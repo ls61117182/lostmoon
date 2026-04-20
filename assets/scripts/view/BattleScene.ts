@@ -1116,6 +1116,11 @@ export class BattleScene extends Component {
     const check = canAttack({ attacker: sherman, target, map });
     if (!check.ok) {
       console.log(`[Combat] 无法攻击: ${check.reason}`);
+      // 玩家点到一个"其实打不到"的敌人（比如偏出六向直线 / 被树遮挡），给一条
+      // 从射击者向上飘的浮字，免得玩家以为点击没响应。
+      const msg = check.reason === '非六向直线' ? '需在六向直线上' : (check.reason ?? '无法攻击');
+      const warnColor = new Color(255, 120, 120, 255);
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, msg, warnColor, { size: 22, dur: 0.9, rise: 24 });
       return;
     }
 

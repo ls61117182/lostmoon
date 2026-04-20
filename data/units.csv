@@ -1,0 +1,7 @@
+﻿unitKind,displayName,size,armorFront,armorFrontSide,armorRearSide,armorRear,penetration,notes
+sherman,谢尔曼 M4,4,6,6,5,5,4,玩家方坦克
+tiger,虎式,5,8,6,5,5,6,重型敌方坦克
+panzer4,四号坦克,4,7,5,5,4,4,中坚敌方坦克
+panzer3,三号坦克,4,6,5,5,4,4,次级敌方坦克
+truck,卡车,4,0,0,0,0,0,占位 - 后续按特殊规则结算
+infantry,步兵,0,0,0,0,0,1,占位 - 仅事件中作为攻击方
