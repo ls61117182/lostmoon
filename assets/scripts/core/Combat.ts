@@ -17,7 +17,7 @@
 
 import { RNG } from './Dice';
 import { HexMap, approximateDirection, directionTo, hexDistance, rotateDirection } from './HexGrid';
-import { Axial, Unit } from './types';
+import { Axial, CrewSlot, ShermanCrew, Unit } from './types';
 
 export type ArmorFace = 'front' | 'frontSide' | 'rearSide' | 'rear';
 
@@ -43,6 +43,19 @@ export type DamageEffect =
   | 'paralyzed'
   | 'crewCheck';
 
+/**
+ * §3.2 注释 + §3.4 Step 3 注释的"阵亡检定"结果。
+ *   - die ∈ 1..6  本次乘员阵亡检定掷出的 1d6 点数
+ *   - slot        实际阵亡的乘员编号：1–5 点直接映射；6 点只有在车长打开舱盖时 = 1（车长阵亡），
+ *                 否则 slot = null（虚惊一场，无人死亡）
+ *   - rerolled    是否发生过"已死乘员重抛"（§3.2 注释的规则：已死乘员不再吃伤，需重抛）
+ */
+export interface CrewDeathResult {
+  die: number;
+  slot: CrewSlot | null;
+  rerolled: boolean;
+}
+
 export interface AttackReport {
   dice: [number, number];
   roll: number;
@@ -59,6 +72,8 @@ export interface AttackReport {
   /** 伤害检定分段：仅在 hit && penetrated 时有值 */
   damageDie?: number;       // 1d6 伤害表掷骰
   damageEffect?: DamageEffect;
+  /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（目前只会在谢尔曼身上发生） */
+  crewCheck?: CrewDeathResult;
   statusChange: HitStatusChange;
 }
 
@@ -189,12 +204,19 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const damageEffect = resolveDamageEffect(target, damageDie);
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
+  // 阵亡检定：只对谢尔曼（crewCheck）再掷一次，决定哪位乘员死
+  let crewCheck: CrewDeathResult | undefined;
+  if (damageEffect === 'crewCheck') {
+    crewCheck = resolveCrewCheck(target, rng);
+  }
+
   return {
     dice: [d1, d2], roll, threshold,
     hit: true,
     armorFace: face, armor, penetration: pen,
     penDie, penThreshold, penetrated,
     damageDie, damageEffect,
+    crewCheck,
     statusChange,
   };
 }
@@ -219,6 +241,66 @@ export function resolveDamageEffect(target: Unit, die: number): DamageEffect {
   // 德军坦克：5/6 直接摧毁；1-4 受损，已受损则升级为摧毁
   if (die >= 5) return 'destroyed';
   return target.damaged ? 'destroyed' : 'damaged';
+}
+
+/**
+ * §3.2 + §3.4 的"谢尔曼阵亡检定"。
+ *
+ * 规则：
+ *   - 1d6 = 1..5 → 直接映射到 1=车长 / 2=装填手 / 3=炮手 / 4=驾驶员 / 5=副驾驶
+ *   - 1d6 = 6     → 仅在车长"打开舱盖"时 → 车长阵亡；否则视为虚惊（无人阵亡）
+ *   - 已死乘员需重新掷骰（§3.2 脚注）：若映射到的乘员已死亡，则重抛。
+ *     兜底：最多重抛 N 次，若全员皆死则返回 slot=null（虚惊），避免死循环。
+ *
+ * 返回 CrewDeathResult；调用方在 applyAttack 里真正把对应 crew 字段置 false。
+ */
+export function resolveCrewCheck(target: Unit, rng: RNG): CrewDeathResult {
+  const crew = target.crew;
+  let rerolled = false;
+  const MAX_REROLL = 12;
+  for (let i = 0; i < MAX_REROLL; i++) {
+    const die = rng.d6();
+    const slot = mapCrewDie(die, !!target.hatchOpen);
+    if (slot === null) {
+      // 舱盖关闭时的 6 = 虚惊，规则上不再重抛：直接返回
+      return { die, slot: null, rerolled };
+    }
+    // 有具体乘员编号：若已死，按脚注重抛；否则接受结果
+    if (!crew || isCrewAlive(crew, slot)) {
+      return { die, slot, rerolled };
+    }
+    rerolled = true;
+  }
+  // 全员已死的极端情况（或连 MAX_REROLL 次都滚到死人）：当作虚惊返回
+  return { die: 0, slot: null, rerolled };
+}
+
+/** 1d6 → 乘员编号；舱盖开的 6 = 车长；舱盖关的 6 = null（虚惊） */
+export function mapCrewDie(die: number, hatchOpen: boolean): CrewSlot | null {
+  if (die >= 1 && die <= 5) return die as CrewSlot;
+  if (die === 6) return hatchOpen ? 1 : null;
+  return null;
+}
+
+export function isCrewAlive(crew: ShermanCrew, slot: CrewSlot): boolean {
+  switch (slot) {
+    case 1: return crew.commander;
+    case 2: return crew.loader;
+    case 3: return crew.gunner;
+    case 4: return crew.driver;
+    case 5: return crew.coDriver;
+  }
+}
+
+/** 将 crew 字典里对应 slot 的字段置 false（仅在该乘员当前存活时生效）。 */
+export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
+  switch (slot) {
+    case 1: crew.commander = false; break;
+    case 2: crew.loader = false;    break;
+    case 3: crew.gunner = false;    break;
+    case 4: crew.driver = false;    break;
+    case 5: crew.coDriver = false;  break;
+  }
 }
 
 /**
@@ -260,9 +342,12 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       target.paralyzed = true;
       break;
     case 'crewCheck':
-      // MVP：未实装乘员抽签，等价 "着火 +1"；以后接入 crew 死亡表
+      // §3.4 Step 3 d6=2：再掷 1d6 决定哪位乘员阵亡。crewCheck.slot === null 表示虚惊。
+      // 受伤状态仍然算作"被击穿"，因此 damaged=true；但不增加 fireLevel。
       target.damaged = true;
-      target.fireLevel = (target.fireLevel ?? 0) + 1;
+      if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
+        killCrewSlot(target.crew, report.crewCheck.slot);
+      }
       break;
   }
 }

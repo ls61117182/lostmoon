@@ -57,7 +57,7 @@ import {
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
-import { applyAttack, AttackReport, canAttack, DamageEffect, hitThreshold, rollAttack } from '../core/Combat';
+import { applyAttack, AttackReport, canAttack, CrewDeathResult, DamageEffect, hitThreshold, rollAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { decideEnemyMove } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
@@ -99,6 +99,42 @@ function damageOutcomeLabel(e: DamageEffect | undefined): { text: string; color:
     case 'crewCheck':  return { text: '阵亡检定',  color: new Color(240, 220, 120, 255) };
     default:           return { text: '—',          color: new Color(200, 200, 200, 255) };
   }
+}
+
+/** §3.2：乘员编号 -> 中文名 */
+function crewRoleName(slot: number | null | undefined): string {
+  switch (slot) {
+    case 1: return '车长';
+    case 2: return '装填手';
+    case 3: return '炮手';
+    case 4: return '驾驶员';
+    case 5: return '副驾驶';
+    default: return '—';
+  }
+}
+
+/** 阵亡检定：骰子面板右侧小字 "xxx 阵亡 / 虚惊（舱盖关）" */
+function crewDeathLabel(cc: CrewDeathResult | undefined): { text: string; color: Color } {
+  if (!cc) return { text: '—', color: new Color(200, 200, 200, 255) };
+  if (cc.slot === null) {
+    // die === 6 且舱盖关 / 或兜底的"全员阵亡"极端情况
+    return { text: '虚惊（舱盖关）', color: new Color(180, 200, 240, 255) };
+  }
+  return {
+    text: `${crewRoleName(cc.slot)} 阵亡`,
+    color: new Color(255,  80,  80, 255),
+  };
+}
+
+/** 阵亡检定：骰子面板底部大字 */
+function crewOutcomeLabel(cc: CrewDeathResult | undefined): { text: string; color: Color } {
+  if (!cc || cc.slot === null) {
+    return { text: '乘员虚惊', color: new Color(180, 200, 240, 255) };
+  }
+  return {
+    text: `${crewRoleName(cc.slot)} 阵亡`,
+    color: new Color(255,  80,  80, 255),
+  };
 }
 
 /** 任意单位正在播放的移动动画（谢尔曼 / 敌坦克通用） */
@@ -157,6 +193,7 @@ type DiceStage =
   | 'hit-roll' | 'hit-show'
   | 'pen-roll' | 'pen-show'
   | 'dmg-roll' | 'dmg-show'
+  | 'crew-roll' | 'crew-show'
   | 'hold' | 'done';
 
 interface DiceShow {
@@ -179,7 +216,10 @@ interface DiceShow {
   dmgDieLabel: Label | null; // 1 颗伤害骰（仅 penetrated 时展示）
   dmgTitleLabel: Label | null;  // "伤害检定" 标题
   dmgEffectLabel: Label | null; // "起火 / 炮塔受损 / 痛痪 / 阵亡检定 / 摧毁 / 受损"
-  outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪
+  crewDieLabel: Label | null;    // 1 颗阵亡检定骰（仅 damageEffect==='crewCheck' 时存在）
+  crewTitleLabel: Label | null;  // "阵亡检定" 标题
+  crewEffectLabel: Label | null; // "驾驶员阵亡 / 虚惊 / …"
+  outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪 / 乘员阵亡
 }
 
 /** 战报浮字：一条挂在 mapNode 下的 Label，会上浮 + 渐隐 + 自毁 */
@@ -284,6 +324,8 @@ const DICE_PEN_ROLL_DUR   = 0.9;
 const DICE_PEN_SHOW_DUR   = 0.6;
 const DICE_DMG_ROLL_DUR   = 0.9;
 const DICE_DMG_SHOW_DUR   = 0.6;
+const DICE_CREW_ROLL_DUR  = 0.9;
+const DICE_CREW_SHOW_DUR  = 0.7;
 const DICE_HOLD_DUR       = 0.7;
 /** 掷骰阶段内每颗骰子面切换频率 */
 const DICE_CYCLE_INTERVAL = 0.06;
@@ -2297,6 +2339,9 @@ export class BattleScene extends Component {
       dmgDieLabel: panel.dmgDieLabel,
       dmgTitleLabel: panel.dmgTitleLabel,
       dmgEffectLabel: panel.dmgEffectLabel,
+      crewDieLabel: panel.crewDieLabel,
+      crewTitleLabel: panel.crewTitleLabel,
+      crewEffectLabel: panel.crewEffectLabel,
       outcomeLabel: panel.outcomeLabel,
     };
   }
@@ -2339,9 +2384,15 @@ export class BattleScene extends Component {
     dmgDieLabel: Label | null;
     dmgTitleLabel: Label | null;
     dmgEffectLabel: Label | null;
+    crewDieLabel: Label | null;
+    crewTitleLabel: Label | null;
+    crewEffectLabel: Label | null;
     outcomeLabel: Label;
   } {
-    const PANEL_W = 560, PANEL_H = 440;
+    // 只有"命中 + 击穿 + 伤害效果为阵亡检定"时才需要第 4 行
+    const needsCrewRow = report.hit && report.penetrated && report.damageEffect === 'crewCheck';
+    const PANEL_W = 560;
+    const PANEL_H = needsCrewRow ? 520 : 440;
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -2383,11 +2434,12 @@ export class BattleScene extends Component {
     const hitNeed = this.makeCenteredLabel(panel, `命中需 ≥${report.threshold}`,
       0, PANEL_H / 2 - 72, PANEL_W - 40, 28, 20, DICE_INFO_TEXT);
 
-    // 三行骰子等距摆放：hit / pen / dmg
+    // 三/四行骰子等距摆放：hit / pen / dmg (/ crew)
     const DIE_SIZE = 72, DIE_GAP = 24, ROW_GAP = 82;
     const hitDiceY = PANEL_H / 2 - 148;
     const penDiceY = hitDiceY - ROW_GAP;
     const dmgDiceY = penDiceY - ROW_GAP;
+    const crewDiceY = dmgDiceY - ROW_GAP;
     const leftDieCenter = -(DIE_SIZE + DIE_GAP / 2);
 
     // 2d6 两颗骰
@@ -2416,6 +2468,22 @@ export class BattleScene extends Component {
     const dmgEffect = this.makeCenteredLabel(panel, '',
       200, dmgDiceY, 180, 40, 28, DICE_OUTCOME_HIT);
 
+    // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
+    let crewDie: Label | null = null;
+    let crewTitle: Label | null = null;
+    let crewEffect: Label | null = null;
+    if (needsCrewRow) {
+      crewDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), crewDiceY, DIE_SIZE);
+      crewTitle = this.makeCenteredLabel(panel, '阵亡检定',
+        70, crewDiceY, 170, 28, 18, DICE_INFO_TEXT);
+      crewEffect = this.makeCenteredLabel(panel, '',
+        200, crewDiceY, 180, 40, 28, DICE_OUTCOME_CREW);
+      // 阵亡检定行默认 hidden，直到 crew-roll 才亮
+      crewDie.node.parent!.active = false;
+      crewTitle.node.active = false;
+      crewEffect.node.active = false;
+    }
+
     // 底部大字结果
     const outcome = this.makeCenteredLabel(panel, '',
       0, -PANEL_H / 2 + 44, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
@@ -2442,6 +2510,9 @@ export class BattleScene extends Component {
       dmgDieLabel: dmgDie,
       dmgTitleLabel: dmgTitle,
       dmgEffectLabel: dmgEffect,
+      crewDieLabel: crewDie,
+      crewTitleLabel: crewTitle,
+      crewEffectLabel: crewEffect,
       outcomeLabel: outcome,
     };
   }
@@ -2632,8 +2703,52 @@ export class BattleScene extends Component {
       case 'dmg-show': {
         if (show.t >= DICE_DMG_SHOW_DUR) {
           show.t = 0;
+          if (show.report.damageEffect === 'crewCheck' && show.report.crewCheck) {
+            // 阵亡检定：再掷一颗 1d6 决定死谁
+            show.stage = 'crew-roll';
+            if (show.crewDieLabel) {
+              show.crewDieLabel.node.parent!.active = true;
+              show.crewDieLabel.string = '?';
+            }
+            if (show.crewTitleLabel) show.crewTitleLabel.node.active = true;
+            if (show.crewEffectLabel) {
+              show.crewEffectLabel.node.active = true;
+              show.crewEffectLabel.string = '';
+            }
+          } else {
+            show.stage = 'hold';
+            const out = damageOutcomeLabel(show.report.damageEffect);
+            show.outcomeLabel.string = out.text;
+            show.outcomeLabel.color = out.color;
+          }
+        }
+        break;
+      }
+      case 'crew-roll': {
+        const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
+        const p = ((frame * 29) % 6) + 1;
+        if (show.crewDieLabel) show.crewDieLabel.string = String(p);
+        if (show.t >= DICE_CREW_ROLL_DUR) {
+          show.stage = 'crew-show';
+          show.t = 0;
+          const cc = show.report.crewCheck;
+          if (show.crewDieLabel && cc) {
+            // 重抛过的情况下仍然展示最终那次的点数
+            show.crewDieLabel.string = cc.die > 0 ? String(cc.die) : '-';
+          }
+          if (show.crewEffectLabel) {
+            const lab = crewDeathLabel(cc);
+            show.crewEffectLabel.string = lab.text;
+            show.crewEffectLabel.color = lab.color;
+          }
+        }
+        break;
+      }
+      case 'crew-show': {
+        if (show.t >= DICE_CREW_SHOW_DUR) {
+          show.t = 0;
           show.stage = 'hold';
-          const out = damageOutcomeLabel(show.report.damageEffect);
+          const out = crewOutcomeLabel(show.report.crewCheck);
           show.outcomeLabel.string = out.text;
           show.outcomeLabel.color = out.color;
         }
@@ -2697,12 +2812,26 @@ export class BattleScene extends Component {
       } else {
         const effect = report.damageEffect;
         const dmgInfo = `伤害1d6=${report.damageDie} → ${effect ?? 'unknown'}`;
-        console.log(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${target.kind}`);
-        const out = damageOutcomeLabel(effect);
-        text = out.text;
-        color = out.color;
-        // 摧毁用最大号字，其余中号；受损系列视觉权重稍低
-        size = effect === 'destroyed' ? 50 : effect === 'damaged' ? 38 : 42;
+        if (effect === 'crewCheck' && report.crewCheck) {
+          // 阵亡检定：把 crew 骰 + 结果也打到日志
+          const cc = report.crewCheck;
+          const crewInfo = cc.slot === null
+            ? `阵亡检定1d6=${cc.die} → 虚惊（舱盖关）`
+            : `阵亡检定1d6=${cc.die} → ${crewRoleName(cc.slot)} 阵亡`
+              + (cc.rerolled ? '（有已死乘员重抛）' : '');
+          console.log(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${crewInfo} → ${target.kind}`);
+          const out = crewOutcomeLabel(cc);
+          text = out.text;
+          color = out.color;
+          size = cc.slot === null ? 36 : 44;
+        } else {
+          console.log(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${target.kind}`);
+          const out = damageOutcomeLabel(effect);
+          text = out.text;
+          color = out.color;
+          // 摧毁用最大号字，其余中号；受损系列视觉权重稍低
+          size = effect === 'destroyed' ? 50 : effect === 'damaged' ? 38 : 42;
+        }
       }
     }
     this.spawnFloater(target.pos.q, target.pos.r, text, color, { size });
