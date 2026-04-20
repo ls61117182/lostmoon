@@ -57,7 +57,7 @@ import {
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
-import { applyAttack, AttackReport, canAttack, hitThreshold, rollAttack } from '../core/Combat';
+import { applyAttack, AttackReport, canAttack, DamageEffect, hitThreshold, rollAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { decideEnemyMove } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
@@ -70,6 +70,35 @@ const { ccclass, property } = _decorator;
 /** 三阶缓出：起步快、收尾慢，最适合"惯性滑停"的坦克移动 */
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
+}
+
+/**
+ * 把 §3.4 Step 3 的 DamageEffect 映射到骰子面板右侧的"效果文字" + 颜色。
+ * 内容偏简短，只够放一行；底部的大字 outcomeLabel 用 damageOutcomeLabel 另算。
+ */
+function damageEffectLabel(e: DamageEffect | undefined): { text: string; color: Color } {
+  switch (e) {
+    case 'destroyed':  return { text: '摧毁！',     color: new Color(255,  60,  60, 255) };
+    case 'damaged':    return { text: '受损',       color: new Color(240, 200, 100, 255) };
+    case 'fire':       return { text: '起火 +1',    color: new Color(255, 170,  40, 255) };
+    case 'turret':     return { text: '炮塔受损',   color: new Color(230, 150,  80, 255) };
+    case 'paralyzed':  return { text: '痛痪',       color: new Color(200, 160, 240, 255) };
+    case 'crewCheck':  return { text: '阵亡检定',   color: new Color(240, 220, 120, 255) };
+    default:           return { text: '—',           color: new Color(200, 200, 200, 255) };
+  }
+}
+
+/** 面板底部大字的配色 / 文字。与右侧小字相比用更醒目颜色。 */
+function damageOutcomeLabel(e: DamageEffect | undefined): { text: string; color: Color } {
+  switch (e) {
+    case 'destroyed':  return { text: '击毁',      color: new Color(255,  60,  60, 255) };
+    case 'damaged':    return { text: '受损',      color: new Color(240, 200, 100, 255) };
+    case 'fire':       return { text: '起火',      color: new Color(255, 170,  40, 255) };
+    case 'turret':     return { text: '炮塔受损',  color: new Color(230, 150,  80, 255) };
+    case 'paralyzed':  return { text: '痛痪',      color: new Color(200, 160, 240, 255) };
+    case 'crewCheck':  return { text: '阵亡检定',  color: new Color(240, 220, 120, 255) };
+    default:           return { text: '—',          color: new Color(200, 200, 200, 255) };
+  }
 }
 
 /** 任意单位正在播放的移动动画（谢尔曼 / 敌坦克通用） */
@@ -111,18 +140,24 @@ interface DieVisual {
 }
 
 /**
- * 攻击掷骰展示面板的状态机：
+ * 攻击掷骰展示面板的状态机（§3.4 三段式）：
  *   - hit-roll : 2d6 骰子面在飞速循环
  *   - hit-show : 锁定 2d6 真值并显示"命中 / 未命中"
  *   - pen-roll : （仅命中时进入）1d6 穿甲骰在飞速循环
  *   - pen-show : 锁定 1d6 并显示"击穿 / 跳弹"
- *   - hold     : 显示最终结果（起火 / 击毁 / 跳弹 / MISS），停顿后自毁
+ *   - dmg-roll : （仅击穿时进入）1d6 伤害骰在飞速循环
+ *   - dmg-show : 锁定 1d6 并显示"摧毁 / 起火 / 炮塔受损 / 痛痪 / 阵亡检定 / 受损"
+ *   - hold     : 显示最终结果（起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪…），停顿后自毁
  *   - done     : 即将销毁，advanceDiceShow 里用来幂等保护
  *
  * 动画用 update() 里的 t 累加驱动，因此不依赖任何 tween 库；
  * 期间 this.diceShow !== null 会屏蔽一切玩家 / 敌方新指令。
  */
-type DiceStage = 'hit-roll' | 'hit-show' | 'pen-roll' | 'pen-show' | 'hold' | 'done';
+type DiceStage =
+  | 'hit-roll' | 'hit-show'
+  | 'pen-roll' | 'pen-show'
+  | 'dmg-roll' | 'dmg-show'
+  | 'hold' | 'done';
 
 interface DiceShow {
   stage: DiceStage;
@@ -141,7 +176,10 @@ interface DiceShow {
   penDieLabel: Label | null; // 1 颗穿甲骰（只在 hit 时非空）
   penNeedLabel: Label | null;
   penVerdictLabel: Label | null;
-  outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS
+  dmgDieLabel: Label | null; // 1 颗伤害骰（仅 penetrated 时展示）
+  dmgTitleLabel: Label | null;  // "伤害检定" 标题
+  dmgEffectLabel: Label | null; // "起火 / 炮塔受损 / 痛痪 / 阵亡检定 / 摧毁 / 受损"
+  outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪
 }
 
 /** 战报浮字：一条挂在 mapNode 下的 Label，会上浮 + 渐隐 + 自毁 */
@@ -219,6 +257,10 @@ const DICE_OUTCOME_HIT = new Color(255, 170,  40, 255); // 起火
 const DICE_OUTCOME_KO  = new Color(255,  60,  60, 255); // 击毁
 const DICE_OUTCOME_RIC = new Color(180, 200, 240, 255); // 跳弹
 const DICE_OUTCOME_MISS= new Color(230, 230, 230, 255); // MISS
+const DICE_OUTCOME_TURRET = new Color(230, 150,  80, 255); // 炮塔受损
+const DICE_OUTCOME_PARAL  = new Color(200, 160, 240, 255); // 痛痪
+const DICE_OUTCOME_CREW   = new Color(240, 220, 120, 255); // 阵亡检定
+const DICE_OUTCOME_HURT   = new Color(240, 200, 100, 255); // 受损（德军首发）
 
 // 谢尔曼状态面板配色
 const STATUS_PANEL_BG     = new Color( 28,  34,  48, 220);
@@ -235,11 +277,13 @@ const STATUS_VALUE_FIRE   = new Color(255, 120,  40, 255);
 const STATUS_VALUE_DOWN   = new Color(130, 130, 130, 255);
 const STATUS_VALUE_DEAD   = new Color(240,  90,  90, 255);
 
-// 掷骰动画时序（秒）：数值可调，整段约 2.4s，不命中时提前结束
+// 掷骰动画时序（秒）：数值可调。命中+击穿+伤害最长约 3.7s；未命中 / 跳弹会提前结束。
 const DICE_HIT_ROLL_DUR   = 0.9;
 const DICE_HIT_SHOW_DUR   = 0.6;
 const DICE_PEN_ROLL_DUR   = 0.9;
 const DICE_PEN_SHOW_DUR   = 0.6;
+const DICE_DMG_ROLL_DUR   = 0.9;
+const DICE_DMG_SHOW_DUR   = 0.6;
 const DICE_HOLD_DUR       = 0.7;
 /** 掷骰阶段内每颗骰子面切换频率 */
 const DICE_CYCLE_INTERVAL = 0.06;
@@ -364,6 +408,8 @@ export class BattleScene extends Component {
   private statusLoaded: Label | null = null;   // 装填 / 未装填
   private statusHatch: Label | null = null;    // 舱盖开 / 舱盖关
   private statusFire: Label | null = null;     // 完好 / 起火 / 已毁
+  private statusTurret: Label | null = null;   // 完好 / 受损
+  private statusMobility: Label | null = null; // 正常 / 痛痪
   private statusCrewLabels: Label[] = [];      // 5 个乘员值标签（车长..副驾驶）
 
   // 存档/读档
@@ -1008,7 +1054,9 @@ export class BattleScene extends Component {
    *   │   谢尔曼状态       │
    *   │  装填    未装填    │
    *   │  舱盖    关闭      │
-   *   │  车体    完好      │
+   *   │  车体    起火(2)   │
+   *   │  炮塔    受损      │
+   *   │  机动    痛痪      │
    *   │  ─────────────     │
    *   │   乘员             │
    *   │  ① 车长    存活    │
@@ -1022,7 +1070,7 @@ export class BattleScene extends Component {
    * refresh 时只改 string + color，不重建节点。
    */
   private buildStatusPanel() {
-    const W = 220, H = 360;
+    const W = 220, H = 400;
     // 锚在右侧：存档/读档按钮下方再留一点空隙
     const x = 640 - W / 2 - 10;
     const y = 360 - 16 - 24 - 16 - H / 2 - 8;
@@ -1038,7 +1086,7 @@ export class BattleScene extends Component {
     bg.rect(-W / 2, -H / 2, W, H);
     bg.fill();
     bg.stroke();
-    // 中间分隔线（画在背景上）
+    // 车体 5 行与乘员 5 行之间的分隔线
     const sepY = -H / 2 + 160;
     bg.strokeColor = new Color(120, 120, 120, 200);
     bg.lineWidth = 1;
@@ -1052,14 +1100,29 @@ export class BattleScene extends Component {
     this.makeCenteredLabel(panel, '谢尔曼状态',
       0, H / 2 - 22, W - 20, 28, 22, STATUS_TITLE_COLOR);
 
-    // 车体状态 3 行（装填 / 舱盖 / 车体）
-    const bodyRowY = [H / 2 - 60, H / 2 - 90, H / 2 - 120];
-    this.makeLeftLabel(panel, '装填',   -W / 2 + 20, bodyRowY[0], 100, 22, 18, STATUS_LABEL_COLOR);
-    this.statusLoaded = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[0], 100, 22, 18, STATUS_VALUE_DOWN);
-    this.makeLeftLabel(panel, '舱盖',   -W / 2 + 20, bodyRowY[1], 100, 22, 18, STATUS_LABEL_COLOR);
-    this.statusHatch  = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[1], 100, 22, 18, STATUS_VALUE_DOWN);
-    this.makeLeftLabel(panel, '车体',   -W / 2 + 20, bodyRowY[2], 100, 22, 18, STATUS_LABEL_COLOR);
-    this.statusFire   = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[2], 100, 22, 18, STATUS_VALUE_DOWN);
+    // 车体状态 5 行（装填 / 舱盖 / 车体 / 炮塔 / 机动）—— 等距 28px
+    const BODY_TOP = H / 2 - 60;
+    const BODY_GAP = 28;
+    const bodyRowY = [0, 1, 2, 3, 4].map(i => BODY_TOP - i * BODY_GAP);
+    const bodyRows: Array<[string, 'loaded' | 'hatch' | 'fire' | 'turret' | 'mobility']> = [
+      ['装填', 'loaded'],
+      ['舱盖', 'hatch'],
+      ['车体', 'fire'],
+      ['炮塔', 'turret'],
+      ['机动', 'mobility'],
+    ];
+    for (let i = 0; i < bodyRows.length; i++) {
+      const [label, key] = bodyRows[i];
+      this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
+      const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
+      switch (key) {
+        case 'loaded':   this.statusLoaded = val; break;
+        case 'hatch':    this.statusHatch = val; break;
+        case 'fire':     this.statusFire = val; break;
+        case 'turret':   this.statusTurret = val; break;
+        case 'mobility': this.statusMobility = val; break;
+      }
+    }
 
     // 乘员小标题
     this.makeCenteredLabel(panel, '乘员',
@@ -1160,17 +1223,49 @@ export class BattleScene extends Component {
       }
     }
 
-    // 车体（起火 / 摧毁 / 完好）
+    // 车体（已毁 / 起火 (程度) / 完好）
     if (this.statusFire) {
       if (s.destroyed) {
         this.statusFire.string = '已毁';
         this.statusFire.color = STATUS_VALUE_DEAD;
-      } else if (s.damaged) {
-        this.statusFire.string = '起火';
+      } else if ((s.fireLevel ?? 0) > 0) {
+        // 有明确的着火程度：显示数字让玩家看到严重性（来自 §3.4 Step 3 的 'fire' 效果）
+        this.statusFire.string = `起火(${s.fireLevel})`;
         this.statusFire.color = STATUS_VALUE_FIRE;
+      } else if (s.damaged) {
+        this.statusFire.string = '受损';
+        this.statusFire.color = STATUS_VALUE_WARN;
       } else {
         this.statusFire.string = '完好';
         this.statusFire.color = STATUS_VALUE_OK;
+      }
+    }
+
+    // 炮塔（受损后不能主炮射击）
+    if (this.statusTurret) {
+      if (s.destroyed) {
+        this.statusTurret.string = '—';
+        this.statusTurret.color = STATUS_VALUE_DOWN;
+      } else if (s.turretDamaged) {
+        this.statusTurret.string = '受损';
+        this.statusTurret.color = STATUS_VALUE_DEAD;
+      } else {
+        this.statusTurret.string = '完好';
+        this.statusTurret.color = STATUS_VALUE_OK;
+      }
+    }
+
+    // 机动（痛痪后不能前进/后退/转向）
+    if (this.statusMobility) {
+      if (s.destroyed) {
+        this.statusMobility.string = '—';
+        this.statusMobility.color = STATUS_VALUE_DOWN;
+      } else if (s.paralyzed) {
+        this.statusMobility.string = '痛痪';
+        this.statusMobility.color = STATUS_VALUE_DEAD;
+      } else {
+        this.statusMobility.string = '正常';
+        this.statusMobility.color = STATUS_VALUE_OK;
       }
     }
 
@@ -2199,6 +2294,9 @@ export class BattleScene extends Component {
       penDieLabel: panel.penDieLabel,
       penNeedLabel: panel.penNeedLabel,
       penVerdictLabel: panel.penVerdictLabel,
+      dmgDieLabel: panel.dmgDieLabel,
+      dmgTitleLabel: panel.dmgTitleLabel,
+      dmgEffectLabel: panel.dmgEffectLabel,
       outcomeLabel: panel.outcomeLabel,
     };
   }
@@ -2206,18 +2304,24 @@ export class BattleScene extends Component {
   /**
    * 构造居中弹出的掷骰面板，返回需要在动画中被 update 的 Label 引用。
    *
-   * 布局（Canvas 1280×720 下约占 520×320，居中）：
-   *   ┌───────────────────────────────────┐
-   *   │  玩家 → panzer4                    │   标题
-   *   │  命中需 ≥7                         │
-   *   │   ┌──┐ ┌──┐                        │
-   *   │   │ 5│ │ 3│   = 8    命中！         │   2d6 + 判定
-   *   │   └──┘ └──┘                        │
-   *   │   ┌──┐                              │
-   *   │   │ 4│   需 ≥2      击穿！          │   1d6 + 判定（仅命中时出现）
-   *   │   └──┘                              │
-   *   │            起火                     │   底部大字结果
-   *   └───────────────────────────────────┘
+   * 布局（Canvas 1280×720 下约占 560×440，居中）：
+   *   ┌─────────────────────────────────────┐
+   *   │  玩家 → panzer4                      │   标题
+   *   │  命中需 ≥7                           │
+   *   │   ┌──┐ ┌──┐                          │
+   *   │   │ 5│ │ 3│   = 8     命中！          │   2d6 + 判定
+   *   │   └──┘ └──┘                          │
+   *   │   ┌──┐                                │
+   *   │   │ 4│        需 ≥2     击穿！        │   1d6 穿甲（仅命中时出现）
+   *   │   └──┘                                │
+   *   │   ┌──┐                                │
+   *   │   │ 3│        伤害检定    起火         │   1d6 伤害（仅击穿时出现）
+   *   │   └──┘                                │
+   *   │                起火                   │   底部大字结果
+   *   └─────────────────────────────────────┘
+   *
+   * 伤害骰行在 'dmg-roll' 阶段才被置 active=true；未命中 / 跳弹时整行保持隐藏，
+   * 让画面只显示"推进到哪一段"的信息，避免空白"?"误导玩家。
    */
   private buildDiceShowPanel(
     report: AttackReport,
@@ -2232,9 +2336,12 @@ export class BattleScene extends Component {
     penDieLabel: Label | null;
     penNeedLabel: Label | null;
     penVerdictLabel: Label | null;
+    dmgDieLabel: Label | null;
+    dmgTitleLabel: Label | null;
+    dmgEffectLabel: Label | null;
     outcomeLabel: Label;
   } {
-    const PANEL_W = 540, PANEL_H = 360;
+    const PANEL_W = 560, PANEL_H = 440;
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -2276,12 +2383,16 @@ export class BattleScene extends Component {
     const hitNeed = this.makeCenteredLabel(panel, `命中需 ≥${report.threshold}`,
       0, PANEL_H / 2 - 72, PANEL_W - 40, 28, 20, DICE_INFO_TEXT);
 
+    // 三行骰子等距摆放：hit / pen / dmg
+    const DIE_SIZE = 72, DIE_GAP = 24, ROW_GAP = 82;
+    const hitDiceY = PANEL_H / 2 - 148;
+    const penDiceY = hitDiceY - ROW_GAP;
+    const dmgDiceY = penDiceY - ROW_GAP;
+    const leftDieCenter = -(DIE_SIZE + DIE_GAP / 2);
+
     // 2d6 两颗骰
-    const DIE_SIZE = 72, DIE_GAP = 24;
-    const hitDiceY = PANEL_H / 2 - 150;
-    const dieStart = -(DIE_SIZE + DIE_GAP / 2);
-    const d1 = this.makeDieSquare(panel, dieStart, hitDiceY, DIE_SIZE);
-    const d2 = this.makeDieSquare(panel, dieStart + DIE_SIZE + DIE_GAP, hitDiceY, DIE_SIZE);
+    const d1 = this.makeDieSquare(panel, leftDieCenter, hitDiceY, DIE_SIZE);
+    const d2 = this.makeDieSquare(panel, leftDieCenter + DIE_SIZE + DIE_GAP, hitDiceY, DIE_SIZE);
 
     // "= N"
     const hitSum = this.makeCenteredLabel(panel, '= ?',
@@ -2291,17 +2402,29 @@ export class BattleScene extends Component {
     const hitVerdict = this.makeCenteredLabel(panel, '',
       190, hitDiceY, 160, 40, 28, DICE_OK_TEXT);
 
-    // 1d6 穿甲骰（标题固定显示，骰子/文字先留白）
-    const penDiceY = PANEL_H / 2 - 232;
+    // 1d6 穿甲骰 + 需求 + 判定
     const penDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), penDiceY, DIE_SIZE);
     const penNeed = this.makeCenteredLabel(panel, '',
       70, penDiceY, 170, 28, 18, DICE_INFO_TEXT);
     const penVerdict = this.makeCenteredLabel(panel, '',
       200, penDiceY, 160, 40, 28, DICE_OK_TEXT);
 
+    // 1d6 伤害骰 + "伤害检定" + 效果文字
+    const dmgDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), dmgDiceY, DIE_SIZE);
+    const dmgTitle = this.makeCenteredLabel(panel, '伤害检定',
+      70, dmgDiceY, 170, 28, 18, DICE_INFO_TEXT);
+    const dmgEffect = this.makeCenteredLabel(panel, '',
+      200, dmgDiceY, 180, 40, 28, DICE_OUTCOME_HIT);
+
     // 底部大字结果
     const outcome = this.makeCenteredLabel(panel, '',
       0, -PANEL_H / 2 + 44, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
+
+    // 伤害骰行在 dmg-roll 前不应该出现，默认整行 hidden
+    // （骰子方块容器 / 标题 / 效果文字 三个节点一起关掉）
+    dmgDie.node.parent!.active = false;
+    dmgTitle.node.active = false;
+    dmgEffect.node.active = false;
 
     // title / hitNeed 仅作标题用，外部不再更新它们，但避免 TS 报"未使用"，
     // 保留到返回结构里（外部不用就不用，Label 生命周期跟随 root.destroy 自动回收）
@@ -2316,6 +2439,9 @@ export class BattleScene extends Component {
       penDieLabel: penDie,
       penNeedLabel: penNeed,
       penVerdictLabel: penVerdict,
+      dmgDieLabel: dmgDie,
+      dmgTitleLabel: dmgTitle,
+      dmgEffectLabel: dmgEffect,
       outcomeLabel: outcome,
     };
   }
@@ -2371,7 +2497,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 每帧推进掷骰面板。
+   * 每帧推进掷骰面板（§3.4 三段式）。
    *
    * 状态机：
    *   hit-roll (滚动 DICE_HIT_ROLL_DUR)
@@ -2379,7 +2505,9 @@ export class BattleScene extends Component {
    *   若未命中：hit-show → hold（骰子不再动，底部大字 MISS，停 DICE_HOLD_DUR）→ done
    *   若命中：hit-show → pen-roll (DICE_PEN_ROLL_DUR)
    *     → pen-show (揭示 1d6 + 击穿/跳弹，DICE_PEN_SHOW_DUR)
-   *     → hold（底部出 起火/击毁/跳弹，DICE_HOLD_DUR）→ done
+   *   若跳弹：pen-show → hold（底部出 跳弹）→ done
+   *   若击穿：pen-show → dmg-roll (DICE_DMG_ROLL_DUR) → dmg-show (揭示 1d6 + 伤害效果)
+   *     → hold（底部出 起火 / 击毁 / 炮塔 / 痛痪 / 阵亡检定 / 受损）→ done
    */
   private advanceDiceShow(dt: number) {
     const show = this.diceShow;
@@ -2460,18 +2588,54 @@ export class BattleScene extends Component {
       case 'pen-show': {
         if (show.t >= DICE_PEN_SHOW_DUR) {
           show.t = 0;
-          show.stage = 'hold';
-          // 按 report.statusChange 决定底部大字
           if (!show.report.penetrated) {
+            // 跳弹：不再进入伤害检定，直接到 hold
+            show.stage = 'hold';
+            if (show.dmgDieLabel) show.dmgDieLabel.node.parent!.active = false;
+            if (show.dmgEffectLabel) show.dmgEffectLabel.node.active = false;
             show.outcomeLabel.string = '跳弹';
             show.outcomeLabel.color = DICE_OUTCOME_RIC;
-          } else if (show.report.statusChange === 'destroyed') {
-            show.outcomeLabel.string = '击毁';
-            show.outcomeLabel.color = DICE_OUTCOME_KO;
           } else {
-            show.outcomeLabel.string = '起火';
-            show.outcomeLabel.color = DICE_OUTCOME_HIT;
+            // 准备伤害检定阶段：打开该行可见性 + 骰子进入滚动
+            show.stage = 'dmg-roll';
+            if (show.dmgDieLabel) {
+              show.dmgDieLabel.node.parent!.active = true;
+              show.dmgDieLabel.string = '?';
+            }
+            if (show.dmgEffectLabel) {
+              show.dmgEffectLabel.node.active = true;
+              show.dmgEffectLabel.string = '';
+            }
+            if (show.dmgTitleLabel) show.dmgTitleLabel.node.active = true;
           }
+        }
+        break;
+      }
+      case 'dmg-roll': {
+        const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
+        const p = ((frame * 11) % 6) + 1;
+        if (show.dmgDieLabel) show.dmgDieLabel.string = String(p);
+        if (show.t >= DICE_DMG_ROLL_DUR) {
+          show.stage = 'dmg-show';
+          show.t = 0;
+          if (show.dmgDieLabel && show.report.damageDie !== undefined) {
+            show.dmgDieLabel.string = String(show.report.damageDie);
+          }
+          if (show.dmgEffectLabel) {
+            const lab = damageEffectLabel(show.report.damageEffect);
+            show.dmgEffectLabel.string = lab.text;
+            show.dmgEffectLabel.color = lab.color;
+          }
+        }
+        break;
+      }
+      case 'dmg-show': {
+        if (show.t >= DICE_DMG_SHOW_DUR) {
+          show.t = 0;
+          show.stage = 'hold';
+          const out = damageOutcomeLabel(show.report.damageEffect);
+          show.outcomeLabel.string = out.text;
+          show.outcomeLabel.color = out.color;
         }
         break;
       }
@@ -2512,7 +2676,8 @@ export class BattleScene extends Component {
    * 攻击结算后的统一展示：console 日志 + 目标格上方浮字 + 重绘 + 胜负判定。
    * 玩家与敌方都走这条路径，确保战报格式与 UI 反馈一致。
    *
-   * 命中并击穿 → 起火 / 击毁；命中未击穿 → "跳弹"；未命中 → "MISS"。
+   * 未命中 → "MISS"；命中未击穿 → "跳弹"；命中并击穿 → 按 §3.4 Step 3 伤害效果浮字
+   * （击毁 / 起火 / 炮塔受损 / 痛痪 / 阵亡检定 / 受损）。
    */
   private presentAttackResult(actor: string, report: AttackReport, _attacker: Unit, target: Unit) {
     if (!this.mission) return;
@@ -2529,12 +2694,15 @@ export class BattleScene extends Component {
       if (!report.penetrated) {
         console.log(`${base} → ${armorInfo} → 未击穿`);
         text = '跳弹'; color = new Color(180, 200, 240, 255); size = 34;
-      } else if (report.statusChange === 'damaged') {
-        console.log(`${base} → ${armorInfo} → ${target.kind} 起火`);
-        text = '起火'; color = new Color(255, 170, 40, 255); size = 42;
       } else {
-        console.log(`${base} → ${armorInfo} → ${target.kind} 已毁`);
-        text = '击毁'; color = new Color(255, 60, 60, 255); size = 50;
+        const effect = report.damageEffect;
+        const dmgInfo = `伤害1d6=${report.damageDie} → ${effect ?? 'unknown'}`;
+        console.log(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${target.kind}`);
+        const out = damageOutcomeLabel(effect);
+        text = out.text;
+        color = out.color;
+        // 摧毁用最大号字，其余中号；受损系列视觉权重稍低
+        size = effect === 'destroyed' ? 50 : effect === 'damaged' ? 38 : 42;
       }
     }
     this.spawnFloater(target.pos.q, target.pos.r, text, color, { size });

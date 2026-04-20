@@ -3,9 +3,14 @@
  *
  * MVP 简化（相对手册的差异，以后补）：
  *   - 命中公式只算 "体型 + 距离 + 树篱 + 建筑"，忽略烟雾/隐蔽
- *   - 流程：① 2d6 命中检定 → ② 命中后再掷 1d6 穿甲检定（d6 ≥ 装甲 - 穿甲 才造成伤害）。
- *     未击穿 = 命中无效，不推进 damaged/destroyed；击穿 → 未起火变起火、起火变摧毁。
- *     不实装手册 Step 3 的"伤害结果表（炮塔受损 / 痛痪 / 着火程度）"，统一收敛到二段式起火→摧毁。
+ *   - 流程（§3.4 三段式）：
+ *       ① 2d6 命中检定（阈值 = 体型 + 距离 + 树篱 + 建筑 + …）
+ *       ② 命中后再掷 1d6 穿甲检定（d6 ≥ 装甲 - 穿甲 才击穿；未击穿 = 跳弹，命中无效）
+ *       ③ 击穿后再掷 1d6 伤害检定（§3.4 Step 3 的伤害结果表）：
+ *            谢尔曼： 1=摧毁 / 2=阵亡检定 / 3,4=着火 +1 / 5=炮塔受损 / 6=痛痪
+ *            德军坦克： 1–4=受损（已受损→摧毁） / 5,6=摧毁
+ *          → 对应效果写回 target 的 destroyed/damaged/fireLevel/turretDamaged/paralyzed
+ *   - "阵亡检定"（d6=2，谢尔曼）未实装乘员抽签；MVP 简化等价于着火 +1，并打日志说明
  *   - 不处理对子（doubles）特殊事件
  *   - 不校验乘员存活（假设炮手总是可用）
  */
@@ -16,8 +21,27 @@ import { Axial, Unit } from './types';
 
 export type ArmorFace = 'front' | 'frontSide' | 'rearSide' | 'rear';
 
-/** 本次攻击对目标状态的改动：无变化 / 首次穿甲受损 / 补刀摧毁 */
+/** 本次攻击对目标状态的粗粒度改动：无变化 / 受损系列 / 直接摧毁。
+ *  保留给存档和旧 UI 分支；精细效果见 AttackReport.damageEffect。 */
 export type HitStatusChange = 'none' | 'damaged' | 'destroyed';
+
+/**
+ * §3.4 Step 3 伤害表的具体结果。
+ *   - 'destroyed'   目标直接摧毁（谢 1；德 5,6；德 已受损时 1-4）
+ *   - 'damaged'     受损（德军首次受伤；MVP 语义 = "起火状态"，下次击穿直接摧毁）
+ *   - 'fire'        着火 / 着火程度 +1（谢尔曼 3,4）
+ *   - 'turret'      炮塔受损：不能用主炮射击（谢尔曼 5）
+ *   - 'paralyzed'   痛痪：不能前进/后退/转向（谢尔曼 6）
+ *   - 'crewCheck'   阵亡检定：再掷 1d6 映射乘员 1-5（谢尔曼 2）。MVP 未实装乘员抽签，
+ *                   视觉上等同 'fire' +1，保留该枚举值以便以后补
+ */
+export type DamageEffect =
+  | 'destroyed'
+  | 'damaged'
+  | 'fire'
+  | 'turret'
+  | 'paralyzed'
+  | 'crewCheck';
 
 export interface AttackReport {
   dice: [number, number];
@@ -32,6 +56,9 @@ export interface AttackReport {
   penDie?: number;          // 1d6 击穿掷骰
   penThreshold?: number;    // 击穿所需 = armor - penetration（≤0 必穿，≥7 不可击穿）
   penetrated?: boolean;     // 是否击穿装甲；未击穿 = 命中无效
+  /** 伤害检定分段：仅在 hit && penetrated 时有值 */
+  damageDie?: number;       // 1d6 伤害表掷骰
+  damageEffect?: DamageEffect;
   statusChange: HitStatusChange;
 }
 
@@ -147,34 +174,96 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const penThreshold = armor - pen;
   const penetrated = penDie >= penThreshold;
 
-  // 仅在击穿时推进伤害进度（first-hit → 起火，second-hit → 摧毁）
-  const statusChange: HitStatusChange = !penetrated
-    ? 'none'
-    : target.damaged
-      ? 'destroyed'
-      : 'damaged';
+  if (!penetrated) {
+    return {
+      dice: [d1, d2], roll, threshold,
+      hit: true,
+      armorFace: face, armor, penetration: pen,
+      penDie, penThreshold, penetrated,
+      statusChange: 'none',
+    };
+  }
+
+  // 第三段：伤害检定（§3.4 Step 3）
+  const damageDie = rng.d6();
+  const damageEffect = resolveDamageEffect(target, damageDie);
+  const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
   return {
     dice: [d1, d2], roll, threshold,
     hit: true,
-    armorFace: face,
-    armor,
-    penetration: pen,
-    penDie,
-    penThreshold,
-    penetrated,
+    armorFace: face, armor, penetration: pen,
+    penDie, penThreshold, penetrated,
+    damageDie, damageEffect,
     statusChange,
   };
 }
 
-/** 把 rollAttack 得出的 report 真正写入 target（触发起火 / 摧毁）。未命中或未击穿都不变更。 */
+/**
+ * §3.4 Step 3 伤害结果表。两条路线（谢尔曼 / 德军坦克）；
+ * 步兵等单位按"德军坦克"路线处理（MVP 下不会成为被击穿的目标）。
+ */
+export function resolveDamageEffect(target: Unit, die: number): DamageEffect {
+  const isSherman = target.kind === 'sherman';
+  if (isSherman) {
+    switch (die) {
+      case 1: return 'destroyed';
+      case 2: return 'crewCheck';
+      case 3:
+      case 4: return 'fire';
+      case 5: return 'turret';
+      case 6:
+      default: return 'paralyzed';
+    }
+  }
+  // 德军坦克：5/6 直接摧毁；1-4 受损，已受损则升级为摧毁
+  if (die >= 5) return 'destroyed';
+  return target.damaged ? 'destroyed' : 'damaged';
+}
+
+/**
+ * 把 rollAttack 得出的 report 真正写入 target。
+ * 未命中 / 未击穿 → 不改任何字段（跳弹）。
+ * 击穿 → 按 §3.4 Step 3 的 damageEffect 映射到具体状态位。
+ *
+ * 注：damaged 在本项目语义上代表"受损 / 起火中"的综合标志，任何非摧毁的有效击穿
+ * 都会置 true，使谢尔曼的状态面板与地图外观能立刻反应"我被打中了"。更细分的字段
+ * （fireLevel/turretDamaged/paralyzed）各自独立累积，便于文档化的 §3.5 状态系统实装。
+ */
 export function applyAttack(target: Unit, report: AttackReport): void {
   if (!report.hit) return;
   if (!report.penetrated) return;
-  if (report.statusChange === 'destroyed') {
-    target.destroyed = true;
-  } else if (report.statusChange === 'damaged') {
-    target.damaged = true;
+  const effect = report.damageEffect;
+  // 历史分支（未带 damageEffect 的旧 report）：按 statusChange 走二段式
+  if (!effect) {
+    if (report.statusChange === 'destroyed') target.destroyed = true;
+    else if (report.statusChange === 'damaged') target.damaged = true;
+    return;
+  }
+  switch (effect) {
+    case 'destroyed':
+      target.destroyed = true;
+      break;
+    case 'damaged':
+      target.damaged = true;
+      break;
+    case 'fire':
+      target.damaged = true;
+      target.fireLevel = (target.fireLevel ?? 0) + 1;
+      break;
+    case 'turret':
+      target.damaged = true;
+      target.turretDamaged = true;
+      break;
+    case 'paralyzed':
+      target.damaged = true;
+      target.paralyzed = true;
+      break;
+    case 'crewCheck':
+      // MVP：未实装乘员抽签，等价 "着火 +1"；以后接入 crew 死亡表
+      target.damaged = true;
+      target.fireLevel = (target.fireLevel ?? 0) + 1;
+      break;
   }
 }
 
