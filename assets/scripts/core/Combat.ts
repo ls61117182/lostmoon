@@ -92,12 +92,15 @@ export type AttackDenyReason =
   | 'attack.reason.destroyedTarget'
   | 'attack.reason.overlap'
   | 'attack.reason.notStraight'
-  | 'attack.reason.blocked';
+  | 'attack.reason.blocked'
+  | 'attack.reason.turretDamaged';
 
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
+  // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
+  if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
   // 射角限制：只能朝 6 条轴向直线射击。directionTo 只在 from→to 落在某条六向射线上才返回
   // 方向编号，否则返回 null——非 null 即表示"同线"。
@@ -106,7 +109,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   return { ok: true };
 }
 
-/** 命中所需 = 体型 + 距离 + 树篱数 + 建筑格 (+1) */
+/** 命中所需 = 体型 + 距离 + 树篱数 + 建筑格 + 烟雾 + 隐蔽 */
 export function hitThreshold(ctx: AttackContext): number {
   const b = hitBreakdown(ctx);
   return b.threshold;
@@ -118,7 +121,9 @@ export interface HitBreakdown {
   distance: number;
   hedges: number;
   building: number;     // 0 或 1
-  threshold: number;    // = size + distance + hedges + building
+  smoke: number;        // 0 或 1 —— 目标处于烟雾掩护中（§3.5）
+  concealed: number;    // 0 或 2 —— 目标隐蔽（§3.5）
+  threshold: number;    // = size + distance + hedges + building + smoke + concealed
 }
 
 export function hitBreakdown(ctx: AttackContext): HitBreakdown {
@@ -128,7 +133,13 @@ export function hitBreakdown(ctx: AttackContext): HitBreakdown {
   const targetTile = map.get(target.pos);
   const building = targetTile?.terrain === 'building' ? 1 : 0;
   const size = target.stats.size;
-  return { size, distance, hedges, building, threshold: size + distance + hedges + building };
+  // §3.5 状态系统：烟雾掩护 +1；隐蔽 +2。两者都作用在目标身上（被打者的难命中度）。
+  const smoke = target.smoked ? 1 : 0;
+  const concealed = target.hidden ? 2 : 0;
+  return {
+    size, distance, hedges, building, smoke, concealed,
+    threshold: size + distance + hedges + building + smoke + concealed,
+  };
 }
 
 /** 2d6 ≥ N 的概率（N 在 [0..14] 内取值；越界自动夹到 1 或 0）。 */

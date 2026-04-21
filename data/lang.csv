@@ -118,12 +118,21 @@ floater.noInfantry,无相邻步兵,No Adjacent Infantry
 floater.fireReduced,起火程度 -1,Fire Level -1
 floater.turretFixed,炮塔已修复,Turret Repaired
 floater.mobilityFixed,机动已修复,Mobility Repaired
+floater.paralyzedBlocked,瘫痪中无法移动,Immobilized: Cannot Move
+floater.smokeDeployed,施放烟雾,Smoke Deployed
+floater.concealed,进入隐蔽,Concealed
+floater.revealed,暴露（离开隐蔽）,Revealed
+floater.needPair,需要两颗同点骰,Need Pair of Dice
+floater.smokeCleared,烟雾消散,Smoke Cleared
+floater.fireCheck,着火检定,Fire Check
+action.concealPair,进入隐蔽（+同点骰）,Go Concealed (+pair)
 attack.reason.selfFire,不能攻击自己,Cannot Target Self
 attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
 attack.reason.overlap,目标重叠,Overlap
 attack.reason.notStraight,非六向直线,Not on Hex Axis
 attack.reason.notStraightHint,需在六向直线上,Must be on hex axis
 attack.reason.blocked,无视线,No LOS
+attack.reason.turretDamaged,炮塔受损不能开火,Turret Damaged: Cannot Fire
 attack.reason.unknown,无法攻击,Cannot Attack
 preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
 dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}

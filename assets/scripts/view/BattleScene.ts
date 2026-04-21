@@ -58,7 +58,7 @@ import {
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
-import { applyAttack, AttackReport, canAttack, CrewDeathResult, DamageEffect, hitThreshold, rollAttack } from '../core/Combat';
+import { applyAttack, AttackReport, canAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveDamageEffect, rollAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { t } from '../core/Lang';
 import {
@@ -1954,9 +1954,10 @@ export class BattleScene extends Component {
         return;
       }
     } else if (this.playerStep === 'misc') {
-      // 杂项阶段 6 点 = 灭火，无分支 → 直接执行
+      // 杂项阶段 6 点 = 灭火，无分支 → 直接执行。
+      // 但若有同点搭档（= 可走"隐蔽"对子动作），则改走 popover 让玩家选择。
       const m = classifyMiscDie(slot.pip);
-      if (m === 'fire_suppress') {
+      if (m === 'fire_suppress' && this.findConcealmentPartner(idx) < 0) {
         this.closeDiePopover();
         this.tryFireSuppress(idx);
         return;
@@ -2060,8 +2061,8 @@ export class BattleScene extends Component {
           }
           break;
         case 'smoke_or_repair':
-          // 5 点 C 列：烟雾（MVP 未实装）/ 修复
-          items.push({ text: t('action.smoke'), color: PHASE_BTN_DISABLED,
+          // 5 点 C 列：烟雾 / 修复（炮塔 / 瘫痪）
+          items.push({ text: t('action.smoke'), color: PHASE_BTN_MISC,
             onClick: () => this.trySmoke(idx) });
           if (sherman && sherman.turretDamaged) {
             items.push({ text: t('action.repairTurret'), color: PHASE_BTN_MISC,
@@ -2078,14 +2079,15 @@ export class BattleScene extends Component {
           items.push({ text: t('action.fireSuppress'), color: PHASE_BTN_MISC,
             onClick: () => this.tryFireSuppress(idx) });
           break;
-        case 'concealment':
-          // 对子 C 列：隐蔽 —— MVP 未实装
-          items.push({ text: t('action.concealment'), color: PHASE_BTN_DISABLED,
-            onClick: () => this.tryConcealment(idx) });
-          break;
         default:
           items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
             onClick: () => this.discardDie(idx) });
+      }
+      // §3.6 对子 C 列：只要 misc 阶段还存在"与当前骰同点且未用"的搭档，就追加"隐蔽（+同点骰）"
+      // 这样玩家任何点数的对子都可以自由选择是否入隐蔽，不必局限于某一枚具体点数。
+      if (this.findConcealmentPartner(idx) >= 0) {
+        items.push({ text: t('action.concealPair'), color: PHASE_BTN_MISC,
+          onClick: () => this.tryConcealment(idx) });
       }
     }
 
@@ -2154,10 +2156,19 @@ export class BattleScene extends Component {
     }
 
     const sherman = this.mission.sherman;
+    // §3.5 瘫痪：不可转向 / 前进 / 后退；骰子保留不消耗，玩家可用来走修复或放弃
+    if (sherman.paralyzed) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
+        new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
     if (sherman.facing === null) sherman.facing = 0;
     // rotateDirection 的参数是"顺时针旋转 N 步"，所以 CCW 用 5（= -1 mod 6）
     const step = dirSign === 1 ? 1 : 5;
     sherman.facing = rotateDirection(sherman.facing, step);
+    // §3.5 隐蔽：任何移动动作（转向 / 前进 / 后退）都会脱离隐蔽
+    this.breakConcealment(sherman);
     slot.used = true;
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -2195,6 +2206,13 @@ export class BattleScene extends Component {
     }
 
     const { map, sherman, enemies } = this.mission;
+    // §3.5 瘫痪：不可前进 / 后退；骰子保留不消耗
+    if (sherman.paralyzed) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
+        new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
     if (sherman.facing === null) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.noFacing'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -2219,6 +2237,8 @@ export class BattleScene extends Component {
 
     slot.used = true;
     this.closeDiePopover();
+    // §3.5 隐蔽：前进 / 后退都会脱离隐蔽
+    this.breakConcealment(sherman);
     this.anim = {
       unit: sherman,
       fromQ: sherman.pos.q,
@@ -2397,28 +2417,87 @@ export class BattleScene extends Component {
     this.discardDie(dieIdx);
   }
 
-  /** 烟雾：MVP 占位，目前只弹浮字并丢弃本骰。 */
+  /**
+   * 烟雾（杂项 5 点 smoke_or_repair 的烟雾支）：
+   * 消耗该骰；把 sherman.smoked 置 true —— 下一次对谢尔曼的命中检定 +1。
+   * 烟雾在下一次"阶段①（玩家回合开始时）"自动消散。
+   */
   private trySmoke(dieIdx: number) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
     if (classifyMiscDie(slot.pip) !== 'smoke_or_repair') return;
     const s = this.mission.sherman;
-    this.spawnFloater(s.pos.q, s.pos.r, t('floater.notImplemented'),
-      new Color(200, 200, 200, 255), { size: 22, dur: 0.9, rise: 24 });
-    this.discardDie(dieIdx);
+    s.smoked = true;
+    slot.used = true;
+    this.closeDiePopover();
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.smokeDeployed'),
+      new Color(200, 200, 220, 255), { size: 22, dur: 0.9, rise: 24 });
+    console.log('[Misc] 施放烟雾 → sherman.smoked=true');
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.refreshStatusPanel();
+    this.autoEndPhaseIfDone();
   }
 
-  /** 隐蔽（对子 C 列）：MVP 占位。 */
+  /**
+   * 隐蔽（§3.6 对子 C 列 concealment）：
+   * 需要一对同点骰；消耗两颗，置 sherman.hidden=true（被攻击命中阈值 +2）。
+   * 隐蔽保持到下一次谢尔曼做出移动（转向 / 前进 / 后退），见 breakConcealment()。
+   *
+   * dieIdx 对应被玩家点击的那颗；第二颗 = phaseDice 中第一颗同点且未用的骰。
+   * 若找不到同点搭档，弹"需要两颗同点骰"并不消耗。
+   */
   private tryConcealment(dieIdx: number) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
-    if (classifyMiscDie(slot.pip) !== 'concealment') return;
+    const partnerIdx = this.findConcealmentPartner(dieIdx);
     const s = this.mission.sherman;
-    this.spawnFloater(s.pos.q, s.pos.r, t('floater.notImplemented'),
-      new Color(200, 200, 200, 255), { size: 22, dur: 0.9, rise: 24 });
-    this.discardDie(dieIdx);
+    if (partnerIdx < 0) {
+      this.spawnFloater(s.pos.q, s.pos.r, t('floater.needPair'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    const partner = this.phaseDice[partnerIdx];
+    slot.used = true;
+    partner.used = true;
+    s.hidden = true;
+    this.closeDiePopover();
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.concealed'),
+      new Color(160, 220, 180, 255), { size: 22, dur: 0.9, rise: 24 });
+    console.log(`[Misc] 进入隐蔽（消耗骰 ${dieIdx} + ${partnerIdx}，点数 ${slot.pip}）`);
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.refreshStatusPanel();
+    this.autoEndPhaseIfDone();
+  }
+
+  /**
+   * 在当前 phaseDice 中寻找一个"点数相同、未使用、不同于 dieIdx"的索引。
+   * 用于 §3.6 对子动作（当前只有"隐蔽"一种）。
+   */
+  private findConcealmentPartner(dieIdx: number): number {
+    const slot = this.phaseDice[dieIdx];
+    if (!slot) return -1;
+    for (let i = 0; i < this.phaseDice.length; i++) {
+      if (i === dieIdx) continue;
+      const p = this.phaseDice[i];
+      if (p && !p.used && p.pip === slot.pip) return i;
+    }
+    return -1;
+  }
+
+  /** §3.5 隐蔽破除：任何移动动作结束后调用；若 hidden=true 则清除并飘一条提示。 */
+  private breakConcealment(u: Unit) {
+    if (!u.hidden) return;
+    u.hidden = false;
+    this.spawnFloater(u.pos.q, u.pos.r, t('floater.revealed'),
+      new Color(220, 200, 160, 255), { size: 20, dur: 0.8, rise: 22 });
+    this.refreshStatusPanel();
   }
 
   // ---------- 智能"下一阶段" ----------
@@ -2446,6 +2525,27 @@ export class BattleScene extends Component {
   private beginEnemyPhase() {
     if (!this.mission) return;
     this.phase = 'enemy';
+    // §2.1 阶段④：移除德军烟雾（烟雾只保留一回合）
+    for (const e of this.mission.enemies) {
+      if (!e.destroyed && e.smoked) {
+        e.smoked = false;
+        this.spawnFloater(e.pos.q, e.pos.r, t('floater.smokeCleared'),
+          new Color(200, 200, 220, 255), { size: 20, dur: 0.8, rise: 22 });
+        console.log(`[Phase④] ${e.kind} 烟雾消散`);
+      }
+    }
+    // §2.1 阶段⑤：着火程度检定 —— 谢尔曼若着火，按 fireLevel 次掷骰结算
+    this.runFireCheck();
+    // 阶段⑤ 结算后可能已阵亡 → 更新胜负
+    this.outcome = checkOutcome(this.mission);
+    this.updateOutcomeOverlay();
+    if (this.outcome !== 'ongoing') {
+      this.closeDiePopover();
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      return;
+    }
     // GDD §3.7：按距谢尔曼最近 → 最远排序；同距随机
     this.enemyOrder = selectEnemyOrder(this.mission.enemies, this.mission.sherman, this.rng);
     this.enemyIndex = 0;
@@ -2458,6 +2558,104 @@ export class BattleScene extends Component {
     this.redraw();
     console.log(`[BattleScene] === 回合 ${this.turn} 敌方阶段开始 (${this.enemyOrder.length} 辆敌坦)`);
     this.beginCurrentEnemyTurn();
+  }
+
+  /**
+   * §2.1 阶段⑤ + §3.5 着火程度检定：
+   * 谢尔曼 fireLevel 有多少就掷多少颗 d6，每颗按"谢尔曼伤害表" (§3.4 Step 3) 结算，
+   * 但与受击穿不同的是：不再做命中 / 穿甲检定 —— 火已经在车里了。
+   *
+   * 为了避免同一轮检定中"着火 → fireLevel 升级 → 又多掷一次"的链式 bug：
+   * - 先快照 N = 当前 fireLevel；
+   * - 本批次所有"3/4 着火" 结果累计到 pendingFire，最后一次性加到 fireLevel 上；
+   * - 其他结果（摧毁 / 炮塔 / 瘫痪 / crewCheck）直接就地应用。
+   *
+   * MVP：不走动画面板，仅以浮字 + 日志呈现；后续可扩展为迷你掷骰面板。
+   */
+  private runFireCheck() {
+    if (!this.mission) return;
+    const s = this.mission.sherman;
+    const n = s.fireLevel ?? 0;
+    if (n <= 0) return;
+    console.log(`[Phase⑤] 着火检定 ×${n}`);
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.fireCheck'),
+      new Color(255, 180, 80, 255), { size: 22, dur: 1.0, rise: 28 });
+    let pendingFire = 0;
+    for (let i = 0; i < n; i++) {
+      if (s.destroyed) break;
+      const die = this.rng.d6();
+      const effect = resolveDamageEffect(s, die);
+      console.log(`[Phase⑤] d6=${die} → ${effect}`);
+      this.applyFireCheckEffect(s, effect, () => { pendingFire += 1; });
+    }
+    if (!s.destroyed && pendingFire > 0) {
+      s.fireLevel = (s.fireLevel ?? 0) + pendingFire;
+      console.log(`[Phase⑤] fireLevel += ${pendingFire} → ${s.fireLevel}`);
+    }
+    this.refreshStatusPanel();
+    this.redraw();
+  }
+
+  /**
+   * 着火检定单次结果 → 状态写回 + 浮字反馈。
+   * 'fire' 不就地累加 fireLevel，而是通过 onFire 回调交给调用方批量结算（见 runFireCheck）。
+   */
+  private applyFireCheckEffect(s: Unit, effect: DamageEffect, onFire: () => void) {
+    const pos = s.pos;
+    const color = new Color(255, 180, 80, 255);
+    switch (effect) {
+      case 'destroyed':
+        s.destroyed = true;
+        this.spawnFloater(pos.q, pos.r, t('dmg.outcome.destroyed'),
+          new Color(255, 100, 100, 255), { size: 26, dur: 1.2, rise: 32 });
+        break;
+      case 'fire':
+        onFire();
+        this.spawnFloater(pos.q, pos.r, t('dmg.effect.fire'), color,
+          { size: 22, dur: 0.9, rise: 24 });
+        break;
+      case 'turret':
+        s.damaged = true;
+        s.turretDamaged = true;
+        this.spawnFloater(pos.q, pos.r, t('dmg.outcome.turret'), color,
+          { size: 22, dur: 0.9, rise: 24 });
+        break;
+      case 'paralyzed':
+        s.damaged = true;
+        s.paralyzed = true;
+        this.spawnFloater(pos.q, pos.r, t('dmg.outcome.paralyzed'), color,
+          { size: 22, dur: 0.9, rise: 24 });
+        break;
+      case 'crewCheck': {
+        // §3.4 Step 3 d6=2：再掷一次决定哪位乘员阵亡（与受击穿同机制）
+        s.damaged = true;
+        const crewDie = this.rng.d6();
+        const slot = crewDie >= 1 && crewDie <= 5
+          ? crewDie as 1 | 2 | 3 | 4 | 5
+          : (s.hatchOpen ? 1 : null);
+        if (slot !== null && s.crew) {
+          switch (slot) {
+            case 1: s.crew.commander = false; break;
+            case 2: s.crew.loader = false;    break;
+            case 3: s.crew.gunner = false;    break;
+            case 4: s.crew.driver = false;    break;
+            case 5: s.crew.coDriver = false;  break;
+          }
+          this.spawnFloater(pos.q, pos.r, t('crew.death.kia', { role: t('crew.role.' + slot) }),
+            new Color(255, 120, 120, 255), { size: 22, dur: 1.0, rise: 26 });
+          console.log(`[Phase⑤] 阵亡检定 d6=${crewDie} → slot=${slot}`);
+        } else {
+          this.spawnFloater(pos.q, pos.r, t('crew.death.falseAlarm'),
+            new Color(200, 200, 200, 255), { size: 20, dur: 0.9, rise: 24 });
+          console.log(`[Phase⑤] 阵亡检定 d6=${crewDie} → 虚惊`);
+        }
+        break;
+      }
+      case 'damaged':
+        // 谢尔曼伤害表不会给出 'damaged'（对应的是德坦路线），兜底处理
+        s.damaged = true;
+        break;
+    }
   }
 
   // ---------- 存档 / 读档 ----------
@@ -2762,6 +2960,14 @@ export class BattleScene extends Component {
   private endEnemyPhase() {
     this.turn += 1;
     this.phase = 'player';
+    // §2.1 阶段①：移除谢尔曼烟雾（烟雾只保留一回合）
+    if (this.mission && this.mission.sherman.smoked) {
+      this.mission.sherman.smoked = false;
+      this.spawnFloater(this.mission.sherman.pos.q, this.mission.sherman.pos.r,
+        t('floater.smokeCleared'), new Color(200, 200, 220, 255),
+        { size: 20, dur: 0.8, rise: 22 });
+      console.log('[Phase①] 谢尔曼烟雾消散');
+    }
     // 清理敌方调度中间态
     this.enemyOrder = [];
     this.enemyIndex = 0;
