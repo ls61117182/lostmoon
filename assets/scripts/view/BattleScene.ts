@@ -1723,10 +1723,11 @@ export class BattleScene extends Component {
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(pip);
       switch (a) {
-        case 'turn':  return { text: t('die.hint.turn'),  color: DIE_HINT_GREEN };
-        case 'drive': return { text: t('die.hint.drive'), color: DIE_HINT_GREEN };
-        case 'start': return { text: t('die.hint.start'), color: DIE_HINT_GREY };
-        default:      return { text: t('die.hint.none'),  color: DIE_HINT_GREY };
+        case 'turn':    return { text: t('die.hint.turn'),    color: DIE_HINT_GREEN };
+        case 'drive':   return { text: t('die.hint.drive'),   color: DIE_HINT_GREEN };
+        case 'reverse': return { text: t('die.hint.reverse'), color: DIE_HINT_GREEN };
+        case 'start':   return { text: t('die.hint.start'),   color: DIE_HINT_GREY };
+        default:        return { text: t('die.hint.none'),    color: DIE_HINT_GREY };
       }
     }
     if (this.playerStep === 'attack') {
@@ -1813,6 +1814,12 @@ export class BattleScene extends Component {
       this.closeDiePopover();
       return;
     }
+    // GDD §3.6：点数 5 / 6 只能前进，无分支需要选择 → 点一下直接走，不再弹菜单
+    if (this.playerStep === 'movement' && classifyMoveDie(slot.pip) === 'drive') {
+      this.closeDiePopover();
+      this.tryDriveSherman(idx, +1);
+      return;
+    }
     this.showDiePopover(idx);
   }
 
@@ -1846,8 +1853,11 @@ export class BattleScene extends Component {
         items.push({ text: t('action.turnCCW'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryTurnSherman(idx, -1) });
       } else if (a === 'drive') {
+        // GDD §3.6：点数 5 / 6 只能前进，不再提供后退选项
         items.push({ text: t('action.advance'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryDriveSherman(idx, +1) });
+      } else if (a === 'reverse') {
+        // GDD §3.6：点数 1 → 后退 1 格
         items.push({ text: t('action.reverse'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryDriveSherman(idx, -1) });
       } else {
@@ -1938,13 +1948,22 @@ export class BattleScene extends Component {
 
   /**
    * 前进 / 后退 1 格：dirSign +1=沿当前 facing，-1=反向。
-   * 如果目标格无法进入（越界 / 水域林地建筑 / 被活着的敌方占据），弹警告浮字并 *不* 消耗骰子。
+   *
+   * GDD §3.6 约束：
+   *   - 骰面 5 / 6（action='drive'）只允许前进（dirSign=+1）
+   *   - 骰面 1    （action='reverse'）只允许后退（dirSign=-1）
+   *
+   * 若骰子动作与请求方向不匹配，直接忽略（按钮层已分开提供，这里是双保险）。
+   * 若目标格无法进入（越界 / 水域林地建筑 / 被活着的敌方占据），弹警告浮字并 *不* 消耗骰子。
    */
   private tryDriveSherman(dieIdx: number, dirSign: 1 | -1) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'movement') return;
-    if (classifyMoveDie(slot.pip) !== 'drive') return;
+    const act = classifyMoveDie(slot.pip);
+    if (act === 'drive' && dirSign !== +1) return;
+    if (act === 'reverse' && dirSign !== -1) return;
+    if (act !== 'drive' && act !== 'reverse') return;
 
     const { map, sherman, enemies } = this.mission;
     if (sherman.facing === null) {

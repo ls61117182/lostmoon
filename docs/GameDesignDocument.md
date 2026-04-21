@@ -178,22 +178,26 @@ d6 ≥ 目标对应面装甲 - 攻击方穿甲值  → 造成伤害
 
 ### 3.6 行动表（玩家"谢尔曼行动阶段"摇骰映射）
 
+> **配置源**：`data/player_action_table.csv`（骰面 → A/B/C 动作）+ `data/player_dice_pool.csv`（基础 3 / 地形修正 / 舱盖 +1 / 上下限）。**以上表为准；下方表格只是人类可读参考。**
+>
 > **摇骰数量 = 基础 3 颗 + 地形修正（公路+1、泥地-1）+ 车长打开舱盖 +1 + 乘员存活修正**
 > 上限 5 颗
 
 | 骰子点数 | A 移动 | B 攻击 | C 杂项 |
 |---------|--------|--------|--------|
-| 1 | — | 装填 | 炮手：主炮射击 / 装填手：装填 |
-| 2 | 启动 | 装填 | 副驾驶：相邻步兵 7+ 命中 |
+| 1 | 后退 | 装填 | 炮手：主炮射击 / 装填手：装填 |
+| 2 | 转向 | 装填 | 副驾驶：机枪射击：相邻步兵 7+ 命中 |
 | 3 | 转向 | 机枪射击（相邻步兵 7+） | 驾驶员：转向 或 前进 |
 | 4 | 转向 | 机枪射击 | 修复 |
 | 5 | 前进 | **主炮射击** | 烟雾 或 修复 |
-| 6 | 前进 | **主炮射击** | 灭火 / 着火程度 -1 |
-| 2 个相同点 | 驾驶员：前进 + 转向 | 炮手：主炮射击 或 装填 | 隐蔽 |
+| 6 | 前进 | **主炮射击** | 灭火 ：着火程度 -1 |
+| 2 个相同点 | 驾驶员：前进 / 副驾驶：转向 | 炮手：主炮射击 / 装填手：装填 | 隐蔽 |
 
 > **顺序约束**：A、B 可互换顺序，C 必须最后执行。
 
 ### 3.7 德军坦克 AI 行动表
+
+> **配置源**：`data/enemy_ai_table.csv`（列 × 骰面 → 主动作 / 备选动作）+ `data/enemy_ai_dice.csv`（每列掷骰数）。**以上表为准；下方表格只是人类可读参考。**
 
 德军坦克不依赖玩家决策，由"起始格地形 → 掷骰映射"的确定表驱动：
 
@@ -506,10 +510,10 @@ setLang('en');   // 一行切到英文，下一次 t() 调用立即返回英文
 |-----|--------|------|------|
 | `data/units.csv` | `tools/buildUnitDB.js` | `core/UnitDB.ts` | 单位类型：体型 / 4 个装甲面 / 穿甲 |
 | `data/lang.csv` | `tools/buildLangDB.js` | `core/LangDB.ts` | 所有玩家可见文本（见 6.5）|
+| `data/player_action_table.csv` + `data/player_dice_pool.csv` | `tools/buildPlayerActionDB.js` | `core/PlayerActionDB.ts` | §3.6 玩家行动表（1..6 + 对子 → A 移动 / B 攻击 / C 杂项）+ 骰池公式（基础 / 地形修正 / 舱盖 / 上下限）|
+| `data/enemy_ai_table.csv` + `data/enemy_ai_dice.csv` | `tools/buildEnemyAIDB.js` | `core/EnemyAIDB.ts` | §3.7 德军坦克 AI 表（列 × 骰面 → 主动作 / 备选动作）+ 每列骰数（road 4 / field 4 / mud 3 / damaged 2）|
 | `data/terrain.csv`（规划）| `tools/buildTerrainDB.js` | `core/TerrainDB.ts` | 地形移动成本 / LoS 阻挡 / 射击修正 |
-| `data/ai_table.csv`（规划）| `tools/buildAITableDB.js` | `core/AITableDB.ts` | AI 列 × 骰面 → 主动作 / 备选动作 |
 | `data/damage_table.csv`（规划）| `tools/buildDamageDB.js` | `core/DamageDB.ts` | 1d6 伤害点数 → 效果（起火/炮塔/痛痪/阵亡检定/击毁）|
-| `data/dice_pool.csv`（规划）| `tools/buildDicePoolDB.js` | `core/DicePoolDB.ts` | 地形 × 舱盖 → 行动骰数量 |
 | `data/missions/*.json` | *(不走 CSV)* | *(直接 JSON)* | 单关地图 + 初始摆放；结构太复杂，继续用 JSON |
 
 > 命名约定：CSV 文件统一放 `data/` 下，生成器统一放 `tools/build*DB.js`，输出统一到 `assets/scripts/core/*DB.ts` 并带"自动生成，请勿手改"注释头。
@@ -611,5 +615,5 @@ Excel 开 data/XX.csv → 改数值 → 另存为 CSV UTF-8 →
 **文档版本**：v0.2  
 **作者**：策划组  
 **最后更新**：2026-04-20  
-**v0.2 变更**：新增 6.5 多语言与文案管理（`lang.csv`）、6.6 数值数据管理（CSV 驱动）两节硬规则。  
+**v0.2 变更**：新增 6.5 多语言与文案管理（`lang.csv`）、6.6 数值数据管理（CSV 驱动）两节硬规则；§3.6 玩家行动表 / 骰池、§3.7 德军 AI 表均改为以 `data/player_action_table.csv`、`data/player_dice_pool.csv`、`data/enemy_ai_table.csv`、`data/enemy_ai_dice.csv` 为唯一配置源。  
 **下一步**：与主程评审第六章实现方案；与美术评审第五章 UI 草稿。

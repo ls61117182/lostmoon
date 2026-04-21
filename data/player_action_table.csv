@@ -1,0 +1,8 @@
+﻿die,move,attack,misc,notes
+1,reverse,reload,gunner_gun_or_reload,A列后退；B列装填；C列炮手主炮射击或装填手装填
+2,turn,reload,codriver_mg,A列转向；B列装填；C列副驾驶机枪射击：相邻步兵7+命中
+3,turn,mg,driver_turn_or_drive,A列转向；B列机枪射击（相邻步兵7+）；C列驾驶员转向或前进
+4,turn,mg,repair,A列转向；B列机枪射击；C列修复
+5,drive,gun,smoke_or_repair,A列前进；B列主炮射击；C列烟雾或修复
+6,drive,gun,fire_suppress,A列前进；B列主炮射击；C列灭火：着火程度-1
+doubles,driver_drive_codriver_turn,gunner_gun_or_reload,concealment,对子：A列驾驶员前进/副驾驶转向；B列炮手主炮射击/装填手装填；C列隐蔽

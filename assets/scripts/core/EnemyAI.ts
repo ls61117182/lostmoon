@@ -18,6 +18,14 @@
 
 import { RNG } from './Dice';
 import {
+  AI_DICE_COUNT,
+  AIActionEntry,
+  AIActionTable,
+  AIColumn,
+  DEFAULT_AI_TABLE,
+  EnemyAction,
+} from './EnemyAIDB';
+import {
   HexMap,
   approximateDirection,
   directionTo,
@@ -31,76 +39,13 @@ import { Axial, Direction, TerrainType, Unit } from './types';
 
 // ---------- 行动分类 ----------
 
-/** 单颗 AI 骰能产出的具体行动 */
-export type EnemyAction =
-  | 'shoot'    // 射击：朝谢尔曼开火
-  | 'turn'     // 转向 1 步（60°）
-  | 'advance'  // 前进 1 格
-  | 'reverse'  // 后退 1 格
-  | 'smoke'    // 施放烟雾（自身 smoked=true）
-  | 'repair'   // 修复（清掉 damaged 状态）
-  | 'none';    // 空骰：无事发生
-
-/** 一颗骰子对应的"A>B"规则；没有 fallback 就单纯 A */
-export interface AIActionEntry {
-  primary: EnemyAction;
-  fallback?: EnemyAction;
-}
-
-/** AI 表的行键：地形或"受损" */
-export type AIColumn = 'road' | 'field' | 'mud' | 'damaged';
-
-/** AI 表：列 → (1..6) → 行动 */
-export type AIActionTable = Record<AIColumn, Record<number, AIActionEntry>>;
-
-/** 不同列对应的掷骰数 */
-export const AI_DICE_COUNT: Record<AIColumn, number> = {
-  road: 4,
-  field: 4,
-  mud: 3,
-  damaged: 2,
-};
-
 /**
- * GDD §3.7 示意 AI 表。按任务配置化后这张表会被各关自己的表覆盖。
- *
- * 注：表里每颗骰都保留"A>B"的降级候选；
- * shoot/repair 等没有明显降级候选的条目就写单一动作。
+ * AI 行动 / 列 / 骰数 / 默认表 —— 全部从 `EnemyAIDB` 再导出，数据源是
+ * `data/enemy_ai_table.csv` + `data/enemy_ai_dice.csv`，由 `tools/buildEnemyAIDB.js`
+ * 生成。本文件不再写任何骰面→动作的硬编码。
  */
-export const DEFAULT_AI_TABLE: AIActionTable = {
-  road: {
-    1: { primary: 'shoot',   fallback: 'turn' },
-    2: { primary: 'advance', fallback: 'shoot' },
-    3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'turn' },
-    5: { primary: 'advance', fallback: 'shoot' },
-    6: { primary: 'advance', fallback: 'turn' },
-  },
-  field: {
-    1: { primary: 'shoot',   fallback: 'turn' },
-    2: { primary: 'turn' },
-    3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'advance', fallback: 'turn' },
-    5: { primary: 'advance', fallback: 'turn' },
-    6: { primary: 'advance', fallback: 'reverse' },
-  },
-  mud: {
-    1: { primary: 'shoot' },
-    2: { primary: 'turn' },
-    3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'turn' },
-    5: { primary: 'advance', fallback: 'shoot' },
-    6: { primary: 'advance', fallback: 'smoke' },
-  },
-  damaged: {
-    1: { primary: 'repair' },
-    2: { primary: 'turn' },
-    3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'turn' },
-    5: { primary: 'shoot' },
-    6: { primary: 'smoke' },
-  },
-};
+export { AI_DICE_COUNT, DEFAULT_AI_TABLE };
+export type { AIActionEntry, AIActionTable, AIColumn, EnemyAction };
 
 // ---------- 列 & 骰子 ----------
 

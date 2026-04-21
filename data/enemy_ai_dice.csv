@@ -1,0 +1,5 @@
+﻿column,dice,notes
+road,4,公路格掷 4 骰
+field,4,田地格掷 4 骰
+mud,3,泥地格掷 3 骰
+damaged,2,受损状态掷 2 骰（不论地形）

@@ -1,57 +1,70 @@
 /**
  * 行动阶段骰子逻辑 —— 纯 TypeScript，不依赖 Cocos。
  *
- * 说明书 3.6 节规定：玩家进入"谢尔曼行动阶段"时先掷 N 颗骰子（N = 基础 3 +
- * 地形修正 + 舱盖修正 + 乘员修正，上限 5），再按骰面点数把每颗骰子拖进
- * A/B/C 三列行动槽。本 demo 与 GDD 口径保持一致，只是把它进一步拆成
- * "移动阶段 / 攻击阶段各自独立掷骰"——玩家手动选先进哪个阶段，
+ * GDD §3.6 规定玩家进入"谢尔曼行动阶段"时先掷 N 颗骰子（N = 基础 3 + 地形修正
+ * + 舱盖修正 + 乘员修正，上限 5），再按骰面点数把每颗骰子拖进 A/B/C 三列行动槽。
+ * 本 demo 把它拆成"移动阶段 / 攻击阶段各自独立掷骰"——玩家手动选先进哪个阶段，
  * 每进一次都重摇一次骰。
  *
- * 本文件负责 2 件事：
- *  1) 给出"某阶段进骰池的大小"的纯函数；
- *  2) 把单颗骰子点数 → 该阶段可用动作 的查表函数；
+ * 本文件只负责薄薄一层业务胶水：
+ *   1) `actionDicePool()`：按 GDD 公式计算本阶段应掷多少颗骰；
+ *   2) `classifyMoveDie()` / `classifyAttackDie()`：把单颗骰点数映射到当前阶段动作；
+ *   3) `rollActionDice()`：用给定 RNG 掷 N 颗 d6。
+ *
+ * **所有数值与映射均来自 `data/player_action_table.csv` + `data/player_dice_pool.csv`，
+ *   由 `tools/buildPlayerActionDB.js` 生成 `PlayerActionDB.ts`。** 本文件不再写任何
+ *   骰面→动作的硬编码，也不再写 3 / 5 / +1 这类魔法常量。
  *
  * 不触及 Unit / Map，这样以后写单元测试可以直接跑。
  */
 
 import { RNG } from './Dice';
+import {
+  PLAYER_ACTION_BY_PIP,
+  PLAYER_DICE_POOL,
+  AttackDieAction as AttackDieActionDB,
+  MoveDieAction as MoveDieActionDB,
+} from './PlayerActionDB';
 import { TerrainType } from './types';
 
 // ---------- 动作分类 ----------
 
 /**
- * 移动阶段骰面含义（说明书 3.6 表）：
- *   1        → 无
- *   2        → 启动（本 demo 未实装发动机熄火机制，玩家把它当废骰放弃即可）
- *   3 / 4    → 转向 1 次（60°，顺时针或逆时针由玩家选）
- *   5 / 6    → 前进 1 格；允许玩家改为"后退"（说明书里"后退"属痛痪解除后的普通驾驶动作）
+ * 移动阶段骰面含义（见 `data/player_action_table.csv` move 列）。
+ *
+ * MVP 实际消费的取值：
+ *   - 'none'    → 本骰弃掉
+ *   - 'turn'    → 转向 1 次（60°，顺时针 / 逆时针由玩家选）
+ *   - 'drive'   → 前进 1 格（前格合法且地形可入）
+ *   - 'reverse' → 后退 1 格（后格合法且地形可入，MVP UI 提示暂未开放）
+ *
+ * `'start'`（启动检定）与 `'driver_drive_codriver_turn'`（对子：驾驶员前进 /
+ * 副驾驶转向，二选一）均为未来扩展值，MVP 遇到这些值按 `'none'` 处理。
  */
-export type MoveDieAction = 'none' | 'start' | 'turn' | 'drive';
+export type MoveDieAction = MoveDieActionDB;
 
 /**
- * 攻击阶段骰面含义（说明书 3.6 表）：
- *   1 / 2    → 装填 1 次
- *   3 / 4    → 机枪射击（相邻步兵）
- *   5 / 6    → 主炮射击（必须已装填）
+ * 攻击阶段骰面含义（见 `data/player_action_table.csv` attack 列）。
  *
- * MVP 把"对子"相关的特殊组合（如 对子 → 炮手主炮射击/装填）留空，
- * 对子的每颗骰仍作为普通骰分别使用。
+ * MVP 实际消费的取值：
+ *   - 'none'   → 本骰弃掉
+ *   - 'reload' → 装填 1 次
+ *   - 'mg'     → 机枪射击（相邻步兵）
+ *   - 'gun'    → 主炮射击（必须已装填）
+ *
+ * `'gunner_gun_or_reload'` 代表"炮手主炮射击 / 装填手装填（二选一）"，
+ * 同时出现在点数 1 的 C 列与对子行的 B 列；MVP 不消费。
  */
-export type AttackDieAction = 'none' | 'reload' | 'mg' | 'gun';
+export type AttackDieAction = AttackDieActionDB;
 
 export function classifyMoveDie(pt: number): MoveDieAction {
-  if (pt === 1) return 'none';
-  if (pt === 2) return 'start';
-  if (pt === 3 || pt === 4) return 'turn';
-  if (pt === 5 || pt === 6) return 'drive';
-  return 'none';
+  const row = PLAYER_ACTION_BY_PIP[pt as 1 | 2 | 3 | 4 | 5 | 6];
+  return row ? row.move : 'none';
 }
 
 export function classifyAttackDie(pt: number): AttackDieAction {
-  if (pt === 1 || pt === 2) return 'reload';
-  if (pt === 3 || pt === 4) return 'mg';
-  if (pt === 5 || pt === 6) return 'gun';
-  return 'none';
+  const row = PLAYER_ACTION_BY_PIP[pt as 1 | 2 | 3 | 4 | 5 | 6];
+  return row ? row.attack : 'none';
 }
 
 // ---------- 行动骰池 ----------
@@ -64,19 +77,18 @@ export interface ActionDicePoolOpts {
 }
 
 /**
- * 本阶段应掷骰数。
- *
- * 手册修正：
- *   基础 3；公路 +1；泥地 -1；舱盖打开 +1；上限 5；下限 1（防止极端修正下永远 0 骰）
+ * 本阶段应掷骰数。修正来自 `data/player_dice_pool.csv`：
+ *   基础、地形修正、舱盖修正、上下限全部读配置；本文件不再写任何魔法数字。
  *
  * 乘员修正 MVP 暂未落实（驾驶员/炮手阵亡的细则后续迭代时补）。
  */
 export function actionDicePool(opts: ActionDicePoolOpts): number {
-  let n = 3;
-  if (opts.terrain === 'road') n += 1;
-  else if (opts.terrain === 'mud') n -= 1;
-  if (opts.hatchOpen) n += 1;
-  return Math.max(1, Math.min(5, n));
+  const cfg = PLAYER_DICE_POOL;
+  let n = cfg.base;
+  const bonus = cfg.terrainBonus[opts.terrain];
+  if (typeof bonus === 'number') n += bonus;
+  if (opts.hatchOpen) n += cfg.hatchOpen;
+  return Math.max(cfg.capMin, Math.min(cfg.capMax, n));
 }
 
 /** 用给定 RNG 掷 count 颗 d6，返回长度为 count 的点数数组。 */

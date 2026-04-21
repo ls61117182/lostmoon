@@ -71,7 +71,8 @@ dice.tray.move,移动阶段骰子（点骰子选择动作）,Move Phase Dice (ta
 dice.tray.attack,攻击阶段骰子（点骰子选择动作）,Attack Phase Dice (tap a die to act)
 dice.slot.used,已用,Used
 die.hint.turn,转向,Turn
-die.hint.drive,驾驶,Drive
+die.hint.drive,前进,Advance
+die.hint.reverse,后退,Reverse
 die.hint.start,启动,Start
 die.hint.reload,装填,Reload
 die.hint.gun,主炮,Gun
