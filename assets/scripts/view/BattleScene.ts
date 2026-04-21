@@ -59,6 +59,7 @@ import {
 } from '../core/ActionDice';
 import { applyAttack, AttackReport, canAttack, CrewDeathResult, DamageEffect, hitThreshold, rollAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
+import { t } from '../core/Lang';
 import {
   actionFor,
   AI_DICE_COUNT,
@@ -108,37 +109,37 @@ function describeEntry(entry: AIActionEntry): string {
  */
 function damageEffectLabel(e: DamageEffect | undefined): { text: string; color: Color } {
   switch (e) {
-    case 'destroyed':  return { text: '摧毁！',     color: new Color(255,  60,  60, 255) };
-    case 'damaged':    return { text: '受损',       color: new Color(240, 200, 100, 255) };
-    case 'fire':       return { text: '起火 +1',    color: new Color(255, 170,  40, 255) };
-    case 'turret':     return { text: '炮塔受损',   color: new Color(230, 150,  80, 255) };
-    case 'paralyzed':  return { text: '痛痪',       color: new Color(200, 160, 240, 255) };
-    case 'crewCheck':  return { text: '阵亡检定',   color: new Color(240, 220, 120, 255) };
-    default:           return { text: '—',           color: new Color(200, 200, 200, 255) };
+    case 'destroyed':  return { text: t('dmg.effect.destroyed'), color: new Color(255,  60,  60, 255) };
+    case 'damaged':    return { text: t('dmg.effect.damaged'),   color: new Color(240, 200, 100, 255) };
+    case 'fire':       return { text: t('dmg.effect.fire'),      color: new Color(255, 170,  40, 255) };
+    case 'turret':     return { text: t('dmg.effect.turret'),    color: new Color(230, 150,  80, 255) };
+    case 'paralyzed':  return { text: t('dmg.effect.paralyzed'), color: new Color(200, 160, 240, 255) };
+    case 'crewCheck':  return { text: t('dmg.effect.crewCheck'), color: new Color(240, 220, 120, 255) };
+    default:           return { text: '—',                        color: new Color(200, 200, 200, 255) };
   }
 }
 
 /** 面板底部大字的配色 / 文字。与右侧小字相比用更醒目颜色。 */
 function damageOutcomeLabel(e: DamageEffect | undefined): { text: string; color: Color } {
   switch (e) {
-    case 'destroyed':  return { text: '击毁',      color: new Color(255,  60,  60, 255) };
-    case 'damaged':    return { text: '受损',      color: new Color(240, 200, 100, 255) };
-    case 'fire':       return { text: '起火',      color: new Color(255, 170,  40, 255) };
-    case 'turret':     return { text: '炮塔受损',  color: new Color(230, 150,  80, 255) };
-    case 'paralyzed':  return { text: '痛痪',      color: new Color(200, 160, 240, 255) };
-    case 'crewCheck':  return { text: '阵亡检定',  color: new Color(240, 220, 120, 255) };
-    default:           return { text: '—',          color: new Color(200, 200, 200, 255) };
+    case 'destroyed':  return { text: t('dmg.outcome.destroyed'), color: new Color(255,  60,  60, 255) };
+    case 'damaged':    return { text: t('dmg.outcome.damaged'),   color: new Color(240, 200, 100, 255) };
+    case 'fire':       return { text: t('dmg.outcome.fire'),      color: new Color(255, 170,  40, 255) };
+    case 'turret':     return { text: t('dmg.outcome.turret'),    color: new Color(230, 150,  80, 255) };
+    case 'paralyzed':  return { text: t('dmg.outcome.paralyzed'), color: new Color(200, 160, 240, 255) };
+    case 'crewCheck':  return { text: t('dmg.outcome.crewCheck'), color: new Color(240, 220, 120, 255) };
+    default:           return { text: '—',                         color: new Color(200, 200, 200, 255) };
   }
 }
 
-/** §3.2：乘员编号 -> 中文名 */
+/** §3.2：乘员编号 -> 角色名（走 t()，默认中文） */
 function crewRoleName(slot: number | null | undefined): string {
   switch (slot) {
-    case 1: return '车长';
-    case 2: return '装填手';
-    case 3: return '炮手';
-    case 4: return '驾驶员';
-    case 5: return '副驾驶';
+    case 1: return t('crew.role.1');
+    case 2: return t('crew.role.2');
+    case 3: return t('crew.role.3');
+    case 4: return t('crew.role.4');
+    case 5: return t('crew.role.5');
     default: return '—';
   }
 }
@@ -148,10 +149,10 @@ function crewDeathLabel(cc: CrewDeathResult | undefined): { text: string; color:
   if (!cc) return { text: '—', color: new Color(200, 200, 200, 255) };
   if (cc.slot === null) {
     // die === 6 且舱盖关 / 或兜底的"全员阵亡"极端情况
-    return { text: '虚惊（舱盖关）', color: new Color(180, 200, 240, 255) };
+    return { text: t('crew.death.falseAlarmHatch'), color: new Color(180, 200, 240, 255) };
   }
   return {
-    text: `${crewRoleName(cc.slot)} 阵亡`,
+    text: t('crew.death.kia', { role: crewRoleName(cc.slot) }),
     color: new Color(255,  80,  80, 255),
   };
 }
@@ -159,10 +160,10 @@ function crewDeathLabel(cc: CrewDeathResult | undefined): { text: string; color:
 /** 阵亡检定：骰子面板底部大字 */
 function crewOutcomeLabel(cc: CrewDeathResult | undefined): { text: string; color: Color } {
   if (!cc || cc.slot === null) {
-    return { text: '乘员虚惊', color: new Color(180, 200, 240, 255) };
+    return { text: t('crew.death.falseAlarm'), color: new Color(180, 200, 240, 255) };
   }
   return {
-    text: `${crewRoleName(cc.slot)} 阵亡`,
+    text: t('crew.death.kia', { role: crewRoleName(cc.slot) }),
     color: new Color(255,  80,  80, 255),
   };
 }
@@ -691,7 +692,7 @@ export class BattleScene extends Component {
     l.horizontalAlign = HorizontalTextAlignment.CENTER;
     l.verticalAlign = VerticalTextAlignment.CENTER;
     if (prob <= 0) {
-      l.string = `≥${need}\n几乎不可能`;
+      l.string = t('preview.impossible', { n: need });
       l.fontSize = 14;
     } else {
       l.string = `≥${need}\n${Math.round(prob * 100)}%`;
@@ -721,7 +722,7 @@ export class BattleScene extends Component {
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
-    const text = u.destroyed ? '已毁' : '起火';
+    const text = u.destroyed ? t('unit.status.destroyed') : t('unit.status.fire');
     const color = u.destroyed ? STATUS_TEXT_DEAD : STATUS_TEXT_FIRE;
 
     const n = new Node('StatusLabel');
@@ -1038,7 +1039,7 @@ export class BattleScene extends Component {
     label.color = HUD_TEXT_COLOR;
     label.horizontalAlign = HorizontalTextAlignment.LEFT;
     label.verticalAlign = VerticalTextAlignment.TOP;
-    label.string = '回合 - | 行动力 -/-';
+    label.string = t('hud.init');
     // Canvas 1280x720，左上角对应 (-640, 360)，再留 16px 边距
     labelNode.setPosition(-624, 344, 0);
     this.node.addChild(labelNode);
@@ -1070,7 +1071,7 @@ export class BattleScene extends Component {
     txt.color = HUD_TEXT_COLOR;
     txt.horizontalAlign = HorizontalTextAlignment.CENTER;
     txt.verticalAlign = VerticalTextAlignment.CENTER;
-    txt.string = '下一阶段';
+    txt.string = t('btn.nextPhase');
     btn.addChild(txtNode);
     this.endTurnLabel = txt;
 
@@ -1080,11 +1081,11 @@ export class BattleScene extends Component {
 
     // ---- 右上角"存档 / 读档"按钮 ----
     // 放在右上角而非底部，视觉上和"战局操作"（结束回合）分区：上=元操作，下=回合内行动
-    this.makeSimpleButton('SaveBtn', '存档',
+    this.makeSimpleButton('SaveBtn', t('btn.save'),
       640 - 70 - 16, 360 - 24 - 16,
       new Color(60, 120, 80, 230),
       () => this.onSave());
-    this.makeSimpleButton('LoadBtn', '读档',
+    this.makeSimpleButton('LoadBtn', t('btn.load'),
       640 - 70 - 16 - 140 - 10, 360 - 24 - 16,
       new Color(80, 60, 130, 230),
       () => this.onLoad_Save());
@@ -1185,7 +1186,7 @@ export class BattleScene extends Component {
     this.statusPanel = panel;
 
     // 顶部标题
-    this.makeCenteredLabel(panel, '谢尔曼状态',
+    this.makeCenteredLabel(panel, t('status.panelTitle'),
       0, H / 2 - 22, W - 20, 28, 22, STATUS_TITLE_COLOR);
 
     // 车体状态 5 行（装填 / 舱盖 / 车体 / 炮塔 / 机动）—— 等距 28px
@@ -1193,11 +1194,11 @@ export class BattleScene extends Component {
     const BODY_GAP = 28;
     const bodyRowY = [0, 1, 2, 3, 4].map(i => BODY_TOP - i * BODY_GAP);
     const bodyRows: Array<[string, 'loaded' | 'hatch' | 'fire' | 'turret' | 'mobility']> = [
-      ['装填', 'loaded'],
-      ['舱盖', 'hatch'],
-      ['车体', 'fire'],
-      ['炮塔', 'turret'],
-      ['机动', 'mobility'],
+      [t('status.row.loaded'),   'loaded'],
+      [t('status.row.hatch'),    'hatch'],
+      [t('status.row.fire'),     'fire'],
+      [t('status.row.turret'),   'turret'],
+      [t('status.row.mobility'), 'mobility'],
     ];
     for (let i = 0; i < bodyRows.length; i++) {
       const [label, key] = bodyRows[i];
@@ -1213,17 +1214,23 @@ export class BattleScene extends Component {
     }
 
     // 乘员小标题
-    this.makeCenteredLabel(panel, '乘员',
+    this.makeCenteredLabel(panel, t('status.row.crewTitle'),
       0, sepY - 22, W - 20, 24, 20, STATUS_TITLE_COLOR);
 
     // 5 名乘员行：编号 + 称谓 + 状态
-    const crewNames = ['① 车长', '② 装填手', '③ 炮手', '④ 驾驶员', '⑤ 副驾驶'];
+    const crewNames = [
+      t('status.crew.1'),
+      t('status.crew.2'),
+      t('status.crew.3'),
+      t('status.crew.4'),
+      t('status.crew.5'),
+    ];
     const crewTopY = sepY - 54;
     this.statusCrewLabels = [];
     for (let i = 0; i < crewNames.length; i++) {
       const rowY = crewTopY - i * 26;
       this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 120, 22, 18, STATUS_LABEL_COLOR);
-      const val = this.makeRightLabel(panel, '存活', W / 2 - 20, rowY, 70, 22, 18, STATUS_VALUE_OK);
+      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 70, 22, 18, STATUS_VALUE_OK);
       this.statusCrewLabels.push(val);
     }
   }
@@ -1288,10 +1295,10 @@ export class BattleScene extends Component {
         this.statusLoaded.string = '—';
         this.statusLoaded.color = STATUS_VALUE_DOWN;
       } else if (s.loaded) {
-        this.statusLoaded.string = '已装填';
+        this.statusLoaded.string = t('status.val.loaded');
         this.statusLoaded.color = STATUS_VALUE_OK;
       } else {
-        this.statusLoaded.string = '未装填';
+        this.statusLoaded.string = t('status.val.unloaded');
         this.statusLoaded.color = STATUS_VALUE_DOWN;
       }
     }
@@ -1303,10 +1310,10 @@ export class BattleScene extends Component {
         this.statusHatch.color = STATUS_VALUE_DOWN;
       } else if (s.hatchOpen) {
         // 舱盖开 = 行动骰+1 但易被步兵 / 对子击杀车长 → 用警告色
-        this.statusHatch.string = '打开';
+        this.statusHatch.string = t('status.val.hatchOpen');
         this.statusHatch.color = STATUS_VALUE_WARN;
       } else {
-        this.statusHatch.string = '关闭';
+        this.statusHatch.string = t('status.val.hatchClosed');
         this.statusHatch.color = STATUS_VALUE_DOWN;
       }
     }
@@ -1314,17 +1321,17 @@ export class BattleScene extends Component {
     // 车体（已毁 / 起火 (程度) / 完好）
     if (this.statusFire) {
       if (s.destroyed) {
-        this.statusFire.string = '已毁';
+        this.statusFire.string = t('status.val.destroyed');
         this.statusFire.color = STATUS_VALUE_DEAD;
       } else if ((s.fireLevel ?? 0) > 0) {
         // 有明确的着火程度：显示数字让玩家看到严重性（来自 §3.4 Step 3 的 'fire' 效果）
-        this.statusFire.string = `起火(${s.fireLevel})`;
+        this.statusFire.string = t('status.val.fireN', { n: s.fireLevel ?? 0 });
         this.statusFire.color = STATUS_VALUE_FIRE;
       } else if (s.damaged) {
-        this.statusFire.string = '受损';
+        this.statusFire.string = t('status.val.damaged');
         this.statusFire.color = STATUS_VALUE_WARN;
       } else {
-        this.statusFire.string = '完好';
+        this.statusFire.string = t('status.val.intact');
         this.statusFire.color = STATUS_VALUE_OK;
       }
     }
@@ -1335,10 +1342,10 @@ export class BattleScene extends Component {
         this.statusTurret.string = '—';
         this.statusTurret.color = STATUS_VALUE_DOWN;
       } else if (s.turretDamaged) {
-        this.statusTurret.string = '受损';
+        this.statusTurret.string = t('status.val.damaged');
         this.statusTurret.color = STATUS_VALUE_DEAD;
       } else {
-        this.statusTurret.string = '完好';
+        this.statusTurret.string = t('status.val.intact');
         this.statusTurret.color = STATUS_VALUE_OK;
       }
     }
@@ -1349,10 +1356,10 @@ export class BattleScene extends Component {
         this.statusMobility.string = '—';
         this.statusMobility.color = STATUS_VALUE_DOWN;
       } else if (s.paralyzed) {
-        this.statusMobility.string = '痛痪';
+        this.statusMobility.string = t('status.val.paralyzed');
         this.statusMobility.color = STATUS_VALUE_DEAD;
       } else {
-        this.statusMobility.string = '正常';
+        this.statusMobility.string = t('status.val.normal');
         this.statusMobility.color = STATUS_VALUE_OK;
       }
     }
@@ -1366,13 +1373,13 @@ export class BattleScene extends Component {
     for (let i = 0; i < this.statusCrewLabels.length; i++) {
       const lab = this.statusCrewLabels[i];
       if (s.destroyed) {
-        lab.string = '阵亡';
+        lab.string = t('status.val.crewDead');
         lab.color = STATUS_VALUE_DEAD;
       } else if (!crewFlags[i]) {
-        lab.string = '阵亡';
+        lab.string = t('status.val.crewDead');
         lab.color = STATUS_VALUE_DEAD;
       } else {
-        lab.string = '存活';
+        lab.string = t('status.val.crewAlive');
         lab.color = STATUS_VALUE_OK;
       }
     }
@@ -1395,20 +1402,25 @@ export class BattleScene extends Component {
   private updateHUD() {
     if (this.hudLabel) {
       if (this.phase !== 'player') {
-        this.hudLabel.string = `回合 ${this.turn} | 敌方行动中...`;
+        this.hudLabel.string = t('hud.enemyTurn', { n: this.turn });
       } else if (this.playerStep === 'choose') {
         const doneTag = [
-          this.movementDone ? '✓移动' : '·移动',
-          this.attackDone   ? '✓攻击' : '·攻击',
+          this.movementDone ? t('hud.moveDone')   : t('hud.moveTodo'),
+          this.attackDone   ? t('hud.attackDone') : t('hud.attackTodo'),
         ].join(' ');
-        this.hudLabel.string = `回合 ${this.turn} | 玩家 | 选择阶段  ${doneTag}`;
+        this.hudLabel.string = t('hud.playerChoose', { n: this.turn, tags: doneTag });
       } else if (this.playerStep === 'movement') {
-        this.hudLabel.string = `回合 ${this.turn} | 移动阶段 | 骰子 ${this.remainingDice()}`;
+        this.hudLabel.string = t('hud.movePhase', { n: this.turn, dice: this.remainingDice() });
       } else {
         const sherman = this.mission?.sherman;
-        const loaded = sherman?.loaded ? '已装填' : '未装填';
-        const sel = this.selectedGunDieIdx >= 0 ? ' | 点敌人开火' : '';
-        this.hudLabel.string = `回合 ${this.turn} | 攻击阶段 | ${loaded} | 骰子 ${this.remainingDice()}${sel}`;
+        const loaded = sherman?.loaded ? t('hud.loaded') : t('hud.unloaded');
+        const sel = this.selectedGunDieIdx >= 0 ? ` | ${t('hud.attackSelectHint')}` : '';
+        this.hudLabel.string = t('hud.attackPhase', {
+          n: this.turn,
+          loaded,
+          dice: this.remainingDice(),
+          sel,
+        });
       }
     }
 
@@ -1431,10 +1443,10 @@ export class BattleScene extends Component {
    *   - 敌方阶段                      → "敌方回合中"（灰-蓝，点不了）
    */
   private computeAdvanceButton(): { label: string; urgent: boolean } {
-    if (this.phase !== 'player') return { label: '敌方回合中', urgent: false };
+    if (this.phase !== 'player') return { label: t('btn.enemyTurnRunning'), urgent: false };
     const allDone = this.movementDone && this.attackDone;
-    if (allDone) return { label: '结束回合', urgent: true };
-    return { label: '下一阶段', urgent: false };
+    if (allDone) return { label: t('btn.endTurn'), urgent: true };
+    return { label: t('btn.nextPhase'), urgent: false };
   }
 
   /** 胜负覆盖层：懒创建，仅在 outcome 非 ongoing 时显示，并联动"再来一局"按钮的可见性 */
@@ -1461,17 +1473,17 @@ export class BattleScene extends Component {
     }
     this.outcomeLabel.node.active = true;
     if (this.outcome === 'victory') {
-      this.outcomeLabel.string = '胜利！';
+      this.outcomeLabel.string = t('outcome.win');
       this.outcomeLabel.color = new Color(255, 230, 80, 255);
     } else {
-      this.outcomeLabel.string = '战败';
+      this.outcomeLabel.string = t('outcome.lose');
       this.outcomeLabel.color = new Color(255, 80, 80, 255);
     }
 
     // "再来一局"按钮：放在标题正下方
     if (!this.restartBtn) {
       this.restartBtn = this.makeSimpleButton(
-        'RestartBtn', '再来一局',
+        'RestartBtn', t('btn.restart'),
         0, -90,
         BTN_BG_NORMAL,
         () => this.restartMission(),
@@ -1554,9 +1566,9 @@ export class BattleScene extends Component {
       bar.addChild(b);
       return b;
     };
-    this.chooseMoveBtn = makeBtn('ChooseMove', '移动阶段', -130,
+    this.chooseMoveBtn = makeBtn('ChooseMove', t('btn.movePhase'), -130,
       PHASE_BTN_MOVE, () => this.enterPhase('movement'));
-    this.chooseAttackBtn = makeBtn('ChooseAttack', '攻击阶段', +130,
+    this.chooseAttackBtn = makeBtn('ChooseAttack', t('btn.attackPhase'), +130,
       PHASE_BTN_ATTACK, () => this.enterPhase('attack'));
   }
 
@@ -1646,9 +1658,9 @@ export class BattleScene extends Component {
     }
     if (this.diceTitleLabel) {
       this.diceTitleLabel.string = this.playerStep === 'movement'
-        ? '移动阶段骰子（点骰子选择动作）'
+        ? t('dice.tray.move')
         : this.playerStep === 'attack'
-          ? '攻击阶段骰子（点骰子选择动作）'
+          ? t('dice.tray.attack')
           : '';
     }
     this.refreshDiceTray();
@@ -1702,7 +1714,7 @@ export class BattleScene extends Component {
     vis.faceLabel.color = slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT;
 
     const hint = this.dieActionHint(slot.pip);
-    vis.hintLabel.string = slot.used ? '已用' : hint.text;
+    vis.hintLabel.string = slot.used ? t('dice.slot.used') : hint.text;
     vis.hintLabel.color = slot.used ? DIE_HINT_GREY : hint.color;
   }
 
@@ -1711,19 +1723,19 @@ export class BattleScene extends Component {
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(pip);
       switch (a) {
-        case 'turn':  return { text: '转向', color: DIE_HINT_GREEN };
-        case 'drive': return { text: '驾驶', color: DIE_HINT_GREEN };
-        case 'start': return { text: '启动',  color: DIE_HINT_GREY };
-        default:      return { text: '无',    color: DIE_HINT_GREY };
+        case 'turn':  return { text: t('die.hint.turn'),  color: DIE_HINT_GREEN };
+        case 'drive': return { text: t('die.hint.drive'), color: DIE_HINT_GREEN };
+        case 'start': return { text: t('die.hint.start'), color: DIE_HINT_GREY };
+        default:      return { text: t('die.hint.none'),  color: DIE_HINT_GREY };
       }
     }
     if (this.playerStep === 'attack') {
       const a = classifyAttackDie(pip);
       switch (a) {
-        case 'reload': return { text: '装填', color: DIE_HINT_RED };
-        case 'gun':    return { text: '主炮', color: DIE_HINT_RED };
-        case 'mg':     return { text: '机枪', color: DIE_HINT_GREY };
-        default:       return { text: '无',   color: DIE_HINT_GREY };
+        case 'reload': return { text: t('die.hint.reload'), color: DIE_HINT_RED };
+        case 'gun':    return { text: t('die.hint.gun'),    color: DIE_HINT_RED };
+        case 'mg':     return { text: t('die.hint.mg'),     color: DIE_HINT_GREY };
+        default:       return { text: t('die.hint.none'),   color: DIE_HINT_GREY };
       }
     }
     return { text: '', color: DIE_HINT_GREY };
@@ -1829,30 +1841,30 @@ export class BattleScene extends Component {
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
       if (a === 'turn') {
-        items.push({ text: '↻ 顺时针 60°', color: PHASE_BTN_MOVE,
+        items.push({ text: t('action.turnCW'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryTurnSherman(idx, +1) });
-        items.push({ text: '↺ 逆时针 60°', color: PHASE_BTN_MOVE,
+        items.push({ text: t('action.turnCCW'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryTurnSherman(idx, -1) });
       } else if (a === 'drive') {
-        items.push({ text: '▲ 前进 1 格', color: PHASE_BTN_MOVE,
+        items.push({ text: t('action.advance'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryDriveSherman(idx, +1) });
-        items.push({ text: '▼ 后退 1 格', color: PHASE_BTN_MOVE,
+        items.push({ text: t('action.reverse'), color: PHASE_BTN_MOVE,
           onClick: () => this.tryDriveSherman(idx, -1) });
       } else {
         // 'start' / 'none'：没有有效动作，提供"放弃"
-        items.push({ text: '放弃本骰', color: PHASE_BTN_DISABLED,
+        items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
           onClick: () => this.discardDie(idx) });
       }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
       if (a === 'reload') {
-        items.push({ text: '装填主炮', color: PHASE_BTN_ATTACK,
+        items.push({ text: t('action.reload'), color: PHASE_BTN_ATTACK,
           onClick: () => this.tryReload(idx) });
       } else if (a === 'gun') {
-        items.push({ text: '选定主炮开火', color: PHASE_BTN_ATTACK,
+        items.push({ text: t('action.fire'), color: PHASE_BTN_ATTACK,
           onClick: () => this.selectGunDie(idx) });
       } else {
-        items.push({ text: '放弃本骰', color: PHASE_BTN_DISABLED,
+        items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
           onClick: () => this.discardDie(idx) });
       }
     }
@@ -1936,7 +1948,7 @@ export class BattleScene extends Component {
 
     const { map, sherman, enemies } = this.mission;
     if (sherman.facing === null) {
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, '未定朝向',
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.noFacing'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
@@ -1944,14 +1956,14 @@ export class BattleScene extends Component {
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
     const tile = map.get(to);
     if (!tile || !map.canTankEnter(to)) {
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, '地形阻挡',
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
       return;
     }
     const blocker = enemies.find(e => !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
     if (blocker) {
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, '敌方占据',
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.enemyBlock'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
       return;
@@ -1999,7 +2011,7 @@ export class BattleScene extends Component {
     if (classifyAttackDie(slot.pip) !== 'reload') return;
     const sherman = this.mission.sherman;
     if (sherman.loaded) {
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, '已装填',
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.loaded'),
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
       return;
@@ -2332,7 +2344,7 @@ export class BattleScene extends Component {
       case 'smoke': {
         enemy.smoked = true;
         console.log(`[AI] ${enemy.kind} 施放烟雾`);
-        this.spawnFloater(enemy.pos.q, enemy.pos.r, '烟雾',
+        this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.smoke'),
           new Color(200, 200, 220, 255), { size: 24 });
         this.redraw();
         return 'done';
@@ -2342,7 +2354,7 @@ export class BattleScene extends Component {
         if (enemy.damaged) {
           enemy.damaged = false;
           console.log(`[AI] ${enemy.kind} 修复成功`);
-          this.spawnFloater(enemy.pos.q, enemy.pos.r, '修复',
+          this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.repair'),
             new Color(160, 220, 160, 255), { size: 24 });
           this.redraw();
         }
@@ -2446,16 +2458,19 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[this.selectedGunDieIdx];
     if (!slot || slot.used) return;
     if (!sherman.loaded) {
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, '未装填',
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.unloaded'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
     const check = canAttack({ attacker: sherman, target, map });
     if (!check.ok) {
-      console.log(`[Combat] 无法攻击: ${check.reason}`);
+      console.log(`[Combat] cannot attack: ${check.reason}`);
       // 玩家点到一个"其实打不到"的敌人（比如偏出六向直线 / 被树遮挡），给一条
       // 从射击者向上飘的浮字，免得玩家以为点击没响应。
-      const msg = check.reason === '非六向直线' ? '需在六向直线上' : (check.reason ?? '无法攻击');
+      // 非六向直线有专门的简短提示，其他原因用对应文案；缺失时兜底到"无法攻击"。
+      const msg = check.reason === 'attack.reason.notStraight'
+        ? t('attack.reason.notStraightHint')
+        : t(check.reason ?? 'attack.reason.unknown');
       const warnColor = new Color(255, 120, 120, 255);
       this.spawnFloater(sherman.pos.q, sherman.pos.r, msg, warnColor, { size: 22, dur: 0.9, rise: 24 });
       return;
@@ -2467,13 +2482,13 @@ export class BattleScene extends Component {
     const report = rollAttack({ attacker: sherman, target, map }, this.rng);
     // 骰子先标"用掉了"不行 —— 动画期间得看出主炮骰仍在选中态。
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
-    this.startDiceShow(report, '玩家', target.kind, () => {
+    this.startDiceShow(report, t('actor.player'), target.kind, () => {
       if (!this.mission) return;
       applyAttack(target, report);
       slot.used = true;
       sherman.loaded = false;
       this.selectedGunDieIdx = -1;
-      this.presentAttackResult('玩家', report, sherman, target);
+      this.presentAttackResult(t('actor.player'), report, sherman, target);
       this.refreshPhaseUI();
       this.updateHUD();
       this.autoEndPhaseIfDone();
@@ -2505,10 +2520,10 @@ export class BattleScene extends Component {
     this.destroyEnemyDiceTray();
 
     const report = rollAttack({ attacker: enemy, target: sherman, map }, this.rng);
-    this.startDiceShow(report, `敌方 ${enemy.kind}`, '谢尔曼', () => {
+    this.startDiceShow(report, t('actor.enemyPrefix', { name: enemy.kind }), t('actor.sherman'), () => {
       if (!this.mission) return;
       applyAttack(sherman, report);
-      this.presentAttackResult(`敌方 ${enemy.kind}`, report, enemy, sherman);
+      this.presentAttackResult(t('actor.enemyPrefix', { name: enemy.kind }), report, enemy, sherman);
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
       if (this.outcome === 'ongoing' && this.phase === 'enemy') {
         // 重新浮出托盘（可能还剩骰子），再继续调度
@@ -2653,7 +2668,7 @@ export class BattleScene extends Component {
       0, PANEL_H / 2 - 34, PANEL_W - 40, 34, 26, HUD_TEXT_COLOR);
 
     // 命中需求
-    const hitNeed = this.makeCenteredLabel(panel, `命中需 ≥${report.threshold}`,
+    const hitNeed = this.makeCenteredLabel(panel, t('dice.panel.hitNeed', { n: report.threshold }),
       0, PANEL_H / 2 - 72, PANEL_W - 40, 28, 20, DICE_INFO_TEXT);
 
     // 三/四行骰子等距摆放：hit / pen / dmg (/ crew)
@@ -2685,7 +2700,7 @@ export class BattleScene extends Component {
 
     // 1d6 伤害骰 + "伤害检定" + 效果文字
     const dmgDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), dmgDiceY, DIE_SIZE);
-    const dmgTitle = this.makeCenteredLabel(panel, '伤害检定',
+    const dmgTitle = this.makeCenteredLabel(panel, t('dice.panel.dmgTitle'),
       70, dmgDiceY, 170, 28, 18, DICE_INFO_TEXT);
     const dmgEffect = this.makeCenteredLabel(panel, '',
       200, dmgDiceY, 180, 40, 28, DICE_OUTCOME_HIT);
@@ -2696,7 +2711,7 @@ export class BattleScene extends Component {
     let crewEffect: Label | null = null;
     if (needsCrewRow) {
       crewDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), crewDiceY, DIE_SIZE);
-      crewTitle = this.makeCenteredLabel(panel, '阵亡检定',
+      crewTitle = this.makeCenteredLabel(panel, t('dice.panel.crewTitle'),
         70, crewDiceY, 170, 28, 18, DICE_INFO_TEXT);
       crewEffect = this.makeCenteredLabel(panel, '',
         200, crewDiceY, 180, 40, 28, DICE_OUTCOME_CREW);
@@ -2804,7 +2819,7 @@ export class BattleScene extends Component {
     hl.color = new Color(230, 230, 200, 255);
     hl.horizontalAlign = HorizontalTextAlignment.CENTER;
     hl.verticalAlign = VerticalTextAlignment.CENTER;
-    hl.string = `${this.enemyAICol}  ${count}骰`;
+    hl.string = t('dice.aiHeader', { col: this.enemyAICol, n: count });
     hl.enableOutline = true;
     hl.outlineColor = new Color(0, 0, 0, 220);
     hl.outlineWidth = 2;
@@ -2929,10 +2944,10 @@ export class BattleScene extends Component {
           show.hitDieLabels[1].string = String(show.report.dice[1]);
           show.hitSumLabel.string = `= ${show.report.roll}`;
           if (show.report.hit) {
-            show.hitVerdictLabel.string = '命中！';
+            show.hitVerdictLabel.string = t('dice.panel.hitYes');
             show.hitVerdictLabel.color = DICE_OK_TEXT;
           } else {
-            show.hitVerdictLabel.string = '未命中';
+            show.hitVerdictLabel.string = t('dice.panel.hitNo');
             show.hitVerdictLabel.color = DICE_FAIL_TEXT;
           }
         }
@@ -2947,14 +2962,18 @@ export class BattleScene extends Component {
             if (show.penDieLabel) show.penDieLabel.node.parent!.active = false;
             if (show.penNeedLabel) show.penNeedLabel.node.active = false;
             if (show.penVerdictLabel) show.penVerdictLabel.node.active = false;
-            show.outcomeLabel.string = 'MISS';
+            show.outcomeLabel.string = t('dice.panel.outcomeMiss');
             show.outcomeLabel.color = DICE_OUTCOME_MISS;
           } else {
             // 准备 pen 阶段：标题文字 + 骰子进入滚动
             show.stage = 'pen-roll';
             if (show.penNeedLabel && show.report.penThreshold !== undefined) {
-              const t = show.report.penThreshold;
-              show.penNeedLabel.string = t <= 0 ? '必穿 (≤0)' : t >= 7 ? '不可击穿 (≥7)' : `需 ≥${t}`;
+              const thr = show.report.penThreshold;
+              show.penNeedLabel.string = thr <= 0
+                ? t('dice.panel.penMustPen')
+                : thr >= 7
+                  ? t('dice.panel.penCantPen')
+                  : t('dice.panel.penNeed', { n: thr });
             }
             if (show.penVerdictLabel) show.penVerdictLabel.string = '';
           }
@@ -2973,10 +2992,10 @@ export class BattleScene extends Component {
           }
           if (show.penVerdictLabel) {
             if (show.report.penetrated) {
-              show.penVerdictLabel.string = '击穿！';
+              show.penVerdictLabel.string = t('dice.panel.penYes');
               show.penVerdictLabel.color = DICE_OK_TEXT;
             } else {
-              show.penVerdictLabel.string = '跳弹';
+              show.penVerdictLabel.string = t('dice.panel.penNo');
               show.penVerdictLabel.color = DICE_FAIL_TEXT;
             }
           }
@@ -2991,7 +3010,7 @@ export class BattleScene extends Component {
             show.stage = 'hold';
             if (show.dmgDieLabel) show.dmgDieLabel.node.parent!.active = false;
             if (show.dmgEffectLabel) show.dmgEffectLabel.node.active = false;
-            show.outcomeLabel.string = '跳弹';
+            show.outcomeLabel.string = t('dice.panel.outcomeRic');
             show.outcomeLabel.color = DICE_OUTCOME_RIC;
           } else {
             // 准备伤害检定阶段：打开该行可见性 + 骰子进入滚动
@@ -3128,14 +3147,14 @@ export class BattleScene extends Component {
     let color: Color;
     let size: number;
     if (!report.hit) {
-      console.log(`${base} → 未命中`);
-      text = 'MISS'; color = new Color(230, 230, 230, 255); size = 32;
+      console.log(`${base} → miss`);
+      text = t('dice.panel.outcomeMiss'); color = new Color(230, 230, 230, 255); size = 32;
     } else {
-      const armorInfo = `命中 ${report.armorFace}面 (装甲${report.armor} / 穿甲${report.penetration})`
-        + ` 1d6=${report.penDie} 需${report.penThreshold}`;
+      const armorInfo = `hit ${report.armorFace} (armor${report.armor} / pen${report.penetration})`
+        + ` 1d6=${report.penDie} need${report.penThreshold}`;
       if (!report.penetrated) {
-        console.log(`${base} → ${armorInfo} → 未击穿`);
-        text = '跳弹'; color = new Color(180, 200, 240, 255); size = 34;
+        console.log(`${base} → ${armorInfo} → ricochet`);
+        text = t('dice.panel.outcomeRic'); color = new Color(180, 200, 240, 255); size = 34;
       } else {
         const effect = report.damageEffect;
         const dmgInfo = `伤害1d6=${report.damageDie} → ${effect ?? 'unknown'}`;

@@ -83,15 +83,26 @@ export interface AttackContext {
   map: HexMap;
 }
 
-export function canAttack(ctx: AttackContext): { ok: boolean; reason?: string } {
+/**
+ * canAttack 返回的 reason 为 i18n key（由 UI 层用 t(reason) 翻译），
+ * 保持 core 层和文案无关，避免双语循环依赖。
+ */
+export type AttackDenyReason =
+  | 'attack.reason.selfFire'
+  | 'attack.reason.destroyedTarget'
+  | 'attack.reason.overlap'
+  | 'attack.reason.notStraight'
+  | 'attack.reason.blocked';
+
+export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   const { attacker, target, map } = ctx;
-  if (target === attacker) return { ok: false, reason: '不能攻击自己' };
-  if (target.destroyed) return { ok: false, reason: '目标已被摧毁' };
-  if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: '目标重叠' };
+  if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
+  if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
+  if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
   // 射角限制：只能朝 6 条轴向直线射击。directionTo 只在 from→to 落在某条六向射线上才返回
   // 方向编号，否则返回 null——非 null 即表示"同线"。
-  if (directionTo(attacker.pos, target.pos) === null) return { ok: false, reason: '非六向直线' };
-  if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: '无视线' };
+  if (directionTo(attacker.pos, target.pos) === null) return { ok: false, reason: 'attack.reason.notStraight' };
+  if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
 

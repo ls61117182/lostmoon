@@ -205,6 +205,10 @@
     "__prefab": null,
     "hexSize": 26,
     "missionPath": "missions/mission_01",
+    "showReachable": true,
+    "moveDuration": 0.28,
+    "movesPerTurn": 2,
+    "rngSeed": 0,
     "_id": "5akMBOeR1GgZJJPkXY7lET"
   },
   {

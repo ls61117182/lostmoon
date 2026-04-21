@@ -1,0 +1,115 @@
+﻿key,zh,en
+dmg.effect.destroyed,摧毁！,Destroyed!
+dmg.effect.damaged,受损,Damaged
+dmg.effect.fire,起火 +1,On Fire +1
+dmg.effect.turret,炮塔受损,Turret Hit
+dmg.effect.paralyzed,痛痪,Immobilized
+dmg.effect.crewCheck,阵亡检定,Crew Check
+dmg.outcome.destroyed,击毁,Destroyed
+dmg.outcome.damaged,受损,Damaged
+dmg.outcome.fire,起火,On Fire
+dmg.outcome.turret,炮塔受损,Turret Hit
+dmg.outcome.paralyzed,痛痪,Immobilized
+dmg.outcome.crewCheck,阵亡检定,Crew Check
+crew.role.1,车长,Commander
+crew.role.2,装填手,Loader
+crew.role.3,炮手,Gunner
+crew.role.4,驾驶员,Driver
+crew.role.5,副驾驶,Co-driver
+crew.death.falseAlarmHatch,虚惊（舱盖关）,False Alarm (Hatch Closed)
+crew.death.falseAlarm,乘员虚惊,Crew False Alarm
+crew.death.kia,{role} 阵亡,{role} KIA
+unit.status.destroyed,已毁,Destroyed
+unit.status.fire,起火,On Fire
+hud.init,回合 - | 行动力 -/-,Turn - | AP -/-
+hud.enemyTurn,回合 {n} | 敌方行动中...,Turn {n} | Enemy acting...
+hud.playerChoose,回合 {n} | 玩家 | 选择阶段  {tags},Turn {n} | Player | Choose phase  {tags}
+hud.movePhase,回合 {n} | 移动阶段 | 骰子 {dice},Turn {n} | Move phase | Dice {dice}
+hud.attackPhase,回合 {n} | 攻击阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack phase | {loaded} | Dice {dice}{sel}
+hud.attackSelectHint,点敌人开火,Click enemy to fire
+hud.loaded,已装填,Loaded
+hud.unloaded,未装填,Unloaded
+hud.moveDone,✓移动,✓Move
+hud.moveTodo,·移动,·Move
+hud.attackDone,✓攻击,✓Attack
+hud.attackTodo,·攻击,·Attack
+btn.nextPhase,下一阶段,Next Phase
+btn.endTurn,结束回合,End Turn
+btn.enemyTurnRunning,敌方回合中,Enemy Turn
+btn.save,存档,Save
+btn.load,读档,Load
+btn.restart,再来一局,Play Again
+btn.movePhase,移动阶段,Move Phase
+btn.attackPhase,攻击阶段,Attack Phase
+outcome.win,胜利！,Victory!
+outcome.lose,战败,Defeat
+status.panelTitle,谢尔曼状态,Sherman Status
+status.row.loaded,装填,Loaded
+status.row.hatch,舱盖,Hatch
+status.row.fire,车体,Hull
+status.row.turret,炮塔,Turret
+status.row.mobility,机动,Mobility
+status.row.crewTitle,乘员,Crew
+status.crew.1,① 车长,① Commander
+status.crew.2,② 装填手,② Loader
+status.crew.3,③ 炮手,③ Gunner
+status.crew.4,④ 驾驶员,④ Driver
+status.crew.5,⑤ 副驾驶,⑤ Co-driver
+status.val.loaded,已装填,Loaded
+status.val.unloaded,未装填,Unloaded
+status.val.hatchOpen,打开,Open
+status.val.hatchClosed,关闭,Closed
+status.val.destroyed,已毁,Destroyed
+status.val.fireN,起火({n}),Fire({n})
+status.val.damaged,受损,Damaged
+status.val.intact,完好,Intact
+status.val.paralyzed,痛痪,Immobilized
+status.val.normal,正常,Normal
+status.val.crewDead,阵亡,KIA
+status.val.crewAlive,存活,Alive
+dice.tray.move,移动阶段骰子（点骰子选择动作）,Move Phase Dice (tap a die to act)
+dice.tray.attack,攻击阶段骰子（点骰子选择动作）,Attack Phase Dice (tap a die to act)
+dice.slot.used,已用,Used
+die.hint.turn,转向,Turn
+die.hint.drive,驾驶,Drive
+die.hint.start,启动,Start
+die.hint.reload,装填,Reload
+die.hint.gun,主炮,Gun
+die.hint.mg,机枪,MG
+die.hint.none,—,—
+action.turnCW,↻ 顺时针 60°,↻ CW 60°
+action.turnCCW,↺ 逆时针 60°,↺ CCW 60°
+action.advance,▲ 前进 1 格,▲ Advance 1
+action.reverse,▼ 后退 1 格,▼ Reverse 1
+action.skip,放弃本骰,Skip Die
+action.reload,装填主炮,Reload Gun
+action.fire,选定主炮开火,Fire Gun
+floater.noFacing,未定朝向,No Facing
+floater.blockedTerrain,地形阻挡,Blocked Terrain
+floater.enemyBlock,敌方占据,Enemy Blocks
+floater.smoke,烟雾,Smoke
+floater.repair,修复,Repair
+attack.reason.selfFire,不能攻击自己,Cannot Target Self
+attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
+attack.reason.overlap,目标重叠,Overlap
+attack.reason.notStraight,非六向直线,Not on Hex Axis
+attack.reason.notStraightHint,需在六向直线上,Must be on hex axis
+attack.reason.blocked,无视线,No LOS
+attack.reason.unknown,无法攻击,Cannot Attack
+preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
+dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}
+dice.panel.hitYes,命中！,Hit!
+dice.panel.hitNo,未命中,Miss
+dice.panel.penMustPen,必穿 (≤0),Auto-Pen (≤0)
+dice.panel.penCantPen,不可击穿 (≥7),Immune (≥7)
+dice.panel.penNeed,需 ≥{n},Need ≥{n}
+dice.panel.penYes,击穿！,Penetrate!
+dice.panel.penNo,跳弹,Ricochet
+dice.panel.dmgTitle,伤害检定,Damage Check
+dice.panel.crewTitle,阵亡检定,Crew Check
+dice.panel.outcomeMiss,MISS,MISS
+dice.panel.outcomeRic,跳弹,Ricochet
+actor.player,玩家,Player
+actor.sherman,谢尔曼,Sherman
+actor.enemyPrefix,敌方 {name},Enemy {name}
+dice.aiHeader,{col}  {n}骰,{col}  {n}d

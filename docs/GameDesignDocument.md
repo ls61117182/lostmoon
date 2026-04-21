@@ -449,6 +449,93 @@ export function resolveAttack(p: AttackParams, rng: RNG): AttackResult {
 - 资源按任务分包（resources/missions/01/），首屏只加载主菜单。
 - 屏幕适配：FitWidth 为主，UI 用九宫格 + 安全区。
 
+### 6.5 多语言与文案管理（lang.csv）
+
+**硬规则**：**游戏里所有用户能看到的文本**（HUD、按钮、弹窗、浮字、状态面板、骰子托盘提示、伤害 / 乘员结算、胜负标语、攻击失败原因等）**都必须通过 `lang.csv` 读取，不允许在代码里硬编码中文 / 英文字符串。**同时游戏需支持运行时切换语言，默认显示中文。
+
+#### 6.5.1 工程布局
+
+| 文件 | 角色 |
+|------|------|
+| `data/lang.csv` | **文案主表**（策划直接维护）。UTF-8 + BOM，3 列：`key,zh,en` |
+| `tools/buildLangDB.js` | CSV → TS 生成器。零依赖 Node 脚本 |
+| `assets/scripts/core/LangDB.ts` | **自动生成**产物，不可手改（会被覆盖） |
+| `assets/scripts/core/Lang.ts` | 运行时入口：`t()` / `setLang()` / `getLang()` |
+
+#### 6.5.2 CSV 约定
+- 3 列固定顺序：`key,zh,en`。三列都不允许为空，否则生成脚本拒绝通过。
+- `key` 全局唯一，建议用点号分组命名：`btn.nextPhase`、`hud.movePhase`、`dmg.effect.fire`、`crew.role.1`。
+- 值里允许 `{name}` 形式的占位符，调用 `t(key, { name: value })` 替换。
+- 值里允许字面量 `\n`（反斜杠 + n），运行时自动展开为真正的换行，方便 Excel 编辑多行文案。
+- 如果值里需要逗号或换行，按标准 CSV 用双引号包裹字段（`""` 转义内部引号）。
+
+#### 6.5.3 运行时 API
+```ts
+import { t, setLang, getLang } from '../core/Lang';
+
+label.string = t('btn.nextPhase');                             // 下一阶段
+label.string = t('hud.movePhase', { n: 3, dice: '4/5' });      // 回合 3 | 移动阶段 | 骰子 4/5
+label.string = t('preview.impossible', { n: 12 });             // 两行文案，\n 自动换行
+
+setLang('en');   // 一行切到英文，下一次 t() 调用立即返回英文
+```
+- 找不到 key 时 `console.warn` 并原样返回 key，线上也能一眼看出缺漏。
+- 默认 `currentLang = 'zh'`，语言切换可以绑定到主菜单的"设置"入口。
+
+#### 6.5.4 策划工作流
+1. 用 Excel 打开 `data/lang.csv` → 编辑 `zh` / `en` 两列（`key` 列别动）。
+2. "另存为 CSV UTF-8（逗号分隔）" 覆盖原文件。
+3. 在项目根目录执行 `node tools/buildLangDB.js`，自动重写 `LangDB.ts`。
+4. 在 Cocos Creator 里预览即可看到新文案；无需重启编辑器。
+
+#### 6.5.5 写代码的硬约束
+- **绝不在 `.ts` 里硬编码中/英文字符串给任何 `label.string` / `button.text` / `spawnFloater()` 文案参数**。新增文案 → 先进 `lang.csv` → 跑生成器 → 再在代码里 `t('your.key')`。
+- `core/` 层函数如果需要返回"原因类文本"（如 `canAttack().reason`），**只返回 i18n key**（参见 `Combat.AttackDenyReason`），由 UI 层统一 `t(reason)` 渲染。核心层与文案必须零耦合。
+- 控制台日志 (`console.log` 等) 允许保留中英文硬编码——仅供开发者调试，不视为玩家可见文本。
+- 编辑器 Inspector 的 `@property({ tooltip })` 同理：只是策划工具，不算玩家可见文本。
+
+### 6.6 数值数据管理（CSV 驱动）
+
+**硬规则**：**游戏里所有可调数值**（单位装甲 / 穿甲 / 体型、敌方 AI 行动表、伤害表、地形移动成本、骰子池大小、任务奖励、乘员加成……）**都必须配置到 `data/*.csv` 里，由生成脚本编译成 `assets/scripts/core/*DB.ts`，禁止把数字魔法常量散在代码中。**
+
+目的：策划打开 Excel 改格子就能调参，不用等程序员改代码。
+
+#### 6.6.1 现有 / 规划中的 CSV 表
+
+| CSV | 生成器 | 输出 | 内容 |
+|-----|--------|------|------|
+| `data/units.csv` | `tools/buildUnitDB.js` | `core/UnitDB.ts` | 单位类型：体型 / 4 个装甲面 / 穿甲 |
+| `data/lang.csv` | `tools/buildLangDB.js` | `core/LangDB.ts` | 所有玩家可见文本（见 6.5）|
+| `data/terrain.csv`（规划）| `tools/buildTerrainDB.js` | `core/TerrainDB.ts` | 地形移动成本 / LoS 阻挡 / 射击修正 |
+| `data/ai_table.csv`（规划）| `tools/buildAITableDB.js` | `core/AITableDB.ts` | AI 列 × 骰面 → 主动作 / 备选动作 |
+| `data/damage_table.csv`（规划）| `tools/buildDamageDB.js` | `core/DamageDB.ts` | 1d6 伤害点数 → 效果（起火/炮塔/痛痪/阵亡检定/击毁）|
+| `data/dice_pool.csv`（规划）| `tools/buildDicePoolDB.js` | `core/DicePoolDB.ts` | 地形 × 舱盖 → 行动骰数量 |
+| `data/missions/*.json` | *(不走 CSV)* | *(直接 JSON)* | 单关地图 + 初始摆放；结构太复杂，继续用 JSON |
+
+> 命名约定：CSV 文件统一放 `data/` 下，生成器统一放 `tools/build*DB.js`，输出统一到 `assets/scripts/core/*DB.ts` 并带"自动生成，请勿手改"注释头。
+
+#### 6.6.2 生成器通用约定
+1. **UTF-8 + BOM**：所有 CSV 强制 UTF-8 + BOM。生成器发现非 BOM 或 GBK 会自动转换并回写，保证 git diff 稳定、Excel 双击打开不乱码（参考 `buildUnitDB.js::readCsvSmart`）。
+2. **强校验**：
+   - 关键列（枚举类 key / 外键引用）必须落在预设集合里，否则生成器报错并**拒绝写文件**，不允许污染游戏代码。
+   - 数值列必须是合法整数 / 浮点数，空值或非数字会被精确定位到 CSV 行号。
+   - 唯一约束：key / 主键列不允许重复。
+3. **零依赖**：只用 Node 18+ 内置 `fs` / `TextDecoder`，不引任何 npm 包；CI 环境和本地都能直接跑。
+4. **稳定 diff**：生成的 TS 输出列顺序 / 对齐 / 注释格式固定，让 git diff 只反映真实的数值变动。
+
+#### 6.6.3 代码侧读取约定
+- 运行时所有数值查询**只走生成出来的 `*DB.ts` 导出函数**（如 `getUnitStats(kind)`、`t(key)`），不允许 `import` 原始 CSV。
+- 不允许在 `.ts` 里写如 `const SHERMAN_ARMOR = 6;` 这种魔法数字；改成 `getUnitStats('sherman').armorFront`。
+- 如果某个数值还没上 CSV（比如仍在玩法探索期），代码里写 `TODO(data-csv): 上表名.csv` 注释，列入下一次数据化任务。
+
+#### 6.6.4 策划工作流
+```
+Excel 开 data/XX.csv → 改数值 → 另存为 CSV UTF-8 →
+  node tools/buildXXDB.js → Cocos 预览即时生效
+```
+
+脚本失败时终端会打印具体到 CSV 行号的原因（`第 5 行 unitKind="..."：字段 armorFront="abc" 不是非负整数`），定位 1 秒搞定。
+
 ---
 
 ## 七、开发路线图
@@ -521,7 +608,8 @@ export function resolveAttack(p: AttackParams, rng: RNG): AttackResult {
 
 ---
 
-**文档版本**：v0.1  
+**文档版本**：v0.2  
 **作者**：策划组  
 **最后更新**：2026-04-20  
+**v0.2 变更**：新增 6.5 多语言与文案管理（`lang.csv`）、6.6 数值数据管理（CSV 驱动）两节硬规则。  
 **下一步**：与主程评审第六章实现方案；与美术评审第五章 UI 草稿。
