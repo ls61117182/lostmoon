@@ -54,6 +54,7 @@ import {
 import {
   actionDicePool,
   classifyAttackDie,
+  classifyMiscDie,
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
@@ -183,14 +184,16 @@ type Phase = 'player' | 'enemy';
 
 /**
  * 玩家回合内的细分状态机：
- *   - 'choose'     : 等待玩家选择进入"移动阶段"还是"攻击阶段"
+ *   - 'choose'     : 等待玩家选择进入"移动阶段 / 攻击阶段 / 杂项阶段"
  *   - 'movement'   : 正在执行移动阶段，骰子托盘展示着本阶段剩余移动骰
  *   - 'attack'     : 正在执行攻击阶段；选中一颗主炮骰后进入"选目标"态，
  *                    点击敌人开火，结算后骰子从托盘消失
- * 两个阶段同一回合内互不可重复执行；两个都执行过后回合内"下一阶段"按钮变红切为
- * "结束回合"，再点才真正把控制权交给敌方。
+ *   - 'misc'       : 正在执行杂项阶段（C 列）。GDD §2.3 要求 C 列必须最后执行，
+ *                    所以一旦进入 misc，本回合剩余的 movement / attack 就不能再进入了。
+ * 三个阶段同一回合内互不可重复执行；均执行过（或 misc 已完成 / 移动+攻击都完成）后
+ * 右下角按钮变红切为"结束回合"，再点才真正把控制权交给敌方。
  */
-type PlayerStep = 'choose' | 'movement' | 'attack';
+type PlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
 
 /** 骰子托盘里的单颗骰子 —— 同阶段内所有骰共享一份 action 分类结果（movement 或 attack） */
 interface DieSlot {
@@ -292,9 +295,10 @@ const BTN_BG_URGENT  = new Color(190,  80,  60, 240);
 const BTN_BORDER     = new Color(255, 255, 255, 255);
 const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
 
-// 阶段选择条配色：两个按钮，红/蓝不同色；已执行过的阶段被灰掉禁用
+// 阶段选择条配色：三个按钮（移动=绿 / 攻击=红 / 杂项=紫）；已执行过的阶段被灰掉禁用
 const PHASE_BTN_MOVE      = new Color( 60, 130,  80, 230);
 const PHASE_BTN_ATTACK    = new Color(160,  70,  70, 230);
+const PHASE_BTN_MISC      = new Color(110,  80, 160, 230);
 const PHASE_BTN_DISABLED  = new Color( 80,  80,  80, 200);
 
 // 骰子配色：底色白/灰（已用）+ 边框；分类颜色直接在动作提示文字上体现
@@ -435,9 +439,11 @@ export class BattleScene extends Component {
   private phase: Phase = 'player';
   /** 玩家回合内的子状态机（见 PlayerStep 注释） */
   private playerStep: PlayerStep = 'choose';
-  /** 本回合是否已经执行过移动阶段 / 攻击阶段；两个都 true → 下一阶段按钮切为"结束回合" */
+  /** 本回合是否已经执行过移动阶段 / 攻击阶段 / 杂项阶段；
+   * GDD §2.3：C 列（杂项）必须最后执行，所以 miscDone = true 时同样视为回合子阶段已终结。 */
   private movementDone: boolean = false;
   private attackDone: boolean = false;
+  private miscDone: boolean = false;
   /** 当前子阶段（movement/attack）手上的骰子；回到 choose 时清空 */
   private phaseDice: DieSlot[] = [];
   /** 攻击阶段玩家点击某颗主炮骰 → 进入"选目标"态，这里记录那颗骰在 phaseDice 的下标。-1 = 未选 */
@@ -474,10 +480,11 @@ export class BattleScene extends Component {
   private endTurnBtn: Node | null = null;
   private endTurnBg: Graphics | null = null;
   private endTurnLabel: Label | null = null;
-  /** 底部"阶段选择"条的两个按钮；在 choose 子步骤可见，其他子步骤隐藏 */
+  /** 底部"阶段选择"条的三个按钮；在 choose 子步骤可见，其他子步骤隐藏 */
   private chooseBar: Node | null = null;
   private chooseMoveBtn: Node | null = null;
   private chooseAttackBtn: Node | null = null;
+  private chooseMiscBtn: Node | null = null;
   /** 底部骰子托盘：movement/attack 子步骤时显示 */
   private diceTrayRoot: Node | null = null;
   private diceVisuals: DieVisual[] = [];
@@ -564,6 +571,7 @@ export class BattleScene extends Component {
     this.playerStep = 'choose';
     this.movementDone = false;
     this.attackDone = false;
+    this.miscDone = false;
     this.phaseDice = [];
     this.selectedGunDieIdx = -1;
     this.outcome = 'ongoing';
@@ -626,10 +634,11 @@ export class BattleScene extends Component {
       this.drawDriveCandidates();
     }
 
-    // 4. 可攻击目标高亮：仅"攻击阶段 + 已选中主炮骰"时展示
+    // 4. 可攻击目标高亮：仅"攻击阶段 / 杂项阶段 + 已选中主炮骰"时展示
     //    —— 避免玩家在装填未做/未选骰时被红圈误导以为能直接点敌人开火
     if (!this.anim && this.phase === 'player'
-        && this.playerStep === 'attack' && this.selectedGunDieIdx >= 0
+        && (this.playerStep === 'attack' || this.playerStep === 'misc')
+        && this.selectedGunDieIdx >= 0
         && this.outcome === 'ongoing') {
       this.drawAttackableHighlights();
     }
@@ -715,10 +724,23 @@ export class BattleScene extends Component {
 
   // ---------- 单位状态常驻文字 ----------
 
+  /**
+   * 判定单位的"起火外观"是否应当点亮：
+   *   - 谢尔曼：看 fireLevel > 0（0 = 已灭 / 从未起火，回归常色）
+   *   - 其他（敌坦）：沿用 MVP 语义 —— damaged=true 即等价于"起火中（下次击穿摧毁）"
+   *
+   * 这样 §3.5 的"灭火行动 (杂项 6 点) -1"在 fireLevel 降到 0 时，
+   * 谢尔曼的橙圆 + 外火苗环会自动退回普通阵营色。
+   */
+  private isOnFire(u: Unit): boolean {
+    if (u.kind === 'sherman') return (u.fireLevel ?? 0) > 0;
+    return !!u.damaged;
+  }
+
   /** 给"起火/已毁"的单位在格子下方挂一条短文字，整批生成、整批销毁。 */
   private spawnStatusLabelIfAny(u: Unit) {
     if (!this.mapNode) return;
-    if (!u.damaged && !u.destroyed) return;
+    if (!this.isOnFire(u) && !u.destroyed) return;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
@@ -983,7 +1005,8 @@ export class BattleScene extends Component {
     }
 
     // 起火：鲜橙填充 + 亮黄边 + 外层橙红环（保留阵营辨识度时仍以"危险色"为主）
-    if (u.damaged) {
+    // 谢尔曼看 fireLevel（被灭火后可退出起火外观），敌方看 damaged（MVP 首次受伤即入"起火"状态）
+    if (this.isOnFire(u)) {
       g.fillColor = ONFIRE_FILL;
       g.strokeColor = ONFIRE_BORDER;
       g.lineWidth = 3;
@@ -1417,10 +1440,13 @@ export class BattleScene extends Component {
         const doneTag = [
           this.movementDone ? t('hud.moveDone')   : t('hud.moveTodo'),
           this.attackDone   ? t('hud.attackDone') : t('hud.attackTodo'),
+          this.miscDone     ? t('hud.miscDone')   : t('hud.miscTodo'),
         ].join(' ');
         this.hudLabel.string = t('hud.playerChoose', { n: this.turn, tags: doneTag });
       } else if (this.playerStep === 'movement') {
         this.hudLabel.string = t('hud.movePhase', { n: this.turn, dice: this.remainingDice() });
+      } else if (this.playerStep === 'misc') {
+        this.hudLabel.string = t('hud.miscPhase', { n: this.turn, dice: this.remainingDice() });
       } else {
         const sherman = this.mission?.sherman;
         const loaded = sherman?.loaded ? t('hud.loaded') : t('hud.unloaded');
@@ -1454,6 +1480,7 @@ export class BattleScene extends Component {
    */
   private computeAdvanceButton(): { label: string; urgent: boolean } {
     if (this.phase !== 'player') return { label: t('btn.enemyTurnRunning'), urgent: false };
+    // 回合可以结束的条件：A + B 都完成即可（C 是可选的尾部阶段，玩家可做可跳）。
     const allDone = this.movementDone && this.attackDone;
     if (allDone) return { label: t('btn.endTurn'), urgent: true };
     return { label: t('btn.nextPhase'), urgent: false };
@@ -1524,6 +1551,7 @@ export class BattleScene extends Component {
     this.selectedGunDieIdx = -1;
     this.movementDone = false;
     this.attackDone = false;
+    this.miscDone = false;
     this.playerStep = 'choose';
     this.closeDiePopover();
     this.clearFloaters();
@@ -1536,12 +1564,12 @@ export class BattleScene extends Component {
 
   // ---------- 阶段选择条 + 骰子托盘 ----------
 
-  /** 底部阶段选择条：两个大按钮，仅在 playerStep === 'choose' 时可见。 */
+  /** 底部阶段选择条：三个大按钮（移动 / 攻击 / 杂项），仅在 playerStep === 'choose' 时可见。 */
   private buildChooseBar() {
     const bar = new Node('ChooseBar');
     bar.layer = this.node.layer;
     const ut = bar.addComponent(UITransform);
-    ut.setContentSize(640, 80);
+    ut.setContentSize(700, 80);
     ut.setAnchorPoint(0.5, 0.5);
     bar.setPosition(0, -260, 0);
     this.node.addChild(bar);
@@ -1549,7 +1577,7 @@ export class BattleScene extends Component {
 
     const makeBtn = (name: string, text: string, x: number, color: Color,
                      onClick: () => void): Node => {
-      const W = 220, H = 72;
+      const W = 200, H = 72;
       const b = new Node(name);
       b.layer = this.node.layer;
       b.addComponent(UITransform).setContentSize(W, H);
@@ -1565,8 +1593,8 @@ export class BattleScene extends Component {
       txtNode.layer = this.node.layer;
       txtNode.addComponent(UITransform).setContentSize(W, H);
       const tx = txtNode.addComponent(Label);
-      tx.fontSize = 30;
-      tx.lineHeight = 34;
+      tx.fontSize = 28;
+      tx.lineHeight = 32;
       tx.color = HUD_TEXT_COLOR;
       tx.horizontalAlign = HorizontalTextAlignment.CENTER;
       tx.verticalAlign = VerticalTextAlignment.CENTER;
@@ -1576,10 +1604,13 @@ export class BattleScene extends Component {
       bar.addChild(b);
       return b;
     };
-    this.chooseMoveBtn = makeBtn('ChooseMove', t('btn.movePhase'), -130,
+    this.chooseMoveBtn = makeBtn('ChooseMove', t('btn.movePhase'), -220,
       PHASE_BTN_MOVE, () => this.enterPhase('movement'));
-    this.chooseAttackBtn = makeBtn('ChooseAttack', t('btn.attackPhase'), +130,
+    this.chooseAttackBtn = makeBtn('ChooseAttack', t('btn.attackPhase'), 0,
       PHASE_BTN_ATTACK, () => this.enterPhase('attack'));
+    // 杂项按钮的颜色单独选一支紫色，避免和移动（蓝）/攻击（红）混淆
+    this.chooseMiscBtn = makeBtn('ChooseMisc', t('btn.miscPhase'), +220,
+      PHASE_BTN_MISC, () => this.enterPhase('misc'));
   }
 
   /** 底部骰子托盘：有 5 个最大容量的空位；实际数量按 phaseDice.length 决定可见性。 */
@@ -1659,19 +1690,35 @@ export class BattleScene extends Component {
     if (this.chooseBar) {
       this.chooseBar.active = inBattle && this.playerStep === 'choose';
     }
-    if (this.chooseMoveBtn) this.setPhaseBtnEnabled(this.chooseMoveBtn, !this.movementDone, PHASE_BTN_MOVE);
-    if (this.chooseAttackBtn) this.setPhaseBtnEnabled(this.chooseAttackBtn, !this.attackDone, PHASE_BTN_ATTACK);
+    // GDD §2.3：C 必须最后执行 —— 杂项按钮要等 A + B 都做完后才"出现"；
+    // 此时它既是可选动作，也是"跳过 C 直接结束回合"的替代（玩家也可以直接点右下角的"结束回合"）。
+    const canMove   = !this.movementDone;
+    const canAttack = !this.attackDone;
+    const canMisc   = this.movementDone && this.attackDone && !this.miscDone;
+    if (this.chooseMoveBtn)   this.setPhaseBtnEnabled(this.chooseMoveBtn,   canMove,   PHASE_BTN_MOVE);
+    if (this.chooseAttackBtn) this.setPhaseBtnEnabled(this.chooseAttackBtn, canAttack, PHASE_BTN_ATTACK);
+    if (this.chooseMiscBtn) {
+      // A / B 任一未完成 → 杂项按钮整体隐藏（不是灰掉）；完成后再淡入
+      this.chooseMiscBtn.active = canMisc;
+      this.setPhaseBtnEnabled(this.chooseMiscBtn, canMisc, PHASE_BTN_MISC);
+    }
 
     // 2) 骰子托盘
     if (this.diceTrayRoot) {
-      this.diceTrayRoot.active = inBattle && (this.playerStep === 'movement' || this.playerStep === 'attack');
+      this.diceTrayRoot.active = inBattle && (
+        this.playerStep === 'movement'
+        || this.playerStep === 'attack'
+        || this.playerStep === 'misc'
+      );
     }
     if (this.diceTitleLabel) {
       this.diceTitleLabel.string = this.playerStep === 'movement'
         ? t('dice.tray.move')
         : this.playerStep === 'attack'
           ? t('dice.tray.attack')
-          : '';
+          : this.playerStep === 'misc'
+            ? t('dice.tray.misc')
+            : '';
     }
     this.refreshDiceTray();
     // 点击骰子后弹出的菜单，状态变化时（比如骰子被消耗）一并关闭
@@ -1749,6 +1796,19 @@ export class BattleScene extends Component {
         default:       return { text: t('die.hint.none'),   color: DIE_HINT_GREY };
       }
     }
+    if (this.playerStep === 'misc') {
+      const m = classifyMiscDie(pip);
+      switch (m) {
+        case 'fire_suppress':         return { text: t('die.hint.fireSuppress'),      color: DIE_HINT_GREEN };
+        case 'repair':                return { text: t('die.hint.repair'),            color: DIE_HINT_GREEN };
+        case 'smoke_or_repair':       return { text: t('die.hint.smokeOrRepair'),     color: DIE_HINT_GREEN };
+        case 'driver_turn_or_drive':  return { text: t('die.hint.driverTurnOrDrive'), color: DIE_HINT_GREEN };
+        case 'gunner_gun_or_reload':  return { text: t('die.hint.gunOrLoad'),         color: DIE_HINT_RED   };
+        case 'codriver_mg':           return { text: t('die.hint.codriverMG'),        color: DIE_HINT_GREY  };
+        case 'concealment':           return { text: t('die.hint.conceal'),           color: DIE_HINT_GREY  };
+        default:                      return { text: t('die.hint.none'),              color: DIE_HINT_GREY  };
+      }
+    }
     return { text: '', color: DIE_HINT_GREY };
   }
 
@@ -1792,15 +1852,17 @@ export class BattleScene extends Component {
     this.refreshStatusPanel();
   }
 
-  /** 玩家在"选择阶段"时点了移动或攻击按钮 → 摇一批骰子，进入对应子阶段。 */
-  private enterPhase(which: 'movement' | 'attack') {
+  /** 玩家在"选择阶段"时点了移动/攻击/杂项按钮 → 摇一批骰子，进入对应子阶段。 */
+  private enterPhase(which: 'movement' | 'attack' | 'misc') {
     if (!this.mission) return;
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
     if (this.playerStep !== 'choose') return;
     if (which === 'movement' && this.movementDone) return;
-    if (which === 'attack' && this.attackDone) return;
+    if (which === 'attack'   && this.attackDone) return;
+    // 杂项阶段门禁：GDD §2.3 C 必须最后 —— 只有 A + B 都完成后才允许进入
+    if (which === 'misc' && (this.miscDone || !this.movementDone || !this.attackDone)) return;
 
     const { map, sherman } = this.mission;
     const tile = map.get(sherman.pos);
@@ -1812,7 +1874,8 @@ export class BattleScene extends Component {
     this.playerStep = which;
     this.closeDiePopover();
 
-    console.log(`[Dice] ${which === 'movement' ? '移动' : '攻击'}阶段掷骰: `
+    const label = which === 'movement' ? '移动' : which === 'attack' ? '攻击' : '杂项';
+    console.log(`[Dice] ${label}阶段掷骰: `
       + `[${pips.join(', ')}]（地形 ${terrain}, 舱盖 ${sherman.hatchOpen ? '开' : '关'}）`);
 
     this.refreshPhaseUI();
@@ -1821,12 +1884,13 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 结束当前子阶段（movement / attack），回到 choose；
-   * 根据已完成阶段判断是继续选剩余那个，还是两阶段都完成 → 按钮切为"结束回合"。
+   * 结束当前子阶段（movement / attack / misc），回到 choose；
+   * 根据已完成阶段判断继续选剩余阶段，还是切为"结束回合"。
    */
   private endCurrentSubPhase() {
     if (this.playerStep === 'movement') this.movementDone = true;
     else if (this.playerStep === 'attack') this.attackDone = true;
+    else if (this.playerStep === 'misc') this.miscDone = true;
     this.phaseDice = [];
     this.selectedGunDieIdx = -1;
     this.playerStep = 'choose';
@@ -1841,11 +1905,15 @@ export class BattleScene extends Component {
    * 省得玩家还要手动再点一次按钮。未消耗的骰子会被"废弃"在阶段结束时自然丢失。
    */
   private autoEndPhaseIfDone() {
-    if (this.playerStep !== 'movement' && this.playerStep !== 'attack') return;
+    if (this.playerStep !== 'movement'
+      && this.playerStep !== 'attack'
+      && this.playerStep !== 'misc') return;
     if (this.phaseDice.length === 0) return;
     const anyLeft = this.phaseDice.some(d => !d.used);
     if (!anyLeft) {
-      console.log(`[Dice] ${this.playerStep === 'movement' ? '移动' : '攻击'}阶段骰子用尽，自动结束阶段`);
+      const label = this.playerStep === 'movement' ? '移动'
+        : this.playerStep === 'attack' ? '攻击' : '杂项';
+      console.log(`[Dice] ${label}阶段骰子用尽，自动结束阶段`);
       this.endCurrentSubPhase();
     }
   }
@@ -1856,17 +1924,43 @@ export class BattleScene extends Component {
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
-    if (this.playerStep !== 'movement' && this.playerStep !== 'attack') return;
+    if (this.playerStep !== 'movement'
+      && this.playerStep !== 'attack'
+      && this.playerStep !== 'misc') return;
     const slot = this.phaseDice[idx];
     if (!slot || slot.used) {
       this.closeDiePopover();
       return;
     }
-    // GDD §3.6：点数 5 / 6 只能前进，无分支需要选择 → 点一下直接走，不再弹菜单
-    if (this.playerStep === 'movement' && classifyMoveDie(slot.pip) === 'drive') {
-      this.closeDiePopover();
-      this.tryDriveSherman(idx, +1);
-      return;
+    // GDD §3.6：移动阶段的"前进"(5/6) 与"后退"(1)，以及攻击阶段的"装填"(1/2)
+    // 都只有单一动作、无分支选择 → 点一下直接执行，不再弹菜单。
+    if (this.playerStep === 'movement') {
+      const a = classifyMoveDie(slot.pip);
+      if (a === 'drive') {
+        this.closeDiePopover();
+        this.tryDriveSherman(idx, +1);
+        return;
+      }
+      if (a === 'reverse') {
+        this.closeDiePopover();
+        this.tryDriveSherman(idx, -1);
+        return;
+      }
+    } else if (this.playerStep === 'attack') {
+      const a = classifyAttackDie(slot.pip);
+      if (a === 'reload') {
+        this.closeDiePopover();
+        this.tryReload(idx);
+        return;
+      }
+    } else if (this.playerStep === 'misc') {
+      // 杂项阶段 6 点 = 灭火，无分支 → 直接执行
+      const m = classifyMiscDie(slot.pip);
+      if (m === 'fire_suppress') {
+        this.closeDiePopover();
+        this.tryFireSuppress(idx);
+        return;
+      }
     }
     this.showDiePopover(idx);
   }
@@ -1925,6 +2019,74 @@ export class BattleScene extends Component {
         items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
           onClick: () => this.discardDie(idx) });
       }
+    } else if (this.playerStep === 'misc') {
+      const m = classifyMiscDie(slot.pip);
+      const sherman = this.mission ? this.mission.sherman : null;
+      switch (m) {
+        case 'gunner_gun_or_reload':
+          // 1 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
+          items.push({ text: t('action.reload'), color: PHASE_BTN_ATTACK,
+            onClick: () => this.tryReload(idx) });
+          items.push({ text: t('action.fire'), color: PHASE_BTN_ATTACK,
+            onClick: () => this.selectGunDie(idx) });
+          break;
+        case 'codriver_mg':
+          // 2 点 C 列：副驾驶机枪射击相邻步兵；MVP 步兵系统未实装，作为占位
+          items.push({ text: t('action.codriverMG'), color: PHASE_BTN_DISABLED,
+            onClick: () => this.tryCodriverMG(idx) });
+          break;
+        case 'driver_turn_or_drive':
+          // 3 点 C 列：驾驶员转向 / 前进
+          items.push({ text: t('action.turnCW'),  color: PHASE_BTN_MOVE,
+            onClick: () => this.tryTurnSherman(idx, +1) });
+          items.push({ text: t('action.turnCCW'), color: PHASE_BTN_MOVE,
+            onClick: () => this.tryTurnSherman(idx, -1) });
+          items.push({ text: t('action.advance'), color: PHASE_BTN_MOVE,
+            onClick: () => this.tryDriveSherman(idx, +1) });
+          break;
+        case 'repair':
+          // 4 点 C 列：修复炮塔 或 瘫痪；无损则只给"放弃"
+          if (sherman && sherman.turretDamaged) {
+            items.push({ text: t('action.repairTurret'), color: PHASE_BTN_MISC,
+              onClick: () => this.tryRepair(idx, 'turret') });
+          }
+          if (sherman && sherman.paralyzed) {
+            items.push({ text: t('action.repairMobility'), color: PHASE_BTN_MISC,
+              onClick: () => this.tryRepair(idx, 'mobility') });
+          }
+          if (items.length === 0) {
+            items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
+              onClick: () => { this.discardDie(idx); this.spawnNoRepairFloater(); } });
+          }
+          break;
+        case 'smoke_or_repair':
+          // 5 点 C 列：烟雾（MVP 未实装）/ 修复
+          items.push({ text: t('action.smoke'), color: PHASE_BTN_DISABLED,
+            onClick: () => this.trySmoke(idx) });
+          if (sherman && sherman.turretDamaged) {
+            items.push({ text: t('action.repairTurret'), color: PHASE_BTN_MISC,
+              onClick: () => this.tryRepair(idx, 'turret') });
+          }
+          if (sherman && sherman.paralyzed) {
+            items.push({ text: t('action.repairMobility'), color: PHASE_BTN_MISC,
+              onClick: () => this.tryRepair(idx, 'mobility') });
+          }
+          break;
+        case 'fire_suppress':
+          // 6 点 C 列：灭火（着火程度 -1）—— 正常走 onClickDie 直接执行；
+          // 若 popover 被触发（比如玩家通过其他途径），这里兜底给一个按钮
+          items.push({ text: t('action.fireSuppress'), color: PHASE_BTN_MISC,
+            onClick: () => this.tryFireSuppress(idx) });
+          break;
+        case 'concealment':
+          // 对子 C 列：隐蔽 —— MVP 未实装
+          items.push({ text: t('action.concealment'), color: PHASE_BTN_DISABLED,
+            onClick: () => this.tryConcealment(idx) });
+          break;
+        default:
+          items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
+            onClick: () => this.discardDie(idx) });
+      }
     }
 
     if (items.length === 0) return;
@@ -1973,12 +2135,23 @@ export class BattleScene extends Component {
 
   // ---------- 移动阶段动作 ----------
 
-  /** 转向：dirSign +1=顺时针，-1=逆时针；消耗一颗转向骰。 */
+  /**
+   * 转向：dirSign +1=顺时针，-1=逆时针；消耗一颗转向骰。
+   *
+   * 移动阶段：骰面 = 'turn' 时合法。
+   * 杂项阶段：骰面 = 'driver_turn_or_drive' (die=3) 时合法（调用方已通过 popover 分支路由）。
+   */
   private tryTurnSherman(dieIdx: number, dirSign: 1 | -1) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
-    if (!slot || slot.used || this.playerStep !== 'movement') return;
-    if (classifyMoveDie(slot.pip) !== 'turn') return;
+    if (!slot || slot.used) return;
+    if (this.playerStep === 'movement') {
+      if (classifyMoveDie(slot.pip) !== 'turn') return;
+    } else if (this.playerStep === 'misc') {
+      if (classifyMiscDie(slot.pip) !== 'driver_turn_or_drive') return;
+    } else {
+      return;
+    }
 
     const sherman = this.mission.sherman;
     if (sherman.facing === null) sherman.facing = 0;
@@ -2007,11 +2180,19 @@ export class BattleScene extends Component {
   private tryDriveSherman(dieIdx: number, dirSign: 1 | -1) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
-    if (!slot || slot.used || this.playerStep !== 'movement') return;
-    const act = classifyMoveDie(slot.pip);
-    if (act === 'drive' && dirSign !== +1) return;
-    if (act === 'reverse' && dirSign !== -1) return;
-    if (act !== 'drive' && act !== 'reverse') return;
+    if (!slot || slot.used) return;
+    if (this.playerStep === 'movement') {
+      const act = classifyMoveDie(slot.pip);
+      if (act === 'drive' && dirSign !== +1) return;
+      if (act === 'reverse' && dirSign !== -1) return;
+      if (act !== 'drive' && act !== 'reverse') return;
+    } else if (this.playerStep === 'misc') {
+      // 杂项阶段 driver_turn_or_drive (die=3) 只允许前进 1 格
+      if (classifyMiscDie(slot.pip) !== 'driver_turn_or_drive') return;
+      if (dirSign !== +1) return;
+    } else {
+      return;
+    }
 
     const { map, sherman, enemies } = this.mission;
     if (sherman.facing === null) {
@@ -2070,12 +2251,23 @@ export class BattleScene extends Component {
 
   // ---------- 攻击阶段动作 ----------
 
-  /** 装填主炮：消耗一颗装填骰；若已装填则拒绝（浪费骰）。 */
+  /**
+   * 装填主炮：消耗一颗装填骰；若已装填则拒绝（浪费骰）。
+   *
+   * 攻击阶段：骰面 = 'reload' (die=1/2) 时合法。
+   * 杂项阶段：骰面 = 'gunner_gun_or_reload' (die=1) 时合法（由 popover 路由）。
+   */
   private tryReload(dieIdx: number) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
-    if (!slot || slot.used || this.playerStep !== 'attack') return;
-    if (classifyAttackDie(slot.pip) !== 'reload') return;
+    if (!slot || slot.used) return;
+    if (this.playerStep === 'attack') {
+      if (classifyAttackDie(slot.pip) !== 'reload') return;
+    } else if (this.playerStep === 'misc') {
+      if (classifyMiscDie(slot.pip) !== 'gunner_gun_or_reload') return;
+    } else {
+      return;
+    }
     const sherman = this.mission.sherman;
     if (sherman.loaded) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.loaded'),
@@ -2093,17 +2285,140 @@ export class BattleScene extends Component {
     this.autoEndPhaseIfDone();
   }
 
-  /** 选择一颗主炮骰进入"选目标"态；之后点敌人格才真正开火。 */
+  /**
+   * 选择一颗主炮骰进入"选目标"态；之后点敌人格才真正开火。
+   *
+   * 攻击阶段：骰面 = 'gun' (die=5/6) 时合法。
+   * 杂项阶段：骰面 = 'gunner_gun_or_reload' (die=1) 时合法（由 popover 路由）。
+   */
   private selectGunDie(dieIdx: number) {
     const slot = this.phaseDice[dieIdx];
-    if (!slot || slot.used || this.playerStep !== 'attack') return;
-    if (classifyAttackDie(slot.pip) !== 'gun') return;
+    if (!slot || slot.used) return;
+    if (this.playerStep === 'attack') {
+      if (classifyAttackDie(slot.pip) !== 'gun') return;
+    } else if (this.playerStep === 'misc') {
+      if (classifyMiscDie(slot.pip) !== 'gunner_gun_or_reload') return;
+    } else {
+      return;
+    }
     // 再次点同一颗 → 取消选择
     this.selectedGunDieIdx = this.selectedGunDieIdx === dieIdx ? -1 : dieIdx;
     this.closeDiePopover();
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
+  }
+
+  // ---------- 杂项阶段动作 ----------
+
+  /**
+   * 修复：消耗一颗 'repair' / 'smoke_or_repair' 骰，清除一项受损状态。
+   *   - target='turret'   → 清除 turretDamaged
+   *   - target='mobility' → 清除 paralyzed
+   *
+   * 调用方（popover）已确保对应状态存在；此处再校验一次做防御。
+   */
+  private tryRepair(dieIdx: number, target: 'turret' | 'mobility') {
+    if (!this.mission) return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || this.playerStep !== 'misc') return;
+    const m = classifyMiscDie(slot.pip);
+    if (m !== 'repair' && m !== 'smoke_or_repair') return;
+
+    const sherman = this.mission.sherman;
+    if (target === 'turret') {
+      if (!sherman.turretDamaged) return;
+      sherman.turretDamaged = false;
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.turretFixed'),
+        new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+      console.log('[Misc] 修复炮塔');
+    } else {
+      if (!sherman.paralyzed) return;
+      sherman.paralyzed = false;
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.mobilityFixed'),
+        new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+      console.log('[Misc] 修复瘫痪');
+    }
+    slot.used = true;
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.refreshStatusPanel();
+    this.autoEndPhaseIfDone();
+  }
+
+  /** 灭火：消耗 die=6 骰，若 fireLevel > 0 则 -1；否则弹浮字并放弃。 */
+  private tryFireSuppress(dieIdx: number) {
+    if (!this.mission) return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || this.playerStep !== 'misc') return;
+    if (classifyMiscDie(slot.pip) !== 'fire_suppress') return;
+
+    const sherman = this.mission.sherman;
+    const lvl = sherman.fireLevel ?? 0;
+    if (lvl <= 0) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.noFire'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      // 无火可灭 → 视为放弃本骰（不白费点击）
+      this.discardDie(dieIdx);
+      return;
+    }
+    sherman.fireLevel = lvl - 1;
+    slot.used = true;
+    this.closeDiePopover();
+    this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.fireReduced'),
+      new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+    console.log(`[Misc] 灭火 → fireLevel ${lvl} → ${sherman.fireLevel}`);
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.refreshStatusPanel();
+    this.autoEndPhaseIfDone();
+  }
+
+  /** 修复动作在无可修项时顺便飘一条提示。 */
+  private spawnNoRepairFloater() {
+    if (!this.mission) return;
+    const s = this.mission.sherman;
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.noRepair'),
+      new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+  }
+
+  /** 副驾驶机枪：MVP 无步兵系统，作为占位弹浮字并丢弃本骰。 */
+  private tryCodriverMG(dieIdx: number) {
+    if (!this.mission) return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || this.playerStep !== 'misc') return;
+    if (classifyMiscDie(slot.pip) !== 'codriver_mg') return;
+    const s = this.mission.sherman;
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.noInfantry'),
+      new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+    this.discardDie(dieIdx);
+  }
+
+  /** 烟雾：MVP 占位，目前只弹浮字并丢弃本骰。 */
+  private trySmoke(dieIdx: number) {
+    if (!this.mission) return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || this.playerStep !== 'misc') return;
+    if (classifyMiscDie(slot.pip) !== 'smoke_or_repair') return;
+    const s = this.mission.sherman;
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.notImplemented'),
+      new Color(200, 200, 200, 255), { size: 22, dur: 0.9, rise: 24 });
+    this.discardDie(dieIdx);
+  }
+
+  /** 隐蔽（对子 C 列）：MVP 占位。 */
+  private tryConcealment(dieIdx: number) {
+    if (!this.mission) return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || this.playerStep !== 'misc') return;
+    if (classifyMiscDie(slot.pip) !== 'concealment') return;
+    const s = this.mission.sherman;
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.notImplemented'),
+      new Color(200, 200, 200, 255), { size: 22, dur: 0.9, rise: 24 });
+    this.discardDie(dieIdx);
   }
 
   // ---------- 智能"下一阶段" ----------
@@ -2118,11 +2433,11 @@ export class BattleScene extends Component {
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
 
-    if (this.playerStep === 'movement' || this.playerStep === 'attack') {
+    if (this.playerStep === 'movement' || this.playerStep === 'attack' || this.playerStep === 'misc') {
       this.endCurrentSubPhase();
       return;
     }
-    // choose 状态
+    // choose 状态：A + B 都完成即可结束回合（C 为可选尾段，不强制）
     if (this.movementDone && this.attackDone) {
       this.beginEnemyPhase();
     }
@@ -2201,6 +2516,8 @@ export class BattleScene extends Component {
     this.playerStep = 'choose';
     this.movementDone = (result.movesLeft ?? 2) === 0;
     this.attackDone   = (result.attacksLeft ?? 1) === 0;
+    // 旧存档结构没有 miscDone 位；保守按"未做"恢复，玩家可在读档回合继续做 C 阶段。
+    this.miscDone = false;
     this.phaseDice = [];
     this.selectedGunDieIdx = -1;
     this.enemyOrder = [];
@@ -2451,10 +2768,11 @@ export class BattleScene extends Component {
     this.enemyDice = [];
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
-    // 新回合：两个子阶段重置为"未执行"，由玩家重新选先移动还是先攻击
+    // 新回合：三个子阶段重置为"未执行"，由玩家重新选移动/攻击/杂项
     this.playerStep = 'choose';
     this.movementDone = false;
     this.attackDone = false;
+    this.miscDone = false;
     this.phaseDice = [];
     this.selectedGunDieIdx = -1;
     // 敌方阶段也可能击毁谢尔曼；重入玩家回合时复查胜负
@@ -2486,8 +2804,9 @@ export class BattleScene extends Component {
     // 点骰子托盘上方时由骰子节点自己处理；点在地图上 → 关菜单顺便走后面流程
     this.closeDiePopover();
 
-    // 仅在"攻击阶段 + 已选主炮骰"时响应（否则地图点击无效果，视觉上也无红圈）
-    if (this.playerStep !== 'attack' || this.selectedGunDieIdx < 0) return;
+    // 仅在"攻击阶段 / 杂项阶段 + 已选主炮骰"时响应（否则地图点击无效果，视觉上也无红圈）
+    if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
+    if (this.selectedGunDieIdx < 0) return;
 
     const ut = this.mapNode.getComponent(UITransform);
     if (!ut) return;
@@ -2519,7 +2838,7 @@ export class BattleScene extends Component {
    */
   private tryAttack(target: Unit) {
     if (!this.mission) return;
-    if (this.playerStep !== 'attack') return;
+    if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
     if (this.selectedGunDieIdx < 0) return;
     const { map, sherman } = this.mission;
     const slot = this.phaseDice[this.selectedGunDieIdx];

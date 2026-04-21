@@ -23,6 +23,7 @@ import {
   PLAYER_ACTION_BY_PIP,
   PLAYER_DICE_POOL,
   AttackDieAction as AttackDieActionDB,
+  MiscDieAction as MiscDieActionDB,
   MoveDieAction as MoveDieActionDB,
 } from './PlayerActionDB';
 import { TerrainType } from './types';
@@ -57,6 +58,23 @@ export type MoveDieAction = MoveDieActionDB;
  */
 export type AttackDieAction = AttackDieActionDB;
 
+/**
+ * 杂项阶段骰面含义（见 `data/player_action_table.csv` misc 列）。
+ *
+ * MVP 实际消费：
+ *   - 'gunner_gun_or_reload' (1)：炮手主炮射击 / 装填手装填，二选一弹窗
+ *   - 'codriver_mg'          (2)：副驾驶机枪射击相邻步兵（MVP 步兵未实装，占位跳过）
+ *   - 'driver_turn_or_drive' (3)：驾驶员 转向 / 前进，弹窗 3 选项
+ *   - 'repair'               (4)：修复炮塔或机动（两者都有则弹窗二选一）
+ *   - 'smoke_or_repair'      (5)：烟雾 / 修复，二选一（烟雾系统 MVP 未实装，仅弹占位浮字）
+ *   - 'fire_suppress'        (6)：着火程度 -1
+ *   - 'concealment'   (doubles)：隐蔽（MVP 未实装，占位跳过）
+ *
+ * 所有具体"是否可执行"的判定都在 `BattleScene` 里按当前单位状态再做一次；
+ * 本枚举只负责"骰面 → 动作类别"的映射。
+ */
+export type MiscDieAction = MiscDieActionDB;
+
 export function classifyMoveDie(pt: number): MoveDieAction {
   const row = PLAYER_ACTION_BY_PIP[pt as 1 | 2 | 3 | 4 | 5 | 6];
   return row ? row.move : 'none';
@@ -65,6 +83,11 @@ export function classifyMoveDie(pt: number): MoveDieAction {
 export function classifyAttackDie(pt: number): AttackDieAction {
   const row = PLAYER_ACTION_BY_PIP[pt as 1 | 2 | 3 | 4 | 5 | 6];
   return row ? row.attack : 'none';
+}
+
+export function classifyMiscDie(pt: number): MiscDieAction {
+  const row = PLAYER_ACTION_BY_PIP[pt as 1 | 2 | 3 | 4 | 5 | 6];
+  return row ? row.misc : 'none';
 }
 
 // ---------- 行动骰池 ----------

@@ -33,6 +33,9 @@ hud.moveDone,✓移动,✓Move
 hud.moveTodo,·移动,·Move
 hud.attackDone,✓攻击,✓Attack
 hud.attackTodo,·攻击,·Attack
+hud.miscDone,✓杂项,✓Misc
+hud.miscTodo,·杂项,·Misc
+hud.miscPhase,回合 {n} | 杂项阶段 | 骰子 {dice},Turn {n} | Misc phase | Dice {dice}
 btn.nextPhase,下一阶段,Next Phase
 btn.endTurn,结束回合,End Turn
 btn.enemyTurnRunning,敌方回合中,Enemy Turn
@@ -41,6 +44,7 @@ btn.load,读档,Load
 btn.restart,再来一局,Play Again
 btn.movePhase,移动阶段,Move Phase
 btn.attackPhase,攻击阶段,Attack Phase
+btn.miscPhase,杂项阶段,Misc Phase
 outcome.win,胜利！,Victory!
 outcome.lose,战败,Defeat
 status.panelTitle,谢尔曼状态,Sherman Status
@@ -69,6 +73,7 @@ status.val.crewDead,阵亡,KIA
 status.val.crewAlive,存活,Alive
 dice.tray.move,移动阶段骰子（点骰子选择动作）,Move Phase Dice (tap a die to act)
 dice.tray.attack,攻击阶段骰子（点骰子选择动作）,Attack Phase Dice (tap a die to act)
+dice.tray.misc,杂项阶段骰子（点骰子选择动作）,Misc Phase Dice (tap a die to act)
 dice.slot.used,已用,Used
 die.hint.turn,转向,Turn
 die.hint.drive,前进,Advance
@@ -79,6 +84,14 @@ floater.hatchCommanderDead,车长已阵亡，操作无效,Commander is dead; act
 die.hint.reload,装填,Reload
 die.hint.gun,主炮,Gun
 die.hint.mg,机枪,MG
+die.hint.repair,修复,Repair
+die.hint.fireSuppress,灭火,Put Out Fire
+die.hint.smoke,烟雾,Smoke
+die.hint.conceal,隐蔽,Conceal
+die.hint.gunOrLoad,炮/填,Gun/Load
+die.hint.driverTurnOrDrive,驾:转/进,Driver:Turn/Advance
+die.hint.smokeOrRepair,烟/修,Smoke/Repair
+die.hint.codriverMG,副机枪,Co-MG
 die.hint.none,—,—
 action.turnCW,↻ 顺时针 60°,↻ CW 60°
 action.turnCCW,↺ 逆时针 60°,↺ CCW 60°
@@ -87,11 +100,24 @@ action.reverse,▼ 后退 1 格,▼ Reverse 1
 action.skip,放弃本骰,Skip Die
 action.reload,装填主炮,Reload Gun
 action.fire,选定主炮开火,Fire Gun
+action.repairTurret,修复炮塔,Repair Turret
+action.repairMobility,修复瘫痪,Repair Mobility
+action.fireSuppress,灭火 -1,Reduce Fire -1
+action.smoke,施放烟雾,Deploy Smoke
+action.concealment,进入隐蔽,Go Concealed
+action.codriverMG,副驾驶机枪,Co-driver MG
 floater.noFacing,未定朝向,No Facing
 floater.blockedTerrain,地形阻挡,Blocked Terrain
 floater.enemyBlock,敌方占据,Enemy Blocks
 floater.smoke,烟雾,Smoke
 floater.repair,修复,Repair
+floater.noRepair,无需修复,Nothing to Repair
+floater.noFire,无起火,No Fire
+floater.notImplemented,暂未实装,Not Yet Implemented
+floater.noInfantry,无相邻步兵,No Adjacent Infantry
+floater.fireReduced,起火程度 -1,Fire Level -1
+floater.turretFixed,炮塔已修复,Turret Repaired
+floater.mobilityFixed,机动已修复,Mobility Repaired
 attack.reason.selfFire,不能攻击自己,Cannot Target Self
 attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
 attack.reason.overlap,目标重叠,Overlap
