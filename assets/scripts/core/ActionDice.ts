@@ -37,10 +37,13 @@ import { TerrainType } from './types';
  *   - 'none'    → 本骰弃掉
  *   - 'turn'    → 转向 1 次（60°，顺时针 / 逆时针由玩家选）
  *   - 'drive'   → 前进 1 格（前格合法且地形可入）
- *   - 'reverse' → 后退 1 格（后格合法且地形可入，MVP UI 提示暂未开放）
+ *   - 'reverse' → 后退 1 格（后格合法且地形可入）
  *
- * `'start'`（启动检定）与 `'driver_drive_codriver_turn'`（对子：驾驶员前进 /
- * 副驾驶转向，二选一）均为未来扩展值，MVP 遇到这些值按 `'none'` 处理。
+ * `'driver_drive_codriver_turn'`（对子：驾驶员前进 / 副驾驶转向，二选一）
+ *   不由 `classifyMoveDie` 单颗骰映射返回，而是由 BattleScene 在同点搭档检测
+ *   （`findDoublesPartner`）时动态追加到 popover 菜单。
+ *
+ * `'start'`（启动检定）为未来扩展值，MVP 遇到按 `'none'` 处理。
  */
 export type MoveDieAction = MoveDieActionDB;
 
@@ -53,8 +56,10 @@ export type MoveDieAction = MoveDieActionDB;
  *   - 'mg'     → 机枪射击（相邻步兵）
  *   - 'gun'    → 主炮射击（必须已装填）
  *
- * `'gunner_gun_or_reload'` 代表"炮手主炮射击 / 装填手装填（二选一）"，
- * 同时出现在点数 1 的 C 列与对子行的 B 列；MVP 不消费。
+ * `'gunner_gun_or_reload'` 代表"炮手主炮射击 / 装填手装填（二选一）"：
+ *   - 在杂项阶段 1 点时由 `classifyMiscDie` 返回（单骰消费）；
+ *   - 在攻击阶段对子时由 BattleScene 动态追加"装填手装填（+同点骰）"
+ *     和"炮手主炮射击（+同点骰）"两项，消耗 2 颗骰。
  */
 export type AttackDieAction = AttackDieActionDB;
 
@@ -68,7 +73,8 @@ export type AttackDieAction = AttackDieActionDB;
  *   - 'repair'               (4)：修复炮塔或机动（两者都有则弹窗二选一）
  *   - 'smoke_or_repair'      (5)：烟雾 / 修复，二选一（烟雾系统 MVP 未实装，仅弹占位浮字）
  *   - 'fire_suppress'        (6)：着火程度 -1
- *   - 'concealment'   (doubles)：隐蔽（MVP 未实装，占位跳过）
+ *   - 'concealment'   (doubles)：隐蔽 —— 由 BattleScene 在检测到任意同点搭档时
+ *                                  动态追加"进入隐蔽（+同点骰）"菜单项，消耗 2 颗骰
  *
  * 所有具体"是否可执行"的判定都在 `BattleScene` 里按当前单位状态再做一次；
  * 本枚举只负责"骰面 → 动作类别"的映射。

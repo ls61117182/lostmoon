@@ -125,7 +125,13 @@ floater.revealed,暴露（离开隐蔽）,Revealed
 floater.needPair,需要两颗同点骰,Need Pair of Dice
 floater.smokeCleared,烟雾消散,Smoke Cleared
 floater.fireCheck,着火检定,Fire Check
+floater.roleUnavailable,{role}已阵亡，无法操作,{role} KIA: cannot act
 action.concealPair,进入隐蔽（+同点骰）,Go Concealed (+pair)
+action.doublesDriverAdvance,驾驶员前进（+同点骰）,Driver Advance (+pair)
+action.doublesCoDriverTurnCW,副驾驶 ↻ 60°（+同点骰）,Co-driver ↻ 60° (+pair)
+action.doublesCoDriverTurnCCW,副驾驶 ↺ 60°（+同点骰）,Co-driver ↺ 60° (+pair)
+action.doublesLoaderReload,装填手装填（+同点骰）,Loader Reload (+pair)
+action.doublesGunnerFire,炮手主炮射击（+同点骰）,Gunner Fire (+pair)
 attack.reason.selfFire,不能攻击自己,Cannot Target Self
 attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
 attack.reason.overlap,目标重叠,Overlap

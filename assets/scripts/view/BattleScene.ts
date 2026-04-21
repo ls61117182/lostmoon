@@ -448,6 +448,11 @@ export class BattleScene extends Component {
   private phaseDice: DieSlot[] = [];
   /** 攻击阶段玩家点击某颗主炮骰 → 进入"选目标"态，这里记录那颗骰在 phaseDice 的下标。-1 = 未选 */
   private selectedGunDieIdx: number = -1;
+  /**
+   * 若当前主炮选择来自"对子 B 列（炮手主炮射击）"，partner 记录在此。
+   * 开火结算时连带这颗也标记 used；-1 = 普通单骰主炮选择。
+   */
+  private selectedGunDoublesIdx: number = -1;
 
   // 敌方阶段调度（GDD §3.7 AI 表骰子驱动版）
   /** 本回合按"距离谢尔曼最近→最远"排序后的活单位列表；beginEnemyPhase 时锁定一次 */
@@ -573,7 +578,7 @@ export class BattleScene extends Component {
     this.attackDone = false;
     this.miscDone = false;
     this.phaseDice = [];
-    this.selectedGunDieIdx = -1;
+    this.clearGunSelection();
     this.outcome = 'ongoing';
     this.rng = new RNG(this.rngSeed || undefined);
     this.clearFloaters();
@@ -1548,7 +1553,7 @@ export class BattleScene extends Component {
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
     this.phaseDice = [];
-    this.selectedGunDieIdx = -1;
+    this.clearGunSelection();
     this.movementDone = false;
     this.attackDone = false;
     this.miscDone = false;
@@ -1870,7 +1875,7 @@ export class BattleScene extends Component {
     const count = actionDicePool({ terrain, hatchOpen: !!sherman.hatchOpen });
     const pips = rollActionDice(this.rng, count);
     this.phaseDice = pips.map(pip => ({ pip, used: false }));
-    this.selectedGunDieIdx = -1;
+    this.clearGunSelection();
     this.playerStep = which;
     this.closeDiePopover();
 
@@ -1892,7 +1897,7 @@ export class BattleScene extends Component {
     else if (this.playerStep === 'attack') this.attackDone = true;
     else if (this.playerStep === 'misc') this.miscDone = true;
     this.phaseDice = [];
-    this.selectedGunDieIdx = -1;
+    this.clearGunSelection();
     this.playerStep = 'choose';
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -1934,21 +1939,23 @@ export class BattleScene extends Component {
     }
     // GDD §3.6：移动阶段的"前进"(5/6) 与"后退"(1)，以及攻击阶段的"装填"(1/2)
     // 都只有单一动作、无分支选择 → 点一下直接执行，不再弹菜单。
+    // 但若存在同点搭档（= §3.6 对子动作可用），仍要走 popover 让玩家选择对子动作。
+    const hasDoubles = this.findDoublesPartner(idx) >= 0;
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
-      if (a === 'drive') {
+      if (a === 'drive' && !hasDoubles) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, +1);
         return;
       }
-      if (a === 'reverse') {
+      if (a === 'reverse' && !hasDoubles) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, -1);
         return;
       }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
-      if (a === 'reload') {
+      if (a === 'reload' && !hasDoubles) {
         this.closeDiePopover();
         this.tryReload(idx);
         return;
@@ -1957,7 +1964,7 @@ export class BattleScene extends Component {
       // 杂项阶段 6 点 = 灭火，无分支 → 直接执行。
       // 但若有同点搭档（= 可走"隐蔽"对子动作），则改走 popover 让玩家选择。
       const m = classifyMiscDie(slot.pip);
-      if (m === 'fire_suppress' && this.findConcealmentPartner(idx) < 0) {
+      if (m === 'fire_suppress' && !hasDoubles) {
         this.closeDiePopover();
         this.tryFireSuppress(idx);
         return;
@@ -1988,6 +1995,8 @@ export class BattleScene extends Component {
     type Item = { text: string; color: Color; onClick: () => void };
     const items: Item[] = [];
 
+    const hasDoublesPartner = this.findDoublesPartner(idx) >= 0;
+
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
       if (a === 'turn') {
@@ -2008,6 +2017,15 @@ export class BattleScene extends Component {
         items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
           onClick: () => this.discardDie(idx) });
       }
+      // §3.6 A 列对子：驾驶员前进 / 副驾驶 ↻ 60° / 副驾驶 ↺ 60°
+      if (hasDoublesPartner) {
+        items.push({ text: t('action.doublesDriverAdvance'), color: PHASE_BTN_MOVE,
+          onClick: () => this.tryDoublesDriverAdvance(idx) });
+        items.push({ text: t('action.doublesCoDriverTurnCW'), color: PHASE_BTN_MOVE,
+          onClick: () => this.tryDoublesCoDriverTurn(idx, +1) });
+        items.push({ text: t('action.doublesCoDriverTurnCCW'), color: PHASE_BTN_MOVE,
+          onClick: () => this.tryDoublesCoDriverTurn(idx, -1) });
+      }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
       if (a === 'reload') {
@@ -2019,6 +2037,13 @@ export class BattleScene extends Component {
       } else {
         items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
           onClick: () => this.discardDie(idx) });
+      }
+      // §3.6 B 列对子：装填手装填（+同点骰）/ 炮手主炮射击（+同点骰）
+      if (hasDoublesPartner) {
+        items.push({ text: t('action.doublesLoaderReload'), color: PHASE_BTN_ATTACK,
+          onClick: () => this.tryDoublesLoaderReload(idx) });
+        items.push({ text: t('action.doublesGunnerFire'), color: PHASE_BTN_ATTACK,
+          onClick: () => this.selectGunDieDoubles(idx) });
       }
     } else if (this.playerStep === 'misc') {
       const m = classifyMiscDie(slot.pip);
@@ -2083,9 +2108,8 @@ export class BattleScene extends Component {
           items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
             onClick: () => this.discardDie(idx) });
       }
-      // §3.6 对子 C 列：只要 misc 阶段还存在"与当前骰同点且未用"的搭档，就追加"隐蔽（+同点骰）"
-      // 这样玩家任何点数的对子都可以自由选择是否入隐蔽，不必局限于某一枚具体点数。
-      if (this.findConcealmentPartner(idx) >= 0) {
+      // §3.6 对子 C 列：只要存在同点搭档，就追加"隐蔽（+同点骰）"
+      if (hasDoublesPartner) {
         items.push({ text: t('action.concealPair'), color: PHASE_BTN_MISC,
           onClick: () => this.tryConcealment(idx) });
       }
@@ -2322,11 +2346,74 @@ export class BattleScene extends Component {
       return;
     }
     // 再次点同一颗 → 取消选择
-    this.selectedGunDieIdx = this.selectedGunDieIdx === dieIdx ? -1 : dieIdx;
+    if (this.selectedGunDieIdx === dieIdx) {
+      this.clearGunSelection();
+    } else {
+      this.selectedGunDieIdx = dieIdx;
+      // 普通单骰主炮选择：不连带对子 partner
+      this.selectedGunDoublesIdx = -1;
+    }
     this.closeDiePopover();
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
+  }
+
+  /** §3.6 B 列对子：炮手主炮射击（+同点骰）。选中后走普通开火流程，tryAttack 会一并消耗 partner。 */
+  private selectGunDieDoubles(dieIdx: number) {
+    if (!this.mission) return;
+    if (this.playerStep !== 'attack') return; // 对子 B 列仅用于攻击阶段
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used) return;
+    const partnerIdx = this.findDoublesPartner(dieIdx);
+    if (partnerIdx < 0) {
+      const s = this.mission.sherman;
+      this.spawnFloater(s.pos.q, s.pos.r, t('floater.needPair'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    // 炮手阵亡则无法行动
+    if (!this.checkCrewAlive('gunner')) return;
+    this.selectedGunDieIdx = dieIdx;
+    this.selectedGunDoublesIdx = partnerIdx;
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    console.log(`[Attack] 对子 炮手主炮射击已备（主骰 ${dieIdx} + 搭档 ${partnerIdx}，点数 ${slot.pip}）`);
+  }
+
+  /** 统一清理主炮选中态（包括 doubles partner）。 */
+  private clearGunSelection() {
+    this.selectedGunDieIdx = -1;
+    this.selectedGunDoublesIdx = -1;
+  }
+
+  /**
+   * 检查指定乘员是否存活；不存活时浮一条"{role}已阵亡..."提示并返回 false。
+   * §3.6 对子动作均与特定乘员强绑定（驾驶员 / 副驾驶 / 装填手 / 炮手），阵亡即不可执行。
+   * slot: 'driver'(4) / 'coDriver'(5) / 'loader'(2) / 'gunner'(3) / 'commander'(1)
+   */
+  private checkCrewAlive(slot: 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver'): boolean {
+    if (!this.mission) return false;
+    const crew = this.mission.sherman.crew;
+    if (!crew) return true; // 未定义 crew 视作都活着（老存档兼容）
+    const alive = !!crew[slot];
+    if (!alive) {
+      const roleKey = {
+        commander: 'crew.role.1',
+        loader: 'crew.role.2',
+        gunner: 'crew.role.3',
+        driver: 'crew.role.4',
+        coDriver: 'crew.role.5',
+      }[slot];
+      const s = this.mission.sherman;
+      this.spawnFloater(s.pos.q, s.pos.r,
+        t('floater.roleUnavailable', { role: t(roleKey) }),
+        new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+    }
+    return alive;
   }
 
   // ---------- 杂项阶段动作 ----------
@@ -2453,7 +2540,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
-    const partnerIdx = this.findConcealmentPartner(dieIdx);
+    const partnerIdx = this.findDoublesPartner(dieIdx);
     const s = this.mission.sherman;
     if (partnerIdx < 0) {
       this.spawnFloater(s.pos.q, s.pos.r, t('floater.needPair'),
@@ -2478,9 +2565,12 @@ export class BattleScene extends Component {
 
   /**
    * 在当前 phaseDice 中寻找一个"点数相同、未使用、不同于 dieIdx"的索引。
-   * 用于 §3.6 对子动作（当前只有"隐蔽"一种）。
+   * 用于 §3.6 对子动作：
+   *   - A 移动：驾驶员前进 / 副驾驶转向
+   *   - B 攻击：炮手主炮射击 / 装填手装填
+   *   - C 杂项：隐蔽
    */
-  private findConcealmentPartner(dieIdx: number): number {
+  private findDoublesPartner(dieIdx: number): number {
     const slot = this.phaseDice[dieIdx];
     if (!slot) return -1;
     for (let i = 0; i < this.phaseDice.length; i++) {
@@ -2498,6 +2588,150 @@ export class BattleScene extends Component {
     this.spawnFloater(u.pos.q, u.pos.r, t('floater.revealed'),
       new Color(220, 200, 160, 255), { size: 20, dur: 0.8, rise: 22 });
     this.refreshStatusPanel();
+  }
+
+  // ---------- §3.6 对子动作（跨列统一入口） ----------
+
+  /**
+   * 对子通用消耗：把主骰 + partner 两颗标记已用；返回 partner 是否找到。
+   * 若找不到 partner，飘"需要两颗同点骰"并返回 false。
+   */
+  private consumeDoubles(dieIdx: number): boolean {
+    if (!this.mission) return false;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used) return false;
+    const partnerIdx = this.findDoublesPartner(dieIdx);
+    if (partnerIdx < 0) {
+      const s = this.mission.sherman;
+      this.spawnFloater(s.pos.q, s.pos.r, t('floater.needPair'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return false;
+    }
+    slot.used = true;
+    this.phaseDice[partnerIdx].used = true;
+    return true;
+  }
+
+  /**
+   * §3.6 A 列对子：驾驶员前进 1 格（仅移动阶段）。
+   * 消耗一对同点骰；走 tryDriveSherman 的几何 / 地形校验逻辑，但绕过"骰面=drive"的判定。
+   * 若驾驶员阵亡或瘫痪或地形 / 敌方阻挡，骰子不消耗。
+   */
+  private tryDoublesDriverAdvance(dieIdx: number) {
+    if (!this.mission) return;
+    if (this.playerStep !== 'movement') return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used) return;
+    if (!this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
+
+    const { map, sherman, enemies } = this.mission;
+    if (sherman.paralyzed) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
+        new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    if (sherman.facing === null) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.noFacing'),
+        new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    const driveDir = sherman.facing;
+    const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
+    const tile = map.get(to);
+    if (!tile || !map.canTankEnter(to)) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
+        new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    const blocker = enemies.find(e => !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    if (blocker) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.enemyBlock'),
+        new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+
+    // 几何校验通过 → 消耗对子并开始前进动画
+    if (!this.consumeDoubles(dieIdx)) return;
+    this.closeDiePopover();
+    this.breakConcealment(sherman);
+    this.anim = {
+      unit: sherman,
+      fromQ: sherman.pos.q,
+      fromR: sherman.pos.r,
+      toQ: to.q,
+      toR: to.r,
+      t: 0,
+      dur: Math.max(0.05, this.moveDuration),
+    };
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    console.log(`[Move] 对子 驾驶员前进 → (${to.q},${to.r})（消耗两颗骰）`);
+  }
+
+  /**
+   * §3.6 A 列对子：副驾驶转向 60°（仅移动阶段）。
+   * dirSign +1 = CW，-1 = CCW。副驾驶阵亡或瘫痪则拒绝。
+   */
+  private tryDoublesCoDriverTurn(dieIdx: number, dirSign: 1 | -1) {
+    if (!this.mission) return;
+    if (this.playerStep !== 'movement') return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used) return;
+    if (!this.checkCrewAlive('coDriver')) { this.closeDiePopover(); return; }
+
+    const sherman = this.mission.sherman;
+    if (sherman.paralyzed) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
+        new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    if (!this.consumeDoubles(dieIdx)) return;
+    if (sherman.facing === null) sherman.facing = 0;
+    const step = dirSign === 1 ? 1 : 5;
+    sherman.facing = rotateDirection(sherman.facing, step);
+    this.breakConcealment(sherman);
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    console.log(`[Move] 对子 副驾驶转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${sherman.facing}`);
+    this.autoEndPhaseIfDone();
+  }
+
+  /**
+   * §3.6 B 列对子：装填手装填（仅攻击阶段）。
+   * 若已装填则不消耗；装填手阵亡则拒绝。
+   */
+  private tryDoublesLoaderReload(dieIdx: number) {
+    if (!this.mission) return;
+    if (this.playerStep !== 'attack') return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used) return;
+    if (!this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
+
+    const sherman = this.mission.sherman;
+    if (sherman.loaded) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.loaded'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    if (!this.consumeDoubles(dieIdx)) return;
+    sherman.loaded = true;
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.refreshStatusPanel();
+    console.log('[Attack] 对子 装填手装填完成（消耗两颗骰）');
+    this.autoEndPhaseIfDone();
   }
 
   // ---------- 智能"下一阶段" ----------
@@ -2717,7 +2951,7 @@ export class BattleScene extends Component {
     // 旧存档结构没有 miscDone 位；保守按"未做"恢复，玩家可在读档回合继续做 C 阶段。
     this.miscDone = false;
     this.phaseDice = [];
-    this.selectedGunDieIdx = -1;
+    this.clearGunSelection();
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -2980,7 +3214,7 @@ export class BattleScene extends Component {
     this.attackDone = false;
     this.miscDone = false;
     this.phaseDice = [];
-    this.selectedGunDieIdx = -1;
+    this.clearGunSelection();
     // 敌方阶段也可能击毁谢尔曼；重入玩家回合时复查胜负
     if (this.mission) {
       this.outcome = checkOutcome(this.mission);
@@ -3074,12 +3308,18 @@ export class BattleScene extends Component {
     const report = rollAttack({ attacker: sherman, target, map }, this.rng);
     // 骰子先标"用掉了"不行 —— 动画期间得看出主炮骰仍在选中态。
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
+    // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，onDone 时一并消耗。
+    const doublesPartnerIdx = this.selectedGunDoublesIdx;
     this.startDiceShow(report, t('actor.player'), target.kind, () => {
       if (!this.mission) return;
       applyAttack(target, report);
       slot.used = true;
+      if (doublesPartnerIdx >= 0) {
+        const p = this.phaseDice[doublesPartnerIdx];
+        if (p) p.used = true;
+      }
       sherman.loaded = false;
-      this.selectedGunDieIdx = -1;
+      this.clearGunSelection();
       this.presentAttackResult(t('actor.player'), report, sherman, target);
       this.refreshPhaseUI();
       this.updateHUD();
