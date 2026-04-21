@@ -3,13 +3,13 @@ dmg.effect.destroyed,摧毁！,Destroyed!
 dmg.effect.damaged,受损,Damaged
 dmg.effect.fire,起火 +1,On Fire +1
 dmg.effect.turret,炮塔受损,Turret Hit
-dmg.effect.paralyzed,痛痪,Immobilized
+dmg.effect.paralyzed,瘫痪,Immobilized
 dmg.effect.crewCheck,阵亡检定,Crew Check
 dmg.outcome.destroyed,击毁,Destroyed
 dmg.outcome.damaged,受损,Damaged
 dmg.outcome.fire,起火,On Fire
 dmg.outcome.turret,炮塔受损,Turret Hit
-dmg.outcome.paralyzed,痛痪,Immobilized
+dmg.outcome.paralyzed,瘫痪,Immobilized
 dmg.outcome.crewCheck,阵亡检定,Crew Check
 crew.role.1,车长,Commander
 crew.role.2,装填手,Loader
@@ -63,7 +63,7 @@ status.val.destroyed,已毁,Destroyed
 status.val.fireN,起火({n}),Fire({n})
 status.val.damaged,受损,Damaged
 status.val.intact,完好,Intact
-status.val.paralyzed,痛痪,Immobilized
+status.val.paralyzed,瘫痪,Immobilized
 status.val.normal,正常,Normal
 status.val.crewDead,阵亡,KIA
 status.val.crewAlive,存活,Alive
@@ -74,6 +74,8 @@ die.hint.turn,转向,Turn
 die.hint.drive,前进,Advance
 die.hint.reverse,后退,Reverse
 die.hint.start,启动,Start
+floater.hatchLocked,本回合舱盖已锁定,Hatch locked this turn
+floater.hatchCommanderDead,车长已阵亡，操作无效,Commander is dead; action invalid
 die.hint.reload,装填,Reload
 die.hint.gun,主炮,Gun
 die.hint.mg,机枪,MG

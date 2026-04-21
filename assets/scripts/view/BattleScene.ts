@@ -1200,18 +1200,28 @@ export class BattleScene extends Component {
       [t('status.row.turret'),   'turret'],
       [t('status.row.mobility'), 'mobility'],
     ];
+    let hatchRowY = 0;
     for (let i = 0; i < bodyRows.length; i++) {
       const [label, key] = bodyRows[i];
       this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
       const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
       switch (key) {
         case 'loaded':   this.statusLoaded = val; break;
-        case 'hatch':    this.statusHatch = val; break;
+        case 'hatch':    this.statusHatch = val; hatchRowY = bodyRowY[i]; break;
         case 'fire':     this.statusFire = val; break;
         case 'turret':   this.statusTurret = val; break;
         case 'mobility': this.statusMobility = val; break;
       }
     }
+
+    // GDD §2.1：舱盖在"选择阶段"可自由切换；进入移动/攻击后本回合锁定。
+    // 为避免额外按钮挤占界面，直接把整行做成点击热区 → 调用 tryToggleHatch()。
+    const hatchHit = new Node('HatchHit');
+    hatchHit.layer = this.node.layer;
+    hatchHit.addComponent(UITransform).setContentSize(W - 24, BODY_GAP);
+    hatchHit.setPosition(0, hatchRowY, 0);
+    hatchHit.on(Node.EventType.TOUCH_END, () => this.tryToggleHatch(), this);
+    panel.addChild(hatchHit);
 
     // 乘员小标题
     this.makeCenteredLabel(panel, t('status.row.crewTitle'),
@@ -1743,6 +1753,44 @@ export class BattleScene extends Component {
   }
 
   // ---------- 阶段进入 / 结束 ----------
+
+  // ---------- 车长舱盖 ----------
+
+  /**
+   * GDD §2.1：舱盖仅在"选择阶段"且本回合未进入任何子阶段时可切换；
+   * 车长阵亡 / 已进入移动或攻击 / 坦克被毁 → 禁止切换。
+   *
+   * 返回 null 表示允许；否则返回浮字用的 i18n key。
+   */
+  private canToggleHatch(): string | null {
+    if (!this.mission) return 'floater.hatchLocked';
+    const s = this.mission.sherman;
+    if (s.destroyed) return 'floater.hatchLocked';
+    // 车长存活检查必须先于"阶段锁"，否则车长已阵亡但恰好还在 choose 的情况下
+    // 会误报"本回合已锁定"，让玩家困惑到底是哪种原因。
+    if (s.crew && !s.crew.commander) return 'floater.hatchCommanderDead';
+    if (this.phase !== 'player' || this.outcome !== 'ongoing') return 'floater.hatchLocked';
+    if (this.playerStep !== 'choose' || this.movementDone || this.attackDone) {
+      return 'floater.hatchLocked';
+    }
+    return null;
+  }
+
+  /** 点击"舱盖"行：允许则翻转 hatchOpen 并刷新面板；否则弹红色浮字。 */
+  private tryToggleHatch() {
+    if (this.isBusy()) return;
+    if (!this.mission) return;
+    const s = this.mission.sherman;
+    const reason = this.canToggleHatch();
+    if (reason) {
+      this.spawnFloater(s.pos.q, s.pos.r, t(reason),
+        new Color(255, 120, 120, 255), { size: 22, dur: 1.2, rise: 28 });
+      return;
+    }
+    s.hatchOpen = !s.hatchOpen;
+    console.log(`[Hatch] 车长舱盖 → ${s.hatchOpen ? '打开' : '关闭'}`);
+    this.refreshStatusPanel();
+  }
 
   /** 玩家在"选择阶段"时点了移动或攻击按钮 → 摇一批骰子，进入对应子阶段。 */
   private enterPhase(which: 'movement' | 'attack') {
