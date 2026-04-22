@@ -27,6 +27,7 @@ hud.playerChoose,回合 {n} | 玩家 | 选择阶段  {tags},Turn {n} | Player | 
 hud.movePhase,回合 {n} | 移动阶段 | 骰子 {dice},Turn {n} | Move phase | Dice {dice}
 hud.attackPhase,回合 {n} | 攻击阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack phase | {loaded} | Dice {dice}{sel}
 hud.attackSelectHint,点敌人开火,Click enemy to fire
+hud.mgSelectHint,点相邻步兵扫射,Click adjacent infantry
 hud.loaded,已装填,Loaded
 hud.unloaded,未装填,Unloaded
 hud.moveDone,✓移动,✓Move
@@ -106,6 +107,8 @@ action.fireSuppress,灭火 -1,Reduce Fire -1
 action.smoke,施放烟雾,Deploy Smoke
 action.concealment,进入隐蔽,Go Concealed
 action.codriverMG,副驾驶机枪,Co-driver MG
+action.fireMG,选定机枪扫射,Fire MG
+action.fireMGCoDriver,副驾驶机枪扫射,Co-driver Fire MG
 floater.noFacing,未定朝向,No Facing
 floater.blockedTerrain,地形阻挡,Blocked Terrain
 floater.enemyBlock,敌方占据,Enemy Blocks
@@ -125,6 +128,9 @@ floater.revealed,暴露（离开隐蔽）,Revealed
 floater.needPair,需要两颗同点骰,Need Pair of Dice
 floater.smokeCleared,烟雾消散,Smoke Cleared
 floater.fireCheck,着火检定,Fire Check
+floater.mgMiss,机枪未命中,MG Miss
+floater.mgHit,步兵击毙,Infantry Down
+floater.mgDice,机枪 2d6={d1}+{d2}={sum},MG 2d6={d1}+{d2}={sum}
 floater.roleUnavailable,{role}已阵亡，无法操作,{role} KIA: cannot act
 action.concealPair,进入隐蔽（+同点骰）,Go Concealed (+pair)
 action.doublesDriverAdvance,驾驶员前进（+同点骰）,Driver Advance (+pair)
@@ -139,9 +145,14 @@ attack.reason.notStraight,非六向直线,Not on Hex Axis
 attack.reason.notStraightHint,需在六向直线上,Must be on hex axis
 attack.reason.blocked,无视线,No LOS
 attack.reason.turretDamaged,炮塔受损不能开火,Turret Damaged: Cannot Fire
+attack.reason.mgRange,机枪只能射击相邻单位,MG: Target Must Be Adjacent
+attack.reason.notInfantry,机枪只能扫射步兵,MG: Target Must Be Infantry
+attack.reason.gunVsInfantry,主炮不瞄步兵，请改用机枪,Main gun ignores infantry; use MG
 attack.reason.unknown,无法攻击,Cannot Attack
 preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
 dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}
+dice.panel.mgHitNeed,机枪扫射 命中需 ≥{n},MG Burst · Hit ≥{n}
+dice.panel.outcomeMGKill,步兵击毙！,Infantry Down!
 dice.panel.hitYes,命中！,Hit!
 dice.panel.hitNo,未命中,Miss
 dice.panel.penMustPen,必穿 (≤0),Auto-Pen (≤0)
@@ -156,4 +167,10 @@ dice.panel.outcomeRic,跳弹,Ricochet
 actor.player,玩家,Player
 actor.sherman,谢尔曼,Sherman
 actor.enemyPrefix,敌方 {name},Enemy {name}
+unit.name.sherman,谢尔曼,Sherman
+unit.name.tiger,虎式,Tiger
+unit.name.panzer4,四号,Panzer IV
+unit.name.panzer3,三号,Panzer III
+unit.name.truck,卡车,Truck
+unit.name.infantry,步兵,Infantry
 dice.aiHeader,{col}  {n}骰,{col}  {n}d

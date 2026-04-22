@@ -381,6 +381,54 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
   return report;
 }
 
+// ---------- 机枪（MG）攻击 ----------
+//
+// §3.6 行动表 B 列 3/4 + C 列 2："机枪射击：相邻步兵 7+ 命中"。
+// 相对主炮攻击的差异：
+//   - 目标仅限 `kind='infantry'` 且必须与攻击方相邻（hexDistance===1）
+//   - 单段 2d6 检定：点数之和 ≥ 7 = 命中；命中即直接击毙（步兵无装甲）
+//   - 不吃树篱 / 建筑 / 烟雾 / 隐蔽修正（相邻近距离扫射）
+//   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
+//
+// canMGAttack 返回的 reason 同样是 i18n key，由 UI 层翻译。
+
+/** 机枪命中阈值：2d6 ≥ 7 */
+export const MG_HIT_THRESHOLD = 7;
+
+export type MGDenyReason =
+  | 'attack.reason.selfFire'
+  | 'attack.reason.destroyedTarget'
+  | 'attack.reason.mgRange'
+  | 'attack.reason.notInfantry';
+
+export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
+  const { attacker, target } = ctx;
+  if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
+  if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
+  if (target.kind !== 'infantry') return { ok: false, reason: 'attack.reason.notInfantry' };
+  if (hexDistance(attacker.pos, target.pos) !== 1) return { ok: false, reason: 'attack.reason.mgRange' };
+  return { ok: true };
+}
+
+export interface MGReport {
+  dice: [number, number];
+  roll: number;
+  threshold: number;
+  hit: boolean;
+}
+
+export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
+  const d1 = rng.d6();
+  const d2 = rng.d6();
+  const roll = d1 + d2;
+  return { dice: [d1, d2], roll, threshold: MG_HIT_THRESHOLD, hit: roll >= MG_HIT_THRESHOLD };
+}
+
+/** 写入机枪攻击结果：命中 = 目标直接击毙。 */
+export function applyMGAttack(target: Unit, report: MGReport): void {
+  if (report.hit) target.destroyed = true;
+}
+
 // ---------- 不掷骰的"预演" ----------
 
 export interface AttackPreview {

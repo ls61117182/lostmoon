@@ -59,6 +59,18 @@
       "at": { "col": 6, "row": 5 },
       "facing": 3,
       "startId": 4
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": { "col": 1, "row": 8 },
+      "facing": null
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": { "col": 4, "row": 7 },
+      "facing": null
     }
   ],
 

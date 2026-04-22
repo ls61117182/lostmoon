@@ -58,7 +58,7 @@ import {
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
-import { applyAttack, AttackReport, canAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveDamageEffect, rollAttack } from '../core/Combat';
+import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { t } from '../core/Lang';
 import {
@@ -236,6 +236,13 @@ interface DiceShow {
   report: AttackReport;      // 已 rollAttack 得出的最终结果（不能再变）
   attackerLabel: string;     // 标题里的攻击方名（"玩家" / "敌方 panzer4"）
   targetLabel: string;       // 标题里的目标名（"panzer4" / "谢尔曼"）
+  /**
+   * 是否"机枪模式"（§3.6 B 列 3/4 / C 列 2）：
+   *   - 面板只显示 2d6 + 命中阈值 + 结果三段
+   *   - 状态机在 hit-show 结束后直接跳到 hold，不进入 pen/dmg/crew
+   *   - 底部大字改用 MG 专属文案（"步兵击毙 / MISS"）
+   */
+  mg: boolean;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
   // 视觉
@@ -375,6 +382,11 @@ const DESTROYED_BORDER = new Color(220,  40,  40, 255);
 const STATUS_TEXT_FIRE = new Color(255, 200,  60, 255);
 const STATUS_TEXT_DEAD = new Color(220,  60,  60, 255);
 const STATUS_TEXT_OUT  = new Color(  0,   0,   0, 220);
+// 单位名字标签：常驻显示在每个棋子正下方，方便玩家一眼识别兵种
+const UNIT_NAME_TEXT_ALLIED = new Color(200, 230, 255, 255);
+const UNIT_NAME_TEXT_GERMAN = new Color(255, 220, 200, 255);
+const UNIT_NAME_TEXT_DEAD   = new Color(180, 180, 180, 220);
+const UNIT_NAME_OUTLINE     = new Color(  0,   0,   0, 220);
 // 可攻击目标（视线中、非摧毁敌方）高亮
 const ATTACKABLE_COLOR = new Color(255,  60,  60, 255);
 
@@ -453,6 +465,11 @@ export class BattleScene extends Component {
    * 开火结算时连带这颗也标记 used；-1 = 普通单骰主炮选择。
    */
   private selectedGunDoublesIdx: number = -1;
+  /**
+   * 攻击 mg（3/4）/ 杂项 codriver_mg（2）时玩家点中的机枪骰下标。-1 = 未选。
+   * 机枪选中与主炮选中 *互斥* —— 任一进入选中态都会把另一方清零，避免玩家困惑"这颗骰到底选哪一发"。
+   */
+  private selectedMGDieIdx: number = -1;
 
   // 敌方阶段调度（GDD §3.7 AI 表骰子驱动版）
   /** 本回合按"距离谢尔曼最近→最远"排序后的活单位列表；beginEnemyPhase 时锁定一次 */
@@ -479,6 +496,8 @@ export class BattleScene extends Component {
   private previewLabels: Node[] = [];
   // 单位状态文字池（起火 / 已毁）：随 redraw 整批重建
   private statusLabels: Node[] = [];
+  // 单位名字文字池（"谢尔曼" / "虎式" 等）：常驻显示，随 redraw 整批重建
+  private nameLabels: Node[] = [];
 
   // HUD
   private hudLabel: Label | null = null;
@@ -647,6 +666,13 @@ export class BattleScene extends Component {
         && this.outcome === 'ongoing') {
       this.drawAttackableHighlights();
     }
+    // 4b. 机枪目标高亮：选中机枪骰时，把 *相邻步兵* 圈出来
+    if (!this.anim && this.phase === 'player'
+        && (this.playerStep === 'attack' || this.playerStep === 'misc')
+        && this.selectedMGDieIdx >= 0
+        && this.outcome === 'ongoing') {
+      this.drawMGTargetHighlights();
+    }
 
     // 5. 单位 —— 正在动画的那个用插值像素坐标，其余用本格坐标
     this.drawUnitMaybeAnim(sherman);
@@ -656,6 +682,11 @@ export class BattleScene extends Component {
     this.clearStatusLabels();
     this.spawnStatusLabelIfAny(sherman);
     for (const e of enemies) this.spawnStatusLabelIfAny(e);
+
+    // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …），整批重建
+    this.clearNameLabels();
+    this.spawnUnitNameLabel(sherman);
+    for (const e of enemies) this.spawnUnitNameLabel(e);
   }
 
   private drawAttackableHighlights() {
@@ -663,6 +694,8 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     for (const e of enemies) {
       if (e.destroyed) continue;
+      // 主炮不瞄步兵：步兵专属机枪（§3.1.2 / §3.6），避免大红圈误导
+      if (e.kind === 'infantry') continue;
       const ctx = { attacker: sherman, target: e, map };
       if (!canAttack(ctx).ok) continue;
 
@@ -674,6 +707,28 @@ export class BattleScene extends Component {
       // 命中预览：≥需要值 + 命中概率
       const need = hitThreshold(ctx);
       this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.7, need);
+    }
+    this.g.lineWidth = 2;
+  }
+
+  /**
+   * 机枪目标高亮：与 drawAttackableHighlights 并列。
+   * 仅把 *相邻* 且 *未被摧毁* 的步兵圈出来，并在格上方标"≥7  58%"（2d6≥7 固定概率 21/36 = 58%）。
+   */
+  private drawMGTargetHighlights() {
+    if (!this.g || !this.mission) return;
+    const { map, sherman, enemies } = this.mission;
+    for (const e of enemies) {
+      if (e.destroyed) continue;
+      const ctx = { attacker: sherman, target: e, map };
+      if (!canMGAttack(ctx).ok) continue;
+
+      const c = this.project(e.pos.q, e.pos.r);
+      this.g.strokeColor = ATTACKABLE_COLOR;
+      this.g.lineWidth = 3;
+      this.drawHexOutline(c.x, c.y, this.hexSize - 3);
+      // 2d6 ≥ 7 恒定概率，直接复用现有 preview label（need=7）
+      this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.7, 7);
     }
     this.g.lineWidth = 2;
   }
@@ -777,6 +832,46 @@ export class BattleScene extends Component {
   private clearStatusLabels() {
     for (const n of this.statusLabels) n.destroy();
     this.statusLabels.length = 0;
+  }
+
+  /**
+   * 在单位格子正下方挂一条单位名字（"谢尔曼" / "虎式" …），常驻显示。
+   * 位置放在状态文字（起火/已毁）之下，避免相互遮挡；已毁单位也会显示但用灰色。
+   */
+  private spawnUnitNameLabel(u: Unit) {
+    if (!this.mapNode) return;
+    const c = (this.anim && this.anim.unit === u)
+      ? this.interpolatedPos(u)
+      : this.project(u.pos.q, u.pos.r);
+
+    const n = new Node('UnitNameLabel');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(96, 22);
+    ut.setAnchorPoint(0.5, 0.5);
+
+    const l = n.addComponent(Label);
+    l.fontSize = 16;
+    l.lineHeight = 18;
+    l.color = u.destroyed
+      ? UNIT_NAME_TEXT_DEAD
+      : (u.faction === 'allied' ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
+    l.horizontalAlign = HorizontalTextAlignment.CENTER;
+    l.verticalAlign = VerticalTextAlignment.CENTER;
+    l.string = t(`unit.name.${u.kind}`);
+    l.enableOutline = true;
+    l.outlineColor = UNIT_NAME_OUTLINE;
+    l.outlineWidth = 2;
+
+    this.mapNode.addChild(n);
+    // 状态标签占据 c.y - hexSize*0.65 附近；名字放得更低一点，叠放顺序"圆形 → 状态 → 名字"
+    n.setPosition(c.x, c.y - this.hexSize * 1.3, 0);
+    this.nameLabels.push(n);
+  }
+
+  private clearNameLabels() {
+    for (const n of this.nameLabels) n.destroy();
+    this.nameLabels.length = 0;
   }
 
   /** 单位若正在动画，返回插值像素位置；否则等价 project(u.pos)。给状态文字定位用。 */
@@ -990,6 +1085,11 @@ export class BattleScene extends Component {
     const c = overrideX !== undefined && overrideY !== undefined
       ? { x: overrideX, y: overrideY }
       : this.project(u.pos.q, u.pos.r);
+    // 步兵单独走一条更"像小人"的绘制路径，与坦克的大圆 + 朝向线拉开辨识度。
+    if (u.kind === 'infantry') {
+      this.drawInfantry(u, c.x, c.y);
+      return;
+    }
     const r = this.hexSize * 0.5;
 
     // 摧毁：暗灰色 + 穿心 X
@@ -1049,6 +1149,51 @@ export class BattleScene extends Component {
       g.stroke();
       g.lineWidth = 2;
     }
+  }
+
+  /**
+   * 步兵渲染：头（上方小圆）+ 身（下方略大圆），整体比坦克更小更"瘦"，
+   * 没有朝向线（`facing=null`）。摧毁时用灰色 + 红 X，与坦克保持一致的"残骸"观感。
+   *
+   * 小字说明：
+   *   - 体积更小是因为 §3.1.2 步兵 size=0，只能被机枪打（主炮打不到），视觉上理应与坦克区分
+   *   - 头和身用两个同心的小圆叠出剪影，不依赖任何外部美术资源
+   */
+  private drawInfantry(u: Unit, cx: number, cy: number) {
+    const g = this.g!;
+    const bodyR = this.hexSize * 0.30;
+    const headR = this.hexSize * 0.16;
+    const headOffset = this.hexSize * 0.28; // 头部在身体上方
+
+    if (u.destroyed) {
+      // 残骸：暗灰身 + 红 X
+      g.fillColor = DESTROYED_FILL;
+      g.strokeColor = DESTROYED_BORDER;
+      g.lineWidth = 2;
+      g.circle(cx, cy, bodyR);
+      g.fill();
+      g.stroke();
+      g.strokeColor = DESTROYED_BORDER;
+      g.lineWidth = 3;
+      const d = bodyR * 0.9;
+      g.moveTo(cx - d, cy - d); g.lineTo(cx + d, cy + d); g.stroke();
+      g.moveTo(cx - d, cy + d); g.lineTo(cx + d, cy - d); g.stroke();
+      g.lineWidth = 2;
+      return;
+    }
+
+    const fill = FACTION_COLORS[u.faction];
+    g.fillColor = fill;
+    g.strokeColor = UNIT_BORDER;
+    g.lineWidth = 2;
+    // 身
+    g.circle(cx, cy - bodyR * 0.15, bodyR);
+    g.fill();
+    g.stroke();
+    // 头
+    g.circle(cx, cy + headOffset, headR);
+    g.fill();
+    g.stroke();
   }
 
   // ---------- HUD ----------
@@ -1455,7 +1600,10 @@ export class BattleScene extends Component {
       } else {
         const sherman = this.mission?.sherman;
         const loaded = sherman?.loaded ? t('hud.loaded') : t('hud.unloaded');
-        const sel = this.selectedGunDieIdx >= 0 ? ` | ${t('hud.attackSelectHint')}` : '';
+        // 选中主炮 → "点敌人开火"；选中机枪 → "点相邻步兵扫射"；两者互斥
+        let sel = '';
+        if (this.selectedGunDieIdx >= 0) sel = ` | ${t('hud.attackSelectHint')}`;
+        else if (this.selectedMGDieIdx >= 0) sel = ` | ${t('hud.mgSelectHint')}`;
         this.hudLabel.string = t('hud.attackPhase', {
           n: this.turn,
           loaded,
@@ -1755,7 +1903,8 @@ export class BattleScene extends Component {
         continue;
       }
       vis.root.active = true;
-      this.drawDieSlot(vis, slot, i === this.selectedGunDieIdx);
+      // 主炮 / 机枪选中都复用同一种"已高亮"视觉，玩家以颜色与 HUD 文案区分
+      this.drawDieSlot(vis, slot, i === this.selectedGunDieIdx || i === this.selectedMGDieIdx);
     }
   }
 
@@ -2034,6 +2183,9 @@ export class BattleScene extends Component {
       } else if (a === 'gun') {
         items.push({ text: t('action.fire'), color: PHASE_BTN_ATTACK,
           onClick: () => this.selectGunDie(idx) });
+      } else if (a === 'mg') {
+        items.push({ text: t('action.fireMG'), color: PHASE_BTN_ATTACK,
+          onClick: () => this.selectMGDie(idx) });
       } else {
         items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
           onClick: () => this.discardDie(idx) });
@@ -2057,9 +2209,9 @@ export class BattleScene extends Component {
             onClick: () => this.selectGunDie(idx) });
           break;
         case 'codriver_mg':
-          // 2 点 C 列：副驾驶机枪射击相邻步兵；MVP 步兵系统未实装，作为占位
-          items.push({ text: t('action.codriverMG'), color: PHASE_BTN_DISABLED,
-            onClick: () => this.tryCodriverMG(idx) });
+          // 2 点 C 列：副驾驶机枪射击相邻步兵
+          items.push({ text: t('action.fireMGCoDriver'), color: PHASE_BTN_ATTACK,
+            onClick: () => this.selectMGDie(idx) });
           break;
         case 'driver_turn_or_drive':
           // 3 点 C 列：驾驶员转向 / 前进
@@ -2352,6 +2504,8 @@ export class BattleScene extends Component {
       this.selectedGunDieIdx = dieIdx;
       // 普通单骰主炮选择：不连带对子 partner
       this.selectedGunDoublesIdx = -1;
+      // 主炮与机枪选中互斥
+      this.selectedMGDieIdx = -1;
     }
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -2377,6 +2531,7 @@ export class BattleScene extends Component {
     if (!this.checkCrewAlive('gunner')) return;
     this.selectedGunDieIdx = dieIdx;
     this.selectedGunDoublesIdx = partnerIdx;
+    this.selectedMGDieIdx = -1;
     this.closeDiePopover();
     this.refreshPhaseUI();
     this.updateHUD();
@@ -2384,10 +2539,55 @@ export class BattleScene extends Component {
     console.log(`[Attack] 对子 炮手主炮射击已备（主骰 ${dieIdx} + 搭档 ${partnerIdx}，点数 ${slot.pip}）`);
   }
 
-  /** 统一清理主炮选中态（包括 doubles partner）。 */
+  /**
+   * 统一清理主炮 / 机枪的选中态（包括 doubles partner）。
+   *
+   * 虽然名字只提"Gun"，但绝大多数调用点都是"重置本阶段的攻击目标选择"——
+   * 回合 / 阶段切换、开火结束、任务重启等场景下机枪选中也必须一起清，
+   * 避免跨阶段保留脏状态。保留名字不改是为了兼容现有调用链。
+   */
   private clearGunSelection() {
     this.selectedGunDieIdx = -1;
     this.selectedGunDoublesIdx = -1;
+    this.selectedMGDieIdx = -1;
+  }
+
+  /**
+   * 选中一颗机枪骰进入"选步兵"态；之后点相邻步兵格触发扫射。
+   *
+   * 合法骰面：
+   *   - 攻击阶段：pip ∈ {3, 4}（classifyAttackDie == 'mg'）
+   *   - 杂项阶段：pip == 2（classifyMiscDie == 'codriver_mg'，副驾驶机枪）
+   *
+   * 乘员约束：
+   *   - 攻击阶段 MG：装填手负责同轴机枪；装填手阵亡则无法使用
+   *   - 杂项阶段 codriver_mg：副驾驶机枪；副驾驶阵亡则无法使用
+   */
+  private selectMGDie(dieIdx: number) {
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used) return;
+    if (this.playerStep === 'attack') {
+      if (classifyAttackDie(slot.pip) !== 'mg') return;
+      if (!this.checkCrewAlive('loader')) return;
+    } else if (this.playerStep === 'misc') {
+      if (classifyMiscDie(slot.pip) !== 'codriver_mg') return;
+      if (!this.checkCrewAlive('coDriver')) return;
+    } else {
+      return;
+    }
+    // 再次点同一颗 → 取消选择
+    if (this.selectedMGDieIdx === dieIdx) {
+      this.selectedMGDieIdx = -1;
+    } else {
+      // 机枪与主炮选中互斥：先把所有攻击相关选中清零（clearGunSelection 会把 MG 也清零），
+      // 再把本次 MG 选中写回。顺序不能反，否则自己把自己清掉。
+      this.clearGunSelection();
+      this.selectedMGDieIdx = dieIdx;
+    }
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
   }
 
   /**
@@ -2492,16 +2692,82 @@ export class BattleScene extends Component {
       new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
   }
 
-  /** 副驾驶机枪：MVP 无步兵系统，作为占位弹浮字并丢弃本骰。 */
-  private tryCodriverMG(dieIdx: number) {
+  /**
+   * 玩家机枪扫射：必须已选中机枪骰 + target 为相邻步兵（canMGAttack 通过）。
+   *
+   * 命中模型（§3.6 行动表 B3/B4 / C2）：2d6 ≥ 7 即命中，命中直接击毙步兵。
+   * 不吃装甲检定、不消耗 loaded、不受 turretDamaged 影响。
+   *
+   * 动画路径与主炮 DiceShow 分离 —— 走一条轻量"骰面浮字 + 结果浮字"的路线，
+   * 避免在玩家扫射 1 名步兵时出现整块遮罩面板（视觉成本与 impact 不对等）。
+   */
+  private tryMGAttack(target: Unit) {
     if (!this.mission) return;
-    const slot = this.phaseDice[dieIdx];
-    if (!slot || slot.used || this.playerStep !== 'misc') return;
-    if (classifyMiscDie(slot.pip) !== 'codriver_mg') return;
-    const s = this.mission.sherman;
-    this.spawnFloater(s.pos.q, s.pos.r, t('floater.noInfantry'),
-      new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
-    this.discardDie(dieIdx);
+    if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
+    if (this.selectedMGDieIdx < 0) return;
+    const { map, sherman } = this.mission;
+    const slot = this.phaseDice[this.selectedMGDieIdx];
+    if (!slot || slot.used) return;
+
+    const check = canMGAttack({ attacker: sherman, target, map });
+    if (!check.ok) {
+      console.log(`[Combat-MG] cannot attack: ${check.reason}`);
+      const msg = t(check.reason ?? 'attack.reason.unknown');
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, msg,
+        new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      return;
+    }
+
+    // 先掷骰拿到确定结果，再让面板按这个结果播动画；
+    // 真正 applyMGAttack / 消耗骰子 / 胜负判定都放到 onDone 里，
+    // 这样动画期间托盘 + 敌人图示不会提前变。
+    const report = rollMGAttack({ attacker: sherman, target, map }, this.rng);
+    console.log(
+      `[Combat-MG] 玩家机枪 2d6=${report.dice[0]}+${report.dice[1]}=${report.roll}`
+      + ` 需要≥${report.threshold} → ${report.hit ? 'HIT 击毙' : 'MISS'}`
+    );
+
+    // MGReport → 面板可用的 AttackReport 视图：只用 2d6/threshold/hit 四个字段，
+    // 其余 pen/dmg/crew 分段字段都留空；mg=true 下 advanceDiceShow 不会读它们。
+    const panelReport: AttackReport = {
+      dice: report.dice,
+      roll: report.roll,
+      threshold: report.threshold,
+      hit: report.hit,
+      statusChange: report.hit ? 'destroyed' : 'none',
+    };
+
+    const capturedSlot = slot;
+    this.startDiceShow(
+      panelReport,
+      t('actor.player'),
+      target.kind,
+      () => {
+        if (!this.mission) return;
+        applyMGAttack(target, report);
+        capturedSlot.used = true;
+        this.selectedMGDieIdx = -1;
+        // 面板结束后再补一条目标格上方的短浮字，强化"这次扫射打谁"的视觉记忆
+        if (report.hit) {
+          this.spawnFloater(target.pos.q, target.pos.r, t('floater.mgHit'),
+            new Color(255, 120, 120, 255), { size: 32, dur: 1.0, rise: 48 });
+        } else {
+          this.spawnFloater(target.pos.q, target.pos.r, t('floater.mgMiss'),
+            new Color(220, 220, 220, 255), { size: 26, dur: 0.9, rise: 44 });
+        }
+        this.outcome = checkOutcome(this.mission);
+        if (this.outcome !== 'ongoing') this.updateOutcomeOverlay();
+        this.refreshPhaseUI();
+        this.updateHUD();
+        this.redraw();
+        this.refreshStatusPanel();
+        this.autoEndPhaseIfDone();
+      },
+      { mg: true },
+    );
+    // 立即刷一次 HUD，让 "点相邻步兵扫射" 提示消失，避免玩家以为还能再点
+    this.updateHUD();
+    this.redraw();
   }
 
   /**
@@ -2781,7 +3047,9 @@ export class BattleScene extends Component {
       return;
     }
     // GDD §3.7：按距谢尔曼最近 → 最远排序；同距随机
-    this.enemyOrder = selectEnemyOrder(this.mission.enemies, this.mission.sherman, this.rng);
+    // 步兵 §3.1.2 规定"只在回合结束事件中行动"，因此敌方阶段不参与骰子驱动。
+    const aiCandidates = this.mission.enemies.filter(e => e.kind !== 'infantry');
+    this.enemyOrder = selectEnemyOrder(aiCandidates, this.mission.sherman, this.rng);
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
@@ -3244,9 +3512,9 @@ export class BattleScene extends Component {
     // 点骰子托盘上方时由骰子节点自己处理；点在地图上 → 关菜单顺便走后面流程
     this.closeDiePopover();
 
-    // 仅在"攻击阶段 / 杂项阶段 + 已选主炮骰"时响应（否则地图点击无效果，视觉上也无红圈）
+    // 仅在"攻击阶段 / 杂项阶段 + 已选主炮 / 机枪骰"时响应（否则地图点击无效果，视觉上也无红圈）
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
-    if (this.selectedGunDieIdx < 0) return;
+    if (this.selectedGunDieIdx < 0 && this.selectedMGDieIdx < 0) return;
 
     const ut = this.mapNode.getComponent(UITransform);
     if (!ut) return;
@@ -3269,7 +3537,13 @@ export class BattleScene extends Component {
     const enemyOnTile = this.mission.enemies.find(
       e => !e.destroyed && e.pos.q === target!.pos.q && e.pos.r === target!.pos.r,
     );
-    if (enemyOnTile) this.tryAttack(enemyOnTile);
+    if (!enemyOnTile) return;
+    // 机枪选中优先：选机枪骰时只对步兵生效；主炮选中走 tryAttack 主炮路径
+    if (this.selectedMGDieIdx >= 0) {
+      this.tryMGAttack(enemyOnTile);
+    } else {
+      this.tryAttack(enemyOnTile);
+    }
   }
 
   /**
@@ -3283,6 +3557,12 @@ export class BattleScene extends Component {
     const { map, sherman } = this.mission;
     const slot = this.phaseDice[this.selectedGunDieIdx];
     if (!slot || slot.used) return;
+    // 主炮禁瞄步兵：引导玩家改用机枪骰；不消耗骰，避免误操作损失行动资源
+    if (target.kind === 'infantry') {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('attack.reason.gunVsInfantry'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 1.0, rise: 26 });
+      return;
+    }
     if (!sherman.loaded) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.unloaded'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -3383,18 +3663,21 @@ export class BattleScene extends Component {
     attackerLabel: string,
     targetLabel: string,
     onDone: () => void,
+    opts: { mg?: boolean } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
     this.closeDiePopover();
 
-    const panel = this.buildDiceShowPanel(report, attackerLabel, targetLabel);
+    const mg = !!opts.mg;
+    const panel = this.buildDiceShowPanel(report, attackerLabel, targetLabel, mg);
     this.diceShow = {
       stage: 'hit-roll',
       t: 0,
       report,
       attackerLabel,
       targetLabel,
+      mg,
       onDone,
       finalized: false,
       panelRoot: panel.root,
@@ -3441,6 +3724,7 @@ export class BattleScene extends Component {
     report: AttackReport,
     attackerLabel: string,
     targetLabel: string,
+    mg: boolean = false,
   ): {
     root: Node;
     hitDieLabels: Label[];
@@ -3459,9 +3743,10 @@ export class BattleScene extends Component {
     outcomeLabel: Label;
   } {
     // 只有"命中 + 击穿 + 伤害效果为阵亡检定"时才需要第 4 行
-    const needsCrewRow = report.hit && report.penetrated && report.damageEffect === 'crewCheck';
+    const needsCrewRow = !mg && report.hit && report.penetrated && report.damageEffect === 'crewCheck';
     const PANEL_W = 560;
-    const PANEL_H = needsCrewRow ? 520 : 440;
+    // 机枪模式：只有标题 + 命中阈值 + 2d6 + 结果大字，用更矮的面板
+    const PANEL_H = mg ? 280 : needsCrewRow ? 520 : 440;
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -3499,8 +3784,11 @@ export class BattleScene extends Component {
     const title = this.makeCenteredLabel(panel, `${attackerLabel} → ${targetLabel}`,
       0, PANEL_H / 2 - 34, PANEL_W - 40, 34, 26, HUD_TEXT_COLOR);
 
-    // 命中需求
-    const hitNeed = this.makeCenteredLabel(panel, t('dice.panel.hitNeed', { n: report.threshold }),
+    // 命中需求：机枪用单独文案（"机枪扫射 需 ≥7"），主炮走原来的命中阈值行
+    const hitNeedText = mg
+      ? t('dice.panel.mgHitNeed', { n: report.threshold })
+      : t('dice.panel.hitNeed', { n: report.threshold });
+    const hitNeed = this.makeCenteredLabel(panel, hitNeedText,
       0, PANEL_H / 2 - 72, PANEL_W - 40, 28, 20, DICE_INFO_TEXT);
 
     // 三/四行骰子等距摆放：hit / pen / dmg (/ crew)
@@ -3523,45 +3811,54 @@ export class BattleScene extends Component {
     const hitVerdict = this.makeCenteredLabel(panel, '',
       190, hitDiceY, 160, 40, 28, DICE_OK_TEXT);
 
-    // 1d6 穿甲骰 + 需求 + 判定
-    const penDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), penDiceY, DIE_SIZE);
-    const penNeed = this.makeCenteredLabel(panel, '',
-      70, penDiceY, 170, 28, 18, DICE_INFO_TEXT);
-    const penVerdict = this.makeCenteredLabel(panel, '',
-      200, penDiceY, 160, 40, 28, DICE_OK_TEXT);
-
-    // 1d6 伤害骰 + "伤害检定" + 效果文字
-    const dmgDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), dmgDiceY, DIE_SIZE);
-    const dmgTitle = this.makeCenteredLabel(panel, t('dice.panel.dmgTitle'),
-      70, dmgDiceY, 170, 28, 18, DICE_INFO_TEXT);
-    const dmgEffect = this.makeCenteredLabel(panel, '',
-      200, dmgDiceY, 180, 40, 28, DICE_OUTCOME_HIT);
-
-    // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
+    // 1d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有 2d6 命中这一段。
+    let penDie: Label | null = null;
+    let penNeed: Label | null = null;
+    let penVerdict: Label | null = null;
+    let dmgDie: Label | null = null;
+    let dmgTitle: Label | null = null;
+    let dmgEffect: Label | null = null;
     let crewDie: Label | null = null;
     let crewTitle: Label | null = null;
     let crewEffect: Label | null = null;
-    if (needsCrewRow) {
-      crewDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), crewDiceY, DIE_SIZE);
-      crewTitle = this.makeCenteredLabel(panel, t('dice.panel.crewTitle'),
-        70, crewDiceY, 170, 28, 18, DICE_INFO_TEXT);
-      crewEffect = this.makeCenteredLabel(panel, '',
-        200, crewDiceY, 180, 40, 28, DICE_OUTCOME_CREW);
-      // 阵亡检定行默认 hidden，直到 crew-roll 才亮
-      crewDie.node.parent!.active = false;
-      crewTitle.node.active = false;
-      crewEffect.node.active = false;
+    if (!mg) {
+      // 1d6 穿甲骰 + 需求 + 判定
+      penDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), penDiceY, DIE_SIZE);
+      penNeed = this.makeCenteredLabel(panel, '',
+        70, penDiceY, 170, 28, 18, DICE_INFO_TEXT);
+      penVerdict = this.makeCenteredLabel(panel, '',
+        200, penDiceY, 160, 40, 28, DICE_OK_TEXT);
+
+      // 1d6 伤害骰 + "伤害检定" + 效果文字
+      dmgDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), dmgDiceY, DIE_SIZE);
+      dmgTitle = this.makeCenteredLabel(panel, t('dice.panel.dmgTitle'),
+        70, dmgDiceY, 170, 28, 18, DICE_INFO_TEXT);
+      dmgEffect = this.makeCenteredLabel(panel, '',
+        200, dmgDiceY, 180, 40, 28, DICE_OUTCOME_HIT);
+
+      // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
+      if (needsCrewRow) {
+        crewDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), crewDiceY, DIE_SIZE);
+        crewTitle = this.makeCenteredLabel(panel, t('dice.panel.crewTitle'),
+          70, crewDiceY, 170, 28, 18, DICE_INFO_TEXT);
+        crewEffect = this.makeCenteredLabel(panel, '',
+          200, crewDiceY, 180, 40, 28, DICE_OUTCOME_CREW);
+        // 阵亡检定行默认 hidden，直到 crew-roll 才亮
+        crewDie.node.parent!.active = false;
+        crewTitle.node.active = false;
+        crewEffect.node.active = false;
+      }
+
+      // 伤害骰行在 dmg-roll 前不应该出现，默认整行 hidden
+      // （骰子方块容器 / 标题 / 效果文字 三个节点一起关掉）
+      dmgDie.node.parent!.active = false;
+      dmgTitle.node.active = false;
+      dmgEffect.node.active = false;
     }
 
     // 底部大字结果
     const outcome = this.makeCenteredLabel(panel, '',
       0, -PANEL_H / 2 + 44, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
-
-    // 伤害骰行在 dmg-roll 前不应该出现，默认整行 hidden
-    // （骰子方块容器 / 标题 / 效果文字 三个节点一起关掉）
-    dmgDie.node.parent!.active = false;
-    dmgTitle.node.active = false;
-    dmgEffect.node.active = false;
 
     // title / hitNeed 仅作标题用，外部不再更新它们，但避免 TS 报"未使用"，
     // 保留到返回结构里（外部不用就不用，Label 生命周期跟随 root.destroy 自动回收）
@@ -3788,7 +4085,18 @@ export class BattleScene extends Component {
       case 'hit-show': {
         if (show.t >= DICE_HIT_SHOW_DUR) {
           show.t = 0;
-          if (!show.report.hit) {
+          if (show.mg) {
+            // 机枪模式：2d6 一段式，hit-show 结束后直接到 hold；
+            // 命中 = 步兵击毙，未命中 = MISS。不会进入 pen/dmg/crew。
+            show.stage = 'hold';
+            if (show.report.hit) {
+              show.outcomeLabel.string = t('dice.panel.outcomeMGKill');
+              show.outcomeLabel.color = DICE_OUTCOME_HIT;
+            } else {
+              show.outcomeLabel.string = t('dice.panel.outcomeMiss');
+              show.outcomeLabel.color = DICE_OUTCOME_MISS;
+            }
+          } else if (!show.report.hit) {
             // 未命中直接跳到 hold 显示 MISS，并隐藏穿甲骰那一行（视觉更干净）
             show.stage = 'hold';
             if (show.penDieLabel) show.penDieLabel.node.parent!.active = false;
