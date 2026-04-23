@@ -538,13 +538,6 @@ export class BattleScene extends Component {
   private missionId: string = '';
 
   onLoad() {
-    // 把 battle 节点提到 Canvas 兄弟列表最末（=渲染最上层），
-    // 避免被同 Canvas 的其他 UI 元素（SpriteSplash / 登录 等）遮挡。
-    const parentNode = this.node.parent;
-    if (parentNode) {
-      this.node.setSiblingIndex(parentNode.children.length - 1);
-    }
-
     // 自动创建子 Graphics 节点，免去编辑器手动配置
     const gNode = new Node('MapGraphics');
     // UI Graphics 必须在 UI_2D 层才会被 Canvas 的 UI 相机渲染。
