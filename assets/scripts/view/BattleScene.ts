@@ -42,6 +42,7 @@ import {
   UITransform,
   Vec3,
   VerticalTextAlignment,
+  director,
   resources,
 } from 'cc';
 import {
@@ -77,6 +78,8 @@ import {
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { checkOutcome, MissionOutcome } from '../core/Objective';
 import { applySave, captureSave, SAVE_KEY, SaveData } from '../core/SaveLoad';
+import { GameSession } from '../core/GameSession';
+import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
 import { MissionData, TerrainType, Tile, Unit } from '../core/types';
 
 const { ccclass, property } = _decorator;
@@ -427,6 +430,9 @@ export class BattleScene extends Component {
   @property({ tooltip: '任务 JSON 在 resources/ 下的相对路径，无需扩展名。' })
   missionPath: string = 'missions/mission_01';
 
+  @property({ tooltip: '点击"返回主菜单"跳转到的场景名（与 Build Settings 保持一致）' })
+  mainMenuSceneName: string = 'main';
+
   @property({ tooltip: '是否在谢尔曼周围高亮可移动的相邻格' })
   showReachable: boolean = true;
 
@@ -490,6 +496,7 @@ export class BattleScene extends Component {
   private outcome: MissionOutcome = 'ongoing';
   private outcomeLabel: Label | null = null;
   private restartBtn: Node | null = null;
+  private backToMenuBtn: Node | null = null;
   // 战报浮字池：挂在 mapNode 下，随 update() 上浮 + 渐隐自毁
   private floaters: Floater[] = [];
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
@@ -559,6 +566,12 @@ export class BattleScene extends Component {
     this.buildChooseBar();
     this.buildDiceTray();
 
+    // 主菜单选关时会写入 GameSession.selectedMissionPath；绕过菜单直接启动场景
+    // 也安全（GameSession 默认值 = 'missions/mission_01'，与本脚本 @property 默认一致）。
+    if (GameSession.selectedMissionPath) {
+      this.missionPath = GameSession.selectedMissionPath;
+    }
+
     // 从 resources/ 加载任务 JSON（注意：路径不含扩展名）
     resources.load(this.missionPath, JsonAsset, (err, asset) => {
       if (err || !asset) {
@@ -566,6 +579,12 @@ export class BattleScene extends Component {
         return;
       }
       this.loadAndDraw(asset.json as MissionData);
+      // 主菜单"继续游戏"入口：任务加载完成后立刻读档覆盖，随后清掉 resume 标志
+      // 避免下次"再来一局"又被读回旧存档。
+      if (GameSession.resumeFromSave) {
+        this.onLoad_Save();
+        GameSession.clearResumeFlag();
+      }
     });
   }
 
@@ -1644,7 +1663,15 @@ export class BattleScene extends Component {
     if (this.outcome === 'ongoing') {
       if (this.outcomeLabel) this.outcomeLabel.node.active = false;
       if (this.restartBtn) this.restartBtn.active = false;
+      if (this.backToMenuBtn) this.backToMenuBtn.active = false;
       return;
+    }
+    // 胜利时回写菜单进度，下次主菜单会显示 ★ 并解锁下一关。
+    // markCompleted 内部幂等，重复调用无副作用。
+    if (this.outcome === 'victory'
+        && GameSession.selectedLevelId > 0
+        && findLevelByMissionId(this.missionId)) {
+      MenuProgress.markCompleted(GameSession.selectedLevelId);
     }
     if (!this.outcomeLabel) {
       const n = new Node('OutcomeLabel');
@@ -1670,18 +1697,35 @@ export class BattleScene extends Component {
       this.outcomeLabel.color = new Color(255, 80, 80, 255);
     }
 
-    // "再来一局"按钮：放在标题正下方
+    // "再来一局"按钮：左，"返回主菜单"按钮：右。makeSimpleButton 宽 140，间距 20。
     if (!this.restartBtn) {
       this.restartBtn = this.makeSimpleButton(
         'RestartBtn', t('btn.restart'),
-        0, -90,
+        -80, -90,
         BTN_BG_NORMAL,
         () => this.restartMission(),
       );
     }
+    if (!this.backToMenuBtn) {
+      this.backToMenuBtn = this.makeSimpleButton(
+        'BackToMenuBtn', t('btn.backToMenu'),
+        80, -90,
+        new Color(80, 60, 130, 230),
+        () => this.onBackToMenu(),
+      );
+    }
     this.restartBtn.active = true;
+    this.backToMenuBtn.active = true;
     // 保证按钮在最上层（避免被后续 redraw 创建的浮字 / 状态文字盖住的视觉印象）
     this.restartBtn.setSiblingIndex(this.node.children.length - 1);
+    this.backToMenuBtn.setSiblingIndex(this.node.children.length - 1);
+  }
+
+  private onBackToMenu() {
+    console.log('[BattleScene] 返回主菜单');
+    director.loadScene(this.mainMenuSceneName, (err) => {
+      if (err) console.error('[BattleScene] 加载主菜单场景失败:', this.mainMenuSceneName, err);
+    });
   }
 
   /**
