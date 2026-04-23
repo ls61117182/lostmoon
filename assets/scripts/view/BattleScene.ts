@@ -425,7 +425,7 @@ const HIT_PROB_GE: ReadonlyArray<number> = [
 export class BattleScene extends Component {
 
   @property({ tooltip: '六角形单边长度（像素）。地图过大请调小，过小请调大。' })
-  hexSize: number = 26;
+  hexSize: number = 39;
 
   @property({ tooltip: '任务 JSON 在 resources/ 下的相对路径，无需扩展名。' })
   missionPath: string = 'missions/mission_01';
