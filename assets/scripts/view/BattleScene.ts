@@ -78,7 +78,7 @@ import {
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { checkOutcome, MissionOutcome } from '../core/Objective';
-import { applySave, captureSave, SAVE_KEY, SaveData } from '../core/SaveLoad';
+import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
 import { Direction, MissionData, TerrainType, Tile, Unit } from '../core/types';
@@ -637,6 +637,8 @@ export class BattleScene extends Component {
   /** 战斗内模态（设置）；退出确认单独一层叠在上面 */
   private battleModalRoot: Node | null = null;
   private battleExitModalRoot: Node | null = null;
+  /** 存读档飘字：叠在所有模态之上，短显后自毁 */
+  private battleSettingsToastRoot: Node | null = null;
   private battleSettingsRefs: {
     volumeFill: Graphics | null;
     volumeThumb: Node | null;
@@ -684,7 +686,7 @@ export class BattleScene extends Component {
       // 主菜单"继续游戏"入口：任务加载完成后立刻读档覆盖，随后清掉 resume 标志
       // 避免下次"再来一局"又被读回旧存档。
       if (GameSession.resumeFromSave) {
-        this.onLoad_Save();
+        this.onLoad_Save(/* skipHint */ true);
         GameSession.clearResumeFlag();
       }
     });
@@ -3605,7 +3607,8 @@ export class BattleScene extends Component {
       panel, panelW / 2 - 28, panelH / 2 - 28, 36, 36,
       MODAL_CLOSE_BG, () => this.closeBattleModal(),
     );
-    this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 36, 36, 22, HUD_TEXT_COLOR);
+    const closeLab = this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 36, 36, 22, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeBattleModal());
 
     this.battleModalRoot = root;
     return { panel, contentY: panelH / 2 - 80 };
@@ -3633,10 +3636,12 @@ export class BattleScene extends Component {
     const curLang = getLang();
     const zhBtn = this.makeBattleRectButton(panel, 10, langRowY, 100, 40, LANG_BTN_IDLE,
       () => this.switchBattleLang('zh'));
-    this.makeBattleModalLabel(zhBtn.node, t('menu.settings.langZh'), 0, 0, 100, 40, 18, HUD_TEXT_COLOR);
+    const zhLab = this.makeBattleModalLabel(zhBtn.node, t('menu.settings.langZh'), 0, 0, 100, 40, 18, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(zhLab, () => this.switchBattleLang('zh'));
     const enBtn = this.makeBattleRectButton(panel, 130, langRowY, 100, 40, LANG_BTN_IDLE,
       () => this.switchBattleLang('en'));
-    this.makeBattleModalLabel(enBtn.node, t('menu.settings.langEn'), 0, 0, 100, 40, 18, HUD_TEXT_COLOR);
+    const enLab = this.makeBattleModalLabel(enBtn.node, t('menu.settings.langEn'), 0, 0, 100, 40, 18, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(enLab, () => this.switchBattleLang('en'));
 
     this.battleSettingsRefs = {
       volumeFill: track.fill,
@@ -3651,23 +3656,27 @@ export class BattleScene extends Component {
     const saveB = this.makeBattleRectButton(panel, -110, saveRowY, 140, 44, new Color(60, 120, 80, 230),
       () => { this.onSave(); },
     );
-    this.makeBattleModalLabel(saveB.node, t('btn.save'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
+    const saveLab = this.makeBattleModalLabel(saveB.node, t('btn.save'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(saveLab, () => { this.onSave(); });
     const loadB = this.makeBattleRectButton(panel, 110, saveRowY, 140, 44, new Color(80, 60, 130, 230),
       () => { this.onLoad_Save(); },
     );
-    this.makeBattleModalLabel(loadB.node, t('btn.load'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
+    const loadLab = this.makeBattleModalLabel(loadB.node, t('btn.load'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(loadLab, () => { this.onLoad_Save(); });
 
     const exitRowY = contentY - 220;
     const exitB = this.makeBattleRectButton(panel, 0, exitRowY, 200, 44, BTN_EXIT_WARN,
       () => this.openBattleExitConfirm(),
     );
-    this.makeBattleModalLabel(exitB.node, t('battle.settings.exit'), 0, 0, 200, 44, 20, HUD_TEXT_COLOR);
+    const exitSetLab = this.makeBattleModalLabel(exitB.node, t('battle.settings.exit'), 0, 0, 200, 44, 20, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(exitSetLab, () => this.openBattleExitConfirm());
 
     const closeRowY = contentY - 290;
     const closeB = this.makeBattleRectButton(panel, 0, closeRowY, 160, 44, BATTLE_BTN_ACCENT,
       () => this.closeBattleModal(),
     );
-    this.makeBattleModalLabel(closeB.node, t('menu.settings.close'), 0, 0, 160, 44, 20, HUD_TEXT_COLOR);
+    const closeSetLab = this.makeBattleModalLabel(closeB.node, t('menu.settings.close'), 0, 0, 160, 44, 20, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeSetLab, () => this.closeBattleModal());
   }
 
   private openBattleExitConfirm() {
@@ -3718,23 +3727,26 @@ export class BattleScene extends Component {
       panel, panelW / 2 - 26, panelH / 2 - 26, 32, 32,
       MODAL_CLOSE_BG, () => this.closeBattleExitModal(),
     );
-    this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 32, 32, 18, HUD_TEXT_COLOR);
+    const exitCloseLab = this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 32, 32, 18, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(exitCloseLab, () => this.closeBattleExitModal());
 
     const yBtn = -panelH / 2 + 56;
     const saveQuitB = this.makeBattleRectButton(panel, -105, yBtn, 190, 48, new Color(60, 120, 80, 230),
       () => this.saveAndExitLevel(),
     );
-    this.makeBattleModalLabel(saveQuitB.node, t('battle.exit.saveAndQuit'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
+    const saveQuitLab = this.makeBattleModalLabel(saveQuitB.node, t('battle.exit.saveAndQuit'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(saveQuitLab, () => this.saveAndExitLevel());
     const abandonB = this.makeBattleRectButton(panel, 105, yBtn, 190, 48, BTN_EXIT_WARN,
       () => this.abandonExitLevel(),
     );
-    this.makeBattleModalLabel(abandonB.node, t('battle.exit.abandon'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
+    const abandonLab = this.makeBattleModalLabel(abandonB.node, t('battle.exit.abandon'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(abandonLab, () => this.abandonExitLevel());
 
     this.battleExitModalRoot = root;
   }
 
   private saveAndExitLevel() {
-    this.onSave();
+    if (!this.onSave()) return;
     this.closeAllBattleModals();
     this.onBackToMenu();
   }
@@ -3946,12 +3958,68 @@ export class BattleScene extends Component {
 
   // ---------- 存档 / 读档 ----------
 
-  private onSave() {
-    if (!this.mission) return;
-    // 仅在玩家"阶段选择"子步骤且无动画时存档；骰子托盘中态不保存，避免读档后骰子状态错乱
-    if (this.isBusy() || this.phase !== 'player' || this.playerStep !== 'choose') {
-      console.log('[Save] 当前不可存档：仅玩家阶段选择态且无动画时允许');
-      return;
+  /**
+   * 存读档结果提示：屏幕正中央、挂在 `this.node` 最顶层，避免被设置/退出模态挡住。
+   * 不依赖地图坐标；约 1.7s 后自毁。
+   */
+  private flashBattleSettingsHint(msg: string) {
+    if (this.battleSettingsToastRoot?.isValid) {
+      this.battleSettingsToastRoot.destroy();
+      this.battleSettingsToastRoot = null;
+    }
+    const root = new Node('BattleSaveToast');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(Math.max(0, this.node.children.length - 1));
+
+    const lab = this.makeBattleModalLabel(
+      root, msg,
+      0, 0, 560, 72, 30,
+      new Color(255, 245, 210, 255),
+    );
+    lab.enableOutline = true;
+    lab.outlineColor = new Color(0, 0, 0, 230);
+    lab.outlineWidth = 3;
+    lab.horizontalAlign = HorizontalTextAlignment.CENTER;
+    lab.verticalAlign = VerticalTextAlignment.CENTER;
+
+    this.battleSettingsToastRoot = root;
+    const toastRef = root;
+    this.scheduleOnce(() => {
+      if (this.battleSettingsToastRoot === toastRef && toastRef.isValid) {
+        toastRef.destroy();
+        if (this.battleSettingsToastRoot === toastRef) this.battleSettingsToastRoot = null;
+      }
+    }, 1.7);
+  }
+
+  /**
+   * 模态矩形按钮上的文字 Label 在部分环境下会先命中触摸，父节点收不到 TOUCH_END；
+   * 在文字节点上镜像挂一次相同回调。
+   */
+  private mirrorBattleModalButtonLabel(label: Label, onClick: () => void) {
+    label.node.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      onClick();
+      ev.propagationStopped = true;
+    }, this);
+  }
+
+  /** @returns 是否已成功写入 localStorage */
+  private onSave(): boolean {
+    if (!this.mission) return false;
+    if (this.isBusy()) {
+      this.flashBattleSettingsHint(t('battle.save.busy'));
+      return false;
+    }
+    if (this.outcome !== 'ongoing') {
+      this.flashBattleSettingsHint(t('battle.save.notOngoing'));
+      return false;
+    }
+    if (this.phase !== 'player') {
+      this.flashBattleSettingsHint(t('battle.save.playerOnly'));
+      return false;
     }
     const data = captureSave({
       missionId: this.missionId,
@@ -3962,24 +4030,32 @@ export class BattleScene extends Component {
       // 2 = 未做过（仍可执行），0 = 已做过。读档时按此复原。
       movesLeft: this.movementDone ? 0 : 2,
       attacksLeft: this.attackDone ? 0 : 1,
+      miscDone: this.miscDone,
+      playerStep: this.playerStep as SavePlayerStep,
+      phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
     });
     try {
       sys.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
       console.log(`[Save] 已存档：回合 ${data.turn}`);
+      this.flashBattleSettingsHint(t('battle.save.ok'));
+      return true;
     } catch (e) {
       console.error('[Save] 写入失败:', e);
+      this.flashBattleSettingsHint(t('battle.save.fail'));
+      return false;
     }
   }
 
-  private onLoad_Save() {
+  /** @param skipHint 主菜单「继续游戏」自动读档时为 true，不飘「已读档」以免干扰开场 */
+  private onLoad_Save(skipHint?: boolean) {
     if (!this.mission) return;
     if (this.isBusy()) {
-      console.log('[Load] 动画进行中，稍后再试');
+      this.flashBattleSettingsHint(t('battle.load.busy'));
       return;
     }
     const raw = sys.localStorage.getItem(SAVE_KEY);
     if (!raw) {
-      console.log('[Load] 无存档');
+      this.flashBattleSettingsHint(t('battle.load.none'));
       return;
     }
     let save: SaveData;
@@ -3987,22 +4063,28 @@ export class BattleScene extends Component {
       save = JSON.parse(raw);
     } catch (e) {
       console.error('[Load] 存档损坏:', e);
+      this.flashBattleSettingsHint(t('battle.load.badJson'));
       return;
     }
     const result = applySave(this.mission, this.missionId, save);
     if (!result.ok) {
       console.warn('[Load] 读档失败:', result.reason);
+      this.flashBattleSettingsHint(t('battle.load.fail', { reason: result.reason ?? '' }));
       return;
     }
     // 写回场景状态；中断任何敌方阶段调度 / 骰子态 / 动画
     this.turn = result.turn!;
     this.phase = result.phase!;
-    this.playerStep = 'choose';
     this.movementDone = (result.movesLeft ?? 2) === 0;
     this.attackDone   = (result.attacksLeft ?? 1) === 0;
-    // 旧存档结构没有 miscDone 位；保守按"未做"恢复，玩家可在读档回合继续做 C 阶段。
-    this.miscDone = false;
-    this.phaseDice = [];
+    this.miscDone = result.miscDone ?? false;
+    if (this.phase === 'player') {
+      this.playerStep = (result.playerStep ?? 'choose') as PlayerStep;
+      this.phaseDice = (result.phaseDice ?? []).map(s => ({ pip: s.pip, used: s.used }));
+    } else {
+      this.playerStep = 'choose';
+      this.phaseDice = [];
+    }
     this.clearGunSelection();
     this.enemyOrder = [];
     this.enemyIndex = 0;
@@ -4019,6 +4101,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
+    if (!skipHint) this.flashBattleSettingsHint(t('battle.load.ok'));
     console.log(`[Load] 已读档：回合 ${this.turn}, 移动 ${this.movementDone ? '已做' : '未做'}, 攻击 ${this.attackDone ? '已做' : '未做'}`);
   }
 

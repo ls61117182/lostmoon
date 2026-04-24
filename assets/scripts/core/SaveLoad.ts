@@ -1,5 +1,5 @@
 import { LoadedMission } from './MissionLoader';
-import { Direction, UnitKind } from './types';
+import { Direction, ShermanCrew, UnitKind } from './types';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = 'lone_sherman_save_v1';
@@ -8,8 +8,12 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  * 存档版本号。
  *   1: 位置 + 朝向 + 回合 + 移动力
  *   2: 追加 attacksLeft + 每个单位的 damaged/destroyed 状态（战斗系统）
+ *   3: 追加玩家子阶段 / 本阶段骰子 / 谢尔曼与敌军的战术字段（装填、舱盖、乘员、烟雾等）
  */
-const SAVE_VERSION = 2 as const;
+const SAVE_VERSION = 3 as const;
+
+/** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
+export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
 
 interface UnitSnapshot {
   kind: UnitKind;
@@ -18,10 +22,19 @@ interface UnitSnapshot {
   facing: Direction | null;
   damaged?: boolean;
   destroyed?: boolean;
+  /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
+  smoked?: boolean;
+  /** v3：仅谢尔曼 */
+  fireLevel?: number;
+  turretDamaged?: boolean;
+  paralyzed?: boolean;
+  loaded?: boolean;
+  hatchOpen?: boolean;
+  crew?: ShermanCrew;
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION;
+  version: typeof SAVE_VERSION | 2;
   missionId: string;
   turn: number;
   phase: 'player' | 'enemy';
@@ -29,6 +42,12 @@ export interface SaveData {
   attacksLeft: number;
   sherman: UnitSnapshot;
   enemies: UnitSnapshot[];
+  /** v3：杂项阶段是否已结束 */
+  miscDone?: boolean;
+  /** v3：玩家回合子状态 */
+  playerStep?: SavePlayerStep;
+  /** v3：当前子阶段骰子槽（与 BattleScene.phaseDice 同构） */
+  phaseDice?: Array<{ pip: number; used: boolean }>;
 }
 
 export interface SnapshotParams {
@@ -38,6 +57,9 @@ export interface SnapshotParams {
   phase: 'player' | 'enemy';
   movesLeft: number;
   attacksLeft: number;
+  miscDone: boolean;
+  playerStep: SavePlayerStep;
+  phaseDice: Array<{ pip: number; used: boolean }>;
 }
 
 /**
@@ -45,6 +67,7 @@ export interface SnapshotParams {
  * 单元测试或服务器战报回放时可以直接使用同一 JSON 格式。
  */
 export function captureSave(p: SnapshotParams): SaveData {
+  const sh = p.mission.sherman;
   return {
     version: SAVE_VERSION,
     missionId: p.missionId,
@@ -52,13 +75,23 @@ export function captureSave(p: SnapshotParams): SaveData {
     phase: p.phase,
     movesLeft: p.movesLeft,
     attacksLeft: p.attacksLeft,
+    miscDone: p.miscDone,
+    playerStep: p.playerStep,
+    phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
     sherman: {
-      kind: p.mission.sherman.kind,
-      q: p.mission.sherman.pos.q,
-      r: p.mission.sherman.pos.r,
-      facing: p.mission.sherman.facing,
-      damaged: p.mission.sherman.damaged,
-      destroyed: p.mission.sherman.destroyed,
+      kind: sh.kind,
+      q: sh.pos.q,
+      r: sh.pos.r,
+      facing: sh.facing,
+      damaged: sh.damaged,
+      destroyed: sh.destroyed,
+      fireLevel: sh.fireLevel,
+      turretDamaged: sh.turretDamaged,
+      paralyzed: sh.paralyzed,
+      loaded: sh.loaded,
+      hatchOpen: sh.hatchOpen,
+      crew: sh.crew ? { ...sh.crew } : undefined,
+      smoked: sh.smoked,
     },
     enemies: p.mission.enemies.map(e => ({
       kind: e.kind,
@@ -67,6 +100,7 @@ export function captureSave(p: SnapshotParams): SaveData {
       facing: e.facing,
       damaged: e.damaged,
       destroyed: e.destroyed,
+      smoked: e.smoked,
     })),
   };
 }
@@ -78,6 +112,9 @@ export interface ApplyResult {
   phase?: 'player' | 'enemy';
   movesLeft?: number;
   attacksLeft?: number;
+  miscDone?: boolean;
+  playerStep?: SavePlayerStep;
+  phaseDice?: Array<{ pip: number; used: boolean }>;
   reason?: string;
 }
 
@@ -93,7 +130,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION) {
+  if (save.version !== SAVE_VERSION && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -128,11 +165,38 @@ export function applySave(
     live.destroyed = s.destroyed ?? false;
   }
 
+  if (save.version >= 3) {
+    const sh = mission.sherman;
+    const ss = save.sherman;
+    if (ss.fireLevel !== undefined) sh.fireLevel = ss.fireLevel;
+    if (ss.turretDamaged !== undefined) sh.turretDamaged = ss.turretDamaged;
+    if (ss.paralyzed !== undefined) sh.paralyzed = ss.paralyzed;
+    if (ss.loaded !== undefined) sh.loaded = ss.loaded;
+    if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
+    if (ss.crew) sh.crew = { ...ss.crew };
+    if (ss.smoked !== undefined) sh.smoked = ss.smoked;
+    for (let i = 0; i < save.enemies.length; i++) {
+      const s = save.enemies[i];
+      if (s.smoked !== undefined) mission.enemies[i].smoked = s.smoked;
+    }
+  }
+
   return {
     ok: true,
     turn: save.turn,
     phase: save.phase,
     movesLeft: save.movesLeft,
     attacksLeft: save.attacksLeft,
+    ...(save.version >= 3
+      ? {
+        miscDone: save.miscDone ?? false,
+        playerStep: save.playerStep ?? 'choose',
+        phaseDice: save.phaseDice ?? [],
+      }
+      : {
+        miscDone: false,
+        playerStep: 'choose' as SavePlayerStep,
+        phaseDice: [] as Array<{ pip: number; used: boolean }>,
+      }),
   };
 }

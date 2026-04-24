@@ -221,4 +221,14 @@ battle.settings.exit,退出关卡,Exit Level
 battle.exit.title,退出关卡？,Exit this level?
 battle.exit.saveAndQuit,保存后退出,Save & Exit
 battle.exit.abandon,放弃关卡,Abandon
+battle.save.ok,已存档,Game saved
+battle.save.busy,忙碌中无法存档,Cannot save while busy
+battle.save.notOngoing,胜负已分无法存档,Cannot save after battle ends
+battle.save.playerOnly,仅玩家回合可存档,Save only in player turn
+battle.save.fail,存档写入失败,Save failed
+battle.load.ok,已读档,Game loaded
+battle.load.none,无存档,No save data
+battle.load.badJson,存档格式损坏,Save data corrupted
+battle.load.busy,忙碌中无法读档,Cannot load while busy
+battle.load.fail,读档失败：{reason},Load failed: {reason}
 
