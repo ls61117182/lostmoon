@@ -519,6 +519,13 @@ export class BattleScene extends Component {
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
   private shermanSpriteDisplayH = 0;
+  /** 四号俯视图：多辆时需节点池；每帧 redraw 开头清零再按敌军顺序占用 */
+  private panzer4TopSpriteFrame: SpriteFrame | null = null;
+  private panzer4SpriteDisplayW = 0;
+  private panzer4SpriteDisplayH = 0;
+  private panzer4SpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private panzer4PoolNext = 0;
+  private static readonly PANZER4_SPRITE_POOL = 16;
   private mission: LoadedMission | null = null;
   private offsetX = 0;
   private offsetY = 0;
@@ -686,14 +693,41 @@ export class BattleScene extends Component {
     this.shermanSpriteNode = shNode;
     shNode.active = false;
 
+    gNode.addChild(shNode);
+    for (let i = 0; i < BattleScene.PANZER4_SPRITE_POOL; i++) {
+      const pz = new Node(`Panzer4Top_${i}`);
+      pz.layer = this.node.layer;
+      pz.addComponent(UITransform).setContentSize(1280, 720);
+      const spz = pz.addComponent(Sprite);
+      spz.sizeMode = Sprite.SizeMode.CUSTOM;
+      pz.active = false;
+      this.panzer4SpritePool.push({ node: pz, sprite: spz });
+      gNode.addChild(pz);
+    }
+
     const linesNode = new Node('MapFacingLines');
     linesNode.layer = this.node.layer;
     linesNode.addComponent(UITransform).setContentSize(1280, 720);
     this.gLines = linesNode.addComponent(Graphics);
     this.gLines.lineWidth = 2;
 
-    gNode.addChild(shNode);
     gNode.addChild(linesNode);
+
+    resources.load('textures/units/panzer4_top/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 四号俯视图加载失败，使用矢量车体:', err);
+        return;
+      }
+      const rw = sf.rect.width;
+      const rh = sf.rect.height;
+      this.panzer4SpriteDisplayW = rw > 0 ? rw : sf.width;
+      this.panzer4SpriteDisplayH = rh > 0 ? rh : sf.height;
+      this.panzer4TopSpriteFrame = sf;
+      for (const { sprite } of this.panzer4SpritePool) {
+        if (sprite) sprite.spriteFrame = sf;
+      }
+      this.redraw();
+    });
 
     // 3.x 动态加载 SpriteFrame 必须指向图片子资源路径 …/spriteFrame（见官方「动态加载资源」）
     resources.load('textures/units/sherman_top/spriteFrame', SpriteFrame, (err, sf) => {
@@ -798,6 +832,8 @@ export class BattleScene extends Component {
     const g = this.g;
     g.clear();
     this.gLines?.clear();
+    this.panzer4PoolNext = 0;
+    for (const { node } of this.panzer4SpritePool) node.active = false;
     // 命中预览 Label 是常驻节点（非纯 Graphics），需要随每次重绘整批重建，
     // 否则谢尔曼移动后旧位置的预览会留在屏幕上误导玩家。
     this.clearPreviewLabels();
@@ -809,10 +845,17 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     const tiles = map.all();
 
-    // 1. 地形格（纯基底填色；有建筑的格在下一步叠加图案）
+    // 1. 地形格：分两遍绘制，避免「每格 fill+stroke 紧挨」时邻格 fill 盖住共享边上的描边
+    //    （同色草地会整片「熔合」、看起来像格线突然没了；掷骰后 redraw 变多更明显）。
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
-      this.drawHex(c.x, c.y, this.hexSize, TERRAIN_COLORS[t.terrain]);
+      this.drawHexFill(c.x, c.y, this.hexSize, TERRAIN_COLORS[t.terrain]);
+    }
+    g.lineWidth = 2;
+    g.strokeColor = TILE_BORDER;
+    for (const t of tiles) {
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawHexStroke(c.x, c.y, this.hexSize);
     }
 
     // 1a. 林地表冠层：示意树木（在基底之上、建筑/树篱之前）
@@ -1255,11 +1298,9 @@ export class BattleScene extends Component {
     this.g.lineWidth = 2;
   }
 
-  /** 实心六边形 */
-  private drawHex(cx: number, cy: number, size: number, fill: Color) {
+  /** 六边形路径（moveTo 首顶点 + close） */
+  private traceHexPath(cx: number, cy: number, size: number) {
     const g = this.g!;
-    g.fillColor = fill;
-    g.strokeColor = TILE_BORDER;
     for (let i = 0; i < 6; i++) {
       const angle = (-30 + 60 * i) * Math.PI / 180;
       const x = cx + size * Math.cos(angle);
@@ -1267,7 +1308,22 @@ export class BattleScene extends Component {
       if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
     }
     g.close();
+  }
+
+  /** 仅填充实心六边形（格线见 drawHexStroke / redraw 第二遍） */
+  private drawHexFill(cx: number, cy: number, size: number, fill: Color) {
+    const g = this.g!;
+    g.fillColor = fill;
+    this.traceHexPath(cx, cy, size);
     g.fill();
+  }
+
+  /** 仅描边六边形格线（应在全部基底 fill 之后调用） */
+  private drawHexStroke(cx: number, cy: number, size: number) {
+    const g = this.g!;
+    g.strokeColor = TILE_BORDER;
+    g.lineWidth = 2;
+    this.traceHexPath(cx, cy, size);
     g.stroke();
   }
 
@@ -1458,22 +1514,25 @@ export class BattleScene extends Component {
     return { ux: ux / len, uy: uy / len };
   }
 
-  /** 谢尔曼俯视图：缩放、对齐屏幕朝向（贴图炮管朝左为 -X，与六角 neighbor 方向对齐时常数 +180°）。 */
-  private updateShermanTopSprite(
+  /**
+   * 坦克俯视图通用：CUSTOM 尺寸 + 裁切宽高缓存；炮管朝左（-X）时对齐六角朝向用 +180°。
+   */
+  private applyTopDownTankSprite(
+    node: Node,
+    sp: Sprite,
+    sf: SpriteFrame,
+    displayW: number,
+    displayH: number,
     u: Unit,
     c: { x: number; y: number },
     facingLerp?: { from: number; to: number; t: number } | null,
   ) {
-    const node = this.shermanSpriteNode!;
-    const sp = this.shermanTopSprite!;
-    const sf = this.shermanTopSpriteFrame!;
     node.active = true;
     node.setPosition(c.x, c.y, 0);
-    const w = this.shermanSpriteDisplayW > 0 ? this.shermanSpriteDisplayW : sf.width;
-    const h = this.shermanSpriteDisplayH > 0 ? this.shermanSpriteDisplayH : sf.height;
+    const w = displayW > 0 ? displayW : sf.width;
+    const h = displayH > 0 ? displayH : sf.height;
     sp.spriteFrame = sf;
     const ut = node.getComponent(UITransform)!;
-    // 相对原先 hexSize*0.9 再放大约 100%（即 hexSize*1.8 作为长边贴六角格直径方向）
     const fit = this.hexSize * 1.8;
     const maxDim = Math.max(w, h) || 1;
     const tw = (w / maxDim) * fit;
@@ -1498,6 +1557,23 @@ export class BattleScene extends Component {
       uy = 0;
     }
     node.angle = (Math.atan2(uy, ux) * 180) / Math.PI + 180;
+  }
+
+  private updateShermanTopSprite(
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: { from: number; to: number; t: number } | null,
+  ) {
+    this.applyTopDownTankSprite(
+      this.shermanSpriteNode!,
+      this.shermanTopSprite!,
+      this.shermanTopSpriteFrame!,
+      this.shermanSpriteDisplayW,
+      this.shermanSpriteDisplayH,
+      u,
+      c,
+      facingLerp,
+    );
   }
 
   private drawShermanFacingLine(
@@ -1582,6 +1658,27 @@ export class BattleScene extends Component {
         && this.gLines
         && !this.isOnFire(u)) {
       this.updateShermanTopSprite(u, c, facingLerp);
+      this.drawShermanFacingLine(c, r, facingLerp, u);
+      return;
+    }
+
+    // 四号坦克俯视图（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存策略）
+    if (u.kind === 'panzer4'
+        && this.panzer4TopSpriteFrame
+        && this.gLines
+        && !this.isOnFire(u)
+        && this.panzer4PoolNext < this.panzer4SpritePool.length) {
+      const slot = this.panzer4SpritePool[this.panzer4PoolNext++];
+      this.applyTopDownTankSprite(
+        slot.node,
+        slot.sprite,
+        this.panzer4TopSpriteFrame,
+        this.panzer4SpriteDisplayW,
+        this.panzer4SpriteDisplayH,
+        u,
+        c,
+        facingLerp,
+      );
       this.drawShermanFacingLine(c, r, facingLerp, u);
       return;
     }

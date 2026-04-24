@@ -3,5 +3,12 @@
   "uuid": "828e1475-c8d6-4ddf-98fe-cb0e3e628a74",
   "creator": {
     "version": "3.8.8"
+  },
+  "scripts": {
+    "normalize-tanks": "node tools/normalizeTankSprites.cjs",
+    "audit-tanks": "node tools/auditTankPngWhite.cjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.33.5"
   }
 }
