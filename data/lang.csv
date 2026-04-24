@@ -175,6 +175,14 @@ unit.name.panzer3,三号,Panzer III
 unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
 dice.aiHeader,{col}  {n}骰,{col}  {n}d
+dice.aiEnemy.shoot,主炮射击,Main gun
+dice.aiEnemy.turn,转向,Turn
+dice.aiEnemy.advance,前进,Advance
+dice.aiEnemy.reverse,后退,Reverse
+dice.aiEnemy.smoke,烟雾,Smoke
+dice.aiEnemy.repair,修复,Repair
+dice.aiEnemy.none,无,None
+dice.aiEnemy.waste,空转,No action
 menu.title,孤胆谢尔曼,Lone Sherman
 menu.subtitle,LONE SHERMAN · 1944,LONE SHERMAN · 1944
 menu.continue,继续游戏,Continue

@@ -13,7 +13,8 @@
  *   - 主炮骰点击进入"选择目标"态；点击视线内敌人 → 掷骰结算并消耗骰，之后 loaded 归 false
  *   - 右下角按钮："下一阶段"（结束当前阶段或直接进入下一个未执行阶段；两阶段都用完后变红
  *     切成"结束回合"，点击才真正进入敌方阶段）
- *   - 敌方坦克贪心地向谢尔曼移动，移动结束后若有视线 → 立即开火（每敌 1 发/回合）
+ *   - 敌方阶段：UI 固定区展示该敌坦本回合全部 AI 骰并按序执行；移动 / 转向约 0.5s 过程动画，
+ *     谢尔曼移动与转向同样播放过程动画
  *   - 摧毁任务目标单位 → 屏幕中央"胜利！"；谢尔曼被摧毁 → "战败"
  *   - 胜负出现后下方"再来一局"按钮可点击重置整局，使用同一份任务 JSON
  *   - 右上 ⚙ 战斗设置：音量 / 语言 / 存档读档 / 退出关卡（退出二次确认：保存后退出 / 放弃关卡）
@@ -80,7 +81,7 @@ import { checkOutcome, MissionOutcome } from '../core/Objective';
 import { applySave, captureSave, SAVE_KEY, SaveData } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
-import { MissionData, TerrainType, Tile, Unit } from '../core/types';
+import { Direction, MissionData, TerrainType, Tile, Unit } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
@@ -88,6 +89,17 @@ const { ccclass, property } = _decorator;
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
+
+/** 三阶缓入缓出：排序位移动画用 */
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+/** 敌方 AI 骰子迷你托盘：相对原 28px 约 +100% */
+const ENEMY_AI_DIE_SIZE = 56;
+const ENEMY_AI_DIE_GAP = 12;
+/** 掷骰展示后、按点排序到槽位的动画时长（秒） */
+const ENEMY_TRAY_SORT_DUR = 1.0;
 
 /** 把 AIActionEntry 转成控制台日志里的 "射击>转向" 这种紧凑表达 */
 function describeEntry(entry: AIActionEntry): string {
@@ -172,15 +184,19 @@ function crewOutcomeLabel(cc: CrewDeathResult | undefined): { text: string; colo
   };
 }
 
-/** 任意单位正在播放的移动动画（谢尔曼 / 敌坦克通用） */
+/** 任意单位正在播放的移动 / 转向动画（谢尔曼 / 敌坦克通用） */
 interface MoveAnim {
-  unit: Unit;    // 当前正在动画的单位
+  unit: Unit;
+  kind: 'move' | 'turn';
   fromQ: number;
   fromR: number;
   toQ: number;
   toR: number;
   t: number;     // 0..1
   dur: number;   // 秒
+  /** kind==='turn'：一步 60° 的起止朝向 */
+  turnFrom?: Direction;
+  turnTo?: Direction;
 }
 
 type Phase = 'player' | 'enemy';
@@ -478,8 +494,8 @@ export class BattleScene extends Component {
   @property({ tooltip: '是否在谢尔曼周围高亮可移动的相邻格' })
   showReachable: boolean = true;
 
-  @property({ tooltip: '谢尔曼移动一格的动画时长（秒）' })
-  moveDuration: number = 0.28;
+  @property({ tooltip: '坦克移动一格 / 转向 60° 的过程动画时长（秒），敌我共用' })
+  moveDuration: number = 0.5;
 
   @property({ tooltip: '【已废弃】敌方旧版贪心移动预算；GDD §3.7 骰子驱动 AI 已接管，保留仅为场景资源兼容' })
   movesPerTurn: number = 2;
@@ -533,6 +549,33 @@ export class BattleScene extends Component {
   /** 迷你骰子托盘 UI 根节点；跟随当前敌坦位置，动画期间临时隐藏 */
   private enemyDiceTrayRoot: Node | null = null;
   private enemyDiceTrayLabels: Label[] = [];
+  /** 与 labels 同序：迷你骰方块底图，便于改描边高亮当前执行骰 */
+  private enemyDiceTrayTileGraphics: Graphics[] = [];
+  /** 每颗骰一列根节点（含骰格 + 下方动作说明），便于排序动画改 x */
+  private enemyDiceTrayDieRoots: Node[] = [];
+  /** 与骰同序：下方「将执行动作」短文案 */
+  private enemyDiceTraySubtitleLabels: Label[] = [];
+  /** 当前托盘对应的敌坦（refresh 时重算每颗骰的可行动作文案） */
+  private enemyDiceTraySubject: Unit | null = null;
+  /** 布局参数：排序动画与 refresh 共用 */
+  private enemyTrayMetrics: {
+    dieSize: number;
+    gap: number;
+    totalW: number;
+    count: number;
+    rowY: number;
+  } | null = null;
+  /** 本回合当前敌坦骰子按点数升序（同点按原下标）的执行顺序 */
+  private enemyDiceExecOrder: number[] = [];
+  /** 非 null 表示正在播排序位移动画，播完后再 runNextEnemyStep */
+  private enemyDiceSortAnim: {
+    t: number;
+    dur: number;
+    fromSlot: number[];
+    toSlot: number[];
+  } | null = null;
+  /** 敌方当前正在执行的那颗骰下标；-1 无高亮 */
+  private enemyDiceHighlightIdx: number = -1;
   // 战斗 / 胜负
   private rng: RNG = new RNG(1);
   private outcome: MissionOutcome = 'ongoing';
@@ -969,6 +1012,7 @@ export class BattleScene extends Component {
   /** 单位若正在动画，返回插值像素位置；否则等价 project(u.pos)。给状态文字定位用。 */
   private interpolatedPos(u: Unit): { x: number; y: number } {
     if (!this.anim || this.anim.unit !== u) return this.project(u.pos.q, u.pos.r);
+    if (this.anim.kind === 'turn') return this.project(u.pos.q, u.pos.r);
     const k = easeOutCubic(this.anim.t);
     const a = this.project(this.anim.fromQ, this.anim.fromR);
     const b = this.project(this.anim.toQ, this.anim.toR);
@@ -1043,9 +1087,18 @@ export class BattleScene extends Component {
     this.floaters.length = 0;
   }
 
-  /** 同一接口画任意单位：若该单位正是当前动画对象，使用插值位置 */
+  /** 同一接口画任意单位：若该单位正是当前动画对象，使用插值位置 / 插值朝向 */
   private drawUnitMaybeAnim(u: Unit) {
     if (this.anim && this.anim.unit === u) {
+      if (this.anim.kind === 'turn') {
+        const c = this.project(u.pos.q, u.pos.r);
+        this.drawUnit(u, c.x, c.y, {
+          from: this.anim.turnFrom!,
+          to: this.anim.turnTo!,
+          t: this.anim.t,
+        });
+        return;
+      }
       const k = easeOutCubic(this.anim.t);
       const a = this.project(this.anim.fromQ, this.anim.fromR);
       const b = this.project(this.anim.toQ, this.anim.toR);
@@ -1062,32 +1115,53 @@ export class BattleScene extends Component {
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) this.advanceDiceShow(dt);
 
+    // 敌方 AI 骰：掷完后的槽位排序动画（约 1s），播完再开始按序执行各骰
+    if (this.enemyDiceSortAnim && this.mission && this.enemyDiceTrayRoot) {
+      const s = this.enemyDiceSortAnim;
+      s.t += dt;
+      const p = Math.min(1, s.t / s.dur);
+      this.applyEnemyDiceSortLayout(easeInOutCubic(p));
+      if (p >= 1) {
+        this.applyEnemyDiceSortLayout(1);
+        this.enemyDiceSortAnim = null;
+        this.runNextEnemyStep();
+      }
+      this.redraw();
+      return;
+    }
+
     if (!this.anim || !this.mission) return;
     this.anim.t += dt / this.anim.dur;
     if (this.anim.t < 1) {
       this.redraw();
       return;
     }
-    // 动画结束：把数据真正落到目标格，清空状态
-    const finishedUnit = this.anim.unit;
-    finishedUnit.pos = { q: this.anim.toQ, r: this.anim.toR };
+    // 动画结束：移动写回格心；转向写回 facing
+    const anim = this.anim;
+    const finishedUnit = anim.unit;
+    if (anim.kind === 'move') {
+      finishedUnit.pos = { q: anim.toQ, r: anim.toR };
+      console.log(
+        `[BattleScene] ${finishedUnit.kind} 到达 (q=${finishedUnit.pos.q}, r=${finishedUnit.pos.r})`,
+      );
+    } else {
+      finishedUnit.facing = anim.turnTo!;
+      console.log(
+        `[BattleScene] ${finishedUnit.kind} 转向完成 facing=${finishedUnit.facing}`,
+      );
+    }
     this.anim = null;
     this.redraw();
-    console.log(
-      `[BattleScene] ${finishedUnit.kind} 到达 (q=${finishedUnit.pos.q}, r=${finishedUnit.pos.r})`,
-    );
-    // 若处于敌方阶段，紧接着调度下一步
+    // 若处于敌方阶段，紧接着调度下一颗骰（骰子托盘固定在 UI 上，无需每步重建）
     if (this.phase === 'enemy') {
-      // 动画结束后若该敌坦还剩骰子，重新浮出托盘再继续
-      if (this.outcome === 'ongoing' && this.enemyDiceUsed.some(u => !u)) {
-        const current = this.enemyOrder[this.enemyIndex];
-        if (current && !current.destroyed) this.buildEnemyDiceTray(current);
-      }
+      this.enemyDiceHighlightIdx = -1;
+      this.refreshEnemyDiceTray();
       this.runNextEnemyStep();
       return;
     }
-    // 玩家驾驶结束后：更新 HUD（移动后可能改变可攻目标）+ 检查骰子是否用尽
-    if (this.phase === 'player' && this.playerStep === 'movement') {
+    // 玩家移动 / 转向 / 杂项阶段驾驶类动作结束后
+    if (this.phase === 'player'
+        && (this.playerStep === 'movement' || this.playerStep === 'misc')) {
       this.updateHUD();
       this.autoEndPhaseIfDone();
     }
@@ -1275,8 +1349,38 @@ export class BattleScene extends Component {
     g.lineWidth = 2;
   }
 
-  /** 单位：圆 + 朝向短线。可传 overrideX/Y 以画在动画插值位置。 */
-  private drawUnit(u: Unit, overrideX?: number, overrideY?: number) {
+  /** 某朝向在屏幕上的单位方向向量（从格心指向该向邻居中心）。 */
+  private facingToScreenUnitVec(pos: { q: number; r: number }, facing: number): { ux: number; uy: number } {
+    const d = (((facing % 6) + 6) % 6) as Direction;
+    const c = this.project(pos.q, pos.r);
+    const np = this.project(neighbor({ q: pos.q, r: pos.r }, d).q, neighbor({ q: pos.q, r: pos.r }, d).r);
+    const len = Math.hypot(np.x - c.x, np.y - c.y) || 1;
+    return { ux: (np.x - c.x) / len, uy: (np.y - c.y) / len };
+  }
+
+  /** 两个相邻朝向之间插值（用于 60° 转向动画）。 */
+  private facingBlendScreenVec(
+    pos: { q: number; r: number }, from: number, to: number, tRaw: number,
+  ): { ux: number; uy: number } {
+    const t = easeOutCubic(tRaw);
+    const a = this.facingToScreenUnitVec(pos, from);
+    const b = this.facingToScreenUnitVec(pos, to);
+    let ux = a.ux + (b.ux - a.ux) * t;
+    let uy = a.uy + (b.uy - a.uy) * t;
+    const len = Math.hypot(ux, uy) || 1;
+    return { ux: ux / len, uy: uy / len };
+  }
+
+  /**
+   * 单位：圆 + 朝向短线。
+   * overrideX/Y：动画插值格心；facingLerp：转向动画时插值炮口方向（不读 u.facing）。
+   */
+  private drawUnit(
+    u: Unit,
+    overrideX?: number,
+    overrideY?: number,
+    facingLerp?: { from: number; to: number; t: number } | null,
+  ) {
     const g = this.g!;
     const c = overrideX !== undefined && overrideY !== undefined
       ? { x: overrideX, y: overrideY }
@@ -1329,8 +1433,15 @@ export class BattleScene extends Component {
       g.stroke();
     }
 
-    if (u.facing !== null) {
-      // 用"邻居中心 - 自身中心"得到屏幕方向，避免手算 Y 轴翻转
+    if (facingLerp) {
+      const { ux, uy } = this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
+      g.strokeColor = FACING_COLOR;
+      g.lineWidth = 4;
+      g.moveTo(c.x, c.y);
+      g.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
+      g.stroke();
+      g.lineWidth = 2;
+    } else if (u.facing !== null) {
       const np = this.project(neighbor(u.pos, u.facing).q, neighbor(u.pos, u.facing).r);
       const dx = np.x - c.x;
       const dy = np.y - c.y;
@@ -2575,18 +2686,29 @@ export class BattleScene extends Component {
       return;
     }
     if (sherman.facing === null) sherman.facing = 0;
-    // rotateDirection 的参数是"顺时针旋转 N 步"，所以 CCW 用 5（= -1 mod 6）
     const step = dirSign === 1 ? 1 : 5;
-    sherman.facing = rotateDirection(sherman.facing, step);
+    const from = sherman.facing;
+    const to = rotateDirection(from, step);
     // §3.5 隐蔽：任何移动动作（转向 / 前进 / 后退）都会脱离隐蔽
     this.breakConcealment(sherman);
     slot.used = true;
     this.closeDiePopover();
+    this.anim = {
+      unit: sherman,
+      kind: 'turn',
+      fromQ: sherman.pos.q,
+      fromR: sherman.pos.r,
+      toQ: sherman.pos.q,
+      toR: sherman.pos.r,
+      t: 0,
+      dur: Math.max(0.05, this.moveDuration),
+      turnFrom: from,
+      turnTo: to,
+    };
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Move] 转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${sherman.facing}`);
-    this.autoEndPhaseIfDone();
+    console.log(`[Move] 转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
   }
 
   /**
@@ -2652,6 +2774,7 @@ export class BattleScene extends Component {
     this.breakConcealment(sherman);
     this.anim = {
       unit: sherman,
+      kind: 'move',
       fromQ: sherman.pos.q,
       fromR: sherman.pos.r,
       toQ: to.q,
@@ -3162,6 +3285,7 @@ export class BattleScene extends Component {
     this.breakConcealment(sherman);
     this.anim = {
       unit: sherman,
+      kind: 'move',
       fromQ: sherman.pos.q,
       fromR: sherman.pos.r,
       toQ: to.q,
@@ -3196,14 +3320,26 @@ export class BattleScene extends Component {
     if (!this.consumeDoubles(dieIdx)) return;
     if (sherman.facing === null) sherman.facing = 0;
     const step = dirSign === 1 ? 1 : 5;
-    sherman.facing = rotateDirection(sherman.facing, step);
+    const from = sherman.facing;
+    const to = rotateDirection(from, step);
     this.breakConcealment(sherman);
     this.closeDiePopover();
+    this.anim = {
+      unit: sherman,
+      kind: 'turn',
+      fromQ: sherman.pos.q,
+      fromR: sherman.pos.r,
+      toQ: sherman.pos.q,
+      toR: sherman.pos.r,
+      t: 0,
+      dur: Math.max(0.05, this.moveDuration),
+      turnFrom: from,
+      turnTo: to,
+    };
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Move] 对子 副驾驶转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${sherman.facing}`);
-    this.autoEndPhaseIfDone();
+    console.log(`[Move] 对子 副驾驶转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
   }
 
   /**
@@ -3890,7 +4026,7 @@ export class BattleScene extends Component {
    * 开启 `enemyOrder[enemyIndex]` 这辆敌坦的回合：
    *   1. 跳过已摧毁 / 不存在 的条目
    *   2. 按起始格地形 & damaged 状态查 AI 列，掷骰子
-   *   3. 建立迷你骰子托盘浮在该敌坦上方
+   *   3. 在 UI 层建立迷你骰子托盘（展示本回合全部点数）
    *   4. 进入 runNextEnemyStep 开始逐颗消耗
    *
    * 若已轮完所有敌坦 → 结束敌方阶段。
@@ -3919,13 +4055,14 @@ export class BattleScene extends Component {
     const count = AI_DICE_COUNT[this.enemyAICol];
     this.enemyDice = rollAIDice(this.rng, count);
     this.enemyDiceUsed = this.enemyDice.map(() => false);
+    this.enemyDiceExecOrder = this.computeEnemyDiceExecOrder();
 
     console.log(
-      `[AI] ${enemy.kind}@(${enemy.pos.q},${enemy.pos.r}) 列=${this.enemyAICol} 掷 ${count} 骰 → [${this.enemyDice.join(',')}]`
+      `[AI] ${enemy.kind}@(${enemy.pos.q},${enemy.pos.r}) 列=${this.enemyAICol} 掷 ${count} 骰 → [${this.enemyDice.join(',')}] 执行序=${this.enemyDiceExecOrder.map(i => this.enemyDice[i]).join(',')}`
     );
 
-    this.buildEnemyDiceTray(enemy);
-    this.runNextEnemyStep();
+    this.buildEnemyDiceTray(enemy, { playSort: true });
+    if (!this.enemyDiceSortAnim) this.runNextEnemyStep();
   }
 
   /**
@@ -3953,9 +4090,11 @@ export class BattleScene extends Component {
     }
 
     while (true) {
-      // 找下一颗未消耗的骰
-      const dieIdx = this.enemyDiceUsed.findIndex(u => !u);
-      if (dieIdx < 0) {
+      // 按「点数升序（同点原序）」依次消耗骰子，而非数组下标顺序
+      const dieIdx = this.enemyDiceExecOrder.find(i => !this.enemyDiceUsed[i]);
+      if (dieIdx === undefined) {
+        this.enemyDiceHighlightIdx = -1;
+        this.refreshEnemyDiceTray();
         // 本敌坦全部骰子用完：切下一个
         this.enemyIndex++;
         this.beginCurrentEnemyTurn();
@@ -3971,12 +4110,14 @@ export class BattleScene extends Component {
         (chosen ? ` ⇒ ${chosen}` : ' ⇒ 无可行动作（空转）')
       );
 
+      this.enemyDiceHighlightIdx = dieIdx;
       // 消耗这颗骰子（无论是否真正执行成功，都算"本骰已用")
       this.enemyDiceUsed[dieIdx] = true;
       this.refreshEnemyDiceTray();
 
       if (!chosen) {
-        // 无可行动作：直接进下一颗
+        this.enemyDiceHighlightIdx = -1;
+        this.refreshEnemyDiceTray();
         continue;
       }
 
@@ -3984,6 +4125,8 @@ export class BattleScene extends Component {
       const result = this.executeEnemyAction(enemy, chosen);
       if (this.outcome !== 'ongoing') return; // 可能谢尔曼被击毁
       if (result === 'animating') return;     // 等动画 / dice-show 回调再 runNextEnemyStep
+      this.enemyDiceHighlightIdx = -1;
+      this.refreshEnemyDiceTray();
       // 'done' → 原地完成，循环取下一颗骰
     }
   }
@@ -4040,14 +4183,27 @@ export class BattleScene extends Component {
         const decision = decideEnemyTurn(enemy, sherman, map, occupied);
         if (decision === 'stay') {
           console.log(`[AI] ${enemy.kind} 转向 → 保持 facing=${enemy.facing}`);
-        } else {
-          const step = decision === 'cw' ? 1 : 5;
-          enemy.facing = rotateDirection(enemy.facing, step);
-          console.log(`[AI] ${enemy.kind} 转向 ${decision.toUpperCase()} → facing=${enemy.facing}`);
+          this.redraw();
+          return 'done';
         }
+        const step = decision === 'cw' ? 1 : 5;
+        const from = enemy.facing;
+        const to = rotateDirection(from, step);
+        console.log(`[AI] ${enemy.kind} 转向 ${decision.toUpperCase()} → facing=${to}（动画中）`);
+        this.anim = {
+          unit: enemy,
+          kind: 'turn',
+          fromQ: enemy.pos.q,
+          fromR: enemy.pos.r,
+          toQ: enemy.pos.q,
+          toR: enemy.pos.r,
+          t: 0,
+          dur: Math.max(0.05, this.moveDuration),
+          turnFrom: from,
+          turnTo: to,
+        };
         this.redraw();
-        this.refreshEnemyDiceTray();
-        return 'done';
+        return 'animating';
       }
 
       case 'advance':
@@ -4057,10 +4213,10 @@ export class BattleScene extends Component {
           ? enemy.facing
           : rotateDirection(enemy.facing, 3);
         const to = neighbor(enemy.pos, dir);
-        // 发起移动动画；在 update() 动画结束分支里会再次调 runNextEnemyStep
-        this.destroyEnemyDiceTray();
+        // 发起移动动画；骰子托盘保留在 UI 上展示全套点数
         this.anim = {
           unit: enemy,
+          kind: 'move',
           fromQ: enemy.pos.q,
           fromR: enemy.pos.r,
           toQ: to.q,
@@ -4289,7 +4445,7 @@ export class BattleScene extends Component {
         // 重新浮出托盘（可能还剩骰子），再继续调度
         if (this.enemyDiceUsed.some(u => !u)) {
           const current = this.enemyOrder[this.enemyIndex];
-          if (current && !current.destroyed) this.buildEnemyDiceTray(current);
+          if (current && !current.destroyed) this.buildEnemyDiceTray(current, { playSort: false });
         }
         this.runNextEnemyStep();
       }
@@ -4562,37 +4718,87 @@ export class BattleScene extends Component {
 
   // ---------- 敌方 AI 骰子迷你托盘 ----------
 
+  /** 按点数升序排骰下标，同点保留原数组顺序（稳定排序） */
+  private computeEnemyDiceExecOrder(): number[] {
+    const n = this.enemyDice.length;
+    const idx = Array.from({ length: n }, (_, i) => i);
+    idx.sort((a, b) => {
+      const va = this.enemyDice[a];
+      const vb = this.enemyDice[b];
+      if (va !== vb) return va - vb;
+      return a - b;
+    });
+    return idx;
+  }
+
+  /** 托盘下方短标签：当前规则下该骰将执行的具体动作（无可行则空转） */
+  private enemyDieActionSubtitle(enemy: Unit, dieIdx: number): string {
+    const pip = this.enemyDice[dieIdx];
+    const entry = actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
+    const chosen = this.chooseActionForEntry(enemy, entry);
+    if (!chosen || chosen === 'none') return t('dice.aiEnemy.waste');
+    return t(`dice.aiEnemy.${chosen}`);
+  }
+
+  /** k∈[0,1]：各骰列根节点从 fromSlot 插值到 toSlot 的屏幕 x */
+  private applyEnemyDiceSortLayout(k01: number) {
+    const m = this.enemyTrayMetrics;
+    const s = this.enemyDiceSortAnim;
+    if (!m || !s) return;
+    const slotCenterX = (slot: number) =>
+      -m.totalW / 2 + m.dieSize / 2 + slot * (m.dieSize + m.gap);
+    for (let i = 0; i < m.count; i++) {
+      const root = this.enemyDiceTrayDieRoots[i];
+      if (!root || !root.isValid) continue;
+      const x0 = slotCenterX(s.fromSlot[i]);
+      const x1 = slotCenterX(s.toSlot[i]);
+      root.setPosition(x0 + (x1 - x0) * k01, m.rowY, 0);
+    }
+  }
+
   /**
-   * 在 mapNode 上方浮起一排迷你骰子，跟随当前敌坦格子。
-   *
-   *   - 上一行文字：AI 列名 + 列骰数，例如 "road 4"
-   *   - 下一行：count 个 24×24 方块，每块内部显示点数；已消耗的变灰
+   * 在 UI 层（`this.node` 子节点**最顶层**）固定位置展示本辆敌坦当回合全部 AI 骰：
+   * 勿插在 MapGraphics 与 HUD 之间，否则会被右侧状态栏等后绘制的 UI 完全遮挡。
+   * @param playSort true：新回合掷骰后播约 1s 排序动画再开始执行；false：直接摆在升序槽位（如射击面板关闭后重建托盘）
    */
-  private buildEnemyDiceTray(enemy: Unit) {
+  private buildEnemyDiceTray(enemy: Unit, opts: { playSort?: boolean } = {}) {
+    const playSort = opts.playSort !== false;
     this.destroyEnemyDiceTray();
-    if (!this.mapNode) return;
     const count = this.enemyDice.length;
     if (count <= 0) return;
 
-    const DIE_SIZE = 24;
-    const GAP = 4;
+    const DIE_SIZE = ENEMY_AI_DIE_SIZE;
+    const GAP = ENEMY_AI_DIE_GAP;
     const totalW = count * DIE_SIZE + (count - 1) * GAP;
+    const subtitleH = 22;
+    const headerBand = 28;
+    const trayH = headerBand + DIE_SIZE + subtitleH + 8;
+    const rowY = -subtitleH / 2 - 4;
+
+    this.enemyTrayMetrics = { dieSize: DIE_SIZE, gap: GAP, totalW, count, rowY };
+
+    const exec = this.enemyDiceExecOrder.length === count
+      ? this.enemyDiceExecOrder
+      : this.computeEnemyDiceExecOrder();
+    const toSlot = this.enemyDice.map((_, i) => exec.indexOf(i));
+    const fromSlot = this.enemyDice.map((_, i) => i);
+
     const root = new Node('EnemyDiceTray');
     root.layer = this.node.layer;
-    root.addComponent(UITransform).setContentSize(totalW, DIE_SIZE + 18);
-    const { x, y } = this.project(enemy.pos.q, enemy.pos.r);
-    // 漂在单位上方约 1 格高
-    root.setPosition(x, y + this.hexSize + 8, 0);
-    this.mapNode.addChild(root);
+    root.addComponent(UITransform).setContentSize(totalW, trayH);
+    // 左上固定区：避免与右侧状态栏/齿轮重叠；且必须挂在 this.node 子节点**最后**，
+    // 否则 insertChild 插在 Map 后、仍排在全部 HUD 之前，会被半透明状态栏整块盖住。
+    root.setPosition(-400, 268, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
 
-    // 列名标签
     const header = new Node('AICol');
     header.layer = this.node.layer;
-    header.addComponent(UITransform).setContentSize(totalW + 40, 14);
-    header.setPosition(0, DIE_SIZE / 2 + 10, 0);
+    header.addComponent(UITransform).setContentSize(totalW + 48, 24);
+    header.setPosition(0, trayH / 2 - headerBand / 2 - 2, 0);
     const hl = header.addComponent(Label);
-    hl.fontSize = 11;
-    hl.lineHeight = 13;
+    hl.fontSize = 22;
+    hl.lineHeight = 26;
     hl.color = new Color(230, 230, 200, 255);
     hl.horizontalAlign = HorizontalTextAlignment.CENTER;
     hl.verticalAlign = VerticalTextAlignment.CENTER;
@@ -4602,14 +4808,28 @@ export class BattleScene extends Component {
     hl.outlineWidth = 2;
     root.addChild(header);
 
+    this.enemyDiceTraySubject = enemy;
     this.enemyDiceTrayLabels = [];
-    const x0 = -totalW / 2 + DIE_SIZE / 2;
+    this.enemyDiceTrayTileGraphics = [];
+    this.enemyDiceTrayDieRoots = [];
+    this.enemyDiceTraySubtitleLabels = [];
+
+    const slotCenterX = (slot: number) =>
+      -totalW / 2 + DIE_SIZE / 2 + slot * (DIE_SIZE + GAP);
+
     for (let i = 0; i < count; i++) {
-      const cx = x0 + i * (DIE_SIZE + GAP);
-      const tile = new Node(`D${i}`);
+      const dieRoot = new Node(`D${i}`);
+      dieRoot.layer = this.node.layer;
+      dieRoot.addComponent(UITransform).setContentSize(DIE_SIZE + 4, DIE_SIZE + subtitleH + 6);
+      const startSlot = playSort ? fromSlot[i] : toSlot[i];
+      dieRoot.setPosition(slotCenterX(startSlot), rowY, 0);
+      root.addChild(dieRoot);
+      this.enemyDiceTrayDieRoots.push(dieRoot);
+
+      const tile = new Node('Tile');
       tile.layer = this.node.layer;
       tile.addComponent(UITransform).setContentSize(DIE_SIZE, DIE_SIZE);
-      tile.setPosition(cx, -2, 0);
+      tile.setPosition(0, subtitleH / 2 + 2, 0);
       const g = tile.addComponent(Graphics);
       g.lineWidth = 2;
       g.strokeColor = new Color(30, 30, 30, 255);
@@ -4617,14 +4837,14 @@ export class BattleScene extends Component {
       g.rect(-DIE_SIZE / 2, -DIE_SIZE / 2, DIE_SIZE, DIE_SIZE);
       g.fill();
       g.stroke();
-      root.addChild(tile);
+      dieRoot.addChild(tile);
 
       const labNode = new Node('Face');
       labNode.layer = this.node.layer;
       labNode.addComponent(UITransform).setContentSize(DIE_SIZE, DIE_SIZE);
       const l = labNode.addComponent(Label);
-      l.fontSize = 14;
-      l.lineHeight = 16;
+      l.fontSize = 30;
+      l.lineHeight = 34;
       l.color = new Color(20, 20, 20, 255);
       l.horizontalAlign = HorizontalTextAlignment.CENTER;
       l.verticalAlign = VerticalTextAlignment.CENTER;
@@ -4632,37 +4852,92 @@ export class BattleScene extends Component {
       tile.addChild(labNode);
 
       this.enemyDiceTrayLabels.push(l);
+      this.enemyDiceTrayTileGraphics.push(g);
+
+      const subNode = new Node('Action');
+      subNode.layer = this.node.layer;
+      subNode.addComponent(UITransform).setContentSize(DIE_SIZE + 16, subtitleH);
+      subNode.setPosition(0, -DIE_SIZE / 2 - 8, 0);
+      const sub = subNode.addComponent(Label);
+      sub.fontSize = 13;
+      sub.lineHeight = 15;
+      sub.color = new Color(200, 200, 180, 255);
+      sub.horizontalAlign = HorizontalTextAlignment.CENTER;
+      sub.verticalAlign = VerticalTextAlignment.TOP;
+      sub.string = this.enemyDieActionSubtitle(enemy, i);
+      dieRoot.addChild(subNode);
+      this.enemyDiceTraySubtitleLabels.push(sub);
     }
 
     this.enemyDiceTrayRoot = root;
+    if (playSort) {
+      this.enemyDiceSortAnim = { t: 0, dur: ENEMY_TRAY_SORT_DUR, fromSlot, toSlot };
+      this.applyEnemyDiceSortLayout(0);
+    } else {
+      this.enemyDiceSortAnim = null;
+      for (let i = 0; i < count; i++) {
+        const dr = this.enemyDiceTrayDieRoots[i];
+        if (dr) dr.setPosition(slotCenterX(toSlot[i]), rowY, 0);
+      }
+    }
+
     this.refreshEnemyDiceTray();
   }
 
-  /** 重刷托盘里每颗骰的"已用/未用"视觉：已用 → 暗色 + 半透 */
+  /** 重刷托盘里每颗骰的已用 / 当前执行高亮 */
   private refreshEnemyDiceTray() {
     if (!this.enemyDiceTrayRoot) return;
+    const m = this.enemyTrayMetrics;
+    const DIE_SIZE = m?.dieSize ?? ENEMY_AI_DIE_SIZE;
+    const enemy = this.enemyDiceTraySubject;
     for (let i = 0; i < this.enemyDiceTrayLabels.length; i++) {
       const used = !!this.enemyDiceUsed[i];
+      const hi = i === this.enemyDiceHighlightIdx;
       const lab = this.enemyDiceTrayLabels[i];
-      if (!lab) continue;
-      // 变文字颜色即可，骰子面不需要每次重绘 Graphics
-      lab.color = used
-        ? new Color(120, 120, 120, 180)
-        : new Color(20, 20, 20, 255);
-      const parent = lab.node.parent;
-      if (parent) {
-        parent.setScale(used ? 0.85 : 1, used ? 0.85 : 1, 1);
+      if (lab) {
+        lab.color = used
+          ? new Color(120, 120, 120, 200)
+          : new Color(20, 20, 20, 255);
       }
+      const sub = this.enemyDiceTraySubtitleLabels[i];
+      if (sub && enemy && !enemy.destroyed) {
+        sub.string = this.enemyDieActionSubtitle(enemy, i);
+        sub.color = used
+          ? new Color(130, 130, 120, 160)
+          : new Color(200, 200, 180, 255);
+      }
+      const g = this.enemyDiceTrayTileGraphics[i];
+      if (!g) continue;
+      g.clear();
+      g.fillColor = used
+        ? new Color(160, 150, 100, 220)
+        : new Color(240, 230, 130, 255);
+      g.strokeColor = hi
+        ? new Color(255, 200, 80, 255)
+        : new Color(30, 30, 30, 255);
+      g.lineWidth = hi ? 3.5 : 2;
+      g.rect(-DIE_SIZE / 2, -DIE_SIZE / 2, DIE_SIZE, DIE_SIZE);
+      g.fill();
+      g.stroke();
+      const parent = lab?.node.parent;
+      if (parent) parent.setScale(used && !hi ? 0.9 : 1, used && !hi ? 0.9 : 1, 1);
     }
   }
 
-  /** 销毁敌方骰子托盘（切敌方单位 / 结束敌方阶段 / 动画期间临时收起用） */
+  /** 销毁敌方骰子托盘（切敌方单位 / 结束敌方阶段 / 开火掷骰前收起用） */
   private destroyEnemyDiceTray() {
+    this.enemyDiceSortAnim = null;
+    this.enemyTrayMetrics = null;
+    this.enemyDiceTraySubject = null;
+    this.enemyDiceTrayDieRoots = [];
+    this.enemyDiceTraySubtitleLabels = [];
     if (this.enemyDiceTrayRoot) {
       this.enemyDiceTrayRoot.destroy();
       this.enemyDiceTrayRoot = null;
     }
     this.enemyDiceTrayLabels = [];
+    this.enemyDiceTrayTileGraphics = [];
+    this.enemyDiceHighlightIdx = -1;
   }
 
   /** 在 parent 下挂一个居中 Label，并返回供外部 setString。 */
@@ -4918,7 +5193,7 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return this.anim !== null || this.diceShow !== null;
+    return this.anim !== null || this.diceShow !== null || this.enemyDiceSortAnim !== null;
   }
 
   /**
