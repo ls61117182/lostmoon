@@ -220,4 +220,9 @@ export const LANG_DB: Record<string, LangEntry> = {
   'level.10.title': { zh: "鲁尔", en: "Ruhr" },
   'level.11.title': { zh: "易北河", en: "Elbe" },
   'level.12.title': { zh: "柏林", en: "Berlin" },
+  'battle.settings.title': { zh: "战斗设置", en: "Battle Settings" },
+  'battle.settings.exit': { zh: "退出关卡", en: "Exit Level" },
+  'battle.exit.title': { zh: "退出关卡？", en: "Exit this level?" },
+  'battle.exit.saveAndQuit': { zh: "保存后退出", en: "Save & Exit" },
+  'battle.exit.abandon': { zh: "放弃关卡", en: "Abandon" },
 };

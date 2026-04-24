@@ -16,7 +16,7 @@
  *   - 敌方坦克贪心地向谢尔曼移动，移动结束后若有视线 → 立即开火（每敌 1 发/回合）
  *   - 摧毁任务目标单位 → 屏幕中央"胜利！"；谢尔曼被摧毁 → "战败"
  *   - 胜负出现后下方"再来一局"按钮可点击重置整局，使用同一份任务 JSON
- *   - 右上"存档 / 读档"：单槽 localStorage，仅"阶段选择"子步骤且无动画时可存
+ *   - 右上 ⚙ 战斗设置：音量 / 语言 / 存档读档 / 退出关卡（退出二次确认：保存后退出 / 放弃关卡）
  *
  * 用法：
  *   1. 打开任意场景（如 changjing2.scene）
@@ -61,7 +61,7 @@ import {
 } from '../core/ActionDice';
 import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
-import { t } from '../core/Lang';
+import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
   actionFor,
   AI_DICE_COUNT,
@@ -285,9 +285,14 @@ const TERRAIN_COLORS: Record<TerrainType, Color> = {
   road:     new Color(190, 175, 145, 255),
   field:    new Color(196, 220, 130, 255),
   mud:      new Color(140, 110,  80, 255),
-  forest:   new Color( 70, 130,  60, 255),
+  forest:   new Color( 58, 112,  50, 255), // 稍压暗，树冠叠上去后更像林间地面
   water:    new Color( 90, 145, 200, 255),
 };
+/** 林地表冠层（多圆+阴影示意俯视树丛，Y 轴向上） */
+const FOREST_TREE_DARK  = new Color( 28,  88,  30, 255);
+const FOREST_TREE_MID   = new Color( 45, 118,  42, 255);
+const FOREST_TREE_LIGHT = new Color( 70, 148,  58, 255);
+const FOREST_SHADE      = new Color(  0,   0,   0,  50);
 /** 格心建筑图案（不改变六角格基底填色，仅叠加绘制） */
 const BUILDING_ROOF_FILL  = new Color( 95,  78,  62, 255);
 const BUILDING_WALL_FILL  = new Color(160, 145, 125, 255);
@@ -308,6 +313,31 @@ const BTN_BG_NORMAL  = new Color( 60,  90, 140, 230);
 const BTN_BG_URGENT  = new Color(190,  80,  60, 240);
 const BTN_BORDER     = new Color(255, 255, 255, 255);
 const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
+/** 右上角 ⚙ 与 `buildStatusPanel` 竖向对齐（改一处须同步） */
+const BATTLE_SETTINGS_CX = 580;
+const BATTLE_SETTINGS_CY = 318;
+const BATTLE_SETTINGS_R = 24;
+
+// 战斗内设置 / 退出确认模态（与主菜单风格一致）
+const CANVAS_W = 1280;
+const CANVAS_H = 720;
+const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
+const MODAL_PANEL_BG     = new Color( 34,  40,  54, 240);
+const MODAL_PANEL_BORDER = new Color(180, 180, 180, 220);
+const MODAL_CLOSE_BG     = new Color(180,  60,  60, 240);
+const SETTINGS_ICON_BG   = new Color( 40,  50,  60, 220);
+const SETTINGS_ICON_BD   = new Color(200, 200, 200, 180);
+const SLIDER_TRACK       = new Color( 70,  80,  90, 255);
+const SLIDER_FILL        = new Color(170, 110,  50, 255);
+const SLIDER_THUMB       = new Color(240, 215, 150, 255);
+const LANG_BTN_IDLE      = new Color( 60,  70,  80, 230);
+const LANG_BTN_ACTIVE    = new Color(170, 110,  50, 240);
+const LANG_BTN_ACTIVE_BD = new Color(240, 215, 150, 255);
+const BTN_EXIT_WARN      = new Color(160,  70,  70, 230);
+const BATTLE_BTN_ACCENT  = new Color(170, 110,  50, 240);
+const BATTLE_MODAL_DIVIDER = new Color(120, 150, 120, 200);
+const BATTLE_MODAL_TEXT_OUTLINE = new Color(0, 0, 0, 220);
+const BATTLE_MODAL_LEVEL_BORDER = new Color(200, 200, 200, 220);
 
 // 阶段选择条配色：三个按钮（移动=绿 / 攻击=红 / 杂项=紫）；已执行过的阶段被灰掉禁用
 const PHASE_BTN_MOVE      = new Color( 60, 130,  80, 230);
@@ -425,6 +455,14 @@ const HIT_PROB_GE: ReadonlyArray<number> = [
   /* 13 */ 0,
 ];
 
+/** 战斗模态内矩形按钮（与 MainMenuScene.makeRectButton 同构） */
+interface BattleRectButtonRefs {
+  node: Node;
+  graphics: Graphics;
+  label: Label | null;
+  redraw: (color: Color, opts?: { border?: boolean }) => void;
+}
+
 @ccclass('BattleScene')
 export class BattleScene extends Component {
 
@@ -537,11 +575,35 @@ export class BattleScene extends Component {
   private statusTurret: Label | null = null;   // 完好 / 受损
   private statusMobility: Label | null = null; // 正常 / 痛痪
   private statusCrewLabels: Label[] = [];      // 5 个乘员值标签（车长..副驾驶）
+  /** 状态面板固定文案（切语言时刷新） */
+  private statusPanelTitleLabel: Label | null = null;
+  private statusBodyLeftLabels: Label[] = [];
+  private statusCrewTitleLabel: Label | null = null;
+  private statusCrewLeftLabels: Label[] = [];
+  /** 底部阶段条按钮文字 */
+  private chooseMoveLabel: Label | null = null;
+  private chooseAttackLabel: Label | null = null;
+  private chooseMiscLabel: Label | null = null;
+  /** 胜负界「再来一局 / 返回主菜单」子 Label */
+  private restartBtnLabel: Label | null = null;
+  private backToMenuBtnLabel: Label | null = null;
 
   // 存档/读档
   private missionId: string = '';
 
+  /** 战斗内模态（设置）；退出确认单独一层叠在上面 */
+  private battleModalRoot: Node | null = null;
+  private battleExitModalRoot: Node | null = null;
+  private battleSettingsRefs: {
+    volumeFill: Graphics | null;
+    volumeThumb: Node | null;
+    volumeLabel: Label | null;
+    langZhBtn: BattleRectButtonRefs | null;
+    langEnBtn: BattleRectButtonRefs | null;
+  } | null = null;
+
   onLoad() {
+    setLang(MenuProgress.load().lang);
     // 自动创建子 Graphics 节点，免去编辑器手动配置
     const gNode = new Node('MapGraphics');
     // UI Graphics 必须在 UI_2D 层才会被 Canvas 的 UI 相机渲染。
@@ -656,6 +718,13 @@ export class BattleScene extends Component {
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
       this.drawHex(c.x, c.y, this.hexSize, TERRAIN_COLORS[t.terrain]);
+    }
+
+    // 1a. 林地表冠层：示意树木（在基底之上、建筑/树篱之前）
+    for (const t of tiles) {
+      if (t.terrain !== 'forest') continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawForestCanopy(c.x, c.y, this.hexSize, t);
     }
 
     // 1b. 建筑图案（不改变基底地形色，仅格心矢量房屋）
@@ -1077,47 +1146,98 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 格心简易房屋图案（与基底地形填色分离，不改变六角格本身颜色）。
-   * 绘制顺序：屋顶 → 墙身 → 外轮廓 → 门缝，尺寸随 hexSize 缩放。
+   * 林地格上叠画多簇「俯视树冠」（多圆+半透明阴影）。
+   * 冠幅约为原先 2 倍、丛数 2 倍，排布为上下两带，尽量占满格内可绘区域；格 (q,r) 轻微错纹。
+   */
+  private drawForestCanopy(cx: number, cy: number, size: number, t: Tile) {
+    const s = size;
+    const hash = t.pos.q * 92811 + t.pos.r * 6899;
+    const jx = (((hash % 7) + 7) % 7) - 3;
+    const h2 = (hash >> 4) ^ (t.pos.r * 3);
+    const jy = (((h2 % 5) + 5) % 5) - 2;
+    const bx = cx + (jx * s) / 85;
+    const by = cy + (jy * s) / 90;
+    const baseR = s * 0.26; // 原 0.13 放大 100%
+    // 6 丛：上排 3 + 下排 3，覆盖格子上半与中部，冠缘相接以「铺满」
+    const clumps: Array<{ ox: number; oy: number; m: number }> = [
+      { ox: -0.32, oy: 0.40, m: 0.95 },
+      { ox: 0.0,  oy: 0.52, m: 1.0  },
+      { ox: 0.32, oy: 0.40, m: 0.95 },
+      { ox: -0.33, oy: 0.05, m: 0.9 },
+      { ox: 0.0,  oy: 0.02, m: 0.95 },
+      { ox: 0.33, oy: 0.05, m: 0.9 },
+    ];
+    for (const c of clumps) {
+      this.drawOneTreeClump(
+        bx + c.ox * s,
+        by + c.oy * s,
+        baseR * c.m,
+      );
+    }
+  }
+
+  /** 单丛树冠：左下浅影 + 几层相叠的圆 */
+  private drawOneTreeClump(x: number, y: number, r: number) {
+    const g = this.g!;
+    const sh = r * 0.42;
+    g.lineWidth = 0;
+    g.fillColor = FOREST_SHADE;
+    g.circle(x - sh, y - sh, r * 0.92);
+    g.fill();
+    g.fillColor = FOREST_TREE_DARK;
+    g.circle(x - r * 0.1, y + r * 0.06, r);
+    g.fill();
+    g.fillColor = FOREST_TREE_MID;
+    g.circle(x + r * 0.2, y - r * 0.04, r * 0.8);
+    g.fill();
+    g.fillColor = FOREST_TREE_LIGHT;
+    g.circle(x, y, r * 0.52);
+    g.fill();
+    g.lineWidth = 1;
+  }
+
+  /**
+   * 格心简易侧视房屋（与基底地形填色分离）。
+   * 坐标系：Cocos 画布 Y 向上。旧版中 `yTop` 命名反了：较小 Y 在屏幕下侧、较大 Y
+   * 在屏幕上侧，导致山墙朝「下」；现已改为屋身在下、人字顶（尖）在上。
    */
   private drawBuildingOverlay(cx: number, cy: number, size: number) {
     const g = this.g!;
-    const bodyW = size * 0.5;
-    const roofW = size * 0.62;
-    const yTop = cy - size * 0.06;
-    const yRoofPeak = cy - size * 0.36;
-    const yBot = cy + size * 0.28;
+    const s = size;
+    const bodyW = s * 0.5;
+    const roofW = s * 0.62;
+    // 墙：从下沿到「檐口」矩形；人字顶：以檐口为底、尖在上方
+    const yBase = cy - s * 0.26;    // 墙下沿（格心偏下）
+    const yWallTop = cy - s * 0.08; // 檐口 / 人字底边
+    const yRoofPeak = cy + s * 0.20; // 人字尖（Y 较大 = 更靠上）
     const xL = cx - bodyW * 0.5;
     const xR = cx + bodyW * 0.5;
 
     g.lineWidth = 2;
 
-    // 墙身（矩形，先画）
     g.fillColor = BUILDING_WALL_FILL;
     g.strokeColor = BUILDING_OUTLINE;
-    g.moveTo(xL, yTop);
-    g.lineTo(xR, yTop);
-    g.lineTo(xR, yBot);
-    g.lineTo(xL, yBot);
+    g.moveTo(xL, yBase);
+    g.lineTo(xR, yBase);
+    g.lineTo(xR, yWallTop);
+    g.lineTo(xL, yWallTop);
     g.close();
     g.fill();
     g.stroke();
 
-    // 屋顶（三角形，压在墙顶）
     g.fillColor = BUILDING_ROOF_FILL;
-    g.moveTo(cx - roofW * 0.5, yTop);
+    g.moveTo(cx - roofW * 0.5, yWallTop);
     g.lineTo(cx, yRoofPeak);
-    g.lineTo(cx + roofW * 0.5, yTop);
+    g.lineTo(cx + roofW * 0.5, yWallTop);
     g.close();
     g.fill();
     g.stroke();
 
-    // 门洞（小矩形描边）
     g.strokeColor = BUILDING_DOOR_STROKE;
     g.lineWidth = 1.5;
-    const dw = size * 0.12;
-    const dh = size * 0.14;
-    const dTop = cy + size * 0.04;
+    const dw = s * 0.12;
+    const dh = s * 0.12;
+    const dTop = yBase + s * 0.05;
     const dLeft = cx - dw * 0.5;
     g.moveTo(dLeft, dTop);
     g.lineTo(dLeft + dw, dTop);
@@ -1328,19 +1448,14 @@ export class BattleScene extends Component {
     this.node.addChild(btn);
     this.endTurnBtn = btn;
 
-    // ---- 右上角"存档 / 读档"按钮 ----
-    // 放在右上角而非底部，视觉上和"战局操作"（结束回合）分区：上=元操作，下=回合内行动
-    this.makeSimpleButton('SaveBtn', t('btn.save'),
-      640 - 70 - 16, 360 - 24 - 16,
-      new Color(60, 120, 80, 230),
-      () => this.onSave());
-    this.makeSimpleButton('LoadBtn', t('btn.load'),
-      640 - 70 - 16 - 140 - 10, 360 - 24 - 16,
-      new Color(80, 60, 130, 230),
-      () => this.onLoad_Save());
-
-    // ---- 右侧谢尔曼状态面板（车体 + 乘员） ----
+    // ---- 右侧谢尔曼状态面板：须先于 ⚙ 创建，否则面板会盖在设置按钮上 ----
     this.buildStatusPanel();
+
+    // ---- 右上角设置（后 addChild，保证叠在最上可点） ----
+    this.makeBattleCircleButton(
+      this.node, BATTLE_SETTINGS_CX, BATTLE_SETTINGS_CY, BATTLE_SETTINGS_R, '⚙',
+      () => this.openBattleSettings(),
+    );
   }
 
   /** 简版按钮工厂：静态背景色，无状态切换，比结束回合按钮简单。 */
@@ -1408,10 +1523,24 @@ export class BattleScene extends Component {
    * refresh 时只改 string + color，不重建节点。
    */
   private buildStatusPanel() {
-    const W = 220, H = 400;
-    // 锚在右侧：存档/读档按钮下方再留一点空隙
-    const x = 640 - W / 2 - 10;
-    const y = 360 - 16 - 24 - 16 - H / 2 - 8;
+    const W = 220;
+    const GAP_BELOW_GEAR = 10;
+    // 面板顶缘 = 齿轮底缘下方留缝；整体落在设置按钮下方
+    const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
+    // 高度按内容收紧：车体 + 分隔 + 乘员区，底边多留内边距防裁字
+    const H = 328;
+    const y = panelTopY - H / 2;
+    const x = BATTLE_SETTINGS_CX - W / 2; // 与齿轮同一竖直中线，整体在按钮下
+
+    // 车体区与乘员区：分隔线紧跟「机动」行，避免大块空白
+    const BODY_TOP = H / 2 - 42;
+    const BODY_GAP = 24;
+    const bodyRowY = [0, 1, 2, 3, 4].map(i => BODY_TOP - i * BODY_GAP);
+    const lastBodyRowY = bodyRowY[4];
+    const sepY = lastBodyRowY - 12;
+    const CREW_GAP = 22;
+    const crewTitleY = sepY - 14;
+    const crewTopY = crewTitleY - 22;
 
     const panel = new Node('ShermanStatus');
     panel.layer = this.node.layer;
@@ -1425,7 +1554,6 @@ export class BattleScene extends Component {
     bg.fill();
     bg.stroke();
     // 车体 5 行与乘员 5 行之间的分隔线
-    const sepY = -H / 2 + 160;
     bg.strokeColor = new Color(120, 120, 120, 200);
     bg.lineWidth = 1;
     bg.moveTo(-W / 2 + 16, sepY);
@@ -1435,13 +1563,10 @@ export class BattleScene extends Component {
     this.statusPanel = panel;
 
     // 顶部标题
-    this.makeCenteredLabel(panel, t('status.panelTitle'),
-      0, H / 2 - 22, W - 20, 28, 22, STATUS_TITLE_COLOR);
-
-    // 车体状态 5 行（装填 / 舱盖 / 车体 / 炮塔 / 机动）—— 等距 28px
-    const BODY_TOP = H / 2 - 60;
-    const BODY_GAP = 28;
-    const bodyRowY = [0, 1, 2, 3, 4].map(i => BODY_TOP - i * BODY_GAP);
+    this.statusBodyLeftLabels = [];
+    this.statusCrewLeftLabels = [];
+    this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
+      0, H / 2 - 20, W - 20, 28, 22, STATUS_TITLE_COLOR);
     const bodyRows: Array<[string, 'loaded' | 'hatch' | 'fire' | 'turret' | 'mobility']> = [
       [t('status.row.loaded'),   'loaded'],
       [t('status.row.hatch'),    'hatch'],
@@ -1452,7 +1577,8 @@ export class BattleScene extends Component {
     let hatchRowY = 0;
     for (let i = 0; i < bodyRows.length; i++) {
       const [label, key] = bodyRows[i];
-      this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
+      const leftLab = this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
+      this.statusBodyLeftLabels.push(leftLab);
       const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
       switch (key) {
         case 'loaded':   this.statusLoaded = val; break;
@@ -1473,8 +1599,8 @@ export class BattleScene extends Component {
     panel.addChild(hatchHit);
 
     // 乘员小标题
-    this.makeCenteredLabel(panel, t('status.row.crewTitle'),
-      0, sepY - 22, W - 20, 24, 20, STATUS_TITLE_COLOR);
+    this.statusCrewTitleLabel = this.makeCenteredLabel(panel, t('status.row.crewTitle'),
+      0, crewTitleY, W - 20, 22, 18, STATUS_TITLE_COLOR);
 
     // 5 名乘员行：编号 + 称谓 + 状态
     const crewNames = [
@@ -1484,11 +1610,11 @@ export class BattleScene extends Component {
       t('status.crew.4'),
       t('status.crew.5'),
     ];
-    const crewTopY = sepY - 54;
     this.statusCrewLabels = [];
     for (let i = 0; i < crewNames.length; i++) {
-      const rowY = crewTopY - i * 26;
-      this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 120, 22, 18, STATUS_LABEL_COLOR);
+      const rowY = crewTopY - i * CREW_GAP;
+      const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 120, 22, 18, STATUS_LABEL_COLOR);
+      this.statusCrewLeftLabels.push(crewLeft);
       const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 70, 22, 18, STATUS_VALUE_OK);
       this.statusCrewLabels.push(val);
     }
@@ -1762,6 +1888,7 @@ export class BattleScene extends Component {
         BTN_BG_NORMAL,
         () => this.restartMission(),
       );
+      this.restartBtnLabel = this.restartBtn.getChildByName('Label')?.getComponent(Label) ?? null;
     }
     if (!this.backToMenuBtn) {
       this.backToMenuBtn = this.makeSimpleButton(
@@ -1770,6 +1897,7 @@ export class BattleScene extends Component {
         new Color(80, 60, 130, 230),
         () => this.onBackToMenu(),
       );
+      this.backToMenuBtnLabel = this.backToMenuBtn.getChildByName('Label')?.getComponent(Label) ?? null;
     }
     this.restartBtn.active = true;
     this.backToMenuBtn.active = true;
@@ -1830,7 +1958,7 @@ export class BattleScene extends Component {
     this.chooseBar = bar;
 
     const makeBtn = (name: string, text: string, x: number, color: Color,
-                     onClick: () => void): Node => {
+                     onClick: () => void): { root: Node; label: Label } => {
       const W = 200, H = 72;
       const b = new Node(name);
       b.layer = this.node.layer;
@@ -1856,15 +1984,21 @@ export class BattleScene extends Component {
       b.addChild(txtNode);
       b.on(Node.EventType.TOUCH_END, onClick, this);
       bar.addChild(b);
-      return b;
+      return { root: b, label: tx };
     };
-    this.chooseMoveBtn = makeBtn('ChooseMove', t('btn.movePhase'), -220,
+    const mv = makeBtn('ChooseMove', t('btn.movePhase'), -220,
       PHASE_BTN_MOVE, () => this.enterPhase('movement'));
-    this.chooseAttackBtn = makeBtn('ChooseAttack', t('btn.attackPhase'), 0,
+    this.chooseMoveBtn = mv.root;
+    this.chooseMoveLabel = mv.label;
+    const at = makeBtn('ChooseAttack', t('btn.attackPhase'), 0,
       PHASE_BTN_ATTACK, () => this.enterPhase('attack'));
+    this.chooseAttackBtn = at.root;
+    this.chooseAttackLabel = at.label;
     // 杂项按钮的颜色单独选一支紫色，避免和移动（蓝）/攻击（红）混淆
-    this.chooseMiscBtn = makeBtn('ChooseMisc', t('btn.miscPhase'), +220,
+    const mc = makeBtn('ChooseMisc', t('btn.miscPhase'), +220,
       PHASE_BTN_MISC, () => this.enterPhase('misc'));
+    this.chooseMiscBtn = mc.root;
+    this.chooseMiscLabel = mc.label;
   }
 
   /** 底部骰子托盘：有 5 个最大容量的空位；实际数量按 phaseDice.length 决定可见性。 */
@@ -3259,6 +3393,419 @@ export class BattleScene extends Component {
         s.damaged = true;
         break;
     }
+  }
+
+  // ---------- 战斗内设置 / 退出确认模态 ----------
+
+  private closeBattleModal() {
+    if (this.battleModalRoot && this.battleModalRoot.isValid) this.battleModalRoot.destroy();
+    this.battleModalRoot = null;
+    this.battleSettingsRefs = null;
+  }
+
+  private closeBattleExitModal() {
+    if (this.battleExitModalRoot && this.battleExitModalRoot.isValid) {
+      this.battleExitModalRoot.destroy();
+    }
+    this.battleExitModalRoot = null;
+  }
+
+  private closeAllBattleModals() {
+    this.closeBattleExitModal();
+    this.closeBattleModal();
+  }
+
+  /** 全屏遮罩 + 居中面板 + 标题 + ✕（与 MainMenuScene.openModal 同构） */
+  private openBattleModal(titleText: string, panelW: number, panelH: number): {
+    panel: Node;
+    contentY: number;
+  } {
+    const root = new Node('BattleModal');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bd = backdrop.addComponent(Graphics);
+    bd.fillColor = MODAL_BACKDROP;
+    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
+    bd.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+      this.closeBattleModal();
+      e.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(panelW, panelH);
+    const pg = panel.addComponent(Graphics);
+    pg.fillColor = MODAL_PANEL_BG;
+    pg.strokeColor = MODAL_PANEL_BORDER;
+    pg.lineWidth = 2;
+    pg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+    pg.fill();
+    pg.stroke();
+    pg.strokeColor = BATTLE_MODAL_DIVIDER;
+    pg.lineWidth = 1;
+    pg.moveTo(-panelW / 2 + 30, panelH / 2 - 64);
+    pg.lineTo( panelW / 2 - 30, panelH / 2 - 64);
+    pg.stroke();
+    panel.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_START, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const titleY = panelH / 2 - 36;
+    const titleLab = this.makeBattleModalLabel(panel, titleText,
+      0, titleY, panelW - 100, 36, 28, STATUS_TITLE_COLOR);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+
+    const closeBtn = this.makeBattleRectButton(
+      panel, panelW / 2 - 28, panelH / 2 - 28, 36, 36,
+      MODAL_CLOSE_BG, () => this.closeBattleModal(),
+    );
+    this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 36, 36, 22, HUD_TEXT_COLOR);
+
+    this.battleModalRoot = root;
+    return { panel, contentY: panelH / 2 - 80 };
+  }
+
+  private openBattleSettings() {
+    this.closeBattleModal();
+    this.closeBattleExitModal();
+    const panelW = 480;
+    const panelH = 420;
+    const { panel, contentY } = this.openBattleModal(t('battle.settings.title'), panelW, panelH);
+    const halfW = panelW / 2;
+
+    const volRowY = contentY - 28;
+    this.makeBattleModalLabel(panel, t('menu.settings.volume'),
+      -halfW + 80, volRowY, 80, 28, 20, HUD_TEXT_COLOR);
+    const state = MenuProgress.load();
+    const track = this.buildBattleVolumeSlider(panel, 40, volRowY, 220, state.volume);
+    const volLabel = this.makeBattleModalLabel(panel, `${state.volume}%`,
+      200, volRowY, 60, 28, 20, HUD_TEXT_COLOR);
+
+    const langRowY = contentY - 92;
+    this.makeBattleModalLabel(panel, t('menu.settings.lang'),
+      -halfW + 80, langRowY, 80, 28, 20, HUD_TEXT_COLOR);
+    const curLang = getLang();
+    const zhBtn = this.makeBattleRectButton(panel, 10, langRowY, 100, 40, LANG_BTN_IDLE,
+      () => this.switchBattleLang('zh'));
+    this.makeBattleModalLabel(zhBtn.node, t('menu.settings.langZh'), 0, 0, 100, 40, 18, HUD_TEXT_COLOR);
+    const enBtn = this.makeBattleRectButton(panel, 130, langRowY, 100, 40, LANG_BTN_IDLE,
+      () => this.switchBattleLang('en'));
+    this.makeBattleModalLabel(enBtn.node, t('menu.settings.langEn'), 0, 0, 100, 40, 18, HUD_TEXT_COLOR);
+
+    this.battleSettingsRefs = {
+      volumeFill: track.fill,
+      volumeThumb: track.thumb,
+      volumeLabel: volLabel,
+      langZhBtn: zhBtn,
+      langEnBtn: enBtn,
+    };
+    this.refreshLangBattleButtons(curLang);
+
+    const saveRowY = contentY - 156;
+    const saveB = this.makeBattleRectButton(panel, -110, saveRowY, 140, 44, new Color(60, 120, 80, 230),
+      () => { this.onSave(); },
+    );
+    this.makeBattleModalLabel(saveB.node, t('btn.save'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
+    const loadB = this.makeBattleRectButton(panel, 110, saveRowY, 140, 44, new Color(80, 60, 130, 230),
+      () => { this.onLoad_Save(); },
+    );
+    this.makeBattleModalLabel(loadB.node, t('btn.load'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
+
+    const exitRowY = contentY - 220;
+    const exitB = this.makeBattleRectButton(panel, 0, exitRowY, 200, 44, BTN_EXIT_WARN,
+      () => this.openBattleExitConfirm(),
+    );
+    this.makeBattleModalLabel(exitB.node, t('battle.settings.exit'), 0, 0, 200, 44, 20, HUD_TEXT_COLOR);
+
+    const closeRowY = contentY - 290;
+    const closeB = this.makeBattleRectButton(panel, 0, closeRowY, 160, 44, BATTLE_BTN_ACCENT,
+      () => this.closeBattleModal(),
+    );
+    this.makeBattleModalLabel(closeB.node, t('menu.settings.close'), 0, 0, 160, 44, 20, HUD_TEXT_COLOR);
+  }
+
+  private openBattleExitConfirm() {
+    this.closeBattleExitModal();
+    const root = new Node('BattleExitModal');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bd = backdrop.addComponent(Graphics);
+    bd.fillColor = MODAL_BACKDROP;
+    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
+    bd.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+      this.closeBattleExitModal();
+      e.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const panelW = 440;
+    const panelH = 220;
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(panelW, panelH);
+    const pg = panel.addComponent(Graphics);
+    pg.fillColor = MODAL_PANEL_BG;
+    pg.strokeColor = MODAL_PANEL_BORDER;
+    pg.lineWidth = 2;
+    pg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+    pg.fill();
+    pg.stroke();
+    panel.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_START, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const titleLab = this.makeBattleModalLabel(panel, t('battle.exit.title'),
+      0, panelH / 2 - 40, panelW - 40, 36, 24, STATUS_TITLE_COLOR);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+
+    const closeBtn = this.makeBattleRectButton(
+      panel, panelW / 2 - 26, panelH / 2 - 26, 32, 32,
+      MODAL_CLOSE_BG, () => this.closeBattleExitModal(),
+    );
+    this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 32, 32, 18, HUD_TEXT_COLOR);
+
+    const yBtn = -panelH / 2 + 56;
+    const saveQuitB = this.makeBattleRectButton(panel, -105, yBtn, 190, 48, new Color(60, 120, 80, 230),
+      () => this.saveAndExitLevel(),
+    );
+    this.makeBattleModalLabel(saveQuitB.node, t('battle.exit.saveAndQuit'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
+    const abandonB = this.makeBattleRectButton(panel, 105, yBtn, 190, 48, BTN_EXIT_WARN,
+      () => this.abandonExitLevel(),
+    );
+    this.makeBattleModalLabel(abandonB.node, t('battle.exit.abandon'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
+
+    this.battleExitModalRoot = root;
+  }
+
+  private saveAndExitLevel() {
+    this.onSave();
+    this.closeAllBattleModals();
+    this.onBackToMenu();
+  }
+
+  private abandonExitLevel() {
+    this.closeAllBattleModals();
+    this.onBackToMenu();
+  }
+
+  private buildBattleVolumeSlider(
+    panel: Node, centerX: number, centerY: number, width: number, initial: number,
+  ): { fill: Graphics; thumb: Node } {
+    const trackH = 8;
+    const root = new Node('VolumeSlider');
+    root.layer = this.node.layer;
+    const ut = root.addComponent(UITransform);
+    ut.setContentSize(width, 36);
+    root.setPosition(centerX, centerY, 0);
+    panel.addChild(root);
+
+    const trackNode = new Node('Track');
+    trackNode.layer = this.node.layer;
+    trackNode.addComponent(UITransform).setContentSize(width, trackH);
+    const trackG = trackNode.addComponent(Graphics);
+    trackG.fillColor = SLIDER_TRACK;
+    trackG.rect(-width / 2, -trackH / 2, width, trackH);
+    trackG.fill();
+    root.addChild(trackNode);
+
+    const fillNode = new Node('Fill');
+    fillNode.layer = this.node.layer;
+    fillNode.addComponent(UITransform).setContentSize(width, trackH);
+    const fillG = fillNode.addComponent(Graphics);
+    root.addChild(fillNode);
+
+    const thumb = new Node('Thumb');
+    thumb.layer = this.node.layer;
+    thumb.addComponent(UITransform).setContentSize(20, 20);
+    const thumbG = thumb.addComponent(Graphics);
+    thumbG.fillColor = SLIDER_THUMB;
+    thumbG.strokeColor = BATTLE_MODAL_TEXT_OUTLINE;
+    thumbG.lineWidth = 2;
+    thumbG.circle(0, 0, 9);
+    thumbG.fill();
+    thumbG.stroke();
+    root.addChild(thumb);
+
+    const refreshBar = (vol: number) => {
+      const pct = Math.max(0, Math.min(100, vol)) / 100;
+      fillG.clear();
+      fillG.fillColor = SLIDER_FILL;
+      fillG.rect(-width / 2, -trackH / 2, width * pct, trackH);
+      fillG.fill();
+      thumb.setPosition(-width / 2 + width * pct, 0, 0);
+    };
+    refreshBar(initial);
+
+    const setVolFromTouch = (ev: EventTouch) => {
+      const uiPos = ev.getUILocation();
+      const local = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
+      const pct = Math.max(0, Math.min(1, (local.x + width / 2) / width));
+      const vol = Math.round(pct * 100);
+      MenuProgress.setVolume(vol);
+      refreshBar(vol);
+      if (this.battleSettingsRefs?.volumeLabel) {
+        this.battleSettingsRefs.volumeLabel.string = `${vol}%`;
+      }
+      ev.propagationStopped = true;
+    };
+    root.on(Node.EventType.TOUCH_START, setVolFromTouch, this);
+    root.on(Node.EventType.TOUCH_MOVE, setVolFromTouch, this);
+
+    return { fill: fillG, thumb };
+  }
+
+  private makeBattleRectButton(
+    parent: Node,
+    x: number, y: number, w: number, h: number,
+    color: Color,
+    onClick: () => void,
+  ): BattleRectButtonRefs {
+    const n = new Node('RectBtn');
+    n.layer = this.node.layer;
+    n.addComponent(UITransform).setContentSize(w, h);
+    n.setPosition(x, y, 0);
+    const g = n.addComponent(Graphics);
+    const redraw = (c: Color, opts?: { border?: boolean }) => {
+      g.clear();
+      g.fillColor = c;
+      g.rect(-w / 2, -h / 2, w, h);
+      g.fill();
+      if (opts?.border) {
+        g.strokeColor = BATTLE_MODAL_LEVEL_BORDER;
+        g.lineWidth = 2;
+        g.rect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);
+        g.stroke();
+      }
+    };
+    redraw(color);
+    n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      onClick();
+      ev.propagationStopped = true;
+    }, this);
+    parent.addChild(n);
+    return { node: n, graphics: g, label: null, redraw };
+  }
+
+  private makeBattleCircleButton(
+    parent: Node, x: number, y: number, r: number,
+    iconText: string, onClick: () => void,
+  ): BattleRectButtonRefs {
+    const n = new Node('CircleBtn');
+    n.layer = this.node.layer;
+    n.addComponent(UITransform).setContentSize(r * 2, r * 2);
+    n.setPosition(x, y, 0);
+    const g = n.addComponent(Graphics);
+    const redraw = (c: Color) => {
+      g.clear();
+      g.fillColor = c;
+      g.strokeColor = SETTINGS_ICON_BD;
+      g.lineWidth = 2;
+      g.circle(0, 0, r);
+      g.fill();
+      g.stroke();
+    };
+    redraw(SETTINGS_ICON_BG);
+    this.makeBattleModalLabel(n, iconText, 0, 0, r * 2, r * 2, r + 2, HUD_TEXT_COLOR);
+    n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      onClick();
+      ev.propagationStopped = true;
+    }, this);
+    parent.addChild(n);
+    return { node: n, graphics: g, label: null, redraw: (c: Color) => redraw(c) };
+  }
+
+  private makeBattleModalLabel(
+    parent: Node, text: string,
+    x: number, y: number, w: number, h: number,
+    fontSize: number, color: Color,
+  ): Label {
+    const n = new Node('Label');
+    n.layer = this.node.layer;
+    n.addComponent(UITransform).setContentSize(w, h);
+    n.setPosition(x, y, 0);
+    const l = n.addComponent(Label);
+    l.fontSize = fontSize;
+    l.lineHeight = fontSize + 4;
+    l.color = color;
+    l.horizontalAlign = HorizontalTextAlignment.CENTER;
+    l.verticalAlign = VerticalTextAlignment.CENTER;
+    l.string = text;
+    parent.addChild(n);
+    return l;
+  }
+
+  private switchBattleLang(lang: LangCode) {
+    if (getLang() === lang) return;
+    setLang(lang);
+    MenuProgress.setLang(lang);
+    this.closeDiePopover();
+    // 与主菜单一致：切语言后关掉模态，避免面板上残留旧语言文案
+    this.closeAllBattleModals();
+    this.refreshBattleStaticI18n();
+  }
+
+  private refreshLangBattleButtons(cur: LangCode) {
+    if (!this.battleSettingsRefs) return;
+    const zh = this.battleSettingsRefs.langZhBtn;
+    const en = this.battleSettingsRefs.langEnBtn;
+    if (zh) zh.redraw(cur === 'zh' ? LANG_BTN_ACTIVE : LANG_BTN_IDLE, { border: cur === 'zh' });
+    if (en) en.redraw(cur === 'en' ? LANG_BTN_ACTIVE : LANG_BTN_IDLE, { border: cur === 'en' });
+  }
+
+  /** 语言切换后刷新战斗 HUD 内所有固定文案（不重建节点） */
+  private refreshBattleStaticI18n() {
+    if (this.statusPanelTitleLabel) this.statusPanelTitleLabel.string = t('status.panelTitle');
+    const bodyKeys = [
+      'status.row.loaded',
+      'status.row.hatch',
+      'status.row.fire',
+      'status.row.turret',
+      'status.row.mobility',
+    ] as const;
+    for (let i = 0; i < this.statusBodyLeftLabels.length && i < bodyKeys.length; i++) {
+      this.statusBodyLeftLabels[i].string = t(bodyKeys[i]);
+    }
+    if (this.statusCrewTitleLabel) this.statusCrewTitleLabel.string = t('status.row.crewTitle');
+    for (let i = 0; i < this.statusCrewLeftLabels.length; i++) {
+      const key = `status.crew.${i + 1}` as const;
+      this.statusCrewLeftLabels[i].string = t(key);
+    }
+    if (this.chooseMoveLabel) this.chooseMoveLabel.string = t('btn.movePhase');
+    if (this.chooseAttackLabel) this.chooseAttackLabel.string = t('btn.attackPhase');
+    if (this.chooseMiscLabel) this.chooseMiscLabel.string = t('btn.miscPhase');
+    if (this.restartBtnLabel) this.restartBtnLabel.string = t('btn.restart');
+    if (this.backToMenuBtnLabel) this.backToMenuBtnLabel.string = t('btn.backToMenu');
+    if (this.outcomeLabel && this.outcome !== 'ongoing') {
+      if (this.outcome === 'victory') {
+        this.outcomeLabel.string = t('outcome.win');
+      } else {
+        this.outcomeLabel.string = t('outcome.lose');
+      }
+    }
+    this.updateHUD();
+    this.refreshPhaseUI();
+    this.refreshStatusPanel();
+    this.redraw();
   }
 
   // ---------- 存档 / 读档 ----------

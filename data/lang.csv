@@ -208,4 +208,9 @@ level.09.title,雷马根,Remagen
 level.10.title,鲁尔,Ruhr
 level.11.title,易北河,Elbe
 level.12.title,柏林,Berlin
+battle.settings.title,战斗设置,Battle Settings
+battle.settings.exit,退出关卡,Exit Level
+battle.exit.title,退出关卡？,Exit this level?
+battle.exit.saveAndQuit,保存后退出,Save & Exit
+battle.exit.abandon,放弃关卡,Abandon
 
