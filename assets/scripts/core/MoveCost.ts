@@ -9,7 +9,7 @@ import { TerrainType } from './types';
  *   田地：无修正           → 1 点（基准）
  *   泥地：移动阶段 -1 骰   → 2 点（昂贵）
  *
- * 林地/建筑/水域在 HexMap.canTankEnter 已被拒绝，正常流程不会调用到这里。
+ * 林地/水域在 HexMap.canTankEnter 已被拒绝，正常流程不会调用到这里。
  * 但本函数仍然返回 Infinity 作为防御性兜底，方便 AI/路径搜索代码统一处理。
  *
  * 未来若要支持"穿越树篱 +1 行动力"，新增一个 `hedgeCost(crossing: boolean)`
@@ -21,7 +21,6 @@ export function terrainMoveCost(t: TerrainType): number {
     case 'field':    return 1;
     case 'mud':      return 2;
     case 'forest':   return Infinity;
-    case 'building': return Infinity;
     case 'water':    return Infinity;
   }
 }

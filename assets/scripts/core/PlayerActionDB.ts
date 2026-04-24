@@ -63,7 +63,6 @@ export const PLAYER_DICE_POOL: DicePoolConfig = {
     field: 0,
     mud: -1,
     forest: 0,
-    building: 0,
     water: 0,
   },
   capMin: 1,

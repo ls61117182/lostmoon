@@ -27,12 +27,13 @@ export type TerrainType =
   | 'field'     // 田地
   | 'mud'       // 泥地：移动 -1 骰
   | 'forest'    // 林地：坦克不可入，阻挡视线
-  | 'building'  // 建筑：坦克不可入，阻挡视线，命中 +1
   | 'water';    // 水域：任何单位不可入，阻挡视线
 
 export interface Tile {
   pos: Axial;
   terrain: TerrainType;
+  /** 建筑叠加：非独立地形；坦克可入；视线仅路径中间格阻挡；目标仍 +1 掩护 */
+  hasBuilding?: boolean;
   /** 沿 6 条边是否有树篱（按 Direction 索引） */
   hedges?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** 援军生成位编号（如说明书的红色数字 1..6） */
@@ -141,12 +142,26 @@ export interface MissionData {
 }
 
 export interface TileDef {
-  /** 简写：r=road, f=field, m=mud, F=forest, b=building, w=water */
-  t: 'r' | 'f' | 'm' | 'F' | 'b' | 'w';
+  /**
+   * 基底地形简写：r=公路 f=田地 m=泥地 F=林地 w=水域。
+   * 旧版 `b` 表示「整格为建筑」已废弃，见 MissionLoader 会转为 f+建筑。
+   */
+  t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b';
+  /**
+   * 建筑叠加在基底上：`1` 表示有建筑（坦克可进入；命中+1；视线仅路径「中间格」阻挡）。
+   * 田/泥+建筑在任务表述上为「农场」，公路+建筑为「村庄」。
+   */
+  bd?: 1;
   /** 树篱：6 位字符串，0/1 表示该方向是否有树篱（顺时针 E,SE,SW,W,NW,NE） */
   h?: string;
   /** 援军编号 */
   rid?: number;
   /** 敌方起始编号 */
   eid?: number;
+}
+
+/** 有建筑时：田/泥+建筑=农场，公路+建筑=村庄（与 GDD §3.2 一致） */
+export function buildingSceneKind(t: Tile): 'farm' | 'village' | null {
+  if (!t.hasBuilding) return null;
+  return t.terrain === 'road' ? 'village' : 'farm';
 }

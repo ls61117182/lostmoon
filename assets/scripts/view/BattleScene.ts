@@ -286,9 +286,13 @@ const TERRAIN_COLORS: Record<TerrainType, Color> = {
   field:    new Color(196, 220, 130, 255),
   mud:      new Color(140, 110,  80, 255),
   forest:   new Color( 70, 130,  60, 255),
-  building: new Color(110, 100,  90, 255),
   water:    new Color( 90, 145, 200, 255),
 };
+/** 格心建筑图案（不改变六角格基底填色，仅叠加绘制） */
+const BUILDING_ROOF_FILL  = new Color( 95,  78,  62, 255);
+const BUILDING_WALL_FILL  = new Color(160, 145, 125, 255);
+const BUILDING_OUTLINE    = new Color( 45,  38,  32, 255);
+const BUILDING_DOOR_STROKE= new Color( 55,  48,  42, 255);
 
 const FACTION_COLORS = {
   allied: new Color( 60, 160,  80, 255),
@@ -648,10 +652,17 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     const tiles = map.all();
 
-    // 1. 地形格
+    // 1. 地形格（纯基底填色；有建筑的格在下一步叠加图案）
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
       this.drawHex(c.x, c.y, this.hexSize, TERRAIN_COLORS[t.terrain]);
+    }
+
+    // 1b. 建筑图案（不改变基底地形色，仅格心矢量房屋）
+    for (const t of tiles) {
+      if (!t.hasBuilding) continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawBuildingOverlay(c.x, c.y, this.hexSize);
     }
 
     // 2. 树篱
@@ -1020,7 +1031,7 @@ export class BattleScene extends Component {
    * ±1 格移动。这里把两个候选格画出来：
    *   - 前进（沿 facing）=> 绿圈
    *   - 后退（facing+3）=> 琥珀圈
-   *   - 如果该方向的目标格越界 / 地形不可入 / 有活着的敌人 => 画红描边提示不可入
+   *   - 如果该方向的目标格越界 / 林地或水域不可入 / 有活着的敌人 => 画红描边提示不可入
    */
   private drawDriveCandidates() {
     if (!this.g || !this.mission) return;
@@ -1063,6 +1074,59 @@ export class BattleScene extends Component {
     g.close();
     g.fill();
     g.stroke();
+  }
+
+  /**
+   * 格心简易房屋图案（与基底地形填色分离，不改变六角格本身颜色）。
+   * 绘制顺序：屋顶 → 墙身 → 外轮廓 → 门缝，尺寸随 hexSize 缩放。
+   */
+  private drawBuildingOverlay(cx: number, cy: number, size: number) {
+    const g = this.g!;
+    const bodyW = size * 0.5;
+    const roofW = size * 0.62;
+    const yTop = cy - size * 0.06;
+    const yRoofPeak = cy - size * 0.36;
+    const yBot = cy + size * 0.28;
+    const xL = cx - bodyW * 0.5;
+    const xR = cx + bodyW * 0.5;
+
+    g.lineWidth = 2;
+
+    // 墙身（矩形，先画）
+    g.fillColor = BUILDING_WALL_FILL;
+    g.strokeColor = BUILDING_OUTLINE;
+    g.moveTo(xL, yTop);
+    g.lineTo(xR, yTop);
+    g.lineTo(xR, yBot);
+    g.lineTo(xL, yBot);
+    g.close();
+    g.fill();
+    g.stroke();
+
+    // 屋顶（三角形，压在墙顶）
+    g.fillColor = BUILDING_ROOF_FILL;
+    g.moveTo(cx - roofW * 0.5, yTop);
+    g.lineTo(cx, yRoofPeak);
+    g.lineTo(cx + roofW * 0.5, yTop);
+    g.close();
+    g.fill();
+    g.stroke();
+
+    // 门洞（小矩形描边）
+    g.strokeColor = BUILDING_DOOR_STROKE;
+    g.lineWidth = 1.5;
+    const dw = size * 0.12;
+    const dh = size * 0.14;
+    const dTop = cy + size * 0.04;
+    const dLeft = cx - dw * 0.5;
+    g.moveTo(dLeft, dTop);
+    g.lineTo(dLeft + dw, dTop);
+    g.lineTo(dLeft + dw, dTop + dh);
+    g.lineTo(dLeft, dTop + dh);
+    g.close();
+    g.stroke();
+
+    g.lineWidth = 2;
   }
 
   /** 仅描边的六边形（用于高亮） */
@@ -2399,7 +2463,7 @@ export class BattleScene extends Component {
    *   - 骰面 1    （action='reverse'）只允许后退（dirSign=-1）
    *
    * 若骰子动作与请求方向不匹配，直接忽略（按钮层已分开提供，这里是双保险）。
-   * 若目标格无法进入（越界 / 水域林地建筑 / 被活着的敌方占据），弹警告浮字并 *不* 消耗骰子。
+   * 若目标格无法进入（越界 / 水域或林地 / 被活着的敌方占据），弹警告浮字并 *不* 消耗骰子。
    */
   private tryDriveSherman(dieIdx: number, dirSign: 1 | -1) {
     if (!this.mission) return;

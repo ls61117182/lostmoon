@@ -52,14 +52,13 @@ const REQUIRED_POOL_KEYS = [
   'terrain_field',
   'terrain_mud',
   'terrain_forest',
-  'terrain_building',
   'terrain_water',
   'cap_min',
   'cap_max',
 ];
 
 // 与 TerrainType 对齐，用于生成代码里的映射
-const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'building', 'water'];
+const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'water'];
 
 /** 通用 smart 读取：优先 UTF-8，失败用 GBK；非 BOM 统一转为 UTF-8 + BOM 回写。 */
 function readCsvSmart(filePath) {

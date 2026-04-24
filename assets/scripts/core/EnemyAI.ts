@@ -55,7 +55,7 @@ export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
   switch (terrain) {
     case 'road': return 'road';
     case 'mud':  return 'mud';
-    // 林地 / 建筑 / 水域坦克不能进，理论上走不到；兜底按"田地"处理
+    // 林地 / 水域坦克不能进，理论上走不到；兜底按"田地"处理
     default:     return 'field';
   }
 }

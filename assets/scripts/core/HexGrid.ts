@@ -12,7 +12,7 @@
  *           SW(2)  SE(1)
  */
 
-import { Axial, Direction, Offset, Tile, TerrainType } from './types';
+import { Axial, Direction, Offset, Tile } from './types';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -207,24 +207,31 @@ export class HexMap {
   canTankEnter(p: Axial): boolean {
     const t = this.get(p);
     if (!t) return false;
-    return t.terrain !== 'forest' && t.terrain !== 'building' && t.terrain !== 'water';
+    if (t.terrain === 'forest' || t.terrain === 'water') return false;
+    return true;
   }
 
-  /** 该地形是否阻挡视线（坦克之间的射击） */
-  blocksLineOfSight(terrain: TerrainType): boolean {
-    return terrain === 'forest' || terrain === 'building' || terrain === 'water';
+  /**
+   * 当某格在视线路径的**中间**（非起点、非终点）时，是否因此截断视线。
+   * 林地/水域、以及路径**中间**的带建筑格均阻挡；建筑在起止格不调用本方法故不挡视线
+   *（含：建筑格内的单位可作为视线起点向外射击）。
+   */
+  lineOfSightBlockedByTile(t: Tile): boolean {
+    if (t.terrain === 'forest' || t.terrain === 'water') return true;
+    if (t.hasBuilding) return true;
+    return false;
   }
 
   /**
    * 计算 from → to 之间是否有视线。
-   * 规则：除起止格外，路径上任何阻挡视线的地形都会切断视线。
+   * 规则：除起止格外，路径上任何阻挡视线的地形/建筑（中间格）会切断视线。
    */
   hasLineOfSight(from: Axial, to: Axial): boolean {
     const path = hexLine(from, to);
     for (let i = 1; i < path.length - 1; i++) {
       const t = this.get(path[i]);
       if (!t) return false;
-      if (this.blocksLineOfSight(t.terrain)) return false;
+      if (this.lineOfSightBlockedByTile(t)) return false;
     }
     return true;
   }

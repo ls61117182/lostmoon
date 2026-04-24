@@ -131,7 +131,7 @@ export function hitBreakdown(ctx: AttackContext): HitBreakdown {
   const distance = hexDistance(attacker.pos, target.pos);
   const hedges = map.countHedgesAlong(attacker.pos, target.pos);
   const targetTile = map.get(target.pos);
-  const building = targetTile?.terrain === 'building' ? 1 : 0;
+  const building = targetTile?.hasBuilding ? 1 : 0;
   const size = target.stats.size;
   // §3.5 状态系统：烟雾掩护 +1；隐蔽 +2。两者都作用在目标身上（被打者的难命中度）。
   const smoke = target.smoked ? 1 : 0;

@@ -10,6 +10,7 @@ import { HexMap, offsetToAxial } from './HexGrid';
 import {
   Direction,
   MissionData,
+  TerrainType,
   Tile,
   TileDef,
   Unit,
@@ -18,13 +19,12 @@ import {
 } from './types';
 import { getUnitStats } from './UnitDB';
 
-/** TileDef 简写 → TerrainType */
+/** TileDef 简写（不含已废弃的整格 b）→ TerrainType */
 const TERRAIN_MAP = {
   r: 'road',
   f: 'field',
   m: 'mud',
   F: 'forest',
-  b: 'building',
   w: 'water',
 } as const;
 
@@ -42,9 +42,11 @@ export function loadMission(data: MissionData): LoadedMission {
     for (let col = 0; col < data.cols; col++) {
       const def: TileDef | undefined = data.tiles[row]?.[col];
       if (!def) continue;
+      const { terrain, hasBuilding } = parseTileDefBase(def);
       const tile: Tile = {
         pos: offsetToAxial({ col, row }),
-        terrain: TERRAIN_MAP[def.t],
+        terrain,
+        ...(hasBuilding ? { hasBuilding: true } : {}),
         hedges: parseHedges(def.h),
         reinforceId: def.rid,
         enemyStartId: def.eid,
@@ -60,6 +62,16 @@ export function loadMission(data: MissionData): LoadedMission {
   const enemies = data.enemies.map((p, i) => makeUnit(`enemy_${i}`, p));
 
   return { map, sherman, enemies, data };
+}
+
+/** 解析基底地形 + 是否带建筑；兼容旧版 `t: "b"` 整格建筑 */
+function parseTileDefBase(def: TileDef): { terrain: TerrainType; hasBuilding: boolean } {
+  if (def.t === 'b') {
+    return { terrain: 'field', hasBuilding: true };
+  }
+  const hasBuilding = def.bd === 1;
+  const terrain = TERRAIN_MAP[def.t as keyof typeof TERRAIN_MAP];
+  return { terrain, hasBuilding };
 }
 
 /** "010100" → [false, true, false, true, false, false] */
