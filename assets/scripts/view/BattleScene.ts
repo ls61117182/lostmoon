@@ -444,10 +444,17 @@ const ONFIRE_BORDER    = new Color(255, 230,  60, 255);
 const ONFIRE_RING_OUT  = new Color(255, 160,  40, 200);
 const DESTROYED_FILL   = new Color( 60,  60,  60, 220);
 const DESTROYED_BORDER = new Color(220,  40,  40, 255);
-// 持久化状态文字（"起火" / "已毁"），在单位下方绘制
-const STATUS_TEXT_FIRE = new Color(255, 200,  60, 255);
+// 持久化状态文字（仅「已毁」；起火等改由格子下矢量状态图标）
 const STATUS_TEXT_DEAD = new Color(220,  60,  60, 255);
 const STATUS_TEXT_OUT  = new Color(  0,   0,   0, 220);
+
+/** 坦克格子下方状态图标（顺序：受损→烟雾→隐蔽→着火→瘫痪→炮塔） */
+type TankStatusBadgeKind = 'damaged' | 'smoke' | 'hidden' | 'fire' | 'paralyzed' | 'turret';
+
+const TANK_BADGE_CELL = 17;
+const TANK_BADGE_GAP = 4;
+const BADGE_BG = new Color(18, 20, 26, 235);
+const BADGE_FRAME = new Color(0, 0, 0, 220);
 // 单位名字标签：常驻显示在每个棋子正下方，方便玩家一眼识别兵种
 const UNIT_NAME_TEXT_ALLIED = new Color(200, 230, 255, 255);
 const UNIT_NAME_TEXT_GERMAN = new Color(255, 220, 200, 255);
@@ -517,8 +524,6 @@ export class BattleScene extends Component {
   rngSeed: number = 0;
 
   private g: Graphics | null = null;
-  /** 谢尔曼朝向线单独一层，画在俯视图精灵之上 */
-  private gLines: Graphics | null = null;
   private mapNode: Node | null = null;
   private shermanSpriteNode: Node | null = null;
   private shermanTopSprite: Sprite | null = null;
@@ -612,8 +617,10 @@ export class BattleScene extends Component {
   private floaters: Floater[] = [];
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
-  // 单位状态文字池（起火 / 已毁）：随 redraw 整批重建
+  // 单位状态文字池（仅已毁短标签）：随 redraw 整批重建
   private statusLabels: Node[] = [];
+  /** 坦克状态图标条（矢量），在格心下方横向排列 */
+  private statusBadgeNodes: Node[] = [];
   // 单位名字文字池（"谢尔曼" / "虎式" 等）：常驻显示，随 redraw 整批重建
   private nameLabels: Node[] = [];
 
@@ -687,8 +694,7 @@ export class BattleScene extends Component {
     this.node.addChild(gNode);
     this.mapNode = gNode;
 
-    // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上；
-    // 先加精灵、再加朝向线，保证炮口短线盖住车体。
+    // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上。
     const shNode = new Node('ShermanTopSprite');
     shNode.layer = this.node.layer;
     shNode.addComponent(UITransform).setContentSize(1280, 720);
@@ -709,14 +715,6 @@ export class BattleScene extends Component {
       this.enemyTopSpritePool.push({ node: pz, sprite: spz });
       gNode.addChild(pz);
     }
-
-    const linesNode = new Node('MapFacingLines');
-    linesNode.layer = this.node.layer;
-    linesNode.addComponent(UITransform).setContentSize(1280, 720);
-    this.gLines = linesNode.addComponent(Graphics);
-    this.gLines.lineWidth = 2;
-
-    gNode.addChild(linesNode);
 
     const enemyTopPaths: Record<EnemyTopKind, string> = {
       panzer4: 'textures/units/panzer4_top/spriteFrame',
@@ -843,7 +841,6 @@ export class BattleScene extends Component {
     if (!this.g || !this.mission) return;
     const g = this.g;
     g.clear();
-    this.gLines?.clear();
     this.enemyTopPoolNext = 0;
     for (const { node } of this.enemyTopSpritePool) node.active = false;
     // 命中预览 Label 是常驻节点（非纯 Graphics），需要随每次重绘整批重建，
@@ -920,10 +917,13 @@ export class BattleScene extends Component {
     this.drawUnitMaybeAnim(sherman);
     for (const e of enemies) this.drawUnitMaybeAnim(e);
 
-    // 6. 单位状态常驻文字（起火 / 已毁），整批重建
+    // 6. 单位状态：已毁短标签 + 坦克矢量状态图标条
     this.clearStatusLabels();
     this.spawnStatusLabelIfAny(sherman);
     for (const e of enemies) this.spawnStatusLabelIfAny(e);
+    this.clearStatusBadges();
+    this.spawnStatusBadgesIfAny(sherman);
+    for (const e of enemies) this.spawnStatusBadgesIfAny(e);
 
     // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …），整批重建
     this.clearNameLabels();
@@ -1039,15 +1039,15 @@ export class BattleScene extends Component {
     return !!u.damaged;
   }
 
-  /** 给"起火/已毁"的单位在格子下方挂一条短文字，整批生成、整批销毁。 */
+  /** 给已毁单位在格子下方挂「已毁」短文字；起火与其它状态由状态图标条表示。 */
   private spawnStatusLabelIfAny(u: Unit) {
     if (!this.mapNode) return;
-    if (!this.isOnFire(u) && !u.destroyed) return;
+    if (!u.destroyed) return;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
-    const text = u.destroyed ? t('unit.status.destroyed') : t('unit.status.fire');
-    const color = u.destroyed ? STATUS_TEXT_DEAD : STATUS_TEXT_FIRE;
+    const text = t('unit.status.destroyed');
+    const color = STATUS_TEXT_DEAD;
 
     const n = new Node('StatusLabel');
     n.layer = this.node.layer;
@@ -1076,9 +1076,165 @@ export class BattleScene extends Component {
     this.statusLabels.length = 0;
   }
 
+  private clearStatusBadges() {
+    for (const n of this.statusBadgeNodes) n.destroy();
+    this.statusBadgeNodes.length = 0;
+  }
+
+  /**
+   * 收集当前应显示的坦克状态图标（固定顺序；德坦 damaged 与起火同义时只显示「着火」避免重复）。
+   * 谢尔曼：仅 `damaged`（乘员检定/阵亡等）不再出「受损」标——乘员状态由右侧状态栏负责。
+   */
+  private collectTankStatusBadgeKinds(u: Unit): TankStatusBadgeKind[] {
+    if (u.kind === 'infantry' || u.destroyed) return [];
+    const out: TankStatusBadgeKind[] = [];
+    if (u.kind === 'sherman') {
+      if (u.damaged && (this.isOnFire(u) || !!u.turretDamaged || !!u.paralyzed)) {
+        out.push('damaged');
+      }
+    } else if (u.damaged && !this.isOnFire(u)) {
+      out.push('damaged');
+    }
+    if (u.smoked) out.push('smoke');
+    if (u.hidden) out.push('hidden');
+    if (this.isOnFire(u)) out.push('fire');
+    if (u.paralyzed) out.push('paralyzed');
+    if (u.turretDamaged) out.push('turret');
+    return out;
+  }
+
+  /** 在格心略下方绘制一排小方标（矢量），不遮挡俯视车体 */
+  private spawnStatusBadgesIfAny(u: Unit) {
+    if (!this.mapNode) return;
+    const kinds = this.collectTankStatusBadgeKinds(u);
+    if (kinds.length === 0) return;
+
+    const c = (this.anim && this.anim.unit === u)
+      ? this.interpolatedPos(u)
+      : this.project(u.pos.q, u.pos.r);
+    const rowY = c.y - this.hexSize * 0.56;
+    const cell = TANK_BADGE_CELL;
+    const gap = TANK_BADGE_GAP;
+    const totalW = kinds.length * cell + (kinds.length - 1) * gap;
+
+    const n = new Node('TankStatusBadges');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(totalW + 4, cell + 6);
+    ut.setAnchorPoint(0.5, 0.5);
+    n.setPosition(c.x, rowY, 0);
+
+    const g = n.addComponent(Graphics);
+    let x = -totalW / 2 + cell / 2;
+    for (const kind of kinds) {
+      this.drawTankStatusBadge(g, kind, x, 0, cell * 0.5);
+      x += cell + gap;
+    }
+
+    this.mapNode.addChild(n);
+    this.statusBadgeNodes.push(n);
+  }
+
+  /** 单枚状态标：深色底框 + 中心符号 */
+  private drawTankStatusBadge(g: Graphics, kind: TankStatusBadgeKind, cx: number, cy: number, half: number) {
+    const h = half;
+    g.fillColor = BADGE_BG;
+    g.strokeColor = BADGE_FRAME;
+    g.lineWidth = 1.25;
+    g.rect(cx - h, cy - h, h * 2, h * 2);
+    g.fill();
+    g.stroke();
+
+    const r = h * 0.55;
+    g.lineWidth = 1.5;
+    switch (kind) {
+      case 'damaged': {
+        // 裂损：斜向折线
+        g.strokeColor = new Color(255, 200, 80, 255);
+        g.moveTo(cx - h * 0.55, cy - h * 0.35);
+        g.lineTo(cx - h * 0.1, cy + h * 0.05);
+        g.lineTo(cx + h * 0.15, cy - h * 0.45);
+        g.lineTo(cx + h * 0.55, cy + h * 0.35);
+        g.stroke();
+        break;
+      }
+      case 'smoke': {
+        g.fillColor = new Color(140, 160, 190, 200);
+        g.circle(cx - 2.5, cy + 0.5, r * 0.85);
+        g.fill();
+        g.fillColor = new Color(170, 185, 205, 160);
+        g.circle(cx + 3, cy - 1, r * 0.65);
+        g.fill();
+        g.fillColor = new Color(120, 140, 165, 180);
+        g.circle(cx + 1, cy + 2.5, r * 0.5);
+        g.fill();
+        break;
+      }
+      case 'hidden': {
+        g.fillColor = new Color(45, 85, 48, 255);
+        g.rect(cx - h * 0.65, cy - h * 0.35, h * 1.3, h * 0.7);
+        g.fill();
+        g.strokeColor = new Color(190, 175, 120, 255);
+        g.lineWidth = 1.2;
+        for (let i = -1; i <= 1; i++) {
+          const ox = i * 2.2;
+          g.moveTo(cx - h * 0.55 + ox, cy - h * 0.35);
+          g.lineTo(cx + h * 0.55 + ox, cy + h * 0.35);
+          g.stroke();
+        }
+        break;
+      }
+      case 'fire': {
+        g.fillColor = ONFIRE_FILL;
+        g.strokeColor = ONFIRE_BORDER;
+        g.lineWidth = 1.2;
+        g.moveTo(cx, cy + h * 0.55);
+        g.lineTo(cx - h * 0.45, cy - h * 0.15);
+        g.lineTo(cx - h * 0.12, cy - h * 0.35);
+        g.lineTo(cx + h * 0.12, cy - h * 0.35);
+        g.lineTo(cx + h * 0.45, cy - h * 0.15);
+        g.close();
+        g.fill();
+        g.stroke();
+        g.fillColor = new Color(255, 240, 120, 255);
+        g.circle(cx, cy - h * 0.15, r * 0.35);
+        g.fill();
+        break;
+      }
+      case 'paralyzed': {
+        g.fillColor = new Color(160, 110, 220, 255);
+        g.circle(cx, cy, r * 0.75);
+        g.fill();
+        g.strokeColor = new Color(255, 255, 255, 240);
+        g.lineWidth = 1.4;
+        g.moveTo(cx - h * 0.45, cy + h * 0.15);
+        g.lineTo(cx - h * 0.1, cy - h * 0.25);
+        g.lineTo(cx + h * 0.15, cy + h * 0.1);
+        g.lineTo(cx + h * 0.45, cy - h * 0.2);
+        g.stroke();
+        break;
+      }
+      case 'turret': {
+        g.strokeColor = new Color(90, 85, 75, 255);
+        g.lineWidth = 2;
+        g.moveTo(cx - h * 0.55, cy - h * 0.15);
+        g.lineTo(cx + h * 0.35, cy - h * 0.15);
+        g.stroke();
+        g.strokeColor = new Color(230, 55, 55, 255);
+        g.lineWidth = 1.6;
+        const d = h * 0.35;
+        g.moveTo(cx - d, cy + h * 0.15); g.lineTo(cx + d, cy + h * 0.45); g.stroke();
+        g.moveTo(cx - d, cy + h * 0.45); g.lineTo(cx + d, cy + h * 0.15); g.stroke();
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
   /**
    * 在单位格子正下方挂一条单位名字（"谢尔曼" / "虎式" …），常驻显示。
-   * 位置放在状态文字（起火/已毁）之下，避免相互遮挡；已毁单位也会显示但用灰色。
+   * 状态图标在格心下约 hex*0.56；已毁短标签约 hex*0.65；名字更靠下避免遮挡。
    */
   private spawnUnitNameLabel(u: Unit) {
     if (!this.mapNode) return;
@@ -1106,7 +1262,7 @@ export class BattleScene extends Component {
     l.outlineWidth = 2;
 
     this.mapNode.addChild(n);
-    // 状态标签占据 c.y - hexSize*0.65 附近；名字放得更低一点，叠放顺序"圆形 → 状态 → 名字"
+    // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字
     n.setPosition(c.x, c.y - this.hexSize * 1.3, 0);
     this.nameLabels.push(n);
   }
@@ -1588,39 +1744,8 @@ export class BattleScene extends Component {
     );
   }
 
-  private drawShermanFacingLine(
-    c: { x: number; y: number },
-    r: number,
-    facingLerp: { from: number; to: number; t: number } | null | undefined,
-    u: Unit,
-  ) {
-    const lg = this.gLines!;
-    if (facingLerp) {
-      const { ux, uy } = this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
-      lg.strokeColor = FACING_COLOR;
-      lg.lineWidth = 4;
-      lg.moveTo(c.x, c.y);
-      lg.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
-      lg.stroke();
-      lg.lineWidth = 2;
-    } else if (u.facing !== null) {
-      const np = this.project(neighbor(u.pos, u.facing).q, neighbor(u.pos, u.facing).r);
-      const dx = np.x - c.x;
-      const dy = np.y - c.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const ux = dx / len;
-      const uy = dy / len;
-      lg.strokeColor = FACING_COLOR;
-      lg.lineWidth = 4;
-      lg.moveTo(c.x, c.y);
-      lg.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
-      lg.stroke();
-      lg.lineWidth = 2;
-    }
-  }
-
   /**
-   * 单位：圆 + 朝向短线。
+   * 单位：俯视贴图坦克仅画精灵（朝向由贴图）；矢量回退车体为圆 + 黄色朝向短线。
    * overrideX/Y：动画插值格心；facingLerp：转向动画时插值炮口方向（不读 u.facing）。
    */
   private drawUnit(
@@ -1639,7 +1764,7 @@ export class BattleScene extends Component {
       return;
     }
     if (u.kind === 'sherman' && this.shermanSpriteNode) {
-      if (u.destroyed || !this.shermanTopSpriteFrame || this.isOnFire(u)) {
+      if (u.destroyed || !this.shermanTopSpriteFrame) {
         this.shermanSpriteNode.active = false;
       }
     }
@@ -1662,22 +1787,17 @@ export class BattleScene extends Component {
       return; // 摧毁的单位不再画朝向线
     }
 
-    // 谢尔曼俯视图精灵（已加载、未起火）：跳过矢量车体，炮口线在 gLines 上画
+    // 谢尔曼俯视图精灵（已加载、未摧毁）：起火等状态用格子下图标表示，不再替换为矢量橙圆
     if (u.kind === 'sherman'
         && this.shermanTopSpriteFrame
         && this.shermanSpriteNode
-        && this.shermanTopSprite
-        && this.gLines
-        && !this.isOnFire(u)) {
+        && this.shermanTopSprite) {
       this.updateShermanTopSprite(u, c, facingLerp);
-      this.drawShermanFacingLine(c, r, facingLerp, u);
       return;
     }
 
     // 德军俯视图：四号 / 三号 / 虎 / 卡（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存）
     if (isEnemyTopKind(u.kind)
-        && this.gLines
-        && !this.isOnFire(u)
         && this.enemyTopPoolNext < this.enemyTopSpritePool.length) {
       const meta = this.enemyTopMeta[u.kind];
       if (meta?.sf) {
@@ -1692,7 +1812,6 @@ export class BattleScene extends Component {
           c,
           facingLerp,
         );
-        this.drawShermanFacingLine(c, r, facingLerp, u);
         return;
       }
     }
