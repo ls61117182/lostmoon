@@ -320,7 +320,11 @@ const FACTION_COLORS = {
   german: new Color( 60,  60,  60, 255),
 };
 
-const HEDGE_COLOR        = new Color( 35,  90,  35, 255);
+/** 树篱上离散「灌木丛」：比林地略深、略灰，与 FOREST_* 区分 */
+const HEDGE_SHADE       = new Color(22, 38, 24, 185);
+const HEDGE_BUSH_DARK  = new Color(36, 78, 38, 255);
+const HEDGE_BUSH_MID   = new Color(48, 98, 46, 255);
+const HEDGE_BUSH_LIGHT = new Color(62, 118, 56, 255);
 const TILE_BORDER        = new Color( 40,  40,  40, 220);
 const FACING_COLOR       = new Color(255, 210,  60, 255);
 const UNIT_BORDER        = new Color(255, 255, 255, 255);
@@ -784,7 +788,7 @@ export class BattleScene extends Component {
       if (!t.hedges) continue;
       const c = this.project(t.pos.q, t.pos.r);
       for (let i = 0; i < 6; i++) {
-        if (t.hedges[i]) this.drawHedgeEdge(c.x, c.y, this.hexSize, i);
+        if (t.hedges[i]) this.drawHedgeEdge(c.x, c.y, this.hexSize, i, t.pos.q, t.pos.r);
       }
     }
 
@@ -1338,17 +1342,52 @@ export class BattleScene extends Component {
     g.stroke();
   }
 
-  /** 第 dir 条边的树篱 */
-  private drawHedgeEdge(cx: number, cy: number, size: number, dir: number) {
-    const g = this.g!;
-    const a1 = (-30 + 60 * (dir)) * Math.PI / 180;
+  /** 每条六角边上的树篱丛数（不含顶点，等分弦长；两端留白 = 相邻丛间距） */
+  private static readonly HEDGE_CLUMPS_PER_EDGE = 5;
+
+  /**
+   * 第 dir 条边的树篱：中心落在该边弦上，与格线重合。
+   * 单丛大小统一，在原先基准半径 `size*0.086` 上整体放大 30%。
+   * 沿边用 `k/(n+1)` 均匀取点，使两端与顶点留出相同空隙、丛与丛之间等距。
+   */
+  private drawHedgeEdge(cx: number, cy: number, size: number, dir: number, _q: number, _r: number) {
+    const a1 = (-30 + 60 * dir) * Math.PI / 180;
     const a2 = (-30 + 60 * (dir + 1)) * Math.PI / 180;
-    g.strokeColor = HEDGE_COLOR;
-    g.lineWidth = 5;
-    g.moveTo(cx + size * Math.cos(a1), cy + size * Math.sin(a1));
-    g.lineTo(cx + size * Math.cos(a2), cy + size * Math.sin(a2));
-    g.stroke();
-    g.lineWidth = 2;
+    const x0 = cx + size * Math.cos(a1);
+    const y0 = cy + size * Math.sin(a1);
+    const x1 = cx + size * Math.cos(a2);
+    const y1 = cy + size * Math.sin(a2);
+    const tx = x1 - x0;
+    const ty = y1 - y0;
+
+    const br = size * 0.086 * 1.3;
+    const n = BattleScene.HEDGE_CLUMPS_PER_EDGE;
+    for (let k = 1; k <= n; k++) {
+      const f = k / (n + 1);
+      const px = x0 + tx * f;
+      const py = y0 + ty * f;
+      this.drawHedgeTreeClump(px, py, br);
+    }
+  }
+
+  /** 树篱单丛：结构与林地树冠类似，配色略深以便与田地/公路上的树篱区分 */
+  private drawHedgeTreeClump(x: number, y: number, r: number) {
+    const g = this.g!;
+    const sh = r * 0.22;
+    g.lineWidth = 0;
+    g.fillColor = HEDGE_SHADE;
+    g.circle(x - sh, y - sh, r * 0.9);
+    g.fill();
+    g.fillColor = HEDGE_BUSH_DARK;
+    g.circle(x - r * 0.08, y + r * 0.05, r);
+    g.fill();
+    g.fillColor = HEDGE_BUSH_MID;
+    g.circle(x + r * 0.18, y - r * 0.05, r * 0.78);
+    g.fill();
+    g.fillColor = HEDGE_BUSH_LIGHT;
+    g.circle(x, y, r * 0.48);
+    g.fill();
+    g.lineWidth = 1;
   }
 
   /** 某朝向在屏幕上的单位方向向量（从格心指向该向邻居中心）。 */
