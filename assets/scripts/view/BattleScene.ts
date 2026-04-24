@@ -39,6 +39,8 @@ import {
   JsonAsset,
   Label,
   Node,
+  Sprite,
+  SpriteFrame,
   sys,
   UITransform,
   Vec3,
@@ -508,7 +510,15 @@ export class BattleScene extends Component {
   rngSeed: number = 0;
 
   private g: Graphics | null = null;
+  /** 谢尔曼朝向线单独一层，画在俯视图精灵之上 */
+  private gLines: Graphics | null = null;
   private mapNode: Node | null = null;
+  private shermanSpriteNode: Node | null = null;
+  private shermanTopSprite: Sprite | null = null;
+  private shermanTopSpriteFrame: SpriteFrame | null = null;
+  /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
+  private shermanSpriteDisplayW = 0;
+  private shermanSpriteDisplayH = 0;
   private mission: LoadedMission | null = null;
   private offsetX = 0;
   private offsetY = 0;
@@ -665,6 +675,41 @@ export class BattleScene extends Component {
     this.node.addChild(gNode);
     this.mapNode = gNode;
 
+    // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上；
+    // 先加精灵、再加朝向线，保证炮口短线盖住车体。
+    const shNode = new Node('ShermanTopSprite');
+    shNode.layer = this.node.layer;
+    shNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.shermanTopSprite = shNode.addComponent(Sprite);
+    // CUSTOM：用 UITransform 定最终像素边长，避免 TRIMMED + setScale 与 1280×720 占位在 UI 刷新时叠出异常缩放
+    this.shermanTopSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.shermanSpriteNode = shNode;
+    shNode.active = false;
+
+    const linesNode = new Node('MapFacingLines');
+    linesNode.layer = this.node.layer;
+    linesNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.gLines = linesNode.addComponent(Graphics);
+    this.gLines.lineWidth = 2;
+
+    gNode.addChild(shNode);
+    gNode.addChild(linesNode);
+
+    // 3.x 动态加载 SpriteFrame 必须指向图片子资源路径 …/spriteFrame（见官方「动态加载资源」）
+    resources.load('textures/units/sherman_top/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 谢尔曼俯视图加载失败，使用矢量车体:', err);
+        return;
+      }
+      const rw = sf.rect.width;
+      const rh = sf.rect.height;
+      this.shermanSpriteDisplayW = rw > 0 ? rw : sf.width;
+      this.shermanSpriteDisplayH = rh > 0 ? rh : sf.height;
+      this.shermanTopSpriteFrame = sf;
+      if (this.shermanTopSprite) this.shermanTopSprite.spriteFrame = sf;
+      this.redraw();
+    });
+
     // 注册触摸事件（点击地图任意位置）
     gNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
 
@@ -752,6 +797,7 @@ export class BattleScene extends Component {
     if (!this.g || !this.mission) return;
     const g = this.g;
     g.clear();
+    this.gLines?.clear();
     // 命中预览 Label 是常驻节点（非纯 Graphics），需要随每次重绘整批重建，
     // 否则谢尔曼移动后旧位置的预览会留在屏幕上误导玩家。
     this.clearPreviewLabels();
@@ -1412,6 +1458,79 @@ export class BattleScene extends Component {
     return { ux: ux / len, uy: uy / len };
   }
 
+  /** 谢尔曼俯视图：缩放、对齐屏幕朝向（贴图炮管朝左为 -X，与六角 neighbor 方向对齐时常数 +180°）。 */
+  private updateShermanTopSprite(
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: { from: number; to: number; t: number } | null,
+  ) {
+    const node = this.shermanSpriteNode!;
+    const sp = this.shermanTopSprite!;
+    const sf = this.shermanTopSpriteFrame!;
+    node.active = true;
+    node.setPosition(c.x, c.y, 0);
+    const w = this.shermanSpriteDisplayW > 0 ? this.shermanSpriteDisplayW : sf.width;
+    const h = this.shermanSpriteDisplayH > 0 ? this.shermanSpriteDisplayH : sf.height;
+    sp.spriteFrame = sf;
+    const ut = node.getComponent(UITransform)!;
+    // 相对原先 hexSize*0.9 再放大约 100%（即 hexSize*1.8 作为长边贴六角格直径方向）
+    const fit = this.hexSize * 1.8;
+    const maxDim = Math.max(w, h) || 1;
+    const tw = (w / maxDim) * fit;
+    const th = (h / maxDim) * fit;
+    ut.setContentSize(tw, th);
+    node.setScale(1, 1, 1);
+    let ux: number;
+    let uy: number;
+    if (facingLerp) {
+      const v = this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
+      ux = v.ux;
+      uy = v.uy;
+    } else if (u.facing !== null) {
+      const np = this.project(neighbor(u.pos, u.facing).q, neighbor(u.pos, u.facing).r);
+      const dx = np.x - c.x;
+      const dy = np.y - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      ux = dx / len;
+      uy = dy / len;
+    } else {
+      ux = 1;
+      uy = 0;
+    }
+    node.angle = (Math.atan2(uy, ux) * 180) / Math.PI + 180;
+  }
+
+  private drawShermanFacingLine(
+    c: { x: number; y: number },
+    r: number,
+    facingLerp: { from: number; to: number; t: number } | null | undefined,
+    u: Unit,
+  ) {
+    const lg = this.gLines!;
+    if (facingLerp) {
+      const { ux, uy } = this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
+      lg.strokeColor = FACING_COLOR;
+      lg.lineWidth = 4;
+      lg.moveTo(c.x, c.y);
+      lg.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
+      lg.stroke();
+      lg.lineWidth = 2;
+    } else if (u.facing !== null) {
+      const np = this.project(neighbor(u.pos, u.facing).q, neighbor(u.pos, u.facing).r);
+      const dx = np.x - c.x;
+      const dy = np.y - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+      lg.strokeColor = FACING_COLOR;
+      lg.lineWidth = 4;
+      lg.moveTo(c.x, c.y);
+      lg.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
+      lg.stroke();
+      lg.lineWidth = 2;
+    }
+  }
+
   /**
    * 单位：圆 + 朝向短线。
    * overrideX/Y：动画插值格心；facingLerp：转向动画时插值炮口方向（不读 u.facing）。
@@ -1431,6 +1550,11 @@ export class BattleScene extends Component {
       this.drawInfantry(u, c.x, c.y);
       return;
     }
+    if (u.kind === 'sherman' && this.shermanSpriteNode) {
+      if (u.destroyed || !this.shermanTopSpriteFrame || this.isOnFire(u)) {
+        this.shermanSpriteNode.active = false;
+      }
+    }
     const r = this.hexSize * 0.5;
 
     // 摧毁：暗灰色 + 穿心 X
@@ -1448,6 +1572,18 @@ export class BattleScene extends Component {
       g.moveTo(c.x - d, c.y + d); g.lineTo(c.x + d, c.y - d); g.stroke();
       g.lineWidth = 2;
       return; // 摧毁的单位不再画朝向线
+    }
+
+    // 谢尔曼俯视图精灵（已加载、未起火）：跳过矢量车体，炮口线在 gLines 上画
+    if (u.kind === 'sherman'
+        && this.shermanTopSpriteFrame
+        && this.shermanSpriteNode
+        && this.shermanTopSprite
+        && this.gLines
+        && !this.isOnFire(u)) {
+      this.updateShermanTopSprite(u, c, facingLerp);
+      this.drawShermanFacingLine(c, r, facingLerp, u);
+      return;
     }
 
     // 起火：鲜橙填充 + 亮黄边 + 外层橙红环（保留阵营辨识度时仍以"危险色"为主）
