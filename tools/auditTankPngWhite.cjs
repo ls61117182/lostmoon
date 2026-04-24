@@ -40,12 +40,18 @@ async function auditFile(label, absPath) {
 }
 
 async function main() {
-  const sh = path.join(UNITS, 'sherman_top.png');
-  const p4 = path.join(UNITS, 'panzer4_top.png');
+  const files = [
+    'sherman_top.png',
+    'panzer4_top.png',
+    'panzer3_top.png',
+    'tiger_top.png',
+    'truck_top.png',
+  ];
   const lines = [];
-  for (const p of [sh, p4]) {
+  for (const name of files) {
+    const p = path.join(UNITS, name);
     if (!fs.existsSync(p)) continue;
-    const d = await auditFile(path.basename(p), p);
+    const d = await auditFile(name, p);
     const row = {
       sessionId: '061460',
       hypothesisId: 'H1-white-pixels',

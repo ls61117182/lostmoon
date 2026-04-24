@@ -83,9 +83,16 @@ import { checkOutcome, MissionOutcome } from '../core/Objective';
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
-import { Direction, MissionData, TerrainType, Tile, Unit } from '../core/types';
+import { Direction, MissionData, TerrainType, Tile, Unit, UnitKind } from '../core/types';
 
 const { ccclass, property } = _decorator;
+
+/** 使用俯视 PNG 的德军单位（与谢尔曼同一套 normalizeTankSprites 白边处理） */
+type EnemyTopKind = Extract<UnitKind, 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+
+function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
+  return k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+}
 
 /** 三阶缓出：起步快、收尾慢，最适合"惯性滑停"的坦克移动 */
 function easeOutCubic(t: number): number {
@@ -519,13 +526,11 @@ export class BattleScene extends Component {
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
   private shermanSpriteDisplayH = 0;
-  /** 四号俯视图：多辆时需节点池；每帧 redraw 开头清零再按敌军顺序占用 */
-  private panzer4TopSpriteFrame: SpriteFrame | null = null;
-  private panzer4SpriteDisplayW = 0;
-  private panzer4SpriteDisplayH = 0;
-  private panzer4SpritePool: Array<{ node: Node; sprite: Sprite }> = [];
-  private panzer4PoolNext = 0;
-  private static readonly PANZER4_SPRITE_POOL = 16;
+  /** 德军俯视图（四号/三号/虎/卡）：多单位共用节点池；每帧 redraw 开头清零再按绘制顺序占用 */
+  private enemyTopMeta: Partial<Record<EnemyTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
+  private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private enemyTopPoolNext = 0;
+  private static readonly ENEMY_TOP_SPRITE_POOL = 16;
   private mission: LoadedMission | null = null;
   private offsetX = 0;
   private offsetY = 0;
@@ -694,14 +699,14 @@ export class BattleScene extends Component {
     shNode.active = false;
 
     gNode.addChild(shNode);
-    for (let i = 0; i < BattleScene.PANZER4_SPRITE_POOL; i++) {
-      const pz = new Node(`Panzer4Top_${i}`);
+    for (let i = 0; i < BattleScene.ENEMY_TOP_SPRITE_POOL; i++) {
+      const pz = new Node(`EnemyTop_${i}`);
       pz.layer = this.node.layer;
       pz.addComponent(UITransform).setContentSize(1280, 720);
       const spz = pz.addComponent(Sprite);
       spz.sizeMode = Sprite.SizeMode.CUSTOM;
       pz.active = false;
-      this.panzer4SpritePool.push({ node: pz, sprite: spz });
+      this.enemyTopSpritePool.push({ node: pz, sprite: spz });
       gNode.addChild(pz);
     }
 
@@ -713,20 +718,27 @@ export class BattleScene extends Component {
 
     gNode.addChild(linesNode);
 
-    resources.load('textures/units/panzer4_top/spriteFrame', SpriteFrame, (err, sf) => {
-      if (err || !sf) {
-        console.warn('[BattleScene] 四号俯视图加载失败，使用矢量车体:', err);
-        return;
-      }
-      const rw = sf.rect.width;
-      const rh = sf.rect.height;
-      this.panzer4SpriteDisplayW = rw > 0 ? rw : sf.width;
-      this.panzer4SpriteDisplayH = rh > 0 ? rh : sf.height;
-      this.panzer4TopSpriteFrame = sf;
-      for (const { sprite } of this.panzer4SpritePool) {
-        if (sprite) sprite.spriteFrame = sf;
-      }
-      this.redraw();
+    const enemyTopPaths: Record<EnemyTopKind, string> = {
+      panzer4: 'textures/units/panzer4_top/spriteFrame',
+      panzer3: 'textures/units/panzer3_top/spriteFrame',
+      tiger: 'textures/units/tiger_top/spriteFrame',
+      truck: 'textures/units/truck_top/spriteFrame',
+    };
+    (['panzer4', 'panzer3', 'tiger', 'truck'] as const).forEach((kind) => {
+      resources.load(enemyTopPaths[kind], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] 俯视图加载失败 (${kind})，该类型将回退矢量车体:`, err);
+          return;
+        }
+        const rw = sf.rect.width;
+        const rh = sf.rect.height;
+        this.enemyTopMeta[kind] = {
+          sf,
+          dw: rw > 0 ? rw : sf.width,
+          dh: rh > 0 ? rh : sf.height,
+        };
+        this.redraw();
+      });
     });
 
     // 3.x 动态加载 SpriteFrame 必须指向图片子资源路径 …/spriteFrame（见官方「动态加载资源」）
@@ -832,8 +844,8 @@ export class BattleScene extends Component {
     const g = this.g;
     g.clear();
     this.gLines?.clear();
-    this.panzer4PoolNext = 0;
-    for (const { node } of this.panzer4SpritePool) node.active = false;
+    this.enemyTopPoolNext = 0;
+    for (const { node } of this.enemyTopSpritePool) node.active = false;
     // 命中预览 Label 是常驻节点（非纯 Graphics），需要随每次重绘整批重建，
     // 否则谢尔曼移动后旧位置的预览会留在屏幕上误导玩家。
     this.clearPreviewLabels();
@@ -1662,25 +1674,27 @@ export class BattleScene extends Component {
       return;
     }
 
-    // 四号坦克俯视图（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存策略）
-    if (u.kind === 'panzer4'
-        && this.panzer4TopSpriteFrame
+    // 德军俯视图：四号 / 三号 / 虎 / 卡（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存）
+    if (isEnemyTopKind(u.kind)
         && this.gLines
         && !this.isOnFire(u)
-        && this.panzer4PoolNext < this.panzer4SpritePool.length) {
-      const slot = this.panzer4SpritePool[this.panzer4PoolNext++];
-      this.applyTopDownTankSprite(
-        slot.node,
-        slot.sprite,
-        this.panzer4TopSpriteFrame,
-        this.panzer4SpriteDisplayW,
-        this.panzer4SpriteDisplayH,
-        u,
-        c,
-        facingLerp,
-      );
-      this.drawShermanFacingLine(c, r, facingLerp, u);
-      return;
+        && this.enemyTopPoolNext < this.enemyTopSpritePool.length) {
+      const meta = this.enemyTopMeta[u.kind];
+      if (meta?.sf) {
+        const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyTopDownTankSprite(
+          slot.node,
+          slot.sprite,
+          meta.sf,
+          meta.dw,
+          meta.dh,
+          u,
+          c,
+          facingLerp,
+        );
+        this.drawShermanFacingLine(c, r, facingLerp, u);
+        return;
+      }
     }
 
     // 起火：鲜橙填充 + 亮黄边 + 外层橙红环（保留阵营辨识度时仍以"危险色"为主）

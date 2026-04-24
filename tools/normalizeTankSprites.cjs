@@ -1,7 +1,8 @@
 /**
- * 裁去谢尔曼 / 四号俯视图四周空白（透明或近白底），再统一为相同像素画布（contain 居中）。
+ * 裁去单位俯视图四周空白（透明或近白底），再统一为相同像素画布（contain 居中）。
+ * 与谢尔曼相同：边界泛洪去浅底 + 近白漂白 + bbox，最后所有车同一 W×H。
  * 用法（仓库根目录）：npm install && node tools/normalizeTankSprites.cjs
- * 完成后请在 Cocos Creator 中对两 PNG 各执行一次「重新导入资源」以刷新 .meta。
+ * 完成后请在 Cocos Creator 中对改动的 PNG 各执行一次「重新导入资源」以刷新 .meta。
  */
 const fs = require('fs');
 const path = require('path');
@@ -15,8 +16,17 @@ try {
 }
 
 const UNITS = path.join(__dirname, '..', 'assets', 'resources', 'textures', 'units');
-/** 统一画布长边至少如此像素（不足则整体放大，两车仍同尺寸） */
+/** 统一画布长边至少如此像素（不足则整体放大） */
 const MIN_LONG_EDGE = 400;
+
+/** 参与统一尺寸的 PNG 基名（不含扩展名） */
+const SPRITE_BASES = [
+  'sherman_top',
+  'panzer4_top',
+  'panzer3_top',
+  'tiger_top',
+  'truck_top',
+];
 
 function lum(r, g, b) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
@@ -25,10 +35,6 @@ function sat(r, g, b) {
   return Math.max(r, g, b) - Math.min(r, g, b);
 }
 
-/**
- * 从图像四边泛洪：仅清除与边界相连、且整体偏「浅灰/白底」的连通区域（避免车体深色被误删）。
- * 解决：白边 RGB 略低于 252 导致 bbox/阈值裁切无效，游戏里仍显示不透明白矩形。
- */
 function removeEdgeConnectedLightBackground(buf, w, h, channels) {
   const n = w * h;
   const cand = new Uint8Array(n);
@@ -77,7 +83,6 @@ function removeEdgeConnectedLightBackground(buf, w, h, channels) {
   }
   if (cnt > n * 0.92) return;
   const meanL = cnt ? sumL / cnt : 0;
-  // 若连通区平均亮度不够高，可能是浅地色块贴边，保守不删
   if (meanL < 232) return;
   for (let i = 0; i < n; i++) {
     if (!marked[i]) continue;
@@ -89,7 +94,6 @@ function removeEdgeConnectedLightBackground(buf, w, h, channels) {
   }
 }
 
-/** 兜底：仍偏白且不透明的像素改为透明 */
 function bleachNearWhite(buf, w, h, channels) {
   for (let i = 0; i < w * h; i++) {
     const o = i * channels;
@@ -118,9 +122,8 @@ function bboxContent(buf, w, h, channels) {
       const r = buf[i];
       const g = buf[i + 1];
       const b = buf[i + 2];
-      const a = channels >= 4 ? buf[i + 3] : 255;
+      const a = buf[i + 3];
       const transparent = a < 24;
-      // 仅裁「明显」白底，避免把车体浅灰当背景
       const nearWhite = r >= 252 && g >= 252 && b >= 252 && a > 230;
       const isBg = transparent || nearWhite;
       if (!isBg) {
@@ -167,20 +170,29 @@ async function trimSmart(absPath) {
 }
 
 async function main() {
-  const shPath = path.join(UNITS, 'sherman_top.png');
-  const p4Path = path.join(UNITS, 'panzer4_top.png');
-  if (!fs.existsSync(shPath) || !fs.existsSync(p4Path)) {
-    console.error('缺少文件:', shPath, p4Path);
-    process.exit(1);
+  const paths = [];
+  for (const base of SPRITE_BASES) {
+    const p = path.join(UNITS, `${base}.png`);
+    if (!fs.existsSync(p)) {
+      console.error('缺少文件:', p);
+      process.exit(1);
+    }
+    paths.push({ base, abs: p });
   }
 
-  const bufSh = await trimSmart(shPath).then((x) => x.toBuffer());
-  const bufP4 = await trimSmart(p4Path).then((x) => x.toBuffer());
+  const buffers = [];
+  for (const { base, abs } of paths) {
+    const buf = await trimSmart(abs).then((x) => x.toBuffer());
+    buffers.push({ base, buf });
+  }
 
-  const m1 = await sharp(bufSh).metadata();
-  const m2 = await sharp(bufP4).metadata();
-  let W = Math.max(m1.width || 0, m2.width || 0);
-  let H = Math.max(m1.height || 0, m2.height || 0);
+  let W = 0;
+  let H = 0;
+  for (const { buf } of buffers) {
+    const m = await sharp(buf).metadata();
+    W = Math.max(W, m.width || 0);
+    H = Math.max(H, m.height || 0);
+  }
   const long = Math.max(W, H);
   if (long > 0 && long < MIN_LONG_EDGE) {
     const s = MIN_LONG_EDGE / long;
@@ -189,23 +201,17 @@ async function main() {
   }
 
   const bg = { r: 0, g: 0, b: 0, alpha: 0 };
-  const outSh = path.join(UNITS, 'sherman_top.png.__tmp__');
-  const outP4 = path.join(UNITS, 'panzer4_top.png.__tmp__');
-
-  await sharp(bufSh)
-    .resize(W, H, { fit: 'contain', position: 'centre', background: bg })
-    .png()
-    .toFile(outSh);
-  await sharp(bufP4)
-    .resize(W, H, { fit: 'contain', position: 'centre', background: bg })
-    .png()
-    .toFile(outP4);
-
-  fs.renameSync(outSh, shPath);
-  fs.renameSync(outP4, p4Path);
+  for (const { base, buf } of buffers) {
+    const outTmp = path.join(UNITS, `${base}.png.__tmp__`);
+    await sharp(buf)
+      .resize(W, H, { fit: 'contain', position: 'centre', background: bg })
+      .png()
+      .toFile(outTmp);
+    fs.renameSync(outTmp, path.join(UNITS, `${base}.png`));
+  }
 
   console.log(`已输出统一尺寸: ${W} x ${H}（透明底 + contain 居中）`);
-  console.log('请在 Cocos Creator 资源管理器中右键 sherman_top.png、panzer4_top.png →「重新导入资源」。');
+  console.log('请在 Cocos Creator 资源管理器中对上述 PNG →「重新导入资源」。');
 }
 
 main().catch((e) => {
