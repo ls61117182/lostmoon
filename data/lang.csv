@@ -227,6 +227,16 @@ level.11.title,易北河,Elbe
 level.12.title,柏林,Berlin
 battle.settings.title,战斗设置,Battle Settings
 battle.settings.exit,退出关卡,Exit Level
+battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)
+battle.turnEndList.empty,本关未配置回合结束事件表。,This mission has no turn-end event table.
+battle.turnEndList.line,{range}（主骰 {n} 颗，点数之和）→ {effect},{range} (sum of {n} dice) → {effect}
+battle.turnEndList.effect.sniper,狙击手,Sniper
+battle.turnEndList.effect.commander_extra,车长额外指挥,Commander bonus
+battle.turnEndList.effect.infantry_spawn,德军步兵增援,German infantry reinforcement
+battle.turnEndList.effect.adjacent_infantry_fire,相邻步兵齐射,Adjacent infantry volley
+battle.turnEndList.effect.mechanical_failure,机械故障,Mechanical failure
+battle.turnEndList.effect.stuka,斯图卡空袭,Stuka raid
+battle.turnEndList.effect.panzer3_spawn,III 号坦克增援,Panzer III reinforcement
 battle.exit.title,退出关卡？,Exit this level?
 battle.exit.saveAndQuit,保存后退出,Save & Exit
 battle.exit.abandon,放弃关卡,Abandon

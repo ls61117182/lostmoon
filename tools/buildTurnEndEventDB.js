@@ -144,6 +144,13 @@ function build() {
   lines.push('  return hit[0];');
   lines.push('}');
   lines.push('');
+  lines.push('/** 当前关卡全部回合结束事件行（按 sum 区间升序） */');
+  lines.push('export function turnEndEventsForMission(missionId: string): TurnEndEventRow[] {');
+  lines.push('  return TURN_END_EVENTS');
+  lines.push('    .filter(r => r.missionId === missionId)');
+  lines.push('    .sort((a, b) => a.sumMin - b.sumMin || a.sumMax - b.sumMax);');
+  lines.push('}');
+  lines.push('');
 
   fs.writeFileSync(OUT_PATH, lines.join('\n'), 'utf8');
   console.log(`[buildTurnEndEventDB] OK ${rows.length} rows → ${path.relative(ROOT, OUT_PATH)}`);

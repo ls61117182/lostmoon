@@ -18,7 +18,7 @@
  *     谢尔曼移动与转向同样播放过程动画
  *   - 摧毁任务目标单位 → 屏幕中央"胜利！"；谢尔曼被摧毁 → "战败"
  *   - 胜负出现后下方"再来一局"按钮可点击重置整局，使用同一份任务 JSON
- *   - 右上 ⚙ 战斗设置：音量 / 语言 / 存档读档 / 退出关卡（退出二次确认：保存后退出 / 放弃关卡）
+ *   - 右上 ☰ 本关回合结束事件表（只读查阅）/ ⚙ 战斗设置：音量 / 语言 / 存档读档 / 退出关卡（退出二次确认：保存后退出 / 放弃关卡）
  *
  * 用法：
  *   1. 打开任意场景（如 changjing2.scene）
@@ -85,7 +85,24 @@ import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
 import { prepareTurnEndEvent, TurnEndExtraDicePhase } from '../core/TurnEndEventApply';
-import { hasTurnEndEvents, TURN_END_EVENTS, turnEndRowForSum } from '../core/TurnEndEventDB';
+import {
+  hasTurnEndEvents,
+  TURN_END_EVENTS,
+  TurnEndEffectType,
+  turnEndEventsForMission,
+  turnEndRowForSum,
+} from '../core/TurnEndEventDB';
+
+/** 回合结束事件表弹窗：效果类型 → lang key */
+const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
+  sniper: 'battle.turnEndList.effect.sniper',
+  commander_extra: 'battle.turnEndList.effect.commander_extra',
+  infantry_spawn: 'battle.turnEndList.effect.infantry_spawn',
+  adjacent_infantry_fire: 'battle.turnEndList.effect.adjacent_infantry_fire',
+  mechanical_failure: 'battle.turnEndList.effect.mechanical_failure',
+  stuka: 'battle.turnEndList.effect.stuka',
+  panzer3_spawn: 'battle.turnEndList.effect.panzer3_spawn',
+};
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
@@ -376,7 +393,8 @@ const OBJ_HUD_LOCKED = new Color(150, 150, 158, 255);
 const OBJ_HUD_ACTIVE = new Color(255, 220, 90, 255);
 /** 任务目标行：已完成 */
 const OBJ_HUD_DONE = new Color(100, 210, 120, 255);
-/** 右上角 ⚙ 与 `buildStatusPanel` 竖向对齐（改一处须同步） */
+/** 右上角：回合结束事件表（左）与 ⚙ 设置（右），与 `buildStatusPanel` 竖向对齐（改一处须同步） */
+const BATTLE_TURNEND_LIST_CX = 520;
 const BATTLE_SETTINGS_CX = 580;
 const BATTLE_SETTINGS_CY = 318;
 const BATTLE_SETTINGS_R = 24;
@@ -2231,7 +2249,11 @@ export class BattleScene extends Component {
     // ---- 右侧谢尔曼状态面板：须先于 ⚙ 创建，否则面板会盖在设置按钮上 ----
     this.buildStatusPanel();
 
-    // ---- 右上角设置（后 addChild，保证叠在最上可点） ----
+    // ---- 右上角：事件表（先 addChild）→ 设置（后 addChild，保证 ⚙ 叠在上层可点） ----
+    this.makeBattleCircleButton(
+      this.node, BATTLE_TURNEND_LIST_CX, BATTLE_SETTINGS_CY, BATTLE_SETTINGS_R, '☰',
+      () => this.openTurnEndEventsReference(),
+    );
     this.makeBattleCircleButton(
       this.node, BATTLE_SETTINGS_CX, BATTLE_SETTINGS_CY, BATTLE_SETTINGS_R, '⚙',
       () => this.openBattleSettings(),
@@ -4521,6 +4543,69 @@ export class BattleScene extends Component {
 
     this.battleModalRoot = root;
     return { panel, contentY: panelH / 2 - 80 };
+  }
+
+  /** 查阅本关 `turn_end_events` 表：主骰点之和区间 → 效果类型（不参与掷骰） */
+  private openTurnEndEventsReference() {
+    this.closeBattleExitModal();
+    this.closeBattleModal();
+    const mid = this.missionId || this.mission?.data.id || '';
+    const rows = turnEndEventsForMission(mid);
+    const panelW = 560;
+    const panelH = 480;
+    const { panel, contentY } = this.openBattleModal(t('battle.turnEndList.title'), panelW, panelH);
+
+    const textBlockW = panelW - 56;
+    const bodyN = new Node('TurnEndListBody');
+    bodyN.layer = this.node.layer;
+    panel.addChild(bodyN);
+    const bodyUt = bodyN.addComponent(UITransform);
+    bodyUt.setAnchorPoint(0.5, 1);
+    bodyUt.setContentSize(textBlockW, 1);
+    const bodyL = bodyN.addComponent(Label);
+    bodyL.fontSize = 18;
+    bodyL.lineHeight = 26;
+    bodyL.color = new Color(220, 225, 230, 255);
+    bodyL.overflow = Label.Overflow.RESIZE_HEIGHT;
+    bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
+    bodyL.verticalAlign = VerticalTextAlignment.TOP;
+    if (rows.length === 0) {
+      bodyL.string = t('battle.turnEndList.empty');
+    } else {
+      bodyL.string = rows
+        .map((r) => {
+          const range = r.sumMin === r.sumMax ? String(r.sumMin) : `${r.sumMin}–${r.sumMax}`;
+          return t('battle.turnEndList.line', {
+            range,
+            n: r.diceCount,
+            effect: t(TURN_END_LIST_EFFECT_KEYS[r.effectType]),
+          });
+        })
+        .join('\n');
+    }
+    bodyN.setPosition(0, contentY - 8);
+
+    const closeRowY = -panelH * 0.5 + 52;
+    const closeB = this.makeBattleRectButton(
+      panel,
+      0,
+      closeRowY,
+      200,
+      44,
+      BATTLE_BTN_ACCENT,
+      () => this.closeBattleModal(),
+    );
+    const closeLab = this.makeBattleModalLabel(
+      closeB.node,
+      t('menu.settings.close'),
+      0,
+      0,
+      200,
+      44,
+      22,
+      Color.WHITE,
+    );
+    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeBattleModal());
   }
 
   private openBattleSettings() {

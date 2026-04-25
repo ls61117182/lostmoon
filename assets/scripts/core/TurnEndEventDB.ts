@@ -36,3 +36,10 @@ export function turnEndRowForSum(missionId: string, sum: number): TurnEndEventRo
   if (hit.length > 1) return hit[0];
   return hit[0];
 }
+
+/** 当前关卡全部回合结束事件行（按 sum 区间升序） */
+export function turnEndEventsForMission(missionId: string): TurnEndEventRow[] {
+  return TURN_END_EVENTS
+    .filter(r => r.missionId === missionId)
+    .sort((a, b) => a.sumMin - b.sumMin || a.sumMax - b.sumMax);
+}
