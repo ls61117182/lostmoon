@@ -32,6 +32,7 @@
 
 import {
   _decorator,
+  BlockInputEvents,
   Color,
   Component,
   EventTouch,
@@ -83,10 +84,12 @@ import {
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
+import { prepareTurnEndEvent } from '../core/TurnEndEventApply';
+import { hasTurnEndEvents, TURN_END_EVENTS, turnEndRowForSum } from '../core/TurnEndEventDB';
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
-import { Direction, MissionData, TerrainType, Tile, Unit, UnitKind } from '../core/types';
+import { Direction, MissionData, ShermanCrew, TerrainType, Tile, Unit, UnitKind } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
@@ -95,6 +98,22 @@ type EnemyTopKind = Extract<UnitKind, 'panzer4' | 'panzer3' | 'tiger' | 'truck'>
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
   return k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+}
+
+/** 本关在 turn_end_events 表里配置的主骰颗数（多行取最大，缺省 2） */
+function turnEndDiceCountForMission(missionId: string): number {
+  const rows = TURN_END_EVENTS.filter(r => r.missionId === missionId);
+  if (!rows.length) return 2;
+  return Math.max(...rows.map(r => r.diceCount));
+}
+
+/** 着火检定预掷结果：确认后才写入谢尔曼状态 */
+interface FireCheckPreparedStep {
+  die: number;
+  effect: DamageEffect;
+  crewDie?: number;
+  /** 阵亡检定为 null 表示虚惊；1–5 为乘员位 */
+  crewSlot?: number | null;
 }
 
 /** 三阶缓出：起步快、收尾慢，最适合"惯性滑停"的坦克移动 */
@@ -672,6 +691,34 @@ export class BattleScene extends Component {
   private diePopover: Node | null = null;
   /** 攻击掷骰动画面板；非 null 时锁定所有输入 */
   private diceShow: DiceShow | null = null;
+  /** 回合结束事件：播主骰 + 说明，确认后执行 apply 再进入下一玩家回合 */
+  private turnEndEventUI: {
+    root: Node;
+    stage: 'roll' | 'hold';
+    t: number;
+    dieLabels: Label[];
+    primaryDice: number[];
+    sumLabel: Label;
+    bodyLabel: Label;
+    bodyKey: string;
+    bodyParams: Record<string, string | number>;
+    apply: () => void;
+  } | null = null;
+  private turnEndUnitSeq = 0;
+  /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续敌方阶段 */
+  private fireCheckEventUI: {
+    root: Node;
+    stage: 'roll' | 'hold';
+    t: number;
+    dieLabels: Label[];
+    allDice: number[];
+    sumLabel: Label;
+    bodyLabel: Label;
+    introKey: string;
+    introParams: Record<string, string | number>;
+    bodyText: string;
+    apply: () => void;
+  } | null = null;
 
   // ---- 右侧谢尔曼状态面板 ----
   private statusPanel: Node | null = null;
@@ -851,6 +898,9 @@ export class BattleScene extends Component {
     this.clearFloaters();
     this.closeDiePopover();
     this.finalizeDiceShow(true);
+    this.destroyTurnEndEventUI();
+    this.destroyFireCheckEventUI();
+    this.turnEndUnitSeq = 0;
     this.refreshPhaseUI();
     this.updateHUD();
     this.updateOutcomeOverlay();
@@ -1252,14 +1302,14 @@ export class BattleScene extends Component {
 
   /**
    * 收集当前应显示的坦克状态图标（固定顺序；德坦 damaged 与起火同义时只显示「着火」避免重复）。
-   * 谢尔曼：仅 `damaged`（乘员检定/阵亡等）不再出「受损」标——乘员状态由右侧状态栏负责。
-   * 瘫痪单独用 `paralyzed` 标展示；勿与「受损」折线叠出（瘫痪结算会同时置 `damaged`+`paralyzed`）。
+   * 谢尔曼：`fireLevel>0` 时已有「着火」标，不再叠「受损」折线（击穿/起火都会置 `damaged=true`）。
+   * 无火但 `damaged` 时（如仅乘员检定等）仍显示受损标；炮塔/瘫痪有独立图标。
    */
   private collectTankStatusBadgeKinds(u: Unit): TankStatusBadgeKind[] {
     if (u.kind === 'infantry' || u.destroyed) return [];
     const out: TankStatusBadgeKind[] = [];
     if (u.kind === 'sherman') {
-      if (u.damaged && (this.isOnFire(u) || !!u.turretDamaged)) {
+      if (u.damaged && !this.isOnFire(u)) {
         out.push('damaged');
       }
     } else if (u.damaged && !this.isOnFire(u)) {
@@ -1547,6 +1597,10 @@ export class BattleScene extends Component {
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) this.advanceDiceShow(dt);
+
+    if (this.turnEndEventUI) this.advanceTurnEndEventUI(dt);
+
+    if (this.fireCheckEventUI) this.advanceFireCheckEventUI(dt);
 
     // 敌方 AI 骰：掷完后的槽位排序动画（约 1s），播完再开始按序执行各骰
     if (this.enemyDiceSortAnim && this.mission && this.enemyDiceTrayRoot) {
@@ -2688,6 +2742,8 @@ export class BattleScene extends Component {
     // 中断动画与敌方阶段调度，丢弃所有过场视觉 / 阶段残留
     this.anim = null;
     this.finalizeDiceShow(true);
+    this.destroyTurnEndEventUI();
+    this.destroyFireCheckEventUI();
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -4122,9 +4178,13 @@ export class BattleScene extends Component {
         console.log(`[Phase④] ${e.kind} 烟雾消散`);
       }
     }
-    // §2.1 阶段⑤：着火程度检定 —— 谢尔曼若着火，按 fireLevel 次掷骰结算
-    this.runFireCheck();
-    // 阶段⑤ 结算后可能已阵亡 → 更新胜负
+    // §2.1 阶段⑤：着火程度检定（有 UI 时异步，无火则直接进入后续）
+    this.startFireCheckFlowAndContinue();
+  }
+
+  /** 阶段⑤ 之后：胜负判定 → 建敌方顺序 → 首辆敌坦回合 */
+  private continueEnemyPhaseAfterFireCheck() {
+    if (!this.mission) return;
     this.outcome = checkOutcome(this.mission);
     this.updateOutcomeOverlay();
     if (this.outcome !== 'ongoing') {
@@ -4134,8 +4194,6 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
-    // GDD §3.7：按距谢尔曼最近 → 最远排序；同距随机
-    // 步兵 §3.1.2 规定"只在回合结束事件中行动"，因此敌方阶段不参与骰子驱动。
     const aiCandidates = this.mission.enemies.filter(e => e.kind !== 'infantry');
     this.enemyOrder = selectEnemyOrder(aiCandidates, this.mission.sherman, this.rng);
     this.enemyIndex = 0;
@@ -4151,46 +4209,178 @@ export class BattleScene extends Component {
   }
 
   /**
-   * §2.1 阶段⑤ + §3.5 着火程度检定：
-   * 谢尔曼 fireLevel 有多少就掷多少颗 d6，每颗按"谢尔曼伤害表" (§3.4 Step 3) 结算，
-   * 但与受击穿不同的是：不再做命中 / 穿甲检定 —— 火已经在车里了。
-   *
-   * 为了避免同一轮检定中"着火 → fireLevel 升级 → 又多掷一次"的链式 bug：
-   * - 先快照 N = 当前 fireLevel；
-   * - 本批次所有"3/4 着火" 结果累计到 pendingFire，最后一次性加到 fireLevel 上；
-   * - 其他结果（摧毁 / 炮塔 / 瘫痪 / crewCheck）直接就地应用。
-   *
-   * MVP：不走动画面板，仅以浮字 + 日志呈现；后续可扩展为迷你掷骰面板。
+   * §2.1 阶段⑤：无着火则直接 continue；否则预掷全部 d6、弹面板，确认后再写回谢尔曼并 continue。
    */
-  private runFireCheck() {
+  private startFireCheckFlowAndContinue() {
     if (!this.mission) return;
     const s = this.mission.sherman;
-    const n = s.fireLevel ?? 0;
-    if (n <= 0) return;
-    console.log(`[Phase⑤] 着火检定 ×${n}`);
+    const nSnap = s.fireLevel ?? 0;
+    if (nSnap <= 0 || s.destroyed) {
+      this.continueEnemyPhaseAfterFireCheck();
+      return;
+    }
+    console.log(`[Phase⑤] 着火检定 ×${nSnap}（面板）`);
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.fireCheck'),
       new Color(255, 180, 80, 255), { size: 22, dur: 1.0, rise: 28 });
+    const prep = this.prepareFireCheckSteps(nSnap);
+    if (prep.steps.length === 0 || prep.allDice.length === 0) {
+      this.continueEnemyPhaseAfterFireCheck();
+      return;
+    }
+    const bodyText = this.formatFireCheckBodyText(prep.steps, prep.pendingFire, nSnap);
+    const introKey = 'fireCheck.intro';
+    const introParams: Record<string, string | number> = {
+      n: nSnap,
+      rolls: prep.steps.length,
+      dice: prep.allDice.join('+'),
+    };
+    this.destroyFireCheckEventUI();
+    const refs = this.buildFireCheckEventPanel(prep.allDice);
+    for (const lab of refs.dieLabels) lab.string = '?';
+    refs.sumLabel.string = '';
+    refs.bodyLabel.string = '';
+    this.fireCheckEventUI = {
+      root: refs.root,
+      stage: 'roll',
+      t: 0,
+      dieLabels: refs.dieLabels,
+      allDice: prep.allDice,
+      sumLabel: refs.sumLabel,
+      bodyLabel: refs.bodyLabel,
+      introKey,
+      introParams,
+      bodyText,
+      apply: () => {
+        let pendingFire = 0;
+        for (const st of prep.steps) {
+          if (s.destroyed) break;
+          const preCrew = st.effect === 'crewCheck' && st.crewDie !== undefined
+            ? { crewDie: st.crewDie, crewSlot: st.crewSlot ?? null }
+            : undefined;
+          this.applyFireCheckEffect(s, st.effect, () => { pendingFire += 1; }, preCrew);
+        }
+        if (!s.destroyed && pendingFire > 0) {
+          s.fireLevel = (s.fireLevel ?? 0) + pendingFire;
+          console.log(`[Phase⑤] fireLevel += ${pendingFire} → ${s.fireLevel}`);
+        }
+        this.refreshStatusPanel();
+        this.redraw();
+      },
+    };
+  }
+
+  /**
+   * 预掷本批次全部着火检定（快照 n 次），用于 UI 展示；不在此写回 fireLevel（由确认后 apply 批量 +）。
+   * 阵亡检定二次骰在预掷中按与实机相同规则消耗 RNG，并用本地 hatch/crew 快照推演后续检定。
+   */
+  private prepareFireCheckSteps(nSnap: number): {
+    steps: FireCheckPreparedStep[];
+    pendingFire: number;
+    allDice: number[];
+  } {
+    const steps: FireCheckPreparedStep[] = [];
+    const allDice: number[] = [];
     let pendingFire = 0;
-    for (let i = 0; i < n; i++) {
-      if (s.destroyed) break;
+    let destroyed = !!this.mission!.sherman.destroyed;
+    let hatchOpen = !!this.mission!.sherman.hatchOpen;
+    const crew: ShermanCrew | undefined = this.mission!.sherman.crew
+      ? { ...this.mission!.sherman.crew }
+      : undefined;
+
+    for (let i = 0; i < nSnap; i++) {
+      if (destroyed) break;
       const die = this.rng.d6();
-      const effect = resolveDamageEffect(s, die);
+      allDice.push(die);
+      const effect = resolveDamageEffect({ kind: 'sherman' } as Unit, die);
       console.log(`[Phase⑤] d6=${die} → ${effect}`);
-      this.applyFireCheckEffect(s, effect, () => { pendingFire += 1; });
+
+      if (effect === 'destroyed') {
+        destroyed = true;
+        steps.push({ die, effect });
+        continue;
+      }
+      if (effect === 'fire') {
+        pendingFire += 1;
+        steps.push({ die, effect });
+        continue;
+      }
+      if (effect === 'crewCheck') {
+        const crewDie = this.rng.d6();
+        const slot = crewDie >= 1 && crewDie <= 5
+          ? (crewDie as 1 | 2 | 3 | 4 | 5)
+          : (hatchOpen ? 1 : null);
+        steps.push({ die, effect, crewDie, crewSlot: slot });
+        if (slot !== null && crew) {
+          switch (slot) {
+            case 1:
+              crew.commander = false;
+              hatchOpen = false;
+              break;
+            case 2: crew.loader = false; break;
+            case 3: crew.gunner = false; break;
+            case 4: crew.driver = false; break;
+            case 5: crew.coDriver = false; break;
+          }
+        }
+        continue;
+      }
+      if (effect === 'turret' || effect === 'paralyzed' || effect === 'damaged') {
+        steps.push({ die, effect });
+        continue;
+      }
+      steps.push({ die, effect });
     }
-    if (!s.destroyed && pendingFire > 0) {
-      s.fireLevel = (s.fireLevel ?? 0) + pendingFire;
-      console.log(`[Phase⑤] fireLevel += ${pendingFire} → ${s.fireLevel}`);
+    return { steps, pendingFire, allDice };
+  }
+
+  private formatFireCheckBodyText(
+    steps: FireCheckPreparedStep[],
+    pendingFire: number,
+    nSnap: number,
+  ): string {
+    const lines: string[] = [];
+    for (let i = 0; i < steps.length; i++) {
+      const st = steps[i];
+      const idx = i + 1;
+      let outcome = '';
+      if (st.effect === 'crewCheck') {
+        outcome = st.crewSlot != null
+          ? t('fireCheck.crewKia', { role: t(`crew.role.${st.crewSlot}`), cd: st.crewDie ?? 0 })
+          : t('fireCheck.crewSafe', { cd: st.crewDie ?? 0 });
+      } else {
+        outcome = this.fireCheckOutcomePhrase(st.effect);
+      }
+      lines.push(t('fireCheck.stepLine', { idx, die: st.die, outcome }));
     }
-    this.refreshStatusPanel();
-    this.redraw();
+    if (pendingFire > 0) {
+      lines.push(t('fireCheck.batchFire', { k: pendingFire, n: nSnap }));
+    }
+    return lines.join('\n');
+  }
+
+  private fireCheckOutcomePhrase(effect: DamageEffect): string {
+    switch (effect) {
+      case 'destroyed': return t('dmg.outcome.destroyed');
+      case 'fire': return t('dmg.effect.fire');
+      case 'turret': return t('dmg.outcome.turret');
+      case 'paralyzed': return t('dmg.outcome.paralyzed');
+      case 'damaged': return t('dmg.outcome.damaged');
+      case 'crewCheck': return t('dmg.outcome.crewCheck');
+      default: return String(effect);
+    }
   }
 
   /**
    * 着火检定单次结果 → 状态写回 + 浮字反馈。
-   * 'fire' 不就地累加 fireLevel，而是通过 onFire 回调交给调用方批量结算（见 runFireCheck）。
+   * 'fire' 不就地累加 fireLevel，而是通过 onFire 回调交给调用方批量结算。
+   * `preCrew` 有值时（面板确认回放）不再掷二次骰，与预掷一致。
    */
-  private applyFireCheckEffect(s: Unit, effect: DamageEffect, onFire: () => void) {
+  private applyFireCheckEffect(
+    s: Unit,
+    effect: DamageEffect,
+    onFire: () => void,
+    preCrew?: { crewDie: number; crewSlot: number | null },
+  ) {
     const pos = s.pos;
     const color = new Color(255, 180, 80, 255);
     switch (effect) {
@@ -4219,10 +4409,12 @@ export class BattleScene extends Component {
       case 'crewCheck': {
         // §3.4 Step 3 d6=2：再掷一次决定哪位乘员阵亡（与受击穿同机制）
         s.damaged = true;
-        const crewDie = this.rng.d6();
-        const slot = crewDie >= 1 && crewDie <= 5
-          ? crewDie as 1 | 2 | 3 | 4 | 5
-          : (s.hatchOpen ? 1 : null);
+        const crewDie = preCrew?.crewDie ?? this.rng.d6();
+        const slot = preCrew
+          ? preCrew.crewSlot
+          : (crewDie >= 1 && crewDie <= 5
+            ? crewDie as 1 | 2 | 3 | 4 | 5
+            : (s.hatchOpen ? 1 : null));
         if (slot !== null && s.crew) {
           switch (slot) {
             case 1:
@@ -4810,6 +5002,8 @@ export class BattleScene extends Component {
     this.destroyEnemyDiceTray();
     this.anim = null;          // 若在动画中点读档，直接丢弃动画状态
     this.finalizeDiceShow(true);
+    this.destroyTurnEndEventUI();
+    this.destroyFireCheckEventUI();
     this.closeDiePopover();
     this.clearFloaters();
     // 胜负状态也要随读档重新判定
@@ -4844,7 +5038,7 @@ export class BattleScene extends Component {
     }
     if (this.enemyIndex >= this.enemyOrder.length) {
       this.destroyEnemyDiceTray();
-      this.endEnemyPhase();
+      this.maybeBeginTurnEndEventOrEndEnemyPhase();
       return;
     }
 
@@ -5280,6 +5474,8 @@ export class BattleScene extends Component {
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
+    this.destroyTurnEndEventUI();
+    this.destroyFireCheckEventUI();
     this.closeDiePopover();
 
     const mg = !!opts.mg;
@@ -6001,7 +6197,379 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return this.anim !== null || this.diceShow !== null || this.enemyDiceSortAnim !== null;
+    return this.anim !== null || this.diceShow !== null || this.enemyDiceSortAnim !== null
+      || this.turnEndEventUI !== null || this.fireCheckEventUI !== null;
+  }
+
+  private destroyFireCheckEventUI() {
+    const ui = this.fireCheckEventUI;
+    if (!ui) return;
+    this.fireCheckEventUI = null;
+    if (ui.root.isValid) ui.root.destroy();
+  }
+
+  private buildFireCheckEventPanel(allDice: number[]): {
+    root: Node;
+    dieLabels: Label[];
+    sumLabel: Label;
+    bodyLabel: Label;
+  } {
+    const n = allDice.length;
+    const perRow = 6;
+    const rows = Math.max(1, Math.ceil(n / perRow));
+    const dieSize = n > 8 ? 38 : 46;
+    const gap = n > 8 ? 34 : 50;
+    const diceBlockH = rows * (dieSize + 10) - 10;
+
+    const root = new Node('FireCheckEventPanel');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+
+    const mask = new Node('Mask');
+    mask.layer = this.node.layer;
+    mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.addChild(mask);
+    const maskG = mask.addComponent(Graphics);
+    maskG.fillColor = new Color(0, 0, 0, 180);
+    maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    maskG.fill();
+    mask.addComponent(BlockInputEvents);
+
+    const pw = Math.min(720, CANVAS_W - 40);
+    const ph = Math.min(420 + (rows - 1) * 40, CANVAS_H - 64);
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    root.addChild(panel);
+    panel.addComponent(UITransform).setContentSize(pw, ph);
+    const panelG = panel.addComponent(Graphics);
+    panelG.fillColor = new Color(40, 44, 52, 255);
+    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
+    panelG.fill();
+    panelG.strokeColor = new Color(90, 98, 110, 255);
+    panelG.lineWidth = 2;
+    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
+    panelG.stroke();
+
+    const title = new Node('Title');
+    title.layer = this.node.layer;
+    panel.addChild(title);
+    const titleL = title.addComponent(Label);
+    titleL.string = t('fireCheck.title');
+    titleL.fontSize = 26;
+    titleL.color = new Color(240, 240, 240, 255);
+    title.setPosition(0, ph * 0.5 - 30);
+
+    const dieWrap = new Node('DieWrap');
+    dieWrap.layer = this.node.layer;
+    panel.addChild(dieWrap);
+    dieWrap.setPosition(0, ph * 0.5 - 56 - diceBlockH * 0.5);
+    const dieLabels: Label[] = [];
+    for (let r = 0; r < rows; r++) {
+      const inRow = Math.min(perRow, n - r * perRow);
+      const startX = -((inRow - 1) * gap) * 0.5;
+      for (let c = 0; c < inRow; c++) {
+        dieLabels.push(this.makeDieSquare(dieWrap, startX + c * gap, -r * (dieSize + 10), dieSize));
+      }
+    }
+
+    const textBlockW = Math.min(560, pw - 96);
+    const sumLabelN = new Node('SumLabel');
+    sumLabelN.layer = this.node.layer;
+    panel.addChild(sumLabelN);
+    sumLabelN.addComponent(UITransform).setContentSize(textBlockW, 36);
+    const sumL = sumLabelN.addComponent(Label);
+    sumL.fontSize = 19;
+    sumL.lineHeight = 24;
+    sumL.color = new Color(200, 210, 220, 255);
+    sumL.horizontalAlign = HorizontalTextAlignment.CENTER;
+    sumL.verticalAlign = VerticalTextAlignment.CENTER;
+    sumL.overflow = Label.Overflow.CLAMP;
+    sumL.string = '';
+    sumLabelN.setPosition(0, ph * 0.5 - 72 - diceBlockH - 8);
+
+    const bodyN = new Node('BodyLabel');
+    bodyN.layer = this.node.layer;
+    panel.addChild(bodyN);
+    const bodyUt = bodyN.addComponent(UITransform);
+    bodyUt.setAnchorPoint(0.5, 1);
+    bodyUt.setContentSize(textBlockW, 1);
+    const bodyL = bodyN.addComponent(Label);
+    bodyL.fontSize = 18;
+    bodyL.lineHeight = 24;
+    bodyL.color = new Color(220, 225, 230, 255);
+    bodyL.overflow = Label.Overflow.RESIZE_HEIGHT;
+    bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
+    bodyL.verticalAlign = VerticalTextAlignment.TOP;
+    bodyL.string = '';
+    bodyN.setPosition(0, ph * 0.5 - 110 - diceBlockH - 8);
+
+    const confirmB = this.makeBattleRectButton(
+      panel,
+      0,
+      -ph * 0.5 + 48,
+      200,
+      44,
+      BATTLE_BTN_ACCENT,
+      () => this.onFireCheckConfirmClick(),
+    );
+    const confirmLab = this.makeBattleModalLabel(
+      confirmB.node,
+      t('fireCheck.confirm'),
+      0,
+      0,
+      200,
+      44,
+      22,
+      Color.WHITE,
+    );
+    this.mirrorBattleModalButtonLabel(confirmLab, () => this.onFireCheckConfirmClick());
+
+    return { root, dieLabels, sumLabel: sumL, bodyLabel: bodyL };
+  }
+
+  private advanceFireCheckEventUI(dt: number) {
+    const ui = this.fireCheckEventUI;
+    if (!ui || ui.stage !== 'roll') return;
+    ui.t += dt;
+    const DUR = 0.55;
+    if (ui.t < DUR) {
+      const tick = Math.floor(ui.t / 0.08) % 6;
+      for (const lab of ui.dieLabels) lab.string = String((tick % 6) + 1);
+      return;
+    }
+    for (let i = 0; i < ui.dieLabels.length; i++) {
+      const lab = ui.dieLabels[i];
+      if (lab) lab.string = String(ui.allDice[i] ?? '?');
+    }
+    ui.sumLabel.string = t(ui.introKey, ui.introParams);
+    ui.bodyLabel.string = ui.bodyText;
+    ui.stage = 'hold';
+  }
+
+  private onFireCheckConfirmClick() {
+    const ui = this.fireCheckEventUI;
+    if (!ui || ui.stage !== 'hold') return;
+    try {
+      ui.apply();
+    } catch (e) {
+      console.error('[FireCheck] apply failed', e);
+    }
+    this.destroyFireCheckEventUI();
+    this.continueEnemyPhaseAfterFireCheck();
+  }
+
+  private destroyTurnEndEventUI() {
+    const ui = this.turnEndEventUI;
+    if (!ui) return;
+    this.turnEndEventUI = null;
+    if (ui.root.isValid) ui.root.destroy();
+  }
+
+  /** 敌方阶段全部结束后：若有回合结束事件表则先播主骰与说明，否则直接进入下一玩家回合。 */
+  private maybeBeginTurnEndEventOrEndEnemyPhase() {
+    if (!this.mission) {
+      this.endEnemyPhase();
+      return;
+    }
+    const mid = this.mission.data.id;
+    const hasTe = hasTurnEndEvents(mid);
+    /** 胜负态在 BattleScene.this.outcome；mission 对象无 outcome 字段，勿用 this.mission.outcome */
+    if (this.outcome !== 'ongoing' || !hasTurnEndEvents(mid)) {
+      this.endEnemyPhase();
+      return;
+    }
+    this.startTurnEndEventFlow(mid);
+  }
+
+  private startTurnEndEventFlow(missionId: string) {
+    if (!this.mission) return;
+    const diceCount = turnEndDiceCountForMission(missionId);
+    const primaryDice: number[] = [];
+    for (let i = 0; i < diceCount; i++) primaryDice.push(this.rng.d6());
+    const sum = primaryDice.reduce((a, b) => a + b, 0);
+    const row = turnEndRowForSum(missionId, sum);
+    if (!row) {
+      console.warn(`[TurnEnd] no row for mission=${missionId} sum=${sum}`);
+      this.endEnemyPhase();
+      return;
+    }
+    const ctx = {
+      mission: this.mission,
+      rng: this.rng,
+      nextEnemyId: () => {
+        this.turnEndUnitSeq += 1;
+        return `turnend_${this.turnEndUnitSeq}`;
+      },
+    };
+    const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
+    this.destroyTurnEndEventUI();
+    const refs = this.buildTurnEndEventPanel(primaryDice);
+    for (const lab of refs.dieLabels) lab.string = '?';
+    refs.sumLabel.string = '';
+    refs.bodyLabel.string = '';
+    this.turnEndEventUI = {
+      root: refs.root,
+      stage: 'roll',
+      t: 0,
+      dieLabels: refs.dieLabels,
+      primaryDice,
+      sumLabel: refs.sumLabel,
+      bodyLabel: refs.bodyLabel,
+      bodyKey: prepared.bodyKey,
+      bodyParams: prepared.bodyParams,
+      apply: prepared.apply,
+    };
+  }
+
+  private buildTurnEndEventPanel(primaryDice: number[]): {
+    root: Node;
+    dieLabels: Label[];
+    sumLabel: Label;
+    bodyLabel: Label;
+  } {
+    const root = new Node('TurnEndEventPanel');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+
+    const mask = new Node('Mask');
+    mask.layer = this.node.layer;
+    mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.addChild(mask);
+    const maskG = mask.addComponent(Graphics);
+    maskG.fillColor = new Color(0, 0, 0, 180);
+    maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    maskG.fill();
+    mask.addComponent(BlockInputEvents);
+
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    root.addChild(panel);
+    const pw = Math.min(720, CANVAS_W - 40);
+    const ph = Math.min(420, CANVAS_H - 80);
+    panel.addComponent(UITransform).setContentSize(pw, ph);
+    const panelG = panel.addComponent(Graphics);
+    panelG.fillColor = new Color(40, 44, 52, 255);
+    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
+    panelG.fill();
+    panelG.strokeColor = new Color(90, 98, 110, 255);
+    panelG.lineWidth = 2;
+    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
+    panelG.stroke();
+
+    const title = new Node('Title');
+    title.layer = this.node.layer;
+    panel.addChild(title);
+    const titleL = title.addComponent(Label);
+    titleL.string = t('turnEnd.title');
+    titleL.fontSize = 26;
+    titleL.color = new Color(240, 240, 240, 255);
+    title.setPosition(0, ph * 0.5 - 32);
+
+    const dieWrap = new Node('DieWrap');
+    dieWrap.layer = this.node.layer;
+    panel.addChild(dieWrap);
+    dieWrap.setPosition(0, ph * 0.5 - 98);
+    const gap = 56;
+    const startX = -((primaryDice.length - 1) * gap) * 0.5;
+    const dieLabels: Label[] = [];
+    for (let i = 0; i < primaryDice.length; i++) {
+      dieLabels.push(this.makeDieSquare(dieWrap, startX + i * gap, 0, 48));
+    }
+
+    /** 正文区左右留白略大于面板边线，避免「贴边太满」；与主骰行同宽便于对齐 */
+    const textBlockW = Math.min(560, pw - 96);
+    const sumLabelN = new Node('SumLabel');
+    sumLabelN.layer = this.node.layer;
+    panel.addChild(sumLabelN);
+    sumLabelN.addComponent(UITransform).setContentSize(textBlockW, 30);
+    const sumL = sumLabelN.addComponent(Label);
+    sumL.fontSize = 20;
+    sumL.lineHeight = 24;
+    sumL.color = new Color(200, 210, 220, 255);
+    sumL.horizontalAlign = HorizontalTextAlignment.CENTER;
+    sumL.verticalAlign = VerticalTextAlignment.CENTER;
+    sumL.overflow = Label.Overflow.CLAMP;
+    sumL.string = '';
+    sumLabelN.setPosition(0, ph * 0.5 - 154);
+
+    const bodyN = new Node('BodyLabel');
+    bodyN.layer = this.node.layer;
+    panel.addChild(bodyN);
+    const bodyUt = bodyN.addComponent(UITransform);
+    bodyUt.setAnchorPoint(0.5, 1);
+    bodyUt.setContentSize(textBlockW, 1);
+    const bodyL = bodyN.addComponent(Label);
+    bodyL.fontSize = 19;
+    bodyL.lineHeight = 24;
+    bodyL.color = new Color(220, 225, 230, 255);
+    bodyL.overflow = Label.Overflow.RESIZE_HEIGHT;
+    bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
+    bodyL.verticalAlign = VerticalTextAlignment.TOP;
+    bodyL.string = '';
+    bodyN.setPosition(0, ph * 0.5 - 176);
+
+    const confirmB = this.makeBattleRectButton(
+      panel,
+      0,
+      -ph * 0.5 + 52,
+      200,
+      44,
+      BATTLE_BTN_ACCENT,
+      () => this.onTurnEndConfirmClick(),
+    );
+    const confirmLab = this.makeBattleModalLabel(
+      confirmB.node,
+      t('turnEnd.confirm'),
+      0,
+      0,
+      200,
+      44,
+      22,
+      Color.WHITE,
+    );
+    this.mirrorBattleModalButtonLabel(confirmLab, () => this.onTurnEndConfirmClick());
+
+    return { root, dieLabels, sumLabel: sumL, bodyLabel: bodyL };
+  }
+
+  private advanceTurnEndEventUI(dt: number) {
+    const ui = this.turnEndEventUI;
+    if (!ui || ui.stage !== 'roll') return;
+    ui.t += dt;
+    const DUR = 0.55;
+    if (ui.t < DUR) {
+      const tick = Math.floor(ui.t / 0.08) % 6;
+      for (const lab of ui.dieLabels) lab.string = String((tick % 6) + 1);
+      return;
+    }
+    for (let i = 0; i < ui.dieLabels.length; i++) {
+      const lab = ui.dieLabels[i];
+      if (lab) lab.string = String(ui.primaryDice[i] ?? '?');
+    }
+    const s = ui.primaryDice.reduce((a, b) => a + b, 0);
+    ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
+    ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+    ui.stage = 'hold';
+  }
+
+  private onTurnEndConfirmClick() {
+    const ui = this.turnEndEventUI;
+    if (!ui || ui.stage !== 'hold') return;
+    try {
+      ui.apply();
+    } catch (e) {
+      console.error('[TurnEnd] apply failed', e);
+    }
+    this.destroyTurnEndEventUI();
+    this.refreshStatusPanel();
+    this.redraw();
+    this.endEnemyPhase();
   }
 
   /**

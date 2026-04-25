@@ -240,4 +240,34 @@ battle.load.none,无存档,No save data
 battle.load.badJson,存档格式损坏,Save data corrupted
 battle.load.busy,忙碌中无法读档,Cannot load while busy
 battle.load.fail,读档失败：{reason},Load failed: {reason}
+turnEnd.title,回合结束事件,Turn-end event
+turnEnd.confirm,确认,OK
+turnEnd.sumLine,主骰 {dice}，合计 {sum},Rolled {dice} (sum {sum})
+turnEnd.sniper.kia,敌方狙击手：谢尔曼舱盖开启且视野内有步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡，车体受损。,Enemy sniper: hatch open with infantry in sight. Event dice {d1}+{d2}={sum}. Commander KIA; hull damaged.
+turnEnd.sniper.safe,敌方狙击手射击（事件骰 {d1}+{d2}={sum}）。舱盖状态 {hatch}、视野内步兵 {los}，未造成车长伤亡。,Enemy sniper fires (event dice {d1}+{d2}={sum}). Hatch={hatch} LOS infantry={los}; commander unharmed.
+turnEnd.commanderExtra.skip,车长额外指挥：车长不在位，无效果。,Commander bonus: no commander; no effect.
+turnEnd.commanderExtra.fire,车长组织灭火：着火层数 -1。,Commander leads firefighting: fire level -1.
+turnEnd.commanderExtra.paralyze,车长督促抢修：解除瘫痪。,Commander oversees repairs: immobilized cleared.
+turnEnd.commanderExtra.turret,车长督导炮塔抢修：炮塔恢复可用。,Commander supervises turret repair: turret restored.
+turnEnd.commanderExtra.load,车长督促装填：主炮完成装填。,Commander urges loading: main gun loaded.
+turnEnd.infantry.placed,德军步兵增援：增援骰 {spawnDie}，部署至增援格 rid={rid}（若格空）。确认后放置单位。,German infantry reinforcement: die {spawnDie} at reinforce tile rid={rid} if clear. Confirm to place.
+turnEnd.infantry.blocked,德军步兵增援：增援骰 {spawnDie}，目标格 rid={rid} 不可用或已被占据，未部署。,Infantry reinforcement: die {spawnDie}; tile rid={rid} blocked or occupied; not placed.
+turnEnd.adjacent,与谢尔曼相邻的敌军步兵集火：已按直射或间接火力规则结算。,Adjacent enemy infantry fire on the Sherman: resolved per direct/indirect rules.
+turnEnd.mechanical.already,机械故障：谢尔曼已瘫痪，无额外效果。,Mechanical failure: already immobilized; no extra effect.
+turnEnd.mechanical.ok,机械故障：行走/动力受损，谢尔曼瘫痪并标记车体受损。,Mechanical failure: Sherman immobilized and marked damaged.
+turnEnd.stuka.miss,斯图卡空袭：未对谢尔曼造成有效毁伤（详见各掷骰）。,Stuka attack: no effective damage to the Sherman.
+turnEnd.stuka.shotDown,车长对空射击 2d6={aa1}+{aa2}={aasum}（≥6）：斯图卡被击落，无轰炸命中。,AA fire 2d6={aa1}+{aa2}={aasum} (≥6): Stuka shot down; no bomb hit.
+turnEnd.stuka.hit,斯图卡轰炸命中车体：轰炸 2d6={b1}+{b2}={bsum}，穿甲与伤害已在战报中预掷。确认后应用到谢尔曼。,Stuka bomb hit: 2d6={b1}+{b2}={bsum}. Penetration and damage pre-rolled; confirm to apply.
+turnEnd.stuka.bombMiss,斯图卡投弹未命中装甲目标：{b1}+{b2}={bsum}（需≥8）。,Stuka bombs miss armor: {b1}+{b2}={bsum} (need ≥8).
+turnEnd.stuka.ric,斯图卡炸弹命中但未击穿（穿甲骰未过阈值），无车体伤害。,Bomb hit but no penetration; no hull damage.
+turnEnd.panzer3.placed,敌军 III 号坦克增援：起始格骰 {spawnDie}，eid={eid}。格可用则确认后放置。,Panzer III reinforcement: start die {spawnDie} eid={eid}. Confirm to place if tile free.
+turnEnd.panzer3.blocked,III 号增援：骰 {spawnDie}，目标格 eid={eid} 被坦克占据或不可用，未部署。,Panzer III reinforcement: die {spawnDie}; tile eid={eid} blocked; not placed.
+turnEnd.unknown,未配置的回合结束效果类型。,Unknown turn-end effect.
+fireCheck.title,着火程度检定,Fire intensity check
+fireCheck.confirm,确定,OK
+fireCheck.intro,按快照掷 {rolls} 次 d6：{dice}（着火层数 {n}）。,Rolling {rolls} fire check d6: {dice} (fire level snapshot {n}).
+fireCheck.stepLine,第{idx}次：d6={die} → {outcome},Roll {idx}: d6={die} → {outcome}
+fireCheck.crewKia,阵亡检定 d6={cd}：{role} 阵亡,Crew check d6={cd}: {role} KIA
+fireCheck.crewSafe,阵亡检定 d6={cd}：虚惊,Crew check d6={cd}: false alarm
+fireCheck.batchFire,其中 {k} 次为「起火+1」。,{k} roll(s) add fire.
 
