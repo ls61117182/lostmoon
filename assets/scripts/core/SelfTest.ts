@@ -18,7 +18,7 @@ import { RNG } from './Dice';
 
 export function runSelfTest(missionJson: MissionData): void {
   console.log('=== Sherman Self-Test ===');
-  const { map, sherman, enemies } = loadMission(missionJson);
+  const { map, sherman, enemies } = loadMission(missionJson, new RNG(42));
 
   // 1. 地图统计
   const tiles = map.all();

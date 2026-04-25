@@ -798,7 +798,8 @@ export class BattleScene extends Component {
 
   private loadAndDraw(data: MissionData) {
     this.missionId = data.id;
-    this.mission = loadMission(data);
+    this.rng = new RNG(this.rngSeed || undefined);
+    this.mission = loadMission(data, this.rng);
     const { sherman: sh0 } = this.mission;
     this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
     this.shermanSpawnFacing = sh0.facing;
@@ -827,7 +828,6 @@ export class BattleScene extends Component {
     this.phaseDice = [];
     this.clearGunSelection();
     this.outcome = 'ongoing';
-    this.rng = new RNG(this.rngSeed || undefined);
     this.clearFloaters();
     this.closeDiePopover();
     this.finalizeDiceShow(true);

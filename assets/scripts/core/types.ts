@@ -38,8 +38,10 @@ export interface Tile {
   hedges?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** 援军生成位编号（如说明书的红色数字 1..6） */
   reinforceId?: number;
-  /** 德军初始位编号（黑色数字） */
+  /** 德军初始位编号（黑色数字 1..6；掷骰出生时全图同编号至多一格） */
   enemyStartId?: number;
+  /** 与 `enemyStartId` 同格：该出生点坦克初始朝向（与盘面数字贴近的边一致，0=E…5=NE） */
+  enemyStartFacing?: Direction;
 }
 
 // ---------- 单位 ----------
@@ -113,10 +115,10 @@ export interface MissionObjective {
 export interface UnitPlacement {
   kind: UnitKind;
   faction: Faction;
-  /** Offset 坐标，方便策划在表格里写 */
-  at: Offset;
+  /** Offset 坐标；若关卡 `enemyStartByDice` 为 true 则可省略，由掷骰规则写入 */
+  at?: Offset;
   facing?: Direction;
-  /** 若为 N，则在 enemyStartId == N 的格子里随机放置 */
+  /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `eid` */
   startId?: number;
 }
 
@@ -133,6 +135,11 @@ export interface MissionData {
   sherman: UnitPlacement;
   /** 德军初始放置 */
   enemies: UnitPlacement[];
+  /**
+   * 为 true 时：每个敌方单位开局掷 1d6，按编号 1..6 的出生格链式占位（见 GDD / MissionLoader）；
+   * 此时 `enemies[].at` / `facing` 可省略。
+   */
+  enemyStartByDice?: boolean;
   /** 胜负条件 */
   objective: MissionObjective;
   /** 使用的行动表 / AI 表 / 事件表 ID（默认 'standard'） */
@@ -156,8 +163,10 @@ export interface TileDef {
   h?: string;
   /** 援军编号 */
   rid?: number;
-  /** 敌方起始编号 */
+  /** 敌方起始编号 1..6（掷骰链用；全图不重复） */
   eid?: number;
+  /** 与 `eid` 同格：初始朝向，与数字贴近的六角边对应（0=E … 5=NE） */
+  ef?: number;
 }
 
 /** 有建筑时：田/泥+建筑=农场，公路+建筑=村庄（与 GDD §3.2 一致） */
