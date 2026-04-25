@@ -164,11 +164,17 @@ export function probDie1d6(threshold: number): number {
 /**
  * 攻击方向相对目标车体朝向的夹角 → 装甲面。
  * diff=0 正面；diff=±1 前侧；diff=±2 后侧；diff=3 后方。
+ *
+ *  bearing 取「从目标格心指向攻击者格心」的离散六向，与 §3.3「方向圈」及主炮 `canAttack`
+ *  的共线判定一致：同射线时优先 `directionTo`，避免仅用 `approximateDirection` 与真实轴线
+ *  在个别格对上出现偏差。
  */
 export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
   if (target.facing === null) return 'front'; // 无朝向单位按正面吃伤
-  const attackDir = approximateDirection(target.pos, attackerPos);
-  const diff = rotateDirection(attackDir, -target.facing);
+  const bearing =
+    directionTo(target.pos, attackerPos)
+    ?? approximateDirection(target.pos, attackerPos);
+  const diff = rotateDirection(bearing, -target.facing);
   if (diff === 0) return 'front';
   if (diff === 1 || diff === 5) return 'frontSide';
   if (diff === 2 || diff === 4) return 'rearSide';

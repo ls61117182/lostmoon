@@ -120,6 +120,7 @@ function describeEntry(entry: AIActionEntry): string {
       case 'reverse': return '后退';
       case 'smoke':   return '烟雾';
       case 'repair':  return '修复';
+      case 'conceal': return '隐蔽';
       case 'none':    return '无';
     }
   };
@@ -4734,6 +4735,15 @@ export class BattleScene extends Component {
             new Color(160, 220, 160, 255), { size: 24 });
           this.redraw();
         }
+        return 'done';
+      }
+
+      case 'conceal': {
+        enemy.hidden = true;
+        console.log(`[AI] ${enemy.kind} 进入隐蔽`);
+        this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.concealed'),
+          new Color(160, 200, 160, 255), { size: 24 });
+        this.redraw();
         return 'done';
       }
     }

@@ -14,6 +14,7 @@ export type EnemyAction =
   | 'reverse'
   | 'smoke'
   | 'repair'
+  | 'conceal'
   | 'none';
 
 /** 一颗骰的 A>B 条目；无 fallback 则只执行 primary */
@@ -41,32 +42,32 @@ export const DEFAULT_AI_TABLE: AIActionTable = {
   road: {
     1: { primary: 'shoot', fallback: 'turn' },
     2: { primary: 'advance', fallback: 'shoot' },
-    3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'turn' },
-    5: { primary: 'advance', fallback: 'shoot' },
-    6: { primary: 'advance', fallback: 'turn' },
+    3: { primary: 'shoot', fallback: 'advance' },
+    4: { primary: 'advance', fallback: 'turn' },
+    5: { primary: 'advance', fallback: 'reverse' },
+    6: { primary: 'shoot', fallback: 'smoke' },
   },
   field: {
     1: { primary: 'shoot', fallback: 'turn' },
-    2: { primary: 'turn' },
-    3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'advance', fallback: 'turn' },
-    5: { primary: 'advance', fallback: 'turn' },
-    6: { primary: 'advance', fallback: 'reverse' },
+    2: { primary: 'advance', fallback: 'turn' },
+    3: { primary: 'shoot', fallback: 'advance' },
+    4: { primary: 'turn' },
+    5: { primary: 'advance', fallback: 'reverse' },
+    6: { primary: 'shoot', fallback: 'conceal' },
   },
   mud: {
     1: { primary: 'shoot' },
     2: { primary: 'turn' },
     3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'turn' },
-    5: { primary: 'advance', fallback: 'shoot' },
-    6: { primary: 'advance', fallback: 'smoke' },
+    4: { primary: 'advance', fallback: 'reverse' },
+    5: { primary: 'shoot' },
+    6: { primary: 'smoke' },
   },
   damaged: {
     1: { primary: 'repair' },
     2: { primary: 'turn' },
     3: { primary: 'advance', fallback: 'turn' },
-    4: { primary: 'turn' },
+    4: { primary: 'advance', fallback: 'reverse' },
     5: { primary: 'shoot' },
     6: { primary: 'smoke' },
   },

@@ -21,7 +21,7 @@ const DICE_CSV = path.join(ROOT, 'data', 'enemy_ai_dice.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'EnemyAIDB.ts');
 
 const AI_COLUMNS = ['road', 'field', 'mud', 'damaged'];
-const AI_ACTIONS = ['shoot', 'turn', 'advance', 'reverse', 'smoke', 'repair', 'none'];
+const AI_ACTIONS = ['shoot', 'turn', 'advance', 'reverse', 'smoke', 'repair', 'conceal', 'none'];
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);

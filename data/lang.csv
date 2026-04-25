@@ -181,6 +181,7 @@ dice.aiEnemy.advance,前进,Advance
 dice.aiEnemy.reverse,后退,Reverse
 dice.aiEnemy.smoke,烟雾,Smoke
 dice.aiEnemy.repair,修复,Repair
+dice.aiEnemy.conceal,隐蔽,Conceal
 dice.aiEnemy.none,无,None
 dice.aiEnemy.waste,空转,No action
 menu.title,孤胆谢尔曼,Lone Sherman

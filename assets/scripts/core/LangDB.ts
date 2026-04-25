@@ -193,6 +193,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'dice.aiEnemy.reverse': { zh: "后退", en: "Reverse" },
   'dice.aiEnemy.smoke': { zh: "烟雾", en: "Smoke" },
   'dice.aiEnemy.repair': { zh: "修复", en: "Repair" },
+  'dice.aiEnemy.conceal': { zh: "隐蔽", en: "Conceal" },
   'dice.aiEnemy.none': { zh: "无", en: "None" },
   'dice.aiEnemy.waste': { zh: "空转", en: "No action" },
   'menu.title': { zh: "孤胆谢尔曼", en: "Lone Sherman" },

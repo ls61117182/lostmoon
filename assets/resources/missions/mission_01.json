@@ -92,7 +92,7 @@
 
   "enemies": [
     {
-      "kind": "panzer4",
+      "kind": "tiger",
       "faction": "german",
       "at": { "col": 4, "row": 2 },
       "facing": 2,

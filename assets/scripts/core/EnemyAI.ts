@@ -170,7 +170,7 @@ function pickShortestTurnTowards(
 /**
  * 给定一个行动，判断敌坦当前能不能执行。
  *
- * 注：`turn` 与 `smoke`、`repair` 几乎总能执行；真正会"做不了"的主要是射击（无视线）
+ * 注：`turn` 与 `smoke`、`repair` 几乎总能执行；`conceal` 在已隐蔽时不可重复；真正会"做不了"的主要是射击（无视线）
  * 与前进/后退（正前/正后被堵）。
  */
 export function canExecuteAction(
@@ -187,6 +187,7 @@ export function canExecuteAction(
     case 'turn':   return true;
     case 'smoke':  return !enemy.smoked;
     case 'repair': return !!enemy.damaged;
+    case 'conceal': return !enemy.hidden;
     case 'advance':
     case 'reverse': {
       if (enemy.paralyzed) return false;
