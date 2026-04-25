@@ -2927,7 +2927,20 @@ export class BattleScene extends Component {
     const { map, sherman } = this.mission;
     const tile = map.get(sherman.pos);
     const terrain = tile ? tile.terrain : 'field';
-    const count = actionDicePool({ terrain, hatchOpen: !!sherman.hatchOpen });
+    const crew = sherman.crew ?? {
+      commander: false,
+      loader: false,
+      gunner: false,
+      driver: false,
+      coDriver: false,
+    };
+    const subPhase = which === 'movement' ? 'movement' : which === 'attack' ? 'attack' : 'misc';
+    const count = actionDicePool({
+      subPhase,
+      terrain,
+      hatchOpen: !!sherman.hatchOpen,
+      crew,
+    });
     const pips = rollActionDice(this.rng, count);
     this.phaseDice = pips.map(pip => ({ pip, used: false }));
     this.clearGunSelection();
@@ -2936,7 +2949,7 @@ export class BattleScene extends Component {
 
     const label = which === 'movement' ? '移动' : which === 'attack' ? '攻击' : '杂项';
     console.log(`[Dice] ${label}阶段掷骰: `
-      + `[${pips.join(', ')}]（地形 ${terrain}, 舱盖 ${sherman.hatchOpen ? '开' : '关'}）`);
+      + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${sherman.hatchOpen ? '开' : '关'}）`);
 
     this.refreshPhaseUI();
     this.updateHUD();

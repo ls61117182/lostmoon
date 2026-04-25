@@ -1,10 +1,25 @@
 ﻿modifier,value,notes
-base,3,基础骰数
-hatch_open,1,车长打开舱盖 +1
-terrain_road,1,公路格 +1
-terrain_field,0,田地格 不变
-terrain_mud,-1,泥地格 -1
-terrain_forest,0,林地格（坦克不可入，占位）
-terrain_water,0,水域格（坦克不可入，占位）
-cap_min,1,骰数下限（不低于此值）
-cap_max,5,骰数上限（不高于此值）
+move_road,2,移动阶段·公路基础骰
+move_field,1,移动阶段·田地基础骰
+move_mud,0,移动阶段·泥地基础骰
+move_forest,0,移动阶段·林地（不可入占位）
+move_water,0,移动阶段·水域（不可入占位）
+attack_road,2,攻击阶段·公路基础骰
+attack_field,2,攻击阶段·田地基础骰
+attack_mud,1,攻击阶段·泥地基础骰
+attack_forest,0,攻击阶段·林地占位
+attack_water,0,攻击阶段·水域占位
+misc_road,1,杂项阶段·公路基础骰
+misc_field,2,杂项阶段·田地基础骰
+misc_mud,1,杂项阶段·泥地基础骰
+misc_forest,0,杂项阶段·林地占位
+misc_water,0,杂项阶段·水域占位
+mod_move_driver,1,移动：驾驶员存活则加骰
+mod_move_codriver,1,移动：副驾驶存活则加骰
+mod_move_hatch,1,移动：车长开舱则加骰
+mod_attack_gunner,1,攻击：炮手存活则加骰
+mod_attack_loader,1,攻击：装填手存活则加骰
+mod_attack_hatch,1,攻击：车长开舱则加骰
+mod_misc_commander,1,杂项：车长存活则加骰（与舱盖无关）
+cap_min,1,掷骰数下限
+cap_max,5,掷骰数上限

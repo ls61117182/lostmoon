@@ -1,10 +1,9 @@
 /**
  * 行动阶段骰子逻辑 —— 纯 TypeScript，不依赖 Cocos。
  *
- * GDD §3.6 规定玩家进入"谢尔曼行动阶段"时先掷 N 颗骰子（N = 基础 3 + 地形修正
- * + 舱盖修正 + 乘员修正，上限 5），再按骰面点数把每颗骰子拖进 A/B/C 三列行动槽。
- * 本 demo 把它拆成"移动阶段 / 攻击阶段各自独立掷骰"——玩家手动选先进哪个阶段，
- * 每进一次都重摇一次骰。
+ * GDD §3.6.1：掷骰数 = **当前子阶段（移动 / 攻击 / 杂项）× 谢尔曼当前格地形** 的基础值，
+ * 再叠加该阶段适用的乘员存活 / 舱盖修正，最后经配置的上下限钳制。
+ * 玩家进入某一子阶段时重摇该数量的骰，再按骰面拖入对应行动槽。
  *
  * 本文件只负责薄薄一层业务胶水：
  *   1) `actionDicePool()`：按 GDD 公式计算本阶段应掷多少颗骰；
@@ -20,13 +19,14 @@
 
 import { RNG } from './Dice';
 import {
+  ActionDiceSubPhase,
   PLAYER_ACTION_BY_PIP,
   PLAYER_DICE_POOL,
   AttackDieAction as AttackDieActionDB,
   MiscDieAction as MiscDieActionDB,
   MoveDieAction as MoveDieActionDB,
 } from './PlayerActionDB';
-import { TerrainType } from './types';
+import { ShermanCrew, TerrainType } from './types';
 
 // ---------- 动作分类 ----------
 
@@ -98,25 +98,40 @@ export function classifyMiscDie(pt: number): MiscDieAction {
 
 // ---------- 行动骰池 ----------
 
+export type { ActionDiceSubPhase };
+
 export interface ActionDicePoolOpts {
+  /** 当前进入的子阶段（与底部按钮一致） */
+  subPhase: ActionDiceSubPhase;
   /** 谢尔曼当前所在格的地形 */
   terrain: TerrainType;
-  /** 车长舱盖是否打开 */
+  /** 车长舱盖是否打开（仅移动 / 攻击子阶段参与加骰；杂项不加舱盖骰） */
   hatchOpen: boolean;
+  /** 五名乘员存活标记；缺省按全 false 处理 */
+  crew: ShermanCrew;
 }
 
 /**
- * 本阶段应掷骰数。修正来自 `data/player_dice_pool.csv`：
- *   基础、地形修正、舱盖修正、上下限全部读配置；本文件不再写任何魔法数字。
- *
- * 乘员修正 MVP 暂未落实（驾驶员/炮手阵亡的细则后续迭代时补）。
+ * 本阶段应掷骰数。`data/player_dice_pool.csv` → `PLAYER_DICE_POOL`：
+ *   子阶段 × 地形基础、各阶段修正系数、cap_min / cap_max 均来自配置。
  */
 export function actionDicePool(opts: ActionDicePoolOpts): number {
   const cfg = PLAYER_DICE_POOL;
-  let n = cfg.base;
-  const bonus = cfg.terrainBonus[opts.terrain];
-  if (typeof bonus === 'number') n += bonus;
-  if (opts.hatchOpen) n += cfg.hatchOpen;
+  const row = cfg.baseByPhaseTerrain[opts.subPhase];
+  let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
+
+  if (opts.subPhase === 'movement') {
+    if (opts.crew.driver) n += cfg.moveMods.driver;
+    if (opts.crew.coDriver) n += cfg.moveMods.codriver;
+    if (opts.hatchOpen) n += cfg.moveMods.hatch;
+  } else if (opts.subPhase === 'attack') {
+    if (opts.crew.gunner) n += cfg.attackMods.gunner;
+    if (opts.crew.loader) n += cfg.attackMods.loader;
+    if (opts.hatchOpen) n += cfg.attackMods.hatch;
+  } else {
+    if (opts.crew.commander) n += cfg.miscMods.commander;
+  }
+
   return Math.max(cfg.capMin, Math.min(cfg.capMax, n));
 }
 

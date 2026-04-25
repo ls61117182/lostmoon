@@ -3,7 +3,7 @@
  *
  * 数据源：data/player_action_table.csv + data/player_dice_pool.csv
  * 重新生成：node tools/buildPlayerActionDB.js
- * 对应 GDD §3.6 行动表 + 掷骰公式。
+ * 对应 GDD §3.6 行动表 + §3.6.1 掷骰数。
  */
 
 import { TerrainType } from './types';
@@ -41,29 +41,58 @@ export const PLAYER_ACTION_DOUBLES: ActionTableRow = {
   misc: 'concealment',
 };
 
-/** 骰池基础配置 + 地形修正 + 上下限。由 actionDicePool() 消费。 */
-export interface DicePoolConfig {
-  /** 基础骰数（常量） */
-  base: number;
-  /** 车长打开舱盖的 +N */
-  hatchOpen: number;
-  /** 地形 → 修正 (+/-) */
-  terrainBonus: Record<TerrainType, number>;
-  /** 骰数下限（不低于此值） */
+/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 上下限。由 actionDicePool() 消费。 */
+export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';
+
+export interface PlayerDicePoolConfig {
+  /** 移动 / 攻击 / 杂项 → 各地形基础骰数 */
+  baseByPhaseTerrain: Record<ActionDiceSubPhase, Record<TerrainType, number>>;
+  /** 移动阶段：驾驶员 / 副驾驶存活、开舱 各加多少（通常为 1） */
+  moveMods: { driver: number; codriver: number; hatch: number };
+  /** 攻击阶段：炮手 / 装填手存活、开舱 */
+  attackMods: { gunner: number; loader: number; hatch: number };
+  /** 杂项阶段：车长存活（与舱盖无关） */
+  miscMods: { commander: number };
   capMin: number;
-  /** 骰数上限（不高于此值） */
   capMax: number;
 }
 
-export const PLAYER_DICE_POOL: DicePoolConfig = {
-  base: 3,
-  hatchOpen: 1,
-  terrainBonus: {
-    road: 1,
-    field: 0,
-    mud: -1,
-    forest: 0,
-    water: 0,
+export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {
+  baseByPhaseTerrain: {
+    movement: {
+      road: 2,
+      field: 1,
+      mud: 0,
+      forest: 0,
+      water: 0,
+    },
+    attack: {
+      road: 2,
+      field: 2,
+      mud: 1,
+      forest: 0,
+      water: 0,
+    },
+    misc: {
+      road: 1,
+      field: 2,
+      mud: 1,
+      forest: 0,
+      water: 0,
+    },
+  },
+  moveMods: {
+    driver: 1,
+    codriver: 1,
+    hatch: 1,
+  },
+  attackMods: {
+    gunner: 1,
+    loader: 1,
+    hatch: 1,
+  },
+  miscMods: {
+    commander: 1,
   },
   capMin: 1,
   capMax: 5,

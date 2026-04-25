@@ -5,7 +5,7 @@
  *
  * 对应 GDD §3.6：
  *   - 行动表：骰面 1..6 / doubles → A 移动 / B 攻击 / C 杂项 三列动作
- *   - 骰池：基础 + 地形修正 + 舱盖修正 + 上下限
+ *   - 骰池 §3.6.1：子阶段 × 地形基础 + 按阶段乘员 / 舱盖修正 + 上下限
  *
  * 数值策划工作流：
  *   1. Excel 打开 data/player_action_table.csv 或 data/player_dice_pool.csv 改数值
@@ -44,21 +44,34 @@ const MISC_VALUES = [
 
 const REQUIRED_ACTION_ROWS = ['1', '2', '3', '4', '5', '6', 'doubles'];
 
-// 骰池配置里必须出现的全部键
+/** 与 types.TerrainType 一致 */
+const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'water'];
+const POOL_PHASES = [
+  { csv: 'move', ts: 'movement' },
+  { csv: 'attack', ts: 'attack' },
+  { csv: 'misc', ts: 'misc' },
+];
+
+function poolBaseKeys() {
+  const keys = [];
+  for (const { csv } of POOL_PHASES) {
+    for (const t of TERRAIN_KINDS) keys.push(`${csv}_${t}`);
+  }
+  return keys;
+}
+
 const REQUIRED_POOL_KEYS = [
-  'base',
-  'hatch_open',
-  'terrain_road',
-  'terrain_field',
-  'terrain_mud',
-  'terrain_forest',
-  'terrain_water',
+  ...poolBaseKeys(),
+  'mod_move_driver',
+  'mod_move_codriver',
+  'mod_move_hatch',
+  'mod_attack_gunner',
+  'mod_attack_loader',
+  'mod_attack_hatch',
+  'mod_misc_commander',
   'cap_min',
   'cap_max',
 ];
-
-// 与 TerrainType 对齐，用于生成代码里的映射
-const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'water'];
 
 /** 通用 smart 读取：优先 UTF-8，失败用 GBK；非 BOM 统一转为 UTF-8 + BOM 回写。 */
 function readCsvSmart(filePath) {
@@ -173,7 +186,7 @@ function parseActionTable() {
   return map;
 }
 
-/** 解析骰池表，返回 { base, hatch_open, terrain_road, ..., cap_min, cap_max } */
+/** 解析骰池表，返回 modifier → 整数的平面 map（键见 REQUIRED_POOL_KEYS） */
 function parsePoolTable() {
   const recs = toRecords(parseCSV(readCsvSmart(POOL_CSV)), POOL_CSV);
   const map = {};
@@ -207,7 +220,7 @@ function build() {
   lines.push(' *');
   lines.push(' * 数据源：data/player_action_table.csv + data/player_dice_pool.csv');
   lines.push(' * 重新生成：node tools/buildPlayerActionDB.js');
-  lines.push(' * 对应 GDD §3.6 行动表 + 掷骰公式。');
+  lines.push(' * 对应 GDD §3.6 行动表 + §3.6.1 掷骰数。');
   lines.push(' */');
   lines.push('');
   lines.push("import { TerrainType } from './types';");
@@ -251,27 +264,44 @@ function build() {
   lines.push(`  misc: '${action.doubles.misc}',`);
   lines.push('};');
   lines.push('');
-  lines.push('/** 骰池基础配置 + 地形修正 + 上下限。由 actionDicePool() 消费。 */');
-  lines.push('export interface DicePoolConfig {');
-  lines.push('  /** 基础骰数（常量） */');
-  lines.push('  base: number;');
-  lines.push('  /** 车长打开舱盖的 +N */');
-  lines.push('  hatchOpen: number;');
-  lines.push('  /** 地形 → 修正 (+/-) */');
-  lines.push('  terrainBonus: Record<TerrainType, number>;');
-  lines.push('  /** 骰数下限（不低于此值） */');
+  lines.push('/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 上下限。由 actionDicePool() 消费。 */');
+  lines.push("export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';");
+  lines.push('');
+  lines.push('export interface PlayerDicePoolConfig {');
+  lines.push("  /** 移动 / 攻击 / 杂项 → 各地形基础骰数 */");
+  lines.push('  baseByPhaseTerrain: Record<ActionDiceSubPhase, Record<TerrainType, number>>;');
+  lines.push('  /** 移动阶段：驾驶员 / 副驾驶存活、开舱 各加多少（通常为 1） */');
+  lines.push('  moveMods: { driver: number; codriver: number; hatch: number };');
+  lines.push('  /** 攻击阶段：炮手 / 装填手存活、开舱 */');
+  lines.push('  attackMods: { gunner: number; loader: number; hatch: number };');
+  lines.push('  /** 杂项阶段：车长存活（与舱盖无关） */');
+  lines.push('  miscMods: { commander: number };');
   lines.push('  capMin: number;');
-  lines.push('  /** 骰数上限（不高于此值） */');
   lines.push('  capMax: number;');
   lines.push('}');
   lines.push('');
-  lines.push('export const PLAYER_DICE_POOL: DicePoolConfig = {');
-  lines.push(`  base: ${pool.base},`);
-  lines.push(`  hatchOpen: ${pool.hatch_open},`);
-  lines.push('  terrainBonus: {');
-  for (const terr of TERRAIN_KINDS) {
-    lines.push(`    ${terr}: ${pool['terrain_' + terr]},`);
+  lines.push('export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {');
+  lines.push('  baseByPhaseTerrain: {');
+  for (const { csv, ts } of POOL_PHASES) {
+    lines.push(`    ${ts}: {`);
+    for (const terr of TERRAIN_KINDS) {
+      lines.push(`      ${terr}: ${pool[`${csv}_${terr}`]},`);
+    }
+    lines.push('    },');
   }
+  lines.push('  },');
+  lines.push('  moveMods: {');
+  lines.push(`    driver: ${pool.mod_move_driver},`);
+  lines.push(`    codriver: ${pool.mod_move_codriver},`);
+  lines.push(`    hatch: ${pool.mod_move_hatch},`);
+  lines.push('  },');
+  lines.push('  attackMods: {');
+  lines.push(`    gunner: ${pool.mod_attack_gunner},`);
+  lines.push(`    loader: ${pool.mod_attack_loader},`);
+  lines.push(`    hatch: ${pool.mod_attack_hatch},`);
+  lines.push('  },');
+  lines.push('  miscMods: {');
+  lines.push(`    commander: ${pool.mod_misc_commander},`);
   lines.push('  },');
   lines.push(`  capMin: ${pool.cap_min},`);
   lines.push(`  capMax: ${pool.cap_max},`);
