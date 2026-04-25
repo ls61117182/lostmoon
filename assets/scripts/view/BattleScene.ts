@@ -81,6 +81,7 @@ import {
   selectEnemyOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
+import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
@@ -111,6 +112,9 @@ const ENEMY_AI_DIE_SIZE = 56;
 const ENEMY_AI_DIE_GAP = 12;
 /** 掷骰展示后、按点排序到槽位的动画时长（秒） */
 const ENEMY_TRAY_SORT_DUR = 1.0;
+/** 敌方 AI 骰子托盘锚点（Canvas 中心为原点）：中上方，避开左侧回合/任务 HUD */
+const ENEMY_DICE_TRAY_ANCHOR_X = 0;
+const ENEMY_DICE_TRAY_ANCHOR_Y = 308;
 
 /** 把 AIActionEntry 转成控制台日志里的 "射击>转向" 这种紧凑表达 */
 function describeEntry(entry: AIActionEntry): string {
@@ -347,6 +351,12 @@ const BTN_BG_NORMAL  = new Color( 60,  90, 140, 230);
 const BTN_BG_URGENT  = new Color(190,  80,  60, 240);
 const BTN_BORDER     = new Color(255, 255, 255, 255);
 const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
+/** 任务目标行：前置未完成 */
+const OBJ_HUD_LOCKED = new Color(150, 150, 158, 255);
+/** 任务目标行：当前可做、未完成 */
+const OBJ_HUD_ACTIVE = new Color(255, 220, 90, 255);
+/** 任务目标行：已完成 */
+const OBJ_HUD_DONE = new Color(100, 210, 120, 255);
 /** 右上角 ⚙ 与 `buildStatusPanel` 竖向对齐（改一处须同步） */
 const BATTLE_SETTINGS_CX = 580;
 const BATTLE_SETTINGS_CY = 318;
@@ -643,6 +653,9 @@ export class BattleScene extends Component {
 
   // HUD
   private hudLabel: Label | null = null;
+  /** 回合数下方：多行任务目标（与 `OBJECTIVE_HUD_MAX` 同序） */
+  private objectiveHudLabels: Label[] = [];
+  private static readonly OBJECTIVE_HUD_MAX = 6;
   private endTurnBtn: Node | null = null;
   private endTurnBg: Graphics | null = null;
   private endTurnLabel: Label | null = null;
@@ -953,6 +966,9 @@ export class BattleScene extends Component {
     this.clearNameLabels();
     this.spawnUnitNameLabel(sherman);
     for (const e of enemies) this.spawnUnitNameLabel(e);
+
+    // 8. 任务目标进度（击毁计数等）随地图状态变，与 redraw 同步以免 HUD 漏刷
+    this.refreshObjectiveHud();
   }
 
   private drawAttackableHighlights() {
@@ -1237,12 +1253,13 @@ export class BattleScene extends Component {
   /**
    * 收集当前应显示的坦克状态图标（固定顺序；德坦 damaged 与起火同义时只显示「着火」避免重复）。
    * 谢尔曼：仅 `damaged`（乘员检定/阵亡等）不再出「受损」标——乘员状态由右侧状态栏负责。
+   * 瘫痪单独用 `paralyzed` 标展示；勿与「受损」折线叠出（瘫痪结算会同时置 `damaged`+`paralyzed`）。
    */
   private collectTankStatusBadgeKinds(u: Unit): TankStatusBadgeKind[] {
     if (u.kind === 'infantry' || u.destroyed) return [];
     const out: TankStatusBadgeKind[] = [];
     if (u.kind === 'sherman') {
-      if (u.damaged && (this.isOnFire(u) || !!u.turretDamaged || !!u.paralyzed)) {
+      if (u.damaged && (this.isOnFire(u) || !!u.turretDamaged)) {
         out.push('damaged');
       }
     } else if (u.damaged && !this.isOnFire(u)) {
@@ -2099,6 +2116,30 @@ export class BattleScene extends Component {
     this.node.addChild(labelNode);
     this.hudLabel = label;
 
+    // ---- 左上角 HUD 下方：多行任务目标 ----
+    const OBJ_FONT = 20;
+    const OBJ_LINE = 26;
+    const objStartY = 312;
+    for (let i = 0; i < BattleScene.OBJECTIVE_HUD_MAX; i++) {
+      const on = new Node(`ObjectiveHud${i}`);
+      on.layer = this.node.layer;
+      const out = on.addComponent(UITransform);
+      out.setContentSize(520, OBJ_LINE);
+      out.setAnchorPoint(0, 1);
+      on.setPosition(-624, objStartY - i * OBJ_LINE, 0);
+      const ol = on.addComponent(Label);
+      ol.fontSize = OBJ_FONT;
+      ol.lineHeight = OBJ_LINE;
+      ol.horizontalAlign = HorizontalTextAlignment.LEFT;
+      ol.verticalAlign = VerticalTextAlignment.TOP;
+      ol.overflow = Label.Overflow.SHRINK;
+      ol.string = '';
+      ol.color = OBJ_HUD_ACTIVE;
+      on.active = false;
+      this.node.addChild(on);
+      this.objectiveHudLabels.push(ol);
+    }
+
     // ---- 右下角"结束回合"按钮 ----
     const btn = new Node('EndTurnButton');
     btn.layer = this.node.layer;
@@ -2489,6 +2530,58 @@ export class BattleScene extends Component {
     const adv = this.computeAdvanceButton();
     this.drawEndTurnBg(adv.urgent);
     if (this.endTurnLabel) this.endTurnLabel.string = adv.label;
+
+    this.refreshObjectiveHud();
+  }
+
+  /** 将单条目标模板展开为带序号的完整行（i18n）。 */
+  private formatObjectiveHudLine(line: ObjHudLine): string {
+    const pfx = t('objective.prefix', { n: line.displayIndex });
+    const tpl = line.template;
+    switch (tpl.key) {
+      case 'destroyProgress':
+        return pfx + t('objective.destroyProgress', {
+          unit: t(`unit.name.${tpl.unitKind}`),
+          cur: tpl.cur,
+          total: tpl.total,
+        });
+      case 'evacFromMark':
+        return pfx + t('objective.evacFromMark');
+      case 'destroyAll':
+        return pfx + t('objective.destroyAllProgress', { cur: tpl.cur, total: tpl.total });
+      case 'destroyTruck':
+        return pfx + t('objective.destroyTruckProgress', { cur: tpl.cur, total: tpl.total });
+      case 'exitEdge':
+        return pfx + t('objective.exitEdge');
+      case 'unknownType':
+        return pfx + t('objective.typeUnknown', { type: tpl.type });
+      default:
+        return pfx;
+    }
+  }
+
+  private objectiveHudColor(state: ObjHudLine['state']): Color {
+    if (state === 'done') return OBJ_HUD_DONE;
+    if (state === 'locked') return OBJ_HUD_LOCKED;
+    return OBJ_HUD_ACTIVE;
+  }
+
+  /** 刷新左上角任务目标多行（胜负已分仍显示最终状态）。 */
+  private refreshObjectiveHud() {
+    for (let i = 0; i < this.objectiveHudLabels.length; i++) {
+      const lab = this.objectiveHudLabels[i];
+      lab.node.active = false;
+    }
+    if (!this.mission) return;
+
+    const rows = buildObjectiveHudLines(this.mission);
+    for (let i = 0; i < rows.length && i < this.objectiveHudLabels.length; i++) {
+      const lab = this.objectiveHudLabels[i];
+      const row = rows[i];
+      lab.string = this.formatObjectiveHudLine(row);
+      lab.color = this.objectiveHudColor(row.state);
+      lab.node.active = true;
+    }
   }
 
   /** 托盘里还剩几颗骰子未执行（用于 HUD 展示） */
@@ -2935,10 +3028,11 @@ export class BattleScene extends Component {
       coDriver: false,
     };
     const subPhase = which === 'movement' ? 'movement' : which === 'attack' ? 'attack' : 'misc';
+    const hatchOpenRaw = !!sherman.hatchOpen;
     const count = actionDicePool({
       subPhase,
       terrain,
-      hatchOpen: !!sherman.hatchOpen,
+      hatchOpen: hatchOpenRaw,
       crew,
     });
     const pips = rollActionDice(this.rng, count);
@@ -2948,8 +3042,9 @@ export class BattleScene extends Component {
     this.closeDiePopover();
 
     const label = which === 'movement' ? '移动' : which === 'attack' ? '攻击' : '杂项';
+    const hatchForLog = hatchOpenRaw && !!crew.commander;
     console.log(`[Dice] ${label}阶段掷骰: `
-      + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${sherman.hatchOpen ? '开' : '关'}）`);
+      + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${hatchForLog ? '开' : '关'}）`);
 
     this.refreshPhaseUI();
     this.updateHUD();
@@ -4130,7 +4225,10 @@ export class BattleScene extends Component {
           : (s.hatchOpen ? 1 : null);
         if (slot !== null && s.crew) {
           switch (slot) {
-            case 1: s.crew.commander = false; break;
+            case 1:
+              s.crew.commander = false;
+              if (s.kind === 'sherman') s.hatchOpen = false;
+              break;
             case 2: s.crew.loader = false;    break;
             case 3: s.crew.gunner = false;    break;
             case 4: s.crew.driver = false;    break;
@@ -5497,9 +5595,8 @@ export class BattleScene extends Component {
     const root = new Node('EnemyDiceTray');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(totalW, trayH);
-    // 左上固定区：避免与右侧状态栏/齿轮重叠；且必须挂在 this.node 子节点**最后**，
-    // 否则 insertChild 插在 Map 后、仍排在全部 HUD 之前，会被半透明状态栏整块盖住。
-    root.setPosition(-400, 268, 0);
+    // 中上方：与左侧回合/任务目标错开；仍须挂在 this.node 子节点**最后**，以免被后绘 UI 盖住。
+    root.setPosition(ENEMY_DICE_TRAY_ANCHOR_X, ENEMY_DICE_TRAY_ANCHOR_Y, 0);
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
 

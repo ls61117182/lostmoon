@@ -49,6 +49,13 @@ btn.attackPhase,攻击阶段,Attack Phase
 btn.miscPhase,杂项阶段,Misc Phase
 outcome.win,胜利！,Victory!
 outcome.lose,战败,Defeat
+objective.prefix,任务目标{n}：,Objective {n}: 
+objective.destroyProgress,击毁{unit} {cur}/{total},Destroy {unit} {cur}/{total}
+objective.destroyAllProgress,歼灭全部敌方 {cur}/{total},Eliminate all enemies {cur}/{total}
+objective.destroyTruckProgress,摧毁卡车 {cur}/{total},Destroy trucks {cur}/{total}
+objective.evacFromMark,从指定位置撤离,Evacuate from the marked hex
+objective.exitEdge,从地图边缘指定方向离境,Leave the map at the designated edge
+objective.typeUnknown,任务目标（{type}）,Objective ({type})
 status.panelTitle,谢尔曼状态,Sherman Status
 status.row.loaded,装填,Loaded
 status.row.hatch,舱盖,Hatch

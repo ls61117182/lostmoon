@@ -120,14 +120,17 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
   const row = cfg.baseByPhaseTerrain[opts.subPhase];
   let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
 
+  /** 舱盖加骰仅在车长存活时成立（车长阵亡后 `hatchOpen` 可能未及时清位） */
+  const hatchOpenForDice = !!opts.hatchOpen && !!opts.crew.commander;
+
   if (opts.subPhase === 'movement') {
     if (opts.crew.driver) n += cfg.moveMods.driver;
     if (opts.crew.coDriver) n += cfg.moveMods.codriver;
-    if (opts.hatchOpen) n += cfg.moveMods.hatch;
+    if (hatchOpenForDice) n += cfg.moveMods.hatch;
   } else if (opts.subPhase === 'attack') {
     if (opts.crew.gunner) n += cfg.attackMods.gunner;
     if (opts.crew.loader) n += cfg.attackMods.loader;
-    if (opts.hatchOpen) n += cfg.attackMods.hatch;
+    if (hatchOpenForDice) n += cfg.attackMods.hatch;
   } else {
     if (opts.crew.commander) n += cfg.miscMods.commander;
   }

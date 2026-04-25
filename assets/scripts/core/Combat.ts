@@ -375,6 +375,9 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       target.damaged = true;
       if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
         killCrewSlot(target.crew, report.crewCheck.slot);
+        if (report.crewCheck.slot === 1 && target.kind === 'sherman') {
+          target.hatchOpen = false;
+        }
       }
       break;
   }
