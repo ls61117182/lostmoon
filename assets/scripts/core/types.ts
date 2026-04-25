@@ -73,7 +73,7 @@ export interface Unit {
   facing: Direction | null;
   stats: UnitStats;
   // 状态
-  damaged?: boolean;        // MVP：起火状态（命中一次即进入；下次命中直接摧毁）
+  damaged?: boolean;        // 德军坦克 MVP：首次受伤 / 起火中；谢尔曼不用此位（着火见 fireLevel）
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
   fireLevel?: number;       // 着火程度（仅谢尔曼）
   turretDamaged?: boolean;  // 炮塔受损

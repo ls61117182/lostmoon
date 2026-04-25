@@ -336,18 +336,19 @@ export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
  * 未命中 / 未击穿 → 不改任何字段（跳弹）。
  * 击穿 → 按 §3.4 Step 3 的 damageEffect 映射到具体状态位。
  *
- * 注：damaged 在本项目语义上代表"受损 / 起火中"的综合标志，任何非摧毁的有效击穿
- * 都会置 true，使谢尔曼的状态面板与地图外观能立刻反应"我被打中了"。更细分的字段
- * （fireLevel/turretDamaged/paralyzed）各自独立累积，便于文档化的 §3.5 状态系统实装。
+ * 注：`damaged` 主要用于德军坦克 MVP「首次受伤 / 起火中」；谢尔曼不再写入该位，
+ * 着火用 fireLevel，炮塔 / 瘫痪 / 乘员等有独立字段。
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
   if (!report.hit) return;
   if (!report.penetrated) return;
   const effect = report.damageEffect;
+  const sh = target.kind === 'sherman';
+  const markHullDamaged = !sh;
   // 历史分支（未带 damageEffect 的旧 report）：按 statusChange 走二段式
   if (!effect) {
     if (report.statusChange === 'destroyed') target.destroyed = true;
-    else if (report.statusChange === 'damaged') target.damaged = true;
+    else if (report.statusChange === 'damaged' && markHullDamaged) target.damaged = true;
     return;
   }
   switch (effect) {
@@ -355,24 +356,23 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       target.destroyed = true;
       break;
     case 'damaged':
-      target.damaged = true;
+      if (markHullDamaged) target.damaged = true;
       break;
     case 'fire':
-      target.damaged = true;
+      if (markHullDamaged) target.damaged = true;
       target.fireLevel = (target.fireLevel ?? 0) + 1;
       break;
     case 'turret':
-      target.damaged = true;
+      if (markHullDamaged) target.damaged = true;
       target.turretDamaged = true;
       break;
     case 'paralyzed':
-      target.damaged = true;
+      if (markHullDamaged) target.damaged = true;
       target.paralyzed = true;
       break;
     case 'crewCheck':
       // §3.4 Step 3 d6=2：再掷 1d6 决定哪位乘员阵亡。crewCheck.slot === null 表示虚惊。
-      // 受伤状态仍然算作"被击穿"，因此 damaged=true；但不增加 fireLevel。
-      target.damaged = true;
+      if (markHullDamaged) target.damaged = true;
       if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
         killCrewSlot(target.crew, report.crewCheck.slot);
         if (report.crewCheck.slot === 1 && target.kind === 'sherman') {

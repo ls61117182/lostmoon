@@ -84,7 +84,7 @@ import {
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
-import { prepareTurnEndEvent } from '../core/TurnEndEventApply';
+import { prepareTurnEndEvent, TurnEndExtraDicePhase } from '../core/TurnEndEventApply';
 import { hasTurnEndEvents, TURN_END_EVENTS, turnEndRowForSum } from '../core/TurnEndEventDB';
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
@@ -691,10 +691,10 @@ export class BattleScene extends Component {
   private diePopover: Node | null = null;
   /** 攻击掷骰动画面板；非 null 时锁定所有输入 */
   private diceShow: DiceShow | null = null;
-  /** 回合结束事件：播主骰 + 说明，确认后执行 apply 再进入下一玩家回合 */
+  /** 回合结束事件：主骰 →（若有）额外掷骰各一段动画 → 完整说明，确认后 apply */
   private turnEndEventUI: {
     root: Node;
-    stage: 'roll' | 'hold';
+    stage: 'roll_primary' | 'wait_after_primary' | 'roll_extra' | 'wait_after_extra' | 'hold';
     t: number;
     dieLabels: Label[];
     primaryDice: number[];
@@ -703,6 +703,11 @@ export class BattleScene extends Component {
     bodyKey: string;
     bodyParams: Record<string, string | number>;
     apply: () => void;
+    extraPhases: TurnEndExtraDicePhase[];
+    extraIdx: number;
+    extraSection: Node | null;
+    extraCaptionLabel: Label | null;
+    extraDieLabels: Label[];
   } | null = null;
   private turnEndUnitSeq = 0;
   /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续敌方阶段 */
@@ -1302,17 +1307,12 @@ export class BattleScene extends Component {
 
   /**
    * 收集当前应显示的坦克状态图标（固定顺序；德坦 damaged 与起火同义时只显示「着火」避免重复）。
-   * 谢尔曼：`fireLevel>0` 时已有「着火」标，不再叠「受损」折线（击穿/起火都会置 `damaged=true`）。
-   * 无火但 `damaged` 时（如仅乘员检定等）仍显示受损标；炮塔/瘫痪有独立图标。
+   * 谢尔曼：不再使用「车体受损」折线标；着火 / 炮塔 / 瘫痪等有独立图标或 fireLevel。
    */
   private collectTankStatusBadgeKinds(u: Unit): TankStatusBadgeKind[] {
     if (u.kind === 'infantry' || u.destroyed) return [];
     const out: TankStatusBadgeKind[] = [];
-    if (u.kind === 'sherman') {
-      if (u.damaged && !this.isOnFire(u)) {
-        out.push('damaged');
-      }
-    } else if (u.damaged && !this.isOnFire(u)) {
+    if (u.kind !== 'sherman' && u.damaged && !this.isOnFire(u)) {
       out.push('damaged');
     }
     if (u.smoked) out.push('smoke');
@@ -4395,20 +4395,20 @@ export class BattleScene extends Component {
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'turret':
-        s.damaged = true;
+        if (s.kind !== 'sherman') s.damaged = true;
         s.turretDamaged = true;
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.turret'), color,
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'paralyzed':
-        s.damaged = true;
+        if (s.kind !== 'sherman') s.damaged = true;
         s.paralyzed = true;
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.paralyzed'), color,
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'crewCheck': {
         // §3.4 Step 3 d6=2：再掷一次决定哪位乘员阵亡（与受击穿同机制）
-        s.damaged = true;
+        if (s.kind !== 'sherman') s.damaged = true;
         const crewDie = preCrew?.crewDie ?? this.rng.d6();
         const slot = preCrew
           ? preCrew.crewSlot
@@ -4437,8 +4437,7 @@ export class BattleScene extends Component {
         break;
       }
       case 'damaged':
-        // 谢尔曼伤害表不会给出 'damaged'（对应的是德坦路线），兜底处理
-        s.damaged = true;
+        if (s.kind !== 'sherman') s.damaged = true;
         break;
     }
   }
@@ -5435,8 +5434,7 @@ export class BattleScene extends Component {
     enemy.facing = approximateDirection(enemy.pos, sherman.pos);
     this.redraw();
 
-    // 发起攻击前把骰子托盘临时收起（避免被 DiceShow 遮罩叠加）
-    this.destroyEnemyDiceTray();
+    // 保留本车 AI 行动骰托盘；掷骰面板打开时会挂到 DiceShow 遮罩之上（见 liftEnemyDiceTrayIntoDiceShowIfNeeded）
 
     const report = rollAttack({ attacker: enemy, target: sherman, map }, this.rng);
     this.startDiceShow(report, t('actor.enemyPrefix', { name: enemy.kind }), t('actor.sherman'), () => {
@@ -5463,7 +5461,8 @@ export class BattleScene extends Component {
    * 但 *不要* 自己 applyAttack —— 让本面板在动画末尾回调 onDone，调用方在 onDone
    * 里真正写入伤害 / 弹浮字 / 推进调度。
    *
-   * 期间所有玩家与敌方新指令被屏蔽（见 isBusy()），骰子托盘和点击菜单会被关闭。
+   * 期间所有玩家与敌方新指令被屏蔽（见 isBusy()）；关闭骰子弹窗。
+   * 敌方主炮开火时：敌方 AI 骰子托盘挂到 DiceShow 内、遮罩之上，与命中/穿甲结果同屏可见。
    */
   private startDiceShow(
     report: AttackReport,
@@ -5480,6 +5479,7 @@ export class BattleScene extends Component {
 
     const mg = !!opts.mg;
     const panel = this.buildDiceShowPanel(report, attackerLabel, targetLabel, mg);
+    this.liftEnemyDiceTrayIntoDiceShowIfNeeded(panel.root);
     this.diceShow = {
       stage: 'hit-roll',
       t: 0,
@@ -5928,8 +5928,35 @@ export class BattleScene extends Component {
     }
   }
 
-  /** 销毁敌方骰子托盘（切敌方单位 / 结束敌方阶段 / 开火掷骰前收起用） */
+  /**
+   * 敌方阶段：把 AI 骰子托盘挂到 DiceShow 根节点内、Backdrop 与 Panel 之间，避免被全屏遮罩盖住。
+   */
+  private liftEnemyDiceTrayIntoDiceShowIfNeeded(diceShowRoot: Node) {
+    if (this.phase !== 'enemy') return;
+    const tray = this.enemyDiceTrayRoot;
+    if (!tray || !tray.isValid || !diceShowRoot.isValid) return;
+    if (tray.parent === diceShowRoot) return;
+    tray.removeFromParent();
+    const back = diceShowRoot.getChildByName('Backdrop');
+    const insertAt = back ? 1 : 0;
+    diceShowRoot.insertChild(tray, insertAt);
+    tray.setPosition(ENEMY_DICE_TRAY_ANCHOR_X, ENEMY_DICE_TRAY_ANCHOR_Y, 0);
+  }
+
+  /** 关闭 DiceShow 前将托盘移回 this.node，避免随 panelRoot.destroy 一起被销毁 */
+  private lowerEnemyDiceTrayFromDiceShowIfNeeded() {
+    const tray = this.enemyDiceTrayRoot;
+    if (!tray || !tray.isValid) return;
+    if (tray.parent?.name !== 'DiceShow') return;
+    tray.removeFromParent();
+    this.node.addChild(tray);
+    tray.setPosition(ENEMY_DICE_TRAY_ANCHOR_X, ENEMY_DICE_TRAY_ANCHOR_Y, 0);
+    tray.setSiblingIndex(this.node.children.length - 1);
+  }
+
+  /** 销毁敌方骰子托盘（切敌方单位 / 结束敌方阶段等） */
   private destroyEnemyDiceTray() {
+    this.lowerEnemyDiceTrayFromDiceShowIfNeeded();
     this.enemyDiceSortAnim = null;
     this.enemyTrayMetrics = null;
     this.enemyDiceTraySubject = null;
@@ -6187,6 +6214,7 @@ export class BattleScene extends Component {
   private finalizeDiceShow(skip: boolean) {
     const show = this.diceShow;
     if (!show) return;
+    this.lowerEnemyDiceTrayFromDiceShowIfNeeded();
     this.diceShow = null;
     if (show.panelRoot.isValid) show.panelRoot.destroy();
     if (!skip && !show.finalized) {
@@ -6405,14 +6433,15 @@ export class BattleScene extends Component {
       },
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
+    const extraPhases = prepared.extraDicePhases ?? [];
     this.destroyTurnEndEventUI();
-    const refs = this.buildTurnEndEventPanel(primaryDice);
+    const refs = this.buildTurnEndEventPanel(primaryDice, extraPhases.length > 0);
     for (const lab of refs.dieLabels) lab.string = '?';
     refs.sumLabel.string = '';
     refs.bodyLabel.string = '';
     this.turnEndEventUI = {
       root: refs.root,
-      stage: 'roll',
+      stage: 'roll_primary',
       t: 0,
       dieLabels: refs.dieLabels,
       primaryDice,
@@ -6421,14 +6450,22 @@ export class BattleScene extends Component {
       bodyKey: prepared.bodyKey,
       bodyParams: prepared.bodyParams,
       apply: prepared.apply,
+      extraPhases,
+      extraIdx: 0,
+      extraSection: refs.extraSection,
+      extraCaptionLabel: refs.extraCaptionLabel,
+      extraDieLabels: refs.extraDieLabels,
     };
   }
 
-  private buildTurnEndEventPanel(primaryDice: number[]): {
+  private buildTurnEndEventPanel(primaryDice: number[], hasExtraDice: boolean): {
     root: Node;
     dieLabels: Label[];
     sumLabel: Label;
     bodyLabel: Label;
+    extraSection: Node | null;
+    extraCaptionLabel: Label | null;
+    extraDieLabels: Label[];
   } {
     const root = new Node('TurnEndEventPanel');
     root.layer = this.node.layer;
@@ -6498,6 +6535,41 @@ export class BattleScene extends Component {
     sumL.string = '';
     sumLabelN.setPosition(0, ph * 0.5 - 154);
 
+    let extraSection: Node | null = null;
+    let extraCaptionLabel: Label | null = null;
+    const extraDieLabels: Label[] = [];
+    const bodyTopY = hasExtraDice ? ph * 0.5 - 268 : ph * 0.5 - 176;
+    if (hasExtraDice) {
+      extraSection = new Node('ExtraSection');
+      extraSection.layer = this.node.layer;
+      panel.addChild(extraSection);
+      extraSection.setPosition(0, ph * 0.5 - 206);
+      extraSection.active = false;
+
+      const capN = new Node('ExtraCaption');
+      capN.layer = this.node.layer;
+      extraSection.addChild(capN);
+      capN.addComponent(UITransform).setContentSize(textBlockW, 26);
+      extraCaptionLabel = capN.addComponent(Label);
+      extraCaptionLabel.fontSize = 18;
+      extraCaptionLabel.lineHeight = 22;
+      extraCaptionLabel.color = new Color(190, 200, 215, 255);
+      extraCaptionLabel.horizontalAlign = HorizontalTextAlignment.CENTER;
+      extraCaptionLabel.verticalAlign = VerticalTextAlignment.CENTER;
+      extraCaptionLabel.overflow = Label.Overflow.CLAMP;
+      extraCaptionLabel.string = '';
+      capN.setPosition(0, 18);
+
+      const extraDieWrap = new Node('ExtraDieWrap');
+      extraDieWrap.layer = this.node.layer;
+      extraSection.addChild(extraDieWrap);
+      extraDieWrap.setPosition(0, -16);
+      const egap = 56;
+      const estart = -egap * 0.5;
+      extraDieLabels.push(this.makeDieSquare(extraDieWrap, estart, 0, 48));
+      extraDieLabels.push(this.makeDieSquare(extraDieWrap, estart + egap, 0, 48));
+    }
+
     const bodyN = new Node('BodyLabel');
     bodyN.layer = this.node.layer;
     panel.addChild(bodyN);
@@ -6512,7 +6584,7 @@ export class BattleScene extends Component {
     bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
     bodyL.verticalAlign = VerticalTextAlignment.TOP;
     bodyL.string = '';
-    bodyN.setPosition(0, ph * 0.5 - 176);
+    bodyN.setPosition(0, bodyTopY);
 
     const confirmB = this.makeBattleRectButton(
       panel,
@@ -6535,27 +6607,121 @@ export class BattleScene extends Component {
     );
     this.mirrorBattleModalButtonLabel(confirmLab, () => this.onTurnEndConfirmClick());
 
-    return { root, dieLabels, sumLabel: sumL, bodyLabel: bodyL };
+    return {
+      root,
+      dieLabels,
+      sumLabel: sumL,
+      bodyLabel: bodyL,
+      extraSection,
+      extraCaptionLabel,
+      extraDieLabels,
+    };
+  }
+
+  /** 进入当前 extraPhases[extraIdx] 的掷骰动画前：重置问号与可见骰数 */
+  private setupTurnEndExtraRoll(ui: {
+    extraPhases: TurnEndExtraDicePhase[];
+    extraIdx: number;
+    extraDieLabels: Label[];
+    extraCaptionLabel: Label | null;
+  }) {
+    const phase = ui.extraPhases[ui.extraIdx];
+    if (!phase) return;
+    const n = phase.dice.length;
+    for (let i = 0; i < ui.extraDieLabels.length; i++) {
+      const lab = ui.extraDieLabels[i];
+      if (!lab) continue;
+      lab.string = '?';
+      const cont = lab.node.parent;
+      if (cont) cont.active = i < n;
+    }
+    if (ui.extraCaptionLabel) {
+      ui.extraCaptionLabel.string = t(phase.captionKey);
+    }
   }
 
   private advanceTurnEndEventUI(dt: number) {
     const ui = this.turnEndEventUI;
-    if (!ui || ui.stage !== 'roll') return;
-    ui.t += dt;
+    if (!ui || ui.stage === 'hold') return;
     const DUR = 0.55;
-    if (ui.t < DUR) {
-      const tick = Math.floor(ui.t / 0.08) % 6;
-      for (const lab of ui.dieLabels) lab.string = String((tick % 6) + 1);
+    const PAUSE_AFTER_PRIMARY = 0.2;
+    const PAUSE_AFTER_EXTRA = 0.35;
+
+    if (ui.stage === 'roll_primary') {
+      ui.t += dt;
+      if (ui.t < DUR) {
+        const tick = Math.floor(ui.t / 0.08) % 6;
+        for (const lab of ui.dieLabels) lab.string = String((tick % 6) + 1);
+        return;
+      }
+      for (let i = 0; i < ui.dieLabels.length; i++) {
+        const lab = ui.dieLabels[i];
+        if (lab) lab.string = String(ui.primaryDice[i] ?? '?');
+      }
+      const s = ui.primaryDice.reduce((a, b) => a + b, 0);
+      ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
+      ui.bodyLabel.string = '';
+      if (!ui.extraPhases.length) {
+        ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+        ui.stage = 'hold';
+        return;
+      }
+      ui.stage = 'wait_after_primary';
+      ui.t = 0;
       return;
     }
-    for (let i = 0; i < ui.dieLabels.length; i++) {
-      const lab = ui.dieLabels[i];
-      if (lab) lab.string = String(ui.primaryDice[i] ?? '?');
+
+    if (ui.stage === 'wait_after_primary') {
+      ui.t += dt;
+      if (ui.t < PAUSE_AFTER_PRIMARY) return;
+      if (ui.extraSection) ui.extraSection.active = true;
+      ui.extraIdx = 0;
+      ui.stage = 'roll_extra';
+      ui.t = 0;
+      this.setupTurnEndExtraRoll(ui);
+      return;
     }
-    const s = ui.primaryDice.reduce((a, b) => a + b, 0);
-    ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
-    ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
-    ui.stage = 'hold';
+
+    if (ui.stage === 'roll_extra') {
+      ui.t += dt;
+      const phase = ui.extraPhases[ui.extraIdx];
+      if (!phase) {
+        ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+        ui.stage = 'hold';
+        return;
+      }
+      const n = phase.dice.length;
+      if (ui.t < DUR) {
+        const tick = Math.floor(ui.t / 0.08) % 6;
+        for (let i = 0; i < n; i++) {
+          const lab = ui.extraDieLabels[i];
+          if (lab) lab.string = String((tick % 6) + 1);
+        }
+        return;
+      }
+      for (let i = 0; i < n; i++) {
+        const lab = ui.extraDieLabels[i];
+        if (lab) lab.string = String(phase.dice[i] ?? '?');
+      }
+      ui.stage = 'wait_after_extra';
+      ui.t = 0;
+      return;
+    }
+
+    if (ui.stage === 'wait_after_extra') {
+      ui.t += dt;
+      if (ui.t < PAUSE_AFTER_EXTRA) return;
+      ui.extraIdx += 1;
+      if (ui.extraIdx < ui.extraPhases.length) {
+        ui.stage = 'roll_extra';
+        ui.t = 0;
+        this.setupTurnEndExtraRoll(ui);
+        return;
+      }
+      ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+      if (ui.extraCaptionLabel) ui.extraCaptionLabel.string = '';
+      ui.stage = 'hold';
+    }
   }
 
   private onTurnEndConfirmClick() {

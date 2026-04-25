@@ -24,10 +24,48 @@ export interface TurnEndApplyContext {
   nextEnemyId: () => string;
 }
 
+/** 主骰播完后依次展示的额外掷骰（点数已预掷，仅用于动画与说明节奏） */
+export interface TurnEndExtraDicePhase {
+  dice: number[];
+  captionKey: string;
+}
+
 export interface TurnEndPrepared {
   bodyKey: string;
   bodyParams: Record<string, string | number>;
   apply: () => void;
+  /** 有则：主骰结算后按顺序各播一段掷骰动画（增援格 / 斯图卡各段等） */
+  extraDicePhases?: TurnEndExtraDicePhase[];
+}
+
+/** 从斯图卡预模拟结果拆出需在 UI 上逐段展示的骰子 */
+function buildStukaExtraDicePhases(sim: {
+  aa?: [number, number];
+  bomb?: [number, number];
+  shotDown: boolean;
+  report: AttackReport | null;
+  /** 击穿后伤害表 1d6（与 report.damageDie 同源）；单独带回避免 UI 漏段 */
+  stukaDamageDie?: number;
+}): TurnEndExtraDicePhase[] {
+  const out: TurnEndExtraDicePhase[] = [];
+  if (sim.aa) {
+    out.push({ dice: [...sim.aa], captionKey: 'turnEnd.extra.stukaAa' });
+  }
+  if (sim.bomb) {
+    out.push({ dice: [...sim.bomb], captionKey: 'turnEnd.extra.stukaBomb' });
+  }
+  const rep = sim.report;
+  if (rep && rep.penDie !== undefined) {
+    out.push({ dice: [rep.penDie], captionKey: 'turnEnd.extra.stukaPen' });
+  }
+  const dmg = sim.stukaDamageDie ?? rep?.damageDie;
+  if (dmg !== undefined && dmg !== null) {
+    out.push({ dice: [dmg], captionKey: 'turnEnd.extra.stukaDamage' });
+  }
+  if (rep?.crewCheck) {
+    out.push({ dice: [rep.crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' });
+  }
+  return out;
 }
 
 function shermanLosToAnyInfantry(mission: LoadedMission): boolean {
@@ -112,6 +150,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
   bomb?: [number, number];
   shotDown: boolean;
   report: AttackReport | null;
+  stukaDamageDie?: number;
 } {
   if (sh.destroyed) return { shotDown: false, report: null };
   const hatch = !!sh.hatchOpen && !!sh.crew?.commander;
@@ -133,6 +172,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
       aa,
       bomb,
       shotDown: false,
+      stukaDamageDie: damageDie,
       report: {
         dice: [bomb[0], bomb[1]],
         roll: bombSum,
@@ -163,6 +203,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
   return {
     bomb,
     shotDown: false,
+    stukaDamageDie: damageDie,
     report: {
       dice: [bomb[0], bomb[1]],
       roll: bombSum,
@@ -206,7 +247,6 @@ export function prepareTurnEndEvent(
           if (!willKill || !sh.crew) return;
           sh.crew.commander = false;
           sh.hatchOpen = false;
-          sh.damaged = true;
         },
       };
     }
@@ -246,6 +286,7 @@ export function prepareTurnEndEvent(
       return {
         bodyKey: placed ? 'turnEnd.infantry.placed' : 'turnEnd.infantry.blocked',
         bodyParams: { ...baseParams, spawnDie, rid: spawnDie },
+        extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.spawnReinforce' }],
         apply: () => {
           if (!placed || !pos) return;
           const facing = approximateDirection(pos, sh.pos) as Direction;
@@ -275,7 +316,6 @@ export function prepareTurnEndEvent(
         apply: () => {
           if (sh.destroyed || sh.paralyzed) return;
           sh.paralyzed = true;
-          sh.damaged = true;
         },
       };
     }
@@ -298,9 +338,11 @@ export function prepareTurnEndEvent(
       else if (sim.bomb && sim.bomb[0] + sim.bomb[1] < 8) bodyKey = 'turnEnd.stuka.bombMiss';
       else if (sim.bomb) bodyKey = 'turnEnd.stuka.ric';
       const rep = sim.report;
+      const extraDicePhases = buildStukaExtraDicePhases(sim);
       return {
         bodyKey,
         bodyParams: bp,
+        extraDicePhases: extraDicePhases.length ? extraDicePhases : undefined,
         apply: () => {
           if (rep) applyAttack(sh, rep);
         },
@@ -318,6 +360,7 @@ export function prepareTurnEndEvent(
       return {
         bodyKey: placed ? 'turnEnd.panzer3.placed' : 'turnEnd.panzer3.blocked',
         bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
+        extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.panzer3Start' }],
         apply: () => {
           if (!placed || !pos) return;
           mission.enemies.push({

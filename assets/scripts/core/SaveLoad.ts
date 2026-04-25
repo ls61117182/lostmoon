@@ -85,7 +85,7 @@ export function captureSave(p: SnapshotParams): SaveData {
       q: sh.pos.q,
       r: sh.pos.r,
       facing: sh.facing,
-      damaged: sh.damaged,
+      damaged: false,
       destroyed: sh.destroyed,
       fireLevel: sh.fireLevel,
       turretDamaged: sh.turretDamaged,
@@ -157,7 +157,8 @@ export function applySave(
   // 校验通过，写入状态
   mission.sherman.pos = { q: save.sherman.q, r: save.sherman.r };
   mission.sherman.facing = save.sherman.facing;
-  mission.sherman.damaged = save.sherman.damaged ?? false;
+  // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
+  mission.sherman.damaged = false;
   mission.sherman.destroyed = save.sherman.destroyed ?? false;
   for (let i = 0; i < save.enemies.length; i++) {
     const s = save.enemies[i];

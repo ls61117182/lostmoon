@@ -243,7 +243,14 @@ battle.load.fail,读档失败：{reason},Load failed: {reason}
 turnEnd.title,回合结束事件,Turn-end event
 turnEnd.confirm,确认,OK
 turnEnd.sumLine,主骰 {dice}，合计 {sum},Rolled {dice} (sum {sum})
-turnEnd.sniper.kia,敌方狙击手：谢尔曼舱盖开启且视野内有步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡，车体受损。,Enemy sniper: hatch open with infantry in sight. Event dice {d1}+{d2}={sum}. Commander KIA; hull damaged.
+turnEnd.extra.spawnReinforce,增援格骰（1d6）,Reinforcement tile (1d6)
+turnEnd.extra.panzer3Start,III 号起始格骰（1d6）,Panzer III start tile (1d6)
+turnEnd.extra.stukaAa,车长对空射击（2d6）,Commander AA fire (2d6)
+turnEnd.extra.stukaBomb,斯图卡轰炸命中判定（2d6）,Stuka bombing roll (2d6)
+turnEnd.extra.stukaPen,穿甲检定（1d6）,Penetration check (1d6)
+turnEnd.extra.stukaDamage,伤害检定（1d6）,Damage roll (1d6)
+turnEnd.extra.stukaCrew,阵亡检定（1d6）,Crew casualty check (1d6)
+turnEnd.sniper.kia,敌方狙击手：谢尔曼舱盖开启且视野内有步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡。,Enemy sniper: hatch open with infantry in sight. Event dice {d1}+{d2}={sum}. Commander KIA.
 turnEnd.sniper.safe,敌方狙击手射击（事件骰 {d1}+{d2}={sum}）。舱盖状态 {hatch}、视野内步兵 {los}，未造成车长伤亡。,Enemy sniper fires (event dice {d1}+{d2}={sum}). Hatch={hatch} LOS infantry={los}; commander unharmed.
 turnEnd.commanderExtra.skip,车长额外指挥：车长不在位，无效果。,Commander bonus: no commander; no effect.
 turnEnd.commanderExtra.fire,车长组织灭火：着火层数 -1。,Commander leads firefighting: fire level -1.
@@ -254,7 +261,7 @@ turnEnd.infantry.placed,德军步兵增援：增援骰 {spawnDie}，部署至增
 turnEnd.infantry.blocked,德军步兵增援：增援骰 {spawnDie}，目标格 rid={rid} 不可用或已被占据，未部署。,Infantry reinforcement: die {spawnDie}; tile rid={rid} blocked or occupied; not placed.
 turnEnd.adjacent,与谢尔曼相邻的敌军步兵集火：已按直射或间接火力规则结算。,Adjacent enemy infantry fire on the Sherman: resolved per direct/indirect rules.
 turnEnd.mechanical.already,机械故障：谢尔曼已瘫痪，无额外效果。,Mechanical failure: already immobilized; no extra effect.
-turnEnd.mechanical.ok,机械故障：行走/动力受损，谢尔曼瘫痪并标记车体受损。,Mechanical failure: Sherman immobilized and marked damaged.
+turnEnd.mechanical.ok,机械故障：行走/动力受损，谢尔曼瘫痪。,Mechanical failure: Sherman immobilized.
 turnEnd.stuka.miss,斯图卡空袭：未对谢尔曼造成有效毁伤（详见各掷骰）。,Stuka attack: no effective damage to the Sherman.
 turnEnd.stuka.shotDown,车长对空射击 2d6={aa1}+{aa2}={aasum}（≥6）：斯图卡被击落，无轰炸命中。,AA fire 2d6={aa1}+{aa2}={aasum} (≥6): Stuka shot down; no bomb hit.
 turnEnd.stuka.hit,斯图卡轰炸命中车体：轰炸 2d6={b1}+{b2}={bsum}，穿甲与伤害已在战报中预掷。确认后应用到谢尔曼。,Stuka bomb hit: 2d6={b1}+{b2}={bsum}. Penetration and damage pre-rolled; confirm to apply.
