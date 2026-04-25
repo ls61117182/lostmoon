@@ -11,8 +11,9 @@
  *   - 前进 / 后退沿谢尔曼当前朝向 ±1 格移动；若目标格地形或敌方占据无法进入，
  *     该次移动无效、骰子不消耗、只弹警告浮字
  *   - 主炮骰点击进入"选择目标"态；点击视线内敌人 → 掷骰结算并消耗骰，之后 loaded 归 false
- *   - 右下角按钮："下一阶段"（结束当前阶段或直接进入下一个未执行阶段；两阶段都用完后变红
- *     切成"结束回合"，点击才真正进入敌方阶段）
+ *   - 右下角按钮："下一阶段"（移动/攻击子阶段内用于结束该阶段回到选择条；A+B 完成后变红
+ *     「结束回合」进入敌方阶段）。杂项阶段在骰子用尽或手动结束阶段后，直接进入敌方阶段，
+ *     无需再在「结束回合」上多点一次。
  *   - 敌方阶段：UI 固定区展示该敌坦本回合全部 AI 骰并按序执行；移动 / 转向约 0.5s 过程动画，
  *     谢尔曼移动与转向同样播放过程动画
  *   - 摧毁任务目标单位 → 屏幕中央"胜利！"；谢尔曼被摧毁 → "战败"
@@ -472,6 +473,10 @@ const PREVIEW_COLOR_BAD   = new Color(240,  90,  90, 255); // <20%
 // 黑色描边让浅色字在任意地形上都能看清
 const PREVIEW_OUTLINE     = new Color(  0,   0,   0, 200);
 
+/** 谢尔曼起始格「入场方向」箭头：深灰填充 + 深色描边，贴在车后一侧格边 */
+const SPAWN_ENTRY_ARROW_FILL   = new Color(105, 110, 118, 255);
+const SPAWN_ENTRY_ARROW_STROKE = new Color( 35,  38,  42, 230);
+
 /**
  * 2d6 之和 ≥ N 的精确概率（N 取 2..13；超出范围按边界处理）。
  * 36 种可能性下的累积分布，末位按百分比四舍五入展示。
@@ -541,6 +546,10 @@ export class BattleScene extends Component {
   private offsetX = 0;
   private offsetY = 0;
   private anim: MoveAnim | null = null;
+
+  /** 任务 JSON 谢尔曼出生格与出生朝向；用于在出生格上永久绘制从场外驶入的灰色箭头 */
+  private shermanSpawnQr: { q: number; r: number } | null = null;
+  private shermanSpawnFacing: Direction | null = null;
 
   // 回合状态
   private turn: number = 1;
@@ -647,8 +656,7 @@ export class BattleScene extends Component {
   // ---- 右侧谢尔曼状态面板 ----
   private statusPanel: Node | null = null;
   private statusLoaded: Label | null = null;   // 装填 / 未装填
-  private statusHatch: Label | null = null;    // 舱盖开 / 舱盖关
-  private statusFire: Label | null = null;     // 完好 / 起火 / 已毁
+  private statusFire: Label | null = null;     // 着火层数 / "-"（车体旧文案已迁出）
   private statusTurret: Label | null = null;   // 完好 / 受损
   private statusMobility: Label | null = null; // 正常 / 痛痪
   private statusCrewLabels: Label[] = [];      // 5 个乘员值标签（车长..副驾驶）
@@ -791,6 +799,9 @@ export class BattleScene extends Component {
   private loadAndDraw(data: MissionData) {
     this.missionId = data.id;
     this.mission = loadMission(data);
+    const { sherman: sh0 } = this.mission;
+    this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
+    this.shermanSpawnFacing = sh0.facing;
     const tiles = this.mission.map.all();
 
     // 计算地图像素包围盒，用于居中
@@ -914,6 +925,9 @@ export class BattleScene extends Component {
       this.drawMGTargetHighlights();
     }
 
+    // 4c. 谢尔曼出生格入场箭头（固定画在 JSON 出生格，谢尔曼离开后仍保留；在机体之下绘制）
+    this.drawShermanSpawnEntryArrow();
+
     // 5. 单位 —— 正在动画的那个用插值像素坐标，其余用本格坐标
     this.drawUnitMaybeAnim(sherman);
     for (const e of enemies) this.drawUnitMaybeAnim(e);
@@ -974,6 +988,67 @@ export class BattleScene extends Component {
       this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.7, 7);
     }
     this.g.lineWidth = 2;
+  }
+
+  /**
+   * 在谢尔曼**出生格**绘制灰色小箭头：贴在「车尾所对」那一侧格边中点附近，
+   * 指向格心，暗示单位从地图外沿该边进入、JSON 中的 `facing` 为炮口朝向。
+   * 谢尔曼离开后仍保留在出生格上，作为场景提示。
+   */
+  private drawShermanSpawnEntryArrow() {
+    if (!this.g || !this.mission || !this.shermanSpawnQr || this.shermanSpawnFacing === null) return;
+
+    const g = this.g;
+    const spawn = this.shermanSpawnQr;
+    const entryFrom = rotateDirection(this.shermanSpawnFacing, 3);
+    const c = this.project(spawn.q, spawn.r);
+    const nb = neighbor(spawn, entryFrom);
+    const nc = this.project(nb.q, nb.r);
+    const mx = (c.x + nc.x) * 0.5;
+    const my = (c.y + nc.y) * 0.5;
+    let ix = c.x - mx;
+    let iy = c.y - my;
+    const ilen = Math.hypot(ix, iy);
+    if (ilen < 1e-6) return;
+    ix /= ilen;
+    iy /= ilen;
+    const tx = -iy;
+    const ty = ix;
+
+    const s = this.hexSize;
+    /** 整体放大 50%；随后仅加宽箭头（垂直于箭轴），箭轴方向长度保持本组数值不变 */
+    const lenScale = 1.5;
+    const stemLen = s * 0.07 * lenScale;
+    const headLen = s * 0.13 * lenScale;
+    const headHalfW = s * 0.11 * lenScale * 2;
+    const sink = headLen * 0.32;
+
+    const sx = mx + ix * stemLen;
+    const sy = my + iy * stemLen;
+    const tipX = sx + ix * headLen;
+    const tipY = sy + iy * headLen;
+    const b1x = sx + tx * headHalfW - ix * sink;
+    const b1y = sy + ty * headHalfW - iy * sink;
+    const b2x = sx - tx * headHalfW - ix * sink;
+    const b2y = sy - ty * headHalfW - iy * sink;
+
+    g.strokeColor = SPAWN_ENTRY_ARROW_STROKE;
+    g.fillColor = SPAWN_ENTRY_ARROW_FILL;
+
+    g.lineWidth = 2.25 * lenScale;
+    g.moveTo(mx, my);
+    g.lineTo(sx, sy);
+    g.stroke();
+
+    g.lineWidth = 1.35 * lenScale;
+    g.moveTo(tipX, tipY);
+    g.lineTo(b1x, b1y);
+    g.lineTo(b2x, b2y);
+    g.close();
+    g.fill();
+    g.stroke();
+
+    g.lineWidth = 2;
   }
 
   /** 命中概率分档配色：成功率越高越绿，越低越红 */
@@ -2021,21 +2096,18 @@ export class BattleScene extends Component {
   // ---------- 谢尔曼状态面板 ----------
 
   /**
-   * 右侧常驻信息面板，按 GDD 5.1 的"右侧信息面板"简化实装：
+   * 右侧常驻信息面板（自上而下）：
    *   ┌──────────────────┐
-   *   │   谢尔曼状态       │
-   *   │  装填    未装填    │
-   *   │  舱盖    关闭      │
-   *   │  车体    起火(2)   │
-   *   │  炮塔    受损      │
-   *   │  机动    痛痪      │
-   *   │  ─────────────     │
    *   │   乘员             │
-   *   │  ① 车长    存活    │
-   *   │  ② 装填手  存活    │
-   *   │  ③ 炮手    存活    │
-   *   │  ④ 驾驶员  存活    │
-   *   │  ⑤ 副驾驶  存活    │
+   *   │  ① 车长  打开/关闭  │  ← 与舱盖合并：阵亡显示「阵亡」；存活可点切换舱盖
+   *   │  ② 装填手 …        │
+   *   │  …                 │
+   *   │  ─────────────     │
+   *   │   谢尔曼状态       │
+   *   │  装填    已装填    │
+   *   │  炮塔    完好      │
+   *   │  机动    正常      │
+   *   │  着火程度  2 / -   │
    *   └──────────────────┘
    *
    * 每行左列 = 灰色固定名字，右列 = 根据数据着色的状态文字；
@@ -2044,22 +2116,20 @@ export class BattleScene extends Component {
   private buildStatusPanel() {
     const W = 220;
     const GAP_BELOW_GEAR = 10;
-    // 面板顶缘 = 齿轮底缘下方留缝；整体落在设置按钮下方
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
-    // 高度按内容收紧：车体 + 分隔 + 乘员区，底边多留内边距防裁字
-    const H = 328;
+    const H = 312;
     const y = panelTopY - H / 2;
-    const x = BATTLE_SETTINGS_CX - W / 2; // 与齿轮同一竖直中线，整体在按钮下
+    const x = BATTLE_SETTINGS_CX - W / 2;
 
-    // 车体区与乘员区：分隔线紧跟「机动」行，避免大块空白
-    const BODY_TOP = H / 2 - 42;
-    const BODY_GAP = 24;
-    const bodyRowY = [0, 1, 2, 3, 4].map(i => BODY_TOP - i * BODY_GAP);
-    const lastBodyRowY = bodyRowY[4];
-    const sepY = lastBodyRowY - 12;
     const CREW_GAP = 22;
-    const crewTitleY = sepY - 14;
-    const crewTopY = crewTitleY - 22;
+    const BODY_GAP = 24;
+    const innerTop = H / 2 - 8;
+    const crewTitleY = innerTop - 14;
+    const crewFirstY = crewTitleY - 26;
+    const sepY = crewFirstY - 5 * CREW_GAP - 10;
+    const shermanTitleY = sepY - 16;
+    const bodyFirstY = shermanTitleY - 24;
+    const bodyRowY = [0, 1, 2, 3].map(j => bodyFirstY - j * BODY_GAP);
 
     const panel = new Node('ShermanStatus');
     panel.layer = this.node.layer;
@@ -2072,7 +2142,6 @@ export class BattleScene extends Component {
     bg.rect(-W / 2, -H / 2, W, H);
     bg.fill();
     bg.stroke();
-    // 车体 5 行与乘员 5 行之间的分隔线
     bg.strokeColor = new Color(120, 120, 120, 200);
     bg.lineWidth = 1;
     bg.moveTo(-W / 2 + 16, sepY);
@@ -2081,47 +2150,13 @@ export class BattleScene extends Component {
     this.node.addChild(panel);
     this.statusPanel = panel;
 
-    // 顶部标题
     this.statusBodyLeftLabels = [];
     this.statusCrewLeftLabels = [];
-    this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
-      0, H / 2 - 20, W - 20, 28, 22, STATUS_TITLE_COLOR);
-    const bodyRows: Array<[string, 'loaded' | 'hatch' | 'fire' | 'turret' | 'mobility']> = [
-      [t('status.row.loaded'),   'loaded'],
-      [t('status.row.hatch'),    'hatch'],
-      [t('status.row.fire'),     'fire'],
-      [t('status.row.turret'),   'turret'],
-      [t('status.row.mobility'), 'mobility'],
-    ];
-    let hatchRowY = 0;
-    for (let i = 0; i < bodyRows.length; i++) {
-      const [label, key] = bodyRows[i];
-      const leftLab = this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
-      this.statusBodyLeftLabels.push(leftLab);
-      const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
-      switch (key) {
-        case 'loaded':   this.statusLoaded = val; break;
-        case 'hatch':    this.statusHatch = val; hatchRowY = bodyRowY[i]; break;
-        case 'fire':     this.statusFire = val; break;
-        case 'turret':   this.statusTurret = val; break;
-        case 'mobility': this.statusMobility = val; break;
-      }
-    }
 
-    // GDD §2.1：舱盖在"选择阶段"可自由切换；进入移动/攻击后本回合锁定。
-    // 为避免额外按钮挤占界面，直接把整行做成点击热区 → 调用 tryToggleHatch()。
-    const hatchHit = new Node('HatchHit');
-    hatchHit.layer = this.node.layer;
-    hatchHit.addComponent(UITransform).setContentSize(W - 24, BODY_GAP);
-    hatchHit.setPosition(0, hatchRowY, 0);
-    hatchHit.on(Node.EventType.TOUCH_END, () => this.tryToggleHatch(), this);
-    panel.addChild(hatchHit);
-
-    // 乘员小标题
+    // 1) 乘员区（在「谢尔曼状态」之上）
     this.statusCrewTitleLabel = this.makeCenteredLabel(panel, t('status.row.crewTitle'),
       0, crewTitleY, W - 20, 22, 18, STATUS_TITLE_COLOR);
 
-    // 5 名乘员行：编号 + 称谓 + 状态
     const crewNames = [
       t('status.crew.1'),
       t('status.crew.2'),
@@ -2131,11 +2166,42 @@ export class BattleScene extends Component {
     ];
     this.statusCrewLabels = [];
     for (let i = 0; i < crewNames.length; i++) {
-      const rowY = crewTopY - i * CREW_GAP;
+      const rowY = crewFirstY - i * CREW_GAP;
       const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 120, 22, 18, STATUS_LABEL_COLOR);
       this.statusCrewLeftLabels.push(crewLeft);
-      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 70, 22, 18, STATUS_VALUE_OK);
+      const valW = i === 0 ? 128 : 70;
+      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, valW, 22, 18, STATUS_VALUE_OK);
       this.statusCrewLabels.push(val);
+    }
+
+    // 车长行整行热区：存活时切换舱盖（逻辑见 tryToggleHatch / canToggleHatch）
+    const commanderHatchHit = new Node('CommanderHatchHit');
+    commanderHatchHit.layer = this.node.layer;
+    commanderHatchHit.addComponent(UITransform).setContentSize(W - 24, CREW_GAP);
+    commanderHatchHit.setPosition(0, crewFirstY, 0);
+    commanderHatchHit.on(Node.EventType.TOUCH_END, () => this.tryToggleHatch(), this);
+    panel.addChild(commanderHatchHit);
+
+    // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
+    this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
+      0, shermanTitleY, W - 20, 28, 22, STATUS_TITLE_COLOR);
+    const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'fire']> = [
+      [t('status.row.loaded'),    'loaded'],
+      [t('status.row.turret'),    'turret'],
+      [t('status.row.mobility'),  'mobility'],
+      [t('status.row.fireLevel'), 'fire'],
+    ];
+    for (let i = 0; i < bodyRows.length; i++) {
+      const [label, key] = bodyRows[i];
+      const leftLab = this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
+      this.statusBodyLeftLabels.push(leftLab);
+      const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
+      switch (key) {
+        case 'loaded':   this.statusLoaded = val; break;
+        case 'fire':     this.statusFire = val; break;
+        case 'turret':   this.statusTurret = val; break;
+        case 'mobility': this.statusMobility = val; break;
+      }
     }
   }
 
@@ -2207,36 +2273,17 @@ export class BattleScene extends Component {
       }
     }
 
-    // 舱盖
-    if (this.statusHatch) {
-      if (s.destroyed) {
-        this.statusHatch.string = '—';
-        this.statusHatch.color = STATUS_VALUE_DOWN;
-      } else if (s.hatchOpen) {
-        // 舱盖开 = 行动骰+1 但易被步兵 / 对子击杀车长 → 用警告色
-        this.statusHatch.string = t('status.val.hatchOpen');
-        this.statusHatch.color = STATUS_VALUE_WARN;
-      } else {
-        this.statusHatch.string = t('status.val.hatchClosed');
-        this.statusHatch.color = STATUS_VALUE_DOWN;
-      }
-    }
-
-    // 车体（已毁 / 起火 (程度) / 完好）
+    // 着火程度：仅当前层数；未着火「-」；已毁该行无意义
     if (this.statusFire) {
       if (s.destroyed) {
-        this.statusFire.string = t('status.val.destroyed');
-        this.statusFire.color = STATUS_VALUE_DEAD;
+        this.statusFire.string = '—';
+        this.statusFire.color = STATUS_VALUE_DOWN;
       } else if ((s.fireLevel ?? 0) > 0) {
-        // 有明确的着火程度：显示数字让玩家看到严重性（来自 §3.4 Step 3 的 'fire' 效果）
-        this.statusFire.string = t('status.val.fireN', { n: s.fireLevel ?? 0 });
+        this.statusFire.string = String(s.fireLevel ?? 0);
         this.statusFire.color = STATUS_VALUE_FIRE;
-      } else if (s.damaged) {
-        this.statusFire.string = t('status.val.damaged');
-        this.statusFire.color = STATUS_VALUE_WARN;
       } else {
-        this.statusFire.string = t('status.val.intact');
-        this.statusFire.color = STATUS_VALUE_OK;
+        this.statusFire.string = '-';
+        this.statusFire.color = STATUS_VALUE_DOWN;
       }
     }
 
@@ -2268,13 +2315,27 @@ export class BattleScene extends Component {
       }
     }
 
-    // 5 名乘员。MVP 还没实装乘员阵亡机制，默认全员存活；摧毁后统一标为阵亡。
-    //   crew 字段：commander / loader / gunner / driver / coDriver
+    // 乘员：① 车长与舱盖合并（阵亡 →「阵亡」；存活 → 打开/关闭，点行切换舱盖）
+    //       ②—⑤ 仅存活 / 阵亡
     const crew = s.crew;
     const crewFlags: boolean[] = crew
       ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
       : [true, true, true, true, true];
-    for (let i = 0; i < this.statusCrewLabels.length; i++) {
+
+    const lab0 = this.statusCrewLabels[0];
+    if (lab0) {
+      if (s.destroyed || !crewFlags[0]) {
+        lab0.string = t('status.val.crewDead');
+        lab0.color = STATUS_VALUE_DEAD;
+      } else if (s.hatchOpen) {
+        lab0.string = t('status.val.hatchOpen');
+        lab0.color = STATUS_VALUE_WARN;
+      } else {
+        lab0.string = t('status.val.hatchClosed');
+        lab0.color = STATUS_VALUE_DOWN;
+      }
+    }
+    for (let i = 1; i < this.statusCrewLabels.length; i++) {
       const lab = this.statusCrewLabels[i];
       if (s.destroyed) {
         lab.string = t('status.val.crewDead');
@@ -2793,9 +2854,10 @@ export class BattleScene extends Component {
 
   /**
    * 结束当前子阶段（movement / attack / misc），回到 choose；
-   * 根据已完成阶段判断继续选剩余阶段，还是切为"结束回合"。
+   * 若结束的是杂项阶段，则本回合 A+B 已必然完成 → 直接进入敌方阶段（省一次「结束回合」点击）。
    */
   private endCurrentSubPhase() {
+    const wasMisc = this.playerStep === 'misc';
     if (this.playerStep === 'movement') this.movementDone = true;
     else if (this.playerStep === 'attack') this.attackDone = true;
     else if (this.playerStep === 'misc') this.miscDone = true;
@@ -2803,6 +2865,11 @@ export class BattleScene extends Component {
     this.clearGunSelection();
     this.playerStep = 'choose';
     this.closeDiePopover();
+    if (wasMisc && this.phase === 'player' && this.outcome === 'ongoing'
+        && this.movementDone && this.attackDone) {
+      this.beginEnemyPhase();
+      return;
+    }
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -3783,8 +3850,9 @@ export class BattleScene extends Component {
 
   /**
    * 右下角按钮点击：
-   *   - 当前在移动/攻击阶段 → 先 endCurrentSubPhase，再根据剩余阶段自动进下一个或回到 choose
-   *   - 当前在 choose：两阶段都 done → 真正把控制权交给敌方；否则什么都不做（让玩家点底部条选）
+   *   - 当前在移动/攻击阶段 → endCurrentSubPhase 回到 choose
+   *   - 当前在杂项阶段 → endCurrentSubPhase 内会直接 beginEnemyPhase（见该函数）
+   *   - 当前在 choose：A+B 都 done → beginEnemyPhase（未做杂项时由此结束回合）
    */
   private onAdvanceClicked() {
     if (this.isBusy()) return;
@@ -4331,10 +4399,9 @@ export class BattleScene extends Component {
     if (this.statusPanelTitleLabel) this.statusPanelTitleLabel.string = t('status.panelTitle');
     const bodyKeys = [
       'status.row.loaded',
-      'status.row.hatch',
-      'status.row.fire',
       'status.row.turret',
       'status.row.mobility',
+      'status.row.fireLevel',
     ] as const;
     for (let i = 0; i < this.statusBodyLeftLabels.length && i < bodyKeys.length; i++) {
       this.statusBodyLeftLabels[i].string = t(bodyKeys[i]);
