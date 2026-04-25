@@ -11,6 +11,7 @@
  *   - 前进 / 后退沿谢尔曼当前朝向 ±1 格移动；若目标格地形或敌方占据无法进入，
  *     该次移动无效、骰子不消耗、只弹警告浮字
  *   - 主炮骰点击进入"选择目标"态；点击视线内敌人 → 掷骰结算并消耗骰，之后 loaded 归 false
+ *   - 玩家回合点击地图格：若处于攻击/杂项且格上有敌且已选机枪或主炮骰，则优先尝试机枪/主炮开火；否则打开格子介绍（地形、骰子规则、格上单位状态）
  *   - 右下角按钮："下一阶段"（移动/攻击子阶段内用于结束该阶段回到选择条；A+B 完成后变红
  *     「结束回合」进入敌方阶段）。杂项阶段在骰子用尽或手动结束阶段后，直接进入敌方阶段，
  *     无需再在「结束回合」上多点一次。
@@ -65,6 +66,7 @@ import {
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
+import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
 import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
@@ -107,6 +109,26 @@ import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../c
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
 import { Direction, MissionData, ShermanCrew, TerrainType, Tile, Unit, UnitKind } from '../core/types';
+
+/** 小预览用：在 Graphics 上画实心六角 + 描边 */
+function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
+  const trace = () => {
+    for (let i = 0; i < 6; i++) {
+      const angle = (-30 + 60 * i) * Math.PI / 180;
+      const x = cx + size * Math.cos(angle);
+      const y = cy + size * Math.sin(angle);
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.close();
+  };
+  g.fillColor = fill;
+  trace();
+  g.fill();
+  g.strokeColor = stroke;
+  g.lineWidth = 1.5;
+  trace();
+  g.stroke();
+}
 
 const { ccclass, property } = _decorator;
 
@@ -769,6 +791,8 @@ export class BattleScene extends Component {
   /** 战斗内模态（设置）；退出确认单独一层叠在上面 */
   private battleModalRoot: Node | null = null;
   private battleExitModalRoot: Node | null = null;
+  /** 地图格子介绍（地形 / 骰子规则 / 单位状态） */
+  private tileInspectModalRoot: Node | null = null;
   /** 存读档飘字：叠在所有模态之上，短显后自毁 */
   private battleSettingsToastRoot: Node | null = null;
   private battleSettingsRefs: {
@@ -923,6 +947,7 @@ export class BattleScene extends Component {
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
+    this.closeTileInspectModal();
     this.turnEndUnitSeq = 0;
     this.refreshPhaseUI();
     this.updateHUD();
@@ -4482,6 +4507,272 @@ export class BattleScene extends Component {
   private closeAllBattleModals() {
     this.closeBattleExitModal();
     this.closeBattleModal();
+    this.closeTileInspectModal();
+  }
+
+  private closeTileInspectModal() {
+    const r = this.tileInspectModalRoot;
+    this.tileInspectModalRoot = null;
+    if (r && r.isValid) r.destroy();
+  }
+
+  /** 触点 UI 坐标 → 离格心最近的六角格（空白处返回 null） */
+  private pickTileAtScreenUi(event: EventTouch): Tile | null {
+    if (!this.mission || !this.mapNode) return null;
+    const ut = this.mapNode.getComponent(UITransform);
+    if (!ut) return null;
+    const uiPos = event.getUILocation();
+    const localPos = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
+    const tiles = this.mission.map.all();
+    let target: Tile | null = null;
+    let minDist = Infinity;
+    for (const t of tiles) {
+      const c = this.project(t.pos.q, t.pos.r);
+      const d = Math.hypot(c.x - localPos.x, c.y - localPos.y);
+      if (d < minDist) {
+        minDist = d;
+        target = t;
+      }
+    }
+    if (!target || minDist > this.hexSize) return null;
+    return target;
+  }
+
+  private unitOnTileAxial(pos: { q: number; r: number }): Unit | null {
+    if (!this.mission) return null;
+    const { sherman, enemies } = this.mission;
+    if (!sherman.destroyed && sherman.pos.q === pos.q && sherman.pos.r === pos.r) return sherman;
+    for (const e of enemies) {
+      if (!e.destroyed && e.pos.q === pos.q && e.pos.r === pos.r) return e;
+    }
+    return null;
+  }
+
+  private collectUnitInspectStatusLines(u: Unit): string[] {
+    const parts: string[] = [];
+    const tankLike = u.kind !== 'infantry';
+    if (u.kind === 'sherman') {
+      if ((u.fireLevel ?? 0) > 0) {
+        parts.push(t('tileInspect.status.shermanFire', { n: u.fireLevel ?? 0 }));
+      }
+      if (u.turretDamaged) parts.push(t('tileInspect.status.turretDamaged'));
+      if (u.paralyzed) parts.push(t('tileInspect.status.paralyzed'));
+      if (u.hidden) parts.push(t('tileInspect.status.hidden'));
+      if (u.smoked) parts.push(t('tileInspect.status.smoked'));
+      parts.push(u.loaded ? t('tileInspect.status.loaded') : t('tileInspect.status.unloaded'));
+      if (u.hatchOpen) parts.push(t('tileInspect.status.hatchOpen'));
+    } else if (tankLike) {
+      if (u.damaged) parts.push(t('tileInspect.status.enemyDamaged'));
+      if (u.turretDamaged) parts.push(t('tileInspect.status.turretDamaged'));
+      if (u.paralyzed) parts.push(t('tileInspect.status.paralyzed'));
+      if (u.hidden) parts.push(t('tileInspect.status.hidden'));
+      if (u.smoked) parts.push(t('tileInspect.status.smoked'));
+    } else {
+      if (u.hidden) parts.push(t('tileInspect.status.hidden'));
+      if (u.smoked) parts.push(t('tileInspect.status.smoked'));
+    }
+    return parts;
+  }
+
+  private buildTileInspectBody(tile: Tile): string {
+    const blocks: string[] = [];
+    blocks.push(t(`terrain.${tile.terrain}`));
+    if (tile.hasBuilding) {
+      blocks.push(t('tileInspect.building'));
+    }
+    if (tile.terrain === 'forest') {
+      blocks.push(t('tileInspect.rules.forest'));
+    } else if (tile.terrain === 'water') {
+      blocks.push(t('tileInspect.rules.water'));
+    }
+    if (tile.hedges?.some(Boolean)) {
+      blocks.push(t('tileInspect.hedges'));
+    }
+    if (tile.reinforceId != null) {
+      blocks.push(t('tileInspect.markerRid', { n: tile.reinforceId }));
+    }
+    if (tile.enemyStartId != null) {
+      blocks.push(t('tileInspect.markerEid', { n: tile.enemyStartId }));
+    }
+
+    const pool = PLAYER_DICE_POOL;
+    const b = pool.baseByPhaseTerrain;
+    const mv = b.movement[tile.terrain];
+    const at = b.attack[tile.terrain];
+    const ms = b.misc[tile.terrain];
+    blocks.push(t('tileInspect.diceIntro', { capMin: pool.capMin, capMax: pool.capMax }));
+    blocks.push(t('tileInspect.diceRow.move', { n: mv }));
+    blocks.push(t('tileInspect.diceRow.attack', { n: at }));
+    blocks.push(t('tileInspect.diceRow.misc', { n: ms }));
+    blocks.push(t('tileInspect.diceMods', {
+      md: pool.moveMods.driver,
+      mc: pool.moveMods.codriver,
+      mh: pool.moveMods.hatch,
+      ag: pool.attackMods.gunner,
+      al: pool.attackMods.loader,
+      ah: pool.attackMods.hatch,
+      xc: pool.miscMods.commander,
+    }));
+
+    const occ = this.unitOnTileAxial(tile.pos);
+    if (occ) {
+      const name = t(`unit.name.${occ.kind}`);
+      const st = this.collectUnitInspectStatusLines(occ);
+      const statusText = st.length ? st.join(t('tileInspect.statusSep')) : t('tileInspect.statusNone');
+      blocks.push(t('tileInspect.unitBlock', { name, status: statusText }));
+    } else {
+      blocks.push(t('tileInspect.noUnit'));
+    }
+
+    return blocks.join('\n\n');
+  }
+
+  /** 在模态小预览区绘制六角地形 + 林冠/建筑示意 */
+  private paintTileInspectPreview(g: Graphics, tile: Tile, cx: number, cy: number, hexR: number) {
+    drawMiniHexTerrain(g, cx, cy, hexR, TERRAIN_COLORS[tile.terrain], TILE_BORDER);
+    if (tile.terrain === 'forest') {
+      const s = hexR;
+      g.lineWidth = 0;
+      g.fillColor = FOREST_SHADE;
+      g.circle(cx - s * 0.2, cy - s * 0.15, s * 0.55);
+      g.fill();
+      g.fillColor = FOREST_TREE_DARK;
+      g.circle(cx - s * 0.25, cy + s * 0.1, s * 0.38);
+      g.fill();
+      g.fillColor = FOREST_TREE_LIGHT;
+      g.circle(cx + s * 0.22, cy + s * 0.05, s * 0.32);
+      g.fill();
+    }
+    if (tile.hasBuilding) {
+      const s = hexR;
+      const yBase = cy - s * 0.22;
+      const yWallTop = cy - s * 0.06;
+      const yRoofPeak = cy + s * 0.18;
+      const bodyW = s * 0.55;
+      const roofW = s * 0.68;
+      g.lineWidth = 1.5;
+      g.fillColor = BUILDING_WALL_FILL;
+      g.strokeColor = BUILDING_OUTLINE;
+      g.moveTo(cx - bodyW, yBase);
+      g.lineTo(cx + bodyW, yBase);
+      g.lineTo(cx + bodyW, yWallTop);
+      g.lineTo(cx - bodyW, yWallTop);
+      g.close();
+      g.fill();
+      g.stroke();
+      g.fillColor = BUILDING_ROOF_FILL;
+      g.moveTo(cx - roofW, yWallTop);
+      g.lineTo(cx, yRoofPeak);
+      g.lineTo(cx + roofW, yWallTop);
+      g.close();
+      g.fill();
+      g.stroke();
+    }
+  }
+
+  private openTileInspectModal(tile: Tile) {
+    this.closeTileInspectModal();
+    const panelW = 600;
+    const panelH = 520;
+    const root = new Node('TileInspectModal');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+    this.tileInspectModalRoot = root;
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bd = backdrop.addComponent(Graphics);
+    bd.fillColor = MODAL_BACKDROP;
+    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
+    bd.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+      this.closeTileInspectModal();
+      e.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(panelW, panelH);
+    const pgg = panel.addComponent(Graphics);
+    pgg.fillColor = MODAL_PANEL_BG;
+    pgg.strokeColor = MODAL_PANEL_BORDER;
+    pgg.lineWidth = 2;
+    pgg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+    pgg.fill();
+    pgg.stroke();
+    pgg.strokeColor = BATTLE_MODAL_DIVIDER;
+    pgg.lineWidth = 1;
+    pgg.moveTo(-panelW / 2 + 24, panelH / 2 - 56);
+    pgg.lineTo(panelW / 2 - 24, panelH / 2 - 56);
+    pgg.stroke();
+    panel.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_START, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const titleLab = this.makeBattleModalLabel(panel, t('tileInspect.title'),
+      0, panelH / 2 - 36, panelW - 100, 36, 26, STATUS_TITLE_COLOR);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+
+    const closeBtnTop = this.makeBattleRectButton(
+      panel, panelW / 2 - 28, panelH / 2 - 28, 36, 36,
+      MODAL_CLOSE_BG, () => this.closeTileInspectModal(),
+    );
+    const closeLabTop = this.makeBattleModalLabel(closeBtnTop.node, '✕', 0, 0, 36, 36, 22, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeLabTop, () => this.closeTileInspectModal());
+
+    const preview = new Node('TilePreview');
+    preview.layer = this.node.layer;
+    preview.addComponent(UITransform).setContentSize(150, 130);
+    preview.setPosition(-panelW * 0.5 + 95, panelH * 0.5 - 118);
+    panel.addChild(preview);
+    const pvg = preview.addComponent(Graphics);
+    this.paintTileInspectPreview(pvg, tile, 0, 5, 40);
+
+    const textW = panelW - 48;
+    const bodyN = new Node('Body');
+    bodyN.layer = this.node.layer;
+    panel.addChild(bodyN);
+    const bodyUt = bodyN.addComponent(UITransform);
+    bodyUt.setAnchorPoint(0.5, 1);
+    bodyUt.setContentSize(textW, 1);
+    const bodyL = bodyN.addComponent(Label);
+    bodyL.fontSize = 17;
+    bodyL.lineHeight = 24;
+    bodyL.color = new Color(220, 225, 230, 255);
+    bodyL.overflow = Label.Overflow.RESIZE_HEIGHT;
+    bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
+    bodyL.verticalAlign = VerticalTextAlignment.TOP;
+    bodyL.string = this.buildTileInspectBody(tile);
+    bodyN.setPosition(0, panelH * 0.5 - 200);
+
+    const closeRowY = -panelH * 0.5 + 48;
+    const closeB = this.makeBattleRectButton(
+      panel,
+      0,
+      closeRowY,
+      200,
+      44,
+      BATTLE_BTN_ACCENT,
+      () => this.closeTileInspectModal(),
+    );
+    const closeLab = this.makeBattleModalLabel(
+      closeB.node,
+      t('menu.settings.close'),
+      0,
+      0,
+      200,
+      44,
+      22,
+      Color.WHITE,
+    );
+    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeTileInspectModal());
   }
 
   /** 全屏遮罩 + 居中面板 + 标题 + ✕（与 MainMenuScene.openModal 同构） */
@@ -4547,6 +4838,7 @@ export class BattleScene extends Component {
 
   /** 查阅本关 `turn_end_events` 表：主骰点之和区间 → 效果类型（不参与掷骰） */
   private openTurnEndEventsReference() {
+    this.closeTileInspectModal();
     this.closeBattleExitModal();
     this.closeBattleModal();
     const mid = this.missionId || this.mission?.data.id || '';
@@ -4609,6 +4901,7 @@ export class BattleScene extends Component {
   }
 
   private openBattleSettings() {
+    this.closeTileInspectModal();
     this.closeBattleModal();
     this.closeBattleExitModal();
     const panelW = 480;
@@ -5388,53 +5681,39 @@ export class BattleScene extends Component {
   // ---------- 交互 ----------
 
   /**
-   * 地图点击统一入口。在新骰子驱动下，玩家只剩下一个"点地图上的敌人"的用处：
-   * 攻击阶段选中一颗主炮骰 → 点敌人格触发开火。
-   *
-   * 移动不走点地图路径了（改为点骰子 → 弹菜单 → 前进/后退/转向），
-   * 所以这里除了攻击开火以外不做任何事，避免误点触发。
+   * 地图点击：玩家回合下，优先处理「攻击/杂项 + 已选骰 + 点敌人」开火；
+   * 其余情况打开格子介绍（地形、骰子规则、单位状态）。
    */
   private onTouchMap(event: EventTouch) {
     if (!this.mission || !this.mapNode) return;
-    if (this.isBusy()) return;         // 移动动画 / 掷骰动画期间都不接受新指令
-    if (this.phase !== 'player') return; // 敌方回合不响应点击
-    if (this.outcome !== 'ongoing') return; // 胜负已决，不再响应
+    if (this.isBusy()) return;
+    if (this.phase !== 'player') return;
+    if (this.outcome !== 'ongoing') return;
 
-    // 点骰子托盘上方时由骰子节点自己处理；点在地图上 → 关菜单顺便走后面流程
     this.closeDiePopover();
 
-    // 仅在"攻击阶段 / 杂项阶段 + 已选主炮 / 机枪骰"时响应（否则地图点击无效果，视觉上也无红圈）
-    if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
-    if (this.selectedGunDieIdx < 0 && this.selectedMGDieIdx < 0) return;
-
-    const ut = this.mapNode.getComponent(UITransform);
-    if (!ut) return;
-
-    // UI 触点 → MapGraphics 局部坐标
-    const uiPos = event.getUILocation();
-    const localPos = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
-
-    // 找到离触点最近的格
-    const tiles = this.mission.map.all();
-    let target: Tile | null = null;
-    let minDist = Infinity;
-    for (const t of tiles) {
-      const c = this.project(t.pos.q, t.pos.r);
-      const d = Math.hypot(c.x - localPos.x, c.y - localPos.y);
-      if (d < minDist) { minDist = d; target = t; }
-    }
-    if (!target || minDist > this.hexSize) return; // 点空白处
+    const target = this.pickTileAtScreenUi(event);
+    if (!target) return;
 
     const enemyOnTile = this.mission.enemies.find(
-      e => !e.destroyed && e.pos.q === target!.pos.q && e.pos.r === target!.pos.r,
+      e => !e.destroyed && e.pos.q === target.pos.q && e.pos.r === target.pos.r,
     );
-    if (!enemyOnTile) return;
-    // 机枪选中优先：选机枪骰时只对步兵生效；主炮选中走 tryAttack 主炮路径
-    if (this.selectedMGDieIdx >= 0) {
-      this.tryMGAttack(enemyOnTile);
-    } else {
-      this.tryAttack(enemyOnTile);
+    const attackOrMisc = this.playerStep === 'attack' || this.playerStep === 'misc';
+    const gunSel = this.selectedGunDieIdx >= 0;
+    const mgSel = this.selectedMGDieIdx >= 0;
+
+    if (attackOrMisc && enemyOnTile) {
+      if (mgSel) {
+        this.tryMGAttack(enemyOnTile);
+        return;
+      }
+      if (gunSel) {
+        this.tryAttack(enemyOnTile);
+        return;
+      }
     }
+
+    this.openTileInspectModal(target);
   }
 
   /**
@@ -6311,7 +6590,8 @@ export class BattleScene extends Component {
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
     return this.anim !== null || this.diceShow !== null || this.enemyDiceSortAnim !== null
-      || this.turnEndEventUI !== null || this.fireCheckEventUI !== null;
+      || this.turnEndEventUI !== null || this.fireCheckEventUI !== null
+      || this.tileInspectModalRoot !== null;
   }
 
   private destroyFireCheckEventUI() {

@@ -225,6 +225,36 @@ level.09.title,雷马根,Remagen
 level.10.title,鲁尔,Ruhr
 level.11.title,易北河,Elbe
 level.12.title,柏林,Berlin
+terrain.road,公路,Road
+terrain.field,田野,Field
+terrain.mud,泥地,Mud
+terrain.forest,森林,Forest
+terrain.water,水域,Water
+tileInspect.title,格子介绍,Tile info
+tileInspect.building,建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。,Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile.
+tileInspect.rules.forest,森林：谢尔曼与德军坦克不可进入；步兵可进入；遮挡视线。,Forest: Sherman and German tanks cannot enter; infantry can enter; blocks line of sight.
+tileInspect.rules.water,水域：任何单位不可进入；遮挡视线。,Water: impassable to all units; blocks line of sight.
+tileInspect.hedges,本格带树篱边：谢尔曼与德军坦克不可翻越；步兵可翻越；不遮挡视线。,This tile has hedge edges: Sherman and German tanks cannot cross; infantry can cross; does not block line of sight.
+tileInspect.markerRid,援军标记 rid={n},Reinforcement marker rid={n}
+tileInspect.markerEid,敌军出生点标记 eid={n},Enemy start marker eid={n}
+tileInspect.diceIntro,掷骰规则：各地形在移动 / 攻击 / 杂项子阶段的基础颗数见下；再叠加乘员与舱盖修正后，总颗数限制在 {capMin}～{capMax}。,Dice: per-terrain base counts for movement / attack / misc below; crew and hatch modifiers apply; total dice are clamped to {capMin}–{capMax}.
+tileInspect.diceRow.move,移动阶段基础骰：{n} 颗,Movement base dice: {n}
+tileInspect.diceRow.attack,攻击阶段基础骰：{n} 颗,Attack base dice: {n}
+tileInspect.diceRow.misc,杂项阶段基础骰：{n} 颗,Misc base dice: {n}
+tileInspect.diceMods,修正（每满足一项通常 +1，以规则为准）：移动阶段 驾驶员存活 +{md}、副驾驶存活 +{mc}、车长开舱 +{mh}；攻击阶段 炮手存活 +{ag}、装填手存活 +{al}、车长开舱 +{ah}；杂项阶段 车长存活 +{xc}。,"Modifiers (typically +1 each when applicable): move — driver +{md}, co-driver +{mc}, commander hatch open +{mh}; attack — gunner +{ag}, loader +{al}, commander hatch open +{ah}; misc — commander +{xc}."
+tileInspect.unitBlock,{name}\n状态：{status},{name}\nStatus: {status}
+tileInspect.statusNone,无额外状态,No extra status
+tileInspect.noUnit,当前格上无单位。,No unit on this tile.
+tileInspect.statusSep,；,; 
+tileInspect.status.shermanFire,着火 {n} 级,Fire level {n}
+tileInspect.status.turretDamaged,炮塔受损,Turret damaged
+tileInspect.status.paralyzed,瘫痪,Immobilized
+tileInspect.status.hidden,隐蔽,Concealed
+tileInspect.status.smoked,烟雾,Smoked
+tileInspect.status.loaded,主炮已装填,Main gun loaded
+tileInspect.status.unloaded,主炮未装填,Main gun not loaded
+tileInspect.status.hatchOpen,舱盖打开,Hatches open
+tileInspect.status.enemyDamaged,车体受损,Hull damaged
 battle.settings.title,战斗设置,Battle Settings
 battle.settings.exit,退出关卡,Exit Level
 battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)
