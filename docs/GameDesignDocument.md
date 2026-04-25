@@ -459,6 +459,8 @@ function axialToWorld(q: number, r: number): Vec2 {
 - 行动表 / AI 表 / 事件表（覆盖默认值）
 - 胜负条件（脚本表达式或枚举）
 
+**复合目标 `destroy_kind_evac`**：在击毁 `objective.kind` 所指全部敌方单位后，谢尔曼须从 **`evacAt`** 六角格沿 **`evacExitDir`** 六向之一执行 **前进** 或 **后退**（后退的位移方向 = `facing+3`，须等于 `evacExitDir`），且 **邻格不在地图内**（无 `Tile`）时撤离成功并判胜；动画结束后谢尔曼坐标可落在网格外。存档字段 `shermanEvacuated` 由 `SaveLoad` 持久化。
+
 **敌方坦克掷骰出生（可选，`enemyStartByDice: true`）**
 
 适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记若干**出生格**；同一格可选 **`ef`**（0=E … 5=NE，与 `HexGrid` 一致）表示**与盘面数字所贴近的那条格边**一致的坦克**初始朝向**。

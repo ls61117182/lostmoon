@@ -48,6 +48,8 @@ export interface SaveData {
   playerStep?: SavePlayerStep;
   /** v3：当前子阶段骰子槽（与 BattleScene.phaseDice 同构） */
   phaseDice?: Array<{ pip: number; used: boolean }>;
+  /** 谢尔曼是否已完成 destroy_kind_evac 离场移动 */
+  shermanEvacuated?: boolean;
 }
 
 export interface SnapshotParams {
@@ -102,6 +104,7 @@ export function captureSave(p: SnapshotParams): SaveData {
       destroyed: e.destroyed,
       smoked: e.smoked,
     })),
+    shermanEvacuated: p.mission.shermanEvacuated ?? false,
   };
 }
 
@@ -179,6 +182,7 @@ export function applySave(
       const s = save.enemies[i];
       if (s.smoked !== undefined) mission.enemies[i].smoked = s.smoked;
     }
+    mission.shermanEvacuated = save.shermanEvacuated ?? false;
   }
 
   return {

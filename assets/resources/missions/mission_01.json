@@ -1,7 +1,7 @@
 {
   "id": "mission_01",
   "name": "村庄",
-  "description": "目标：摧毁 2 辆 IV 号坦克，然后从红色箭头方向移动离开地图。\n设置：谢尔曼置于右下角公路末端格，朝西北。2 辆 IV 号坦克在关卡开局各掷 1d6，按地图上标有 eid 1、2 的出生格与链式占位规则落位（详见 GDD §6.2.2）。",
+  "description": "目标：摧毁 2 辆 IV 号坦克；随后在撤离格（col=5,row=6）将车体朝向正东，执行前进驶出地图东侧（邻格无地形亦可胜利）。\n谢尔曼初始在左下公路格；2 辆 IV 号按 eid 掷骰出生（见 GDD）。",
 
   "_comment": "说明书任务 1（P26）。tiles[row][col] 使用 odd-r 偏移。\n基底：r=公路 f=田地 m=泥地 F=林地；bd=1 建筑；h=树篱；rid 援军；eid 敌方骰点出生编号 1..6（全图唯一）；ef 该格出生坦克朝向（0=E…5=NE）。\nenemyStartByDice：敌方无固定 at，开局掷骰放置。",
 
@@ -98,8 +98,10 @@
   ],
 
   "objective": {
-    "type": "destroy_kind",
-    "kind": "panzer4"
+    "type": "destroy_kind_evac",
+    "kind": "panzer4",
+    "evacAt": { "col": 6, "row": 3 },
+    "evacExitDir": 0
   },
 
   "actionTableId": "standard",

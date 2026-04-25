@@ -101,15 +101,20 @@ export interface ShermanCrew {
 export type ObjectiveType =
   | 'destroy_all_enemies'   // 摧毁所有德军单位
   | 'destroy_kind'          // 摧毁某种单位
+  | 'destroy_kind_evac'     // 摧毁指定种类后，从指定格沿指定六向驶出地图（邻格可无地形）
   | 'exit_from_edge'        // 从某方向移出地图
   | 'destroy_truck';        // 摧毁卡车（任务 5 特殊）
 
 export interface MissionObjective {
   type: ObjectiveType;
-  /** destroy_kind 用 */
+  /** destroy_kind / destroy_kind_evac 用 */
   kind?: UnitKind;
   /** exit_from_edge 用：箭头方向（Direction） */
   exitDirection?: Direction;
+  /** destroy_kind_evac：撤离六角格（offset）；谢尔曼在此格且目标格无地形时，沿 evacExitDir 前进或反向后退离场 */
+  evacAt?: Offset;
+  /** destroy_kind_evac：驶出地图的六向（0=E … 5=NE），须与「前进」或「后退」的位移方向一致 */
+  evacExitDir?: Direction;
 }
 
 export interface UnitPlacement {

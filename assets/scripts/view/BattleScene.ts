@@ -54,6 +54,7 @@ import {
   approximateDirection,
   directionTo,
   neighbor,
+  offsetToAxial,
   rotateDirection,
 } from '../core/HexGrid';
 import {
@@ -80,7 +81,7 @@ import {
   selectEnemyOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { checkOutcome, MissionOutcome } from '../core/Objective';
+import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
@@ -208,6 +209,8 @@ interface MoveAnim {
   /** kind==='turn'：一步 60° 的起止朝向 */
   turnFrom?: Direction;
   turnTo?: Direction;
+  /** kind==='move'：驶出地图的撤离移动，结束时置 shermanEvacuated 并判胜 */
+  evacExit?: boolean;
 }
 
 type Phase = 'player' | 'enemy';
@@ -476,6 +479,10 @@ const PREVIEW_OUTLINE     = new Color(  0,   0,   0, 200);
 /** 谢尔曼起始格「入场方向」箭头：深灰填充 + 深色描边，贴在车后一侧格边 */
 const SPAWN_ENTRY_ARROW_FILL   = new Color(105, 110, 118, 255);
 const SPAWN_ENTRY_ARROW_STROKE = new Color( 35,  38,  42, 230);
+
+/** 撤离格箭头：与出生箭头同几何尺寸，沿 `evacExitDir` 指向网格外（与入场箭头指向格心相反） */
+const EVAC_ARROW_FILL   = new Color(210,  55,  55, 255);
+const EVAC_ARROW_STROKE = new Color(110,  20,  20, 240);
 
 /**
  * 2d6 之和 ≥ N 的精确概率（N 取 2..13；超出范围按边界处理）。
@@ -927,6 +934,8 @@ export class BattleScene extends Component {
 
     // 4c. 谢尔曼出生格入场箭头（固定画在 JSON 出生格，谢尔曼离开后仍保留；在机体之下绘制）
     this.drawShermanSpawnEntryArrow();
+    // 4d. destroy_kind_evac：撤离格红色箭头（与出生箭头同尺度，方向指向网格外）
+    this.drawEvacExitArrow();
 
     // 5. 单位 —— 正在动画的那个用插值像素坐标，其余用本格坐标
     this.drawUnitMaybeAnim(sherman);
@@ -1038,6 +1047,74 @@ export class BattleScene extends Component {
     g.lineWidth = 2.25 * lenScale;
     g.moveTo(mx, my);
     g.lineTo(sx, sy);
+    g.stroke();
+
+    g.lineWidth = 1.35 * lenScale;
+    g.moveTo(tipX, tipY);
+    g.lineTo(b1x, b1y);
+    g.lineTo(b2x, b2y);
+    g.close();
+    g.fill();
+    g.stroke();
+
+    g.lineWidth = 2;
+  }
+
+  /**
+   * 在 `destroy_kind_evac` 的撤离格绘制红色箭头：与出生箭头**同尺度**（stem/head/线宽），
+   * 语义为沿 `evacExitDir` 离场；**整箭落在格内**——箭尖取格心至撤离边中点距离的 0.86 倍，不画出六角边界。
+   */
+  private drawEvacExitArrow() {
+    if (!this.g || !this.mission) return;
+    const obj = this.mission.data.objective;
+    if (obj.type !== 'destroy_kind_evac' || !obj.evacAt || obj.evacExitDir === undefined) return;
+
+    const g = this.g;
+    const evac = offsetToAxial(obj.evacAt);
+    const exitDir = obj.evacExitDir as Direction;
+    const c = this.project(evac.q, evac.r);
+    const nb = neighbor(evac, exitDir);
+    const nc = this.project(nb.q, nb.r);
+    const mx = (c.x + nc.x) * 0.5;
+    const my = (c.y + nc.y) * 0.5;
+    let ux = mx - c.x;
+    let uy = my - c.y;
+    const dEdge = Math.hypot(ux, uy);
+    if (dEdge < 1e-6) return;
+    ux /= dEdge;
+    uy /= dEdge;
+    const tx = -uy;
+    const ty = ux;
+
+    const s = this.hexSize;
+    const lenScale = 1.5;
+    const stemLen = s * 0.07 * lenScale;
+    const headLen = s * 0.13 * lenScale;
+    const headHalfW = s * 0.11 * lenScale * 2;
+    const sink = headLen * 0.32;
+
+    /** 箭尖在格内：沿撤离向不超过格心→该边中点距离的 0.86；若格太小容不下整箭则跳过 */
+    const maxTip = dEdge * 0.86;
+    const minTip = stemLen + headLen + s * 0.02;
+    if (maxTip < minTip) return;
+    const tipDist = maxTip;
+    const tipX = c.x + ux * tipDist;
+    const tipY = c.y + uy * tipDist;
+    const joinX = tipX - ux * headLen;
+    const joinY = tipY - uy * headLen;
+    const stemStartX = joinX - ux * stemLen;
+    const stemStartY = joinY - uy * stemLen;
+    const b1x = joinX + tx * headHalfW + ux * sink;
+    const b1y = joinY + ty * headHalfW + uy * sink;
+    const b2x = joinX - tx * headHalfW + ux * sink;
+    const b2y = joinY - ty * headHalfW + uy * sink;
+
+    g.strokeColor = EVAC_ARROW_STROKE;
+    g.fillColor = EVAC_ARROW_FILL;
+
+    g.lineWidth = 2.25 * lenScale;
+    g.moveTo(stemStartX, stemStartY);
+    g.lineTo(joinX, joinY);
     g.stroke();
 
     g.lineWidth = 1.35 * lenScale;
@@ -1480,9 +1557,18 @@ export class BattleScene extends Component {
     const finishedUnit = anim.unit;
     if (anim.kind === 'move') {
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
-      console.log(
-        `[BattleScene] ${finishedUnit.kind} 到达 (q=${finishedUnit.pos.q}, r=${finishedUnit.pos.r})`,
-      );
+      if (anim.evacExit && this.mission) {
+        this.mission.shermanEvacuated = true;
+        this.outcome = checkOutcome(this.mission);
+        this.updateOutcomeOverlay();
+        console.log(
+          `[BattleScene] ${finishedUnit.kind} 撤离完成 → 胜负=${this.outcome}`,
+        );
+      } else {
+        console.log(
+          `[BattleScene] ${finishedUnit.kind} 到达 (q=${finishedUnit.pos.q}, r=${finishedUnit.pos.r})`,
+        );
+      }
     } else {
       finishedUnit.facing = anim.turnTo!;
       console.log(
@@ -1491,6 +1577,11 @@ export class BattleScene extends Component {
     }
     this.anim = null;
     this.redraw();
+    if (this.outcome !== 'ongoing') {
+      this.refreshPhaseUI();
+      this.updateHUD();
+      return;
+    }
     // 若处于敌方阶段，紧接着调度下一颗骰（骰子托盘固定在 UI 上，无需每步重建）
     if (this.phase === 'enemy') {
       this.enemyDiceHighlightIdx = -1;
@@ -3228,6 +3319,27 @@ export class BattleScene extends Component {
     }
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
+    if (isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) {
+      slot.used = true;
+      this.closeDiePopover();
+      this.breakConcealment(sherman);
+      this.anim = {
+        unit: sherman,
+        kind: 'move',
+        fromQ: sherman.pos.q,
+        fromR: sherman.pos.r,
+        toQ: to.q,
+        toR: to.r,
+        t: 0,
+        dur: Math.max(0.05, this.moveDuration),
+        evacExit: true,
+      };
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      console.log(`[Move] 撤离离场 → (${to.q},${to.r})（目标格无地形）`);
+      return;
+    }
     const tile = map.get(to);
     if (!tile || !map.canTankEnter(to)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
@@ -3739,6 +3851,27 @@ export class BattleScene extends Component {
     }
     const driveDir = sherman.facing;
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
+    if (isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to)) {
+      if (!this.consumeDoubles(dieIdx)) return;
+      this.closeDiePopover();
+      this.breakConcealment(sherman);
+      this.anim = {
+        unit: sherman,
+        kind: 'move',
+        fromQ: sherman.pos.q,
+        fromR: sherman.pos.r,
+        toQ: to.q,
+        toR: to.r,
+        t: 0,
+        dur: Math.max(0.05, this.moveDuration),
+        evacExit: true,
+      };
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      console.log(`[Move] 对子 驾驶员撤离离场 → (${to.q},${to.r})`);
+      return;
+    }
     const tile = map.get(to);
     if (!tile || !map.canTankEnter(to)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),

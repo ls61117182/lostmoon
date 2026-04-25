@@ -12,7 +12,7 @@
 ### 目标
 
 - 摧毁 **2 辆 IV 号坦克**；
-- 随后从 **红色箭头方向**（地图顶边，向北）移动离开地图。
+- 随后将谢尔曼开到 **撤离格**（`evacAt`：`col=5, row=6`），沿撤离六向 **`evacExitDir = 0`（正东）** 驶出地图：可 **朝东前进**（邻格无地形即胜利），或 **朝西后退**（后退的位移方向仍为东，与 `evacExitDir` 一致）。
 
 ### 初始设置
 
@@ -26,11 +26,11 @@
 
 ### 胜负条件（代码实现）
 
-- 使用 `objective.type = "destroy_kind"`、`kind = "panzer4"`，即击毁全部
-  IV 号坦克即判胜；失败条件沿用主循环中谢尔曼被摧毁的逻辑。
-- **待办**：规则书的"击毁 + 撤离"复合目标暂未在引擎实现；后续可扩展为
-  `destroy_kind` + `exit_from_edge` 的串联条件，`exitDirection` 设为
-  `4 (NW)` 或 `5 (NE)` 表示从顶边离场。
+- 使用 `objective.type = "destroy_kind_evac"`、`kind = "panzer4"`，并配置
+  `evacAt`（offset 撤离六角格）与 `evacExitDir`（驶出地图的六向，0=E … 5=NE）。
+- 先击毁全部 IV 号；再于撤离格上，沿 `evacExitDir` 执行 **前进** 或等效的
+  **后退**（位移方向与 `evacExitDir` 一致），且 **目标六角不在地图内**（`HexMap.has` 为假）时，记 `shermanEvacuated` 并判胜。
+- 失败条件：谢尔曼被摧毁（`checkOutcome` 优先判负）。
 
 ### 地图配置说明（与 `mission_01.json` 一致：当前 **7 列 × 7 行**）
 

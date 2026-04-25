@@ -36,6 +36,8 @@ export interface LoadedMission {
   sherman: Unit;
   enemies: Unit[];
   data: MissionData;
+  /** destroy_kind_evac：谢尔曼已成功执行离场移动（驶出地图） */
+  shermanEvacuated?: boolean;
 }
 
 export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
@@ -97,7 +99,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     return makeUnit(`enemy_${i}`, p);
   });
 
-  return { map, sherman, enemies, data };
+  return { map, sherman, enemies, data, shermanEvacuated: false };
 }
 
 /** 每个敌方单位掷 1d6：先试 eid=点数之格；被占则 eid+1…6→1 循环直至空位或试满 6 档。 */
