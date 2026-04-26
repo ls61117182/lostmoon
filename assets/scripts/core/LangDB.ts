@@ -275,6 +275,8 @@ export const LANG_DB: Record<string, LangEntry> = {
   'tileInspect.status.unloaded': { zh: "主炮未装填", en: "Main gun not loaded" },
   'tileInspect.status.hatchOpen': { zh: "舱盖打开", en: "Hatches open" },
   'tileInspect.status.enemyDamaged': { zh: "车体受损", en: "Hull damaged" },
+  'battleLog.title': { zh: "战斗记录 · 点标题放大", en: "Combat log · tap title to expand" },
+  'battleLog.ready': { zh: "[系统] 战斗记录就绪。", en: "[System] Combat log ready." },
   'battle.settings.title': { zh: "战斗设置", en: "Battle Settings" },
   'battle.settings.exit': { zh: "退出关卡", en: "Exit Level" },
   'battle.turnEndList.title': { zh: "回合结束事件（本关）", en: "Turn-end events (this mission)" },

@@ -744,6 +744,8 @@ export class BattleScene extends Component {
     bodyLabel: Label;
     bodyKey: string;
     bodyParams: Record<string, string | number>;
+    /** 本行效果类型（本地化短名），写入战斗记录用 */
+    effectName: string;
     apply: () => void;
     extraPhases: TurnEndExtraDicePhase[];
     extraIdx: number;
@@ -807,6 +809,26 @@ export class BattleScene extends Component {
     langZhBtn: BattleRectButtonRefs | null;
     langEnBtn: BattleRectButtonRefs | null;
   } | null = null;
+
+  /** 左下角战斗详细记录（可滚动；点击放大，点遮罩外区域缩小） */
+  private combatLogRoot: Node | null = null;
+  private combatLogDimmer: Node | null = null;
+  private combatLogPanel: Node | null = null;
+  private combatLogPanelBg: Graphics | null = null;
+  private combatLogScroll: ScrollView | null = null;
+  private combatLogContent: Node | null = null;
+  private combatLogLabel: Label | null = null;
+  private combatLogViewN: Node | null = null;
+  private combatLogTitleLab: Label | null = null;
+  private combatLogLines: string[] = [];
+  private combatLogExpanded = false;
+  private static readonly COMBAT_LOG_MAX = 500;
+  private static readonly COMBAT_LOG_W0 = 360;
+  private static readonly COMBAT_LOG_H0 = 190;
+  private static readonly COMBAT_LOG_W1 = 680;
+  private static readonly COMBAT_LOG_H1 = 500;
+  private static readonly COMBAT_LOG_PAD = 8;
+  private static readonly COMBAT_LOG_TITLE_H = 26;
 
   onLoad() {
     setLang(MenuProgress.load().lang);
@@ -890,6 +912,7 @@ export class BattleScene extends Component {
     // 底部阶段选择条 + 骰子托盘（空的，交给 refreshPhaseUI 根据状态切换可见性）
     this.buildChooseBar();
     this.buildDiceTray();
+    this.buildCombatLog();
 
     // 主菜单选关时会写入 GameSession.selectedMissionPath；绕过菜单直接启动场景
     // 也安全（GameSession 默认值 = 'missions/mission_01'，与本脚本 @property 默认一致）。
@@ -959,7 +982,7 @@ export class BattleScene extends Component {
     this.updateOutcomeOverlay();
 
     this.redraw();
-    console.log(
+    this.battleLog(
       `[BattleScene] 任务加载成功: ${data.name}, ${tiles.length} 格, ` +
       `1 + ${this.mission.enemies.length} 个单位`
     );
@@ -1680,17 +1703,17 @@ export class BattleScene extends Component {
         this.mission.shermanEvacuated = true;
         this.outcome = checkOutcome(this.mission);
         this.updateOutcomeOverlay();
-        console.log(
+        this.battleLog(
           `[BattleScene] ${finishedUnit.kind} 撤离完成 → 胜负=${this.outcome}`,
         );
       } else {
-        console.log(
+        this.battleLog(
           `[BattleScene] ${finishedUnit.kind} 到达 (q=${finishedUnit.pos.q}, r=${finishedUnit.pos.r})`,
         );
       }
     } else {
       finishedUnit.facing = anim.turnTo!;
-      console.log(
+      this.battleLog(
         `[BattleScene] ${finishedUnit.kind} 转向完成 facing=${finishedUnit.facing}`,
       );
     }
@@ -2290,6 +2313,237 @@ export class BattleScene extends Component {
     );
   }
 
+  /** 左下角战斗记录：ScrollView + 标题条点击放大；展开时全屏半透明遮罩点击缩小。 */
+  private buildCombatLog() {
+    const W0 = BattleScene.COMBAT_LOG_W0;
+    const H0 = BattleScene.COMBAT_LOG_H0;
+    const pad = BattleScene.COMBAT_LOG_PAD;
+    const th = BattleScene.COMBAT_LOG_TITLE_H;
+    const lx = -CANVAS_W * 0.5 + 12;
+    const ly = -CANVAS_H * 0.5 + 12;
+
+    const root = new Node('CombatLogRoot');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(1, 1);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    this.combatLogRoot = root;
+
+    const dim = new Node('CombatLogDimmer');
+    dim.layer = this.node.layer;
+    dim.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    dim.setPosition(0, 0, 0);
+    dim.addComponent(BlockInputEvents);
+    const dg = dim.addComponent(Graphics);
+    dg.fillColor = new Color(0, 0, 0, 140);
+    dg.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    dg.fill();
+    dim.active = false;
+    dim.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+      this.setCombatLogExpanded(false);
+      e.propagationStopped = true;
+    }, this);
+    root.addChild(dim);
+    this.combatLogDimmer = dim;
+
+    const panel = new Node('CombatLogPanel');
+    panel.layer = this.node.layer;
+    const put = panel.addComponent(UITransform);
+    put.setAnchorPoint(0, 0);
+    put.setContentSize(W0, H0);
+    panel.setPosition(lx, ly, 0);
+    const pbg = panel.addComponent(Graphics);
+    this.combatLogPanelBg = pbg;
+    root.addChild(panel);
+    this.combatLogPanel = panel;
+
+    const scrollN = new Node('CombatLogScroll');
+    scrollN.layer = this.node.layer;
+    const sW = W0 - pad * 2;
+    const sH = H0 - th - pad * 2.5;
+    scrollN.addComponent(UITransform).setContentSize(sW, sH);
+    scrollN.setAnchorPoint(0, 0);
+    scrollN.setPosition(pad, pad, 0);
+    panel.addChild(scrollN);
+    const sv = scrollN.addComponent(ScrollView);
+    sv.vertical = true;
+    sv.horizontal = false;
+    sv.inertia = true;
+    sv.brake = 0.5;
+    sv.verticalScrollBar = null;
+    sv.horizontalScrollBar = null;
+
+    const viewN = new Node('view');
+    viewN.layer = this.node.layer;
+    viewN.addComponent(Mask);
+    const vut = viewN.addComponent(UITransform);
+    vut.setAnchorPoint(0, 0);
+    vut.setContentSize(sW, sH);
+    viewN.setPosition(0, 0, 0);
+    scrollN.addChild(viewN);
+    this.combatLogViewN = viewN;
+
+    const contentN = new Node('content');
+    contentN.layer = this.node.layer;
+    const cut = contentN.addComponent(UITransform);
+    cut.setAnchorPoint(0.5, 1);
+    cut.setContentSize(sW - 4, 80);
+    // 与 view 锚点 (0,0)、尺寸 sW×sH 一致：顶中放在视口上沿（勿用默认 view 中心锚点 + (0,sH/2)，否则整段正文会错位到屏角）
+    contentN.setPosition(sW * 0.5, sH, 0);
+    viewN.addChild(contentN);
+    const lab = contentN.addComponent(Label);
+    lab.fontSize = 13;
+    lab.lineHeight = 17;
+    lab.color = new Color(230, 235, 242, 255);
+    lab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    lab.verticalAlign = VerticalTextAlignment.TOP;
+    lab.overflow = Label.Overflow.RESIZE_HEIGHT;
+    lab.string = '';
+    this.combatLogLabel = lab;
+    this.combatLogContent = contentN;
+    sv.content = contentN;
+    this.combatLogScroll = sv;
+
+    const head = new Node('CombatLogHead');
+    head.layer = this.node.layer;
+    head.addComponent(UITransform).setContentSize(W0 - pad * 2, th);
+    head.setAnchorPoint(0, 0);
+    head.setPosition(pad, H0 - th - pad * 0.5, 0);
+    const hl = head.addComponent(Label);
+    hl.fontSize = 15;
+    hl.lineHeight = 18;
+    hl.color = new Color(200, 210, 225, 255);
+    hl.horizontalAlign = HorizontalTextAlignment.LEFT;
+    hl.verticalAlign = VerticalTextAlignment.CENTER;
+    hl.string = t('battleLog.title');
+    panel.addChild(head);
+    this.combatLogTitleLab = hl;
+    head.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
+      if (!this.combatLogExpanded) this.setCombatLogExpanded(true);
+      e.propagationStopped = true;
+    }, this);
+
+    this.applyCombatLogChrome(false);
+    this.combatLogLines = [];
+    this.battleLog(t('battleLog.ready'));
+
+    root.setSiblingIndex(Math.max(0, this.node.children.length - 1));
+  }
+
+  /** 写入战斗 UI 记录（并保留 console 便于开发器查看） */
+  private battleLog(msg: string) {
+    console.log(msg);
+    if (!this.combatLogLabel) return;
+    this.combatLogLines.push(msg);
+    if (this.combatLogLines.length > BattleScene.COMBAT_LOG_MAX) {
+      this.combatLogLines.splice(0, this.combatLogLines.length - BattleScene.COMBAT_LOG_MAX);
+    }
+    this.combatLogLabel.string = this.combatLogLines.join('\n');
+    this.combatLogLabel.updateRenderData(true);
+    const ut = this.combatLogContent?.getComponent(UITransform);
+    if (ut && this.combatLogScroll) {
+      const innerW = ut.contentSize.width;
+      const h = Math.max(40, this.combatLogLabel.node.getComponent(UITransform)!.contentSize.height);
+      // 勿用 Math.max(h, 视口高)：顶对齐文本 + scrollToBottom 会把正文滚到视口上方，框内看起来全空。
+      ut.setContentSize(innerW, h);
+      this.scheduleOnce(() => this.syncCombatLogScrollAfterLayout(), 0);
+    }
+  }
+
+  /**
+   * 顶对齐战斗记录：内容高度 = 文本高度（至少 40）。
+   * 仅当文本高于视口时才滚到底部看最新；否则滚到顶部，避免 scrollToBottom 把短正文滚没。
+   */
+  private syncCombatLogScrollAfterLayout() {
+    const sv = this.combatLogScroll;
+    const viewN = this.combatLogViewN;
+    const contentN = this.combatLogContent;
+    const lab = this.combatLogLabel;
+    if (!sv?.isValid || !viewN || !contentN || !lab) return;
+    const vh = viewN.getComponent(UITransform)!.contentSize.height;
+    const cut = contentN.getComponent(UITransform)!;
+    lab.updateRenderData(true);
+    const h = Math.max(40, lab.node.getComponent(UITransform)!.contentSize.height);
+    cut.setContentSize(cut.contentSize.width, h);
+    const eps = 2;
+    if (h > vh + eps) sv.scrollToBottom(0);
+    else sv.scrollToTop(0);
+  }
+
+  private applyCombatLogChrome(_expanded: boolean) {
+    const p = this.combatLogPanel;
+    const bg = this.combatLogPanelBg;
+    const lab = this.combatLogLabel;
+    const tl = this.combatLogTitleLab;
+    if (!p || !bg || !lab || !tl) return;
+    // 放大后仍与折叠时相同的半透明深色底 + 浅色字（仅尺寸与字号在变）
+    bg.fillColor = new Color(22, 24, 32, 245);
+    bg.strokeColor = new Color(90, 96, 118, 255);
+    lab.color = new Color(228, 233, 240, 255);
+    tl.color = new Color(190, 200, 215, 255);
+    const utp = p.getComponent(UITransform)!;
+    const w = utp.contentSize.width;
+    const h = utp.contentSize.height;
+    bg.clear();
+    bg.lineWidth = 2;
+    bg.rect(0, 0, w, h);
+    bg.fill();
+    bg.rect(0, 0, w, h);
+    bg.stroke();
+  }
+
+  private setCombatLogExpanded(expanded: boolean) {
+    if (this.combatLogExpanded === expanded) return;
+    this.combatLogExpanded = expanded;
+    const panel = this.combatLogPanel;
+    const dim = this.combatLogDimmer;
+    const scrollN = this.combatLogScroll?.node;
+    const viewN = this.combatLogViewN;
+    const contentN = this.combatLogContent;
+    if (!panel || !dim || !scrollN || !viewN || !contentN || !this.combatLogScroll) return;
+
+    const W = expanded ? BattleScene.COMBAT_LOG_W1 : BattleScene.COMBAT_LOG_W0;
+    const H = expanded ? BattleScene.COMBAT_LOG_H1 : BattleScene.COMBAT_LOG_H0;
+    const pad = BattleScene.COMBAT_LOG_PAD;
+    const th = BattleScene.COMBAT_LOG_TITLE_H;
+    const lx = -CANVAS_W * 0.5 + 12;
+    const ly = -CANVAS_H * 0.5 + 12;
+
+    dim.active = expanded;
+    const put = panel.getComponent(UITransform)!;
+    put.setContentSize(W, H);
+    panel.setPosition(lx, ly, 0);
+
+    const head = panel.getChildByName('CombatLogHead');
+    if (head) {
+      head.getComponent(UITransform)!.setContentSize(W - pad * 2, th);
+      head.setPosition(pad, H - th - pad * 0.5, 0);
+    }
+
+    const sW = W - pad * 2;
+    const sH = H - th - pad * 2.5;
+    scrollN.getComponent(UITransform)!.setContentSize(sW, sH);
+    const vutE = viewN.getComponent(UITransform)!;
+    vutE.setAnchorPoint(0, 0);
+    vutE.setContentSize(sW, sH);
+    contentN.setPosition(sW * 0.5, sH, 0);
+    const cut = contentN.getComponent(UITransform)!;
+    cut.setContentSize(sW - 4, cut.contentSize.height);
+
+    this.applyCombatLogChrome(expanded);
+    if (this.combatLogLabel) {
+      this.combatLogLabel.fontSize = expanded ? 14 : 13;
+      this.combatLogLabel.lineHeight = expanded ? 18 : 17;
+      this.combatLogLabel.updateRenderData(true);
+      const lh = Math.max(40, this.combatLogLabel.node.getComponent(UITransform)!.contentSize.height);
+      cut.setContentSize(sW - 4, lh);
+    }
+    this.scheduleOnce(() => {
+      this.syncCombatLogScrollAfterLayout();
+    }, 0);
+    panel.setSiblingIndex(this.combatLogRoot!.children.length - 1);
+  }
+
   /** 简版按钮工厂：静态背景色，无状态切换，比结束回合按钮简单。 */
   private makeSimpleButton(
     name: string,
@@ -2777,7 +3031,7 @@ export class BattleScene extends Component {
   }
 
   private onBackToMenu() {
-    console.log('[BattleScene] 返回主菜单');
+    this.battleLog('[BattleScene] 返回主菜单');
     director.loadScene(this.mainMenuSceneName, (err) => {
       if (err) console.error('[BattleScene] 加载主菜单场景失败:', this.mainMenuSceneName, err);
     });
@@ -2813,7 +3067,7 @@ export class BattleScene extends Component {
     if (this.outcomeLabel) this.outcomeLabel.node.active = false;
     if (this.restartBtn) this.restartBtn.active = false;
     this.loadAndDraw(data);
-    console.log('[BattleScene] === 重开当前任务 ===');
+    this.battleLog('[BattleScene] === 重开当前任务 ===');
   }
 
   // ---------- 阶段选择条 + 骰子托盘 ----------
@@ -3109,7 +3363,7 @@ export class BattleScene extends Component {
       return;
     }
     s.hatchOpen = !s.hatchOpen;
-    console.log(`[Hatch] 车长舱盖 → ${s.hatchOpen ? '打开' : '关闭'}`);
+    this.battleLog(`[Hatch] 车长舱盖 → ${s.hatchOpen ? '打开' : '关闭'}`);
     this.refreshStatusPanel();
   }
 
@@ -3151,7 +3405,7 @@ export class BattleScene extends Component {
 
     const label = which === 'movement' ? '移动' : which === 'attack' ? '攻击' : '杂项';
     const hatchForLog = hatchOpenRaw && !!crew.commander;
-    console.log(`[Dice] ${label}阶段掷骰: `
+    this.battleLog(`[Dice] ${label}阶段掷骰: `
       + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${hatchForLog ? '开' : '关'}）`);
 
     this.refreshPhaseUI();
@@ -3195,7 +3449,7 @@ export class BattleScene extends Component {
     if (!anyLeft) {
       const label = this.playerStep === 'movement' ? '移动'
         : this.playerStep === 'attack' ? '攻击' : '杂项';
-      console.log(`[Dice] ${label}阶段骰子用尽，自动结束阶段`);
+      this.battleLog(`[Dice] ${label}阶段骰子用尽，自动结束阶段`);
       this.endCurrentSubPhase();
     }
   }
@@ -3490,7 +3744,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Move] 转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
+    this.battleLog(`[Move] 转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
   }
 
   /**
@@ -3553,7 +3807,7 @@ export class BattleScene extends Component {
       this.refreshPhaseUI();
       this.updateHUD();
       this.redraw();
-      console.log(`[Move] 撤离离场 → (${to.q},${to.r})（目标格无地形）`);
+      this.battleLog(`[Move] 撤离离场 → (${to.q},${to.r})（目标格无地形）`);
       return;
     }
     const tile = map.get(to);
@@ -3588,7 +3842,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Move] ${dirSign === 1 ? '前进' : '后退'} → (${to.q},${to.r})`);
+    this.battleLog(`[Move] ${dirSign === 1 ? '前进' : '后退'} → (${to.q},${to.r})`);
     // 动画结束时的 update() 回调里不再派发敌方阶段；
     // 但我们需要在动画完成后检查骰子是否用完。
     // 简单做法：标记"驱动动画结束时要检查"。这里直接留给 update() 的分支处理：
@@ -3638,7 +3892,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log('[Attack] 装填完成');
+    this.battleLog('[Attack] 装填完成');
     this.autoEndPhaseIfDone();
   }
 
@@ -3697,7 +3951,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Attack] 对子 炮手主炮射击已备（主骰 ${dieIdx} + 搭档 ${partnerIdx}，点数 ${slot.pip}）`);
+    this.battleLog(`[Attack] 对子 炮手主炮射击已备（主骰 ${dieIdx} + 搭档 ${partnerIdx}，点数 ${slot.pip}）`);
   }
 
   /**
@@ -3799,13 +4053,13 @@ export class BattleScene extends Component {
       sherman.turretDamaged = false;
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.turretFixed'),
         new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-      console.log('[Misc] 修复炮塔');
+      this.battleLog('[Misc] 修复炮塔');
     } else {
       if (!sherman.paralyzed) return;
       sherman.paralyzed = false;
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.mobilityFixed'),
         new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-      console.log('[Misc] 修复瘫痪');
+      this.battleLog('[Misc] 修复瘫痪');
     }
     slot.used = true;
     this.closeDiePopover();
@@ -3837,7 +4091,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.fireReduced'),
       new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-    console.log(`[Misc] 灭火 → fireLevel ${lvl} → ${sherman.fireLevel}`);
+    this.battleLog(`[Misc] 灭火 → fireLevel ${lvl} → ${sherman.fireLevel}`);
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -3872,7 +4126,7 @@ export class BattleScene extends Component {
 
     const check = canMGAttack({ attacker: sherman, target, map });
     if (!check.ok) {
-      console.log(`[Combat-MG] cannot attack: ${check.reason}`);
+      this.battleLog(`[Combat-MG] cannot attack: ${check.reason}`);
       const msg = t(check.reason ?? 'attack.reason.unknown');
       this.spawnFloater(sherman.pos.q, sherman.pos.r, msg,
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -3883,7 +4137,7 @@ export class BattleScene extends Component {
     // 真正 applyMGAttack / 消耗骰子 / 胜负判定都放到 onDone 里，
     // 这样动画期间托盘 + 敌人图示不会提前变。
     const report = rollMGAttack({ attacker: sherman, target, map }, this.rng);
-    console.log(
+    this.battleLog(
       `[Combat-MG] 玩家机枪 2d6=${report.dice[0]}+${report.dice[1]}=${report.roll}`
       + ` 需要≥${report.threshold} → ${report.hit ? 'HIT 击毙' : 'MISS'}`
     );
@@ -3947,7 +4201,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.smokeDeployed'),
       new Color(200, 200, 220, 255), { size: 22, dur: 0.9, rise: 24 });
-    console.log('[Misc] 施放烟雾 → sherman.smoked=true');
+    this.battleLog('[Misc] 施放烟雾 → sherman.smoked=true');
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -3982,7 +4236,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.concealed'),
       new Color(160, 220, 180, 255), { size: 22, dur: 0.9, rise: 24 });
-    console.log(`[Misc] 进入隐蔽（消耗骰 ${dieIdx} + ${partnerIdx}，点数 ${slot.pip}）`);
+    this.battleLog(`[Misc] 进入隐蔽（消耗骰 ${dieIdx} + ${partnerIdx}，点数 ${slot.pip}）`);
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -4085,7 +4339,7 @@ export class BattleScene extends Component {
       this.refreshPhaseUI();
       this.updateHUD();
       this.redraw();
-      console.log(`[Move] 对子 驾驶员撤离离场 → (${to.q},${to.r})`);
+      this.battleLog(`[Move] 对子 驾驶员撤离离场 → (${to.q},${to.r})`);
       return;
     }
     const tile = map.get(to);
@@ -4120,7 +4374,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Move] 对子 驾驶员前进 → (${to.q},${to.r})（消耗两颗骰）`);
+    this.battleLog(`[Move] 对子 驾驶员前进 → (${to.q},${to.r})（消耗两颗骰）`);
   }
 
   /**
@@ -4163,7 +4417,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[Move] 对子 副驾驶转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
+    this.battleLog(`[Move] 对子 副驾驶转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
   }
 
   /**
@@ -4191,7 +4445,7 @@ export class BattleScene extends Component {
     this.updateHUD();
     this.redraw();
     this.refreshStatusPanel();
-    console.log('[Attack] 对子 装填手装填完成（消耗两颗骰）');
+    this.battleLog('[Attack] 对子 装填手装填完成（消耗两颗骰）');
     this.autoEndPhaseIfDone();
   }
 
@@ -4227,7 +4481,7 @@ export class BattleScene extends Component {
         e.smoked = false;
         this.spawnFloater(e.pos.q, e.pos.r, t('floater.smokeCleared'),
           new Color(200, 200, 220, 255), { size: 20, dur: 0.8, rise: 22 });
-        console.log(`[Phase④] ${e.kind} 烟雾消散`);
+        this.battleLog(`[Phase④] ${e.kind} 烟雾消散`);
       }
     }
     // §2.1 阶段⑤：着火程度检定（有 UI 时异步，无火则直接进入后续）
@@ -4256,7 +4510,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[BattleScene] === 回合 ${this.turn} 敌方阶段开始 (${this.enemyOrder.length} 辆敌坦)`);
+    this.battleLog(`[BattleScene] === 回合 ${this.turn} 敌方阶段开始 (${this.enemyOrder.length} 辆敌坦)`);
     this.beginCurrentEnemyTurn();
   }
 
@@ -4271,7 +4525,7 @@ export class BattleScene extends Component {
       this.continueEnemyPhaseAfterFireCheck();
       return;
     }
-    console.log(`[Phase⑤] 着火检定 ×${nSnap}（面板）`);
+    this.battleLog(`[Phase⑤] 着火检定 ×${nSnap}（面板）`);
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.fireCheck'),
       new Color(255, 180, 80, 255), { size: 22, dur: 1.0, rise: 28 });
     const prep = this.prepareFireCheckSteps(nSnap);
@@ -4313,7 +4567,7 @@ export class BattleScene extends Component {
         }
         if (!s.destroyed && pendingFire > 0) {
           s.fireLevel = (s.fireLevel ?? 0) + pendingFire;
-          console.log(`[Phase⑤] fireLevel += ${pendingFire} → ${s.fireLevel}`);
+          this.battleLog(`[Phase⑤] fireLevel += ${pendingFire} → ${s.fireLevel}`);
         }
         this.refreshStatusPanel();
         this.redraw();
@@ -4344,7 +4598,7 @@ export class BattleScene extends Component {
       const die = this.rng.d6();
       allDice.push(die);
       const effect = resolveDamageEffect({ kind: 'sherman' } as Unit, die);
-      console.log(`[Phase⑤] d6=${die} → ${effect}`);
+      this.battleLog(`[Phase⑤] d6=${die} → ${effect}`);
 
       if (effect === 'destroyed') {
         destroyed = true;
@@ -4480,11 +4734,11 @@ export class BattleScene extends Component {
           }
           this.spawnFloater(pos.q, pos.r, t('crew.death.kia', { role: t('crew.role.' + slot) }),
             new Color(255, 120, 120, 255), { size: 22, dur: 1.0, rise: 26 });
-          console.log(`[Phase⑤] 阵亡检定 d6=${crewDie} → slot=${slot}`);
+          this.battleLog(`[Phase⑤] 阵亡检定 d6=${crewDie} → slot=${slot}`);
         } else {
           this.spawnFloater(pos.q, pos.r, t('crew.death.falseAlarm'),
             new Color(200, 200, 200, 255), { size: 20, dur: 0.9, rise: 24 });
-          console.log(`[Phase⑤] 阵亡检定 d6=${crewDie} → 虚惊`);
+          this.battleLog(`[Phase⑤] 阵亡检定 d6=${crewDie} → 虚惊`);
         }
         break;
       }
@@ -4513,6 +4767,7 @@ export class BattleScene extends Component {
     this.closeBattleExitModal();
     this.closeBattleModal();
     this.closeTileInspectModal();
+    this.setCombatLogExpanded(false);
   }
 
   private closeTileInspectModal() {
@@ -5029,6 +5284,7 @@ export class BattleScene extends Component {
     panel: Node;
     contentY: number;
   } {
+    this.setCombatLogExpanded(false);
     const root = new Node('BattleModal');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
@@ -5217,6 +5473,7 @@ export class BattleScene extends Component {
 
   private openBattleExitConfirm() {
     this.closeBattleExitModal();
+    this.setCombatLogExpanded(false);
     const root = new Node('BattleExitModal');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
@@ -5476,6 +5733,7 @@ export class BattleScene extends Component {
     if (this.chooseMoveLabel) this.chooseMoveLabel.string = t('btn.movePhase');
     if (this.chooseAttackLabel) this.chooseAttackLabel.string = t('btn.attackPhase');
     if (this.chooseMiscLabel) this.chooseMiscLabel.string = t('btn.miscPhase');
+    if (this.combatLogTitleLab) this.combatLogTitleLab.string = t('battleLog.title');
     if (this.restartBtnLabel) this.restartBtnLabel.string = t('btn.restart');
     if (this.backToMenuBtnLabel) this.backToMenuBtnLabel.string = t('btn.backToMenu');
     if (this.outcomeLabel && this.outcome !== 'ongoing') {
@@ -5571,7 +5829,7 @@ export class BattleScene extends Component {
     });
     try {
       sys.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-      console.log(`[Save] 已存档：回合 ${data.turn}`);
+      this.battleLog(`[Save] 已存档：回合 ${data.turn}`);
       this.flashBattleSettingsHint(t('battle.save.ok'));
       return true;
     } catch (e) {
@@ -5639,7 +5897,7 @@ export class BattleScene extends Component {
     this.updateHUD();
     this.redraw();
     if (!skipHint) this.flashBattleSettingsHint(t('battle.load.ok'));
-    console.log(`[Load] 已读档：回合 ${this.turn}, 移动 ${this.movementDone ? '已做' : '未做'}, 攻击 ${this.attackDone ? '已做' : '未做'}`);
+    this.battleLog(`[Load] 已读档：回合 ${this.turn}, 移动 ${this.movementDone ? '已做' : '未做'}, 攻击 ${this.attackDone ? '已做' : '未做'}`);
   }
 
   /**
@@ -5677,7 +5935,7 @@ export class BattleScene extends Component {
     this.enemyDiceUsed = this.enemyDice.map(() => false);
     this.enemyDiceExecOrder = this.computeEnemyDiceExecOrder();
 
-    console.log(
+    this.battleLog(
       `[AI] ${enemy.kind}@(${enemy.pos.q},${enemy.pos.r}) 列=${this.enemyAICol} 掷 ${count} 骰 → [${this.enemyDice.join(',')}] 执行序=${this.enemyDiceExecOrder.map(i => this.enemyDice[i]).join(',')}`
     );
 
@@ -5725,7 +5983,7 @@ export class BattleScene extends Component {
       const entry = actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
       const chosen = this.chooseActionForEntry(enemy, entry);
       const entryLabel = describeEntry(entry);
-      console.log(
+      this.battleLog(
         `[AI] ${enemy.kind} #${dieIdx + 1} d6=${pip} → ${entryLabel}` +
         (chosen ? ` ⇒ ${chosen}` : ' ⇒ 无可行动作（空转）')
       );
@@ -5802,14 +6060,14 @@ export class BattleScene extends Component {
         const occupied = this.buildOccupiedSet(enemy);
         const decision = decideEnemyTurn(enemy, sherman, map, occupied);
         if (decision === 'stay') {
-          console.log(`[AI] ${enemy.kind} 转向 → 保持 facing=${enemy.facing}`);
+          this.battleLog(`[AI] ${enemy.kind} 转向 → 保持 facing=${enemy.facing}`);
           this.redraw();
           return 'done';
         }
         const step = decision === 'cw' ? 1 : 5;
         const from = enemy.facing;
         const to = rotateDirection(from, step);
-        console.log(`[AI] ${enemy.kind} 转向 ${decision.toUpperCase()} → facing=${to}（动画中）`);
+        this.battleLog(`[AI] ${enemy.kind} 转向 ${decision.toUpperCase()} → facing=${to}（动画中）`);
         this.anim = {
           unit: enemy,
           kind: 'turn',
@@ -5844,14 +6102,14 @@ export class BattleScene extends Component {
           t: 0,
           dur: Math.max(0.05, this.moveDuration),
         };
-        console.log(`[AI] ${enemy.kind} ${action === 'advance' ? '前进' : '后退'} → (${to.q},${to.r})`);
+        this.battleLog(`[AI] ${enemy.kind} ${action === 'advance' ? '前进' : '后退'} → (${to.q},${to.r})`);
         this.redraw();
         return 'animating';
       }
 
       case 'smoke': {
         enemy.smoked = true;
-        console.log(`[AI] ${enemy.kind} 施放烟雾`);
+        this.battleLog(`[AI] ${enemy.kind} 施放烟雾`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.smoke'),
           new Color(200, 200, 220, 255), { size: 24 });
         this.redraw();
@@ -5861,7 +6119,7 @@ export class BattleScene extends Component {
       case 'repair': {
         if (enemy.damaged) {
           enemy.damaged = false;
-          console.log(`[AI] ${enemy.kind} 修复成功`);
+          this.battleLog(`[AI] ${enemy.kind} 修复成功`);
           this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.repair'),
             new Color(160, 220, 160, 255), { size: 24 });
           this.redraw();
@@ -5871,7 +6129,7 @@ export class BattleScene extends Component {
 
       case 'conceal': {
         enemy.hidden = true;
-        console.log(`[AI] ${enemy.kind} 进入隐蔽`);
+        this.battleLog(`[AI] ${enemy.kind} 进入隐蔽`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.concealed'),
           new Color(160, 200, 160, 255), { size: 24 });
         this.redraw();
@@ -5901,7 +6159,7 @@ export class BattleScene extends Component {
       this.spawnFloater(this.mission.sherman.pos.q, this.mission.sherman.pos.r,
         t('floater.smokeCleared'), new Color(200, 200, 220, 255),
         { size: 20, dur: 0.8, rise: 22 });
-      console.log('[Phase①] 谢尔曼烟雾消散');
+      this.battleLog('[Phase①] 谢尔曼烟雾消散');
     }
     // 清理敌方调度中间态
     this.enemyOrder = [];
@@ -5924,7 +6182,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    console.log(`[BattleScene] === 进入回合 ${this.turn}（玩家） ===`);
+    this.battleLog(`[BattleScene] === 进入回合 ${this.turn}（玩家） ===`);
   }
 
   // ---------- 交互 ----------
@@ -5989,7 +6247,7 @@ export class BattleScene extends Component {
     }
     const check = canAttack({ attacker: sherman, target, map });
     if (!check.ok) {
-      console.log(`[Combat] cannot attack: ${check.reason}`);
+      this.battleLog(`[Combat] cannot attack: ${check.reason}`);
       // 玩家点到一个"其实打不到"的敌人（比如偏出六向直线 / 被树遮挡），给一条
       // 从射击者向上飘的浮字，免得玩家以为点击没响应。
       // 非六向直线有专门的简短提示，其他原因用对应文案；缺失时兜底到"无法攻击"。
@@ -7048,6 +7306,7 @@ export class BattleScene extends Component {
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
     const extraPhases = prepared.extraDicePhases ?? [];
+    const effectName = t(TURN_END_LIST_EFFECT_KEYS[row.effectType]);
     this.destroyTurnEndEventUI();
     const refs = this.buildTurnEndEventPanel(primaryDice, extraPhases.length > 0);
     for (const lab of refs.dieLabels) lab.string = '?';
@@ -7063,6 +7322,7 @@ export class BattleScene extends Component {
       bodyLabel: refs.bodyLabel,
       bodyKey: prepared.bodyKey,
       bodyParams: prepared.bodyParams,
+      effectName,
       apply: prepared.apply,
       extraPhases,
       extraIdx: 0,
@@ -7341,6 +7601,15 @@ export class BattleScene extends Component {
   private onTurnEndConfirmClick() {
     const ui = this.turnEndEventUI;
     if (!ui || ui.stage !== 'hold') return;
+    const sum = ui.primaryDice.reduce((a, b) => a + b, 0);
+    this.battleLog(
+      `[回合结束] ${t('turnEnd.sumLine', { sum, dice: ui.primaryDice.join('+') })} → ${ui.effectName}`,
+    );
+    for (const ph of ui.extraPhases) {
+      this.battleLog(`[回合结束] ${t(ph.captionKey)}: ${ph.dice.join('+')}`);
+    }
+    const body = ui.bodyLabel.string.trim();
+    if (body) this.battleLog(`[回合结束] ${body}`);
     try {
       ui.apply();
     } catch (e) {
@@ -7366,13 +7635,13 @@ export class BattleScene extends Component {
     let color: Color;
     let size: number;
     if (!report.hit) {
-      console.log(`${base} → miss`);
+      this.battleLog(`${base} → miss`);
       text = t('dice.panel.outcomeMiss'); color = new Color(230, 230, 230, 255); size = 32;
     } else {
       const armorInfo = `hit ${report.armorFace} (armor${report.armor} / pen${report.penetration})`
         + ` 1d6=${report.penDie} need${report.penThreshold}`;
       if (!report.penetrated) {
-        console.log(`${base} → ${armorInfo} → ricochet`);
+        this.battleLog(`${base} → ${armorInfo} → ricochet`);
         text = t('dice.panel.outcomeRic'); color = new Color(180, 200, 240, 255); size = 34;
       } else {
         const effect = report.damageEffect;
@@ -7384,13 +7653,13 @@ export class BattleScene extends Component {
             ? `阵亡检定1d6=${cc.die} → 虚惊（舱盖关）`
             : `阵亡检定1d6=${cc.die} → ${crewRoleName(cc.slot)} 阵亡`
               + (cc.rerolled ? '（有已死乘员重抛）' : '');
-          console.log(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${crewInfo} → ${target.kind}`);
+          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${crewInfo} → ${target.kind}`);
           const out = crewOutcomeLabel(cc);
           text = out.text;
           color = out.color;
           size = cc.slot === null ? 36 : 44;
         } else {
-          console.log(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${target.kind}`);
+          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${target.kind}`);
           const out = damageOutcomeLabel(effect);
           text = out.text;
           color = out.color;

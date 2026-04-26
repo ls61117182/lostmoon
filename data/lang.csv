@@ -263,6 +263,8 @@ tileInspect.status.loaded,主炮已装填,Main gun loaded
 tileInspect.status.unloaded,主炮未装填,Main gun not loaded
 tileInspect.status.hatchOpen,舱盖打开,Hatches open
 tileInspect.status.enemyDamaged,车体受损,Hull damaged
+battleLog.title,战斗记录 · 点标题放大,Combat log · tap title to expand
+battleLog.ready,[系统] 战斗记录就绪。,[System] Combat log ready.
 battle.settings.title,战斗设置,Battle Settings
 battle.settings.exit,退出关卡,Exit Level
 battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)
