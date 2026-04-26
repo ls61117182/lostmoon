@@ -243,6 +243,14 @@ tileInspect.diceRow.attack,攻击阶段基础骰：{n} 颗,Attack base dice: {n}
 tileInspect.diceRow.misc,杂项阶段基础骰：{n} 颗,Misc base dice: {n}
 tileInspect.diceMods,修正（每满足一项通常 +1，以规则为准）：移动阶段 驾驶员存活 +{md}、副驾驶存活 +{mc}、车长开舱 +{mh}；攻击阶段 炮手存活 +{ag}、装填手存活 +{al}、车长开舱 +{ah}；杂项阶段 车长存活 +{xc}。,"Modifiers (typically +1 each when applicable): move — driver +{md}, co-driver +{mc}, commander hatch open +{mh}; attack — gunner +{ag}, loader +{al}, commander hatch open +{ah}; misc — commander +{xc}."
 tileInspect.unitBlock,{name}\n状态：{status},{name}\nStatus: {status}
+tileInspect.currentUnit,当前单位：{name},Current unit: {name}
+tileInspect.currentStatus,当前状态：{status},Current status: {status}
+tileInspect.infantryNoTable,该单位不套用装甲 / 穿甲数据表。,This unit has no armor / penetration stat table.
+tileInspect.colFront,前装甲,Front
+tileInspect.colFrontSide,前侧装甲,Front side
+tileInspect.colRearSide,后侧装甲,Rear side
+tileInspect.colRear,后装甲,Rear
+tileInspect.colPen,穿甲值,Pen.
 tileInspect.statusNone,无额外状态,No extra status
 tileInspect.noUnit,当前格上无单位。,No unit on this tile.
 tileInspect.statusSep,；,; 

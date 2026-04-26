@@ -41,7 +41,9 @@ import {
   HorizontalTextAlignment,
   JsonAsset,
   Label,
+  Mask,
   Node,
+  ScrollView,
   Sprite,
   SpriteFrame,
   sys,
@@ -793,6 +795,9 @@ export class BattleScene extends Component {
   private battleExitModalRoot: Node | null = null;
   /** 地图格子介绍（地形 / 骰子规则 / 单位状态） */
   private tileInspectModalRoot: Node | null = null;
+  private tileInspectScroll: ScrollView | null = null;
+  private tileInspectVBar: { g: Graphics; viewH: number; trackH: number } | null = null;
+  private onTileInspectBarFrame: (() => void) | null = null;
   /** 存读档飘字：叠在所有模态之上，短显后自毁 */
   private battleSettingsToastRoot: Node | null = null;
   private battleSettingsRefs: {
@@ -4511,6 +4516,12 @@ export class BattleScene extends Component {
   }
 
   private closeTileInspectModal() {
+    if (this.onTileInspectBarFrame) {
+      this.unschedule(this.onTileInspectBarFrame);
+      this.onTileInspectBarFrame = null;
+    }
+    this.tileInspectScroll = null;
+    this.tileInspectVBar = null;
     const r = this.tileInspectModalRoot;
     this.tileInspectModalRoot = null;
     if (r && r.isValid) r.destroy();
@@ -4574,9 +4585,9 @@ export class BattleScene extends Component {
     return parts;
   }
 
-  private buildTileInspectBody(tile: Tile): string {
+  /** 格子文字（不含最上行地形名——见左上角；不含单位——见下方面板） */
+  private buildTileInspectTerrainText(tile: Tile): string {
     const blocks: string[] = [];
-    blocks.push(t(`terrain.${tile.terrain}`));
     if (tile.hasBuilding) {
       blocks.push(t('tileInspect.building'));
     }
@@ -4614,17 +4625,158 @@ export class BattleScene extends Component {
       xc: pool.miscMods.commander,
     }));
 
-    const occ = this.unitOnTileAxial(tile.pos);
-    if (occ) {
-      const name = t(`unit.name.${occ.kind}`);
-      const st = this.collectUnitInspectStatusLines(occ);
-      const statusText = st.length ? st.join(t('tileInspect.statusSep')) : t('tileInspect.statusNone');
-      blocks.push(t('tileInspect.unitBlock', { name, status: statusText }));
-    } else {
-      blocks.push(t('tileInspect.noUnit'));
-    }
-
     return blocks.join('\n\n');
+  }
+
+  /** 左栏多行文本，返回量得的高度（Cocos 需 updateRenderData 后高度才准） */
+  private makeTileScrollText(
+    parent: Node, x: number, topY: number, w: number, str: string, size: number,
+  ): { node: Node; h: number; label: Label } {
+    const n = new Node('T');
+    n.layer = this.node.layer;
+    n.addComponent(UITransform).setContentSize(w, 0);
+    const ut = n.getComponent(UITransform)!;
+    ut.setAnchorPoint(0, 1);
+    n.setPosition(x, topY, 0);
+    const l = n.addComponent(Label);
+    l.fontSize = size;
+    l.lineHeight = size + 4;
+    l.string = str;
+    l.color = new Color(220, 225, 230, 255);
+    l.horizontalAlign = HorizontalTextAlignment.LEFT;
+    l.verticalAlign = VerticalTextAlignment.TOP;
+    l.overflow = Label.Overflow.RESIZE_HEIGHT;
+    parent.addChild(n);
+    l.updateRenderData(true);
+    const h = Math.max(1, n.getComponent(UITransform)!.contentSize.height);
+    return { node: n, h, label: l };
+  }
+
+  private makeTileScrollSmallCaptions(
+    parent: Node, x0: number, topY: number, colW: number, strs: string[], size: number, gap: number,
+  ): { h: number } {
+    let hMax = 0;
+    for (let i = 0; i < strs.length; i++) {
+      const n = new Node('C');
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(colW, 0);
+      n.getComponent(UITransform)!.setAnchorPoint(0, 1);
+      n.setPosition(x0 + i * (colW + gap), topY, 0);
+      const l = n.addComponent(Label);
+      l.fontSize = size;
+      l.lineHeight = size + 3;
+      l.string = strs[i]!;
+      l.color = new Color(185, 195, 210, 255);
+      l.horizontalAlign = HorizontalTextAlignment.CENTER;
+      l.verticalAlign = VerticalTextAlignment.TOP;
+      l.overflow = Label.Overflow.RESIZE_HEIGHT;
+      parent.addChild(n);
+      l.updateRenderData(true);
+      hMax = Math.max(hMax, n.getComponent(UITransform)!.contentSize.height);
+    }
+    return { h: hMax };
+  }
+
+  private makeTileScrollValueRow(
+    parent: Node, x0: number, topY: number, colW: number, vals: number[], size: number, gap: number,
+  ): { h: number } {
+    let hMax = 0;
+    for (let i = 0; i < vals.length; i++) {
+      const n = new Node('V');
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(colW, 0);
+      n.getComponent(UITransform)!.setAnchorPoint(0, 1);
+      n.setPosition(x0 + i * (colW + gap), topY, 0);
+      const l = n.addComponent(Label);
+      l.fontSize = size;
+      l.lineHeight = size + 4;
+      l.string = String(vals[i]!);
+      l.color = new Color(250, 252, 255, 255);
+      l.horizontalAlign = HorizontalTextAlignment.CENTER;
+      l.verticalAlign = VerticalTextAlignment.TOP;
+      l.overflow = Label.Overflow.RESIZE_HEIGHT;
+      parent.addChild(n);
+      l.updateRenderData(true);
+      hMax = Math.max(hMax, n.getComponent(UITransform)!.contentSize.height);
+    }
+    return { h: hMax };
+  }
+
+  private fillTileInspectScrollContent(
+    content: Node, innerW: number, tile: Tile, padL: number,
+  ): { totalH: number; lowest: number } {
+    const pl = padL;
+    const pr = 8;
+    const textW = innerW - pl - pr;
+    const x0 = -innerW / 2 + pl;
+    let y = -10;
+    let low = 0;
+    const mark = (top: number, h: number) => { low = Math.min(low, top - h); };
+    const gapL = 12;
+    // 地形/骰子
+    {
+      const { h } = this.makeTileScrollText(content, x0, y, textW, this.buildTileInspectTerrainText(tile), 16);
+      mark(y, h);
+      y = y - h - gapL;
+    }
+    // 分割线
+    {
+      const divH = 1;
+      const padDiv = 10;
+      const d = new Node('Div');
+      d.layer = this.node.layer;
+      d.addComponent(UITransform).setContentSize(textW, padDiv);
+      d.getComponent(UITransform)!.setAnchorPoint(0, 1);
+      d.setPosition(x0, y, 0);
+      const g = d.addComponent(Graphics);
+      g.lineWidth = 0;
+      g.fillColor = BATTLE_MODAL_DIVIDER;
+      g.rect(0, 0, textW, divH);
+      g.fill();
+      content.addChild(d);
+      mark(y, padDiv);
+      y = y - padDiv - 2;
+    }
+    // 单位区
+    const u = this.unitOnTileAxial(tile.pos);
+    if (!u) {
+      const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.noUnit'), 16);
+      mark(y, h);
+      return { totalH: -low + 16, lowest: low };
+    }
+    {
+      const title = t('tileInspect.currentUnit', { name: t(`unit.name.${u.kind}`) });
+      const { h } = this.makeTileScrollText(content, x0, y, textW, title, 17);
+      mark(y, h);
+      y = y - h - 8;
+    }
+    if (u.kind === 'infantry') {
+      const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.infantryNoTable'), 15);
+      mark(y, h);
+      y = y - h - gapL;
+    } else {
+      const st = u.stats;
+      const cols = 5;
+      const gap = 4;
+      const colW = (textW - (cols - 1) * gap) / cols;
+      const heads = [t('tileInspect.colFront'), t('tileInspect.colFrontSide'), t('tileInspect.colRearSide'),
+        t('tileInspect.colRear'), t('tileInspect.colPen')];
+      const th = this.makeTileScrollSmallCaptions(content, x0, y, colW, heads, 12, gap).h;
+      mark(y, th);
+      y = y - th - 6;
+      const { h: vh } = this.makeTileScrollValueRow(content, x0, y, colW, [
+        st.armorFront, st.armorFrontSide, st.armorRearSide, st.armorRear, st.penetration,
+      ], 17, gap);
+      mark(y, vh);
+      y = y - vh - gapL;
+    }
+    const stLines = this.collectUnitInspectStatusLines(u);
+    const stText = stLines.length ? stLines.join(t('tileInspect.statusSep')) : t('tileInspect.statusNone');
+    const { h: hs } = this.makeTileScrollText(
+      content, x0, y, textW, t('tileInspect.currentStatus', { status: stText }), 16,
+    );
+    mark(y, hs);
+    return { totalH: -low + 16, lowest: low };
   }
 
   /** 在模态小预览区绘制六角地形 + 林冠/建筑示意 */
@@ -4670,10 +4822,50 @@ export class BattleScene extends Component {
     }
   }
 
+  private syncTileInspectVBar() {
+    const v = this.tileInspectVBar;
+    const sv = this.tileInspectScroll;
+    if (!v || !v.g?.node?.isValid || !sv?.isValid) return;
+    const content = sv.content;
+    if (!content?.isValid) return;
+    const ch = Math.max(1, content.getComponent(UITransform)!.contentSize.height);
+    const { g, viewH, trackH } = v;
+    g.clear();
+    g.lineWidth = 0;
+    const ty = -trackH * 0.5;
+    // 底轨（在 vbar 节点内垂直居中）
+    g.fillColor = new Color(64, 72, 86, 255);
+    g.roundRect(-3, ty, 6, trackH, 2, 2);
+    g.fill();
+    const maxO = Math.max(0, sv.getMaxScrollOffset().y);
+    if (maxO < 0.5) {
+      g.fillColor = new Color(160, 168, 180, 255);
+      g.roundRect(-3, ty, 6, trackH, 2, 2);
+      g.fill();
+      return;
+    }
+    const cur = Math.max(0, sv.getScrollOffset().y);
+    const ratio = maxO < 0.5 ? 0 : Math.max(0, Math.min(1, cur / maxO));
+    const th = Math.max(22, Math.min(trackH, (viewH / ch) * trackH));
+    const tTop = ty + ratio * (trackH - th);
+    g.fillColor = new Color(190, 198, 210, 255);
+    g.roundRect(-3, tTop, 6, th, 2, 2);
+    g.fill();
+  }
+
   private openTileInspectModal(tile: Tile) {
     this.closeTileInspectModal();
     const panelW = 600;
     const panelH = 520;
+    const leftColW = 156;
+    const barW = 10;
+    const marginX = 12;
+    const contentTopY = panelH / 2 - 64;
+    const contentBottomY = -panelH / 2 + 56;
+    const scrollH = contentTopY - contentBottomY;
+    const rightAreaW = panelW - 2 * marginX - leftColW - 8;
+    const viewW = rightAreaW - barW;
+    const innerW = viewW - 6;
     const root = new Node('TileInspectModal');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
@@ -4727,30 +4919,87 @@ export class BattleScene extends Component {
     const closeLabTop = this.makeBattleModalLabel(closeBtnTop.node, '✕', 0, 0, 36, 36, 22, HUD_TEXT_COLOR);
     this.mirrorBattleModalButtonLabel(closeLabTop, () => this.closeTileInspectModal());
 
+    // 左上：地形预览 + 名称
     const preview = new Node('TilePreview');
     preview.layer = this.node.layer;
     preview.addComponent(UITransform).setContentSize(150, 130);
-    preview.setPosition(-panelW * 0.5 + 95, panelH * 0.5 - 118);
+    const previewCenterX = -panelW * 0.5 + 12 + 75;
+    const previewCenterY = contentTopY - 12 - 65;
+    preview.setPosition(previewCenterX, previewCenterY);
     panel.addChild(preview);
     const pvg = preview.addComponent(Graphics);
     this.paintTileInspectPreview(pvg, tile, 0, 5, 40);
+    const terrainNameLab = this.makeBattleModalLabel(
+      panel, t(`terrain.${tile.terrain}`),
+      previewCenterX, previewCenterY - 80, 150, 28, 20, new Color(235, 240, 245, 255),
+    );
+    terrainNameLab.horizontalAlign = HorizontalTextAlignment.CENTER;
+    terrainNameLab.verticalAlign = VerticalTextAlignment.CENTER;
+    // 右侧可滚动区 + 纵轴指示条
+    const scrollN = new Node('TileInspectScroll');
+    scrollN.layer = this.node.layer;
+    scrollN.addComponent(UITransform).setContentSize(rightAreaW, scrollH);
+    const rightBlockLeft = -panelW * 0.5 + marginX + leftColW;
+    const rightBlockRight = panelW * 0.5 - marginX;
+    const scx = (rightBlockLeft + rightBlockRight) * 0.5;
+    const scy = (contentTopY + contentBottomY) * 0.5;
+    scrollN.setPosition(scx, scy, 0);
+    panel.addChild(scrollN);
+    const sv = scrollN.addComponent(ScrollView);
+    sv.vertical = true;
+    sv.horizontal = false;
+    sv.inertia = true;
+    sv.brake = 0.5;
+    sv.bounceDuration = 0.18;
+    sv.verticalScrollBar = null;
+    sv.horizontalScrollBar = null;
 
-    const textW = panelW - 48;
-    const bodyN = new Node('Body');
-    bodyN.layer = this.node.layer;
-    panel.addChild(bodyN);
-    const bodyUt = bodyN.addComponent(UITransform);
-    bodyUt.setAnchorPoint(0.5, 1);
-    bodyUt.setContentSize(textW, 1);
-    const bodyL = bodyN.addComponent(Label);
-    bodyL.fontSize = 17;
-    bodyL.lineHeight = 24;
-    bodyL.color = new Color(220, 225, 230, 255);
-    bodyL.overflow = Label.Overflow.RESIZE_HEIGHT;
-    bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
-    bodyL.verticalAlign = VerticalTextAlignment.TOP;
-    bodyL.string = this.buildTileInspectBody(tile);
-    bodyN.setPosition(0, panelH * 0.5 - 200);
+    const viewN = new Node('view');
+    viewN.layer = this.node.layer;
+    viewN.addComponent(Mask);
+    const vut = viewN.addComponent(UITransform);
+    vut.setContentSize(viewW, scrollH);
+    viewN.setPosition(-barW / 2, 0, 0);
+    scrollN.addChild(viewN);
+    const contentN = new Node('content');
+    contentN.layer = this.node.layer;
+    const cut = contentN.addComponent(UITransform);
+    cut.setAnchorPoint(0.5, 1);
+    cut.setContentSize(innerW, 200);
+    const contentTopInset = 14;
+    contentN.setPosition(0, scrollH * 0.5 - contentTopInset, 0);
+    viewN.addChild(contentN);
+    contentN.removeAllChildren();
+    const { totalH: firstH } = this.fillTileInspectScrollContent(contentN, innerW, tile, 8);
+    cut.setContentSize(innerW, Math.max(scrollH, firstH));
+
+    this.scheduleOnce(() => {
+      contentN.removeAllChildren();
+      const { totalH: th1 } = this.fillTileInspectScrollContent(contentN, innerW, tile, 8);
+      cut.setContentSize(innerW, Math.max(th1, scrollH));
+      this.syncTileInspectVBar();
+      if (this.tileInspectScroll) this.tileInspectScroll.scrollToTop(0);
+    }, 0);
+
+    // Cocos 3.8+：view 为只读 getter（= content.parent 的 UITransform），禁止赋值；只设 content 即可。
+    sv.content = contentN;
+    // 滚动条挂在 panel 上、对齐右侧内边距，避免作为 ScrollView 子节点时被引擎改位导致「飞到屏边」
+    const vbarWpix = 6;
+    // 视口右缘在 panel 空间：scrollN 中心 + view 左偏(-barW/2) + 半宽（勿用 rightBlockRight，否则会偏到面板外边线）
+    const viewportRightPanel = scx - barW * 0.5 + viewW * 0.5;
+    const vbarCenterX = viewportRightPanel + vbarWpix * 0.5;
+    const vbarN = new Node('VBar');
+    vbarN.layer = this.node.layer;
+    vbarN.addComponent(UITransform).setContentSize(vbarWpix, scrollH);
+    vbarN.setPosition(vbarCenterX, scy, 0);
+    const vG = vbarN.addComponent(Graphics);
+    panel.addChild(vbarN);
+    this.tileInspectScroll = sv;
+    sv.scrollToTop(0);
+    this.tileInspectVBar = { g: vG, viewH: scrollH, trackH: Math.max(8, scrollH - 6) };
+    this.onTileInspectBarFrame = () => { this.syncTileInspectVBar(); };
+    this.schedule(this.onTileInspectBarFrame, 0);
+    this.syncTileInspectVBar();
 
     const closeRowY = -panelH * 0.5 + 48;
     const closeB = this.makeBattleRectButton(
