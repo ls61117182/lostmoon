@@ -30,8 +30,8 @@ export function isShermanEvacDrive(
 ): boolean {
   const obj = mission.data.objective;
   if (obj.type !== 'destroy_kind_evac') return false;
-  if (!obj.kind || !obj.evacAt || obj.evacExitDir === undefined) return false;
-  if (!allEnemiesOfKindDestroyed(mission, obj.kind)) return false;
+  if (!obj.evacAt || obj.evacExitDir === undefined) return false;
+  if (obj.kind && !allEnemiesOfKindDestroyed(mission, obj.kind)) return false;
   const ev = offsetToAxial(obj.evacAt);
   if (from.q !== ev.q || from.r !== ev.r) return false;
   const driveDir = (dirSign === 1 ? facing : rotateDirection(facing, 3)) as number;
@@ -48,8 +48,8 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
       return group.length > 0 && group.every(e => e.destroyed);
     }
     case 'destroy_kind_evac': {
-      if (!obj.kind || !obj.evacAt || obj.evacExitDir === undefined) return false;
-      if (!allEnemiesOfKindDestroyed(mission, obj.kind)) return false;
+      if (!obj.evacAt || obj.evacExitDir === undefined) return false;
+      if (obj.kind && !allEnemiesOfKindDestroyed(mission, obj.kind)) return false;
       return !!mission.shermanEvacuated;
     }
     case 'exit_from_edge':

@@ -49,10 +49,18 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
 
   switch (obj.type) {
     case 'destroy_kind_evac': {
-      if (!obj.kind) return [];
+      const evacDone = !!mission.shermanEvacuated;
+      if (!obj.kind) {
+        return [
+          {
+            displayIndex: 1,
+            state: evacDone ? 'done' : 'active',
+            template: { key: 'evacFromMark' },
+          },
+        ];
+      }
       const { cur, total } = kindProgress(mission, obj.kind);
       const destroyDone = allEnemiesOfKindDestroyed(mission, obj.kind);
-      const evacDone = !!mission.shermanEvacuated;
       return [
         {
           displayIndex: 1,

@@ -1,0 +1,96 @@
+{
+  "id": "mission_04",
+  "name": "只是路过：湖泊",
+  "description": "目标：仅沿红箭头方向将谢尔曼驶出地图（不必歼灭敌军）。\n黑箭头为谢尔曼起始与朝向；黑格 eid 上 1 辆虎式 + 1 辆 IV 号掷骰出生；红格 rid2、rid6 为农场，各 1 名步兵。中央泥地/水域为湖泊与泥泞。回合结束为 2d6 表。",
+
+  "_comment": "底图由任务1 改：rid2 为 f+bd 农场；保留 rid1,3,4,5,6 供事件；湖用 w。仅撤离时 objective 省略 kind。h/ef 方向 0=E…5=NE 同 HexGrid。",
+
+  "cols": 8,
+  "rows": 6,
+
+  "enemyStartByDice": true,
+
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "r", "rid": 4 , "bd":1 },
+      { "t": "r" },
+      { "t": "m", "h": "000001" },
+      { "t": "m", "eid": 5, "ef": 5 },
+      { "t": "f", "eid": 6, "ef": 5 },
+      null
+    ],
+    [
+      null,
+      { "t": "r", "h": "100000" },
+      { "t": "m", "h": "000011" },
+      { "t": "m", "h": "000010" , "bd": 1, "rid": 2 },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "F", "rid": 1 }
+    ],
+    [
+      null,
+      { "t": "m" },
+      { "t": "m", "h": "100000" },
+      { "t": "w" },
+      { "t": "w" },
+      { "t": "m", "bd": 1, "rid": 3 },
+      { "t": "f" },
+      { "t": "f", "eid": 1, "ef": 4 }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "m" },
+      { "t": "w" },
+      { "t": "w", "h": "000001" },
+      { "t": "f" },
+      { "t": "f", "h": "000010", "eid": 2, "ef": 4 }
+    ],
+    [
+      null,
+      { "t": "f", "h": "100000" },
+      { "t": "m" },
+      { "t": "m" },
+      { "t": "m", "h": "100001" },
+      { "t": "f" },
+      { "t": "f", "eid": 3, "ef": 4 },
+      null
+    ],
+    [
+      null,
+      { "t": "F" },
+      { "t": "f", "h": "100000" },
+      { "t": "m", "h": "000100" },
+      { "t": "m", "bd": 1, "rid": 6 },
+      { "t": "f", "eid": 4, "ef": 4 },
+      null
+    ]
+  ],
+
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 0, "row": 3 },
+    "facing": 0
+  },
+
+  "enemies": [
+    { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 1 }, "facing": 0 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 5 }, "facing": 0 },
+    { "kind": "tiger", "faction": "german" },
+    { "kind": "panzer4", "faction": "german" }
+  ],
+
+  "objective": {
+    "type": "destroy_kind_evac",
+    "evacAt": { "col": 7, "row": 2 },
+    "evacExitDir": 0
+  },
+
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}

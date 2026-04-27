@@ -25,6 +25,26 @@ export const HEX_DIRECTIONS: ReadonlyArray<Axial> = [
   { q: +1, r: -1 }, // 5 NE
 ];
 
+/** 与方向索引 0..5 一一对应，仅作文案；与 `HEX_DIRECTIONS`、`TileDef.h` / `ef` 同序 */
+export const HEX_DIRECTION_NAMES: readonly [string, string, string, string, string, string] = [
+  'E', 'SE', 'SW', 'W', 'NW', 'NE',
+];
+
+/**
+ * 将关卡 JSON 的 `h` 字串解析为六条格边的树篱标记（与 `Tile.hedges` 一致）。
+ *
+ * **与 `ef`、单位朝向、战场景观一致**：索引 `i` 与 `HEX_DIRECTIONS[i]` 相同，表示「自本格心指向第 i 个邻接格心」
+ * 的那条边（自本格跨向邻格时经过的格边 / 法向即方向 i）。`h[i]===true` 表示该边外缘布设树篱；
+ * 同格 `eid` 的 `ef` 亦为同一套 `i`（0=E, 顺时针 1=SE … 5=NE），与 `BattleScene.drawHedgeEdge(…, i, …)` 的 `i` 一致。
+ */
+export function hedgeFlagsFromMapJson(s: string | undefined): Tile['hedges'] {
+  if (!s || s.length !== 6) return undefined;
+  return [
+    s[0] === '1', s[1] === '1', s[2] === '1',
+    s[3] === '1', s[4] === '1', s[5] === '1',
+  ] as Tile['hedges'];
+}
+
 // ---------- 基础运算 ----------
 export function axialEquals(a: Axial, b: Axial): boolean {
   return a.q === b.q && a.r === b.r;

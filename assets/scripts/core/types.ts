@@ -101,7 +101,7 @@ export interface ShermanCrew {
 export type ObjectiveType =
   | 'destroy_all_enemies'   // 摧毁所有德军单位
   | 'destroy_kind'          // 摧毁某种单位
-  | 'destroy_kind_evac'     // 摧毁指定种类后，从指定格沿指定六向驶出地图（邻格可无地形）
+  | 'destroy_kind_evac'     // 先歼指定种类再撤离；若省略 kind 则仅撤离（驶出地图即胜）
   | 'exit_from_edge'        // 从某方向移出地图
   | 'destroy_truck';        // 摧毁卡车（任务 5 特殊）
 
@@ -164,13 +164,19 @@ export interface TileDef {
    * 田/泥+建筑在任务表述上为「农场」，公路+建筑为「村庄」。
    */
   bd?: 1;
-  /** 树篱：6 位字符串，0/1 表示该方向是否有树篱（顺时针 E,SE,SW,W,NW,NE） */
+  /**
+   * 树篱：6 位，仅 `0`/`1`；**第 i 位**与 `HexGrid.HEX_DIRECTIONS[i]` 同义（0=E, 顺时针 1=SE … 5=NE）：
+   * 为 `1` 表示本格与**第 i 向邻格**之间那条格边外缘有树篱，与 `HexGrid.hedgeFlagsFromMapJson` 一致。
+   */
   h?: string;
   /** 援军编号 */
   rid?: number;
   /** 敌方起始编号 1..6（掷骰链用；全图不重复） */
   eid?: number;
-  /** 与 `eid` 同格：初始朝向，与数字贴近的六角边对应（0=E … 5=NE） */
+  /**
+   * 与 `eid` 同格：该格上掷骰/增援出生的坦克的**初始 facing**，与 `h` **共用方向索引**：
+   * 数值 i∈0..5 与 `h[i]`、`HEX_DIRECTIONS[i]`、`drawHedgeEdge(…,i,…)` 一一对应（0=E, …, 5=NE）。
+   */
   ef?: number;
 }
 

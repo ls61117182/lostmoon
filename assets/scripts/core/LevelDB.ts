@@ -24,7 +24,7 @@ export interface LevelMeta {
 }
 
 /**
- * 12 关卡配置。mission_04 及以后暂无 JSON，主菜单上仍占位；`unlockedLevel` 至少 3 以便进入已实装的前 3 关。
+ * 12 关卡配置。mission_05 及以后暂无 JSON，主菜单上仍占位；`unlockedLevel` 至少 4 以便进入已实装的前 4 关。
  */
 export const LEVELS: LevelMeta[] = [
   { id: 1,  missionPath: 'missions/mission_01', titleKey: 'level.01.title', missionId: 'mission_01' },
@@ -49,8 +49,8 @@ export function findLevelByMissionId(missionId: string): LevelMeta | undefined {
 
 const MENU_STATE_KEY = 'lone_sherman_menu_v1';
 
-/** 至少解锁到此关：任务 1~3 已实装，新档与读档时保证可进入前 3 关 */
-const MIN_UNLOCKED_LEVEL = 3;
+/** 至少解锁到此关：任务 1~4 已实装，新档与读档时保证可进入前 4 关 */
+const MIN_UNLOCKED_LEVEL = 4;
 
 export interface MenuState {
   /** 已解锁到第几关（1..12）。新档至少为 MIN_UNLOCKED_LEVEL。通关 n 后解锁 n+1 */

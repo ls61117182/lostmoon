@@ -231,7 +231,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'level.01.title': { zh: "村庄", en: "Village" },
   'level.02.title': { zh: "猎杀虎式", en: "Hunt the Tiger" },
   'level.03.title': { zh: "清除步兵", en: "Clear Infantry" },
-  'level.04.title': { zh: "卡昂", en: "Caen" },
+  'level.04.title': { zh: "只是路过：湖泊", en: "Just Passing Through: Lake" },
   'level.05.title': { zh: "法莱兹", en: "Falaise" },
   'level.06.title': { zh: "巴黎", en: "Paris" },
   'level.07.title': { zh: "阿登", en: "Ardennes" },

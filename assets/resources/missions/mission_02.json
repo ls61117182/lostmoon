@@ -3,7 +3,7 @@
   "name": "猎杀虎式",
   "description": "目标：摧毁虎式坦克；随后从右侧撤离点（本图东侧公路出口）驶出地图。\n虎式在开局时按 1d6 与黑格 eid 放置；红格 rid 为步兵增援。回合结束事件为本关 2d6 表。",
 
-  "_comment": "任务2。tiles[row][col] 为 odd-r。基底 r=公路 f=田地 m=泥地 F=林地 w=水；bd=建筑；h=树篱；rid=红数；eid/ef=黑数与朝外朝向。",
+  "_comment": "任务2。tiles[row][col] 为 odd-r。基底 r=公路 f=田地 m=泥地 F=林地 w=水；bd=建筑；h[i] 与 ef 为同一套方向 0=E…5=NE（同 HexGrid）；rid=红数；eid=黑数。",
 
   "cols": 8,
   "rows": 6,

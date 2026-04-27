@@ -92,7 +92,8 @@
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `h` | 树篱（bocage）：6 位 `0/1` 字符串，顺序 `[E, SE, SW, W, NW, NE]`，表示六条格边上是否有树篱。 |
+| `h` | 树篱：6 位 `0/1`，**第 i 位（0 基）**与 `HexGrid.HEX_DIRECTIONS[i]` 及 `ef` **同一**方向编号：0=E, 顺时针 1=SE … 5=NE；`1` 表示本格与**第 i 向邻格**之间那段格边外缘有树篱。解析见 `HexGrid.hedgeFlagsFromMapJson`。 |
+| `ef` | 与 `eid` 同格时黑字坦克的**初始朝向**，**与 `h` 的索引用法相同**；与战场景观里第 i 向格边/树篱一致。 |
 | `rid` | 援军生成位编号（红色数字）。 |
 | `eid` | 敌方起始候选编号（黑色数字）。 |
 
@@ -176,7 +177,36 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 4：只是路过：湖泊
+
+> 对应数据：`assets/resources/missions/mission_04.json`。底图在任务 1 基础上加入湖泊 `w`、红格 **rid2 / rid6** 为**农场**并各放 1 名起始步兵。
+
+### 目标
+
+- **仅撤离**：`destroy_kind_evac` 且**不写 `kind`**，击毁敌军非必要；将谢尔曼开至 `evacAt` 后沿 `evacExitDir` 驶出地图即胜（与红箭头同几何）。
+
+### 初始设置
+
+- **谢尔曼**：`col=0, row=3`，`facing=0`（以 `mission_04.json` 为准）。
+- **虎式 + IV 号**：各 1，`enemyStartByDice` 在黑格 eid 链式掷骰，朝向 `ef`。
+- **步兵 ×2**：各占带 `rid:2` 与 `rid:6` 的格（如 `m`+`bd:1`）；当前配置为 `at`：`(3,1)`（rid2）、`(4,5)`（rid6），改图后请与全图两红格一致。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–3** | 狙击手 | `sniper` |
+| **4** | 机械故障 | `mechanical_failure` → 瘫痪（未瘫时） |
+| **5–6** | 德军步兵 | `infantry_spawn`：1d6 对应红格 `rid`（格空则放置） |
+| **7–9** | 相邻步兵齐射 | `adjacent_infantry_fire` |
+| **10** | 车长额外行动 | `commander_extra` |
+| **11+** | 斯图卡 | `stuka` |
+
+数据行见 `data/turn_end_events.csv`（`mission_04`），`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
 ## 后续任务
 
-- 任务 4 ~ 12 的地图与说明待补充，对应 `mission_04.json` … `mission_12.json`。
+- 任务 5 ~ 12 的地图与说明待补充，对应 `mission_05.json` … `mission_12.json`。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

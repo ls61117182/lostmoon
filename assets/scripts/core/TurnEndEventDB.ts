@@ -34,6 +34,12 @@ export const TURN_END_EVENTS: TurnEndEventRow[] = [
   { missionId: 'mission_03', sumMin: 9, sumMax: 9, diceCount: 2, effectType: 'commander_extra' },
   { missionId: 'mission_03', sumMin: 10, sumMax: 10, diceCount: 2, effectType: 'stuka' },
   { missionId: 'mission_03', sumMin: 11, sumMax: 12, diceCount: 2, effectType: 'panzer3_spawn' },
+  { missionId: 'mission_04', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'sniper' },
+  { missionId: 'mission_04', sumMin: 4, sumMax: 4, diceCount: 2, effectType: 'mechanical_failure' },
+  { missionId: 'mission_04', sumMin: 5, sumMax: 6, diceCount: 2, effectType: 'infantry_spawn' },
+  { missionId: 'mission_04', sumMin: 7, sumMax: 9, diceCount: 2, effectType: 'adjacent_infantry_fire' },
+  { missionId: 'mission_04', sumMin: 10, sumMax: 10, diceCount: 2, effectType: 'commander_extra' },
+  { missionId: 'mission_04', sumMin: 11, sumMax: 12, diceCount: 2, effectType: 'stuka' },
 ];
 
 /** 某关是否配置了回合结束事件（至少一行） */

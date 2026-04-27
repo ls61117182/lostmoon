@@ -1938,6 +1938,7 @@ export class BattleScene extends Component {
 
   /**
    * 第 dir 条边的树篱：中心落在该边弦上，与格线重合。
+   * `dir` 与 `HexGrid.HEX_DIRECTIONS[dir]`、`Tile.hedges[dir]`、关卡 JSON 的 `h[dir]` / `ef` 同序（0=E, 顺时针 … 5=NE）。
    * 单丛大小统一，在原先基准半径 `size*0.086` 上整体放大 30%。
    * 沿边用 `k/(n+1)` 均匀取点，使两端与顶点留出相同空隙、丛与丛之间等距。
    */

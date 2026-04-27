@@ -6,7 +6,7 @@
  *   const { map, sherman, enemies } = loadMission(data, rng);
  */
 
-import { HexMap, offsetToAxial, axialToOffset } from './HexGrid';
+import { HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson } from './HexGrid';
 import {
   Axial,
   Direction,
@@ -49,6 +49,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       if (!def) continue;
       const { terrain, hasBuilding } = parseTileDefBase(def);
       const eid = def.eid;
+      // ef 与 h[i] 使用同一套方向索引 0..5，见 `HexGrid.hedgeFlagsFromMapJson` 与 `HEX_DIRECTIONS`
       const efRaw = def.ef;
       const facing: Direction | undefined = efRaw !== undefined && efRaw !== null
         ? ((((Number(efRaw) % 6) + 6) % 6) as Direction)
@@ -57,7 +58,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         pos: offsetToAxial({ col, row }),
         terrain,
         ...(hasBuilding ? { hasBuilding: true } : {}),
-        hedges: parseHedges(def.h),
+        hedges: hedgeFlagsFromMapJson(def.h),
         reinforceId: def.rid,
         ...(eid !== undefined && eid !== null ? { enemyStartId: eid } : {}),
         ...(facing !== undefined ? { enemyStartFacing: facing } : {}),
@@ -180,15 +181,6 @@ function parseTileDefBase(def: TileDef): { terrain: TerrainType; hasBuilding: bo
   const hasBuilding = def.bd === 1;
   const terrain = TERRAIN_MAP[def.t as keyof typeof TERRAIN_MAP];
   return { terrain, hasBuilding };
-}
-
-/** "010100" → [false, true, false, true, false, false] */
-function parseHedges(s?: string): Tile['hedges'] {
-  if (!s || s.length !== 6) return undefined;
-  return [
-    s[0] === '1', s[1] === '1', s[2] === '1',
-    s[3] === '1', s[4] === '1', s[5] === '1',
-  ] as Tile['hedges'];
 }
 
 function makeUnit(id: string, p: UnitPlacement): Unit {
