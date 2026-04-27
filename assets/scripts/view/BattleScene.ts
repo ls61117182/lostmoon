@@ -27,7 +27,7 @@
  *   3. 把本脚本拖到该 Node 上
  *   4. 预览即可看到地图与 HUD
  *
- * Inspector 可调：hexSize / missionPath / showReachable / moveDuration /
+ * Inspector 可调：hexSize（默认约 +20% 盘面） / missionPath / showReachable / moveDuration /
  *                 movesPerTurn（仅敌方 AI 用） / rngSeed
  */
 
@@ -426,6 +426,11 @@ const BATTLE_SETTINGS_R = 24;
 // 战斗内设置 / 退出确认模态（与主菜单风格一致）
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
+/** 底部「阶段选择条 + 玩家骰子托盘」共用行中心 Y（Canvas 坐标，负值越大越靠下） */
+const BOTTOM_PHASE_ROW_Y = -288;
+/** 右下角「下一阶段 / 结束回合」与阶段条大按钮同高，且与底部行垂直对齐 */
+const ADVANCE_BTN_W = 180;
+const ADVANCE_BTN_H = 72;
 const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
 const MODAL_PANEL_BG     = new Color( 34,  40,  54, 240);
 const MODAL_PANEL_BORDER = new Color(180, 180, 180, 220);
@@ -587,7 +592,7 @@ interface BattleRectButtonRefs {
 export class BattleScene extends Component {
 
   @property({ tooltip: '六角形单边长度（像素）。地图过大请调小，过小请调大。' })
-  hexSize: number = 39;
+  hexSize: number = 46.8;
 
   @property({ tooltip: '任务 JSON 在 resources/ 下的相对路径，无需扩展名。' })
   missionPath: string = 'missions/mission_01';
@@ -821,12 +826,15 @@ export class BattleScene extends Component {
   private combatLogLines: string[] = [];
   private combatLogExpanded = false;
   private static readonly COMBAT_LOG_MAX = 500;
-  private static readonly COMBAT_LOG_W0 = 360;
+  private static readonly COMBAT_LOG_W0 = 260;
   private static readonly COMBAT_LOG_H0 = 190;
-  private static readonly COMBAT_LOG_W1 = 680;
+  private static readonly COMBAT_LOG_W1 = 620;
   private static readonly COMBAT_LOG_H1 = 500;
   private static readonly COMBAT_LOG_PAD = 8;
   private static readonly COMBAT_LOG_TITLE_H = 26;
+  /** 玩家骰子托盘单槽尺寸与间距（与 buildDiceTray / refreshDiceTray 共用） */
+  private static readonly DICE_TRAY_SLOT = 72;
+  private static readonly DICE_TRAY_GAP = 12;
 
   onLoad() {
     setLang(MenuProgress.load().lang);
@@ -2242,7 +2250,7 @@ export class BattleScene extends Component {
     // ---- 左上角 HUD 下方：多行任务目标 ----
     const OBJ_FONT = 20;
     const OBJ_LINE = 26;
-    const objStartY = 312;
+    const objStartY = 296;
     for (let i = 0; i < BattleScene.OBJECTIVE_HUD_MAX; i++) {
       const on = new Node(`ObjectiveHud${i}`);
       on.layer = this.node.layer;
@@ -2267,11 +2275,12 @@ export class BattleScene extends Component {
     const btn = new Node('EndTurnButton');
     btn.layer = this.node.layer;
     const bUT = btn.addComponent(UITransform);
-    const BTN_W = 180, BTN_H = 60;
+    const BTN_W = ADVANCE_BTN_W;
+    const BTN_H = ADVANCE_BTN_H;
     bUT.setContentSize(BTN_W, BTN_H);
     bUT.setAnchorPoint(0.5, 0.5);
-    // 右下角 (640, -360)，往内收 110/40 让按钮不贴边
-    btn.setPosition(640 - BTN_W / 2 - 20, -360 + BTN_H / 2 + 20, 0);
+    // 与底部阶段条 / 骰子托盘同一水平中线，靠右留边距
+    btn.setPosition(CANVAS_W * 0.5 - BTN_W * 0.5 - 20, BOTTOM_PHASE_ROW_Y, 0);
 
     // 背景 Graphics（直接挂在 btn 上）
     const bg = btn.addComponent(Graphics);
@@ -2609,7 +2618,8 @@ export class BattleScene extends Component {
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
     const H = 312;
     const y = panelTopY - H / 2;
-    const x = BATTLE_SETTINGS_CX - W / 2;
+    // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
+    const x = CANVAS_W * 0.5 - W * 0.5 - 10;
 
     const CREW_GAP = 22;
     const BODY_GAP = 24;
@@ -2849,7 +2859,7 @@ export class BattleScene extends Component {
     g.strokeColor = BTN_BORDER;
     g.lineWidth = 2;
     // 锚点 0.5 → 矩形围绕原点
-    g.rect(-90, -30, 180, 60);
+    g.rect(-ADVANCE_BTN_W * 0.5, -ADVANCE_BTN_H * 0.5, ADVANCE_BTN_W, ADVANCE_BTN_H);
     g.fill();
     g.stroke();
   }
@@ -3079,7 +3089,7 @@ export class BattleScene extends Component {
     const ut = bar.addComponent(UITransform);
     ut.setContentSize(480, 80);
     ut.setAnchorPoint(0.5, 0.5);
-    bar.setPosition(0, -260, 0);
+    bar.setPosition(0, BOTTOM_PHASE_ROW_Y, 0);
     this.node.addChild(bar);
     this.chooseBar = bar;
 
@@ -3130,7 +3140,7 @@ export class BattleScene extends Component {
     const tray = new Node('DiceTray');
     tray.layer = this.node.layer;
     tray.addComponent(UITransform).setContentSize(640, 120);
-    tray.setPosition(0, -260, 0);
+    tray.setPosition(0, BOTTOM_PHASE_ROW_Y, 0);
     this.node.addChild(tray);
     this.diceTrayRoot = tray;
 
@@ -3149,8 +3159,9 @@ export class BattleScene extends Component {
     tray.addChild(titleNode);
     this.diceTitleLabel = tl;
 
-    // 5 个骰子槽位（居中摆放），实际数量由 phaseDice.length 决定 active
-    const SLOT = 72, GAP = 12;
+    // 5 个骰子槽位；初始排布见 refreshDiceTray（按实际颗数水平居中）
+    const SLOT = BattleScene.DICE_TRAY_SLOT;
+    const GAP = BattleScene.DICE_TRAY_GAP;
     const total = SLOT * 5 + GAP * 4;
     const startX = -total / 2 + SLOT / 2;
     for (let i = 0; i < 5; i++) {
@@ -3264,6 +3275,12 @@ export class BattleScene extends Component {
 
   /** 遍历 diceVisuals，按 phaseDice 的当前内容重绘每个骰子（点数 + 动作提示 + 用/未用态）。 */
   private refreshDiceTray() {
+    const SLOT = BattleScene.DICE_TRAY_SLOT;
+    const GAP = BattleScene.DICE_TRAY_GAP;
+    const n = this.phaseDice.length;
+    const total = n > 0 ? SLOT * n + GAP * (n - 1) : 0;
+    const startX = n > 0 ? -total * 0.5 + SLOT * 0.5 : 0;
+    let shown = 0;
     for (let i = 0; i < this.diceVisuals.length; i++) {
       const vis = this.diceVisuals[i];
       const slot = this.phaseDice[i];
@@ -3272,6 +3289,9 @@ export class BattleScene extends Component {
         continue;
       }
       vis.root.active = true;
+      const x = startX + shown * (SLOT + GAP);
+      vis.root.setPosition(x, 0, 0);
+      shown++;
       // 主炮 / 机枪选中都复用同一种"已高亮"视觉，玩家以颜色与 HUD 文案区分
       this.drawDieSlot(vis, slot, i === this.selectedGunDieIdx || i === this.selectedMGDieIdx);
     }
