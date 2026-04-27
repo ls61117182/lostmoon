@@ -73,18 +73,25 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   const sherman = makeUnit('sherman_player', data.sherman as UnitPlacement);
 
   // 3. 德军：可选掷骰出生
+  // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位在剩余黑格 eid 上各掷 1d6 链式占位（见 GDD）
   const useDice = !!data.enemyStartByDice;
-  const rngResolved = rng ?? (useDice ? new RNG(0x5EEDFACE) : undefined);
-  const dicePlacements = useDice && rngResolved
-    ? resolveEnemyDicePlacements(data, map, sherman.pos, rngResolved)
-    : null;
+  const needsDice = useDice && data.enemies.some(p => !p.at);
+  const rngResolved = rng ?? (useDice && needsDice ? new RNG(0x5EEDFACE) : undefined);
+  const diceList =
+    useDice && needsDice && rngResolved
+      ? resolveEnemyDicePlacements(data, map, sherman.pos, rngResolved)
+      : null;
 
+  let di = 0;
   const enemies = data.enemies.map((p, i) => {
-    if (useDice && dicePlacements) {
-      const slot = dicePlacements[i];
-      if (!slot) {
-        throw new Error(`任务 ${data.id}：enemyStartByDice 需要与 enemies 数组等长的掷骰结果`);
+    if (useDice) {
+      if (p.at) {
+        return makeUnit(`enemy_${i}`, p);
       }
+      if (!diceList || di >= diceList.length) {
+        throw new Error(`任务 ${data.id}： enemyStartByDice 时缺少第 ${i} 个单位的掷骰格`);
+      }
+      const slot = diceList[di++]!;
       const merged: UnitPlacement = {
         kind: p.kind,
         faction: p.faction,
@@ -98,6 +105,11 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     }
     return makeUnit(`enemy_${i}`, p);
   });
+  if (diceList && di !== diceList.length) {
+    throw new Error(
+      `任务 ${data.id}：内部错误：无坐标掷骰数 ${diceList.length} 与无 at 的敌方数不一致`,
+    );
+  }
 
   return { map, sherman, enemies, data, shermanEvacuated: false };
 }
@@ -124,9 +136,20 @@ function resolveEnemyDicePlacements(
   }
 
   const taken = new Set<string>([`${shermanPos.q},${shermanPos.r}`]);
-  const out: Array<{ at: Offset; facing: Direction }> = [];
+  for (let i = 0; i < data.enemies.length; i++) {
+    const p = data.enemies[i];
+    if (p.at) {
+      const ax = offsetToAxial(p.at);
+      taken.add(`${ax.q},${ax.r}`);
+    }
+  }
 
+  const out: Array<{ at: Offset; facing: Direction }> = [];
   for (let ei = 0; ei < data.enemies.length; ei++) {
+    const p = data.enemies[ei];
+    if (p.at) {
+      continue;
+    }
     const d = rng.d6();
     let placed: { pos: Axial; facing: Direction } | null = null;
     for (let step = 0; step < 6; step++) {
@@ -140,7 +163,7 @@ function resolveEnemyDicePlacements(
     }
     if (!placed) {
       throw new Error(
-        `任务 ${data.id}：第 ${ei + 1} 辆敌方坦克掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
+        `任务 ${data.id}：第 ${ei + 1} 个无坐标敌方单位掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
       );
     }
     taken.add(`${placed.pos.q},${placed.pos.r}`);
@@ -173,12 +196,18 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }
   const stats = getUnitStats(p.kind);
+  /** 朝向仅 0..5（E…NE）。关卡 JSON 误填 6 或负数时归一，避免 neighbor → axialAdd 读 undefined.q 崩溃。 */
+  let facingNorm: Direction | null = p.facing ?? null;
+  if (facingNorm !== null) {
+    const n = ((Number(facingNorm) % 6) + 6) % 6;
+    facingNorm = n as Direction;
+  }
   const u: Unit = {
     id,
     kind: p.kind,
     faction: p.faction,
     pos: offsetToAxial(p.at),
-    facing: p.facing ?? null,
+    facing: facingNorm,
     stats,
   };
   if (p.kind === 'sherman') {

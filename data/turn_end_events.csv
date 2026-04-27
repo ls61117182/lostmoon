@@ -6,3 +6,15 @@ mission_01,7,8,2,adjacent_infantry_fire,相邻步兵齐射
 mission_01,9,9,2,mechanical_failure,机械故障→瘫痪
 mission_01,10,10,2,stuka,斯图卡
 mission_01,11,12,2,panzer3_spawn,III号→黑格 eid
+mission_02,2,5,2,infantry_spawn,任务2：德军步兵→红格
+mission_02,6,6,2,road_mine,任务2：公路地雷（AP0）
+mission_02,7,8,2,adjacent_infantry_fire,相邻步兵
+mission_02,9,9,2,commander_extra,车长额外行动
+mission_02,10,10,2,stuka,斯图卡
+mission_02,11,12,2,panzer4_spawn,IV号→黑格 eid
+mission_03,2,4,2,sniper,任务3：狙击手
+mission_03,5,5,2,road_mine,任务3：地雷
+mission_03,6,8,2,adjacent_infantry_fire,任务3：相邻步兵
+mission_03,9,9,2,commander_extra,车3：车长额外
+mission_03,10,10,2,stuka,任务3：斯图卡
+mission_03,11,12,2,panzer3_spawn,任务3：III号→eid

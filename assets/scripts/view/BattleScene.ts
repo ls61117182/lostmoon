@@ -106,6 +106,8 @@ const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
   mechanical_failure: 'battle.turnEndList.effect.mechanical_failure',
   stuka: 'battle.turnEndList.effect.stuka',
   panzer3_spawn: 'battle.turnEndList.effect.panzer3_spawn',
+  road_mine: 'battle.turnEndList.effect.road_mine',
+  panzer4_spawn: 'battle.turnEndList.effect.panzer4_spawn',
 };
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
@@ -2403,8 +2405,9 @@ export class BattleScene extends Component {
     contentN.setPosition(sW * 0.5, sH, 0);
     viewN.addChild(contentN);
     const lab = contentN.addComponent(Label);
-    lab.fontSize = 13;
-    lab.lineHeight = 17;
+    // 与标题「战斗记录」同档字号，避免正文过细；行高略大于字号保证正常长宽比
+    lab.fontSize = 15;
+    lab.lineHeight = 18;
     lab.color = new Color(230, 235, 242, 255);
     lab.horizontalAlign = HorizontalTextAlignment.LEFT;
     lab.verticalAlign = VerticalTextAlignment.TOP;
@@ -2441,6 +2444,16 @@ export class BattleScene extends Component {
     root.setSiblingIndex(Math.max(0, this.node.children.length - 1));
   }
 
+  /**
+   * 战斗记录正文可用宽度：必须以 ScrollView 的 view 视口宽为准，勿用内容节点在
+   * `Label.updateRenderData` 之后的 `contentSize.width`（同节点上 Label 可能把宽收成「单行最窄宽」导致整段字被压成竖条）。
+   */
+  private getCombatLogBodyWidth(): number {
+    const v = this.combatLogViewN?.getComponent(UITransform);
+    if (!v) return 200;
+    return Math.max(8, v.contentSize.width - 4);
+  }
+
   /** 写入战斗 UI 记录（并保留 console 便于开发器查看） */
   private battleLog(msg: string) {
     console.log(msg);
@@ -2453,10 +2466,10 @@ export class BattleScene extends Component {
     this.combatLogLabel.updateRenderData(true);
     const ut = this.combatLogContent?.getComponent(UITransform);
     if (ut && this.combatLogScroll) {
-      const innerW = ut.contentSize.width;
+      const wBody = this.getCombatLogBodyWidth();
       const h = Math.max(40, this.combatLogLabel.node.getComponent(UITransform)!.contentSize.height);
       // 勿用 Math.max(h, 视口高)：顶对齐文本 + scrollToBottom 会把正文滚到视口上方，框内看起来全空。
-      ut.setContentSize(innerW, h);
+      ut.setContentSize(wBody, h);
       this.scheduleOnce(() => this.syncCombatLogScrollAfterLayout(), 0);
     }
   }
@@ -2475,7 +2488,7 @@ export class BattleScene extends Component {
     const cut = contentN.getComponent(UITransform)!;
     lab.updateRenderData(true);
     const h = Math.max(40, lab.node.getComponent(UITransform)!.contentSize.height);
-    cut.setContentSize(cut.contentSize.width, h);
+    cut.setContentSize(this.getCombatLogBodyWidth(), h);
     const eps = 2;
     if (h > vh + eps) sv.scrollToBottom(0);
     else sv.scrollToTop(0);
@@ -2543,8 +2556,8 @@ export class BattleScene extends Component {
 
     this.applyCombatLogChrome(expanded);
     if (this.combatLogLabel) {
-      this.combatLogLabel.fontSize = expanded ? 14 : 13;
-      this.combatLogLabel.lineHeight = expanded ? 18 : 17;
+      this.combatLogLabel.fontSize = expanded ? 16 : 15;
+      this.combatLogLabel.lineHeight = expanded ? 20 : 18;
       this.combatLogLabel.updateRenderData(true);
       const lh = Math.max(40, this.combatLogLabel.node.getComponent(UITransform)!.contentSize.height);
       cut.setContentSize(sW - 4, lh);

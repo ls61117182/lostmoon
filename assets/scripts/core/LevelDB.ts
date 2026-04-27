@@ -24,9 +24,7 @@ export interface LevelMeta {
 }
 
 /**
- * 12 关卡配置。mission_02 及以后暂无 JSON，先把路径占位；
- * MainMenuScene 会自动把 *有 JSON 的* 关卡标为可解锁候选，
- * *无 JSON 的* 关卡只显示但点击时提示 `menu.notReady`（不切场景）。
+ * 12 关卡配置。mission_04 及以后暂无 JSON，主菜单上仍占位；`unlockedLevel` 至少 3 以便进入已实装的前 3 关。
  */
 export const LEVELS: LevelMeta[] = [
   { id: 1,  missionPath: 'missions/mission_01', titleKey: 'level.01.title', missionId: 'mission_01' },
@@ -51,8 +49,11 @@ export function findLevelByMissionId(missionId: string): LevelMeta | undefined {
 
 const MENU_STATE_KEY = 'lone_sherman_menu_v1';
 
+/** 至少解锁到此关：任务 1~3 已实装，新档与读档时保证可进入前 3 关 */
+const MIN_UNLOCKED_LEVEL = 3;
+
 export interface MenuState {
-  /** 已解锁到第几关（1..12）。默认 1。通关 n 后解锁 n+1 */
+  /** 已解锁到第几关（1..12）。新档至少为 MIN_UNLOCKED_LEVEL。通关 n 后解锁 n+1 */
   unlockedLevel: number;
   /** 通关过的关卡编号列表（用于 ★） */
   completedLevels: number[];
@@ -63,7 +64,7 @@ export interface MenuState {
 }
 
 const DEFAULT_STATE: MenuState = {
-  unlockedLevel: 1,
+  unlockedLevel: MIN_UNLOCKED_LEVEL,
   completedLevels: [],
   volume: 60,
   lang: 'zh',
@@ -85,7 +86,10 @@ function readState(): MenuState {
     if (!raw) return { ...DEFAULT_STATE };
     const parsed = JSON.parse(raw) as Partial<MenuState>;
     return {
-      unlockedLevel: clamp(parsed.unlockedLevel ?? DEFAULT_STATE.unlockedLevel, 1, LEVELS.length),
+      unlockedLevel: Math.max(
+        MIN_UNLOCKED_LEVEL,
+        clamp(parsed.unlockedLevel ?? DEFAULT_STATE.unlockedLevel, 1, LEVELS.length),
+      ),
       completedLevels: Array.isArray(parsed.completedLevels) ? parsed.completedLevels.filter(n => typeof n === 'number') : [],
       volume: clamp(parsed.volume ?? DEFAULT_STATE.volume, 0, 100),
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,

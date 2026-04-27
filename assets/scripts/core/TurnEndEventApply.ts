@@ -374,6 +374,82 @@ export function prepareTurnEndEvent(
         },
       };
     }
+    case 'panzer4_spawn': {
+      const spawnDie = rng.d6();
+      const tile = findTileByEnemyStartId(mission, spawnDie);
+      const pos = tile?.pos;
+      const occ = pos ? unitAt(mission, pos) : null;
+      const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'];
+      const blocked = !!occ && tankKinds.includes(occ.kind);
+      const placed = !!pos && !blocked;
+      const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
+      return {
+        bodyKey: placed ? 'turnEnd.panzer4.placed' : 'turnEnd.panzer4.blocked',
+        bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
+        extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.panzer4Start' }],
+        apply: () => {
+          if (!placed || !pos) return;
+          mission.enemies.push({
+            id: nextEnemyId(),
+            kind: 'panzer4',
+            faction: 'german',
+            pos: { ...pos },
+            facing: face,
+            stats: getUnitStats('panzer4'),
+          });
+        },
+      };
+    }
+    case 'road_mine': {
+      const t = mission.map.get(sh.pos);
+      const onRoad = t?.terrain === 'road';
+      if (sh.destroyed || sh.paralyzed || !onRoad) {
+        return {
+          bodyKey: 'turnEnd.mine.skip',
+          bodyParams: { ...baseParams, onRoad: onRoad ? 1 : 0, paralyzed: sh.paralyzed ? 1 : 0 },
+          apply: () => {},
+        };
+      }
+      const penDie = rng.d6();
+      const penTh = 4;
+      const penetrated = penDie >= penTh;
+      if (!penetrated) {
+        return {
+          bodyKey: 'turnEnd.mine.ric',
+          bodyParams: { ...baseParams, penDie },
+          extraDicePhases: [{ dice: [penDie], captionKey: 'turnEnd.extra.minePen' }],
+          apply: () => {},
+        };
+      }
+      const damageDie = rng.d6();
+      const damageEffect = resolveDamageEffect(sh, damageDie);
+      const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
+      const rep: AttackReport = {
+        dice: [d1, d2],
+        roll: sum,
+        threshold: 2,
+        hit: true,
+        armorFace: 'front',
+        armor: 4,
+        penetration: 0,
+        penDie,
+        penThreshold: penTh,
+        penetrated: true,
+        damageDie,
+        damageEffect,
+        crewCheck,
+        statusChange: damageEffect === 'destroyed' ? 'destroyed' : 'damaged',
+      };
+      return {
+        bodyKey: 'turnEnd.mine.hit',
+        bodyParams: { ...baseParams, penDie, damageDie },
+        extraDicePhases: [
+          { dice: [penDie], captionKey: 'turnEnd.extra.minePen' },
+          { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
+        ],
+        apply: () => applyAttack(sh, rep),
+      };
+    }
     default:
       return {
         bodyKey: 'turnEnd.unknown',

@@ -22,6 +22,8 @@ const EFFECT_TYPES = [
   'mechanical_failure',
   'stuka',
   'panzer3_spawn',
+  'road_mine',
+  'panzer4_spawn',
 ];
 
 function readCsvSmart(filePath) {

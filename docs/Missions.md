@@ -116,8 +116,67 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 2：猎杀虎式
+
+> 对应数据：`assets/resources/missions/mission_02.json`。
+
+### 目标
+
+- 摧毁 **1 辆虎式坦克**（`kind: "tiger"`）；
+- 随后将谢尔曼开到 **撤离格** `evacAt: col=7, row=2`（本图**东侧**带黑字 ③ 的公路格，与 `eid:3` 同格），沿 **`evacExitDir = 0`（正东）** 驶出地图。
+
+### 初始设置
+
+- **谢尔曼**：`col=0, row=3` 公路格，**朝向 0（正东）**（以 `mission_02.json` 为准）。
+- **敌方**：**1 辆虎式** + **2 辆三号**（`tiger` ×1、`panzer3` ×2）。`enemyStartByDice: true`：每辆车开局各掷 **1d6**，在 **eid 1~6 黑格**中链式择空位（与任务 1 的掷骰规则相同），与谢尔曼格不重叠。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–5** | 德军步兵 | `infantry_spawn` → 红格 `rid` |
+| **6** | 地雷 | `road_mine`：谢尔曼在**公路**且**未瘫痪**时自动受击，穿甲 0 vs 装甲 4，再伤害 1d6 |
+| **7–8** | 相邻步兵齐射 | `adjacent_infantry_fire` |
+| **9** | 车长额外行动 | `commander_extra`（装填/修复/灭火 等，与任务 1 同逻辑） |
+| **10** | 斯图卡 | `stuka` |
+| **11+** | IV 号坦克 | `panzer4_spawn` → 黑格 `eid`（与任务 1 的 III 号流程相同，车型为 IV 号） |
+
+数据行见 `data/turn_end_events.csv`（`mission_02`），`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
+## 任务 3：清除步兵
+
+> 对应数据：`assets/resources/missions/mission_03.json`。地图可独立编辑；**6 名步兵的 `at` 须与全图 6 个 `bd:1` 格一致**（谢尔曼所在格不要放步兵）。
+
+### 目标
+
+- 歼灭**全部德军步兵**（`kind: "infantry"`）后，将谢尔曼开至 **撤离格** `evacAt: col=7, row=2`（与黑字 ③ 同格），沿 **`evacExitDir = 0`（正东）** 驶出地图。
+- 场上 **IV 号**为威胁单位，**不必**击毁即可达成目标（胜负仅统计步兵 + 撤离）。
+
+### 初始设置
+
+- **谢尔曼**：`col=0, row=3`（以 JSON 为准，黑箭头起始格），**朝向 0**。
+- **步兵 ×6**：各占一格 `bd:1` 建筑，与 `tiles` 中 6 处 `bd:1` 一一对应；当前配置为 `(4,2) (5,2) (3,3) (4,3) (5,3) (4,4)`（**offset**：`col,row`）。改图后请同步改 `enemies` 里 6 条步兵的 `at`。
+- **IV 号 ×2**：`enemyStartByDice: true` 中仅对无 `at` 的条目掷骰，在 **eid 1~6** 黑格链式占两格，朝向同格 `ef`。
+- 混合部署：`MissionLoader` 在 `enemyStartByDice: true` 时，有 `at` 的单位用 JSON 固定坐标，无 `at` 的单位再掷 **1d6**。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–4** | 狙击手 | `sniper`：舱盖开启且与任意步兵有视线时车长阵亡 |
+| **5** | 地雷 | `road_mine`：谢尔曼在**公路**且**未瘫痪**时受击，AP0 vs 装甲 4，再伤害 1d6 |
+| **6–8** | 相邻步兵齐射 | `adjacent_infantry_fire` |
+| **9** | 车长额外行动 | `commander_extra` |
+| **10** | 斯图卡 | `stuka`（舱盖开时先 2d6≥6 判击落，再 2d6 轰炸等，与任务 1 同逻辑） |
+| **11+** | 三号坦克增援 | `panzer3_spawn` → 黑格 `eid` |
+
+数据行见 `data/turn_end_events.csv`（`mission_03`），`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
 ## 后续任务
 
-- 任务 2 ~ 12 的目标与地图待补充，对应 JSON 文件按需新建
-  （文件名 `mission_02.json` ... `mission_12.json`）。
+- 任务 4 ~ 12 的地图与说明待补充，对应 `mission_04.json` … `mission_12.json`。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。
