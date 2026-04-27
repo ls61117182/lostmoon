@@ -393,6 +393,7 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 // ---------- 机枪（MG）攻击 ----------
 //
 // §3.6 行动表 B 列 3/4 + C 列 2："机枪射击：相邻步兵 7+ 命中"。
+// 乘员门控在 BattleScene.selectMGDie：B 列机枪不因乘员阵亡禁用；C 列副驾驶机枪需副驾驶存活。
 // 相对主炮攻击的差异：
 //   - 目标仅限 `kind='infantry'` 且必须与攻击方相邻（hexDistance===1）
 //   - 单段 2d6 检定：点数之和 ≥ 7 = 命中；命中即直接击毙（步兵无装甲）

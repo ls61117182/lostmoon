@@ -7,14 +7,14 @@
  *   - 进入某阶段时，按谢尔曼当前格地形 + 舱盖状态摇 3~5 颗骰子，落在屏幕底部骰子托盘
  *     - 移动阶段：1=无 / 2=启动（未实装，可跳过）/ 3,4=转向 60° / 5,6=前进或后退 1 格
  *     - 攻击阶段：1,2=装填 / 3,4=机枪（暂无步兵，置灰）/ 5,6=主炮射击（需已装填）
+ *     - 机枪：攻击阶段 3/4 点不受乘员阵亡影响；杂项阶段「副驾驶机枪」需副驾驶存活
  *   - 点击骰子弹出动作菜单，选择具体执行方式（↻顺时针 / ↺逆时针 / ▲前进 / ▼后退…）
  *   - 前进 / 后退沿谢尔曼当前朝向 ±1 格移动；若目标格地形或敌方占据无法进入，
  *     该次移动无效、骰子不消耗、只弹警告浮字
  *   - 主炮骰点击进入"选择目标"态；点击视线内敌人 → 掷骰结算并消耗骰，之后 loaded 归 false
  *   - 玩家回合点击地图格：若处于攻击/杂项且格上有敌且已选机枪或主炮骰，则优先尝试机枪/主炮开火；否则打开格子介绍（地形、骰子规则、格上单位状态）
- *   - 右下角按钮："下一阶段"（移动/攻击子阶段内用于结束该阶段回到选择条；A+B 完成后变红
- *     「结束回合」进入敌方阶段）。杂项阶段在骰子用尽或手动结束阶段后，直接进入敌方阶段，
- *     无需再在「结束回合」上多点一次。
+ *   - 右下角按钮："下一阶段"用于在子阶段内提前结束（仍有骰子未用时）；移动/攻击子阶段在骰子用尽或
+ *     点「下一阶段」后会自动进入另一翼或自动进入杂项；杂项结束后进入敌方阶段。
  *   - 敌方阶段：UI 固定区展示该敌坦本回合全部 AI 骰并按序执行；移动 / 转向约 0.5s 过程动画，
  *     谢尔曼移动与转向同样播放过程动画
  *   - 摧毁任务目标单位 → 屏幕中央"胜利！"；谢尔曼被摧毁 → "战败"
@@ -281,7 +281,7 @@ type Phase = 'player' | 'enemy';
 
 /**
  * 玩家回合内的细分状态机：
- *   - 'choose'     : 等待玩家选择进入"移动阶段 / 攻击阶段 / 杂项阶段"
+ *   - 'choose'     : 等待玩家选择进入"移动阶段 / 攻击阶段"（顺序任意；两阶段均完成后自动进入杂项）
  *   - 'movement'   : 正在执行移动阶段，骰子托盘展示着本阶段剩余移动骰
  *   - 'attack'     : 正在执行攻击阶段；选中一颗主炮骰后进入"选目标"态，
  *                    点击敌人开火，结算后骰子从托盘消失
@@ -444,7 +444,7 @@ const BATTLE_MODAL_DIVIDER = new Color(120, 150, 120, 200);
 const BATTLE_MODAL_TEXT_OUTLINE = new Color(0, 0, 0, 220);
 const BATTLE_MODAL_LEVEL_BORDER = new Color(200, 200, 200, 220);
 
-// 阶段选择条配色：三个按钮（移动=绿 / 攻击=红 / 杂项=紫）；已执行过的阶段被灰掉禁用
+// 阶段选择条配色：两个按钮（移动=绿 / 攻击=红）；已执行过的阶段被灰掉禁用
 const PHASE_BTN_MOVE      = new Color( 60, 130,  80, 230);
 const PHASE_BTN_ATTACK    = new Color(160,  70,  70, 230);
 const PHASE_BTN_MISC      = new Color(110,  80, 160, 230);
@@ -720,11 +720,10 @@ export class BattleScene extends Component {
   private endTurnBtn: Node | null = null;
   private endTurnBg: Graphics | null = null;
   private endTurnLabel: Label | null = null;
-  /** 底部"阶段选择"条的三个按钮；在 choose 子步骤可见，其他子步骤隐藏 */
+  /** 底部"阶段选择"条：移动 / 攻击两个按钮；在 choose 子步骤可见，其他子步骤隐藏 */
   private chooseBar: Node | null = null;
   private chooseMoveBtn: Node | null = null;
   private chooseAttackBtn: Node | null = null;
-  private chooseMiscBtn: Node | null = null;
   /** 底部骰子托盘：movement/attack 子步骤时显示 */
   private diceTrayRoot: Node | null = null;
   private diceVisuals: DieVisual[] = [];
@@ -784,7 +783,6 @@ export class BattleScene extends Component {
   /** 底部阶段条按钮文字 */
   private chooseMoveLabel: Label | null = null;
   private chooseAttackLabel: Label | null = null;
-  private chooseMiscLabel: Label | null = null;
   /** 胜负界「再来一局 / 返回主菜单」子 Label */
   private restartBtnLabel: Label | null = null;
   private backToMenuBtnLabel: Label | null = null;
@@ -2864,7 +2862,6 @@ export class BattleScene extends Component {
         const doneTag = [
           this.movementDone ? t('hud.moveDone')   : t('hud.moveTodo'),
           this.attackDone   ? t('hud.attackDone') : t('hud.attackTodo'),
-          this.miscDone     ? t('hud.miscDone')   : t('hud.miscTodo'),
         ].join(' ');
         this.hudLabel.string = t('hud.playerChoose', { n: this.turn, tags: doneTag });
       } else if (this.playerStep === 'movement') {
@@ -2953,15 +2950,18 @@ export class BattleScene extends Component {
 
   /**
    * 根据当前子状态算出右下角按钮的显示文字与配色：
-   *   - 玩家阶段 + 有任何"未执行阶段" → "下一阶段"（蓝）
-   *   - 玩家阶段 + 两阶段都做过       → "结束回合"（红）
-   *   - 敌方阶段                      → "敌方回合中"（灰-蓝，点不了）
+   *   - 杂项子阶段内 →「结束回合」强调色（结束杂项并进入敌方）
+   *   - 移动 / 攻击子阶段 →「下一阶段」（提前结束本子阶段）
+   *   - 选择阶段且 A+B 已完成、杂项未自动触发前 →「下一阶段」（与自动进杂项并存，作补点）
+   *   - 其余玩家选择阶段 →「下一阶段」（蓝）
+   *   - 敌方阶段 →「敌方回合中」
    */
   private computeAdvanceButton(): { label: string; urgent: boolean } {
     if (this.phase !== 'player') return { label: t('btn.enemyTurnRunning'), urgent: false };
-    // 回合可以结束的条件：A + B 都完成即可（C 是可选的尾部阶段，玩家可做可跳）。
-    const allDone = this.movementDone && this.attackDone;
-    if (allDone) return { label: t('btn.endTurn'), urgent: true };
+    if (this.playerStep === 'misc') return { label: t('btn.endTurn'), urgent: true };
+    if (this.playerStep === 'movement' || this.playerStep === 'attack') {
+      return { label: t('btn.nextPhase'), urgent: false };
+    }
     return { label: t('btn.nextPhase'), urgent: false };
   }
 
@@ -3072,12 +3072,12 @@ export class BattleScene extends Component {
 
   // ---------- 阶段选择条 + 骰子托盘 ----------
 
-  /** 底部阶段选择条：三个大按钮（移动 / 攻击 / 杂项），仅在 playerStep === 'choose' 时可见。 */
+  /** 底部阶段选择条：两个大按钮（移动 / 攻击）水平居中，仅在 playerStep === 'choose' 时可见。 */
   private buildChooseBar() {
     const bar = new Node('ChooseBar');
     bar.layer = this.node.layer;
     const ut = bar.addComponent(UITransform);
-    ut.setContentSize(700, 80);
+    ut.setContentSize(480, 80);
     ut.setAnchorPoint(0.5, 0.5);
     bar.setPosition(0, -260, 0);
     this.node.addChild(bar);
@@ -3112,19 +3112,17 @@ export class BattleScene extends Component {
       bar.addChild(b);
       return { root: b, label: tx };
     };
-    const mv = makeBtn('ChooseMove', t('btn.movePhase'), -220,
+    const BTN_W = 200;
+    const GAP = 24;
+    const cx = (BTN_W + GAP) * 0.5;
+    const mv = makeBtn('ChooseMove', t('btn.movePhase'), -cx,
       PHASE_BTN_MOVE, () => this.enterPhase('movement'));
     this.chooseMoveBtn = mv.root;
     this.chooseMoveLabel = mv.label;
-    const at = makeBtn('ChooseAttack', t('btn.attackPhase'), 0,
+    const at = makeBtn('ChooseAttack', t('btn.attackPhase'), cx,
       PHASE_BTN_ATTACK, () => this.enterPhase('attack'));
     this.chooseAttackBtn = at.root;
     this.chooseAttackLabel = at.label;
-    // 杂项按钮的颜色单独选一支紫色，避免和移动（蓝）/攻击（红）混淆
-    const mc = makeBtn('ChooseMisc', t('btn.miscPhase'), +220,
-      PHASE_BTN_MISC, () => this.enterPhase('misc'));
-    this.chooseMiscBtn = mc.root;
-    this.chooseMiscLabel = mc.label;
   }
 
   /** 底部骰子托盘：有 5 个最大容量的空位；实际数量按 phaseDice.length 决定可见性。 */
@@ -3200,22 +3198,18 @@ export class BattleScene extends Component {
   /** 根据 playerStep / 胜负 / 敌方阶段等状态切换底部 UI 的可见性与文字。 */
   private refreshPhaseUI() {
     const inBattle = this.phase === 'player' && this.outcome === 'ongoing';
+    /** 即将自动进杂项：本帧不应亮选择条，否则会闪一帧移动/攻击按钮再消失 */
+    const pendingMiscAuto = inBattle && this.playerStep === 'choose'
+      && this.movementDone && this.attackDone && !this.miscDone;
     // 1) 阶段选择条
     if (this.chooseBar) {
-      this.chooseBar.active = inBattle && this.playerStep === 'choose';
+      const barOn = inBattle && this.playerStep === 'choose' && !pendingMiscAuto;
+      this.chooseBar.active = barOn;
     }
-    // GDD §2.3：C 必须最后执行 —— 杂项按钮要等 A + B 都做完后才"出现"；
-    // 此时它既是可选动作，也是"跳过 C 直接结束回合"的替代（玩家也可以直接点右下角的"结束回合"）。
     const canMove   = !this.movementDone;
     const canAttack = !this.attackDone;
-    const canMisc   = this.movementDone && this.attackDone && !this.miscDone;
     if (this.chooseMoveBtn)   this.setPhaseBtnEnabled(this.chooseMoveBtn,   canMove,   PHASE_BTN_MOVE);
     if (this.chooseAttackBtn) this.setPhaseBtnEnabled(this.chooseAttackBtn, canAttack, PHASE_BTN_ATTACK);
-    if (this.chooseMiscBtn) {
-      // A / B 任一未完成 → 杂项按钮整体隐藏（不是灰掉）；完成后再淡入
-      this.chooseMiscBtn.active = canMisc;
-      this.setPhaseBtnEnabled(this.chooseMiscBtn, canMisc, PHASE_BTN_MISC);
-    }
 
     // 2) 骰子托盘
     if (this.diceTrayRoot) {
@@ -3237,6 +3231,20 @@ export class BattleScene extends Component {
     this.refreshDiceTray();
     // 点击骰子后弹出的菜单，状态变化时（比如骰子被消耗）一并关闭
     if (!inBattle || this.playerStep === 'choose') this.closeDiePopover();
+
+    // A+B 均已完成且尚未进杂项：同步进杂项（非 busy）；避免 scheduleOnce(0) 晚一帧导致选择条闪屏
+    if (pendingMiscAuto) {
+      if (!this.isBusy()) {
+        this.enterPhaseIfChoose('misc');
+        return;
+      }
+      this.scheduleOnce(() => {
+        if (this.phase !== 'player' || this.outcome !== 'ongoing') return;
+        if (this.playerStep !== 'choose') return;
+        if (!this.movementDone || !this.attackDone || this.miscDone) return;
+        this.enterPhaseIfChoose('misc');
+      }, 0);
+    }
   }
 
   private setPhaseBtnEnabled(btn: Node, enabled: boolean, baseColor: Color) {
@@ -3367,7 +3375,14 @@ export class BattleScene extends Component {
     this.refreshStatusPanel();
   }
 
-  /** 玩家在"选择阶段"时点了移动/攻击/杂项按钮 → 摇一批骰子，进入对应子阶段。 */
+  /** 若仍在选择阶段则进入指定子阶段（供自动链与载档补调用）。 */
+  private enterPhaseIfChoose(which: 'movement' | 'attack' | 'misc') {
+    if (this.phase !== 'player' || this.outcome !== 'ongoing') return;
+    if (this.playerStep !== 'choose') return;
+    this.enterPhase(which);
+  }
+
+  /** 玩家在"选择阶段"时点了移动/攻击按钮，或系统自动进入杂项 → 摇一批骰子，进入对应子阶段。 */
   private enterPhase(which: 'movement' | 'attack' | 'misc') {
     if (!this.mission) return;
     if (this.isBusy()) return;
@@ -3415,25 +3430,46 @@ export class BattleScene extends Component {
 
   /**
    * 结束当前子阶段（movement / attack / misc），回到 choose；
-   * 若结束的是杂项阶段，则本回合 A+B 已必然完成 → 直接进入敌方阶段（省一次「结束回合」点击）。
+   * 若结束的是杂项阶段 → 直接进入敌方阶段。
+   * 若结束的是移动或攻击：另一翼未完成则下一帧自动进入该翼；两翼均完成则由 refreshPhaseUI 自动进杂项。
    */
   private endCurrentSubPhase() {
-    const wasMisc = this.playerStep === 'misc';
-    if (this.playerStep === 'movement') this.movementDone = true;
-    else if (this.playerStep === 'attack') this.attackDone = true;
-    else if (this.playerStep === 'misc') this.miscDone = true;
+    const was = this.playerStep;
+    const wasMisc = was === 'misc';
+    if (was === 'movement') this.movementDone = true;
+    else if (was === 'attack') this.attackDone = true;
+    else if (was === 'misc') this.miscDone = true;
     this.phaseDice = [];
     this.clearGunSelection();
-    this.playerStep = 'choose';
     this.closeDiePopover();
     if (wasMisc && this.phase === 'player' && this.outcome === 'ongoing'
         && this.movementDone && this.attackDone) {
+      this.playerStep = 'choose';
       this.beginEnemyPhase();
       return;
+    }
+    this.playerStep = 'choose';
+    // 另一翼未完成：优先同步 enterPhase，避免与「进杂项」相同的一帧 chooseBar 闪屏（busy 时仍延后一帧）
+    if (this.phase === 'player' && this.outcome === 'ongoing' && (was === 'movement' || was === 'attack')
+      && (!this.movementDone || !this.attackDone)) {
+      const next = !this.movementDone ? 'movement' : 'attack';
+      if (!this.isBusy()) {
+        this.enterPhase(next);
+        return;
+      }
     }
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
+    if (this.phase !== 'player' || this.outcome !== 'ongoing') return;
+    if (was === 'movement' || was === 'attack') {
+      if (!this.movementDone || !this.attackDone) {
+        const next = !this.movementDone ? 'movement' : 'attack';
+        if (this.isBusy()) {
+          this.scheduleOnce(() => this.enterPhaseIfChoose(next), 0);
+        }
+      }
+    }
   }
 
   /**
@@ -3974,16 +4010,13 @@ export class BattleScene extends Component {
    *   - 攻击阶段：pip ∈ {3, 4}（classifyAttackDie == 'mg'）
    *   - 杂项阶段：pip == 2（classifyMiscDie == 'codriver_mg'，副驾驶机枪）
    *
-   * 乘员约束：
-   *   - 攻击阶段 MG：装填手负责同轴机枪；装填手阵亡则无法使用
-   *   - 杂项阶段 codriver_mg：副驾驶机枪；副驾驶阵亡则无法使用
+   * 乘员约束：攻击阶段 3/4 点机枪 **不** 因乘员阵亡禁用；杂项阶段 2 点「副驾驶机枪」需副驾驶存活。
    */
   private selectMGDie(dieIdx: number) {
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     if (this.playerStep === 'attack') {
       if (classifyAttackDie(slot.pip) !== 'mg') return;
-      if (!this.checkCrewAlive('loader')) return;
     } else if (this.playerStep === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'codriver_mg') return;
       if (!this.checkCrewAlive('coDriver')) return;
@@ -4453,9 +4486,8 @@ export class BattleScene extends Component {
 
   /**
    * 右下角按钮点击：
-   *   - 当前在移动/攻击阶段 → endCurrentSubPhase 回到 choose
-   *   - 当前在杂项阶段 → endCurrentSubPhase 内会直接 beginEnemyPhase（见该函数）
-   *   - 当前在 choose：A+B 都 done → beginEnemyPhase（未做杂项时由此结束回合）
+   *   - 移动 / 攻击 / 杂项子阶段内 → endCurrentSubPhase（杂项结束会进敌方）
+   *   - 选择阶段且 A+B 已完成、杂项未开始 → 手动进入杂项（与自动进杂项二选一即可）
    */
   private onAdvanceClicked() {
     if (this.isBusy()) return;
@@ -4466,9 +4498,8 @@ export class BattleScene extends Component {
       this.endCurrentSubPhase();
       return;
     }
-    // choose 状态：A + B 都完成即可结束回合（C 为可选尾段，不强制）
-    if (this.movementDone && this.attackDone) {
-      this.beginEnemyPhase();
+    if (this.movementDone && this.attackDone && !this.miscDone) {
+      this.enterPhase('misc');
     }
   }
 
@@ -5732,7 +5763,6 @@ export class BattleScene extends Component {
     }
     if (this.chooseMoveLabel) this.chooseMoveLabel.string = t('btn.movePhase');
     if (this.chooseAttackLabel) this.chooseAttackLabel.string = t('btn.attackPhase');
-    if (this.chooseMiscLabel) this.chooseMiscLabel.string = t('btn.miscPhase');
     if (this.combatLogTitleLab) this.combatLogTitleLab.string = t('battleLog.title');
     if (this.restartBtnLabel) this.restartBtnLabel.string = t('btn.restart');
     if (this.backToMenuBtnLabel) this.backToMenuBtnLabel.string = t('btn.backToMenu');
@@ -6167,7 +6197,7 @@ export class BattleScene extends Component {
     this.enemyDice = [];
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
-    // 新回合：三个子阶段重置为"未执行"，由玩家重新选移动/攻击/杂项
+    // 新回合：子阶段标记重置；玩家先选移动或攻击，两阶段均完成后自动进杂项
     this.playerStep = 'choose';
     this.movementDone = false;
     this.attackDone = false;
