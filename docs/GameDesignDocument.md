@@ -514,7 +514,7 @@ function axialToWorld(q: number, r: number): Vec2 {
 
 **敌方坦克掷骰出生（可选，`enemyStartByDice: true`）**
 
-适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记若干**出生格**；同一格可选 **`ef`**（0=E … 5=NE）表示坦克**初始 facing**，其方向编号与**同格** `h` 的 6 位、以及 `HEX_DIRECTIONS[ef]` **完全一致**（自本格心指向第 `ef` 邻格心 = 经该边越境的六向）。树篱位 `h[i]=1` 与黑字朝向 `ef` 均用同一套索引 i，与 `HexGrid.hedgeFlagsFromMapJson` 及 `BattleScene.drawHedgeEdge` 一致，避免与树篱边含义冲突。
+适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记若干**出生格**；同一格可选 **`ef`**（0=E … 5=NE）表示坦克**初始 facing**，其方向编号与**同格** `h` 的 6 位、以及 `HEX_DIRECTIONS[ef]` **完全一致**（自本格心指向第 `ef` 邻格心 = 经该边越境的六向）。树篱位 `h[i]=1` 与黑字朝向 `ef` 均用**轴向**同一套索引 i，与 `HexGrid.hedgeFlagsFromMapJson` 及 `HEX_DIRECTIONS` 一致；`BattleScene` 绘制时经 `HEDGE_DRAW_EDGE_BY_AXIAL` 将轴向 i 映到 `drawHedgeEdge` 的**几何边**号，勿与 `h`/`ef` 混用「边号无映射」的假设。
 
 - 关卡 JSON 中 **`enemyStartByDice: true`** 时，每个 **`enemies[]`** 条目可省略 `at` / `facing`，由运行时掷骰决定。
 - **每名敌方坦克开局掷 1 颗 d6**：首先尝试落在 **`eid` 等于骰点** 的六角格；若该格已被占用（含已放置的其它敌方坦克，或谢尔曼初始格），则改试 **`eid = 骰点 + 1`**（6 的下一档为 1），再重复直至找到**既存在 `eid` 配置、又未被占用**的格；若连续 6 档仍无法落位则加载失败（配置错误）。

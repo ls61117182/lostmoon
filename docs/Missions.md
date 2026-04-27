@@ -92,8 +92,8 @@
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `h` | 树篱：6 位 `0/1`，**第 i 位（0 基）**与 `HexGrid.HEX_DIRECTIONS[i]` 及 `ef` **同一**方向编号：0=E, 顺时针 1=SE … 5=NE；`1` 表示本格与**第 i 向邻格**之间那段格边外缘有树篱。解析见 `HexGrid.hedgeFlagsFromMapJson`。 |
-| `ef` | 与 `eid` 同格时黑字坦克的**初始朝向**，**与 `h` 的索引用法相同**；与战场景观里第 i 向格边/树篱一致。 |
+| `h` | 树篱：6 位 `0/1`，**第 i 位（0 基）**与 `HEX_DIRECTIONS[i]` 及 `ef` **同一轴向**编号：0=E, 顺时针 1=SE … 5=NE；`1` 表示本格与**第 i 向邻格**之间那段格边外缘有树篱。解析见 `hedgeFlagsFromMapJson`；`BattleScene` 渲染经 `HEDGE_DRAW_EDGE_BY_AXIAL`。本仓库内 `mission_*.json` 的 `h` 已用 `HexGrid.migrateHedgeHFromLegacyDraw` 与旧版**误用边号**的绘制对齐后再存盘，**勿**对现有关卡再手跑该函数（会二次置换）。 |
+| `ef` | 与 `eid` 同格时黑字坦克的**初始朝向**，**与 `h` 的轴向索引用法相同**；与逻辑层「第 i 向邻接/格边」一致。 |
 | `rid` | 援军生成位编号（红色数字）。 |
 | `eid` | 敌方起始候选编号（黑色数字）。 |
 

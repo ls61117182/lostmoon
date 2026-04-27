@@ -54,6 +54,7 @@ import {
   resources,
 } from 'cc';
 import {
+  HEDGE_DRAW_EDGE_BY_AXIAL,
   axialToPixel,
   approximateDirection,
   directionTo,
@@ -413,6 +414,14 @@ const BTN_BG_NORMAL  = new Color( 60,  90, 140, 230);
 const BTN_BG_URGENT  = new Color(190,  80,  60, 240);
 const BTN_BORDER     = new Color(255, 255, 255, 255);
 const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
+/** 左上角第一行：关卡 id + 名（与回合条区分的稍弱白） */
+const HUD_MISSION_META_COLOR = new Color(220, 225, 235, 255);
+/** 与 `buildHUD` 中关卡标题 UITransform 高度一致，改布局须同步 */
+const HUD_MISSION_TITLE_H = 32;
+/** 关卡标题行下缘 与 回合状态行上缘 的间隙 */
+const HUD_MISSION_TO_TURN_GAP = 4;
+/** 原设计：目标首行 y=296、回合行顶 y=344；增加关卡标题后整体下推的步长 */
+const HUD_SHIFT_FOR_MISSION = HUD_MISSION_TITLE_H + HUD_MISSION_TO_TURN_GAP;
 /** 任务目标行：前置未完成 */
 const OBJ_HUD_LOCKED = new Color(150, 150, 158, 255);
 /** 任务目标行：当前可做、未完成 */
@@ -722,6 +731,8 @@ export class BattleScene extends Component {
   private nameLabels: Node[] = [];
 
   // HUD
+  /** 左上角最上行：任务 JSON `id` + 关卡名（`LevelDB.titleKey` 或 `MissionData.name`） */
+  private missionTitleLabel: Label | null = null;
   private hudLabel: Label | null = null;
   /** 回合数下方：多行任务目标（与 `OBJECTIVE_HUD_MAX` 同序） */
   private objectiveHudLabels: Label[] = [];
@@ -1051,12 +1062,14 @@ export class BattleScene extends Component {
       this.drawBuildingOverlay(c.x, c.y, this.hexSize);
     }
 
-    // 2. 树篱
+    // 2. 树篱（`Tile.hedges` 为轴向 0..5；`drawHedgeEdge` 的边号见 `HEDGE_DRAW_EDGE_BY_AXIAL`）
     for (const t of tiles) {
       if (!t.hedges) continue;
       const c = this.project(t.pos.q, t.pos.r);
-      for (let i = 0; i < 6; i++) {
-        if (t.hedges[i]) this.drawHedgeEdge(c.x, c.y, this.hexSize, i, t.pos.q, t.pos.r);
+      for (let ax = 0; ax < 6; ax++) {
+        if (t.hedges[ax]) {
+          this.drawHedgeEdge(c.x, c.y, this.hexSize, HEDGE_DRAW_EDGE_BY_AXIAL[ax], t.pos.q, t.pos.r);
+        }
       }
     }
 
@@ -1937,14 +1950,13 @@ export class BattleScene extends Component {
   private static readonly HEDGE_CLUMPS_PER_EDGE = 5;
 
   /**
-   * 第 dir 条边的树篱：中心落在该边弦上，与格线重合。
-   * `dir` 与 `HexGrid.HEX_DIRECTIONS[dir]`、`Tile.hedges[dir]`、关卡 JSON 的 `h[dir]` / `ef` 同序（0=E, 顺时针 … 5=NE）。
+   * 第 `edgeIndex` 条**几何边**上的树篱（`edgeIndex` = `-30°+60°·i` 划分法中的 i∈0..5），与**轴向**下标不混用：若表示 `HEX_DIRECTIONS[ax]/Tile.hedges[ax]/h[ax]/ef`，入参应取 `HEDGE_DRAW_EDGE_BY_AXIAL[ax]`。
    * 单丛大小统一，在原先基准半径 `size*0.086` 上整体放大 30%。
    * 沿边用 `k/(n+1)` 均匀取点，使两端与顶点留出相同空隙、丛与丛之间等距。
    */
-  private drawHedgeEdge(cx: number, cy: number, size: number, dir: number, _q: number, _r: number) {
-    const a1 = (-30 + 60 * dir) * Math.PI / 180;
-    const a2 = (-30 + 60 * (dir + 1)) * Math.PI / 180;
+  private drawHedgeEdge(cx: number, cy: number, size: number, edgeIndex: number, _q: number, _r: number) {
+    const a1 = (-30 + 60 * edgeIndex) * Math.PI / 180;
+    const a2 = (-30 + 60 * (edgeIndex + 1)) * Math.PI / 180;
     const x0 = cx + size * Math.cos(a1);
     const y0 = cy + size * Math.sin(a1);
     const x1 = cx + size * Math.cos(a2);
@@ -2234,9 +2246,27 @@ export class BattleScene extends Component {
 
   // ---------- HUD ----------
 
-  /** 一次性创建 HUD：左上角状态 Label + 右下角"结束回合"按钮。无需任何美术资源。 */
+  /** 一次性创建 HUD：左上关卡 id+名、回合/阶段条、多行目标 + 右下角"结束回合"按钮。无需任何美术资源。 */
   private buildHUD() {
-    // ---- 左上角状态 Label ----
+    // ---- 左上角最上行：关卡 id + 名（任务加载后由 `updateHUD` 灌文案）----
+    const mNode = new Node('MissionTitleLabel');
+    mNode.layer = this.node.layer;
+    const mUT = mNode.addComponent(UITransform);
+    mUT.setContentSize(540, HUD_MISSION_TITLE_H);
+    mUT.setAnchorPoint(0, 1);
+    const mLab = mNode.addComponent(Label);
+    mLab.fontSize = 22;
+    mLab.lineHeight = 26;
+    mLab.color = HUD_MISSION_META_COLOR;
+    mLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    mLab.verticalAlign = VerticalTextAlignment.TOP;
+    mLab.overflow = Label.Overflow.SHRINK;
+    mLab.string = '';
+    mNode.setPosition(-624, 344, 0);
+    this.node.addChild(mNode);
+    this.missionTitleLabel = mLab;
+
+    // ---- 第二行起：回合数 + 阶段信息 ----
     const labelNode = new Node('HUDLabel');
     labelNode.layer = this.node.layer;
     const lUT = labelNode.addComponent(UITransform);
@@ -2249,15 +2279,15 @@ export class BattleScene extends Component {
     label.horizontalAlign = HorizontalTextAlignment.LEFT;
     label.verticalAlign = VerticalTextAlignment.TOP;
     label.string = t('hud.init');
-    // Canvas 1280x720，左上角对应 (-640, 360)，再留 16px 边距
-    labelNode.setPosition(-624, 344, 0);
+    // 相对旧版下推：原顶 y=344
+    labelNode.setPosition(-624, 344 - HUD_SHIFT_FOR_MISSION, 0);
     this.node.addChild(labelNode);
     this.hudLabel = label;
 
-    // ---- 左上角 HUD 下方：多行任务目标 ----
+    // ---- 回合行下方：多行任务目标 ----
     const OBJ_FONT = 20;
     const OBJ_LINE = 26;
-    const objStartY = 296;
+    const objStartY = 296 - HUD_SHIFT_FOR_MISSION;
     for (let i = 0; i < BattleScene.OBJECTIVE_HUD_MAX; i++) {
       const on = new Node(`ObjectiveHud${i}`);
       on.layer = this.node.layer;
@@ -2884,6 +2914,13 @@ export class BattleScene extends Component {
   }
 
   private updateHUD() {
+    if (this.missionTitleLabel && this.mission) {
+      const d = this.mission.data;
+      const meta = findLevelByMissionId(d.id);
+      const nameStr = meta ? t(meta.titleKey) : d.name;
+      this.missionTitleLabel.string = t('hud.missionLine', { id: d.id, name: nameStr });
+    }
+
     if (this.hudLabel) {
       if (this.phase !== 'player') {
         this.hudLabel.string = t('hud.enemyTurn', { n: this.turn });

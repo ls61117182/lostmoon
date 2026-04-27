@@ -174,8 +174,8 @@ export interface TileDef {
   /** 敌方起始编号 1..6（掷骰链用；全图不重复） */
   eid?: number;
   /**
-   * 与 `eid` 同格：该格上掷骰/增援出生的坦克的**初始 facing**，与 `h` **共用方向索引**：
-   * 数值 i∈0..5 与 `h[i]`、`HEX_DIRECTIONS[i]`、`drawHedgeEdge(…,i,…)` 一一对应（0=E, …, 5=NE）。
+   * 与 `eid` 同格：该格上掷骰/增援出生的坦克的**初始 facing**，与 `h` **共用轴向索引**：
+   * i∈0..5 与 `h[i]`、`HEX_DIRECTIONS[i]` 一致（0=E, …, 5=NE）。树篱**绘制**在 `BattleScene` 中经 `HEDGE_DRAW_EDGE_BY_AXIAL` 再映到 `drawHedgeEdge` 的几何边号。
    */
   ef?: number;
 }

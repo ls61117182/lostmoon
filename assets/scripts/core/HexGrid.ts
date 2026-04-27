@@ -31,11 +31,20 @@ export const HEX_DIRECTION_NAMES: readonly [string, string, string, string, stri
 ];
 
 /**
+ * 轴向方向 `a` 与**绘制**时 `drawHedgeEdge` 所用弦边下标（`-30°+60°·i` 的第 `i` 条边）的对应。
+ * `Tile.hedges[a]` 与 `HEX_DIRECTIONS[a]`、关卡 `h`/`ef` 均按**轴向** 0..5 编号；`drawHedgeEdge` 的入参是「顶点等分角」的边号，与轴向并非同一下标一一相同（仅 E、W 重合）。
+ * 在 pointy-top + 本工程投影下为 **自逆置换** `[0,5,4,3,2,1]`。
+ */
+export const HEDGE_DRAW_EDGE_BY_AXIAL: readonly [number, number, number, number, number, number] = [
+  0, 5, 4, 3, 2, 1,
+];
+
+/**
  * 将关卡 JSON 的 `h` 字串解析为六条格边的树篱标记（与 `Tile.hedges` 一致）。
  *
  * **与 `ef`、单位朝向、战场景观一致**：索引 `i` 与 `HEX_DIRECTIONS[i]` 相同，表示「自本格心指向第 i 个邻接格心」
  * 的那条边（自本格跨向邻格时经过的格边 / 法向即方向 i）。`h[i]===true` 表示该边外缘布设树篱；
- * 同格 `eid` 的 `ef` 亦为同一套 `i`（0=E, 顺时针 1=SE … 5=NE），与 `BattleScene.drawHedgeEdge(…, i, …)` 的 `i` 一致。
+ * 同格 `eid` 的 `ef` 亦为同一套 `i`（0=E, 顺时针 1=SE … 5=NE）。**渲染**树篱时须用 `HEDGE_DRAW_EDGE_BY_AXIAL[i]` 再传给 `drawHedgeEdge` 的几何边号。
  */
 export function hedgeFlagsFromMapJson(s: string | undefined): Tile['hedges'] {
   if (!s || s.length !== 6) return undefined;
@@ -43,6 +52,15 @@ export function hedgeFlagsFromMapJson(s: string | undefined): Tile['hedges'] {
     s[0] === '1', s[1] === '1', s[2] === '1',
     s[3] === '1', s[4] === '1', s[5] === '1',
   ] as Tile['hedges'];
+}
+
+/**
+ * 将**旧版资源**中按「`h` 下标 = 几何边下标」直接绘制时的 6 位串，迁为**当前**轴向语义下的 `h`：
+ * 对各位 `ax` 有 `h_new[ax] = h_old[ HEDGE_DRAW_EDGE_BY_AXIAL[ax] ]`，与 `BattleScene` 中 `HEDGE_DRAW_EDGE_BY_AXIAL` 联用后，**画面**与旧版仍一致，且与 `HEX_DIRECTIONS` / 越境规则一致。
+ */
+export function migrateHedgeHFromLegacyDraw(h: string | undefined): string | undefined {
+  if (!h || h.length !== 6) return h;
+  return HEDGE_DRAW_EDGE_BY_AXIAL.map((d) => h[d]).join('');
 }
 
 // ---------- 基础运算 ----------

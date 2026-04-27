@@ -22,8 +22,9 @@ crew.death.kia,{role} 阵亡,{role} KIA
 unit.status.destroyed,已毁,Destroyed
 unit.status.fire,起火,On Fire
 hud.init,回合 - | 行动力 -/-,Turn - | AP -/-
+hud.missionLine,{id} · {name},{id} — {name}
 hud.enemyTurn,回合 {n} | 敌方行动中...,Turn {n} | Enemy acting...
-hud.playerChoose,回合 {n} | 玩家 | 选择阶段 · {tags}（两阶段完成后自动进入杂项）,Turn {n} | Player | Choose phase · {tags} (misc auto after both)
+hud.playerChoose,回合 {n} | 玩家 | 选择阶段 · {tags},Turn {n} | Player | Choose phase · {tags} (misc auto after both)
 hud.movePhase,回合 {n} | 移动阶段 | 骰子 {dice},Turn {n} | Move phase | Dice {dice}
 hud.attackPhase,回合 {n} | 攻击阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack phase | {loaded} | Dice {dice}{sel}
 hud.attackSelectHint,点敌人开火,Click enemy to fire

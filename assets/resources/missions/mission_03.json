@@ -2,101 +2,258 @@
   "id": "mission_03",
   "name": "清除步兵",
   "description": "目标：歼灭全部德军步兵后，从地图东侧撤离点沿红箭方向驶出地图。\n谢尔曼置于黑箭头格；六处建筑格（含农场）各 1 名步兵；2 辆 IV 号在黑格 eid 掷骰出生。本关回合结束事件为 2d6 表。",
-
   "_comment": "6 个步兵的 at 与全图 `bd:1` 建筑格一一对应，勿与谢尔曼格重叠。h/ef 方向同序 0=E…5=NE，与 HexGrid 一致。",
-
   "cols": 8,
   "rows": 6,
-
   "enemyStartByDice": true,
-
   "tiles": [
     [
       null,
       null,
-      { "t": "f", "eid": 1, "ef": 1},
-      { "t": "f", "h": "100001" },
-      { "t": "m", "h": "100000" },
-      { "t": "r", "h": "100010"  },
-      { "t": "f", "eid": 2, "ef": 2 },
+      {
+        "t": "f",
+        "eid": 1,
+        "ef": 1
+      },
+      {
+        "t": "f",
+        "h": "110000"
+      },
+      {
+        "t": "m",
+        "h": "100000"
+      },
+      {
+        "t": "r",
+        "h": "101000"
+      },
+      {
+        "t": "f",
+        "eid": 2,
+        "ef": 2
+      },
       null
     ],
     [
       null,
-      { "t": "f" },
-      { "t": "f", "h": "100000" },
-      { "t": "m" },
-      { "t": "m", "h": "100000" },
-      { "t": "r" },
-      { "t": "f" }
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "h": "100000"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "m",
+        "h": "100000"
+      },
+      {
+        "t": "r"
+      },
+      {
+        "t": "f"
+      }
     ],
     [
       null,
-      { "t": "f", "h": "000011" },
-      { "t": "f", "h": "000011" },
-      { "t": "f", "h": "000010" },
-      { "t": "m", "bd": 1 },
-      { "t": "r", "bd": 1 },
-      { "t": "f" },
-      { "t": "f", "eid": 3, "ef": 3 }
+      {
+        "t": "f",
+        "h": "011000"
+      },
+      {
+        "t": "f",
+        "h": "011000"
+      },
+      {
+        "t": "f",
+        "h": "001000"
+      },
+      {
+        "t": "m",
+        "bd": 1
+      },
+      {
+        "t": "r",
+        "bd": 1
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "eid": 3,
+        "ef": 3
+      }
     ],
     [
-      { "t": "r" },
-      { "t": "r" },
-      { "t": "r" },
-      { "t": "r", "bd": 1 },
-      { "t": "r", "bd": 1 },
-      { "t": "r", "bd": 1, "h": "000001" },
-      { "t": "r", "h": "000010", "eid": 4, "ef": 3 },
+      {
+        "t": "r"
+      },
+      {
+        "t": "r"
+      },
+      {
+        "t": "r"
+      },
+      {
+        "t": "r",
+        "bd": 1
+      },
+      {
+        "t": "r",
+        "bd": 1
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "h": "010000"
+      },
+      {
+        "t": "r",
+        "h": "001000",
+        "eid": 4,
+        "ef": 3
+      },
       null
     ],
     [
       null,
-      { "t": "f", "h": "000001" },
-      { "t": "f", "h": "000011" },
-      { "t": "f" },
-      { "t": "f", "h": "100000" },
-      { "t": "r", "bd": 1, "h": "000010" },
-      { "t": "f" },
+      {
+        "t": "f",
+        "h": "010000"
+      },
+      {
+        "t": "f",
+        "h": "011000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "h": "100000"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "h": "001000"
+      },
+      {
+        "t": "f"
+      },
       null
     ],
     [
       null,
-      { "t": "f" },
-      { "t": "f", "eid": 6, "ef": 5 },
-      { "t": "w" },
-      { "t": "w", "h": "100000" },
-      { "t": "r", "eid": 5, "ef": 4 },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "eid": 6,
+        "ef": 5
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w",
+        "h": "100000"
+      },
+      {
+        "t": "r",
+        "eid": 5,
+        "ef": 4
+      },
       null,
       null
     ]
   ],
-
   "sherman": {
     "kind": "sherman",
     "faction": "allied",
-    "at": { "col": 0, "row": 3 },
+    "at": {
+      "col": 0,
+      "row": 3
+    },
     "facing": 0
   },
-
   "enemies": [
-    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 2 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 2 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 3 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 3 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 3 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 4 }, "facing": 0 },
-    { "kind": "panzer4", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" }
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": {
+        "col": 4,
+        "row": 2
+      },
+      "facing": 0
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 2
+      },
+      "facing": 0
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": {
+        "col": 3,
+        "row": 3
+      },
+      "facing": 0
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": {
+        "col": 4,
+        "row": 3
+      },
+      "facing": 0
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 3
+      },
+      "facing": 0
+    },
+    {
+      "kind": "infantry",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 4
+      },
+      "facing": 0
+    },
+    {
+      "kind": "panzer4",
+      "faction": "german"
+    },
+    {
+      "kind": "panzer4",
+      "faction": "german"
+    }
   ],
-
   "objective": {
     "type": "destroy_kind_evac",
     "kind": "infantry",
-    "evacAt": { "col": 7, "row": 2 },
+    "evacAt": {
+      "col": 7,
+      "row": 2
+    },
     "evacExitDir": 0
   },
-
   "actionTableId": "standard",
   "aiTableId": "standard",
   "eventTableId": "standard"
