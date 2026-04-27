@@ -47,6 +47,9 @@ btn.backToMenu,返回主菜单,Back to Menu
 btn.movePhase,移动阶段,Move Phase
 btn.attackPhase,攻击阶段,Attack Phase
 btn.miscPhase,杂项阶段,Misc Phase
+btn.hatchOpen,打开舱盖,Open hatch
+btn.hatchClose,关闭舱盖,Close hatch
+btn.hatchCommanderKia,车长阵亡,Commander KIA
 outcome.win,胜利！,Victory!
 outcome.lose,战败,Defeat
 objective.prefix,任务目标{n}：,Objective {n}: 

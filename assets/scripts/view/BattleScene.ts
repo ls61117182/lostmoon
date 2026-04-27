@@ -3,7 +3,7 @@
  * 攻击阶段"双子阶段、敌方贪心 AI 与存读档。
  *
  * 玩法（按说明书 3.6 行动表拆分为两个独立阶段）：
- *   - 回合开始时底部弹出阶段选择条："移动阶段 / 攻击阶段"，两个子阶段可任意顺序进入
+ *   - 回合开始时底部弹出阶段选择条：「打开舱盖/关闭舱盖」+「移动阶段 / 攻击阶段」；选择子阶段前可多次切换舱盖，车长阵亡则舱盖钮灰显为「车长阵亡」；两子阶段可任意顺序进入
  *   - 进入某阶段时，按谢尔曼当前格地形 + 舱盖状态摇 3~5 颗骰子，落在屏幕底部骰子托盘
  *     - 移动阶段：1=无 / 2=启动（未实装，可跳过）/ 3,4=转向 60° / 5,6=前进或后退 1 格
  *     - 攻击阶段：1,2=装填 / 3,4=机枪（暂无步兵，置灰）/ 5,6=主炮射击（需已装填）
@@ -453,6 +453,8 @@ const BATTLE_MODAL_LEVEL_BORDER = new Color(200, 200, 200, 220);
 const PHASE_BTN_MOVE      = new Color( 60, 130,  80, 230);
 const PHASE_BTN_ATTACK    = new Color(160,  70,  70, 230);
 const PHASE_BTN_MISC      = new Color(110,  80, 160, 230);
+/** 选择阶段条「舱盖」与杂项同紫系，便于与移动/攻击区分 */
+const PHASE_BTN_HATCH     = new Color(110,  80, 160, 230);
 const PHASE_BTN_DISABLED  = new Color( 80,  80,  80, 200);
 
 // 骰子配色：底色白/灰（已用）+ 边框；分类颜色直接在动作提示文字上体现
@@ -725,8 +727,10 @@ export class BattleScene extends Component {
   private endTurnBtn: Node | null = null;
   private endTurnBg: Graphics | null = null;
   private endTurnLabel: Label | null = null;
-  /** 底部"阶段选择"条：移动 / 攻击两个按钮；在 choose 子步骤可见，其他子步骤隐藏 */
+  /** 底部"阶段选择"条：舱盖 + 移动 / 攻击；在 choose 子步骤可见，其他子步骤隐藏 */
   private chooseBar: Node | null = null;
+  private chooseHatchBtn: Node | null = null;
+  private chooseHatchLabel: Label | null = null;
   private chooseMoveBtn: Node | null = null;
   private chooseAttackBtn: Node | null = null;
   /** 底部骰子托盘：movement/attack 子步骤时显示 */
@@ -2848,6 +2852,7 @@ export class BattleScene extends Component {
         lab.color = STATUS_VALUE_OK;
       }
     }
+    this.refreshChooseHatchButton();
   }
 
   /** 绘制结束回合按钮的背景。urgent=true 时换提醒色。 */
@@ -3082,12 +3087,16 @@ export class BattleScene extends Component {
 
   // ---------- 阶段选择条 + 骰子托盘 ----------
 
-  /** 底部阶段选择条：两个大按钮（移动 / 攻击）水平居中，仅在 playerStep === 'choose' 时可见。 */
+  /** 底部阶段选择条：舱盖 + 移动 / 攻击 三个大按钮水平居中，仅在 playerStep === 'choose' 时可见。 */
   private buildChooseBar() {
     const bar = new Node('ChooseBar');
     bar.layer = this.node.layer;
     const ut = bar.addComponent(UITransform);
-    ut.setContentSize(480, 80);
+    const BTN_W = 200;
+    const GAP = 20;
+    const BTN_H = 72;
+    // 三钮：舱盖 + 移动 + 攻击
+    ut.setContentSize(BTN_W * 3 + GAP * 2, 80);
     ut.setAnchorPoint(0.5, 0.5);
     bar.setPosition(0, BOTTOM_PHASE_ROW_Y, 0);
     this.node.addChild(bar);
@@ -3095,7 +3104,7 @@ export class BattleScene extends Component {
 
     const makeBtn = (name: string, text: string, x: number, color: Color,
                      onClick: () => void): { root: Node; label: Label } => {
-      const W = 200, H = 72;
+      const W = BTN_W, H = BTN_H;
       const b = new Node(name);
       b.layer = this.node.layer;
       b.addComponent(UITransform).setContentSize(W, H);
@@ -3122,17 +3131,42 @@ export class BattleScene extends Component {
       bar.addChild(b);
       return { root: b, label: tx };
     };
-    const BTN_W = 200;
-    const GAP = 24;
-    const cx = (BTN_W + GAP) * 0.5;
-    const mv = makeBtn('ChooseMove', t('btn.movePhase'), -cx,
+    const step = BTN_W + GAP;
+    const hx = makeBtn('ChooseHatch', t('btn.hatchOpen'), -step,
+      PHASE_BTN_HATCH, () => this.onChooseHatchClick());
+    this.chooseHatchBtn = hx.root;
+    this.chooseHatchLabel = hx.label;
+    const mv = makeBtn('ChooseMove', t('btn.movePhase'), 0,
       PHASE_BTN_MOVE, () => this.enterPhase('movement'));
     this.chooseMoveBtn = mv.root;
     this.chooseMoveLabel = mv.label;
-    const at = makeBtn('ChooseAttack', t('btn.attackPhase'), cx,
+    const at = makeBtn('ChooseAttack', t('btn.attackPhase'), step,
       PHASE_BTN_ATTACK, () => this.enterPhase('attack'));
     this.chooseAttackBtn = at.root;
     this.chooseAttackLabel = at.label;
+  }
+
+  /** 选择阶段条上的舱盖按钮：与右侧状态栏点击共享 tryToggleHatch 规则。车长阵亡时灰显且无声。 */
+  private onChooseHatchClick() {
+    if (this.isBusy()) return;
+    if (!this.mission) return;
+    const s = this.mission.sherman;
+    if (s.crew && !s.crew.commander) return;
+    this.tryToggleHatch();
+  }
+
+  /** 刷新舱盖按钮文案与底色（选择阶段、车长存活状态、当前舱盖开闭）。 */
+  private refreshChooseHatchButton() {
+    if (!this.chooseHatchBtn || !this.chooseHatchLabel || !this.mission) return;
+    const s = this.mission.sherman;
+    const commanderDead = !!(s.crew && !s.crew.commander);
+    if (commanderDead) {
+      this.chooseHatchLabel.string = t('btn.hatchCommanderKia');
+      this.setPhaseBtnEnabled(this.chooseHatchBtn, false, PHASE_BTN_HATCH);
+    } else {
+      this.chooseHatchLabel.string = s.hatchOpen ? t('btn.hatchClose') : t('btn.hatchOpen');
+      this.setPhaseBtnEnabled(this.chooseHatchBtn, true, PHASE_BTN_HATCH);
+    }
   }
 
   /** 底部骰子托盘：有 5 个最大容量的空位；实际数量按 phaseDice.length 决定可见性。 */
@@ -3216,6 +3250,7 @@ export class BattleScene extends Component {
     if (this.chooseBar) {
       const barOn = inBattle && this.playerStep === 'choose' && !pendingMiscAuto;
       this.chooseBar.active = barOn;
+      if (barOn) this.refreshChooseHatchButton();
     }
     const canMove   = !this.movementDone;
     const canAttack = !this.attackDone;
@@ -3393,6 +3428,7 @@ export class BattleScene extends Component {
     s.hatchOpen = !s.hatchOpen;
     this.battleLog(`[Hatch] 车长舱盖 → ${s.hatchOpen ? '打开' : '关闭'}`);
     this.refreshStatusPanel();
+    this.refreshChooseHatchButton();
   }
 
   /** 若仍在选择阶段则进入指定子阶段（供自动链与载档补调用）。 */
