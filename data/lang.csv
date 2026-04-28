@@ -283,6 +283,7 @@ battle.turnEndList.effect.stuka,斯图卡空袭,Stuka raid
 battle.turnEndList.effect.panzer3_spawn,III 号坦克增援,Panzer III reinforcement
 battle.turnEndList.effect.road_mine,公路地雷（谢尔曼在公路上）,Road mine (Sherman on road)
 battle.turnEndList.effect.panzer4_spawn,IV 号坦克增援,Panzer IV reinforcement
+battle.turnEndList.effect.german_truck_move,德军卡车沿路推进,German truck advances on road
 turnEnd.mine.skip,地雷：谢尔曼不在公路格，或已瘫痪，未触发。,Mine: not on a road or immobilized; no effect.
 turnEnd.mine.ric,地雷：命中间隙装甲未击穿（穿甲掷骰 {penDie}）。,Mine: failed to penetrate (AP roll {penDie}).
 turnEnd.mine.hit,地雷：击穿！伤害掷骰 {damageDie}。,Mine: penetrated! Damage die {damageDie}.
@@ -290,6 +291,11 @@ turnEnd.extra.minePen,穿甲 0 vs 装甲 4,Pen. 0 vs AV 4
 turnEnd.extra.mineDmg,伤害,Damage
 turnEnd.panzer4.placed,敌军 IV 号坦克增援：起始格骰 {spawnDie}，eid={eid}。,Panzer IV reinforcement: start die {spawnDie} eid={eid}.
 turnEnd.panzer4.blocked,IV 号增援：骰 {spawnDie}，格 eid={eid} 被坦克占据。,Panzer IV: eid {eid} blocked.
+turnEnd.germanTruck.noConfig,本关未配置 truckPath。,This mission has no truckPath.
+turnEnd.germanTruck.dead,德军卡车已被击毁，本事件不移动卡车。,Truck destroyed; no movement.
+turnEnd.germanTruck.lost,德军卡车未在 truckPath 上，无法推进。,Truck not on truckPath; cannot advance.
+turnEnd.germanTruck.escaped,德军卡车已驶出地图：任务失败。,German truck left the map: mission failed.
+turnEnd.germanTruck.moved,德军卡车沿路前进（本次跨越 {stepCells} 格，至路径第 {toIdx} 格）。,German truck advances {stepCells} hex(es) (now at path step {toIdx}).
 turnEnd.extra.panzer4Start,IV 号起始格骰（1d6）,Panzer IV start tile (1d6)
 battle.exit.title,退出关卡？,Exit this level?
 battle.exit.saveAndQuit,保存后退出,Save & Exit

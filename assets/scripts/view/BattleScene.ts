@@ -89,7 +89,11 @@ import {
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
-import { prepareTurnEndEvent, TurnEndExtraDicePhase } from '../core/TurnEndEventApply';
+import {
+  GermanTruckMoveSegment,
+  prepareTurnEndEvent,
+  TurnEndExtraDicePhase,
+} from '../core/TurnEndEventApply';
 import {
   hasTurnEndEvents,
   TURN_END_EVENTS,
@@ -109,6 +113,7 @@ const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
   panzer3_spawn: 'battle.turnEndList.effect.panzer3_spawn',
   road_mine: 'battle.turnEndList.effect.road_mine',
   panzer4_spawn: 'battle.turnEndList.effect.panzer4_spawn',
+  german_truck_move: 'battle.turnEndList.effect.german_truck_move',
 };
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
@@ -642,6 +647,10 @@ export class BattleScene extends Component {
   private offsetX = 0;
   private offsetY = 0;
   private anim: MoveAnim | null = null;
+  /** 多段移动/转向衔接（如回合结束德军卡车沿路推进） */
+  private animQueue: MoveAnim[] = [];
+  /** 当前 animQueue 播完后执行（避免敌方阶段误进 runNextEnemyStep） */
+  private pendingAfterAnimChain: (() => void) | null = null;
 
   /** 任务 JSON 谢尔曼出生格与出生朝向；用于在出生格上永久绘制从场外驶入的灰色箭头 */
   private shermanSpawnQr: { q: number; r: number } | null = null;
@@ -773,6 +782,7 @@ export class BattleScene extends Component {
     extraSection: Node | null;
     extraCaptionLabel: Label | null;
     extraDieLabels: Label[];
+    germanTruckMoveSegments?: GermanTruckMoveSegment[];
   } | null = null;
   private turnEndUnitSeq = 0;
   /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续敌方阶段 */
@@ -1743,6 +1753,17 @@ export class BattleScene extends Component {
       );
     }
     this.anim = null;
+    if (this.animQueue.length > 0) {
+      this.anim = this.animQueue.shift()!;
+      this.redraw();
+      return;
+    }
+    if (this.pendingAfterAnimChain) {
+      const cb = this.pendingAfterAnimChain;
+      this.pendingAfterAnimChain = null;
+      cb();
+      return;
+    }
     this.redraw();
     if (this.outcome !== 'ongoing') {
       this.refreshPhaseUI();
@@ -3113,6 +3134,8 @@ export class BattleScene extends Component {
     const data = this.mission.data;
     // 中断动画与敌方阶段调度，丢弃所有过场视觉 / 阶段残留
     this.anim = null;
+    this.animQueue = [];
+    this.pendingAfterAnimChain = null;
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
@@ -4638,7 +4661,8 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
-    const aiCandidates = this.mission.enemies.filter(e => e.kind !== 'infantry');
+    // 步兵无俯视图 AI；卡车仅在回合结束事件 german_truck_move 中沿路移动，不参与敌方阶段掷骰
+    const aiCandidates = this.mission.enemies.filter(e => e.kind !== 'infantry' && e.kind !== 'truck');
     this.enemyOrder = selectEnemyOrder(aiCandidates, this.mission.sherman, this.rng);
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -6022,6 +6046,8 @@ export class BattleScene extends Component {
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
     this.anim = null;          // 若在动画中点读档，直接丢弃动画状态
+    this.animQueue = [];
+    this.pendingAfterAnimChain = null;
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
@@ -7466,6 +7492,7 @@ export class BattleScene extends Component {
       extraSection: refs.extraSection,
       extraCaptionLabel: refs.extraCaptionLabel,
       extraDieLabels: refs.extraDieLabels,
+      germanTruckMoveSegments: prepared.germanTruckMoveSegments,
     };
   }
 
@@ -7739,6 +7766,8 @@ export class BattleScene extends Component {
     const ui = this.turnEndEventUI;
     if (!ui || ui.stage !== 'hold') return;
     const sum = ui.primaryDice.reduce((a, b) => a + b, 0);
+    const applyFn = ui.apply;
+    const truckSegments = ui.germanTruckMoveSegments;
     this.battleLog(
       `[回合结束] ${t('turnEnd.sumLine', { sum, dice: ui.primaryDice.join('+') })} → ${ui.effectName}`,
     );
@@ -7747,8 +7776,30 @@ export class BattleScene extends Component {
     }
     const body = ui.bodyLabel.string.trim();
     if (body) this.battleLog(`[回合结束] ${body}`);
+
+    const truck =
+      truckSegments && truckSegments.length > 0 && this.mission
+        ? this.mission.enemies.find(e => e.kind === 'truck' && !e.destroyed)
+        : undefined;
+
+    if (truck && truckSegments && truckSegments.length > 0) {
+      this.destroyTurnEndEventUI();
+      this.pendingAfterAnimChain = () => {
+        try {
+          applyFn();
+        } catch (e) {
+          console.error('[TurnEnd] apply failed', e);
+        }
+        this.refreshStatusPanel();
+        this.redraw();
+        this.endEnemyPhase();
+      };
+      this.enqueueGermanTruckMoveAnims(truck, truckSegments);
+      return;
+    }
+
     try {
-      ui.apply();
+      applyFn();
     } catch (e) {
       console.error('[TurnEnd] apply failed', e);
     }
@@ -7756,6 +7807,48 @@ export class BattleScene extends Component {
     this.refreshStatusPanel();
     this.redraw();
     this.endEnemyPhase();
+  }
+
+  /** 回合结束 german_truck_move：与敌方坦克相同的转向 / 平移片段与时序 */
+  private enqueueGermanTruckMoveAnims(truck: Unit, segments: GermanTruckMoveSegment[]) {
+    const dur = Math.max(0.05, this.moveDuration);
+    const queue: MoveAnim[] = [];
+    for (const seg of segments) {
+      if (seg.type === 'turn') {
+        queue.push({
+          unit: truck,
+          kind: 'turn',
+          fromQ: seg.at.q,
+          fromR: seg.at.r,
+          toQ: seg.at.q,
+          toR: seg.at.r,
+          t: 0,
+          dur,
+          turnFrom: seg.from,
+          turnTo: seg.to,
+        });
+      } else {
+        queue.push({
+          unit: truck,
+          kind: 'move',
+          fromQ: seg.from.q,
+          fromR: seg.from.r,
+          toQ: seg.to.q,
+          toR: seg.to.r,
+          t: 0,
+          dur,
+        });
+      }
+    }
+    this.animQueue = queue;
+    if (queue.length > 0) {
+      this.anim = queue.shift()!;
+      this.redraw();
+    } else if (this.pendingAfterAnimChain) {
+      const cb = this.pendingAfterAnimChain;
+      this.pendingAfterAnimChain = null;
+      cb();
+    }
   }
 
   /**

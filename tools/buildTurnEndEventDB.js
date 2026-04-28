@@ -24,6 +24,7 @@ const EFFECT_TYPES = [
   'panzer3_spawn',
   'road_mine',
   'panzer4_spawn',
+  'german_truck_move',
 ];
 
 function readCsvSmart(filePath) {

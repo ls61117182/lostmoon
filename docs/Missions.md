@@ -208,5 +208,5 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ## 后续任务
 
-- 任务 5 ~ 12 的地图与说明待补充，对应 `mission_05.json` … `mission_12.json`。
+- **任务 5**：`mission_05.json`（法莱兹；`destroy_truck`、8×6 格、全 `rid`/`eid` 1~6）。任务 6 ~ 12 的地图与说明待补充。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

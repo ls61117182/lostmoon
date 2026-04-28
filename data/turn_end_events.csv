@@ -24,3 +24,7 @@ mission_04,5,6,2,infantry_spawn,任务4：步兵→红格
 mission_04,7,9,2,adjacent_infantry_fire,任务4：相邻步兵
 mission_04,10,10,2,commander_extra,任务4：车长
 mission_04,11,12,2,stuka,任务4：斯图卡
+mission_05,2,5,2,adjacent_infantry_fire,任务5：2–5 相邻步兵齐射
+mission_05,6,9,2,german_truck_move,任务5：6–9 德军卡车沿路推进
+mission_05,10,10,2,commander_extra,任务5：10 车长未阵亡则额外行动
+mission_05,11,12,2,panzer4_spawn,任务5：11+ 掷1d6 放IV号到黑格 eid

@@ -50,6 +50,8 @@ export interface SaveData {
   phaseDice?: Array<{ pip: number; used: boolean }>;
   /** 谢尔曼是否已完成 destroy_kind_evac 离场移动 */
   shermanEvacuated?: boolean;
+  /** 任务 5：德军卡车是否因回合结束事件已驶出地图而判负 */
+  truckEscapeDefeat?: boolean;
 }
 
 export interface SnapshotParams {
@@ -105,6 +107,7 @@ export function captureSave(p: SnapshotParams): SaveData {
       smoked: e.smoked,
     })),
     shermanEvacuated: p.mission.shermanEvacuated ?? false,
+    truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
   };
 }
 
@@ -184,6 +187,7 @@ export function applySave(
       if (s.smoked !== undefined) mission.enemies[i].smoked = s.smoked;
     }
     mission.shermanEvacuated = save.shermanEvacuated ?? false;
+    mission.truckEscapeDefeat = save.truckEscapeDefeat ?? false;
   }
 
   return {

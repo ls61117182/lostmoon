@@ -7,6 +7,7 @@ export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 /** 判断当前任务状态：胜 / 负 / 进行中 */
 export function checkOutcome(mission: LoadedMission): MissionOutcome {
   if (mission.sherman.destroyed) return 'defeat';
+  if (mission.truckEscapeDefeat) return 'defeat';
   if (isObjectiveMet(mission.data.objective, mission)) return 'victory';
   return 'ongoing';
 }

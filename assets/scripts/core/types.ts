@@ -151,6 +151,11 @@ export interface MissionData {
   actionTableId?: string;
   aiTableId?: string;
   eventTableId?: string;
+  /**
+   * 任务 5 等：德军卡车沿 `t: "r"` 公路推进的格序（offset col,row），须两两相邻且均为公路。
+   * 首格为卡车初始格，与 `enemies` 中 `kind: "truck"` 的 `at` 一致；回合结束 6–9 行效果 `german_truck_move` 会沿此表推进。
+   */
+  truckPath?: Offset[];
 }
 
 export interface TileDef {

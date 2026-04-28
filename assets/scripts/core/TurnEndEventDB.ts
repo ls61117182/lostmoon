@@ -4,7 +4,7 @@
  * 生成：node tools/buildTurnEndEventDB.js
  */
 
-export type TurnEndEffectType = 'sniper' | 'commander_extra' | 'infantry_spawn' | 'adjacent_infantry_fire' | 'mechanical_failure' | 'stuka' | 'panzer3_spawn' | 'road_mine' | 'panzer4_spawn';
+export type TurnEndEffectType = 'sniper' | 'commander_extra' | 'infantry_spawn' | 'adjacent_infantry_fire' | 'mechanical_failure' | 'stuka' | 'panzer3_spawn' | 'road_mine' | 'panzer4_spawn' | 'german_truck_move';
 
 export interface TurnEndEventRow {
   missionId: string;
@@ -40,6 +40,10 @@ export const TURN_END_EVENTS: TurnEndEventRow[] = [
   { missionId: 'mission_04', sumMin: 7, sumMax: 9, diceCount: 2, effectType: 'adjacent_infantry_fire' },
   { missionId: 'mission_04', sumMin: 10, sumMax: 10, diceCount: 2, effectType: 'commander_extra' },
   { missionId: 'mission_04', sumMin: 11, sumMax: 12, diceCount: 2, effectType: 'stuka' },
+  { missionId: 'mission_05', sumMin: 2, sumMax: 5, diceCount: 2, effectType: 'adjacent_infantry_fire' },
+  { missionId: 'mission_05', sumMin: 6, sumMax: 9, diceCount: 2, effectType: 'german_truck_move' },
+  { missionId: 'mission_05', sumMin: 10, sumMax: 10, diceCount: 2, effectType: 'commander_extra' },
+  { missionId: 'mission_05', sumMin: 11, sumMax: 12, diceCount: 2, effectType: 'panzer4_spawn' },
 ];
 
 /** 某关是否配置了回合结束事件（至少一行） */

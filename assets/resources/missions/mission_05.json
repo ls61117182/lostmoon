@@ -1,0 +1,206 @@
+{
+  "id": "mission_05",
+  "name": "摧毁卡车",
+  "description": "目标：击毁德军卡车，随后按红箭方向撤离出地图。谢尔曼置于带黑箭头的公路格、朝向与黑箭一致；卡车置于 truckPath 首格。回合结束 2d6 见本关 event 表。",
+  "_comment": "8列×6行 odd-r；h 六位轴向。truckPath 为卡车沿路推进格序（须全为公路、两两相邻），与回合结束效果 german_truck_move 一致。",
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "F",
+        "rid": 6
+      },
+      {
+        "t": "f",
+        "eid": 5,
+        "ef": 2
+      },
+      {
+        "t": "f",
+        "h": "110000",
+        "eid": 6,
+        "ef": 2
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "f",
+        "h": "011000"
+      },
+      {
+        "t": "f",
+        "h": "011000"
+      },
+      {
+        "t": "m",
+        "h": "001000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "h": "010000",
+        "eid": 1,
+        "ef": 3
+      }
+    ],
+    [
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "m",
+        "h": "100000"
+      },
+      {
+        "t": "f",
+        "h": "001000"
+      },
+      {
+        "t": "m",
+        "bd": 1
+      },
+      {
+        "t": "w",
+        "h": "001000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r"
+      }
+    ],
+    [
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "h": "100000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "h": "110000"
+      },
+      {
+        "t": "r",
+        "rid": 1,
+        "bd": 1
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "m",
+        "eid": 4,
+        "ef": 5
+      },
+      {
+        "t": "F",
+        "rid": 5
+      },
+      {
+        "t": "m",
+        "bd": 1,
+        "rid": 2,
+        "h": "011000"
+      },
+      {
+        "t": "w",
+        "h": "011000"
+      },
+      {
+        "t": "F",
+        "rid": 4
+      },
+      {
+        "t": "r",
+        "eid": 2,
+        "ef": 4
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "r"
+      },
+      {
+        "t": "r"
+      },
+      {
+        "t": "r",
+        "eid": 3,
+        "ef": 4
+      },
+      {
+        "t": "r"
+      },
+      {
+        "t": "r"
+      },
+      null,
+      null
+    ]
+  ],
+  "truckPath": [
+    { "col": 7, "row": 2 },
+    { "col": 6, "row": 3 },
+    { "col": 6, "row": 4 },
+    { "col": 5, "row": 5 },
+    { "col": 4, "row": 5 },
+    { "col": 3, "row": 5 },
+    { "col": 2, "row": 5 }
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 1, "row": 1 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "truck", "faction": "german", "at": { "col": 7, "row": 2 } },
+    { "kind": "panzer4", "faction": "german" },
+    { "kind": "panzer4", "faction": "german" },
+    { "kind": "infantry", "faction": "german" },
+    { "kind": "infantry", "faction": "german" },
+    { "kind": "infantry", "faction": "german" }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kind": "truck",
+    "evacAt": { "col": 6, "row": 0 },
+    "evacExitDir": 5
+  },
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}
