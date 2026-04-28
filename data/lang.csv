@@ -314,6 +314,8 @@ turnEnd.title,回合结束事件,Turn-end event
 turnEnd.confirm,确认,OK
 turnEnd.sumLine,主骰 {dice}，合计 {sum},Rolled {dice} (sum {sum})
 turnEnd.extra.spawnReinforce,增援格骰（1d6）,Reinforcement tile (1d6)
+turnEnd.extra.adjacentHit2d6,相邻步兵齐射 · 命中判定（2d6）,Adjacent infantry volley · hit (2d6)
+turnEnd.extra.adjacentMg2d6,相邻步兵齐射 · 机枪火力（2d6）,Adjacent infantry volley · MG fire (2d6)
 turnEnd.extra.panzer3Start,III 号起始格骰（1d6）,Panzer III start tile (1d6)
 turnEnd.extra.stukaAa,车长对空射击（2d6）,Commander AA fire (2d6)
 turnEnd.extra.stukaBomb,斯图卡轰炸命中判定（2d6）,Stuka bombing roll (2d6)
@@ -330,6 +332,7 @@ turnEnd.commanderExtra.load,车长督促装填：主炮完成装填。,Commander
 turnEnd.infantry.placed,德军步兵增援：增援骰 {spawnDie}，部署至增援格 rid={rid}（若格空）。确认后放置单位。,German infantry reinforcement: die {spawnDie} at reinforce tile rid={rid} if clear. Confirm to place.
 turnEnd.infantry.blocked,德军步兵增援：增援骰 {spawnDie}，目标格 rid={rid} 不可用或已被占据，未部署。,Infantry reinforcement: die {spawnDie}; tile rid={rid} blocked or occupied; not placed.
 turnEnd.adjacent,与谢尔曼相邻的敌军步兵集火：已按直射或间接火力规则结算。,Adjacent enemy infantry fire on the Sherman: resolved per direct/indirect rules.
+turnEnd.adjacent.noTarget,步兵射程内无攻击目标。,No attack target in infantry range.
 turnEnd.mechanical.already,机械故障：谢尔曼已瘫痪，无额外效果。,Mechanical failure: already immobilized; no extra effect.
 turnEnd.mechanical.ok,机械故障：行走/动力受损，谢尔曼瘫痪。,Mechanical failure: Sherman immobilized.
 turnEnd.stuka.miss,斯图卡空袭：未对谢尔曼造成有效毁伤（详见各掷骰）。,Stuka attack: no effective damage to the Sherman.

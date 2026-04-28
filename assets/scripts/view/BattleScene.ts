@@ -90,6 +90,7 @@ import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
 import {
+  AdjacentInfantryVolleyPreview,
   GermanTruckMoveSegment,
   prepareTurnEndEvent,
   TurnEndExtraDicePhase,
@@ -766,7 +767,13 @@ export class BattleScene extends Component {
   /** 回合结束事件：主骰 →（若有）额外掷骰各一段动画 → 完整说明，确认后 apply */
   private turnEndEventUI: {
     root: Node;
-    stage: 'roll_primary' | 'wait_after_primary' | 'roll_extra' | 'wait_after_extra' | 'hold';
+    stage:
+      | 'roll_primary'
+      | 'wait_after_primary'
+      | 'pause_before_adjacent_dice'
+      | 'roll_extra'
+      | 'wait_after_extra'
+      | 'hold';
     t: number;
     dieLabels: Label[];
     primaryDice: number[];
@@ -783,6 +790,8 @@ export class BattleScene extends Component {
     extraCaptionLabel: Label | null;
     extraDieLabels: Label[];
     germanTruckMoveSegments?: GermanTruckMoveSegment[];
+    /** 相邻步兵集火：主骰走后串联主炮同款 DiceShow，再显示正文与确认 */
+    adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
   } | null = null;
   private turnEndUnitSeq = 0;
   /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续敌方阶段 */
@@ -6184,6 +6193,8 @@ export class BattleScene extends Component {
     const occupied = new Set<string>();
     for (const u of enemies) {
       if (u === enemy || u.destroyed) continue;
+      // 敌方坦克 / 卡车不被己方步兵占格阻挡，可驶入与步兵叠格
+      if (enemy.kind !== 'infantry' && u.kind === 'infantry') continue;
       occupied.add(`${u.pos.q},${u.pos.r}`);
     }
     occupied.add(`${sherman.pos.q},${sherman.pos.r}`);
@@ -6307,6 +6318,8 @@ export class BattleScene extends Component {
     if (!this.mission) return occ;
     for (const u of this.mission.enemies) {
       if (u === self || u.destroyed) continue;
+      // 敌方坦克 / 卡车不被己方步兵占格阻挡，可驶入与步兵叠格
+      if (self.kind !== 'infantry' && u.kind === 'infantry') continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
     occ.add(`${this.mission.sherman.pos.q},${this.mission.sherman.pos.r}`);
@@ -6503,11 +6516,11 @@ export class BattleScene extends Component {
     attackerLabel: string,
     targetLabel: string,
     onDone: () => void,
-    opts: { mg?: boolean } = {},
+    opts: { mg?: boolean; keepTurnEndPanel?: boolean } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
-    this.destroyTurnEndEventUI();
+    if (!opts.keepTurnEndPanel) this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
     this.closeDiePopover();
 
@@ -7469,6 +7482,7 @@ export class BattleScene extends Component {
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
     const extraPhases = prepared.extraDicePhases ?? [];
+    const adjacentVolleys = prepared.adjacentInfantryVolleys ?? [];
     const effectName = t(TURN_END_LIST_EFFECT_KEYS[row.effectType]);
     this.destroyTurnEndEventUI();
     const refs = this.buildTurnEndEventPanel(primaryDice, extraPhases.length > 0);
@@ -7493,6 +7507,7 @@ export class BattleScene extends Component {
       extraCaptionLabel: refs.extraCaptionLabel,
       extraDieLabels: refs.extraDieLabels,
       germanTruckMoveSegments: prepared.germanTruckMoveSegments,
+      adjacentInfantryVolleys: adjacentVolleys.length > 0 ? adjacentVolleys : undefined,
     };
   }
 
@@ -7656,6 +7671,44 @@ export class BattleScene extends Component {
     };
   }
 
+  /**
+   * 回合结束「相邻步兵集火」：完整回合结束说明停顿后再逐发串联主炮同款 DiceShow，每段结束补浮字（与 tryEnemyAttack 一致），
+   * 全部播完再显示回合结束正文与确认（此时再 applyAttack）。
+   */
+  private beginAdjacentInfantryDiceChain(idx: number) {
+    const ui = this.turnEndEventUI;
+    if (!ui || !this.mission) return;
+    const volleys = ui.adjacentInfantryVolleys;
+    if (!volleys || volleys.length === 0) return;
+
+    ui.stage = 'hold';
+
+    if (idx >= volleys.length) {
+      ui.root.active = true;
+      ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+      return;
+    }
+
+    if (idx === 0) {
+      ui.root.active = false;
+    }
+
+    const v = volleys[idx];
+    const actor = t('actor.enemyPrefix', { name: v.attackerKind });
+    const sh = this.mission.sherman;
+
+    this.startDiceShow(
+      v.report,
+      actor,
+      t('actor.sherman'),
+      () => {
+        this.presentAttackResult(actor, v.report, sh, sh);
+        this.beginAdjacentInfantryDiceChain(idx + 1);
+      },
+      { mg: false, keepTurnEndPanel: true },
+    );
+  }
+
   /** 进入当前 extraPhases[extraIdx] 的掷骰动画前：重置问号与可见骰数 */
   private setupTurnEndExtraRoll(ui: {
     extraPhases: TurnEndExtraDicePhase[];
@@ -7683,6 +7736,7 @@ export class BattleScene extends Component {
     if (!ui || ui.stage === 'hold') return;
     const DUR = 0.55;
     const PAUSE_AFTER_PRIMARY = 0.2;
+    const PAUSE_BEFORE_ADJACENT_DICE = 1.0;
     const PAUSE_AFTER_EXTRA = 0.35;
 
     if (ui.stage === 'roll_primary') {
@@ -7699,13 +7753,30 @@ export class BattleScene extends Component {
       const s = ui.primaryDice.reduce((a, b) => a + b, 0);
       ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
       ui.bodyLabel.string = '';
-      if (!ui.extraPhases.length) {
+      const hasAdjacentDice = (ui.adjacentInfantryVolleys?.length ?? 0) > 0;
+      if (!ui.extraPhases.length && !hasAdjacentDice) {
         ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
         ui.stage = 'hold';
         return;
       }
+      // 相邻步兵集火：先完整展示回合结束表判定结果（正文），停顿后再逐发展示骰子动画
+      if (hasAdjacentDice) {
+        ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+        ui.stage = 'pause_before_adjacent_dice';
+        ui.t = 0;
+        return;
+      }
       ui.stage = 'wait_after_primary';
       ui.t = 0;
+      return;
+    }
+
+    if (ui.stage === 'pause_before_adjacent_dice') {
+      ui.t += dt;
+      if (ui.t < PAUSE_BEFORE_ADJACENT_DICE) return;
+      if (ui.adjacentInfantryVolleys && ui.adjacentInfantryVolleys.length > 0) {
+        this.beginAdjacentInfantryDiceChain(0);
+      }
       return;
     }
 

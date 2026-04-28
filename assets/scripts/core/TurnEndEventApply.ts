@@ -35,6 +35,12 @@ export type GermanTruckMoveSegment =
   | { type: 'turn'; at: Axial; from: Direction; to: Direction }
   | { type: 'move'; from: Axial; to: Axial };
 
+/** 相邻步兵对谢尔曼齐射：一发对应一条预掷战报（UI 用主炮同款 DiceShow 逐发播放） */
+export interface AdjacentInfantryVolleyPreview {
+  report: AttackReport;
+  attackerKind: UnitKind;
+}
+
 export interface TurnEndPrepared {
   bodyKey: string;
   bodyParams: Record<string, string | number>;
@@ -43,6 +49,8 @@ export interface TurnEndPrepared {
   extraDicePhases?: TurnEndExtraDicePhase[];
   /** 德军卡车移动：确认后 BattleScene 依序播片段，再调用 apply */
   germanTruckMoveSegments?: GermanTruckMoveSegment[];
+  /** 相邻步兵集火：由 BattleScene 在主骰后串联完整攻击骰面板（命中→穿甲→伤害），确认后再 apply */
+  adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
 }
 
 /** 下一步朝向：优先顺时针若步数更少 */
@@ -150,19 +158,46 @@ function cellBlockedByTank(mission: LoadedMission, pos: { q: number; r: number }
   return isTankUnitKind(u.kind);
 }
 
-/** 相邻步兵对谢尔曼：优先走主炮检定链；无法直射时用 2d6≥7 + 穿甲 1 vs 装甲 4 */
-function applyAdjacentInfantryVolleys(mission: LoadedMission, rng: RNG) {
+/** 深拷贝用于回合结束预结算（对齐 RNG 顺序，不改变真实 mission） */
+function cloneUnitForSim(u: Unit): Unit {
+  return JSON.parse(JSON.stringify(u)) as Unit;
+}
+
+/**
+ * 相邻步兵集火：预掷骰并返回每发战报（BattleScene 用主炮同款 DiceShow 播放）；返回待应用的战报表；
+ * 与原先「确认后再掷骰」等价 RNG，仅在克隆谢尔曼上演练 applyAttack 以保持顺序与终止条件。
+ */
+/** 是否存在与谢尔曼六角相邻的存活敌军步兵（事件触发时用于文案：无相邻则无射击条件） */
+function hasInfantryAdjacentToSherman(mission: LoadedMission): boolean {
   const sh = mission.sherman;
-  if (sh.destroyed) return;
+  if (sh.destroyed) return false;
+  return mission.enemies.some(
+    e => !e.destroyed && e.kind === 'infantry' && hexDistance(e.pos, sh.pos) === 1,
+  );
+}
+
+function simulateAdjacentInfantryVolleysForTurnEnd(mission: LoadedMission, rng: RNG): {
+  volleys: AdjacentInfantryVolleyPreview[];
+} {
+  const sh = mission.sherman;
+  const volleys: AdjacentInfantryVolleyPreview[] = [];
+
+  if (sh.destroyed) {
+    return { volleys };
+  }
+
+  const simTarget = cloneUnitForSim(sh);
   const infs = mission.enemies.filter(
     e => !e.destroyed && e.kind === 'infantry' && hexDistance(e.pos, sh.pos) === 1,
   );
+
   for (const inf of infs) {
-    const ctx = { attacker: inf, target: sh, map: mission.map };
+    if (simTarget.destroyed) break;
+    const ctx = { attacker: inf, target: simTarget, map: mission.map };
     if (canAttack(ctx).ok) {
       const rep = rollAttack(ctx, rng);
-      applyAttack(sh, rep);
-      if (sh.destroyed) return;
+      volleys.push({ report: rep, attackerKind: inf.kind });
+      applyAttack(simTarget, rep);
       continue;
     }
     const d1 = rng.d6();
@@ -173,9 +208,9 @@ function applyAdjacentInfantryVolleys(mission: LoadedMission, rng: RNG) {
     const penTh = 3;
     if (penDie < penTh) continue;
     const damageDie = rng.d6();
-    const damageEffect = resolveDamageEffect(sh, damageDie);
-    const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
-    applyAttack(sh, {
+    const damageEffect = resolveDamageEffect(simTarget, damageDie);
+    const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(simTarget, rng) : undefined;
+    const rep: AttackReport = {
       dice: [d1, d2],
       roll,
       threshold: 7,
@@ -190,9 +225,12 @@ function applyAdjacentInfantryVolleys(mission: LoadedMission, rng: RNG) {
       damageEffect,
       crewCheck,
       statusChange: damageEffect === 'destroyed' ? 'destroyed' : 'damaged',
-    });
-    if (sh.destroyed) return;
+    };
+    volleys.push({ report: rep, attackerKind: inf.kind });
+    applyAttack(simTarget, rep);
   }
+
+  return { volleys };
 }
 
 /** 仅掷骰构造战报，不写入单位（确认后再 applyAttack） */
@@ -353,10 +391,23 @@ export function prepareTurnEndEvent(
       };
     }
     case 'adjacent_infantry_fire': {
+      const { volleys } = simulateAdjacentInfantryVolleysForTurnEnd(mission, rng);
+      const reports = volleys.map(v => v.report);
+      const bodyKey =
+        !sh.destroyed && !hasInfantryAdjacentToSherman(mission)
+          ? 'turnEnd.adjacent.noTarget'
+          : 'turnEnd.adjacent';
       return {
-        bodyKey: 'turnEnd.adjacent',
+        bodyKey,
         bodyParams: baseParams,
-        apply: () => applyAdjacentInfantryVolleys(mission, rng),
+        adjacentInfantryVolleys: volleys.length > 0 ? volleys : undefined,
+        apply: () => {
+          const sherman = mission.sherman;
+          for (const rep of reports) {
+            applyAttack(sherman, rep);
+            if (sherman.destroyed) return;
+          }
+        },
       };
     }
     case 'mechanical_failure': {
