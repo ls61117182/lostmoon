@@ -76,7 +76,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   const sherman = makeUnit('sherman_player', data.sherman as UnitPlacement);
 
   // 3. 德军：可选掷骰出生
-  // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位在剩余黑格 eid 上各掷 1d6 链式占位（见 GDD）
+  // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位掷 1d6 链式占位——
+  // 步兵用红格 rid（1..6），坦克等非步兵用黑格 eid（1..6）（见 GDD）
   const useDice = !!data.enemyStartByDice;
   const needsDice = useDice && data.enemies.some(p => !p.at);
   const rngResolved = rng ?? (useDice && needsDice ? new RNG(0x5EEDFACE) : undefined);
@@ -152,7 +153,7 @@ function validateTruckPath(data: MissionData, map: HexMap) {
   }
 }
 
-/** 每个敌方单位掷 1d6：先试 eid=点数之格；被占则 eid+1…6→1 循环直至空位或试满 6 档。 */
+/** 掷骰链：步兵用 rid 红格，坦克等用 eid 黑格；先试编号=骰点，再 eid/rid+1…6→1 循环直至空位或试满 6 档。 */
 function resolveEnemyDicePlacements(
   data: MissionData,
   map: HexMap,
@@ -160,17 +161,30 @@ function resolveEnemyDicePlacements(
   rng: RNG,
 ): Array<{ at: Offset; facing: Direction }> {
   const cellsByEid = new Map<number, { pos: Axial; facing: Direction }>();
+  const cellsByRid = new Map<number, { pos: Axial; facing: Direction }>();
   for (const tile of map.all()) {
-    const id = tile.enemyStartId;
-    if (id == null) continue;
-    if (!Number.isInteger(id) || id < 1 || id > 6) {
-      throw new Error(`任务 ${data.id}：非法 enemyStartId / eid=${id}（须为 1..6）`);
+    const eid = tile.enemyStartId;
+    if (eid != null) {
+      if (!Number.isInteger(eid) || eid < 1 || eid > 6) {
+        throw new Error(`任务 ${data.id}：非法 enemyStartId / eid=${eid}（须为 1..6）`);
+      }
+      if (cellsByEid.has(eid)) {
+        throw new Error(`任务 ${data.id}：重复的敌方出生编号 eid=${eid}（全图须唯一）`);
+      }
+      const facing = (tile.enemyStartFacing ?? 0) as Direction;
+      cellsByEid.set(eid, { pos: tile.pos, facing });
     }
-    if (cellsByEid.has(id)) {
-      throw new Error(`任务 ${data.id}：重复的敌方出生编号 eid=${id}（全图须唯一）`);
+    const rid = tile.reinforceId;
+    if (rid != null) {
+      if (!Number.isInteger(rid) || rid < 1 || rid > 6) {
+        throw new Error(`任务 ${data.id}：非法 reinforceId / rid=${rid}（须为 1..6）`);
+      }
+      if (cellsByRid.has(rid)) {
+        throw new Error(`任务 ${data.id}：重复的援军编号 rid=${rid}（全图须唯一）`);
+      }
+      const facing = (tile.enemyStartFacing ?? 0) as Direction;
+      cellsByRid.set(rid, { pos: tile.pos, facing });
     }
-    const facing = (tile.enemyStartFacing ?? 0) as Direction;
-    cellsByEid.set(id, { pos: tile.pos, facing });
   }
 
   const taken = new Set<string>([`${shermanPos.q},${shermanPos.r}`]);
@@ -188,11 +202,18 @@ function resolveEnemyDicePlacements(
     if (p.at) {
       continue;
     }
+    const useRid = p.kind === 'infantry';
+    const cellMap = useRid ? cellsByRid : cellsByEid;
+    if (useRid && cellsByRid.size === 0) {
+      throw new Error(
+        `任务 ${data.id}：掷骰放置步兵需要地图上至少一处 rid（1..6 援军格），且与既有 rid 不重复`,
+      );
+    }
     const d = rng.d6();
     let placed: { pos: Axial; facing: Direction } | null = null;
     for (let step = 0; step < 6; step++) {
-      const eid = ((d - 1 + step) % 6) + 1;
-      const cell = cellsByEid.get(eid);
+      const slot = ((d - 1 + step) % 6) + 1;
+      const cell = cellMap.get(slot);
       if (!cell) continue;
       const key = `${cell.pos.q},${cell.pos.r}`;
       if (taken.has(key)) continue;
@@ -200,8 +221,9 @@ function resolveEnemyDicePlacements(
       break;
     }
     if (!placed) {
+      const kindLabel = useRid ? '步兵 rid' : '坦克 eid';
       throw new Error(
-        `任务 ${data.id}：第 ${ei + 1} 个无坐标敌方单位掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
+        `任务 ${data.id}：第 ${ei + 1} 个无坐标敌方单位（${kindLabel}）掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
       );
     }
     taken.add(`${placed.pos.q},${placed.pos.r}`);

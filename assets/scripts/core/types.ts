@@ -120,10 +120,10 @@ export interface MissionObjective {
 export interface UnitPlacement {
   kind: UnitKind;
   faction: Faction;
-  /** Offset 坐标；若关卡 `enemyStartByDice` 为 true 则可省略，由掷骰规则写入 */
+  /** Offset 坐标；若关卡 `enemyStartByDice` 为 true 则可省略，由掷骰规则写入（步兵→rid 链，坦克等→eid 链） */
   at?: Offset;
   facing?: Direction;
-  /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `eid` */
+  /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `rid`（步兵）/ `eid`（坦克等） */
   startId?: number;
 }
 
@@ -141,8 +141,8 @@ export interface MissionData {
   /** 德军初始放置 */
   enemies: UnitPlacement[];
   /**
-   * 为 true 时：每个敌方单位开局掷 1d6，按编号 1..6 的出生格链式占位（见 GDD / MissionLoader）；
-   * 此时 `enemies[].at` / `facing` 可省略。
+   * 为 true 时：无 `at` 的单位开局掷 1d6，按编号 1..6 链式占位——步兵用格子 `rid`，坦克等非步兵用 `eid`
+   * （见 GDD / MissionLoader）；此时 `enemies[].at` / `facing` 可省略。
    */
   enemyStartByDice?: boolean;
   /** 胜负条件 */
@@ -174,9 +174,9 @@ export interface TileDef {
    * 为 `1` 表示本格与**第 i 向邻格**之间那条格边外缘有树篱，与 `HexGrid.hedgeFlagsFromMapJson` 一致。
    */
   h?: string;
-  /** 援军编号 */
+  /** 援军编号 1..6（红格；掷骰放置步兵时用，全图不重复） */
   rid?: number;
-  /** 敌方起始编号 1..6（掷骰链用；全图不重复） */
+  /** 敌方坦克起始编号 1..6（黑格；掷骰放置坦克等非步兵时用，全图不重复） */
   eid?: number;
   /**
    * 与 `eid` 同格：该格上掷骰/增援出生的坦克的**初始 facing**，与 `h` **共用轴向索引**：

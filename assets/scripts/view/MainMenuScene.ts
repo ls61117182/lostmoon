@@ -20,7 +20,7 @@
 
 import {
   _decorator, Canvas, Color, Component, EventTouch, Graphics,
-  HorizontalTextAlignment, Label, Layers, Node, UITransform,
+  HorizontalTextAlignment, Label, Layers, Mask, Node, ScrollView, UITransform,
   Vec3, VerticalTextAlignment, director,
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
@@ -353,13 +353,29 @@ export class MainMenuScene extends Component {
       lockLabel.node.name = 'LockLabel';
       lockLabel.node.active = false;
 
-      // 底部居中标题（如 "诺曼底"；未解锁不显示）
-      const titleLabel = this.makeLabel(btn.node, t(meta.titleKey),
-        0, -LEVEL_BTN_H / 2 + 22, LEVEL_BTN_W - 16, 22, 16, TEXT_PRIMARY);
+      // 底部居中标题：英文过长时自动换行；锚点在下沿，文本自下往上排布以保持在按钮绿色区域内
+      const titlePadX = 8;
+      const titleW = LEVEL_BTN_W - titlePadX * 2;
+      const titleBottomInset = 10;
+      const titleN = new Node('TitleLabel');
+      titleN.layer = this.node.layer;
+      const titleUt = titleN.addComponent(UITransform);
+      titleUt.setAnchorPoint(0.5, 0);
+      titleUt.setContentSize(titleW, 24);
+      titleN.setPosition(0, -LEVEL_BTN_H / 2 + titleBottomInset, 0);
+      const titleLabel = titleN.addComponent(Label);
+      titleLabel.string = t(meta.titleKey);
+      titleLabel.fontSize = 16;
+      titleLabel.lineHeight = 20;
+      titleLabel.color = TEXT_PRIMARY;
+      titleLabel.overflow = Label.Overflow.RESIZE_HEIGHT;
+      titleLabel.enableWrapText = true;
+      titleLabel.horizontalAlign = HorizontalTextAlignment.CENTER;
+      titleLabel.verticalAlign = VerticalTextAlignment.BOTTOM;
       titleLabel.enableOutline = true;
       titleLabel.outlineColor = TEXT_OUTLINE;
       titleLabel.outlineWidth = 2;
-      titleLabel.node.name = 'TitleLabel';
+      btn.node.addChild(titleN);
 
       this.levelBtns.push(btn);
     }
@@ -583,15 +599,72 @@ export class MainMenuScene extends Component {
     const panelH = 540;
     const { panel } = this.openModal(t('menu.help.title'), panelW, panelH);
 
-    // 正文从标题下方开始，留底部 80 px 给关闭按钮
-    const bodyH = panelH - 80 /* 顶部标题 + 装饰线 */ - 90 /* 底部按钮区 */;
-    const bodyY = (panelH / 2 - 80) - bodyH / 2;
-    const body = this.makeLabel(panel, t('menu.help.body'),
-      0, bodyY, panelW - 80, bodyH, 18, TEXT_PRIMARY);
+    const topReserve = 80;
+    const bottomReserve = 90;
+    const padX = 32;
+    const viewportW = panelW - padX * 2;
+    const viewportH = panelH - topReserve - bottomReserve;
+    const innerTextW = viewportW - 16;
+    const bodyY = (panelH / 2 - topReserve) - viewportH / 2;
+
+    const scrollN = new Node('HelpScroll');
+    scrollN.layer = this.node.layer;
+    scrollN.addComponent(UITransform).setContentSize(viewportW, viewportH);
+    scrollN.setPosition(0, bodyY, 0);
+    panel.addChild(scrollN);
+
+    const sv = scrollN.addComponent(ScrollView);
+    sv.vertical = true;
+    sv.horizontal = false;
+    sv.inertia = true;
+    sv.brake = 0.55;
+    sv.bounceDuration = 0.2;
+    sv.verticalScrollBar = null;
+    sv.horizontalScrollBar = null;
+
+    const viewN = new Node('view');
+    viewN.layer = this.node.layer;
+    viewN.addComponent(Mask);
+    const vut = viewN.addComponent(UITransform);
+    vut.setContentSize(viewportW, viewportH);
+    scrollN.addChild(viewN);
+
+    const contentN = new Node('content');
+    contentN.layer = this.node.layer;
+    const cut = contentN.addComponent(UITransform);
+    cut.setAnchorPoint(0.5, 1);
+    cut.setContentSize(innerTextW, viewportH);
+    const contentTopInset = 8;
+    contentN.setPosition(0, viewportH * 0.5 - contentTopInset, 0);
+    viewN.addChild(contentN);
+
+    const bodyLabNode = new Node('HelpBody');
+    bodyLabNode.layer = this.node.layer;
+    const but = bodyLabNode.addComponent(UITransform);
+    but.setAnchorPoint(0.5, 1);
+    but.setContentSize(innerTextW, 40);
+    const body = bodyLabNode.addComponent(Label);
+    body.string = t('menu.help.body');
+    body.fontSize = 18;
     body.lineHeight = 28;
+    body.color = TEXT_PRIMARY;
+    body.overflow = Label.Overflow.RESIZE_HEIGHT;
+    body.enableWrapText = true;
     body.horizontalAlign = HorizontalTextAlignment.LEFT;
     body.verticalAlign = VerticalTextAlignment.TOP;
-    body.enableWrapText = true;
+    contentN.addChild(bodyLabNode);
+
+    sv.content = contentN;
+
+    const syncHelpScrollContentSize = () => {
+      if (!bodyLabNode.isValid || !contentN.isValid) return;
+      const ut = bodyLabNode.getComponent(UITransform);
+      if (!ut) return;
+      const h = Math.ceil(ut.contentSize.height + 12);
+      cut.setContentSize(innerTextW, Math.max(h, viewportH));
+      sv.scrollToTop(0);
+    };
+    this.scheduleOnce(syncHelpScrollContentSize, 0);
 
     const close = this.makeRectButton(panel, 0, -panelH / 2 + 40, 180, 48, BTN_CONTINUE,
       () => this.closeModal());

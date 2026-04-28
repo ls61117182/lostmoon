@@ -214,21 +214,21 @@ menu.settings.langZh,中文,Chinese
 menu.settings.langEn,English,English
 menu.settings.close,关闭,Close
 menu.help.title,游戏说明,How to Play
-menu.help.body,· 目标：操控谢尔曼完成每关任务要求。\n\n· 每回合掷 6 颗骰子，按点数在「移动 / 攻击 / 杂项」三阶段间分配。\n\n· 移动阶段：使用对应点数转向、前进、后退。\n\n· 攻击阶段：主炮 2d6 命中判定 → 1d6 击穿 → 1d6 伤害；机枪可扫射相邻步兵（≥7 命中）。攻击阶段机枪（3/4 点）不因乘员阵亡禁用。\n\n· 杂项阶段：装填、灭火、隐蔽、烟雾、副驾驶机枪等；其中「副驾驶机枪」（2 点）需副驾驶存活。\n\n· 敌方回合：按距离由近到远依次行动；步兵只在回合结束事件里出没。\n\n· 操作：点骰子弹出动作菜单；选中主炮 / 机枪骰后点地图目标即可开火。,· Goal: Complete each mission's objective with the Sherman.\n\n· Each turn rolls 6 dice; allocate to Move / Attack / Misc phases by pips.\n\n· Move: turn / advance / reverse using matching pips.\n\n· Attack: Main gun (2d6 hit → 1d6 pen → 1d6 damage). MG (pips 3/4) sweeps adjacent infantry (≥7); crew casualties do not block attack-phase MG.\n\n· Misc: reload / suppress fire / go concealed / smoke / co-driver MG; the co-driver MG action (pip 2) requires the co-driver alive.\n\n· Enemy turn: nearest first; infantry only act on end-of-turn events.\n\n· Controls: click a die for its action menu; after picking a gun/MG die click the target.
+menu.help.body,"· 目标：操控谢尔曼完成每关任务要求。\n\n· 每回合行动阶段由攻击/移动/杂项3个阶段组成，攻击和移动可自由选择先后顺序，每个阶段根据所在地形获得对应数量的行动骰子。\n\n· 移动阶段：使用对应点数转向、前进、后退，两个相同骰子可以合并执行新的动作。\n\n· 攻击阶段：主炮需要装填后才可使用，可攻击直线上未被视线阻挡的装甲单位；机枪可扫射相邻步兵（2D6≥7 命中）。\n\n· 杂项阶段：装填、灭火、隐蔽、烟雾、副驾驶机枪等。\n\n· 敌方回合：按距离由近到远依次行动；步兵只在回合结束事件里出没。\n\n· 操作：点骰子弹出动作菜单；选中对应选项后执行动作。","· Goal: Complete each mission's objectives with the Sherman.\n\n· Each turn has three action phases (Attack / Move / Misc). Attack and Move may be resolved in either order; each phase grants action dice according to the terrain you occupy.\n\n· Move phase: spend matching pips to turn, advance, or reverse; two identical dice may be merged to perform new actions.\n\n· Attack phase: the main gun can only be used after loading; it may fire at armored targets along a straight line if line of sight is clear. The machine gun may strafe adjacent infantry (roll 2d6; hit on ≥7).\n\n· Misc phase: reload, extinguish fire, concealment, smoke, co-driver MG, and more.\n\n· Enemy phase: enemies act from nearest to farthest; enemy infantry only appear during end-of-turn events.\n\n· Controls: tap a die to open its action menu; pick an option to execute it."
 menu.help.gotIt,已 了 解,Got it
 menu.modal.close,✕,✕
 level.01.title,村庄,Village
 level.02.title,猎杀虎式,Hunt the Tiger
 level.03.title,清除步兵,Clear Infantry
 level.04.title,只是路过：湖泊,Just Passing Through: Lake
-level.05.title,法莱兹,Falaise
-level.06.title,巴黎,Paris
-level.07.title,阿登,Ardennes
-level.08.title,巴斯通,Bastogne
-level.09.title,雷马根,Remagen
-level.10.title,鲁尔,Ruhr
-level.11.title,易北河,Elbe
-level.12.title,柏林,Berlin
+level.05.title,摧毁卡车,Destroy Truck
+level.06.title,以一敌三,One Against Three
+level.07.title,只是路过：桥梁,Just Passing Through: Bridge
+level.08.title,刺杀,Assassination
+level.09.title,跨过水域,Crossing the Water
+level.10.title,只是路过：城镇,Just Passing Through: Town
+level.11.title,钢铁角斗士,Steel Gladiator
+level.12.title,猎杀虎式Ⅱ,Hunt the Tiger II
 terrain.road,公路,Road
 terrain.field,田野,Field
 terrain.mud,泥地,Mud
