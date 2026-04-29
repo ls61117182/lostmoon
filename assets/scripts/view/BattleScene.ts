@@ -4395,7 +4395,8 @@ export class BattleScene extends Component {
   /**
    * 隐蔽（§3.6 对子 C 列 concealment）：
    * 需要一对同点骰；消耗两颗，置 sherman.hidden=true（被攻击命中阈值 +2）。
-   * 隐蔽保持到下一次谢尔曼做出移动（转向 / 前进 / 后退），见 breakConcealment()。
+   * 隐蔽保持到下一次该单位做出移动动作（转向 / 前进 / 后退）才清除，见 breakConcealment()；
+   * 该规则对**德军坦克**同样生效（阶段⑥ AI `turn` / `advance` / `reverse` 分支同步调用）。
    *
    * dieIdx 对应被玩家点击的那颗；第二颗 = phaseDice 中第一颗同点且未用的骰。
    * 若找不到同点搭档，弹"需要两颗同点骰"并不消耗。
@@ -4445,7 +4446,16 @@ export class BattleScene extends Component {
     return -1;
   }
 
-  /** §3.5 隐蔽破除：任何移动动作结束后调用；若 hidden=true 则清除并飘一条提示。 */
+  /**
+   * §3.5 隐蔽破除：任意坦克执行 **前进 / 后退 / 转向** 动作时调用；若 `hidden=true` 则清除并飘一条提示。
+   *
+   * 规则覆盖：
+   *  - 谢尔曼：移动阶段 / 杂项阶段的「驾驶员前进」「副驾驶转向」「驾驶员撤离离场」「对子前进 / 转向」；
+   *  - 德军坦克：阶段⑥ AI `executeEnemyAction` 的 `turn` / `advance` / `reverse` 分支；
+   *  - 与隐蔽态字段 `unit.hidden` 一一对应（§3.5.1 解除方式列）。
+   *
+   * 参数 u 任意单位都安全：未隐蔽则直接 return；隐蔽即去除并广播浮字 + 状态面板刷新。
+   */
   private breakConcealment(u: Unit) {
     if (!u.hidden) return;
     u.hidden = false;
@@ -6252,6 +6262,8 @@ export class BattleScene extends Component {
         const step = decision === 'cw' ? 1 : 5;
         const from = enemy.facing;
         const to = rotateDirection(from, step);
+        // §3.5 隐蔽：坦克任何移动动作（转向 / 前进 / 后退）都会脱离隐蔽，与谢尔曼一致
+        this.breakConcealment(enemy);
         this.battleLog(`[AI] ${enemy.kind} 转向 ${decision.toUpperCase()} → facing=${to}（动画中）`);
         this.anim = {
           unit: enemy,
@@ -6276,6 +6288,8 @@ export class BattleScene extends Component {
           ? enemy.facing
           : rotateDirection(enemy.facing, 3);
         const to = neighbor(enemy.pos, dir);
+        // §3.5 隐蔽：坦克前进 / 后退也会脱离隐蔽
+        this.breakConcealment(enemy);
         // 发起移动动画；骰子托盘保留在 UI 上展示全套点数
         this.anim = {
           unit: enemy,
