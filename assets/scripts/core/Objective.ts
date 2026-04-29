@@ -1,6 +1,6 @@
 import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
-import { Axial, Direction, MissionObjective, UnitKind } from './types';
+import { Axial, Direction, MissionObjective, tileHasBridge, UnitKind } from './types';
 
 export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 
@@ -21,6 +21,9 @@ export function allEnemiesOfKindDestroyed(mission: LoadedMission, kind: UnitKind
 /**
  * 谢尔曼是否满足「撤离移动」几何条件：已在撤离格、歼灭条件已达成、
  * 沿 `evacExitDir` 前进或后退的目标六角无地图格（可驶出地图外）。
+ *
+ * **桥梁约束（GDD §3.2）**：撤离格若叠加桥梁，`evacExitDir` 必须落在桥梁两端方向之一，
+ * 否则视为越水阻挡（即便方向已指向地图外，仍按桥端规则拦截）。
  */
 export function isShermanEvacDrive(
   mission: LoadedMission,
@@ -37,6 +40,9 @@ export function isShermanEvacDrive(
   if (from.q !== ev.q || from.r !== ev.r) return false;
   const driveDir = (dirSign === 1 ? facing : rotateDirection(facing, 3)) as number;
   if (driveDir !== obj.evacExitDir) return false;
+  // 撤离格若是桥梁，驶出方向须落在桥端两方向之一
+  const fromTile = mission.map.get(from);
+  if (tileHasBridge(fromTile) && !fromTile!.bridgeEnds!.includes(driveDir as Direction)) return false;
   return !mission.map.has(to);
 }
 

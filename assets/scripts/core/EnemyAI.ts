@@ -34,7 +34,7 @@ import {
   neighbors,
   rotateDirection,
 } from './HexGrid';
-import { terrainMoveCost } from './MoveCost';
+import { tileMoveCost } from './MoveCost';
 import { Axial, Direction, TerrainType, Unit } from './types';
 
 // ---------- 行动分类 ----------
@@ -49,7 +49,12 @@ export type { AIActionEntry, AIActionTable, AIColumn, EnemyAction };
 
 // ---------- 列 & 骰子 ----------
 
-/** 敌坦所处格子 / 状态 → AI 列 */
+/**
+ * 敌坦所处格子 / 状态 → AI 列。
+ *
+ * GDD §3.2「按公路触发」一并视桥梁为公路 → 调用方应传 `effectiveDiceTerrain(tile)`
+ * 而非 `tile.terrain`，让水域+桥梁折算成 'road'，确保站在桥上的敌坦走公路 AI 列。
+ */
 export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
   if (enemy.damaged) return 'damaged';
   switch (terrain) {
@@ -122,7 +127,8 @@ export function decideEnemyTurn(
 
   const canEnterFront = (d: Direction) => {
     const p = neighbor(enemy.pos, d);
-    if (!map.canTankEnter(p)) return false;
+    // 桥梁边向（GDD §3.2）：通过 canTankCrossEdge 同时校验「水域+桥梁可入」与「方向落在桥端」。
+    if (!map.canTankCrossEdge(enemy.pos, p)) return false;
     if (occupied.has(`${p.q},${p.r}`)) return false;
     return true;
   };
@@ -196,12 +202,13 @@ export function canExecuteAction(
         ? enemy.facing
         : rotateDirection(enemy.facing, 3);
       const to = neighbor(enemy.pos, dir);
-      if (!map.canTankEnter(to)) return false;
+      // 桥梁边向（GDD §3.2）：水域+桥梁可入需 dir 落在 br 端；非桥梁场景 canTankCrossEdge 行为退化为 canTankEnter。
+      if (!map.canTankCrossEdge(enemy.pos, to)) return false;
       if (occupied.has(`${to.q},${to.r}`)) return false;
       // 终点格的移动成本不看上限（AI 回合没有"移动力"概念），只要能进就算可执行
       const tile = map.get(to);
       if (!tile) return false;
-      void terrainMoveCost(tile.terrain); // 保留 import，方便未来把"骰点数 = 移动力"接进来
+      void tileMoveCost(tile); // 保留 import，方便未来把"骰点数 = 移动力"接进来；桥梁通过 tileMoveCost 自动等效公路
       return true;
     }
   }
@@ -234,11 +241,11 @@ export function decideEnemyMove(
   let bestCost = Infinity;
 
   for (const n of neighbors(enemy.pos)) {
-    if (!map.canTankEnter(n)) continue;
+    if (!map.canTankCrossEdge(enemy.pos, n)) continue;
     if (occupied.has(`${n.q},${n.r}`)) continue;
     const tile = map.get(n);
     if (!tile) continue;
-    const cost = terrainMoveCost(tile.terrain);
+    const cost = tileMoveCost(tile);
     if (cost > budget) continue;
     const d = hexDistance(n, sherman.pos);
     if (d >= currentDist) continue;

@@ -15,6 +15,7 @@ const CSV_PATH = path.join(ROOT, 'data', 'turn_end_events.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TurnEndEventDB.ts');
 
 const EFFECT_TYPES = [
+  'none',
   'sniper',
   'commander_extra',
   'infantry_spawn',

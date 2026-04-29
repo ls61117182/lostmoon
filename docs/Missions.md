@@ -309,9 +309,59 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 7：只是路过：桥梁
+
+> 对应数据：`assets/resources/missions/mission_07.json`。8×6 odd-r。本关首次启用 GDD §3.2 [桥梁](GameDesignDocument.md#32-地形系统) 叠加规则（水域格 + `br=[a,b]`）。
+
+### 目标
+
+- **撤离即胜**：将谢尔曼开至 **撤离格** `evacAt: col=7, row=2`（地图右侧带红色箭头的格），沿 **`evacExitDir = 0`（正东）** 驶出地图。
+- **无歼敌前置**：`objective.type = "destroy_kind_evac"` 但**不带 `kind`** —— `Objective.isObjectiveMet` 中 `if (obj.kind && ...)` 短路，直接以 `mission.shermanEvacuated` 为准；同样 `isShermanEvacDrive` 也跳过歼敌前置，谢尔曼任何时刻只要驶到撤离格 + 沿 `evacExitDir` 即可结算胜利。
+- **失败条件**：仅「谢尔曼被摧毁」一条；无卡车，无 `truckEscapeDefeat`。
+
+### 初始设置
+
+- **谢尔曼**：放置在地图 **左侧黑色箭头格**，朝向箭头方向；当前 JSON 为 `col=0, row=3, facing=0`（朝东）。
+- **2 辆敌坦**（`enemyStartByDice: true`）：1 辆 **虎式** + 1 辆 **III 号**，开局各掷 **1d6**，在 **eid 1~6 黑格**中链式择空位（**不重掷**），朝向同格 **`ef`**。当前 JSON 6 处 eid：`(6,0)=1`、`(7,2)=2`、`(6,4)=3`、`(6,5)=4`、`(2,1)=5`、`(5,1)=6`。
+  - 注意：**eid 2 即撤离格**，掷骰若落到 2，敌坦会出现在撤离格上，谢尔曼必须先击毁该坦克才能撤离。
+- **步兵**：开局**不放置**；本关回合结束事件中**也没有步兵生成或步兵齐射**，故全程不会出现步兵单位。
+
+### 桥梁与公路
+
+桥梁是 GDD §3.2 的非独立地形：叠加在水域格上 → 该格变为**可通行**（坦克 / 卡车），骰子规则 / 移动力**与公路相同**；但**只能从**配置的两端方向**进入或离开**桥梁。
+
+| 字段 | 值 | 含义 |
+|---|---|---|
+| 桥梁格坐标 | `col=3, row=3`（基底 `t="w"`） | 横跨河中段；公路在上下两侧（`col=3, row=2` 与 `col=3, row=4`）对接 |
+| `br` | `[4, 2]` | 4 = NW，2 = SW；这两条边上的邻格分别是 `col=3, row=2`（NW）与 `col=3, row=4`（SW） |
+| 进入约束 | 仅 NW / SW | 从 `col=3, row=2`（NW 邻格）或 `col=3, row=4`（SW 邻格）跨入；其他 4 条边等同水面阻挡 |
+| 离开约束 | 仅 NW / SW | 反之亦然 |
+
+`MissionLoader.parseBridgeEnds` 在加载关卡时强校验「水域基底 + 两个 0..5 不重复方向」；`HexMap.canTankCrossEdge` 在每次移动判定时同时检查出向和入向。
+
+> **说明书原文 vs 实现**：「坦克只能沿着公路的方向移动进入或离开桥梁，但在桥梁上可以转向任意方向」——「沿公路方向进出」即上述 `br=[4,2]` 的边向校验；「桥梁上可转向任意方向」即标准的 60° 转向骰逻辑（转向不消耗 `canTankCrossEdge`，仅 advance / reverse 才校验跨边方向）。「桥梁不会阻挡视线，也不会提供掩护，应被视为公路格」对应 GDD §3.2 + 实现：水域不阻挡视线（既存规则），桥梁也不带 `hasBuilding` / 树篱，故无 +1 掩护；骰池由 `effectiveDiceTerrain` 折算成 `road`。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–5** | **公路地雷** | `road_mine`：若谢尔曼**在公路格或桥梁格**（`effectiveDiceTerrain(tile) === 'road'`，GDD §3.2「按公路触发」一并视桥梁为公路）**且未瘫痪** → 自动命中一次 **装甲 4 / 穿甲 0**，按「2. 造成伤害」掷穿甲 1d6（≥4 穿）+ 伤害 1d6 |
+| **6** | **机械故障** | `mechanical_failure`：谢尔曼瘫痪（若已瘫痪则不变） |
+| **7–8** | **本回合无事件** | `none`：新加的显式无事件类型，仅在事件面板里展示「无事件」并消耗掷骰，不触发任何效果 |
+| **9** | **车长额外行动** | `commander_extra`：若车长存活 → 装填 / 修复（瘫痪 / 炮塔）/ 灭火 三选一（按程序优先级，与既有实现一致） |
+| **10** | **斯图卡** | `stuka`：舱盖开 → 先 2d6≥6 击落判定；未击落再 2d6≥8 命中；命中按 **装甲 4 / 穿甲 1** 解伤害 |
+| **11+** | **III 号坦克** | `panzer3_spawn`：1d6 对应黑格 `eid`（不重掷；若已有坦克则不放置）；朝向同格 `ef` |
+
+数据行见 `data/turn_end_events.csv` 的 `mission_07,...`，`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+> **新增 `none` 效果类型**：在第 7 关之前所有关卡都把 2~12 全部覆盖到具体事件，本关首次出现「7–8 本回合无事件」的显式行——为此扩展 `TurnEndEffectType` 增加 `'none'`，`TurnEndEventApply` 中加 `case 'none'` 走 `turnEnd.none.body` 仅显示文案、不改任何状态；前端事件列表面板（`battle.turnEndList.effect.none`）也添加了对应中英文。
+
+---
+
 ## 后续任务
 
 - **任务 5**：见上文（`destroy_kind_evac` + `kind=truck`，配套 `truckPath` + `german_truck_move` 回合结束推进；卡车驶出地图判负）。
 - **任务 6**：见上文。
-- **任务 7 ~ 12**：地图与说明待补充。
+- **任务 7**：见上文（首次启用桥梁，`destroy_kind_evac` 无 `kind` → 纯撤离胜利；新增 `none` 事件类型）。
+- **任务 8 ~ 12**：地图与说明待补充。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

@@ -12,7 +12,7 @@
  *           SW(2)  SE(1)
  */
 
-import { Axial, Direction, Offset, Tile } from './types';
+import { Axial, Direction, Offset, Tile, tileHasBridge } from './types';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -241,11 +241,50 @@ export class HexMap {
     return Array.from(this.grid.values());
   }
 
-  /** 单位是否能进入该格（坦克视角，不考虑是否被占据） */
+  /**
+   * 单位是否能进入该格（坦克视角，不考虑是否被占据）。
+   *
+   * - 林地永远不可入；
+   * - 水域**默认**不可入，但若叠加了桥梁（GDD §3.2，`Tile.bridgeEnds` 非空）则可入；
+   * - 其他基底（公路 / 田地 / 泥地）一律可入。
+   *
+   * 注意：本函数**只**校验目标格本身是否「物理上能站」。是否能从某条边跨入桥梁格、
+   * 是否能从桥梁格沿某条边跨出，需另用 `canTankCrossEdge` 做边向校验。
+   */
   canTankEnter(p: Axial): boolean {
     const t = this.get(p);
     if (!t) return false;
-    if (t.terrain === 'forest' || t.terrain === 'water') return false;
+    if (t.terrain === 'forest') return false;
+    if (t.terrain === 'water') return tileHasBridge(t);
+    return true;
+  }
+
+  /**
+   * 是否允许坦克 / 卡车沿 `from → to` 跨过这条相邻格边（GDD §3.2 桥梁边向规则）。
+   *
+   * - `from` 与 `to` 必须严格相邻（`hexDistance === 1`），否则返回 false；
+   * - `to` 必须能进入（`canTankEnter`）；
+   * - 若 `from` 是桥梁格 → 出方向 `dir(from→to)` 须落在 `from.bridgeEnds` 中；
+   * - 若 `to` 是桥梁格 → 入方向 `dir(to→from)` 须落在 `to.bridgeEnds` 中；
+   * - 两端都是桥梁时上述两条同时生效（必须同时对齐）。
+   *
+   * 不在桥梁场景下，本函数行为退化为 `canTankEnter(to) && from-to 相邻`，与旧逻辑一致。
+   */
+  canTankCrossEdge(from: Axial, to: Axial): boolean {
+    if (hexDistance(from, to) !== 1) return false;
+    if (!this.canTankEnter(to)) return false;
+    const tFrom = this.get(from);
+    const tTo = this.get(to);
+    if (tileHasBridge(tFrom)) {
+      const dirOut = directionTo(from, to);
+      if (dirOut === null) return false;
+      if (!tFrom!.bridgeEnds!.includes(dirOut)) return false;
+    }
+    if (tileHasBridge(tTo)) {
+      const dirIn = directionTo(to, from);
+      if (dirIn === null) return false;
+      if (!tTo!.bridgeEnds!.includes(dirIn)) return false;
+    }
     return true;
   }
 

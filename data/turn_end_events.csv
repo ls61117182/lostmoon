@@ -1,4 +1,4 @@
-mission_id,sum_min,sum_max,dice_count,effect_type,notes
+﻿mission_id,sum_min,sum_max,dice_count,effect_type,notes
 mission_01,2,3,2,sniper,说明书：狙击手
 mission_01,4,4,2,commander_extra,车长额外行动
 mission_01,5,6,2,infantry_spawn,德军步兵→红格 rid
@@ -35,3 +35,9 @@ mission_06,7,9,2,adjacent_infantry_fire,任务6：7–9 相邻步兵齐射
 mission_06,10,10,2,commander_extra,任务6：10 车长额外行动（装填/修复/灭火）
 mission_06,11,11,2,stuka,任务6：11 斯图卡
 mission_06,12,12,2,panzer3_spawn,任务6：12 III号→黑格 eid（不重掷）
+mission_07,2,5,2,road_mine,任务7：2–5 公路地雷（AP0/装甲4）
+mission_07,6,6,2,mechanical_failure,任务7：6 机械故障 → 谢尔曼瘫痪
+mission_07,7,8,2,none,任务7：7–8 本回合无事件
+mission_07,9,9,2,commander_extra,任务7：9 车长额外行动（装填/修复/灭火）
+mission_07,10,10,2,stuka,任务7：10 斯图卡
+mission_07,11,12,2,panzer3_spawn,任务7：11+ III号→黑格 eid（不重掷）

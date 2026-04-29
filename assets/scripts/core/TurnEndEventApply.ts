@@ -23,7 +23,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, Offset, Unit, UnitKind } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Offset, Unit, UnitKind } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -309,6 +309,15 @@ export function prepareTurnEndEvent(
   const baseParams: Record<string, string | number> = { d1, d2, sum };
 
   switch (row.effectType as TurnEndEffectType) {
+    case 'none': {
+      // 显式「本回合无事件」行（mission_07 7-8）：保持事件面板的范围完整列表，
+      // 不触发任何骰 / 行动；turnEndRowForSum 落到这里时也走完正常 UI 流程，避免 console.warn。
+      return {
+        bodyKey: 'turnEnd.none.body',
+        bodyParams: baseParams,
+        apply: () => {},
+      };
+    }
     case 'sniper': {
       const los = shermanLosToAnyInfantry(mission);
       const hatch = !!sh.hatchOpen && !!sh.crew?.commander;
@@ -591,7 +600,9 @@ export function prepareTurnEndEvent(
     }
     case 'road_mine': {
       const t = mission.map.get(sh.pos);
-      const onRoad = t?.terrain === 'road';
+      // GDD §3.2：桥梁叠加格视同公路（`effectiveDiceTerrain` 把水域+桥梁折算成 'road'），
+      // 因此谢尔曼站在桥上也满足「公路地雷」的触发条件。
+      const onRoad = effectiveDiceTerrain(t) === 'road';
       if (sh.destroyed || sh.paralyzed || !onRoad) {
         return {
           bodyKey: 'turnEnd.mine.skip',

@@ -15,6 +15,7 @@ import {
   TerrainType,
   Tile,
   TileDef,
+  tileHasBridge,
   Unit,
   UnitKind,
   UnitPlacement,
@@ -56,6 +57,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       const facing: Direction | undefined = efRaw !== undefined && efRaw !== null
         ? ((((Number(efRaw) % 6) + 6) % 6) as Direction)
         : undefined;
+      const bridgeEnds = parseBridgeEnds(data.id, { col, row }, terrain, def.br);
       const tile: Tile = {
         pos: offsetToAxial({ col, row }),
         terrain,
@@ -64,6 +66,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         reinforceId: def.rid,
         ...(eid !== undefined && eid !== null ? { enemyStartId: eid } : {}),
         ...(facing !== undefined ? { enemyStartFacing: facing } : {}),
+        ...(bridgeEnds ? { bridgeEnds } : {}),
       };
       map.set(tile);
     }
@@ -138,8 +141,11 @@ function validateTruckPath(data: MissionData, map: HexMap) {
     const o = p[i]!;
     const t = map.get(offsetToAxial(o));
     if (!t) throw new Error(`任务 ${data.id}：truckPath[${i}] 不在地图内 ${JSON.stringify(o)}`);
-    if (t.terrain !== 'road') {
-      throw new Error(`任务 ${data.id}：truckPath[${i}] 非公路格（须 t="r" 对应格）`);
+    // 公路格 / 水域+桥梁格皆视为「卡车可走的路网」（GDD §3.2：桥梁等效公路）；其余抛错。
+    const isRoad = t.terrain === 'road';
+    const isBridge = tileHasBridge(t);
+    if (!isRoad && !isBridge) {
+      throw new Error(`任务 ${data.id}：truckPath[${i}] 非公路或桥梁格（须 t="r"，或 t="w" + br=[a,b]）`);
     }
     // exitDir 仅末格生效：中间格写了直接抛错（避免误以为可以中途换出口）
     if (o.exitDir !== undefined) {
@@ -153,6 +159,12 @@ function validateTruckPath(data: MissionData, map: HexMap) {
           `任务 ${data.id}：truckPath 末格 exitDir=${o.exitDir} 非法（须 0..5：0=E,1=SE,2=SW,3=W,4=NW,5=NE）`,
         );
       }
+      // 末格若是桥梁，exitDir 必须是桥端两方向之一（GDD §3.2：车辆只能从桥端方向驶出桥梁格）
+      if (isBridge && t.bridgeEnds && !t.bridgeEnds.includes(o.exitDir as Direction)) {
+        throw new Error(
+          `任务 ${data.id}：truckPath 末格 (${o.col},${o.row}) 是桥梁，exitDir=${o.exitDir} 不在桥端 [${t.bridgeEnds.join(',')}] 内`,
+        );
+      }
     }
   }
   for (let i = 0; i < p.length - 1; i++) {
@@ -161,6 +173,21 @@ function validateTruckPath(data: MissionData, map: HexMap) {
     if (hexDistance(a, b) !== 1) {
       throw new Error(
         `任务 ${data.id}：truckPath[${i}] 与 [${i + 1}] 不相邻：${JSON.stringify(p[i])} / ${JSON.stringify(p[i + 1])}`,
+      );
+    }
+    // 桥梁边向校验：若 a / b 任一为桥梁格，跨边方向必须命中其桥端方向
+    const tA = map.get(a);
+    const tB = map.get(b);
+    const dirAB = directionTo(a, b);
+    const dirBA = directionTo(b, a);
+    if (dirAB !== null && tileHasBridge(tA) && !tA!.bridgeEnds!.includes(dirAB)) {
+      throw new Error(
+        `任务 ${data.id}：truckPath[${i}]→[${i + 1}] 从桥梁 (${p[i]!.col},${p[i]!.row}) 驶出方向=${dirAB} 不在桥端 [${tA!.bridgeEnds!.join(',')}] 内`,
+      );
+    }
+    if (dirBA !== null && tileHasBridge(tB) && !tB!.bridgeEnds!.includes(dirBA)) {
+      throw new Error(
+        `任务 ${data.id}：truckPath[${i}]→[${i + 1}] 进入桥梁 (${p[i + 1]!.col},${p[i + 1]!.row}) 的方向=${dirBA} 不在桥端 [${tB!.bridgeEnds!.join(',')}] 内`,
       );
     }
   }
@@ -253,6 +280,49 @@ function parseTileDefBase(def: TileDef): { terrain: TerrainType; hasBuilding: bo
   const hasBuilding = def.bd === 1;
   const terrain = TERRAIN_MAP[def.t as keyof typeof TERRAIN_MAP];
   return { terrain, hasBuilding };
+}
+
+/**
+ * 解析 `TileDef.br` → `Tile.bridgeEnds`，并强校验 GDD §3.2「桥梁」字段：
+ * - 仅水域格允许带桥梁；任何非水域基底配 `br` 立即抛错（避免「公路上又叠桥」这类无意义配置悄悄忽略）；
+ * - `br` 必须为长度 2 的数组，每项是 0..5 整数，且两端方向不能相同；
+ * - 通过校验则归一为 `[Direction, Direction]`，未配置则返回 undefined。
+ */
+function parseBridgeEnds(
+  missionId: string,
+  pos: Offset,
+  terrain: TerrainType,
+  raw: TileDef['br'],
+): [Direction, Direction] | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (terrain !== 'water') {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 配置了桥梁 br=${JSON.stringify(raw)}，但基底地形非水域（t='${terrain}'）`
+      + `。GDD §3.2：桥梁必须叠加在水域格上`,
+    );
+  }
+  if (!Array.isArray(raw) || raw.length !== 2) {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁 br=${JSON.stringify(raw)} 非法，须为长度 2 的方向数组 [a, b]`,
+    );
+  }
+  const [aRaw, bRaw] = raw;
+  if (!Number.isInteger(aRaw) || !Number.isInteger(bRaw)) {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁 br=${JSON.stringify(raw)} 非法，两端方向须为整数`,
+    );
+  }
+  if (aRaw < 0 || aRaw > 5 || bRaw < 0 || bRaw > 5) {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁 br=${JSON.stringify(raw)} 非法，方向须 0..5（0=E,1=SE,2=SW,3=W,4=NW,5=NE）`,
+    );
+  }
+  if (aRaw === bRaw) {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁两端方向相同 (${aRaw})，须填两个不同方向`,
+    );
+  }
+  return [aRaw as Direction, bRaw as Direction];
 }
 
 function makeUnit(id: string, p: UnitPlacement): Unit {

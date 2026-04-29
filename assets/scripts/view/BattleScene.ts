@@ -105,6 +105,7 @@ import {
 
 /** 回合结束事件表弹窗：效果类型 → lang key */
 const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
+  none: 'battle.turnEndList.effect.none',
   sniper: 'battle.turnEndList.effect.sniper',
   commander_extra: 'battle.turnEndList.effect.commander_extra',
   infantry_spawn: 'battle.turnEndList.effect.infantry_spawn',
@@ -119,7 +120,7 @@ const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
-import { Direction, MissionData, ShermanCrew, TerrainType, Tile, Unit, UnitKind } from '../core/types';
+import { Direction, effectiveDiceTerrain, MissionData, ShermanCrew, TerrainType, Tile, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -403,6 +404,10 @@ const BUILDING_ROOF_FILL  = new Color( 95,  78,  62, 255);
 const BUILDING_WALL_FILL  = new Color(160, 145, 125, 255);
 const BUILDING_OUTLINE    = new Color( 45,  38,  32, 255);
 const BUILDING_DOOR_STROKE= new Color( 55,  48,  42, 255);
+/** 桥梁叠加（GDD §3.2，绘制于水域格之上）：木板桥面 + 深色边线 */
+const BRIDGE_PLANK_FILL   = new Color(168, 132,  78, 255);
+const BRIDGE_PLANK_OUTLINE= new Color( 60,  44,  26, 255);
+const BRIDGE_RAIL_STROKE  = new Color( 90,  64,  40, 255);
 
 const FACTION_COLORS = {
   allied: new Color( 60, 160,  80, 255),
@@ -1076,6 +1081,13 @@ export class BattleScene extends Component {
       if (t.terrain !== 'forest') continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawForestCanopy(c.x, c.y, this.hexSize, t);
+    }
+
+    // 1a-bridge. 桥梁叠加（GDD §3.2，仅水域格 + bridgeEnds）：在水面上画一条贯通两端的木桥
+    for (const t of tiles) {
+      if (!tileHasBridge(t)) continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawBridgeOverlay(c.x, c.y, this.hexSize, t.bridgeEnds!);
     }
 
     // 1b. 建筑图案（不改变基底地形色，仅格心矢量房屋）
@@ -1831,7 +1843,7 @@ export class BattleScene extends Component {
       const pos = neighbor(sherman.pos, c.dir as 0 | 1 | 2 | 3 | 4 | 5);
       const tile = map.get(pos);
       const blocked = !tile
-        || !map.canTankEnter(pos)
+        || !map.canTankCrossEdge(sherman.pos, pos) // 桥梁边向校验：水域+桥梁需 dir 落在 br 端，详见 GDD §3.2
         || occupied.has(`${pos.q},${pos.r}`);
       const p = this.project(pos.q, pos.r);
       this.g.strokeColor = blocked ? DRIVE_BLOCKED : c.color;
@@ -1971,6 +1983,76 @@ export class BattleScene extends Component {
     g.close();
     g.stroke();
 
+    g.lineWidth = 2;
+  }
+
+  /**
+   * 桥梁叠加（GDD §3.2，仅水域格 + 配置了 `bridgeEnds`）：
+   * 在水面上画出贯通两端方向的木桥。两端方向 `[a, b]` 的物理边由「-30° + 60°·i」分割得到，
+   * 与树篱使用同一套 `HEDGE_DRAW_EDGE_BY_AXIAL` 轴向→几何边映射。
+   *
+   * 桥面：连接两条边中点的木色矩形带；两侧加平行栏杆线，强调"通道"语义；
+   * 与 drawBuildingOverlay 一样不改变基底填色，仅在原色上叠绘。
+   */
+  private drawBridgeOverlay(cx: number, cy: number, size: number, ends: [Direction, Direction]) {
+    const g = this.g!;
+    // 取两端方向对应的几何边中点（与 drawHedgeEdge 对边的端点定义同步）
+    const mid = (axial: Direction): { x: number; y: number } => {
+      const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axial];
+      const a1 = (-30 + 60 * edge) * Math.PI / 180;
+      const a2 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
+      const x0 = cx + size * Math.cos(a1);
+      const y0 = cy + size * Math.sin(a1);
+      const x1 = cx + size * Math.cos(a2);
+      const y1 = cy + size * Math.sin(a2);
+      return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+    };
+    const p0 = mid(ends[0]);
+    const p1 = mid(ends[1]);
+    // 桥面方向单位向量与法线：用法线偏移得到带状矩形 4 角
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const ux = dx / len;
+    const uy = dy / len;
+    const nx = -uy;
+    const ny = ux;
+    const halfW = size * 0.18;
+
+    g.lineWidth = 1.5;
+    g.strokeColor = BRIDGE_PLANK_OUTLINE;
+    g.fillColor = BRIDGE_PLANK_FILL;
+    g.moveTo(p0.x + nx * halfW, p0.y + ny * halfW);
+    g.lineTo(p1.x + nx * halfW, p1.y + ny * halfW);
+    g.lineTo(p1.x - nx * halfW, p1.y - ny * halfW);
+    g.lineTo(p0.x - nx * halfW, p0.y - ny * halfW);
+    g.close();
+    g.fill();
+    g.stroke();
+
+    // 两侧栏杆：再外移一点，以便玩家一眼看出"边界 / 不可越水"语义
+    g.strokeColor = BRIDGE_RAIL_STROKE;
+    g.lineWidth = 2;
+    const railOffset = halfW + size * 0.04;
+    g.moveTo(p0.x + nx * railOffset, p0.y + ny * railOffset);
+    g.lineTo(p1.x + nx * railOffset, p1.y + ny * railOffset);
+    g.stroke();
+    g.moveTo(p0.x - nx * railOffset, p0.y - ny * railOffset);
+    g.lineTo(p1.x - nx * railOffset, p1.y - ny * railOffset);
+    g.stroke();
+
+    // 桥面上等距画几条板缝，明确"木桥"质感
+    g.strokeColor = BRIDGE_PLANK_OUTLINE;
+    g.lineWidth = 1;
+    const PLANKS = 5;
+    for (let k = 1; k <= PLANKS; k++) {
+      const f = k / (PLANKS + 1);
+      const cxk = p0.x + dx * f;
+      const cyk = p0.y + dy * f;
+      g.moveTo(cxk + nx * halfW, cyk + ny * halfW);
+      g.lineTo(cxk - nx * halfW, cyk - ny * halfW);
+      g.stroke();
+    }
     g.lineWidth = 2;
   }
 
@@ -3546,7 +3628,8 @@ export class BattleScene extends Component {
 
     const { map, sherman } = this.mission;
     const tile = map.get(sherman.pos);
-    const terrain = tile ? tile.terrain : 'field';
+    // 桥梁叠加（GDD §3.2）：水域+桥梁 → 等效公路读骰子基数；其他基底原样返回。
+    const terrain = effectiveDiceTerrain(tile);
     const crew = sherman.crew ?? {
       commander: false,
       loader: false,
@@ -3997,7 +4080,8 @@ export class BattleScene extends Component {
       return;
     }
     const tile = map.get(to);
-    if (!tile || !map.canTankEnter(to)) {
+    // 桥梁规则（GDD §3.2）：水域+桥梁可入；入 / 出方向须落在 bridgeEnds 端，否则等同越水阻挡。
+    if (!tile || !map.canTankCrossEdge(sherman.pos, to)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
@@ -4536,7 +4620,8 @@ export class BattleScene extends Component {
       return;
     }
     const tile = map.get(to);
-    if (!tile || !map.canTankEnter(to)) {
+    // 桥梁规则（GDD §3.2）：与单骰 drive 路径一致 —— 水域+桥梁需边向落在 bridgeEnds 端
+    if (!tile || !map.canTankCrossEdge(sherman.pos, to)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
@@ -5040,8 +5125,15 @@ export class BattleScene extends Component {
     }
     if (tile.terrain === 'forest') {
       blocks.push(t('tileInspect.rules.forest'));
-    } else if (tile.terrain === 'water') {
+    } else if (tile.terrain === 'water' && !tileHasBridge(tile)) {
+      // 仅"未叠桥的水域"才提示「不可入」；叠桥后该格变为可通行 → 改用桥梁说明文案。
       blocks.push(t('tileInspect.rules.water'));
+    }
+    if (tileHasBridge(tile)) {
+      blocks.push(t('tileInspect.rules.bridge', {
+        a: tile.bridgeEnds![0],
+        b: tile.bridgeEnds![1],
+      }));
     }
     if (tile.hedges?.some(Boolean)) {
       blocks.push(t('tileInspect.hedges'));
@@ -5053,11 +5145,13 @@ export class BattleScene extends Component {
       blocks.push(t('tileInspect.markerEid', { n: tile.enemyStartId }));
     }
 
+    // 桥梁叠加（GDD §3.2）：水域+桥梁的骰子基数读取按公路；这里 tile 面板与实际掷骰一致。
     const pool = PLAYER_DICE_POOL;
     const b = pool.baseByPhaseTerrain;
-    const mv = b.movement[tile.terrain];
-    const at = b.attack[tile.terrain];
-    const ms = b.misc[tile.terrain];
+    const eff = effectiveDiceTerrain(tile);
+    const mv = b.movement[eff];
+    const at = b.attack[eff];
+    const ms = b.misc[eff];
     blocks.push(t('tileInspect.diceIntro', { capMin: pool.capMin, capMax: pool.capMax }));
     blocks.push(t('tileInspect.diceRow.move', { n: mv }));
     blocks.push(t('tileInspect.diceRow.attack', { n: at }));
@@ -5267,6 +5361,47 @@ export class BattleScene extends Component {
       g.fill();
       g.stroke();
     }
+    // 桥梁叠加（GDD §3.2）：在水域底色上叠桥面 + 双侧栏杆，与主战场同款几何（这里取小尺寸即可）
+    if (tileHasBridge(tile)) {
+      const ends = tile.bridgeEnds!;
+      const mid = (axial: Direction): { x: number; y: number } => {
+        const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axial];
+        const a1 = (-30 + 60 * edge) * Math.PI / 180;
+        const a2 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
+        const x0 = cx + hexR * Math.cos(a1);
+        const y0 = cy + hexR * Math.sin(a1);
+        const x1 = cx + hexR * Math.cos(a2);
+        const y1 = cy + hexR * Math.sin(a2);
+        return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
+      };
+      const p0 = mid(ends[0]);
+      const p1 = mid(ends[1]);
+      const dx = p1.x - p0.x;
+      const dy = p1.y - p0.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      const halfW = hexR * 0.18;
+      g.lineWidth = 1.5;
+      g.fillColor = BRIDGE_PLANK_FILL;
+      g.strokeColor = BRIDGE_PLANK_OUTLINE;
+      g.moveTo(p0.x + nx * halfW, p0.y + ny * halfW);
+      g.lineTo(p1.x + nx * halfW, p1.y + ny * halfW);
+      g.lineTo(p1.x - nx * halfW, p1.y - ny * halfW);
+      g.lineTo(p0.x - nx * halfW, p0.y - ny * halfW);
+      g.close();
+      g.fill();
+      g.stroke();
+      g.strokeColor = BRIDGE_RAIL_STROKE;
+      g.lineWidth = 1.5;
+      const rail = halfW + hexR * 0.04;
+      g.moveTo(p0.x + nx * rail, p0.y + ny * rail);
+      g.lineTo(p1.x + nx * rail, p1.y + ny * rail);
+      g.stroke();
+      g.moveTo(p0.x - nx * rail, p0.y - ny * rail);
+      g.lineTo(p1.x - nx * rail, p1.y - ny * rail);
+      g.stroke();
+    }
   }
 
   private syncTileInspectVBar() {
@@ -5376,9 +5511,14 @@ export class BattleScene extends Component {
     panel.addChild(preview);
     const pvg = preview.addComponent(Graphics);
     this.paintTileInspectPreview(pvg, tile, 0, 5, 40);
+    // 标题：基底地形名；桥梁叠加（GDD §3.2）时在末尾追加「+ 桥梁」标识
+    const baseTerrainName = t(`terrain.${tile.terrain}`);
+    const titleStr = tileHasBridge(tile)
+      ? `${baseTerrainName} + ${t('terrain.bridge')}`
+      : baseTerrainName;
     const terrainNameLab = this.makeBattleModalLabel(
-      panel, t(`terrain.${tile.terrain}`),
-      previewCenterX, previewCenterY - 80, 150, 28, 20, new Color(235, 240, 245, 255),
+      panel, titleStr,
+      previewCenterX, previewCenterY - 80, 200, 28, 20, new Color(235, 240, 245, 255),
     );
     terrainNameLab.horizontalAlign = HorizontalTextAlignment.CENTER;
     terrainNameLab.verticalAlign = VerticalTextAlignment.CENTER;
@@ -6121,7 +6261,7 @@ export class BattleScene extends Component {
 
     const enemy = this.enemyOrder[this.enemyIndex];
     const tile = this.mission.map.get(enemy.pos);
-    const terrain = tile ? tile.terrain : 'field';
+    const terrain = effectiveDiceTerrain(tile);
     this.enemyAICol = aiColumnFor(enemy, terrain);
     const count = AI_DICE_COUNT[this.enemyAICol];
     this.enemyDice = rollAIDice(this.rng, count);

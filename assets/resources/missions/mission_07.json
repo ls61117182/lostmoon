@@ -1,0 +1,87 @@
+{
+  "id": "mission_07",
+  "name": "只是路过：桥梁",
+  "description": "目标：从带红色箭头的撤离格（col=7, row=2）沿正东方向驶离地图（无歼敌前置条件）。\n谢尔曼放置在带黑色箭头的撤离格（col=0, row=3），朝向东方（facing=0）。\n1 辆虎式坦克与 1 辆 III 号坦克按 1d6 链式占位（不重掷）放在不同的黑色 eid 数字格中（1..6），朝向同格 ef。\n通过桥梁跨越河流：桥梁仅允许沿公路方向（NW/SW，即 br=[4,2]）进入或离开；桥梁不阻挡视线、不提供掩护，骰子规则与公路相同（GDD §3.2）。",
+  "_comment": "8列×6行 odd-r。基底简写 r=公路 f=田地 m=泥地 F=林地 w=水域；bd=1 为建筑；br=[a,b] 为桥梁两端方向（仅水域格 t='w' 上有效）。\n核心几何：南北向公路位于 col=3 列，自 (3,0) 至 (3,5)；中段 (3,3) 是水域 + 桥梁，bridgeEnds [4(NW), 2(SW)] 正好对齐 (3,2) 与 (3,4) 两个公路邻格 → 谢尔曼必须沿这条公路过桥。\n6 个 eid 黑格分布在两岸，1d6 链式占位（mission 6 同款语义）。eid 2 即撤离格 (7,2)；若掷骰落到该格，Sherman 需先消灭它再撤。\n回合结束事件见 data/turn_end_events.csv 的 mission_07 行：2–5 地雷 / 6 机械故障 / 7–8 无事件 / 9 车长额外 / 10 斯图卡 / 11+ III 号坦克生成。",
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "f", "eid": 5, "ef": 1, "h": "001000" },
+      { "t": "r", "bd": 1 },
+      { "t": "f", "eid": 6, "ef": 2 },
+      { "t": "f" },
+      { "t": "f", "eid": 1, "ef": 3 }
+    ],
+    [
+      null,
+      { "t": "w", "h": "001000" },
+      { "t": "f", "h": "110000" },
+      { "t": "r" },
+      { "t": "m", "h": "100000" },
+      { "t": "m", "bd": 1 },
+      { "t": "m" }
+    ],
+    [
+      null,
+      { "t": "m", "h": "100000" },
+      { "t": "w", "h": "101000" },
+      { "t": "r", "h": "001000" },
+      { "t": "F" },
+      { "t": "m" },
+      { "t": "f" },
+      { "t": "f", "eid": 2, "ef": 3 }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f", "h": "100000" },
+      { "t": "w", "h": "001000" },
+      { "t": "w", "br": [4, 1] },
+      { "t": "w", "h": "001000" },
+      { "t": "w", "h": "010000" },
+      { "t": "w" },
+      null
+    ],
+    [
+      null,
+      { "t": "f" },
+      { "t": "m", "h": "100000" },
+      { "t": "w", "h": "001000" },
+      { "t": "r", "bd": 1, "h": "100000" },
+      { "t": "f", "h": "001000" },
+      { "t": "f", "eid": 3, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "f" },
+      { "t": "f", "bd": 1 },
+      { "t": "f" },
+      { "t": "r", "h": "100000" },
+      { "t": "f", "eid": 4, "ef": 3 },
+      null,
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 0, "row": 3 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "tiger", "faction": "german" },
+    { "kind": "panzer3", "faction": "german" }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "evacAt": { "col": 7, "row": 2 },
+    "evacExitDir": 0
+  },
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}

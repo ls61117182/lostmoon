@@ -42,6 +42,32 @@ export interface Tile {
   enemyStartId?: number;
   /** 与 `enemyStartId` 同格：该出生点坦克初始朝向（与盘面数字贴近的边一致，0=E…5=NE） */
   enemyStartFacing?: Direction;
+  /**
+   * 桥梁两端方向（仅水域格 `terrain==='water'` 上有效；GDD §3.2「桥梁」叠加项）：
+   * 桥梁本身不是独立地形，叠加在水域格上 → 该格对坦克 / 卡车变为可入；移动 / 攻击 / 杂项的基础骰数与公路相同（见 `effectiveDiceTerrain`），移动力消耗与公路相同（见 `terrainMoveCost`）。
+   * 两端方向 `[a, b]` 决定哪两条格边「贯通」：车辆只能从这两个方向之一驶入 / 驶出本格，其余 4 条边仍视为水面。
+   * 关卡 JSON 字段：`TileDef.br = [a, b]`；MissionLoader 强校验「水域基底 + 两个 0..5 不重复方向」。
+   */
+  bridgeEnds?: [Direction, Direction];
+}
+
+/** 是否在水域格上叠加了桥梁（GDD §3.2 桥梁规则的统一判定）。 */
+export function tileHasBridge(tile: Tile | undefined | null): boolean {
+  return !!tile && tile.terrain === 'water' && !!tile.bridgeEnds;
+}
+
+/**
+ * 计算掷骰 / 移动力使用的「等效地形」：
+ * - 水域 + 桥梁 → 视为公路（GDD §3.2「骰子规则与公路相同」）；
+ * - 其余情况返回基底地形本身。
+ *
+ * 任何「按地形读骰子基数 / 移动力」的代码（`actionDicePool` / `terrainMoveCost` / tileInspect 面板）必须经过本函数，
+ * 才能让"水域+桥梁"既不可入水又不会读到水域那一行 0 颗骰子的死锁配置。
+ */
+export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType {
+  if (!tile) return 'field';
+  if (tileHasBridge(tile)) return 'road';
+  return tile.terrain;
 }
 
 // ---------- 单位 ----------
@@ -196,6 +222,13 @@ export interface TileDef {
    * i∈0..5 与 `h[i]`、`HEX_DIRECTIONS[i]` 一致（0=E, …, 5=NE）。树篱**绘制**在 `BattleScene` 中经 `HEDGE_DRAW_EDGE_BY_AXIAL` 再映到 `drawHedgeEdge` 的几何边号。
    */
   ef?: number;
+  /**
+   * 桥梁两端方向 `[a, b]`（GDD §3.2 桥梁；运行时归一为 `Tile.bridgeEnds`）：
+   * - **仅水域格** (`t === "w"`) 允许配置；其他基底基为非法，MissionLoader 抛错；
+   * - `a`、`b` 须为 0..5 整数（0=E, 1=SE, 2=SW, 3=W, 4=NW, 5=NE）且**互不相同**；
+   * - 配置后该水域格视为可通行，骰子基数与移动力按公路计算；车辆仅能从 `a` / `b` 两端方向驶入 / 驶出本格。
+   */
+  br?: [number, number];
 }
 
 /** 有建筑时：田/泥+建筑=农场，公路+建筑=村庄（与 GDD §3.2 一致） */
