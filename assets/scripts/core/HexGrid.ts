@@ -251,11 +251,11 @@ export class HexMap {
 
   /**
    * 当某格在视线路径的**中间**（非起点、非终点）时，是否因此截断视线。
-   * 林地/水域、以及路径**中间**的带建筑格均阻挡；建筑在起止格不调用本方法故不挡视线
-   *（含：建筑格内的单位可作为视线起点向外射击）。
+   * 林地、以及路径**中间**的带建筑格均阻挡；水域**不**阻挡视线（任何单位仍不可入）；
+   * 建筑在起止格不调用本方法故不挡视线（含：建筑格内的单位可作为视线起点向外射击）。
    */
   lineOfSightBlockedByTile(t: Tile): boolean {
-    if (t.terrain === 'forest' || t.terrain === 'water') return true;
+    if (t.terrain === 'forest') return true;
     if (t.hasBuilding) return true;
     return false;
   }

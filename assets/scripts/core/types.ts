@@ -27,7 +27,7 @@ export type TerrainType =
   | 'field'     // 田地
   | 'mud'       // 泥地：移动 -1 骰
   | 'forest'    // 林地：坦克不可入，阻挡视线
-  | 'water';    // 水域：任何单位不可入，阻挡视线
+  | 'water';    // 水域：任何单位不可入，不阻挡视线
 
 export interface Tile {
   pos: Axial;

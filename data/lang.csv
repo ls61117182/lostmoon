@@ -237,7 +237,7 @@ terrain.water,水域,Water
 tileInspect.title,格子介绍,Tile info
 tileInspect.building,建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。,Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile.
 tileInspect.rules.forest,森林：谢尔曼与德军坦克不可进入；步兵可进入；遮挡视线。,Forest: Sherman and German tanks cannot enter; infantry can enter; blocks line of sight.
-tileInspect.rules.water,水域：任何单位不可进入；遮挡视线。,Water: impassable to all units; blocks line of sight.
+tileInspect.rules.water,水域：任何单位不可进入；不遮挡视线。,Water: impassable to all units; does not block line of sight.
 tileInspect.hedges,本格带树篱边：谢尔曼与德军坦克不可翻越；步兵可翻越；不遮挡视线。,This tile has hedge edges: Sherman and German tanks cannot cross; infantry can cross; does not block line of sight.
 tileInspect.markerRid,援军标记 rid={n},Reinforcement marker rid={n}
 tileInspect.markerEid,敌军出生点标记 eid={n},Enemy start marker eid={n}

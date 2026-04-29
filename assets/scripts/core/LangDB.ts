@@ -249,7 +249,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'tileInspect.title': { zh: "格子介绍", en: "Tile info" },
   'tileInspect.building': { zh: "建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。", en: "Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile." },
   'tileInspect.rules.forest': { zh: "森林：谢尔曼与德军坦克不可进入；步兵可进入；遮挡视线。", en: "Forest: Sherman and German tanks cannot enter; infantry can enter; blocks line of sight." },
-  'tileInspect.rules.water': { zh: "水域：任何单位不可进入；遮挡视线。", en: "Water: impassable to all units; blocks line of sight." },
+  'tileInspect.rules.water': { zh: "水域：任何单位不可进入；不遮挡视线。", en: "Water: impassable to all units; does not block line of sight." },
   'tileInspect.hedges': { zh: "本格带树篱边：谢尔曼与德军坦克不可翻越；步兵可翻越；不遮挡视线。", en: "This tile has hedge edges: Sherman and German tanks cannot cross; infantry can cross; does not block line of sight." },
   'tileInspect.markerRid': { zh: "援军标记 rid={n}", en: "Reinforcement marker rid={n}" },
   'tileInspect.markerEid': { zh: "敌军出生点标记 eid={n}", en: "Enemy start marker eid={n}" },

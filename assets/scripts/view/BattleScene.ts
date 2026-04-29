@@ -6389,24 +6389,26 @@ export class BattleScene extends Component {
     const target = this.pickTileAtScreenUi(event);
     if (!target) return;
 
-    const enemyOnTile = this.mission.enemies.find(
+    const enemiesOnTile = this.mission.enemies.filter(
       e => !e.destroyed && e.pos.q === target.pos.q && e.pos.r === target.pos.r,
     );
     const attackOrMisc = this.playerStep === 'attack' || this.playerStep === 'misc';
     const gunSel = this.selectedGunDieIdx >= 0;
     const mgSel = this.selectedMGDieIdx >= 0;
 
-    if (attackOrMisc && enemyOnTile) {
+    if (attackOrMisc && enemiesOnTile.length > 0) {
+      // 叠格场景：机枪只打步兵；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
       if (mgSel) {
-        this.tryMGAttack(enemyOnTile);
+        const inf = enemiesOnTile.find(e => e.kind === 'infantry') ?? enemiesOnTile[0]!;
+        this.tryMGAttack(inf);
         return;
       }
       if (gunSel) {
-        this.tryAttack(enemyOnTile);
+        const tank = enemiesOnTile.find(e => e.kind !== 'infantry') ?? enemiesOnTile[0]!;
+        this.tryAttack(tank);
         return;
       }
     }
-
     this.openTileInspectModal(target);
   }
 
