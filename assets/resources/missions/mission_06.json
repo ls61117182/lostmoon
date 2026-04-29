@@ -1,0 +1,90 @@
+{
+  "id": "mission_06",
+  "name": "以一敌三",
+  "description": "目标：摧毁所有德军坦克（3 辆 III 号），随后将谢尔曼开至撤离格（带红箭头的右侧边缘，col=7, row=2），沿正东驶出。\n谢尔曼初始放置在带黑箭头的公路格，朝向箭头所示方向；任务开始时即处于**瘫痪**状态。\n3 辆 III 号在不同的黑色 eid 数字格中按 1d6 链式占位（不重掷），朝向同格 ef。",
+  "_comment": "8列×6行 odd-r；h 六位轴向。基底：r=公路 f=田地 m=泥地 F=林地；bd=1 为建筑。evacExitDir: 0(E)。\n敌方仅 3 辆 III 号（panzer3），步兵不在初始阵容；步兵会通过回合结束 4–5 行 `infantry_spawn` 至红格 rid 中产生。\n谢尔曼起始 paralyzed: true，由 MissionLoader 写入 unit.paralyzed = true（与回合结束 mechanical_failure 同语义）。",
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "f", "eid": 5, "ef": 0 },
+      { "t": "f" },
+      { "t": "r", "h": "101000" },
+      { "t": "f" },
+      { "t": "f", "eid": 6, "ef": 2 }
+    ],
+    [
+      null,
+      { "t": "f" },
+      { "t": "F", "rid": 3 },
+      { "t": "f" },
+      { "t": "r", "bd": 1, "rid": 1 },
+      { "t": "f" },
+      { "t": "F", "rid": 5 }
+    ],
+    [
+      null,
+      { "t": "f" },
+      { "t": "f", "h": "110000" },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "r" },
+      { "t": "f" },
+      { "t": "r", "eid": 1, "ef": 3 }
+    ],
+    [
+      { "t": "f", "eid": 4, "ef": 5 },
+      { "t": "f", "bd": 1, "rid": 6, "h": "100000" },
+      { "t": "f", "h": "001000" },
+      { "t": "m", "h": "010000" },
+      { "t": "f" },
+      { "t": "r", "bd": 1, "rid": 2, "h": "100000" },
+      { "t": "f", "h": "001000" },
+      null
+    ],
+    [
+      null,
+      { "t": "f" },
+      { "t": "f", "h": "100000" },
+      { "t": "f", "h": "001000" },
+      { "t": "f" },
+      { "t": "F", "rid": 4 },
+      { "t": "r" },
+      null
+    ],
+    [
+      null,
+      { "t": "f", "eid": 3, "ef": 5 },
+      { "t": "f", "h": "100000" },
+      { "t": "f", "h": "100000" },
+      { "t": "f" },
+      { "t": "r", "eid": 2, "ef": 4 },
+      null,
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 3, "row": 3 },
+    "facing": 5,
+    "paralyzed": true
+  },
+  "enemies": [
+    { "kind": "panzer3", "faction": "german" },
+    { "kind": "panzer3", "faction": "german" },
+    { "kind": "panzer3", "faction": "german" }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kind": "panzer3",
+    "evacAt": { "col": 7, "row": 2 },
+    "evacExitDir": 0
+  },
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}

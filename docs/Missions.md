@@ -206,7 +206,43 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 6：以一敌三
+
+> 对应数据：`assets/resources/missions/mission_06.json`。8×6 odd-r。
+
+### 目标
+
+- 摧毁 **3 辆 III 号坦克**（`kind: "panzer3"`，包含开局 3 辆与回合结束 12 行 `panzer3_spawn` 增援的同种）；
+- 随后将谢尔曼开至 **撤离格** `evacAt: col=7, row=2`（带红箭头的右侧公路格），沿 **`evacExitDir = 0`（正东）** 驶出地图。
+
+### 初始设置
+
+- **谢尔曼**：放置在 **黑色箭头公路格**，朝向箭头方向；当前 JSON 为 `col=4, row=0, facing=1`。
+  - **任务开始时即处于「瘫痪」**：`sherman.paralyzed = true`。`MissionLoader.makeUnit` 读取 `UnitPlacement.paralyzed` 后写入 `unit.paralyzed = true`，与回合结束 `mechanical_failure` 同语义；可通过事件 10 `commander_extra → 修复` 解除。
+- **3 辆 III 号**：`enemyStartByDice: true`；每辆**坦克**开局各掷 **1d6**，在 **eid 1~6 黑格**中链式择空位（**不重掷**），朝向同格 **`ef`**。当前 JSON 6 处 eid：`(7,2)=1`、`(5,5)=2`、`(1,5)=3`、`(0,3)=4`、`(2,0)=5`、`(6,0)=6`。
+- **步兵**：开局**不放置**；仅由回合结束 4–5 行 `infantry_spawn` 在红格 **rid**（1~6）按 1d6 链式产生。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–3** | **狙击手** | `sniper`：舱盖开启且车长与任意步兵有视线时车长阵亡 |
+| **4–5** | **德军步兵** | `infantry_spawn`：1d6 对应红格 `rid`（不重掷；若占用则不放置） |
+| **6** | **地雷** | `road_mine`：谢尔曼在**公路**且**未瘫痪**时受击，AP0 vs 装甲 4，再伤害 1d6 |
+| **7–9** | **相邻步兵齐射** | `adjacent_infantry_fire`：与谢尔曼**相邻**的全体德军步兵各一击（穿甲值 1） |
+| **10** | **车长额外行动** | `commander_extra`：装填 / 修复（瘫痪 / 炮塔）/ 灭火 三选一（按程序优先级） |
+| **11** | **斯图卡** | `stuka`：舱盖开 → 先 2d6≥6 击落判定；未击落再 2d6≥8 命中；命中按装甲 4 / 穿甲 1 解伤害 |
+| **12** | **III 号坦克** | `panzer3_spawn`：1d6 对应黑格 `eid`（不重掷；若已有坦克则不放置）；朝向同格 `ef` |
+
+数据行见 `data/turn_end_events.csv`（`mission_06`），`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。所有 7 类事件 (`sniper` / `infantry_spawn` / `road_mine` / `adjacent_infantry_fire` / `commander_extra` / `stuka` / `panzer3_spawn`) 均沿用任务 1~4 既有实现，无需新增逻辑。
+
+> **「不要重掷」**：与任务 1 / 任务 4 的 `infantry_spawn` 与任务 1 的 `panzer3_spawn` 一致——掷出的点对应格被占用 / 无该 rid（eid）时**直接跳过**本次放置，不再补掷。`MissionLoader` 在开局对 3 辆 III 号坦克掷骰占位时仍走链式 1..6 寻空（与说明书「不要重掷」中**仅**针对回合结束放置不冲突；详见 `resolveEnemyDicePlacements`）。
+
+---
+
 ## 后续任务
 
-- **任务 5**：`mission_05.json`（法莱兹；`destroy_truck`、8×6 格；黑格 **eid** 与红格 **rid** 各 **1~6** 供掷骰；**开局随机步兵**走 **rid**，坦克走 **eid**）。任务 6 ~ 12 的地图与说明待补充。
+- **任务 5**：`mission_05.json`（法莱兹；`destroy_truck`、8×6 格；黑格 **eid** 与红格 **rid** 各 **1~6** 供掷骰；**开局随机步兵**走 **rid**，坦克走 **eid**）。
+- **任务 6**：见上文。
+- **任务 7 ~ 12**：地图与说明待补充。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

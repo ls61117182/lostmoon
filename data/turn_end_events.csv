@@ -1,4 +1,4 @@
-﻿mission_id,sum_min,sum_max,dice_count,effect_type,notes
+mission_id,sum_min,sum_max,dice_count,effect_type,notes
 mission_01,2,3,2,sniper,说明书：狙击手
 mission_01,4,4,2,commander_extra,车长额外行动
 mission_01,5,6,2,infantry_spawn,德军步兵→红格 rid
@@ -28,3 +28,10 @@ mission_05,2,5,2,adjacent_infantry_fire,任务5：2–5 相邻步兵齐射
 mission_05,6,9,2,german_truck_move,任务5：6–9 德军卡车沿路推进
 mission_05,10,10,2,commander_extra,任务5：10 车长未阵亡则额外行动
 mission_05,11,12,2,panzer4_spawn,任务5：11+ 掷1d6 放IV号到黑格 eid
+mission_06,2,3,2,sniper,任务6：2–3 狙击手
+mission_06,4,5,2,infantry_spawn,任务6：4–5 步兵→红格 rid（不重掷）
+mission_06,6,6,2,road_mine,任务6：6 公路地雷（AP0/装甲4）
+mission_06,7,9,2,adjacent_infantry_fire,任务6：7–9 相邻步兵齐射
+mission_06,10,10,2,commander_extra,任务6：10 车长额外行动（装填/修复/灭火）
+mission_06,11,11,2,stuka,任务6：11 斯图卡
+mission_06,12,12,2,panzer3_spawn,任务6：12 III号→黑格 eid（不重掷）

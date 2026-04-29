@@ -125,6 +125,8 @@ export interface UnitPlacement {
   facing?: Direction;
   /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `rid`（步兵）/ `eid`（坦克等） */
   startId?: number;
+  /** 任务 6 等：单位以**初始瘫痪**入场（放置「瘫痪」标记）；与回合结束 `mechanical_failure` 同义，由 `MissionLoader` 写入 `unit.paralyzed = true`。 */
+  paralyzed?: boolean;
 }
 
 export interface MissionData {

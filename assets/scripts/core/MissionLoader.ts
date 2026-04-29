@@ -273,5 +273,6 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
     u.loaded = false;     // 说明书：谢尔曼游戏开始时未装填
     u.hatchOpen = false;  // 起始关闭舱盖
   }
+  if (p.paralyzed) u.paralyzed = true;
   return u;
 }
