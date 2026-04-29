@@ -275,19 +275,39 @@ export class HexMap {
   }
 
   /**
-   * 计算射击路径上穿过的树篱数量（不含目标格本身的树篱）。
-   * 简化实现：累计每段相邻格之间的树篱标记。
+   * 计算射击路径上穿过的树篱数量（用于 §3.4 Step 1 命中所需点数中的"树篱数"修正项）。
+   *
+   * **GDD §3.4 规则**：若路径上的树篱"紧挨攻击者"，则**不计入**。"紧挨攻击者"指：
+   *   1. 该树篱与攻击者**处于同一格子**（即 `from` 格 `hedges[dir(from→邻格)]` 命中）；
+   *   2. 或该树篱所处格子**与攻击者相邻**且**树篱方向为攻击者所在格**（即 `path[1]` 格 `hedges[dir(path[1]→from)]` 命中）。
+   *
+   * 这两种情况都对应 `path[0]→path[1]` 这一条边——攻击者射出第一步穿过的那一段——
+   * 实现上从 `i=1` 起累计后续所有边即可：第一条边永远跳过，自然把上述两种编码同时排除掉。
+   *
+   * 一条物理边可能被任一侧编码，因此 `i ≥ 1` 时同时检查两侧（`a.hedges[dirAB] || b.hedges[dirBA]`），
+   * 任一侧命中即按 1 个树篱计数（不重复累加），与"该边是否有篱笆"语义一致。
+   *
+   * 起止格本身不计：循环上界为 `path.length - 1`，目标格 `path[length-1]` 不会作为起点被检查。
    */
   countHedgesAlong(from: Axial, to: Axial): number {
     const path = hexLine(from, to);
     let count = 0;
-    for (let i = 0; i < path.length - 1; i++) {
+    // 从 i=1 开始 → 跳过 path[0]→path[1] 这条紧挨攻击者的边
+    for (let i = 1; i < path.length - 1; i++) {
       const a = path[i];
       const b = path[i + 1];
-      const dir = directionTo(a, b);
-      if (dir === null) continue;
-      const tile = this.get(a);
-      if (tile?.hedges?.[dir]) count++;
+      const dirAB = directionTo(a, b);
+      if (dirAB === null) continue;
+      const tileA = this.get(a);
+      if (tileA?.hedges?.[dirAB]) {
+        count++;
+        continue;
+      }
+      // 兼容：同一物理边的另一侧编码（b 格指向 a 格的方向上写了树篱）
+      const dirBA = directionTo(b, a);
+      if (dirBA === null) continue;
+      const tileB = this.get(b);
+      if (tileB?.hedges?.[dirBA]) count++;
     }
     return count;
   }

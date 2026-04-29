@@ -141,6 +141,19 @@ function validateTruckPath(data: MissionData, map: HexMap) {
     if (t.terrain !== 'road') {
       throw new Error(`任务 ${data.id}：truckPath[${i}] 非公路格（须 t="r" 对应格）`);
     }
+    // exitDir 仅末格生效：中间格写了直接抛错（避免误以为可以中途换出口）
+    if (o.exitDir !== undefined) {
+      if (i !== p.length - 1) {
+        throw new Error(
+          `任务 ${data.id}：truckPath[${i}] 误填 exitDir，仅末格（i=${p.length - 1}）允许；当前值 ${o.exitDir}`,
+        );
+      }
+      if (!Number.isInteger(o.exitDir) || o.exitDir < 0 || o.exitDir > 5) {
+        throw new Error(
+          `任务 ${data.id}：truckPath 末格 exitDir=${o.exitDir} 非法（须 0..5：0=E,1=SE,2=SW,3=W,4=NW,5=NE）`,
+        );
+      }
+    }
   }
   for (let i = 0; i < p.length - 1; i++) {
     const a = offsetToAxial(p[i]!);

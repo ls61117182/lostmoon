@@ -206,6 +206,75 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 5：摧毁卡车
+
+> 对应数据：`assets/resources/missions/mission_05.json`。8×6 odd-r。地图引入水域 `w` 与一条贯穿底部的公路（卡车撤退线）。
+
+### 目标
+
+- **击毁德军卡车**（`kind: "truck"`）；
+- 随后将谢尔曼开至 **撤离格** `evacAt: col=6, row=0`，沿 **`evacExitDir = 5`（NE）** 驶出地图（撤离几何与红箭一致）。
+- `objective.type = "destroy_kind_evac"`、`kind = "truck"`：与任务 1 / 任务 6 同一族判定，先满足"全部 truck 已毁"，再走 `isShermanEvacDrive`（前进或反向后退使谢尔曼离场）即胜。
+
+### 失败条件
+
+- 谢尔曼被摧毁（`checkOutcome` 优先判负）；
+- **卡车驶出地图**：当 `mission.truckEscapeDefeat = true` 时立即判负（见下文 `german_truck_move` 路径末端越界）。
+
+### 初始设置
+
+- **谢尔曼**：`col=1, row=1`，`facing=0`（正东），起始格为带黑箭头标记的 **田地**（`t: "f"`，以 `mission_05.json` 为准）。
+- **卡车**：固定 `at: col=7, row=2`，与 `truckPath` **首格**一致；`MissionLoader` 在加载完成时把卡车朝向修为指向 `truckPath[1]` 的方向（见 `loadMission` 末尾对 `kind: "truck"` 的特别处理）。
+- **2 辆 IV 号 + 3 名步兵**：`enemyStartByDice: true` 且无 `at`；按混合部署规则——**坦克** 走 **eid 1~6** 黑格链（共 6 处：`(4,0)=5`、`(5,0)=6`、`(6,1)=1`、`(1,4)=4`、`(6,4)=2`、`(3,5)=3`），朝向同格 **`ef`**；**步兵** 走 **rid 1~6** 红格链（共 6 处：`(3,0)=6`、`(6,3)=1`、`(4,2)=3`、`(2,4)=5`、`(3,4)=2`、`(5,4)=4`），朝向同格 **`ef ?? 0`**（本关红格均未配 `ef` → 默认正东，步兵无须依朝向射击）。各自掷 1d6 链式占位（点数对应格被占用 / 不存在则 +1 顺延循环 1..6）。
+
+### 卡车撤退路径 `truckPath`
+
+每个条目类型为 [`TruckPathEntry`](../assets/scripts/core/types.ts)，即 `Offset` (`{col, row}`) 加可选 `exitDir`：
+
+| 字段 | 说明 |
+|---|---|
+| `col`, `row` | offset 坐标，须为公路格（`t === "r"`） |
+| `exitDir`（可选，**仅末格生效**） | 驶出方向（0=E, 1=SE, 2=SW, 3=W, 4=NW, 5=NE）。卡车在末格继续推进时，沿该方向再走 1 格——此格必越界 → 触发 `mission.truckEscapeDefeat = true` 判负，是关卡的兜底逃脱口。**未配置时**：默认沿 `truck.facing` 推算下一格，行为与旧关卡兼容。 |
+
+当前 `mission_05.json` 的 7 格路径：
+
+| 序号 | offset | 备注 |
+|---|---|---|
+| 1 | `(col=7, row=2)` | 卡车初始格 / `enemies[0].at` |
+| 2 | `(col=6, row=3)` | |
+| 3 | `(col=6, row=4)` | |
+| 4 | `(col=5, row=5)` | 进入底部贯穿公路 |
+| 5 | `(col=4, row=5)` | |
+| 6 | `(col=3, row=5)` | |
+| 7 | `(col=2, row=5)` | 路径末端（按需在此条目追加 `"exitDir": <0..5>` 锁定驶离方向） |
+
+`MissionLoader.validateTruckPath` 强校验：
+
+- 每格须 `t === "r"`（公路），相邻格 `hexDistance === 1`；
+- `exitDir` 仅允许出现在**末格**；中间格写了直接抛错（避免误以为可以中途换出口）；
+- `exitDir` 须为 0..5 整数，否则抛错（落地越界这一步也落到 `germanTruckDefeatAfterExitMove` 分支判负）。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–5** | **相邻步兵齐射** | `adjacent_infantry_fire`：与谢尔曼**相邻**的全体德军步兵各一击（穿甲值 1） |
+| **6–9** | **德军卡车沿路推进** | `german_truck_move`：卡车沿 `truckPath` 至少前进 **1 格**；落点若仍有任何坦克（含谢尔曼 / 敌坦 / 别的卡车）则**再多走 1 格**，直至落到无坦克的格；走出 `truckPath` 后改沿 `truck.facing` 步进（每段动画含转向 + 平移）。**任意一步越界 → 整段动画末段挂 `truckExitDefeat`，结束后置 `mission.truckEscapeDefeat = true` 判负。** |
+| **10** | **车长额外行动** | `commander_extra`：车长存活时按程序优先级执行 **灭火 → 修复瘫痪 → 修复炮塔 → 装填** 四选一 |
+| **11–12** | **IV 号坦克** | `panzer4_spawn`：1d6 对应黑格 `eid`（不重掷；落格已有坦克则不放置）；朝向同格 `ef` |
+
+数据行见 `data/turn_end_events.csv`（`mission_05`），`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+> **`german_truck_move` 实现要点**（详见 `assets/scripts/core/TurnEndEventApply.ts`）：
+>
+> - **每步选格的优先级**：当前格仍在 `truckPath` 中段 → 走下一条目；否则若当前格 = 末格 **且配置了 `exitDir`** → 沿 `exitDir` 走一格驶出（必越界 → 判负）；都不满足时 → 沿 `truck.facing` 走一格（旧关卡兼容路径）。
+> - **预模拟段**：`prepareTurnEndEvent` 在 UI 确认前按上述规则滚动模拟，产出 `germanTruckMoveSegments`（`turn` / `move` 片段）；
+> - **动画串联**：`BattleScene.enqueueGermanTruckMoveAnims` 把片段塞入 `animQueue`，按 `moveDuration` 顺序播放；
+> - **末段越界 = 判负**：`germanTruckDefeatAfterExitMove=true` 时，最后一段 `move` 帧置 `truckExitDefeat`，动画完成后 `BattleScene` 写 `mission.truckEscapeDefeat = true`，下一次 `checkOutcome` 直接 `defeat`；
+> - **apply 时机**：仅当卡车落点仍在地图内时，apply 才把 `truck.pos` / `truck.facing` 推进到落点（避免末段越界与抵达最后一格混淆）。
+
+---
+
 ## 任务 6：以一敌三
 
 > 对应数据：`assets/resources/missions/mission_06.json`。8×6 odd-r。
@@ -242,7 +311,7 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ## 后续任务
 
-- **任务 5**：`mission_05.json`（法莱兹；`destroy_truck`、8×6 格；黑格 **eid** 与红格 **rid** 各 **1~6** 供掷骰；**开局随机步兵**走 **rid**，坦克走 **eid**）。
+- **任务 5**：见上文（`destroy_kind_evac` + `kind=truck`，配套 `truckPath` + `german_truck_move` 回合结束推进；卡车驶出地图判负）。
 - **任务 6**：见上文。
 - **任务 7 ~ 12**：地图与说明待补充。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

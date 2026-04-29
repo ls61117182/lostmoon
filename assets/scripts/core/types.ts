@@ -156,8 +156,19 @@ export interface MissionData {
   /**
    * 任务 5 等：德军卡车沿 `t: "r"` 公路推进的格序（offset col,row），须两两相邻且均为公路。
    * 首格为卡车初始格，与 `enemies` 中 `kind: "truck"` 的 `at` 一致；回合结束 6–9 行效果 `german_truck_move` 会沿此表推进。
+   * **末格**可加 `exitDir`：卡车在末格继续推进时，沿该方向再走一格驶离地图（替代原本读取 `truck.facing`）；
+   * 仅最后一格的 `exitDir` 会被使用，中间格上写了也会被忽略。
    */
-  truckPath?: Offset[];
+  truckPath?: TruckPathEntry[];
+}
+
+/**
+ * `truckPath` 的格条目：可写为 `Offset` 形式 `{ col, row }`；
+ * **仅最后一格**可附加 `exitDir`（六向 0=E…5=NE），用于强制卡车从该格沿此方向驶出地图。
+ */
+export interface TruckPathEntry extends Offset {
+  /** 仅末格生效：卡车从该格沿此方向再走 1 格驶出地图（必越界 → 触发 `truckEscapeDefeat` 判负）。 */
+  exitDir?: Direction;
 }
 
 export interface TileDef {

@@ -97,15 +97,68 @@ describe('HexMap 视线 / 树篱', () => {
     expect(map.hasLineOfSight({ q: 0, r: 0 }, { q: 4, r: 0 })).toBe(true);
   });
 
-  test('countHedgesAlong 统计沿途树篱', () => {
+  test('countHedgesAlong：紧挨攻击者格的树篱不计（编码在攻击者格指向邻格）', () => {
     const map = new HexMap(3, 1);
+    map.set({
+      pos: { q: 0, r: 0 },
+      terrain: 'field',
+      hedges: [true, false, false, false, false, false], // 攻击者格东向树篱
+    });
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'field' });
+    map.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
+    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 })).toBe(0);
+  });
+
+  test('countHedgesAlong：紧挨攻击者格的树篱不计（编码在邻格指回攻击者方向）', () => {
+    const map = new HexMap(3, 1);
+    map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
+    map.set({
+      pos: { q: 1, r: 0 },
+      terrain: 'field',
+      hedges: [false, false, false, true, false, false], // 邻格西向（指回攻击者）树篱
+    });
+    map.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
+    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 })).toBe(0);
+  });
+
+  test('countHedgesAlong：路径中段树篱仍按 1 计，且任一侧编码都识别', () => {
+    // (1,0).hedges[0]: 1↔2 之间的树篱编码在 (1,0) 指向 (2,0)
+    const map1 = new HexMap(4, 1);
+    map1.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
+    map1.set({
+      pos: { q: 1, r: 0 },
+      terrain: 'field',
+      hedges: [true, false, false, false, false, false],
+    });
+    map1.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
+    map1.set({ pos: { q: 3, r: 0 }, terrain: 'field' });
+    expect(map1.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 0 })).toBe(1);
+
+    // (2,0).hedges[3]: 同一物理边在 (2,0) 指向 (1,0) 一侧编码
+    const map2 = new HexMap(4, 1);
+    map2.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
+    map2.set({ pos: { q: 1, r: 0 }, terrain: 'field' });
+    map2.set({
+      pos: { q: 2, r: 0 },
+      terrain: 'field',
+      hedges: [false, false, false, true, false, false],
+    });
+    map2.set({ pos: { q: 3, r: 0 }, terrain: 'field' });
+    expect(map2.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 0 })).toBe(1);
+  });
+
+  test('countHedgesAlong：相邻目标（路径仅 1 段）→ 紧挨攻击者一律不计', () => {
+    const map = new HexMap(2, 1);
     map.set({
       pos: { q: 0, r: 0 },
       terrain: 'field',
       hedges: [true, false, false, false, false, false],
     });
-    map.set({ pos: { q: 1, r: 0 }, terrain: 'field' });
-    map.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
-    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 })).toBe(1);
+    map.set({
+      pos: { q: 1, r: 0 },
+      terrain: 'field',
+      hedges: [false, false, false, true, false, false],
+    });
+    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(0);
   });
 });

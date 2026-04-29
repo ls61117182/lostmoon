@@ -119,6 +119,11 @@ export function hitThreshold(ctx: AttackContext): number {
 export interface HitBreakdown {
   size: number;
   distance: number;
+  /**
+   * 路径上的树篱数（每个 +1）；**紧挨攻击者的那一段树篱不计**——
+   * 即攻击者格 → 第一邻格之间的树篱（无论编码在攻击者格指向邻格、还是编码在邻格指向攻击者格）一律免计。
+   * 详见 `HexMap.countHedgesAlong` 的实现注释与 GDD §3.4 Step 1。
+   */
   hedges: number;
   building: number;     // 0 或 1
   smoke: number;        // 0 或 1 —— 目标处于烟雾掩护中（§3.5）
