@@ -284,6 +284,8 @@ interface MoveAnim {
   turnTo?: Direction;
   /** kind==='move'：驶出地图的撤离移动，结束时置 shermanEvacuated 并判胜 */
   evacExit?: boolean;
+  /** kind==='move'：德军卡车沿公路末端驶离地图的最后一个位移，结束时置 truckEscapeDefeat（须在抵达最后一格之后的驶离段） */
+  truckExitDefeat?: boolean;
 }
 
 type Phase = 'player' | 'enemy';
@@ -790,6 +792,8 @@ export class BattleScene extends Component {
     extraCaptionLabel: Label | null;
     extraDieLabels: Label[];
     germanTruckMoveSegments?: GermanTruckMoveSegment[];
+    /** 与 german_truck_move.escapeDrive 配对：仅在驶离动画的最后一移上判负 */
+    germanTruckDefeatAfterExitMove?: boolean;
     /** 相邻步兵集火：主骰走后串联主炮同款 DiceShow，再显示正文与确认 */
     adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
   } | null = null;
@@ -1749,6 +1753,13 @@ export class BattleScene extends Component {
         this.updateOutcomeOverlay();
         this.battleLog(
           `[BattleScene] ${finishedUnit.kind} 撤离完成 → 胜负=${this.outcome}`,
+        );
+      } else if (anim.truckExitDefeat && this.mission && finishedUnit.kind === 'truck') {
+        this.mission.truckEscapeDefeat = true;
+        this.outcome = checkOutcome(this.mission);
+        this.updateOutcomeOverlay();
+        this.battleLog(
+          `[BattleScene] truck 驶离公路终点 → 胜负=${this.outcome}`,
         );
       } else {
         this.battleLog(
@@ -7507,6 +7518,7 @@ export class BattleScene extends Component {
       extraCaptionLabel: refs.extraCaptionLabel,
       extraDieLabels: refs.extraDieLabels,
       germanTruckMoveSegments: prepared.germanTruckMoveSegments,
+      germanTruckDefeatAfterExitMove: prepared.germanTruckDefeatAfterExitMove,
       adjacentInfantryVolleys: adjacentVolleys.length > 0 ? adjacentVolleys : undefined,
     };
   }
@@ -7854,6 +7866,7 @@ export class BattleScene extends Component {
         : undefined;
 
     if (truck && truckSegments && truckSegments.length > 0) {
+      const defeatAfterExitMove = !!ui.germanTruckDefeatAfterExitMove;
       this.destroyTurnEndEventUI();
       this.pendingAfterAnimChain = () => {
         try {
@@ -7865,7 +7878,9 @@ export class BattleScene extends Component {
         this.redraw();
         this.endEnemyPhase();
       };
-      this.enqueueGermanTruckMoveAnims(truck, truckSegments);
+      this.enqueueGermanTruckMoveAnims(truck, truckSegments, {
+        markLastMoveTruckExitDefeat: defeatAfterExitMove,
+      });
       return;
     }
 
@@ -7881,7 +7896,11 @@ export class BattleScene extends Component {
   }
 
   /** 回合结束 german_truck_move：与敌方坦克相同的转向 / 平移片段与时序 */
-  private enqueueGermanTruckMoveAnims(truck: Unit, segments: GermanTruckMoveSegment[]) {
+  private enqueueGermanTruckMoveAnims(
+    truck: Unit,
+    segments: GermanTruckMoveSegment[],
+    opts: { markLastMoveTruckExitDefeat?: boolean } = {},
+  ) {
     const dur = Math.max(0.05, this.moveDuration);
     const queue: MoveAnim[] = [];
     for (const seg of segments) {
@@ -7909,6 +7928,15 @@ export class BattleScene extends Component {
           t: 0,
           dur,
         });
+      }
+    }
+    if (opts.markLastMoveTruckExitDefeat) {
+      for (let i = queue.length - 1; i >= 0; i--) {
+        const m = queue[i];
+        if (m && m.kind === 'move') {
+          m.truckExitDefeat = true;
+          break;
+        }
       }
     }
     this.animQueue = queue;

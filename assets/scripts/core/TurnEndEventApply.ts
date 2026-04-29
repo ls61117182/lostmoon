@@ -12,7 +12,14 @@ import {
   rollAttack,
 } from './Combat';
 import { RNG } from './Dice';
-import { approximateDirection, directionTo, hexDistance, offsetToAxial, rotateDirection } from './HexGrid';
+import {
+  approximateDirection,
+  directionTo,
+  hexDistance,
+  neighbor,
+  offsetToAxial,
+  rotateDirection,
+} from './HexGrid';
 import { LoadedMission } from './MissionLoader';
 import { TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
@@ -49,6 +56,8 @@ export interface TurnEndPrepared {
   extraDicePhases?: TurnEndExtraDicePhase[];
   /** 德军卡车移动：确认后 BattleScene 依序播片段，再调用 apply */
   germanTruckMoveSegments?: GermanTruckMoveSegment[];
+  /** 仅「已在路径末端、沿朝向驶离地图」：在驶离移动的动画帧上置 truckEscapeDefeat，勿在 apply 里置位（避免与抵达最后一格混淆） */
+  germanTruckDefeatAfterExitMove?: boolean;
   /** 相邻步兵集火：由 BattleScene 在主骰后串联完整攻击骰面板（命中→穿甲→伤害），确认后再 apply */
   adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
 }
@@ -59,31 +68,6 @@ function singleStepTowardFacing(from: Direction, to: Direction): Direction {
   const ccw = (from - to + 6) % 6;
   if (cw <= ccw) return rotateDirection(from, 1);
   return rotateDirection(from, 5);
-}
-
-/** 从 truckPath[curIdx] 沿路径走到 path[j]（一格或多格），每格先对齐朝向再驶入 */
-export function buildGermanTruckMoveSegments(
-  truck: Unit,
-  path: Offset[],
-  curIdx: number,
-  j: number,
-): GermanTruckMoveSegment[] {
-  const segments: GermanTruckMoveSegment[] = [];
-  let simFace = (truck.facing ?? 0) as Direction;
-  for (let idx = curIdx; idx < j; idx++) {
-    const fromAx = offsetToAxial(path[idx]!);
-    const toAx = offsetToAxial(path[idx + 1]!);
-    const targetFace = directionTo(fromAx, toAx);
-    if (targetFace === null) continue;
-    const tf = targetFace;
-    while (simFace !== tf) {
-      const nextFace = singleStepTowardFacing(simFace, tf);
-      segments.push({ type: 'turn', at: { ...fromAx }, from: simFace, to: nextFace });
-      simFace = nextFace;
-    }
-    segments.push({ type: 'move', from: { ...fromAx }, to: { ...toAx } });
-  }
-  return segments;
 }
 
 /** 从斯图卡预模拟结果拆出需在 UI 上逐段展示的骰子 */
@@ -151,8 +135,8 @@ function isTankUnitKind(k: UnitKind): boolean {
   return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
 }
 
-/** 某格上是否有**其它**坦克（不含本车卡车自身），含谢尔曼与敌坦。 */
-function cellBlockedByTank(mission: LoadedMission, pos: { q: number; r: number }, selfTruck: Unit): boolean {
+/** 某格上是否站着任何坦克（含谢尔曼 / 敌坦 / 另一辆 truck，不计已毁） */
+function cellHasTank(mission: LoadedMission, pos: { q: number; r: number }, selfTruck: Unit): boolean {
   const u = unitAt(mission, pos);
   if (!u || u.destroyed || u === selfTruck) return false;
   return isTankUnitKind(u.kind);
@@ -511,51 +495,93 @@ export function prepareTurnEndEvent(
       if (!truck) {
         return { bodyKey: 'turnEnd.germanTruck.dead', bodyParams: baseParams, apply: () => {} };
       }
-      const curIdx = path.findIndex(o => {
+      const startIdx = path.findIndex(o => {
         const a = offsetToAxial(o);
         return a.q === truck.pos.q && a.r === truck.pos.r;
       });
-      if (curIdx < 0) {
-        return { bodyKey: 'turnEnd.germanTruck.lost', bodyParams: baseParams, apply: () => {} };
+
+      // 规则：卡车每次事件至少前进 1 格；落点若有任何坦克（不论谢尔曼 / 敌坦 / 别的卡车）就再多走 1 格，
+      // 直到落在「没有坦克」的格子；途中任意一步落到地图外即整体判定为驶离地图、动画末段判负。
+      const segments: GermanTruckMoveSegment[] = [];
+      let cursor: Axial = { q: truck.pos.q, r: truck.pos.r };
+      let simFace: Direction = (truck.facing ?? 0) as Direction;
+      let landCell: Axial = { ...cursor };
+      let offMap = false;
+      let stepCells = 0;
+      const MAX_STEPS = 32;
+      for (let step = 0; step < MAX_STEPS; step++) {
+        // 当前格仍位于 truckPath 中段 → 沿路径走向下一格；否则沿当前朝向走一格
+        const idxNow = path.findIndex(o => {
+          const a = offsetToAxial(o);
+          return a.q === cursor.q && a.r === cursor.r;
+        });
+        let targetCell: Axial;
+        if (idxNow >= 0 && idxNow < path.length - 1) {
+          targetCell = offsetToAxial(path[idxNow + 1]!);
+        } else {
+          targetCell = neighbor(cursor, simFace);
+        }
+        const targetDir = directionTo(cursor, targetCell);
+        if (targetDir !== null) {
+          while (simFace !== targetDir) {
+            const nf = singleStepTowardFacing(simFace, targetDir);
+            segments.push({ type: 'turn', at: { ...cursor }, from: simFace, to: nf });
+            simFace = nf;
+          }
+        }
+        segments.push({ type: 'move', from: { ...cursor }, to: { ...targetCell } });
+        cursor = targetCell;
+        stepCells += 1;
+
+        if (!ctx.mission.map.has(cursor)) {
+          offMap = true;
+          landCell = { ...cursor };
+          break;
+        }
+        if (!cellHasTank(ctx.mission, cursor, truck)) {
+          landCell = { ...cursor };
+          break;
+        }
+        // 此格已有坦克，本次循环尚未落地，继续沿路径 / 朝向再前进一格
       }
-      if (curIdx >= path.length - 1) {
+      const finalFace = simFace;
+
+      // 落点出地图：动画末段挂 truckExitDefeat，动画结束后判负
+      if (offMap) {
         return {
-          bodyKey: 'turnEnd.germanTruck.escaped',
+          bodyKey: 'turnEnd.germanTruck.escapeDrive',
           bodyParams: baseParams,
+          germanTruckMoveSegments: segments,
+          germanTruckDefeatAfterExitMove: true,
+          apply: () => {},
+        };
+      }
+
+      // 落点在地图内：apply 推进 truck.pos / facing；按是否仍在 truckPath 选择 bodyKey
+      const landIdx = path.findIndex(o => {
+        const a = offsetToAxial(o);
+        return a.q === landCell.q && a.r === landCell.r;
+      });
+      if (landIdx >= 0) {
+        return {
+          bodyKey: 'turnEnd.germanTruck.moved',
+          bodyParams: { ...baseParams, stepCells, toIdx: landIdx + 1 },
+          germanTruckMoveSegments: segments,
+          germanTruckDefeatAfterExitMove: false,
           apply: () => {
-            truck.destroyed = true;
-            ctx.mission.truckEscapeDefeat = true;
+            truck.pos = { ...landCell };
+            truck.facing = finalFace;
           },
         };
       }
-      let j = curIdx + 1;
-      while (j < path.length) {
-        const p = offsetToAxial(path[j]!);
-        if (!cellBlockedByTank(ctx.mission, p, truck)) break;
-        j += 1;
-      }
-      if (j >= path.length) {
-        return {
-          bodyKey: 'turnEnd.germanTruck.escaped',
-          bodyParams: baseParams,
-          apply: () => {
-            truck.destroyed = true;
-            ctx.mission.truckEscapeDefeat = true;
-          },
-        };
-      }
-      const newPos = offsetToAxial(path[j]!);
-      const fromAx = offsetToAxial(path[Math.max(0, j - 1)]!);
-      const face = (directionTo(fromAx, newPos) ?? truck.facing ?? 0) as Direction;
-      const stepCells = j - curIdx;
-      const germanTruckMoveSegments = buildGermanTruckMoveSegments(truck, path, curIdx, j);
       return {
-        bodyKey: 'turnEnd.germanTruck.moved',
-        bodyParams: { ...baseParams, stepCells, toIdx: j + 1 },
-        germanTruckMoveSegments,
+        bodyKey: 'turnEnd.germanTruck.atRoadEnd',
+        bodyParams: baseParams,
+        germanTruckMoveSegments: segments,
+        germanTruckDefeatAfterExitMove: false,
         apply: () => {
-          truck.pos = { ...newPos };
-          truck.facing = face;
+          truck.pos = { ...landCell };
+          truck.facing = finalFace;
         },
       };
     }
