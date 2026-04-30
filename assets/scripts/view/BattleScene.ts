@@ -120,7 +120,7 @@ const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
-import { Direction, effectiveDiceTerrain, MissionData, ShermanCrew, TerrainType, Tile, tileHasBridge, Unit, UnitKind } from '../core/types';
+import { Direction, effectiveDiceTerrain, isFootUnit, MissionData, ShermanCrew, TerrainType, Tile, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -585,6 +585,10 @@ const SPAWN_ENTRY_ARROW_STROKE = new Color( 35,  38,  42, 230);
 /** 撤离格箭头：与出生箭头同几何尺寸，沿 `evacExitDir` 指向网格外（与入场箭头指向格心相反） */
 const EVAC_ARROW_FILL   = new Color(210,  55,  55, 255);
 const EVAC_ARROW_STROKE = new Color(110,  20,  20, 240);
+
+/** 军官（任务 8 红色边框建筑里的高级军官）：单位身周与所在格的红色高亮边框 */
+const OFFICER_HALO_STROKE = new Color(220,  40,  40, 255);
+const OFFICER_TILE_STROKE = new Color(220,  40,  40, 255);
 
 /**
  * 2d6 之和 ≥ N 的精确概率（N 取 2..13；超出范围按边界处理）。
@@ -1135,6 +1139,8 @@ export class BattleScene extends Component {
     this.drawShermanSpawnEntryArrow();
     // 4d. destroy_kind_evac：撤离格红色箭头（与出生箭头同尺度，方向指向网格外）
     this.drawEvacExitArrow();
+    // 4e. 军官单位（任务 8 红框建筑里的高级军官，kind='officer'）：在所在格绘制红色 hex 边框
+    this.drawOfficerTileHighlights();
 
     // 5. 单位 —— 正在动画的那个用插值像素坐标，其余用本格坐标
     this.drawUnitMaybeAnim(sherman);
@@ -1162,8 +1168,8 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     for (const e of enemies) {
       if (e.destroyed) continue;
-      // 主炮不瞄步兵：步兵专属机枪（§3.1.2 / §3.6），避免大红圈误导
-      if (e.kind === 'infantry') continue;
+      // 主炮不瞄徒步类（步兵 / 军官）：徒步单位专属机枪（§3.1.2 / §3.6），避免大红圈误导
+      if (isFootUnit(e)) continue;
       const ctx = { attacker: sherman, target: e, map };
       if (!canAttack(ctx).ok) continue;
 
@@ -1330,6 +1336,26 @@ export class BattleScene extends Component {
     g.lineWidth = 2;
   }
 
+  /**
+   * 在每个 `kind === 'officer'` 的德军军官单位所在格上绘制红色六角边框，与说明书原图
+   * 「红色边框建筑」一致；军官被摧毁后不再绘制（避免遗留视觉线索）。
+   */
+  private drawOfficerTileHighlights() {
+    if (!this.g || !this.mission) return;
+    const g = this.g;
+    const enemies = this.mission.enemies;
+    let drewAny = false;
+    for (const u of enemies) {
+      if (u.kind !== 'officer' || u.destroyed) continue;
+      const c = this.project(u.pos.q, u.pos.r);
+      g.strokeColor = OFFICER_TILE_STROKE;
+      g.lineWidth = 3;
+      this.drawHexOutline(c.x, c.y, this.hexSize - 2);
+      drewAny = true;
+    }
+    if (drewAny) g.lineWidth = 2;
+  }
+
   /** 命中概率分档配色：成功率越高越绿，越低越红 */
   private previewColor(prob: number): Color {
     if (prob >= 0.7)  return PREVIEW_COLOR_GREAT;
@@ -1441,7 +1467,8 @@ export class BattleScene extends Component {
    * 谢尔曼：不再使用「车体受损」折线标；着火 / 炮塔 / 瘫痪等有独立图标或 fireLevel。
    */
   private collectTankStatusBadgeKinds(u: Unit): TankStatusBadgeKind[] {
-    if (u.kind === 'infantry' || u.destroyed) return [];
+    // 徒步类（步兵 / 军官）没有装甲 / 装填等坦克状态，跳过坦克 badge 列。
+    if (isFootUnit(u) || u.destroyed) return [];
     const out: TankStatusBadgeKind[] = [];
     if (u.kind !== 'sherman' && u.damaged && !this.isOnFire(u)) {
       out.push('damaged');
@@ -2215,8 +2242,8 @@ export class BattleScene extends Component {
     const c = overrideX !== undefined && overrideY !== undefined
       ? { x: overrideX, y: overrideY }
       : this.project(u.pos.q, u.pos.r);
-    // 步兵单独走一条更"像小人"的绘制路径，与坦克的大圆 + 朝向线拉开辨识度。
-    if (u.kind === 'infantry') {
+    // 徒步类（步兵 / 军官）单独走一条更"像小人"的绘制路径，与坦克的大圆 + 朝向线拉开辨识度。
+    if (isFootUnit(u)) {
       this.drawInfantry(u, c.x, c.y);
       return;
     }
@@ -2365,6 +2392,14 @@ export class BattleScene extends Component {
     g.circle(cx, cy + headOffset, headR);
     g.fill();
     g.stroke();
+    // 军官（kind='officer'）：身体外加一圈红色光环，与说明书原图「红色边框建筑里的德军步兵」呼应
+    if (u.kind === 'officer') {
+      g.strokeColor = OFFICER_HALO_STROKE;
+      g.lineWidth = 3;
+      g.circle(cx, cy - bodyR * 0.05, bodyR * 1.55);
+      g.stroke();
+      g.lineWidth = 2;
+    }
   }
 
   // ---------- HUD ----------
@@ -4776,8 +4811,8 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
-    // 步兵无俯视图 AI；卡车仅在回合结束事件 german_truck_move 中沿路移动，不参与敌方阶段掷骰
-    const aiCandidates = this.mission.enemies.filter(e => e.kind !== 'infantry' && e.kind !== 'truck');
+    // 徒步类（步兵 / 军官）无俯视图 AI；卡车仅在回合结束事件 german_truck_move 中沿路移动，不参与敌方阶段掷骰
+    const aiCandidates = this.mission.enemies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
     this.enemyOrder = selectEnemyOrder(aiCandidates, this.mission.sherman, this.rng);
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -5093,7 +5128,7 @@ export class BattleScene extends Component {
 
   private collectUnitInspectStatusLines(u: Unit): string[] {
     const parts: string[] = [];
-    const tankLike = u.kind !== 'infantry';
+    const tankLike = !isFootUnit(u);
     if (u.kind === 'sherman') {
       if ((u.fireLevel ?? 0) > 0) {
         parts.push(t('tileInspect.status.shermanFire', { n: u.fireLevel ?? 0 }));
@@ -5291,7 +5326,8 @@ export class BattleScene extends Component {
       mark(y, h);
       y = y - h - 8;
     }
-    if (u.kind === 'infantry') {
+    if (isFootUnit(u)) {
+      // 徒步类（步兵 / 军官）：无装甲 / 穿甲数据表，仅显示提示
       const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.infantryNoTable'), 15);
       mark(y, h);
       y = y - h - gapL;
@@ -6354,8 +6390,8 @@ export class BattleScene extends Component {
     const occupied = new Set<string>();
     for (const u of enemies) {
       if (u === enemy || u.destroyed) continue;
-      // 敌方坦克 / 卡车不被己方步兵占格阻挡，可驶入与步兵叠格
-      if (enemy.kind !== 'infantry' && u.kind === 'infantry') continue;
+      // 敌方坦克 / 卡车不被己方徒步类（步兵 / 军官）占格阻挡，可驶入与徒步单位叠格
+      if (!isFootUnit(enemy) && isFootUnit(u)) continue;
       occupied.add(`${u.pos.q},${u.pos.r}`);
     }
     occupied.add(`${sherman.pos.q},${sherman.pos.r}`);
@@ -6483,8 +6519,8 @@ export class BattleScene extends Component {
     if (!this.mission) return occ;
     for (const u of this.mission.enemies) {
       if (u === self || u.destroyed) continue;
-      // 敌方坦克 / 卡车不被己方步兵占格阻挡，可驶入与步兵叠格
-      if (self.kind !== 'infantry' && u.kind === 'infantry') continue;
+      // 敌方坦克 / 卡车不被己方徒步类（步兵 / 军官）占格阻挡，可驶入与徒步单位叠格
+      if (!isFootUnit(self) && isFootUnit(u)) continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
     occ.add(`${this.mission.sherman.pos.q},${this.mission.sherman.pos.r}`);
@@ -6551,14 +6587,14 @@ export class BattleScene extends Component {
     const mgSel = this.selectedMGDieIdx >= 0;
 
     if (attackOrMisc && enemiesOnTile.length > 0) {
-      // 叠格场景：机枪只打步兵；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
+      // 叠格场景：机枪只打徒步类（步兵 / 军官）；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
       if (mgSel) {
-        const inf = enemiesOnTile.find(e => e.kind === 'infantry') ?? enemiesOnTile[0]!;
+        const inf = enemiesOnTile.find(e => isFootUnit(e)) ?? enemiesOnTile[0]!;
         this.tryMGAttack(inf);
         return;
       }
       if (gunSel) {
-        const tank = enemiesOnTile.find(e => e.kind !== 'infantry') ?? enemiesOnTile[0]!;
+        const tank = enemiesOnTile.find(e => !isFootUnit(e)) ?? enemiesOnTile[0]!;
         this.tryAttack(tank);
         return;
       }
@@ -6577,8 +6613,8 @@ export class BattleScene extends Component {
     const { map, sherman } = this.mission;
     const slot = this.phaseDice[this.selectedGunDieIdx];
     if (!slot || slot.used) return;
-    // 主炮禁瞄步兵：引导玩家改用机枪骰；不消耗骰，避免误操作损失行动资源
-    if (target.kind === 'infantry') {
+    // 主炮禁瞄徒步类（步兵 / 军官）：引导玩家改用机枪骰；不消耗骰，避免误操作损失行动资源
+    if (isFootUnit(target)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('attack.reason.gunVsInfantry'),
         new Color(255, 200, 120, 255), { size: 22, dur: 1.0, rise: 26 });
       return;

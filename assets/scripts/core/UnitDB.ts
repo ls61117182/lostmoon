@@ -26,6 +26,9 @@ const DB: Record<UnitKind, UnitStats> = {
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     size: 0, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 1,
   },
+  officer: { // 军官 - 任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
+    size: 0, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 1,
+  },
 };
 
 export function getUnitStats(kind: UnitKind): UnitStats {

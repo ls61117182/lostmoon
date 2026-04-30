@@ -23,7 +23,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Offset, Unit, UnitKind } from './types';
+import { Axial, Direction, effectiveDiceTerrain, isFootUnit, Offset, Unit, UnitKind } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -103,7 +103,8 @@ function buildStukaExtraDicePhases(sim: {
 function shermanLosToAnyInfantry(mission: LoadedMission): boolean {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
-    if (e.destroyed || e.kind !== 'infantry') continue;
+    // 「徒步类」单位（步兵 / 军官）都纳入狙击手视线检查 —— 任务 8 起军官与步兵共享 LOS 触发条件。
+    if (e.destroyed || !isFootUnit(e)) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return true;
   }
   return false;
@@ -155,8 +156,9 @@ function cloneUnitForSim(u: Unit): Unit {
 function hasInfantryAdjacentToSherman(mission: LoadedMission): boolean {
   const sh = mission.sherman;
   if (sh.destroyed) return false;
+  // 步兵 / 军官都计入「相邻徒步单位」 —— 任务 8 起军官在相邻齐射事件中与步兵同等参与。
   return mission.enemies.some(
-    e => !e.destroyed && e.kind === 'infantry' && hexDistance(e.pos, sh.pos) === 1,
+    e => !e.destroyed && isFootUnit(e) && hexDistance(e.pos, sh.pos) === 1,
   );
 }
 
@@ -171,8 +173,9 @@ function simulateAdjacentInfantryVolleysForTurnEnd(mission: LoadedMission, rng: 
   }
 
   const simTarget = cloneUnitForSim(sh);
+  // 任务 8 起：军官与步兵同属「徒步类」，相邻齐射时也参与。
   const infs = mission.enemies.filter(
-    e => !e.destroyed && e.kind === 'infantry' && hexDistance(e.pos, sh.pos) === 1,
+    e => !e.destroyed && isFootUnit(e) && hexDistance(e.pos, sh.pos) === 1,
   );
 
   for (const inf of infs) {

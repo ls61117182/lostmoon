@@ -358,10 +358,60 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 8：刺杀
+
+> 对应数据：`assets/resources/missions/mission_08.json`。7×7 odd-r。本关首次启用新单位 **`'officer'`（军官）**——与步兵互不替代的独立 `UnitKind`，避免与回合结束 5–6 `infantry_spawn` 中产生的普通步兵混淆胜利条件。
+
+### 目标
+
+- **击毙军官 + 撤离**：摧毁红色边框建筑里的**高级军官**（`kind: 'officer'`，本关唯一一只），随后将谢尔曼开至 **撤离格** `evacAt: col=6, row=6`（地图右下角带红色箭头的格），沿 **`evacExitDir = 0`（正东）** 驶出地图。
+- **普通步兵不计入胜利条件**：`destroy_kind_evac` 的 `kind` 字段固定为 `'officer'`，回合结束 5–6 spawn 的步兵 `kind: 'infantry'` 与之不同，**不会被算入「需击毁」清单**——玩家击毙建筑里那只军官即可拉开撤离窗口，无论地图上还有多少普通步兵。
+- **失败条件**：仅「谢尔曼被摧毁」一条；没有卡车，也无 `truckEscapeDefeat`。
+
+### 初始设置
+
+- **谢尔曼**：放置在 **左侧黑色箭头格**，朝向箭头方向；当前 JSON 为 `col=0, row=3, facing=0`（朝东）。
+- **3 辆敌坦**（`enemyStartByDice: true`）：1 **虎式** + 1 **IV 号** + 1 **III 号**，开局各掷 **1d6**，在 **eid 1~6 黑格**中链式择空位（**不重掷**），朝向同格 **`ef`**。当前 JSON 6 处 eid：`(2,5)=1 ef=4` / `(4,5)=2 ef=5` / `(1,0)=3 ef=1` / `(2,2)=4 ef=0` / `(1,1)=5 ef=2` / `(4,0)=6 ef=2`。
+- **军官**：1 个 `kind: 'officer'` 单位**直接固定**放置在红色边框建筑 **`(col=6, row=0)`**（`bd=1`）；`enemyStartByDice` 模式下带 `at` 的单位走固定坐标通道，不会被掷骰挪走。
+- **rid 红格**（步兵 spawn）：6 处分布在地图右半区与中下区——`(6,2)=1` / `(5,2)=2` / `(5,5)=3` / `(3,6)=4` / `(5,1)=5` / `(6,4)=6`。
+
+### 新单位 `'officer'`
+
+为支持说明书原图「红色边框建筑里的德军步兵 = 高级军官」这种「一只精英敌即可解锁撤离」的关卡设计，本关引入了与 `'infantry'` 并列的独立单位类型 `'officer'`（**与 boss 标记不同**——通过 `kind` 区分，最大化复用既有 `destroy_kind_evac` 通道）：
+
+| 维度 | `'infantry'`（步兵） | `'officer'`（军官） |
+|---|---|---|
+| 数据来源 | `data/units.csv` 第 7 行（`size=0`，无装甲，`penetration=1`） | `data/units.csv` 第 8 行（与 `'infantry'` 数值完全一致） |
+| 出生方式 | 关卡 JSON 直接 `at` / `enemyStartByDice` 走 `rid` 链 / 回合结束 `infantry_spawn` 事件 | 关卡 JSON 直接 `at`（`enemyStartByDice` 走 `rid` 链亦可，但本关用固定坐标） |
+| 攻击 / 移动规则 | `isFootKind` / `isFootUnit` 通用判定：仅可被机枪打、不参与坦克 AI、不阻塞坦克叠格 | 同左 |
+| 视觉 | 普通步兵小人 | 同步兵小人 + **红色光环**（`OFFICER_HALO_STROKE`）+ 所在格红色 hex 边框（`drawOfficerTileHighlights`） |
+| 关卡目标关联 | `destroy_kind_evac kind='infantry'`：所有步兵 destroyed 才算前置达成 | `destroy_kind_evac kind='officer'`：所有军官 destroyed 才算前置达成 —— 与 spawn 出来的步兵互不影响 |
+
+> **`isFootKind / isFootUnit`**：在 `types.ts` 中导出，供 `BattleScene` / `Combat` / `TurnEndEventApply` / `MissionLoader` 等共用，统一处理「徒步类」单位（步兵 / 军官）的所有特判位置（机枪目标、相邻齐射、视线检查、AI 排除、叠格阻塞、tile inspect 装甲面板隐藏等）。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），`Objective.allEnemiesOfKindDestroyed(mission, 'officer')` 等按 `kind` 精确判定的位置不应换成 helper。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–4** | **公路地雷** | `road_mine`：若谢尔曼**在公路格或桥梁格**（`effectiveDiceTerrain(tile) === 'road'`，与任务 7 一致）**且未瘫痪** → 自动命中一次 **装甲 4 / 穿甲 0**，按「2. 造成伤害」掷穿甲 1d6（≥4 穿）+ 伤害 1d6 |
+| **5–6** | **德军步兵** | `infantry_spawn`：1d6 对应红格 `rid`（不重掷；若该格已被谢尔曼或步兵占用则跳过本次放置）。spawn 出来的单位 `kind: 'infantry'`，**不会被算作军官**——胜利判定只看 `'officer'` 这一类 |
+| **7–9** | **相邻步兵齐射** | `adjacent_infantry_fire`：与谢尔曼**相邻**的全体「徒步类」（`isFootUnit` 判定，含步兵与军官）各一击（**穿甲值 1**）；若军官当前与谢尔曼相邻也参与齐射 |
+| **10** | **车长额外行动** | `commander_extra`：若车长存活 → 装填 / 修复（瘫痪 / 炮塔）/ 灭火 三选一（按程序优先级） |
+| **11+** | **斯图卡** | `stuka`：舱盖开 → 先 2d6≥6 击落判定；未击落再 2d6≥8 命中；命中按 **装甲 4 / 穿甲 1** 解伤害 |
+
+数据行见 `data/turn_end_events.csv` 的 `mission_08,...`，`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。所有 5 类事件 (`road_mine` / `infantry_spawn` / `adjacent_infantry_fire` / `commander_extra` / `stuka`) 均沿用任务 1~7 既有实现，本关无需新增 `TurnEndEffectType`。
+
+> **关键细节 1：军官不在 5–6 spawn**——`infantry_spawn` 事件创建的单位 `kind` 始终为 `'infantry'`（`TurnEndEventApply` 中的 spawn 路径硬编码），即使军官已死也只能再 spawn 出普通步兵，不会"复活"军官。
+>
+> **关键细节 2：军官死亡后立刻可撤离**——`destroy_kind_evac kind='officer'` 仅看本关唯一一只军官是否 destroyed。地图上仍有普通步兵 / 仍在不断 spawn 也不影响 `isShermanEvacDrive` 与 `isObjectiveMet`。
+
+---
+
 ## 后续任务
 
 - **任务 5**：见上文（`destroy_kind_evac` + `kind=truck`，配套 `truckPath` + `german_truck_move` 回合结束推进；卡车驶出地图判负）。
 - **任务 6**：见上文。
 - **任务 7**：见上文（首次启用桥梁，`destroy_kind_evac` 无 `kind` → 纯撤离胜利；新增 `none` 事件类型）。
-- **任务 8 ~ 12**：地图与说明待补充。
+- **任务 8**：见上文（首次启用新单位 `'officer'`（军官）`UnitKind`；与步兵互不替代，胜利判定走标准 `destroy_kind_evac kind='officer'` 通道；红色边框建筑由 UI 自动渲染）。
+- **任务 9 ~ 12**：地图与说明待补充。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

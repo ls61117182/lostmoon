@@ -10,6 +10,7 @@ import { directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJso
 import {
   Axial,
   Direction,
+  isFootKind,
   MissionData,
   Offset,
   TerrainType,
@@ -104,6 +105,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         faction: p.faction,
         at: slot.at,
         facing: slot.facing,
+        // 保留 placement 上其它「与位置无关」的状态位，避免因 dice 模式丢失
+        paralyzed: p.paralyzed,
       };
       return makeUnit(`enemy_${i}`, merged);
     }
@@ -242,7 +245,7 @@ function resolveEnemyDicePlacements(
     if (p.at) {
       continue;
     }
-    const useRid = p.kind === 'infantry';
+    const useRid = isFootKind(p.kind);
     const cellMap = useRid ? cellsByRid : cellsByEid;
     if (useRid && cellsByRid.size === 0) {
       throw new Error(

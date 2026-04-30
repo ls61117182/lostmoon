@@ -79,7 +79,28 @@ export type UnitKind =
   | 'panzer4'
   | 'panzer3'
   | 'truck'
-  | 'infantry';
+  | 'infantry'
+  /**
+   * 高级军官（任务 8 起）：与步兵同属「徒步类」单位（size=0、不可朝向、机枪打、不参与坦克 AI），
+   * 但在关卡目标上是与 `infantry` **互不替代**的独立 `kind`——避免与回合结束 5–6 spawn 的普通步兵
+   * 混淆。视觉上由 `BattleScene` 在所在格绘制红色边框 + 单位身周红色光环，与说明书原图一致。
+   */
+  | 'officer';
+
+/**
+ * 「徒步类」单位（步兵 / 军官）共享判定：
+ * - 大多数地方原本写 `kind === 'infantry'`（机枪目标 / 相邻齐射 / 渲染分支 / AI 排除等），
+ *   引入 `officer` 后这些判定都应改用本 helper，否则官官就会被坦克类逻辑误处理；
+ * - **唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 kind 始终为 `'infantry'`（不会复活军官），
+ *   `Objective.allEnemiesOfKindDestroyed(mission, 'officer')` 等按 kind 精确判定的位置不应换成本 helper。
+ */
+export function isFootKind(kind: UnitKind): boolean {
+  return kind === 'infantry' || kind === 'officer';
+}
+
+export function isFootUnit(u: { kind: UnitKind }): boolean {
+  return isFootKind(u.kind);
+}
 
 export interface UnitStats {
   size: number;            // 体型

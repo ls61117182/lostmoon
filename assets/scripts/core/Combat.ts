@@ -17,7 +17,7 @@
 
 import { RNG } from './Dice';
 import { HexMap, approximateDirection, directionTo, hexDistance, rotateDirection } from './HexGrid';
-import { Axial, CrewSlot, ShermanCrew, Unit } from './types';
+import { Axial, CrewSlot, isFootUnit, ShermanCrew, Unit } from './types';
 
 export type ArmorFace = 'front' | 'frontSide' | 'rearSide' | 'rear';
 
@@ -400,8 +400,8 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 // §3.6 行动表 B 列 3/4 + C 列 2："机枪射击：相邻步兵 7+ 命中"。
 // 乘员门控在 BattleScene.selectMGDie：B 列机枪不因乘员阵亡禁用；C 列副驾驶机枪需副驾驶存活。
 // 相对主炮攻击的差异：
-//   - 目标仅限 `kind='infantry'` 且必须与攻击方相邻（hexDistance===1）
-//   - 单段 2d6 检定：点数之和 ≥ 7 = 命中；命中即直接击毙（步兵无装甲）
+//   - 目标仅限「徒步类」单位（步兵 / 军官，`isFootUnit` 判定）且必须与攻击方相邻（hexDistance===1）
+//   - 单段 2d6 检定：点数之和 ≥ 7 = 命中；命中即直接击毙（徒步单位无装甲）
 //   - 不吃树篱 / 建筑 / 烟雾 / 隐蔽修正（相邻近距离扫射）
 //   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
 //
@@ -420,7 +420,7 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   const { attacker, target } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
-  if (target.kind !== 'infantry') return { ok: false, reason: 'attack.reason.notInfantry' };
+  if (!isFootUnit(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (hexDistance(attacker.pos, target.pos) !== 1) return { ok: false, reason: 'attack.reason.mgRange' };
   return { ok: true };
 }

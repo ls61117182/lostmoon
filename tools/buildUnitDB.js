@@ -28,7 +28,7 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration'];
 
 // 与 UnitKind 对齐的合法 kind 名单；缺一行或多一行都会报错
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck', 'infantry'];
+const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck', 'infantry', 'officer'];
 
 /**
  * 兼容编码读 CSV：优先按 UTF-8 严格解码，失败就 fallback 到 GBK（Windows 中文 Excel 默认编码）。

@@ -186,6 +186,7 @@ unit.name.panzer4,四号,Panzer IV
 unit.name.panzer3,三号,Panzer III
 unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
+unit.name.officer,军官,Officer
 dice.aiHeader,{col}  {n}骰,{col}  {n}d
 dice.aiEnemy.shoot,主炮射击,Main gun
 dice.aiEnemy.turn,转向,Turn

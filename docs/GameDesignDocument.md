@@ -534,6 +534,10 @@ function axialToWorld(q: number, r: number): Vec2 {
 
 **复合目标 `destroy_kind_evac`**：在击毁 `objective.kind` 所指全部敌方单位后，谢尔曼须从 **`evacAt`** 六角格沿 **`evacExitDir`** 六向之一执行 **前进** 或 **后退**（后退的位移方向 = `facing+3`，须等于 `evacExitDir`），且 **邻格不在地图内**（无 `Tile`）时撤离成功并判胜；动画结束后谢尔曼坐标可落在网格外。存档字段 `shermanEvacuated` 由 `SaveLoad` 持久化。
 
+**徒步类单位（步兵 / 军官，`isFootKind` / `isFootUnit`）**：`UnitKind` 中 `'infantry'`（步兵）与 `'officer'`（军官，任务 8 起）共享「徒步类」语义——`size = 0`，无装甲，仅可被机枪打死、不参与坦克 AI、不阻塞坦克叠格、不渲染装甲 / 装填面板。`types.ts` 导出的 `isFootKind(kind)` / `isFootUnit(unit)` 是这两类共有判定的统一入口；`Combat.canMGAttack`、`TurnEndEventApply.adjacent_infantry_fire`、`BattleScene` 的目标筛选 / 渲染分支等都通过它们进行兼容判定。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），所以「按 `kind` 精确判定」的位置（如 `Objective.allEnemiesOfKindDestroyed(mission, 'officer')`）不能换成 helper。
+
+**新单位 `'officer'`（军官）**：与 `'infantry'` 数值一致（见 `data/units.csv`），但 `kind` 独立——典型用法见任务 8（`mission_08.json`）：建筑里固定放置 1 只军官，objective 为 `{ type:"destroy_kind_evac", kind:"officer", evacAt, evacExitDir }`，与回合结束 5–6 spawn 出来的普通步兵互不混淆。UI 会在军官身周加红色光环、并在所在格绘制红色 hex 边框（`OFFICER_HALO_STROKE` / `OFFICER_TILE_STROKE`），与说明书原图「红色边框建筑里的德军步兵」一致。
+
 **敌方掷骰出生（可选，`enemyStartByDice: true`）**
 
 适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记**坦克等**的**黑格出生位**；用 **`rid`**（1～6，全图**不重复**）标记**步兵**的**红格（援军）出生位**。同一格可选 **`ef`**（0=E … 5=NE）表示该格上单位**初始 facing**（与掷骰放坦克 / 步兵均适用），其方向编号与**同格** `h` 的 6 位、以及 `HEX_DIRECTIONS[ef]` **完全一致**（自本格心指向第 `ef` 邻格心 = 经该边越境的六向）。树篱位 `h[i]=1` 与朝向 `ef` 均用**轴向**同一套索引 i，与 `HexGrid.hedgeFlagsFromMapJson` 及 `HEX_DIRECTIONS` 一致；`BattleScene` 绘制时经 `HEDGE_DRAW_EDGE_BY_AXIAL` 将轴向 i 映到 `drawHedgeEdge` 的**几何边**号。
