@@ -54,9 +54,11 @@ btn.hatchCommanderKia,车长阵亡,Commander KIA
 outcome.win,胜利！,Victory!
 outcome.lose,战败,Defeat
 objective.prefix,任务目标{n}：,Objective {n}: 
-objective.destroyProgress,击毁{unit} {cur}/{total},Destroy {unit} {cur}/{total}
+objective.destroyProgress.tank,击毁{unit} {cur}/{total},Destroy {unit} {cur}/{total}
+objective.destroyProgress.officer,击杀{unit} {cur}/{total},Kill {unit} {cur}/{total}
+objective.destroyProgress.infantry,消灭{unit} {cur}/{total},Eliminate {unit} {cur}/{total}
 objective.destroyAllProgress,歼灭全部敌方 {cur}/{total},Eliminate all enemies {cur}/{total}
-objective.destroyTruckProgress,摧毁卡车 {cur}/{total},Destroy trucks {cur}/{total}
+objective.destroyTruckProgress,击毁卡车 {cur}/{total},Destroy trucks {cur}/{total}
 objective.evacFromMark,从指定位置撤离,Evacuate from the marked hex
 objective.exitEdge,从地图边缘指定方向离境,Leave the map at the designated edge
 objective.typeUnknown,任务目标（{type}）,Objective ({type})

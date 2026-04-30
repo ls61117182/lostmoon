@@ -15,7 +15,7 @@
  * 交互：
  *   - 继续游戏：读战斗存档 `SAVE_KEY`；无存档时按钮灰态
  *   - 关卡按钮：未解锁 / 已解锁 / 已通关 三态；点击后切战斗场景
- *   - 顶部 ⚙ / ?：弹出模态面板，点击 ✕ / 遮罩 / 关闭按钮都可关闭
+ *   - 顶部 ⚙ / ?：弹出模态面板，点击 ✕ 或遮罩空白处关闭
  */
 
 import {
@@ -482,11 +482,6 @@ export class MainMenuScene extends Component {
       langEnBtn: enBtn,
     };
     this.refreshLangButtons(curLang);
-
-    // 关闭按钮
-    const close = this.makeRectButton(panel, 0, contentY - 220, 140, 44, BTN_CONTINUE,
-      () => this.closeModal());
-    this.makeLabel(close.node, t('menu.settings.close'), 0, 0, 140, 44, 20, TEXT_PRIMARY);
   }
 
   private buildVolumeSlider(
@@ -600,7 +595,7 @@ export class MainMenuScene extends Component {
     const { panel } = this.openModal(t('menu.help.title'), panelW, panelH);
 
     const topReserve = 80;
-    const bottomReserve = 90;
+    const bottomReserve = 24;
     const padX = 32;
     const viewportW = panelW - padX * 2;
     const viewportH = panelH - topReserve - bottomReserve;
@@ -665,10 +660,6 @@ export class MainMenuScene extends Component {
       sv.scrollToTop(0);
     };
     this.scheduleOnce(syncHelpScrollContentSize, 0);
-
-    const close = this.makeRectButton(panel, 0, -panelH / 2 + 40, 180, 48, BTN_CONTINUE,
-      () => this.closeModal());
-    this.makeLabel(close.node, t('menu.help.gotIt'), 0, 0, 180, 48, 22, TEXT_PRIMARY);
   }
 
   // ================================================================

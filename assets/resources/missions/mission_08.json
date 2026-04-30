@@ -3,72 +3,67 @@
   "name": "刺杀",
   "description": "目标：摧毁红色边框建筑里的德军高级军官（kind='officer'，与步兵互不替代的独立单位类型），随后将谢尔曼开至带红色箭头的撤离格（col=6, row=6），沿正东（evacExitDir=0）驶离地图。\n谢尔曼放置在带黑色箭头的格中（col=0, row=3），朝向东方（facing=0）。\n1 辆虎式 + 1 辆 IV 号 + 1 辆 III 号按 1d6 链式占位（不重掷）放在不同的黑色 eid 数字格中（1..6），朝向同格 ef。\n红色边框建筑 (col=6, row=0) 上放置 1 个军官单位（kind='officer'）。回合结束 5–6 在红色 rid 数字格上 spawn 出来的步兵 kind='infantry'，不会与军官混淆，不影响 destroy_kind_evac kind='officer' 的判定。",
   "_comment": "7列×7行 odd-r。基底简写：r=公路 f=田地 m=泥地 F=林地 w=水域；bd=1 为建筑。\n红色边框由 UI 根据军官（kind='officer'）所在格自动渲染（不需要 TileDef 字段）。\nobjective.kind='officer'：destroy_kind_evac 仍走原通道（按 kind 全灭判定），由于 kind=='officer' 与 spawn 的 'infantry' 互不重叠，普通步兵增援不会被算作胜利前置。\n回合结束事件见 data/turn_end_events.csv 的 mission_08 行：2–4 公路地雷 / 5–6 步兵 spawn / 7–9 相邻步兵齐射 / 10 车长额外 / 11+ 斯图卡。",
-  "cols": 7,
-  "rows": 7,
+  "cols": 8,
+  "rows": 6,
   "enemyStartByDice": true,
   "tiles": [
     [
-      { "t": "f" },
-      { "t": "m", "eid": 3, "ef": 1 },
-      { "t": "m" },
-      { "t": "r" },
-      { "t": "m", "eid": 6, "ef": 2 },
-      { "t": "f" },
-      { "t": "f", "bd": 1 }
-    ],
-    [
-      { "t": "f" },
-      { "t": "m", "eid": 5, "ef": 2 },
-      { "t": "m" },
-      { "t": "r" },
-      { "t": "f" },
-      { "t": "F", "rid": 5 },
-      { "t": "f" }
-    ],
-    [
-      { "t": "f" },
-      { "t": "r" },
-      { "t": "m", "eid": 4, "ef": 0 },
-      { "t": "r" },
-      { "t": "w" },
-      { "t": "r", "h": "001000", "rid": 2 },
-      { "t": "r", "rid": 1 }
-    ],
-    [
-      { "t": "f" },
-      { "t": "r" },
-      { "t": "m", "h": "100100" },
-      { "t": "m" },
-      { "t": "m", "h": "010010" },
-      { "t": "r" },
-      { "t": "f" }
-    ],
-    [
-      { "t": "f" },
-      { "t": "r" },
-      { "t": "m", "h": "001000" },
-      { "t": "m" },
-      { "t": "r" },
-      { "t": "r" },
-      { "t": "F", "rid": 6 }
-    ],
-    [
-      { "t": "f" },
-      { "t": "F" },
-      { "t": "r", "eid": 1, "ef": 4 },
-      { "t": "f" },
-      { "t": "r", "eid": 2, "ef": 5 },
+      null,
+      null,
+      { "t": "m", "eid": 5, "ef": 1 },
       { "t": "F", "rid": 3 },
-      { "t": "f" }
+      { "t": "r", "h": "001000" },
+      { "t": "f", "eid": 6, "ef": 2 },
+      { "t": "m", "bd": 1 }
+    ],
+    [
+      null,
+      { "t": "m" },
+      { "t": "m" },
+      { "t": "f" },
+      { "t": "r" },
+      { "t": "f" },
+      { "t": "F", "rid": 5 }
+    ],
+    [
+      null,
+      { "t": "r" },
+      { "t": "m", "rid": 4, "bd": 1, "h": "001000" },
+      { "t": "f" },
+      { "t": "w" },
+      { "t": "r", "bd": 1, "rid": 2 },
+      { "t": "r" },
+      { "t": "r", "eid": 1, "ef": 3 }
     ],
     [
       { "t": "f" },
-      { "t": "F" },
+      { "t": "r", "h": "100000" },
+      { "t": "m", "h": "001000" },
+      { "t": "m", "h": "010000" },
+      { "t": "r", "h": "010000" },
+      { "t": "m" },
+      { "t": "f", "eid": 2, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "m" },
+      { "t": "r" },
+      { "t": "r", "bd": 1, "rid": 1 },
+      { "t": "r" },
       { "t": "f" },
-      { "t": "r", "rid": 4 },
+      { "t": "F", "rid": 6 },
+      null
+    ],
+    [
+      null,
+      { "t": "f", "h": "100000" },
       { "t": "f" },
+      { "t": "f", "eid": 4, "ef": 4 },
       { "t": "f" },
-      { "t": "f" }
+      { "t": "f", "eid": 3, "ef": 3 },
+      null,
+      null
     ]
   ],
   "sherman": {
@@ -86,8 +81,8 @@
   "objective": {
     "type": "destroy_kind_evac",
     "kind": "officer",
-    "evacAt": { "col": 6, "row": 6 },
-    "evacExitDir": 0
+    "evacAt": { "col": 5, "row": 5 },
+    "evacExitDir": 1
   },
   "actionTableId": "standard",
   "aiTableId": "standard",

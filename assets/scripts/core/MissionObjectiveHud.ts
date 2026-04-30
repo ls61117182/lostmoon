@@ -23,6 +23,13 @@ export interface ObjHudLine {
   template: ObjHudTemplate;
 }
 
+/** 任务目标「歼敌进度」行：步兵用「消灭」、军官用「击杀」、坦克与卡车用「击毁」（见 lang `objective.destroyProgress.*`）。 */
+export function objectiveDestroyProgressLangKey(kind: UnitKind): string {
+  if (kind === 'infantry') return 'objective.destroyProgress.infantry';
+  if (kind === 'officer') return 'objective.destroyProgress.officer';
+  return 'objective.destroyProgress.tank';
+}
+
 function kindProgress(mission: LoadedMission, kind: UnitKind): { cur: number; total: number } {
   const group = mission.enemies.filter(e => e.kind === kind);
   const total = group.length;

@@ -87,7 +87,7 @@ import {
   selectEnemyOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { buildObjectiveHudLines, ObjHudLine } from '../core/MissionObjectiveHud';
+import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
 import {
   AdjacentInfantryVolleyPreview,
@@ -3121,7 +3121,7 @@ export class BattleScene extends Component {
     const tpl = line.template;
     switch (tpl.key) {
       case 'destroyProgress':
-        return pfx + t('objective.destroyProgress', {
+        return pfx + t(objectiveDestroyProgressLangKey(tpl.unitKind), {
           unit: t(`unit.name.${tpl.unitKind}`),
           cur: tpl.cur,
           total: tpl.total,
@@ -5479,7 +5479,7 @@ export class BattleScene extends Component {
     const barW = 10;
     const marginX = 12;
     const contentTopY = panelH / 2 - 64;
-    const contentBottomY = -panelH / 2 + 56;
+    const contentBottomY = -panelH / 2 + 24;
     const scrollH = contentTopY - contentBottomY;
     const rightAreaW = panelW - 2 * marginX - leftColW - 8;
     const viewW = rightAreaW - barW;
@@ -5623,28 +5623,6 @@ export class BattleScene extends Component {
     this.onTileInspectBarFrame = () => { this.syncTileInspectVBar(); };
     this.schedule(this.onTileInspectBarFrame, 0);
     this.syncTileInspectVBar();
-
-    const closeRowY = -panelH * 0.5 + 48;
-    const closeB = this.makeBattleRectButton(
-      panel,
-      0,
-      closeRowY,
-      200,
-      44,
-      BATTLE_BTN_ACCENT,
-      () => this.closeTileInspectModal(),
-    );
-    const closeLab = this.makeBattleModalLabel(
-      closeB.node,
-      t('menu.settings.close'),
-      0,
-      0,
-      200,
-      44,
-      22,
-      Color.WHITE,
-    );
-    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeTileInspectModal());
   }
 
   /** 全屏遮罩 + 居中面板 + 标题 + ✕（与 MainMenuScene.openModal 同构） */
@@ -5749,28 +5727,6 @@ export class BattleScene extends Component {
         .join('\n');
     }
     bodyN.setPosition(0, contentY - 8);
-
-    const closeRowY = -panelH * 0.5 + 52;
-    const closeB = this.makeBattleRectButton(
-      panel,
-      0,
-      closeRowY,
-      200,
-      44,
-      BATTLE_BTN_ACCENT,
-      () => this.closeBattleModal(),
-    );
-    const closeLab = this.makeBattleModalLabel(
-      closeB.node,
-      t('menu.settings.close'),
-      0,
-      0,
-      200,
-      44,
-      22,
-      Color.WHITE,
-    );
-    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeBattleModal());
   }
 
   private openBattleSettings() {
@@ -5830,13 +5786,6 @@ export class BattleScene extends Component {
     );
     const exitSetLab = this.makeBattleModalLabel(exitB.node, t('battle.settings.exit'), 0, 0, 200, 44, 20, HUD_TEXT_COLOR);
     this.mirrorBattleModalButtonLabel(exitSetLab, () => this.openBattleExitConfirm());
-
-    const closeRowY = contentY - 290;
-    const closeB = this.makeBattleRectButton(panel, 0, closeRowY, 160, 44, BATTLE_BTN_ACCENT,
-      () => this.closeBattleModal(),
-    );
-    const closeSetLab = this.makeBattleModalLabel(closeB.node, t('menu.settings.close'), 0, 0, 160, 44, 20, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(closeSetLab, () => this.closeBattleModal());
   }
 
   private openBattleExitConfirm() {

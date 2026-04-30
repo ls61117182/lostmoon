@@ -409,19 +409,19 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ## 任务 9：跨过水域
 
-> 对应数据：`assets/resources/missions/mission_09.json`。7×7 odd-r。本关首次使用 **`objective.kinds`**（`destroy_kind_evac` 下多类歼敌前置）：须分别歼灭 **虎式** 与 **IV 号** 各一只后，才允许从撤离格离场判胜；**德军步兵不计入**该前置。谢尔曼开局为默认满编与健康状态（与其它关卡一致）；若某关需要自定义初始乘员 / 着火 / 炮塔 / 舱盖等，仍可通过 `UnitPlacement` 与 `MissionLoader.makeUnit` 配置（本关未使用）。
+> 对应数据：`assets/resources/missions/mission_09.json`。8×6 odd-r。本关首次使用 **`objective.kinds`**（`destroy_kind_evac` 下多类歼敌前置）：须分别歼灭 **虎式** 与 **IV 号** 各一只后，才允许从撤离格离场判胜；**德军步兵不计入**该前置。谢尔曼开局为默认满编与健康状态（与其它关卡一致）；若某关需要自定义初始乘员 / 着火 / 炮塔 / 舱盖等，仍可通过 `UnitPlacement` 与 `MissionLoader.makeUnit` 配置（本关未使用）。
 
 ### 目标
 
 - **歼灭全部德军坦克后撤离**：`objective.type = "destroy_kind_evac"`，`kinds: ["tiger", "panzer4"]` —— `Objective.destroyKindEvacPrereqMet` 要求两种 kind 的敌方分组均 `destroyed` 后，`isShermanEvacDrive` / `isObjectiveMet` 才允许进入撤离结算。
 - **步兵不挡胜利**：地图上 4 名开局步兵与后续事件无关本关「坦克全灭」判定；玩家仍需应付其相邻齐射等事件。
-- **撤离几何**：谢尔曼在 **`evacAt: col=1, row=0`**（带红箭头的格），车体朝向须使 **前进或后退** 的位移方向等于 **`evacExitDir = 4`（NW）**，且邻格越出地图边界（本图 NW 邻格无 `Tile`）时 `shermanEvacuated` 置真并判胜。
+- **撤离几何**：以当前 JSON 为准——谢尔曼在 **`evacAt`** 所指格，沿 **`evacExitDir`** 方向驶离地图边界时 `shermanEvacuated` 置真并判胜（见 `mission_09.json` 的 `objective`）。
 
 ### 初始设置
 
-- **谢尔曼**：`col=6, row=6`（右下公路末格），`facing=3`（西）。乘员满编，无瘫痪、无着火、无炮塔受损；舱盖关闭、主炮未装填（引擎默认，与任务 1 等一致）。
-- **2 辆敌坦**（`enemyStartByDice: true`）：**虎式** + **IV 号**，开局各掷 **1d6**，在 **eid 1~6** 黑格链式择空位（不重掷），朝向同格 **`ef`**。当前 JSON 六处 eid：`(5,0)=1`、`(6,1)=2`、`(6,3)=3`、`(5,4)=4`、`(6,5)=5`、`(5,6)=6`。
-- **4 名步兵**：各在 1 处 **`bd:1` 建筑格** —— `(0,0)`、`(0,2)`、`(2,2)`、`(1,6)`，均带 `facing`（当前为 0）。
+- **谢尔曼**：以当前 JSON 为准（例：`at` / `facing` 见 `mission_09.json`）。乘员满编，无瘫痪、无着火、无炮塔受损；舱盖关闭、主炮未装填（引擎默认，与任务 1 等一致）。
+- **2 辆敌坦**（`enemyStartByDice: true`）：**虎式** + **IV 号**，开局各掷 **1d6**，在 **eid 1~6** 黑格链式择空位（不重掷），朝向同格 **`ef`**。当前 JSON 六处 eid：`(6,0)=1`、`(6,1)=2`、`(6,2)=3`、`(6,3)=4`、`(5,4)=5`、`(5,5)=6`。
+- **4 名步兵**：各在 1 处 **`bd:1` 建筑格** —— **`(2,0)`、`(1,2)`、`(3,2)`、`(2,5)`**，均带 `facing`（当前为 0）。
 
 ### 复合目标字段 `kinds`
 
