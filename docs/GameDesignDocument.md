@@ -532,7 +532,7 @@ function axialToWorld(q: number, r: number): Vec2 {
 - 行动表 / AI 表 / 事件表（覆盖默认值）
 - 胜负条件（脚本表达式或枚举）
 
-**复合目标 `destroy_kind_evac`**：在击毁 `objective.kind` 所指全部敌方单位后，谢尔曼须从 **`evacAt`** 六角格沿 **`evacExitDir`** 六向之一执行 **前进** 或 **后退**（后退的位移方向 = `facing+3`，须等于 `evacExitDir`），且 **邻格不在地图内**（无 `Tile`）时撤离成功并判胜；动画结束后谢尔曼坐标可落在网格外。存档字段 `shermanEvacuated` 由 `SaveLoad` 持久化。
+**复合目标 `destroy_kind_evac`**：在击毁 `objective.kind` 所指全部敌方单位后，谢尔曼须从 **`evacAt`** 六角格沿 **`evacExitDir`** 六向之一执行 **前进** 或 **后退**（后退的位移方向 = `facing+3`，须等于 `evacExitDir`），且 **邻格不在地图内**（无 `Tile`）时撤离成功并判胜；动画结束后谢尔曼坐标可落在网格外。存档字段 `shermanEvacuated` 由 `SaveLoad` 持久化。若配置 **`objective.kinds`**（`UnitKind[]`，非空），则须将所列 **每一种** kind 的敌方单位**全部**击毁后才允许撤离（与单独的 `kind` 二选一：有 `kinds` 时优先用 `kinds`，典型见任务 9：虎式 + IV 号，步兵不计入）。
 
 **徒步类单位（步兵 / 军官，`isFootKind` / `isFootUnit`）**：`UnitKind` 中 `'infantry'`（步兵）与 `'officer'`（军官，任务 8 起）共享「徒步类」语义——`size = 0`，无装甲，仅可被机枪打死、不参与坦克 AI、不阻塞坦克叠格、不渲染装甲 / 装填面板。`types.ts` 导出的 `isFootKind(kind)` / `isFootUnit(unit)` 是这两类共有判定的统一入口；`Combat.canMGAttack`、`TurnEndEventApply.adjacent_infantry_fire`、`BattleScene` 的目标筛选 / 渲染分支等都通过它们进行兼容判定。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），所以「按 `kind` 精确判定」的位置（如 `Objective.allEnemiesOfKindDestroyed(mission, 'officer')`）不能换成 helper。
 
@@ -543,6 +543,7 @@ function axialToWorld(q: number, r: number): Vec2 {
 适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记**坦克等**的**黑格出生位**；用 **`rid`**（1～6，全图**不重复**）标记**步兵**的**红格（援军）出生位**。同一格可选 **`ef`**（0=E … 5=NE）表示该格上单位**初始 facing**（与掷骰放坦克 / 步兵均适用），其方向编号与**同格** `h` 的 6 位、以及 `HEX_DIRECTIONS[ef]` **完全一致**（自本格心指向第 `ef` 邻格心 = 经该边越境的六向）。树篱位 `h[i]=1` 与朝向 `ef` 均用**轴向**同一套索引 i，与 `HexGrid.hedgeFlagsFromMapJson` 及 `HEX_DIRECTIONS` 一致；`BattleScene` 绘制时经 `HEDGE_DRAW_EDGE_BY_AXIAL` 将轴向 i 映到 `drawHedgeEdge` 的**几何边**号。
 
 - 关卡 JSON 中 **`enemyStartByDice: true`** 时，每个 **`enemies[]`** 条目可省略 `at` / `facing`，由运行时掷骰决定。
+- **谢尔曼掷骰（可选，`shermanStartByDice: true`）**：与坦克共用地图上的 **eid 1..6** 黑格表，须同时 **`enemyStartByDice: true`**；`sherman` 可省略 **`at` / `facing`**，由 `MissionLoader` 在加载时**先于**德军无坐标单位掷 1d6 链式择空位（与坦克规则相同，占位后写入格上 `ef` 朝向）。典型任务见 `mission_11.json`（钢铁角斗士）。
 - **`kind: infantry`**：**每名无 `at` 的步兵开局掷 1 颗 d6**，链式占用 **`rid = 骰点` → `rid+1` … 绕回 1** 的六角格（规则与下款相同，但查 **`rid` 表**，不是 `eid`）；地图上须配置至少一处 **`rid`**，否则加载失败。
 - **坦克等非步兵**：**每名无 `at` 的单位开局掷 1 颗 d6**，首先尝试落在 **`eid` 等于骰点** 的六角格；若该格已被占用（含已放置的其它敌方单位，或谢尔曼初始格），则改试 **`eid = 骰点 + 1`**（6 的下一档为 1），再重复直至找到**既存在 `eid` 配置、又未被占用**的格；若连续 6 档仍无法落位则加载失败（配置错误）。
 - 未配置对应编号的格在链式探测中跳过（例如关卡只配置了 `eid` 1、2，掷出 5 时会依次尝试 5→6→1→2…直到命中已配置且空闲的格；**`rid` 链同理**）。

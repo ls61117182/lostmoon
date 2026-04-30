@@ -50,6 +50,27 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
   switch (obj.type) {
     case 'destroy_kind_evac': {
       const evacDone = !!mission.shermanEvacuated;
+      const kinds = obj.kinds && obj.kinds.length > 0 ? obj.kinds : null;
+      if (kinds) {
+        const lines: ObjHudLine[] = [];
+        let idx = 1;
+        for (const k of kinds) {
+          const destroyDone = allEnemiesOfKindDestroyed(mission, k);
+          const { cur, total } = kindProgress(mission, k);
+          lines.push({
+            displayIndex: idx++,
+            state: destroyDone ? 'done' : 'active',
+            template: { key: 'destroyProgress', unitKind: k, cur, total },
+          });
+        }
+        const allDestroy = kinds.every((k) => allEnemiesOfKindDestroyed(mission, k));
+        lines.push({
+          displayIndex: idx,
+          state: !allDestroy ? 'locked' : evacDone ? 'done' : 'active',
+          template: { key: 'evacFromMark' },
+        });
+        return lines;
+      }
       if (!obj.kind) {
         return [
           {

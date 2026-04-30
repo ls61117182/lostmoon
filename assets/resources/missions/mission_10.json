@@ -1,0 +1,81 @@
+{
+  "id": "mission_10",
+  "name": "只是路过：城镇",
+  "description": "目标：从带红色箭头的格（撤离格）沿箭头方向驶离地图（无歼敌前置）。\n谢尔曼置于带黑色箭头的公路格（col=0, row=2），朝向箭头方向（facing=0，正东）。\n1 辆虎式 + 2 辆 IV 号按 1d6 链式占位（不重掷）落在不同黑格 eid（1..6）；3 名德军步兵同样按 1d6 链式落在不同红格 rid（1..6）。",
+  "_comment": "6 列 × 6 行 odd-r，**交错列**：col 0/2/4 仅 5 个六角格（tiles[row][col]=null 表示无格），col 1/3/5 满 6 格——与说明书「奇数列 5 格、偶数列 6 格」的竖条版图一致。\n基底 r=公路 f=田地 F=林地 w=水域；bd=1 建筑。黑圈 eid、红圈 rid 与 ef 见各格 JSON。\n原图 C6 中央水塘格在数据里记为 **f + eid:1**（可通行、可掷骰出生），避免坦克生于 `w` 水域导致不可动；若日后单独做「浅滩」地形可再替换。\n撤离：`(5,2)`，`evacExitDir=0`（正东驶出）。回合结束见 `data/turn_end_events.csv` mission_10。",
+  "cols": 6,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      { "t": "f" },
+      { "t": "f", "eid": 5, "ef": 0 },
+      { "t": "F" },
+      { "t": "f" },
+      { "t": "f", "eid": 6, "ef": 0 },
+      { "t": "f" }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "F", "rid": 5, "ef": 2 },
+      { "t": "f", "bd": 1 },
+      { "t": "f" }
+    ],
+    [
+      { "t": "r" },
+      { "t": "r" },
+      { "t": "r", "bd": 1, "rid": 4, "ef": 0 },
+      { "t": "r", "bd": 1, "rid": 2, "ef": 0 },
+      { "t": "r" },
+      { "t": "f", "eid": 1, "ef": 0 }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f", "eid": 4, "ef": 2 },
+      { "t": "f", "bd": 1, "rid": 3, "ef": 0 },
+      { "t": "f", "bd": 1, "rid": 1, "ef": 0 },
+      { "t": "f" },
+      { "t": "f", "eid": 2, "ef": 3 }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f" },
+      null,
+      { "t": "F", "rid": 6, "ef": 1 },
+      { "t": "F" },
+      { "t": "r" }
+    ],
+    [
+      null,
+      { "t": "f" },
+      null,
+      { "t": "f" },
+      null,
+      { "t": "f", "eid": 3, "ef": 1 }
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 0, "row": 2 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "tiger", "faction": "german" },
+    { "kind": "panzer4", "faction": "german" },
+    { "kind": "panzer4", "faction": "german" },
+    { "kind": "infantry", "faction": "german" },
+    { "kind": "infantry", "faction": "german" },
+    { "kind": "infantry", "faction": "german" }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "evacAt": { "col": 5, "row": 2 },
+    "evacExitDir": 0
+  },
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}

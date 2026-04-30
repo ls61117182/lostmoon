@@ -120,7 +120,7 @@ action.fireSuppress,灭火 -1,Reduce Fire -1
 action.smoke,施放烟雾,Deploy Smoke
 action.concealment,进入隐蔽,Go Concealed
 action.codriverMG,副驾驶机枪,Co-driver MG
-action.fireMG,选定机枪扫射,Fire MG
+action.fireMG,机枪扫射,Fire MG
 action.fireMGCoDriver,副驾驶机枪扫射,Co-driver Fire MG
 floater.noFacing,未定朝向,No Facing
 floater.blockedTerrain,地形阻挡,Blocked Terrain
@@ -145,12 +145,12 @@ floater.mgMiss,机枪未命中,MG Miss
 floater.mgHit,步兵击毙,Infantry Down
 floater.mgDice,机枪 2d6={d1}+{d2}={sum},MG 2d6={d1}+{d2}={sum}
 floater.roleUnavailable,{role}已阵亡，无法操作,{role} KIA: cannot act
-action.concealPair,进入隐蔽（+同点骰）,Go Concealed (+pair)
-action.doublesDriverAdvance,驾驶员前进（+同点骰）,Driver Advance (+pair)
-action.doublesCoDriverTurnCW,副驾驶 ↻ 60°（+同点骰）,Co-driver ↻ 60° (+pair)
-action.doublesCoDriverTurnCCW,副驾驶 ↺ 60°（+同点骰）,Co-driver ↺ 60° (+pair)
-action.doublesLoaderReload,装填手装填（+同点骰）,Loader Reload (+pair)
-action.doublesGunnerFire,炮手主炮射击（+同点骰）,Gunner Fire (+pair)
+action.concealPair,隐蔽（+同点骰）,Go Concealed (+pair)
+action.doublesDriverAdvance,前进（+同点骰）,Driver Advance (+pair)
+action.doublesCoDriverTurnCW, ↻ 60°（+同点骰）,Co-driver ↻ 60° (+pair)
+action.doublesCoDriverTurnCCW, ↺ 60°（+同点骰）,Co-driver ↺ 60° (+pair)
+action.doublesLoaderReload,装填（+同点骰）,Loader Reload (+pair)
+action.doublesGunnerFire,主炮射击（+同点骰）,Gunner Fire (+pair)
 attack.reason.selfFire,不能攻击自己,Cannot Target Self
 attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
 attack.reason.overlap,目标重叠,Overlap
@@ -275,6 +275,7 @@ battle.settings.exit,退出关卡,Exit Level
 battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)
 battle.turnEndList.empty,本关未配置回合结束事件表。,This mission has no turn-end event table.
 battle.turnEndList.line,{range}（主骰 {n} 颗，点数之和）→ {effect},{range} (sum of {n} dice) → {effect}
+battle.turnEndList.effect.none,本回合没有事件发生,No event occurs this turn
 battle.turnEndList.effect.sniper,狙击手,Sniper
 battle.turnEndList.effect.commander_extra,车长额外指挥,Commander bonus
 battle.turnEndList.effect.infantry_spawn,德军步兵增援,German infantry reinforcement
@@ -316,6 +317,7 @@ battle.load.fail,读档失败：{reason},Load failed: {reason}
 turnEnd.title,回合结束事件,Turn-end event
 turnEnd.confirm,确认,OK
 turnEnd.sumLine,主骰 {dice}，合计 {sum},Rolled {dice} (sum {sum})
+turnEnd.none.body,事件骰 {d1}+{d2}={sum}。本回合没有事件发生。,Event dice {d1}+{d2}={sum}. No event occurs this turn.
 turnEnd.extra.spawnReinforce,增援格骰（1d6）,Reinforcement tile (1d6)
 turnEnd.extra.adjacentHit2d6,相邻步兵齐射 · 命中判定（2d6）,Adjacent infantry volley · hit (2d6)
 turnEnd.extra.adjacentMg2d6,相邻步兵齐射 · 机枪火力（2d6）,Adjacent infantry volley · MG fire (2d6)

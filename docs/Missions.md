@@ -407,11 +407,139 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ---
 
+## 任务 9：跨过水域
+
+> 对应数据：`assets/resources/missions/mission_09.json`。7×7 odd-r。本关首次使用 **`objective.kinds`**（`destroy_kind_evac` 下多类歼敌前置）：须分别歼灭 **虎式** 与 **IV 号** 各一只后，才允许从撤离格离场判胜；**德军步兵不计入**该前置。谢尔曼开局为默认满编与健康状态（与其它关卡一致）；若某关需要自定义初始乘员 / 着火 / 炮塔 / 舱盖等，仍可通过 `UnitPlacement` 与 `MissionLoader.makeUnit` 配置（本关未使用）。
+
+### 目标
+
+- **歼灭全部德军坦克后撤离**：`objective.type = "destroy_kind_evac"`，`kinds: ["tiger", "panzer4"]` —— `Objective.destroyKindEvacPrereqMet` 要求两种 kind 的敌方分组均 `destroyed` 后，`isShermanEvacDrive` / `isObjectiveMet` 才允许进入撤离结算。
+- **步兵不挡胜利**：地图上 4 名开局步兵与后续事件无关本关「坦克全灭」判定；玩家仍需应付其相邻齐射等事件。
+- **撤离几何**：谢尔曼在 **`evacAt: col=1, row=0`**（带红箭头的格），车体朝向须使 **前进或后退** 的位移方向等于 **`evacExitDir = 4`（NW）**，且邻格越出地图边界（本图 NW 邻格无 `Tile`）时 `shermanEvacuated` 置真并判胜。
+
+### 初始设置
+
+- **谢尔曼**：`col=6, row=6`（右下公路末格），`facing=3`（西）。乘员满编，无瘫痪、无着火、无炮塔受损；舱盖关闭、主炮未装填（引擎默认，与任务 1 等一致）。
+- **2 辆敌坦**（`enemyStartByDice: true`）：**虎式** + **IV 号**，开局各掷 **1d6**，在 **eid 1~6** 黑格链式择空位（不重掷），朝向同格 **`ef`**。当前 JSON 六处 eid：`(5,0)=1`、`(6,1)=2`、`(6,3)=3`、`(5,4)=4`、`(6,5)=5`、`(5,6)=6`。
+- **4 名步兵**：各在 1 处 **`bd:1` 建筑格** —— `(0,0)`、`(0,2)`、`(2,2)`、`(1,6)`，均带 `facing`（当前为 0）。
+
+### 复合目标字段 `kinds`
+
+与仅写单一 `kind` 相比，`kinds` 用于「须消灭多种敌方单位类」且**不要求**消灭其它 kind（如步兵）。HUD 由 `MissionObjectiveHud.buildObjectiveHudLines` 为 `kinds` 中每一项生成一行 `destroyProgress`，最后一行仍为「从指定位置撤离」。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–4** | **狙击手** | `sniper`：舱盖开启、车长存活、与任意徒步单位有视线时车长阵亡 |
+| **5** | **地雷** | `road_mine`：谢尔曼在**公路/桥梁等效公路**且**未瘫痪**时自动命中，**装甲 4 / 穿甲 0** |
+| **6** | **机械故障** | `mechanical_failure`：谢尔曼瘫痪（已瘫痪则不变） |
+| **7–9** | **相邻步兵齐射** | `adjacent_infantry_fire`：与谢尔曼相邻的全体徒步单位各一击（**穿甲 1**） |
+| **10** | **车长额外行动** | `commander_extra`：车长存活时可装填 / 修复 / 灭火 |
+| **11+** | **斯图卡** | `stuka`：舱盖开 → 先 2d6≥6 击落；否则 2d6≥8 命中；命中 **装甲 4 / 穿甲 1** |
+
+数据行见 `data/turn_end_events.csv` 的 `mission_09,...`，`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
+## 任务 10：只是路过：城镇
+
+> 对应数据：`assets/resources/missions/mission_10.json`。6 列 × 6 行 **odd-r**，且为说明书式 **竖条交错版图**：**col 0、2、4 各仅 5 个六角格**（`tiles[row][col] === null` 表示该 offset 无格），**col 1、3、5 各 6 格**——与图 1「奇数列 5 格、偶数列 6 格」一致；渲染与寻路只遍历 `HexMap` 中已 `set` 的格，无格位置不参与邻接。
+
+### 目标
+
+- **纯撤离胜利**：`objective.type = "destroy_kind_evac"` 且**不写 `kind` / `kinds`** —— 与任务 7 相同，`destroyKindEvacPrereqMet` 恒为真，谢尔曼在 **`evacAt: col=5, row=2`**（原图右侧水塘/浅滩一侧、带红箭头格）沿 **`evacExitDir = 0`（正东）** 驶出地图即胜。
+
+### 初始设置
+
+- **谢尔曼**：**黑色箭头**公路格 **`(col=0, row=2)`**，**`facing = 0`（正东）**，默认满编与健康状态。
+- **3 辆敌坦**（`enemyStartByDice: true`）：1 **虎式** + 2 **IV 号**，开局各掷 **1d6**，在 **eid 1~6 黑格**链式择空位（不重掷），朝向同格 **`ef`**。当前 JSON 六处 eid：`(1,0)=5`、`(4,0)=6`、`(5,2)=1`（数据为 `f` 可通行格，承载原图黑圈 1，见 `_comment`）、`(1,3)=4`、`(5,3)=2`、`(5,5)=3`。
+- **3 名步兵**：开局各掷 **1d6**，在 **rid 1~6 红格**链式择空位（不重掷）。当前 rid：`(3,1)=5`、`(2,2)=4`、`(3,2)=2`、`(3,3)=1`、`(2,3)=3`、`(3,4)=6`（与公路/建筑簇相邻关系以图 1 为准）。
+
+### 地图与数据说明
+
+- **公路**：自左侧 col0 公路进入，经 `(1,2)~(4,2)` 横贯，至右下 `(5,4)` 一带与纵向路段衔接（与图 1 道路走向一致，可在编辑器中微调 `h`/`bd`）。
+- **水塘格与 eid=1**：说明书在 **同一六角**上叠了红箭头撤离与黑圈 **1**（坦克掷骰位）。若写成 `t:"w"`，坦克不可入水域会导致出生/增援异常，故本关将该格记为 **`t:"f"` + `eid:1`**，在 `_comment` 中标明「视觉为水塘、数据为可通行田地」；若后续增加浅滩地形类型可再替换。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–5** | **德军步兵** | `infantry_spawn`：掷 1d6，在无谢尔曼与步兵占用的对应 **rid** 格放置 1 名步兵（不重掷） |
+| **6** | **地雷** | `road_mine`：谢尔曼在**公路/桥梁等效公路**且**未瘫痪** → 自动命中，**装甲 4 / 穿甲 0** |
+| **7–8** | **相邻步兵齐射** | `adjacent_infantry_fire`：与谢尔曼相邻的徒步单位各一击（**穿甲 1**） |
+| **9** | **车长额外行动** | `commander_extra`：车长存活 → 装填 / 修复 / 灭火 |
+| **10** | **斯图卡** | `stuka`：舱盖开 → 2d6≥6 击落；否则 2d6≥8 命中；命中 **装甲 4 / 穿甲 1** |
+| **11+** | **IV 号坦克** | `panzer4_spawn`：掷 1d6，在无坦克占用的 **eid** 格放置 IV 号（不重掷），朝向同格 `ef` |
+
+数据行见 `data/turn_end_events.csv` 的 `mission_10,...`，`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
+## 任务 11：钢铁角斗士
+
+> 对应数据：`assets/resources/missions/mission_11.json`。7 列 × 5 行 **odd-r**，**交错列缺格**（与任务 10 同一套 `tiles[row][col]=null` 约定）：**col 0、6 各 3 格；col 1、5 各 4 格；col 2、4 各 5 格；col 3 为 4 格**。
+
+### 目标
+
+- **歼灭全部敌军坦克**：`objective.type = "destroy_all_enemies"` —— 场上全部德军单位被摧毁后判胜（本关仅为坦克，无步兵）。
+
+### 初始设置
+
+- **谢尔曼掷骰出生**：`shermanStartByDice: true` 且 **`sherman` 省略 `at` / `facing`** —— 与德军坦克共用 **eid 1..6 黑格**表，开局先掷 **1d6** 链式择空位（不重掷），朝向落点同格 **`ef`**。须同时 **`enemyStartByDice: true`**（见 `MissionLoader`：`buildCellsByEidFromMap` + `pickEidDiceSlot` 先谢尔曼、再 `resolveEnemyDicePlacements` 排敌坦）。
+- **3 辆敌坦**（`enemyStartByDice: true`）：**虎式**、**IV 号**、**III 号**各掷 **1d6**，在剩余 **eid** 格链式择位（不重掷）。当前 JSON 六处 eid：`(6,1)=1`、`(5,3)=2`、`(2,3)=3`、`(0,1)=4`、`(1,0)=5`、`(5,0)=6`。
+- **谢尔曼状态**：默认满编、无瘫痪、无着火、无炮塔受损（与其它关卡一致）。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–5** | **地雷** | `road_mine`：谢尔曼在**公路/桥梁等效公路**且**未瘫痪** → 自动命中，**装甲 4 / 穿甲 0** |
+| **6–7** | **无事件** | `none`：仅展示文案，不改状态 |
+| **8–9** | **车长额外行动** | `commander_extra`：车长存活 → 装填 / 修复 / 灭火 |
+| **10** | **机械故障** | `mechanical_failure`：谢尔曼瘫痪（已瘫痪则不变） |
+| **11+** | **斯图卡** | `stuka`：舱盖开 → 2d6≥6 击落；否则 2d6≥8 命中；命中 **装甲 4 / 穿甲 1** |
+
+数据行见 `data/turn_end_events.csv` 的 `mission_11,...`，`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
+## 任务 12：猎杀虎式（二）
+
+> 对应数据：`assets/resources/missions/mission_12.json`。8 列 × 5 行 **odd-r**，**交错列缺格**（与任务 10、11 同一套 `tiles[row][col]=null` 约定）：**col 0、2、4、6 各 4 格**（`row=4` 为 `null`），**col 1、3、5、7 各 5 格**。中央 **col=3** 为河道（`t:"w"`），**`row=0` 与 `row=3`** 为带 `br=[0,3]` 的桥梁格，与右岸 **col=4** 纵向公路对接；桥梁不挡视线、无掩护，骰子规则与公路相同（GDD §3.2）。
+
+### 目标
+
+- **先歼虎式再撤离**：`objective.type = "destroy_kind_evac"`，`kind: "tiger"` —— 击毁场上 **虎式** 后，`destroyKindEvacPrereqMet` 才为真；随后谢尔曼在 **`evacAt: col=7, row=2`**（与 **eid 3**、红箭头同格）沿 **`evacExitDir = 0`（正东）** 驶离地图判胜。
+
+### 初始设置
+
+- **谢尔曼**：**黑色箭头**格 **`(col=1, row=2)`**，**`facing = 0`（正东）**，默认满编、无瘫痪、无着火、无炮塔受损（与其它关卡一致；**不使用** `shermanStartByDice`）。
+- **3 辆敌坦**（`enemyStartByDice: true`）：**虎式** + **III 号** ×2，开局各掷 **1d6** 链式择位（不重掷）。说明书要求虎式与两辆 III 号仅占 **黑格编号 1～4**；数据上在 **eid 1～6** 六处黑格齐全（含原图圈 **5、6**），并通过关卡字段 **`enemyDiceEidMax: 4`** 使 `MissionLoader.pickEidDiceSlot` 开局坦克链**只轮换 eid 1..4**，从而与说明书一致；**eid 5、6** 仍供回合结束 **`panzer3_spawn`** 的 1d6 对应格使用。当前六处 eid：**`(5,0)=1`**、**`(6,0)=2`**、**`(7,2)=3`**、**`(6,3)=4`**、**`(1,0)=5`**、**`(4,3)=6`**。
+
+### 回合结束事件（本关 · 掷 **2d6**）
+
+| 2d6 | 事件 | 实现 |
+|-----|------|------|
+| **2–5** | **地雷** | `road_mine`：谢尔曼在**公路/桥梁等效公路**且**未瘫痪** → 自动命中，**装甲 4 / 穿甲 0** |
+| **6** | **机械故障** | `mechanical_failure`：谢尔曼瘫痪（已瘫痪则不变） |
+| **7–8** | **无事件** | `none`：仅展示文案，不改状态 |
+| **9** | **车长额外行动** | `commander_extra`：车长存活 → 装填 / 修复 / 灭火 |
+| **10** | **斯图卡** | `stuka`：舱盖开 → 2d6≥6 击落；否则 2d6≥8 命中；命中 **装甲 4 / 穿甲 1** |
+| **11+** | **III 号坦克** | `panzer3_spawn`：掷 1d6，在无坦克占用的 **eid** 格放置 III 号（不重掷），朝向同格 `ef` |
+
+数据行见 `data/turn_end_events.csv` 的 `mission_12,...`，`node tools/buildTurnEndEventDB.js` 生成 `TurnEndEventDB.ts`。
+
+---
+
 ## 后续任务
 
 - **任务 5**：见上文（`destroy_kind_evac` + `kind=truck`，配套 `truckPath` + `german_truck_move` 回合结束推进；卡车驶出地图判负）。
 - **任务 6**：见上文。
 - **任务 7**：见上文（首次启用桥梁，`destroy_kind_evac` 无 `kind` → 纯撤离胜利；新增 `none` 事件类型）。
 - **任务 8**：见上文（首次启用新单位 `'officer'`（军官）`UnitKind`；与步兵互不替代，胜利判定走标准 `destroy_kind_evac kind='officer'` 通道；红色边框建筑由 UI 自动渲染）。
-- **任务 9 ~ 12**：地图与说明待补充。
+- **任务 9**：见上文（`destroy_kind_evac` + **`kinds`** 多类坦克歼敌前置）。
+- **任务 10**：见上文（纯撤离；**交错列** `null` 缺格；`infantry_spawn` 2–5 / `road_mine` 6 / 相邻步兵 7–8 / `commander_extra` 9 / `stuka` 10 / `panzer4_spawn` 11+）。
+- **任务 11**：见上文（`destroy_all_enemies`；**`shermanStartByDice`** 谢尔曼与坦克共用 eid 先掷；`road_mine` 2–5 / `none` 6–7 / `commander_extra` 8–9 / `mechanical_failure` 10 / `stuka` 11+）。
+- **任务 12**：见上文（`destroy_kind_evac` + **`kind: tiger`**；河 + 双桥；**`enemyDiceEidMax: 4`** 开局坦克仅占 eid 1～4；`road_mine` 2–5 / `mechanical_failure` 6 / `none` 7–8 / `commander_extra` 9 / `stuka` 10 / `panzer3_spawn` 11+）。
 - 主菜单的解锁顺序见 `assets/scripts/core/LevelDB.ts` 中的 `LEVELS` 常量。

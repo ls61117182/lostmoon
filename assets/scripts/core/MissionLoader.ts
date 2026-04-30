@@ -20,6 +20,7 @@ import {
   Unit,
   UnitKind,
   UnitPlacement,
+  ShermanCrew,
 } from './types';
 import { getUnitStats } from './UnitDB';
 import { RNG } from './Dice';
@@ -42,6 +43,49 @@ export interface LoadedMission {
   shermanEvacuated?: boolean;
   /** 任务 5：德军卡车因回合结束事件驶出地图底/终点 → 玩家判负 */
   truckEscapeDefeat?: boolean;
+}
+
+/** 从地图收集 eid 1..6 → 轴向坐标 + 朝向（掷骰放坦克 / 谢尔曼共用）。 */
+function buildCellsByEidFromMap(missionId: string, map: HexMap): Map<number, { pos: Axial; facing: Direction }> {
+  const cellsByEid = new Map<number, { pos: Axial; facing: Direction }>();
+  for (const tile of map.all()) {
+    const eid = tile.enemyStartId;
+    if (eid != null) {
+      if (!Number.isInteger(eid) || eid < 1 || eid > 6) {
+        throw new Error(`任务 ${missionId}：非法 enemyStartId / eid=${eid}（须为 1..6）`);
+      }
+      if (cellsByEid.has(eid)) {
+        throw new Error(`任务 ${missionId}：重复的敌方出生编号 eid=${eid}（全图须唯一）`);
+      }
+      const facing = (tile.enemyStartFacing ?? 0) as Direction;
+      cellsByEid.set(eid, { pos: tile.pos, facing });
+    }
+  }
+  return cellsByEid;
+}
+
+/** 掷 1d6 后链式尝试 eid 1..maxEid（模 maxEid），首个未被 `taken` 占用的 eid 格胜出。 */
+function pickEidDiceSlot(
+  missionId: string,
+  cellsByEid: Map<number, { pos: Axial; facing: Direction }>,
+  taken: Set<string>,
+  rng: RNG,
+  ctxLabel: string,
+  maxEid: number = 6,
+): { pos: Axial; facing: Direction } {
+  const cap = Math.min(6, Math.max(1, Math.floor(maxEid)));
+  const d = rng.d6();
+  for (let step = 0; step < cap; step++) {
+    const slot = ((d - 1 + step) % cap) + 1;
+    const cell = cellsByEid.get(slot);
+    if (!cell) continue;
+    const key = `${cell.pos.q},${cell.pos.r}`;
+    if (taken.has(key)) continue;
+    return cell;
+  }
+  throw new Error(
+    `任务 ${missionId}：${ctxLabel} 掷骰链式占位失败（1d6=${d}，eid 1..${cap} 均无空位或缺格）`,
+  );
 }
 
 export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
@@ -73,20 +117,60 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     }
   }
 
-  // 2. 谢尔曼（必须先有坐标，掷骰敌方时需避开谢尔曼格）
-  if (!data.sherman.at) {
-    throw new Error(`任务 ${data.id}：sherman.at 必填`);
+  // 2. 谢尔曼（须先于无坐标敌军的掷骰占位；可与敌军共用 eid 黑格表）
+  const useDice = !!data.enemyStartByDice;
+  const needsShermanDice = !!(data.shermanStartByDice && !data.sherman.at);
+  const needsEnemyDice = useDice && data.enemies.some((p) => !p.at);
+  if (data.shermanStartByDice && data.sherman.at) {
+    throw new Error(`任务 ${data.id}：shermanStartByDice 为 true 时不应填写 sherman.at`);
   }
-  const sherman = makeUnit('sherman_player', data.sherman as UnitPlacement);
+  if (needsShermanDice && !data.enemyStartByDice) {
+    throw new Error(`任务 ${data.id}：shermanStartByDice 须与 enemyStartByDice 同时为 true`);
+  }
+  if (!needsShermanDice && !data.sherman.at) {
+    throw new Error(`任务 ${data.id}：sherman.at 必填（未启用 shermanStartByDice）`);
+  }
+  const needsDice = needsEnemyDice || needsShermanDice;
+  let rngResolved = rng;
+  if (!rngResolved && needsDice) {
+    rngResolved = new RNG(0x5EEDFACE);
+  }
+
+  const takenBeforeSherman = new Set<string>();
+  for (let i = 0; i < data.enemies.length; i++) {
+    const p = data.enemies[i];
+    if (p.at) {
+      const ax = offsetToAxial(p.at);
+      takenBeforeSherman.add(`${ax.q},${ax.r}`);
+    }
+  }
+
+  let shermanPlacement: UnitPlacement;
+  if (needsShermanDice) {
+    const cellsByEid = buildCellsByEidFromMap(data.id, map);
+    const cell = pickEidDiceSlot(
+      data.id,
+      cellsByEid,
+      takenBeforeSherman,
+      rngResolved!,
+      '谢尔曼',
+      6,
+    );
+    shermanPlacement = {
+      ...data.sherman,
+      at: axialToOffset(cell.pos),
+      facing: cell.facing,
+    };
+  } else {
+    shermanPlacement = data.sherman as UnitPlacement;
+  }
+  const sherman = makeUnit('sherman_player', shermanPlacement);
 
   // 3. 德军：可选掷骰出生
   // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位掷 1d6 链式占位——
   // 步兵用红格 rid（1..6），坦克等非步兵用黑格 eid（1..6）（见 GDD）
-  const useDice = !!data.enemyStartByDice;
-  const needsDice = useDice && data.enemies.some(p => !p.at);
-  const rngResolved = rng ?? (useDice && needsDice ? new RNG(0x5EEDFACE) : undefined);
   const diceList =
-    useDice && needsDice && rngResolved
+    useDice && needsEnemyDice && rngResolved
       ? resolveEnemyDicePlacements(data, map, sherman.pos, rngResolved)
       : null;
 
@@ -203,20 +287,9 @@ function resolveEnemyDicePlacements(
   shermanPos: Axial,
   rng: RNG,
 ): Array<{ at: Offset; facing: Direction }> {
-  const cellsByEid = new Map<number, { pos: Axial; facing: Direction }>();
+  const cellsByEid = buildCellsByEidFromMap(data.id, map);
   const cellsByRid = new Map<number, { pos: Axial; facing: Direction }>();
   for (const tile of map.all()) {
-    const eid = tile.enemyStartId;
-    if (eid != null) {
-      if (!Number.isInteger(eid) || eid < 1 || eid > 6) {
-        throw new Error(`任务 ${data.id}：非法 enemyStartId / eid=${eid}（须为 1..6）`);
-      }
-      if (cellsByEid.has(eid)) {
-        throw new Error(`任务 ${data.id}：重复的敌方出生编号 eid=${eid}（全图须唯一）`);
-      }
-      const facing = (tile.enemyStartFacing ?? 0) as Direction;
-      cellsByEid.set(eid, { pos: tile.pos, facing });
-    }
     const rid = tile.reinforceId;
     if (rid != null) {
       if (!Number.isInteger(rid) || rid < 1 || rid > 6) {
@@ -252,25 +325,38 @@ function resolveEnemyDicePlacements(
         `任务 ${data.id}：掷骰放置步兵需要地图上至少一处 rid（1..6 援军格），且与既有 rid 不重复`,
       );
     }
+    if (!useRid) {
+      const maxEid = data.enemyDiceEidMax ?? 6;
+      const placed = pickEidDiceSlot(
+        data.id,
+        cellsByEid,
+        taken,
+        rng,
+        `第 ${ei + 1} 个无坐标敌方单位（坦克 eid）`,
+        maxEid,
+      );
+      taken.add(`${placed.pos.q},${placed.pos.r}`);
+      out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
+      continue;
+    }
     const d = rng.d6();
-    let placed: { pos: Axial; facing: Direction } | null = null;
+    let placedRid: { pos: Axial; facing: Direction } | null = null;
     for (let step = 0; step < 6; step++) {
       const slot = ((d - 1 + step) % 6) + 1;
       const cell = cellMap.get(slot);
       if (!cell) continue;
       const key = `${cell.pos.q},${cell.pos.r}`;
       if (taken.has(key)) continue;
-      placed = cell;
+      placedRid = cell;
       break;
     }
-    if (!placed) {
-      const kindLabel = useRid ? '步兵 rid' : '坦克 eid';
+    if (!placedRid) {
       throw new Error(
-        `任务 ${data.id}：第 ${ei + 1} 个无坐标敌方单位（${kindLabel}）掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
+        `任务 ${data.id}：第 ${ei + 1} 个无坐标敌方单位（步兵 rid）掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
       );
     }
-    taken.add(`${placed.pos.q},${placed.pos.r}`);
-    out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
+    taken.add(`${placedRid.pos.q},${placedRid.pos.r}`);
+    out.push({ at: axialToOffset(placedRid.pos), facing: placedRid.facing });
   }
   return out;
 }
@@ -355,9 +441,23 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
       driver: true,
       coDriver: true,
     };
-    u.fireLevel = 0;
-    u.loaded = false;     // 说明书：谢尔曼游戏开始时未装填
-    u.hatchOpen = false;  // 起始关闭舱盖
+    if (p.crew) {
+      const slots: (keyof ShermanCrew)[] = [
+        'commander',
+        'loader',
+        'gunner',
+        'driver',
+        'coDriver',
+      ];
+      for (const slot of slots) {
+        const v = p.crew[slot];
+        if (v === false || v === true) u.crew![slot] = v;
+      }
+    }
+    u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
+    u.loaded = p.loaded === true;
+    u.hatchOpen = !!p.hatchOpen;
+    if (p.turretDamaged) u.turretDamaged = true;
   }
   if (p.paralyzed) u.paralyzed = true;
   return u;

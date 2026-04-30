@@ -1,0 +1,72 @@
+{
+  "id": "mission_11",
+  "name": "钢铁角斗士",
+  "description": "目标：摧毁所有敌军坦克。\n谢尔曼与 1 辆虎式、1 辆 IV 号、1 辆 III 号均按 1d6 链式占位（不重掷）落在不同黑格 eid（1..6），朝向同格 ef；谢尔曼掷骰先于德军占位。",
+  "_comment": "7 列 × 5 行 odd-r，**交错列**（与任务 10 同类）：col 0、6 各 3 格；col 1、5 各 4 格；col 2、4 各 5 格；col 3 为 4 格——`null` 表示无六角。\n6 处 eid（白圈黑字）：(6,1)=1、(5,3)=2、(2,3)=3、(0,1)=4、(1,0)=5、(5,0)=6。\n`shermanStartByDice`：谢尔曼省略 at/facing，与坦克共用 eid 表先掷；须 `enemyStartByDice: true`。\n回合结束：mission_11 见 CSV。",
+  "cols": 7,
+  "rows": 5,
+  "enemyStartByDice": true,
+  "shermanStartByDice": true,
+  "tiles": [
+    [
+      { "t": "f" },
+      { "t": "r", "eid": 5, "ef": 0 },
+      { "t": "F" },
+      { "t": "f" },
+      { "t": "m" },
+      { "t": "f", "eid": 6, "ef": 0 },
+      { "t": "F" }
+    ],
+    [
+      { "t": "f", "eid": 4, "ef": 2 },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "r", "eid": 1, "ef": 0 }
+    ],
+    [
+      { "t": "F" },
+      { "t": "m" },
+      { "t": "f" },
+      { "t": "r", "bd": 1 },
+      { "t": "r", "bd": 1 },
+      { "t": "r" },
+      { "t": "f" }
+    ],
+    [
+      null,
+      { "t": "r" },
+      { "t": "r", "eid": 3, "ef": 2 },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "f", "bd": 1, "eid": 2, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      null,
+      { "t": "f" },
+      null,
+      { "t": "f" },
+      null,
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied"
+  },
+  "enemies": [
+    { "kind": "tiger", "faction": "german" },
+    { "kind": "panzer4", "faction": "german" },
+    { "kind": "panzer3", "faction": "german" }
+  ],
+  "objective": {
+    "type": "destroy_all_enemies"
+  },
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}

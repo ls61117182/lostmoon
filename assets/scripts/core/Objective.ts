@@ -2,6 +2,17 @@ import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
 import { Axial, Direction, MissionObjective, tileHasBridge, UnitKind } from './types';
 
+/** `destroy_kind_evac`：歼敌前置是否已满足（纯撤离无 kind/kinds 时恒为 true） */
+export function destroyKindEvacPrereqMet(mission: LoadedMission, obj: MissionObjective): boolean {
+  if (obj.type !== 'destroy_kind_evac') return false;
+  const kinds = obj.kinds;
+  if (kinds && kinds.length > 0) {
+    return kinds.every((k) => allEnemiesOfKindDestroyed(mission, k));
+  }
+  if (obj.kind) return allEnemiesOfKindDestroyed(mission, obj.kind);
+  return true;
+}
+
 export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 
 /** 判断当前任务状态：胜 / 负 / 进行中 */
@@ -35,7 +46,7 @@ export function isShermanEvacDrive(
   const obj = mission.data.objective;
   if (obj.type !== 'destroy_kind_evac') return false;
   if (!obj.evacAt || obj.evacExitDir === undefined) return false;
-  if (obj.kind && !allEnemiesOfKindDestroyed(mission, obj.kind)) return false;
+  if (!destroyKindEvacPrereqMet(mission, obj)) return false;
   const ev = offsetToAxial(obj.evacAt);
   if (from.q !== ev.q || from.r !== ev.r) return false;
   const driveDir = (dirSign === 1 ? facing : rotateDirection(facing, 3)) as number;
@@ -56,7 +67,7 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
     }
     case 'destroy_kind_evac': {
       if (!obj.evacAt || obj.evacExitDir === undefined) return false;
-      if (obj.kind && !allEnemiesOfKindDestroyed(mission, obj.kind)) return false;
+      if (!destroyKindEvacPrereqMet(mission, obj)) return false;
       return !!mission.shermanEvacuated;
     }
     case 'exit_from_edge':

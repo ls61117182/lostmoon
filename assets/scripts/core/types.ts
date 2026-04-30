@@ -148,7 +148,7 @@ export interface ShermanCrew {
 export type ObjectiveType =
   | 'destroy_all_enemies'   // 摧毁所有德军单位
   | 'destroy_kind'          // 摧毁某种单位
-  | 'destroy_kind_evac'     // 先歼指定种类再撤离；若省略 kind 则仅撤离（驶出地图即胜）
+  | 'destroy_kind_evac'     // 先歼指定种类（`kind` 或 `kinds`）再撤离；若二者皆省略则仅撤离（驶出地图即胜）
   | 'exit_from_edge'        // 从某方向移出地图
   | 'destroy_truck';        // 摧毁卡车（任务 5 特殊）
 
@@ -156,6 +156,11 @@ export interface MissionObjective {
   type: ObjectiveType;
   /** destroy_kind / destroy_kind_evac 用 */
   kind?: UnitKind;
+  /**
+   * destroy_kind_evac 专用：须将所列 **每一种** kind 的敌方单位全部击毁后，才允许撤离结算。
+   * 与 `kind` 二选一——若 `kinds` 非空则优先用 `kinds`，忽略单独的 `kind`（典型：任务 9「歼灭全部德军坦克」= 虎式 + IV 号，步兵不计入）。
+   */
+  kinds?: UnitKind[];
   /** exit_from_edge 用：箭头方向（Direction） */
   exitDirection?: Direction;
   /** destroy_kind_evac：撤离六角格（offset）；谢尔曼在此格且目标格无地形时，沿 evacExitDir 前进或反向后退离场 */
@@ -167,13 +172,24 @@ export interface MissionObjective {
 export interface UnitPlacement {
   kind: UnitKind;
   faction: Faction;
-  /** Offset 坐标；若关卡 `enemyStartByDice` 为 true 则可省略，由掷骰规则写入（步兵→rid 链，坦克等→eid 链） */
+  /** Offset 坐标；若关卡 `enemyStartByDice` 则可省略（步兵→rid 链，坦克等→eid 链）；谢尔曼在 `shermanStartByDice` 时亦可省略 */
   at?: Offset;
+  /** 与 `at` 同：谢尔曼在 `shermanStartByDice` 时由格上 `ef` 写入 */
   facing?: Direction;
   /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `rid`（步兵）/ `eid`（坦克等） */
   startId?: number;
   /** 任务 6 等：单位以**初始瘫痪**入场（放置「瘫痪」标记）；与回合结束 `mechanical_failure` 同义，由 `MissionLoader` 写入 `unit.paralyzed = true`。 */
   paralyzed?: boolean;
+  /** 谢尔曼专用：乘员存活；键缺省视为 `true`（存活），显式 `false` 表示该槽位开局阵亡 */
+  crew?: Partial<ShermanCrew>;
+  /** 谢尔曼专用：着火程度；缺省 0 */
+  fireLevel?: number;
+  /** 谢尔曼专用：炮塔受损 */
+  turretDamaged?: boolean;
+  /** 谢尔曼专用：舱盖开启 */
+  hatchOpen?: boolean;
+  /** 谢尔曼专用：主炮是否已装填；缺省 false（未装填） */
+  loaded?: boolean;
 }
 
 export interface MissionData {
@@ -194,6 +210,16 @@ export interface MissionData {
    * （见 GDD / MissionLoader）；此时 `enemies[].at` / `facing` 可省略。
    */
   enemyStartByDice?: boolean;
+  /**
+   * 仅影响**开局** `enemyStartByDice` 的坦克链式占位：掷 1d6 后只在 **eid 1..此值** 上轮换尝试（默认 6）。
+   * 任务 12 填 **4** 时虎式与两辆 III 号仅占 1～4 号黑格；**eid 5、6** 仍可存在于地图上供 `panzer3_spawn` 等回合结束事件使用。
+   */
+  enemyDiceEidMax?: number;
+  /**
+   * 任务 11 等：谢尔曼开局亦掷 1d6，在 **eid 1..6 黑格**链式择空位（与德军坦克共用同一套 eid 表、不重掷）。
+   * 为 true 时须同时 `enemyStartByDice: true`，且地图上须有互不重复的 eid 1..6；`sherman` 可省略 **`at` 与 `facing`**（由掷骰写入格上 `ef`）。
+   */
+  shermanStartByDice?: boolean;
   /** 胜负条件 */
   objective: MissionObjective;
   /** 使用的行动表 / AI 表 / 事件表 ID（默认 'standard'） */

@@ -24,8 +24,7 @@ export interface LevelMeta {
 }
 
 /**
- * 12 关卡配置。当前已实装到 mission_08；9~12 暂无对应 JSON，主菜单按钮仍占位
- * 但点击会因 MissionLoader 加载失败而报错，直到对应 JSON 补齐。
+ * 12 关卡配置。当前已实装到 mission_12（`assets/resources/missions/mission_12.json`）。
  */
 export const LEVELS: LevelMeta[] = [
   { id: 1,  missionPath: 'missions/mission_01', titleKey: 'level.01.title', missionId: 'mission_01' },
@@ -52,9 +51,8 @@ const MENU_STATE_KEY = 'lone_sherman_menu_v1';
 
 /**
  * 至少解锁到此关：测试期间设为 `LEVELS.length`（当前 = 12），主菜单全部关卡开放，
- * 方便绕过通关链直接进入任意已实装关卡（mission_01..08）。
- * 提示：mission_09..12 尚无 JSON，从主菜单点开会因 MissionLoader 加载失败而报错；
- * 待这些任务实装后本常量保持不动即可。正式发布前若要恢复「按通关顺序解锁」可把
+ * 方便绕过通关链直接进入任意已实装关卡（mission_01..12）。
+ * 正式发布前若要恢复「按通关顺序解锁」可把
  * 它改回 1（仅首关默认开放），既有玩家存档里 unlockedLevel 较大的值会照常保留。
  */
 const MIN_UNLOCKED_LEVEL = LEVELS.length;

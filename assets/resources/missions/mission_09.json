@@ -1,0 +1,97 @@
+{
+  "id": "mission_09",
+  "name": "跨过水域",
+  "description": "目标：歼灭全部德军坦克（1 辆虎式 + 1 辆 IV 号），随后将谢尔曼开至带红色箭头的撤离格（col=1, row=0），沿 **NW（evacExitDir=4）** 方向驶离地图。\n谢尔曼置于右下角带黑色箭头的公路末格（col=6, row=6），朝向 **西（facing=3）**。\n1 辆虎式 + 1 辆 IV 号按 1d6 链式占位（不重掷）落在不同黑格 eid（1..6），朝向同格 ef。4 名德军步兵各在 1 处建筑格（bd=1）。",
+  "_comment": "7列×7行 odd-r。6 处 eid（与说明书黑圈）：(5,0)=1、(6,1)=2、(6,3)=3、(5,4)=4、(6,5)=5、(5,6)=6。\n撤离格 (1,0)，evacExitDir=4（NW）。\n胜利：`destroy_kind_evac` + kinds tiger+panzer4；步兵不计入前置。\n回合结束：data/turn_end_events.csv mission_09。",
+  "cols": 7,
+  "rows": 7,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      { "t": "m", "bd": 1 },
+      { "t": "r" },
+      { "t": "m", "bd": 1 },
+      { "t": "w" },
+      { "t": "m" },
+      { "t": "f", "eid": 1, "ef": 0 },
+      { "t": "r" }
+    ],
+    [
+      { "t": "m", "bd": 1 },
+      { "t": "r" },
+      { "t": "f" },
+      { "t": "w", "h": "001000" },
+      { "t": "f" },
+      { "t": "m" },
+      { "t": "f", "eid": 2, "ef": 4 }
+    ],
+    [
+      { "t": "m", "bd": 1 },
+      { "t": "f" },
+      { "t": "r", "bd": 1 },
+      { "t": "w" },
+      { "t": "m" },
+      { "t": "f" },
+      { "t": "m" }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "m" },
+      { "t": "w" },
+      { "t": "w" },
+      { "t": "m", "h": "100000" },
+      { "t": "f", "eid": 3, "ef": 0 }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "w" },
+      { "t": "w" },
+      { "t": "m", "eid": 4, "ef": 3 },
+      { "t": "f" }
+    ],
+    [
+      { "t": "f" },
+      { "t": "f" },
+      { "t": "F" },
+      { "t": "m", "h": "001000" },
+      { "t": "r" },
+      { "t": "m" },
+      { "t": "f", "eid": 5, "ef": 3 }
+    ],
+    [
+      { "t": "F" },
+      { "t": "f", "bd": 1 },
+      { "t": "f" },
+      { "t": "F" },
+      { "t": "f" },
+      { "t": "r", "eid": 6, "ef": 4 },
+      { "t": "r" }
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 6, "row": 6 },
+    "facing": 3
+  },
+  "enemies": [
+    { "kind": "tiger", "faction": "german" },
+    { "kind": "panzer4", "faction": "german" },
+    { "kind": "infantry", "faction": "german", "at": { "col": 0, "row": 0 }, "facing": 0 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 0, "row": 2 }, "facing": 0 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 2, "row": 2 }, "facing": 0 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 1, "row": 6 }, "facing": 0 }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kinds": [ "tiger", "panzer4" ],
+    "evacAt": { "col": 1, "row": 0 },
+    "evacExitDir": 4
+  },
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "standard"
+}
