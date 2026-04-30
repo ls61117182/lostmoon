@@ -7,10 +7,11 @@
  *   - 每一颗骰子再按列表映射到一个行动（A>B 表示先尝试 A，A 做不了才做 B）
  *   - 多辆敌坦的行动顺序：距谢尔曼最近 → 最远；同距随机
  *
- * 转向规则（3 条优先级）：
+ * 转向规则（4 条优先级）：
  *   1. 谢尔曼在"正前直线" + 正前一格可通行 → 不转向
- *   2. 谢尔曼在"正后直线" + 正后一格可通行 → 朝"转向后正前可通行"的一侧转 1 步
- *   3. 否则 → 朝"approximateDirection(enemy→sherman)"最近的一侧转 1 步
+ *   2. 谢尔曼在"正前直线" + 正前一格不可通行 → 朝"转向后正前可通行"的一侧转 1 步
+ *   3. 谢尔曼在"正后直线" + 正后一格可通行 → 朝"转向后正前可通行"的一侧转 1 步
+ *   4. 否则 → 朝"approximateDirection(enemy→sherman)"最近的一侧转 1 步
  *
  * 本文件只做纯决策，不触碰 Unit 状态；具体执行（动画 / 攻击 / 消耗骰子）放在
  * BattleScene 里，配合 update() 驱动。
@@ -109,7 +110,7 @@ export function selectEnemyOrder(
 export type TurnDecision = 'stay' | 'cw' | 'ccw';
 
 /**
- * 三条优先级：见文件头注释。返回 'stay' / 'cw' / 'ccw'，调用方据此旋转 1 步（60°）。
+ * 四条优先级：见文件头注释。返回 'stay' / 'cw' / 'ccw'，调用方据此旋转 1 步（60°）。
  *
  * @param enemy     当前敌坦
  * @param sherman   谢尔曼
@@ -133,27 +134,36 @@ export function decideEnemyTurn(
     return true;
   };
 
-  // 规则 1：谢尔曼在正前直线 + 正前可通行 → 不转
-  const straightDir = directionTo(enemy.pos, sherman.pos);
-  if (straightDir === facing && canEnterFront(facing)) {
-    return 'stay';
-  }
-
-  // 规则 2：谢尔曼在正后直线 + 正后可通行 → 朝"旋转后正前可通行"一侧转 1 步
-  const rear = rotateDirection(facing, 3);
-  if (straightDir === rear && canEnterFront(rear)) {
-    // 尝试 CW / CCW 一步旋转，看谁的新正前可通行 → 优先那边
-    const cwFront   = rotateDirection(facing, 1);
-    const ccwFront  = rotateDirection(facing, 5);
+  // 规则 2 / 3 共用：尝试 CW / CCW 一步旋转，挑"新正前可通行"那侧；都行/都不行 → 朝谢尔曼最短转。
+  const pickTurnToOpenFront = (): TurnDecision => {
+    const cwFront  = rotateDirection(facing, 1);
+    const ccwFront = rotateDirection(facing, 5);
     const cwOk  = canEnterFront(cwFront);
     const ccwOk = canEnterFront(ccwFront);
     if (cwOk && !ccwOk) return 'cw';
     if (!cwOk && ccwOk) return 'ccw';
-    // 两边都行 / 都不行：选"更朝向谢尔曼"那边
     return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
+  };
+
+  const straightDir = directionTo(enemy.pos, sherman.pos);
+
+  // 规则 1：谢尔曼在正前直线 + 正前可通行 → 不转
+  if (straightDir === facing && canEnterFront(facing)) {
+    return 'stay';
   }
 
-  // 规则 3：朝 approximateDirection 方向最短旋转一步
+  // 规则 2：谢尔曼在正前直线 + 正前不可通行 → 朝"旋转后正前可通行"一侧转 1 步
+  if (straightDir === facing && !canEnterFront(facing)) {
+    return pickTurnToOpenFront();
+  }
+
+  // 规则 3：谢尔曼在正后直线 + 正后可通行 → 朝"旋转后正前可通行"一侧转 1 步
+  const rear = rotateDirection(facing, 3);
+  if (straightDir === rear && canEnterFront(rear)) {
+    return pickTurnToOpenFront();
+  }
+
+  // 规则 4：朝 approximateDirection 方向最短旋转一步
   return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
 }
 
