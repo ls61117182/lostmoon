@@ -450,6 +450,11 @@ const BATTLE_SETTINGS_R = 24;
 // 战斗内设置 / 退出确认模态（与主菜单风格一致）
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
+/** 与 MainMenuScene `BG_TOP` / `BG_MID` / `BG_BOTTOM` / `MENU_DIVIDER` 一致（主菜单渐变底图） */
+const MAIN_MENU_STYLE_BG_TOP = new Color(32, 46, 36, 255);
+const MAIN_MENU_STYLE_BG_MID = new Color(22, 32, 26, 255);
+const MAIN_MENU_STYLE_BG_BOTTOM = new Color(14, 20, 18, 255);
+const MAIN_MENU_STYLE_DIVIDER = new Color(120, 150, 120, 200);
 /** 底部「阶段选择条 + 玩家骰子托盘」共用行中心 Y（Canvas 坐标，负值越大越靠下） */
 const BOTTOM_PHASE_ROW_Y = -288;
 /** 右下角「下一阶段 / 结束回合」与阶段条大按钮同高，且与底部行垂直对齐 */
@@ -887,6 +892,7 @@ export class BattleScene extends Component {
 
   onLoad() {
     setLang(MenuProgress.load().lang);
+    this.buildMainMenuStyleBattleBackground();
     // 自动创建子 Graphics 节点，免去编辑器手动配置
     const gNode = new Node('MapGraphics');
     // UI Graphics 必须在 UI_2D 层才会被 Canvas 的 UI 相机渲染。
@@ -8146,4 +8152,47 @@ export class BattleScene extends Component {
       this.updateOutcomeOverlay();
     }
   }
+
+  /**
+   * 与主菜单 `MainMenuScene.buildBackground` 相同：双段竖直渐变 + 顶/底装饰线。
+   * 须最先 `addChild`，叠在摄像机清屏色之上、六角地图与 HUD 之下。
+   */
+  private buildMainMenuStyleBattleBackground() {
+    const n = new Node('BattleMenuStyleBG');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(CANVAS_W, CANVAS_H);
+    n.setPosition(0, 0, 0);
+    const g = n.addComponent(Graphics);
+    const STEPS = 24;
+    for (let i = 0; i < STEPS; i++) {
+      const tRatio = i / (STEPS - 1);
+      const c = tRatio < 0.5
+        ? lerpColorMainMenuStyle(MAIN_MENU_STYLE_BG_TOP, MAIN_MENU_STYLE_BG_MID, tRatio * 2)
+        : lerpColorMainMenuStyle(MAIN_MENU_STYLE_BG_MID, MAIN_MENU_STYLE_BG_BOTTOM, (tRatio - 0.5) * 2);
+      const y = CANVAS_H / 2 - (i + 1) * (CANVAS_H / STEPS);
+      g.fillColor = c;
+      g.rect(-CANVAS_W / 2, y, CANVAS_W, CANVAS_H / STEPS + 1);
+      g.fill();
+    }
+    g.strokeColor = MAIN_MENU_STYLE_DIVIDER;
+    g.lineWidth = 1;
+    g.moveTo(-CANVAS_W / 2 + 60, CANVAS_H / 2 - 80);
+    g.lineTo(CANVAS_W / 2 - 60, CANVAS_H / 2 - 80);
+    g.stroke();
+    g.moveTo(-CANVAS_W / 2 + 60, -CANVAS_H / 2 + 60);
+    g.lineTo(CANVAS_W / 2 - 60, -CANVAS_H / 2 + 60);
+    g.stroke();
+    this.node.addChild(n);
+  }
+}
+
+function lerpColorMainMenuStyle(a: Color, b: Color, tRatio: number): Color {
+  const k = Math.max(0, Math.min(1, tRatio));
+  return new Color(
+    Math.round(a.r + (b.r - a.r) * k),
+    Math.round(a.g + (b.g - a.g) * k),
+    Math.round(a.b + (b.b - a.b) * k),
+    Math.round(a.a + (b.a - a.a) * k),
+  );
 }
