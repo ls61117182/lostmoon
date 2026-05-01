@@ -11,7 +11,7 @@
     [
       null,
       null,
-      { "t": "r", "eid": 5, "ef": 1 },
+      { "t": "r", "eid": 5, "ef": 1, "rd": "010010" },
       { "t": "F" },
       { "t": "f", "h": "011000" },
       { "t": "m" },
@@ -21,7 +21,7 @@
     [
       null,
       { "t": "f", "h": "001000" },
-      { "t": "r", "h": "101000" },
+      { "t": "r", "h": "101000", "rd": "010010" },
       { "t": "f" },
       { "t": "f" },
       { "t": "f", "h": "001000" },
@@ -31,17 +31,17 @@
       null,
       { "t": "f" },
       { "t": "m", "h": "100000" },
-      { "t": "r" },
-      { "t": "r", "bd": 1 },
-      { "t": "r" },
-      { "t": "r" },
-      { "t": "r", "eid": 1, "ef": 3 }
+      { "t": "r", "rd": "010010" },
+      { "t": "r", "bd": 1, "rd": "101000" },
+      { "t": "r", "rd": "100100" },
+      { "t": "r", "rd": "100100" },
+      { "t": "r", "eid": 1, "ef": 3, "rd": "100100" }
     ],
     [
       { "t": "f", "eid": 4, "ef": 0 },
       { "t": "f" },
       { "t": "f" },
-      { "t": "r", "bd": 1, "h": "010000" },
+      { "t": "r", "bd": 1, "h": "010000", "rd": "001011" },
       { "t": "f", "h": "111000" },
       { "t": "f" },
       { "t": "f", "h": "001000" },
@@ -50,8 +50,8 @@
     [
       null,
       { "t": "F" },
-      { "t": "r" },
-      { "t": "r", "h": "110000" },
+      { "t": "r", "rd": "101000" },
+      { "t": "r", "h": "110000", "rd": "000101" },
       { "t": "f" },
       { "t": "f", "bd": 1 },
       { "t": "f", "h": "001000" },
@@ -59,7 +59,7 @@
     ],
     [
       null,
-      { "t": "r", "eid": 3, "ef": 5 },
+      { "t": "r", "eid": 3, "ef": 5, "rd": "001001" },
       { "t": "f", "h": "100000" },
       { "t": "f" },
       { "t": "f" },
@@ -68,18 +68,13 @@
       null
     ]
   ],
-  "sherman": {
-    "kind": "sherman",
-    "faction": "allied"
-  },
+  "sherman": { "kind": "sherman", "faction": "allied" },
   "enemies": [
     { "kind": "tiger", "faction": "german" },
     { "kind": "panzer4", "faction": "german" },
     { "kind": "panzer3", "faction": "german" }
   ],
-  "objective": {
-    "type": "destroy_all_enemies"
-  },
+  "objective": { "type": "destroy_all_enemies" },
   "actionTableId": "standard",
   "aiTableId": "standard",
   "eventTableId": "standard"

@@ -408,6 +408,9 @@ const BUILDING_DOOR_STROKE= new Color( 55,  48,  42, 255);
 const BRIDGE_PLANK_FILL   = new Color(168, 132,  78, 255);
 const BRIDGE_PLANK_OUTLINE= new Color( 60,  44,  26, 255);
 const BRIDGE_RAIL_STROKE  = new Color( 90,  64,  40, 255);
+/** 公路条带（按 `Tile.roads` 方向叠加在公路 / 叠桥水域之上）：略深米褐 + 深棕描边 */
+const ROAD_PATH_FILL      = new Color(170, 152, 118, 255);
+const ROAD_PATH_OUTLINE   = new Color( 60,  44,  26, 255);
 
 const FACTION_COLORS = {
   allied: new Color( 60, 160,  80, 255),
@@ -1098,6 +1101,14 @@ export class BattleScene extends Component {
       if (!tileHasBridge(t)) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawBridgeOverlay(c.x, c.y, this.hexSize, t.bridgeEnds!);
+    }
+
+    // 1a-road. 公路条带：按 `Tile.roads` 方向位绘制；单方向时格心叠绘"道路尽头"圆形（说明书图例）。
+    // 在建筑之前画，避免村庄房屋被路压到；与树篱互不干扰（树篱画在格边外缘，路画在格内）。
+    for (const t of tiles) {
+      if (!t.roads) continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads);
     }
 
     // 1b. 建筑图案（不改变基底地形色，仅格心矢量房屋）
@@ -2086,6 +2097,97 @@ export class BattleScene extends Component {
       g.lineTo(cxk - nx * halfW, cyk - ny * halfW);
       g.stroke();
     }
+    g.lineWidth = 2;
+  }
+
+  /**
+   * 公路条带叠加（依 `Tile.roads` 6 位轴向位绘制）：每个 `roads[ax]===true` 的方向，
+   * 沿"轴向 ax 对应的几何边中点 → 格心"画一段米褐色道路条带，宽度统一 `size*0.18*2`。
+   *
+   * - 多方向时：所有条带在格心通过一个填充圆（半径 = halfW）汇合；条带两侧描边从边中点起
+   *   只画到「距格心 halfW 处」截止，避免穿过格心圆造成"X 字描边"。
+   * - 单方向时：格心额外绘制一个明显放大的圆（halfW * 1.6）+ 圆周描边，模拟说明书的"道路尽头"图案。
+   *
+   * 与桥梁同样使用 `HEDGE_DRAW_EDGE_BY_AXIAL` 完成「轴向 → 几何边」映射；几何边端点定义与
+   * `drawHedgeEdge` / `drawBridgeOverlay` 保持一致（`-30°+60°·i` 弦边法）。
+   */
+  private drawRoadOverlay(
+    cx: number,
+    cy: number,
+    size: number,
+    roads: NonNullable<Tile['roads']>,
+  ) {
+    const g = this.g!;
+    const dirCount = roads.reduce((n, b) => n + (b ? 1 : 0), 0);
+    if (dirCount === 0) return;
+
+    const halfW = size * 0.18;
+    /** 单方向时格心圆放大成"道路尽头"图案；多方向时仅作为汇合圆，半径 = halfW。 */
+    const endR = dirCount === 1 ? halfW * 1.6 : halfW;
+
+    /** 计算第 ax 轴向的边中点（与 drawBridgeOverlay 同步）。 */
+    const edgeMid = (ax: number): { mx: number; my: number } => {
+      const edge = HEDGE_DRAW_EDGE_BY_AXIAL[ax];
+      const a1 = (-30 + 60 * edge) * Math.PI / 180;
+      const a2 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
+      const x0 = cx + size * Math.cos(a1);
+      const y0 = cy + size * Math.sin(a1);
+      const x1 = cx + size * Math.cos(a2);
+      const y1 = cy + size * Math.sin(a2);
+      return { mx: (x0 + x1) / 2, my: (y0 + y1) / 2 };
+    };
+
+    g.fillColor = ROAD_PATH_FILL;
+    g.strokeColor = ROAD_PATH_OUTLINE;
+
+    g.lineWidth = 0;
+    for (let ax = 0; ax < 6; ax++) {
+      if (!roads[ax]) continue;
+      const { mx, my } = edgeMid(ax);
+      const dx = mx - cx;
+      const dy = my - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+      const nx = -uy;
+      const ny = ux;
+      g.moveTo(cx + nx * halfW, cy + ny * halfW);
+      g.lineTo(mx + nx * halfW, my + ny * halfW);
+      g.lineTo(mx - nx * halfW, my - ny * halfW);
+      g.lineTo(cx - nx * halfW, cy - ny * halfW);
+      g.close();
+      g.fill();
+    }
+
+    g.circle(cx, cy, endR);
+    g.fill();
+
+    g.lineWidth = 1.5;
+    for (let ax = 0; ax < 6; ax++) {
+      if (!roads[ax]) continue;
+      const { mx, my } = edgeMid(ax);
+      const dx = mx - cx;
+      const dy = my - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+      const nx = -uy;
+      const ny = ux;
+      const sx = cx + ux * endR;
+      const sy = cy + uy * endR;
+      g.moveTo(sx + nx * halfW, sy + ny * halfW);
+      g.lineTo(mx + nx * halfW, my + ny * halfW);
+      g.stroke();
+      g.moveTo(sx - nx * halfW, sy - ny * halfW);
+      g.lineTo(mx - nx * halfW, my - ny * halfW);
+      g.stroke();
+    }
+
+    if (dirCount === 1) {
+      g.circle(cx, cy, endR);
+      g.stroke();
+    }
+
     g.lineWidth = 2;
   }
 

@@ -541,7 +541,7 @@ function axialToWorld(q: number, r: number): Vec2 {
 
 **敌方掷骰出生（可选，`enemyStartByDice: true`）**
 
-适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记**坦克等**的**黑格出生位**；用 **`rid`**（1～6，全图**不重复**）标记**步兵**的**红格（援军）出生位**。同一格可选 **`ef`**（0=E … 5=NE）表示该格上单位**初始 facing**（与掷骰放坦克 / 步兵均适用），其方向编号与**同格** `h` 的 6 位、以及 `HEX_DIRECTIONS[ef]` **完全一致**（自本格心指向第 `ef` 邻格心 = 经该边越境的六向）。树篱位 `h[i]=1` 与朝向 `ef` 均用**轴向**同一套索引 i，与 `HexGrid.hedgeFlagsFromMapJson` 及 `HEX_DIRECTIONS` 一致；`BattleScene` 绘制时经 `HEDGE_DRAW_EDGE_BY_AXIAL` 将轴向 i 映到 `drawHedgeEdge` 的**几何边**号。
+适用于「开局时敌方位置不完全固定」的关卡。地图上用 **`eid`**（1～6，全图**不重复**）标记**坦克等**的**黑格出生位**；用 **`rid`**（1～6，全图**不重复**）标记**步兵**的**红格（援军）出生位**。同一格可选 **`ef`**（0=E … 5=NE）表示该格上单位**初始 facing**（与掷骰放坦克 / 步兵均适用），其方向编号与**同格** `h` 的 6 位、以及 `HEX_DIRECTIONS[ef]` **完全一致**（自本格心指向第 `ef` 邻格心 = 经该边越境的六向）。树篱位 `h[i]=1` 与朝向 `ef` 均用**轴向**同一套索引 i，与 `HexGrid.hedgeFlagsFromMapJson` 及 `HEX_DIRECTIONS` 一致；`BattleScene` 绘制时经 `HEDGE_DRAW_EDGE_BY_AXIAL` 将轴向 i 映到 `drawHedgeEdge` 的**几何边**号。**公路视觉**：可选 **`rd`**（6 位 `0/1`，**仅** `t='r'` 或水域+桥梁可配）按同一轴向索引绘制"边中点 → 格心"的道路条带；当只有 1 位为 `1` 时，格心额外绘制圆形"道路尽头"图案。`rd` **不影响**移动 / 视线 / 骰子规则，纯视觉字段（解析见 `HexGrid.roadFlagsFromMapJson`，渲染见 `BattleScene.drawRoadOverlay`）。
 
 - 关卡 JSON 中 **`enemyStartByDice: true`** 时，每个 **`enemies[]`** 条目可省略 `at` / `facing`，由运行时掷骰决定。
 - **谢尔曼掷骰（可选，`shermanStartByDice: true`）**：与坦克共用地图上的 **eid 1..6** 黑格表，须同时 **`enemyStartByDice: true`**；`sherman` 可省略 **`at` / `facing`**，由 `MissionLoader` 在加载时**先于**德军无坐标单位掷 1d6 链式择空位（与坦克规则相同，占位后写入格上 `ef` 朝向）。典型任务见 `mission_11.json`（钢铁角斗士）。

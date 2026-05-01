@@ -36,6 +36,13 @@ export interface Tile {
   hasBuilding?: boolean;
   /** 沿 6 条边是否有树篱（按 Direction 索引） */
   hedges?: [boolean, boolean, boolean, boolean, boolean, boolean];
+  /**
+   * 公路视觉：第 i 位为 true 表示本格与「第 i 向邻格」之间那条格边中点 → 本格心绘有一段道路。
+   * 仅对 `terrain==='road'` 或叠桥水域有效；纯视觉字段，不影响移动 / 视线 / 骰子规则。
+   * 当且仅当此数组只有 1 位为 true 时，BattleScene 在格心额外绘制圆形道路终点（说明书"道路尽头"图案）。
+   * 索引与 `hedges`、`HEX_DIRECTIONS`、`enemyStartFacing` 完全同序（轴向 0..5）。
+   */
+  roads?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** 援军生成位编号（如说明书的红色数字 1..6） */
   reinforceId?: number;
   /** 德军初始位编号（黑色数字 1..6；掷骰出生时全图同编号至多一格） */
@@ -260,6 +267,13 @@ export interface TileDef {
    * 为 `1` 表示本格与**第 i 向邻格**之间那条格边外缘有树篱，与 `HexGrid.hedgeFlagsFromMapJson` 一致。
    */
   h?: string;
+  /**
+   * 公路绘制方向：6 位 `0/1`，与 `h` 共享轴向索引（0=E, 顺时针 1=SE … 5=NE）。
+   * `1` 表示本格内沿"第 i 向邻边中点 → 格心"绘制一段道路条带。仅 `t==='r'` 或水域+桥梁允许配置（其它基底 MissionLoader 抛错）。
+   * 当数组中只有 1 位为 `1` 时，BattleScene 会在格心额外绘制圆形"道路尽头"图案；`0` 个或 ≥2 个不画圆。
+   * 纯视觉字段，不影响移动 / 视线 / 骰子；缺省时本格不绘制道路条带（视觉退化为整格平涂的公路色）。
+   */
+  rd?: string;
   /** 援军编号 1..6（红格；掷骰放置步兵时用，全图不重复） */
   rid?: number;
   /** 敌方坦克起始编号 1..6（黑格；掷骰放置坦克等非步兵时用，全图不重复） */

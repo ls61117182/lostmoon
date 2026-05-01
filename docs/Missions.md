@@ -93,6 +93,7 @@
 | 字段 | 说明 |
 | ---- | ---- |
 | `h` | 树篱：6 位 `0/1`，**第 i 位（0 基）**与 `HEX_DIRECTIONS[i]` 及 `ef` **同一轴向**编号：0=E, 顺时针 1=SE … 5=NE；`1` 表示本格与**第 i 向邻格**之间那段格边外缘有树篱。解析见 `hedgeFlagsFromMapJson`；`BattleScene` 渲染经 `HEDGE_DRAW_EDGE_BY_AXIAL`。本仓库内 `mission_*.json` 的 `h` 已用 `HexGrid.migrateHedgeHFromLegacyDraw` 与旧版**误用边号**的绘制对齐后再存盘，**勿**对现有关卡再手跑该函数（会二次置换）。 |
+| `rd` | 公路条带方向：6 位 `0/1`，与 `h` / `ef` **同一轴向**编号；第 i 位 `1` 表示本格内沿「第 i 向邻边中点 → 格心」绘制一段道路。**仅** `t==='r'`（公路）或水域+桥梁可配置（其它基底 MissionLoader 抛错）。当且仅当只有 1 位为 `1` 时，`BattleScene` 在格心额外绘制圆形"道路尽头"图案（说明书图例）。**纯视觉字段**——不影响移动 / 视线 / 骰子规则。解析见 `HexGrid.roadFlagsFromMapJson`，渲染见 `BattleScene.drawRoadOverlay`。 |
 | `ef` | 与 `eid` 同格时黑字坦克的**初始朝向**，**与 `h` 的轴向索引用法相同**；与逻辑层「第 i 向邻接/格边」一致。 |
 | `rid` | 援军生成位编号（红色数字）**1..6**，全图不重复；**开局掷骰放置步兵**（`enemyStartByDice` 且无 `at`）时走 **`rid` 链**，与坦克用的 **`eid` 链**分开。 |
 | `eid` | 敌方坦克起始候选编号（黑色数字）**1..6**；**开局掷骰放置坦克等**（非步兵）时走 **`eid` 链**。 |

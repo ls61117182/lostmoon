@@ -6,7 +6,7 @@
  *   const { map, sherman, enemies } = loadMission(data, rng);
  */
 
-import { directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance } from './HexGrid';
+import { directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
 import {
   Axial,
   Direction,
@@ -103,11 +103,13 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         ? ((((Number(efRaw) % 6) + 6) % 6) as Direction)
         : undefined;
       const bridgeEnds = parseBridgeEnds(data.id, { col, row }, terrain, def.br);
+      const roads = parseRoadFlags(data.id, { col, row }, terrain, !!bridgeEnds, def.rd);
       const tile: Tile = {
         pos: offsetToAxial({ col, row }),
         terrain,
         ...(hasBuilding ? { hasBuilding: true } : {}),
         hedges: hedgeFlagsFromMapJson(def.h),
+        ...(roads ? { roads } : {}),
         reinforceId: def.rid,
         ...(eid !== undefined && eid !== null ? { enemyStartId: eid } : {}),
         ...(facing !== undefined ? { enemyStartFacing: facing } : {}),
@@ -412,6 +414,36 @@ function parseBridgeEnds(
     );
   }
   return [aRaw as Direction, bRaw as Direction];
+}
+
+/**
+ * 解析 `TileDef.rd` → `Tile.roads`（公路视觉条带方向），并强校验：
+ * - 仅 `t==='r'`（公路）或水域+桥梁（视觉同公路）允许配置；其它基底立即抛错，避免田地/林地误配；
+ * - 必须是长度 6、仅 `0/1` 字符的字符串；
+ * - 全 0 等价于未配置（返回 undefined，不写入 Tile.roads）。
+ */
+function parseRoadFlags(
+  missionId: string,
+  pos: Offset,
+  terrain: TerrainType,
+  hasBridge: boolean,
+  raw: TileDef['rd'],
+): Tile['roads'] {
+  if (raw === undefined || raw === null) return undefined;
+  if (terrain !== 'road' && !hasBridge) {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 配置了道路方向 rd='${raw}'，但基底地形非公路（t='${terrain}'）。`
+      + `公路视觉字段仅允许在 t='r' 或叠桥水域上使用`,
+    );
+  }
+  if (typeof raw !== 'string' || raw.length !== 6 || !/^[01]{6}$/.test(raw)) {
+    throw new Error(
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 道路方向 rd='${raw}' 非法，须为长度 6 的 0/1 字符串`,
+    );
+  }
+  const flags = roadFlagsFromMapJson(raw);
+  if (!flags || !flags.some(Boolean)) return undefined;
+  return flags;
 }
 
 function makeUnit(id: string, p: UnitPlacement): Unit {

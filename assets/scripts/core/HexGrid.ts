@@ -55,6 +55,20 @@ export function hedgeFlagsFromMapJson(s: string | undefined): Tile['hedges'] {
 }
 
 /**
+ * 将关卡 JSON 的 `rd` 字串解析为六条边方向上的"公路绘制"标记（与 `Tile.roads` 一致）。
+ *
+ * 与 `h` / `ef` 同序（轴向 0..5），第 i 位为 `'1'` 表示在本格内沿「第 i 向邻边中点 → 格心」绘制道路条带。
+ * 仅作视觉，不影响移动 / 视线 / 骰子；具体绘制及"单方向画圆形道路尽头"逻辑在 `BattleScene.drawRoadOverlay` 中。
+ */
+export function roadFlagsFromMapJson(s: string | undefined): Tile['roads'] {
+  if (!s || s.length !== 6) return undefined;
+  return [
+    s[0] === '1', s[1] === '1', s[2] === '1',
+    s[3] === '1', s[4] === '1', s[5] === '1',
+  ] as Tile['roads'];
+}
+
+/**
  * 将**旧版资源**中按「`h` 下标 = 几何边下标」直接绘制时的 6 位串，迁为**当前**轴向语义下的 `h`：
  * 对各位 `ax` 有 `h_new[ax] = h_old[ HEDGE_DRAW_EDGE_BY_AXIAL[ax] ]`，与 `BattleScene` 中 `HEDGE_DRAW_EDGE_BY_AXIAL` 联用后，**画面**与旧版仍一致，且与 `HEX_DIRECTIONS` / 越境规则一致。
  */
