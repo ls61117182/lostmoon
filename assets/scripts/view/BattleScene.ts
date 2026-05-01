@@ -55,6 +55,7 @@ import {
 } from 'cc';
 import {
   HEDGE_DRAW_EDGE_BY_AXIAL,
+  HexMap,
   axialToPixel,
   approximateDirection,
   directionTo,
@@ -411,6 +412,13 @@ const BRIDGE_RAIL_STROKE  = new Color( 90,  64,  40, 255);
 /** 公路条带（按 `Tile.roads` 方向叠加在公路 / 叠桥水域之上）：略深米褐 + 深棕描边 */
 const ROAD_PATH_FILL      = new Color(170, 152, 118, 255);
 const ROAD_PATH_OUTLINE   = new Color( 60,  44,  26, 255);
+/**
+ * 水陆河岸过渡（仅在水域格内沿"非水域邻格"方向画的内偏移沙带）：双层条带形成由水→陆的渐变错觉
+ * - 外层：略深米褐贴近水侧
+ * - 内层：浅米黄贴近格心 / 陆地侧；两层在六角顶点处自然重叠成圆滑过渡
+ */
+const WATER_BANK_OUTER    = new Color(168, 142,  92, 230);
+const WATER_BANK_INNER    = new Color(214, 196, 152, 235);
 
 const FACTION_COLORS = {
   allied: new Color( 60, 160,  80, 255),
@@ -1087,6 +1095,15 @@ export class BattleScene extends Component {
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
       this.drawHexStroke(c.x, c.y, this.hexSize);
+    }
+
+    // 1-bank. 水陆河岸：仅在水域格内、沿"非水域邻格"方向画沙色内偏移条带，模拟河 / 湖岸过渡。
+    // 与桥梁互斥：叠桥水域的视觉由 drawBridgeOverlay 负责，跳过；邻居为水或地图外亦跳过。
+    for (const t of tiles) {
+      if (t.terrain !== 'water') continue;
+      if (tileHasBridge(t)) continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawWaterBankOverlay(c.x, c.y, this.hexSize, t, map);
     }
 
     // 1a. 林地表冠层：示意树木（在基底之上、建筑/树篱之前）
@@ -2101,12 +2118,170 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 公路条带叠加（依 `Tile.roads` 6 位轴向位绘制）：每个 `roads[ax]===true` 的方向，
-   * 沿"轴向 ax 对应的几何边中点 → 格心"画一段米褐色道路条带，宽度统一 `size*0.18*2`。
+   * 水陆河岸过渡：仅在水域格（非桥梁）内沿"邻格非水域 / 非地图外"的方向画双层沙带（外深 + 内浅），
+   * 模拟由水→陆的渐变。
    *
-   * - 多方向时：所有条带在格心通过一个填充圆（半径 = halfW）汇合；条带两侧描边从边中点起
-   *   只画到「距格心 halfW 处」截止，避免穿过格心圆造成"X 字描边"。
-   * - 单方向时：格心额外绘制一个明显放大的圆（halfW * 1.6）+ 圆周描边，模拟说明书的"道路尽头"图案。
+   * **跨格连续性**：当沙带边 `e` 的某端 V 处的相邻边 `e'` 是「水-水共享边」时，沙带在 V 处会
+   * 沿 e' 边方向**额外延伸 `d/√3`**（"L 形角部"），且内角点选用 V→格心 方向 `d/cos(30°)` 的对角偏移点。
+   * 这样：
+   *  - 内角点同时距 e 边和 e' 边的垂直距离均为 d；
+   *  - 沙带外缘从 V 沿 e' 边方向延伸的小段 + 内缘的对角偏移点 → 在 V 处自然合成一个 L 形角部；
+   *  - 两侧水域格 A、B 在共享边的同一 V 上做对称的 L 形延伸 → 颜色相同的两段沙带在共享边附近
+   *    完全对接，跨越水-水边界形成视觉连续的沙带（不再有 V 形断口）。
+   *
+   * 端点情形：
+   *  - 'land'：相邻边也画沙带（同格内两沙带衔接），内角点用对角偏移；无 L 形延伸；
+   *  - 'water'：相邻边是水-水共享边（不画主沙带，但需 L 形角部延伸过共享边对接邻格沙带）；
+   *  - 'edge'：地图外（沙带封口），内角点用 e 法线方向偏移 d，无 L 形延伸。
+   */
+  private drawWaterBankOverlay(
+    cx: number,
+    cy: number,
+    size: number,
+    tile: Tile,
+    map: HexMap,
+  ) {
+    const g = this.g!;
+    const totalDepth = size * 0.22;
+    const outerRatio = 0.55;
+    const outerDepth = totalDepth * outerRatio;
+
+    // ---- 1) 标记 6 条几何边的邻格类型 ----
+    // 轴向 ax → 几何边 e 通过 HEDGE_DRAW_EDGE_BY_AXIAL；该映射为自逆置换 [0,5,4,3,2,1]。
+    type EdgeType = 'land' | 'water' | 'edge';
+    const edgeType: EdgeType[] = [];
+    for (let e = 0; e < 6; e++) {
+      const ax = HEDGE_DRAW_EDGE_BY_AXIAL[e];
+      const np = neighbor(tile.pos, ax as Direction);
+      const n = map.get(np);
+      if (!n) edgeType.push('edge');
+      else if (n.terrain === 'water') edgeType.push('water');
+      else edgeType.push('land');
+    }
+    if (!edgeType.includes('land')) return;
+
+    // ---- 2) 6 个几何顶点 V[i] = (-30°+60°·i) 上的方向数据 ----
+    const V: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6; i++) {
+      const a = (-30 + 60 * i) * Math.PI / 180;
+      V.push({ x: cx + size * Math.cos(a), y: cy + size * Math.sin(a) });
+    }
+    /** 顶点 i 的"V → 格心"单位向量（即两条相邻边法线的角平分线方向） */
+    const vToCenter = V.map((v) => {
+      const ux = cx - v.x;
+      const uy = cy - v.y;
+      const l = Math.hypot(ux, uy) || 1;
+      return { ux: ux / l, uy: uy / l };
+    });
+    /** 几何边 e（V[e] → V[e+1]）的方向单位向量 */
+    const edgeDir: { ux: number; uy: number }[] = [];
+    /** 几何边 e 的法线（朝格心）单位向量 */
+    const edgeNorm: { ux: number; uy: number }[] = [];
+    for (let e = 0; e < 6; e++) {
+      const v0 = V[e];
+      const v1 = V[(e + 1) % 6];
+      const dx = v1.x - v0.x;
+      const dy = v1.y - v0.y;
+      const l = Math.hypot(dx, dy) || 1;
+      edgeDir.push({ ux: dx / l, uy: dy / l });
+      const mx = (v0.x + v1.x) * 0.5;
+      const my = (v0.y + v1.y) * 0.5;
+      const ux = cx - mx;
+      const uy = cy - my;
+      const ll = Math.hypot(ux, uy) || 1;
+      edgeNorm.push({ ux: ux / ll, uy: uy / ll });
+    }
+
+    /** L 形延伸的沿邻边长度：使外缘起点距 e 边的垂直距离正好为 d（与对角偏移点同高） */
+    const patchLen = (d: number) => d / Math.sqrt(3);
+
+    /**
+     * 一条沙带边 e 的多边形顶点（按外缘 → 内缘 顺时针）。两端按 type_a / type_b 分别决定
+     * 外缘起点 + 内缘内角点；空形或重复点会在闭合时自动合并。
+     */
+    const stripPolygon = (e: number, d: number): { x: number; y: number }[] => {
+      const va = V[e];
+      const vb = V[(e + 1) % 6];
+      const vbi = (e + 1) % 6;
+      const ePrev = (e + 5) % 6;
+      const eNext = (e + 1) % 6;
+      const tA = edgeType[ePrev];
+      const tB = edgeType[eNext];
+
+      // 外缘起 / 终点：'water' 时沿邻边延伸 patchLen(d)
+      // V_a 沿 e_prev 边方向（朝 V_a 之外的另一端 V[ePrev]）= -edgeDir[ePrev]
+      const vaPatch =
+        tA === 'water'
+          ? {
+              x: va.x - edgeDir[ePrev].ux * patchLen(d),
+              y: va.y - edgeDir[ePrev].uy * patchLen(d),
+            }
+          : va;
+      // V_b 沿 e_next 边方向（朝 V_b 之外的另一端 V[(eNext+1)%6]）= +edgeDir[eNext]
+      const vbPatch =
+        tB === 'water'
+          ? {
+              x: vb.x + edgeDir[eNext].ux * patchLen(d),
+              y: vb.y + edgeDir[eNext].uy * patchLen(d),
+            }
+          : vb;
+
+      // 内角点：'land' / 'water' → 对角偏移；'edge' → 沿 e 法线偏移 d（封口）
+      const f = d / Math.cos(Math.PI / 6);
+      const vaInner =
+        tA === 'edge'
+          ? { x: va.x + edgeNorm[e].ux * d, y: va.y + edgeNorm[e].uy * d }
+          : { x: va.x + vToCenter[e].ux * f, y: va.y + vToCenter[e].uy * f };
+      const vbInner =
+        tB === 'edge'
+          ? { x: vb.x + edgeNorm[e].ux * d, y: vb.y + edgeNorm[e].uy * d }
+          : { x: vb.x + vToCenter[vbi].ux * f, y: vb.y + vToCenter[vbi].uy * f };
+
+      // 多边形：外缘 vaPatch → V_a → V_b → vbPatch  → 内缘 vbInner → vaInner
+      // 退化：tA=='land'/'edge' 时 vaPatch == V_a，连续两个相同点不影响 fill；
+      //       tB 同理。
+      return [vaPatch, va, vb, vbPatch, vbInner, vaInner];
+    };
+
+    // ---- 3) 先画整体（深度=totalDepth, inner color），再画外层（深度=outerDepth, outer color）覆盖外侧 ----
+    g.lineWidth = 0;
+    g.fillColor = WATER_BANK_INNER;
+    for (let e = 0; e < 6; e++) {
+      if (edgeType[e] !== 'land') continue;
+      const poly = stripPolygon(e, totalDepth);
+      g.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) g.lineTo(poly[i].x, poly[i].y);
+      g.close();
+      g.fill();
+    }
+    g.fillColor = WATER_BANK_OUTER;
+    for (let e = 0; e < 6; e++) {
+      if (edgeType[e] !== 'land') continue;
+      const poly = stripPolygon(e, outerDepth);
+      g.moveTo(poly[0].x, poly[0].y);
+      for (let i = 1; i < poly.length; i++) g.lineTo(poly[i].x, poly[i].y);
+      g.close();
+      g.fill();
+    }
+  }
+
+  /**
+   * 公路条带叠加（依 `Tile.roads` 6 位轴向位绘制）：将 6 向折成 3 条轴对（0-3 / 1-4 / 2-5）：
+   *
+   * - **直道**（同轴 a 与 a+3 同时为 1）：作为一条**整段**条带从边中点 A 直接画到边中点 B；
+   *   两侧描边贯穿整格不截断 → 与相邻格内同向直道无缝连为一条连续公路。
+   * - **半条带**（仅 a 或仅 a+3 为 1）：边中点 → 格心；汇合圆作为多向交汇时的填充连续区。
+   * - **道路尽头**（`dirCount === 1` 单方向）：格心圆放大到 `halfW * 1.6` + 圆周描边。
+   *
+   * 「描边只保留在路面并集的外轮廓上」做法（fill → stroke → fill again）：
+   *   1) 一次填充：所有路面（halfW 半宽 + 汇合圆 endR）；
+   *   2) 描边：直道两侧贯穿、半条带两侧从边中点到格心、单方向圆周；
+   *   3) 二次填充：用同色再画一次，半宽缩 `lineWidth/2 ≈ 0.75px` →
+   *      把描边的"路面内侧"部分覆盖回米褐，仅保留路面边缘外侧的 0.75 像素描边。
+   *   这样：
+   *    - 直道穿过半条带的那段描边被半条带 inner-fill 擦掉 → T/Y 字交汇处不再有"线穿过路面"；
+   *    - 弯道两条 half 的内端描边被汇合圆 inner-fill 擦掉 → 描边自然沿汇合圆缘弯过去，
+   *      而不是各自留一个缺口。
    *
    * 与桥梁同样使用 `HEDGE_DRAW_EDGE_BY_AXIAL` 完成「轴向 → 几何边」映射；几何边端点定义与
    * `drawHedgeEdge` / `drawBridgeOverlay` 保持一致（`-30°+60°·i` 弦边法）。
@@ -2122,8 +2297,13 @@ export class BattleScene extends Component {
     if (dirCount === 0) return;
 
     const halfW = size * 0.18;
-    /** 单方向时格心圆放大成"道路尽头"图案；多方向时仅作为汇合圆，半径 = halfW。 */
+    const lineW = 1.5;
+    /** 二次填充用的"内缩"量：只保留 `lineW/2` 的外缘描边幸存 */
+    const inset = lineW / 2;
+    const innerHalf = Math.max(0, halfW - inset);
+    /** 单方向时格心圆放大成"道路尽头"图案；其它情况下作为汇合圆，半径 = halfW。 */
     const endR = dirCount === 1 ? halfW * 1.6 : halfW;
+    const innerEndR = Math.max(0, endR - inset);
 
     /** 计算第 ax 轴向的边中点（与 drawBridgeOverlay 同步）。 */
     const edgeMid = (ax: number): { mx: number; my: number } => {
@@ -2137,34 +2317,71 @@ export class BattleScene extends Component {
       return { mx: (x0 + x1) / 2, my: (y0 + y1) / 2 };
     };
 
+    // 三轴分类：0-3 / 1-4 / 2-5。同轴两端都通 → through（整段直道）；
+    // 仅一端 → half（半条带 + 该轴 0..2 的方向）；都不通 → 跳过。
+    const through: number[] = []; // 含轴号 0/1/2（绘制时用边中点 a 与 a+3 的连线）
+    const halves: number[] = [];  // 含具体方向 0..5
+    for (let a = 0; a < 3; a++) {
+      const fwd = !!roads[a];
+      const bwd = !!roads[a + 3];
+      if (fwd && bwd) through.push(a);
+      else if (fwd) halves.push(a);
+      else if (bwd) halves.push(a + 3);
+    }
+
+    /** 矩形条带填充：从 pA 到 pB 沿垂直方向取 ±w 的矩形，仅 fill 不 stroke。 */
+    const fillStrip = (
+      pA: { mx: number; my: number },
+      pB: { mx: number; my: number },
+      w: number,
+    ) => {
+      const dx = pB.mx - pA.mx;
+      const dy = pB.my - pA.my;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      g.moveTo(pA.mx + nx * w, pA.my + ny * w);
+      g.lineTo(pB.mx + nx * w, pB.my + ny * w);
+      g.lineTo(pB.mx - nx * w, pB.my - ny * w);
+      g.lineTo(pA.mx - nx * w, pA.my - ny * w);
+      g.close();
+      g.fill();
+    };
+
     g.fillColor = ROAD_PATH_FILL;
     g.strokeColor = ROAD_PATH_OUTLINE;
 
+    // ---- 1) 一次填充（halfW）：所有 through / half / 汇合圆 ----
     g.lineWidth = 0;
-    for (let ax = 0; ax < 6; ax++) {
-      if (!roads[ax]) continue;
-      const { mx, my } = edgeMid(ax);
-      const dx = mx - cx;
-      const dy = my - cy;
-      const len = Math.hypot(dx, dy) || 1;
-      const ux = dx / len;
-      const uy = dy / len;
-      const nx = -uy;
-      const ny = ux;
-      g.moveTo(cx + nx * halfW, cy + ny * halfW);
-      g.lineTo(mx + nx * halfW, my + ny * halfW);
-      g.lineTo(mx - nx * halfW, my - ny * halfW);
-      g.lineTo(cx - nx * halfW, cy - ny * halfW);
-      g.close();
+    for (const a of through) {
+      fillStrip(edgeMid(a), edgeMid(a + 3), halfW);
+    }
+    for (const ax of halves) {
+      fillStrip(edgeMid(ax), { mx: cx, my: cy }, halfW);
+    }
+    if (halves.length > 0 || dirCount === 1) {
+      g.circle(cx, cy, endR);
       g.fill();
     }
 
-    g.circle(cx, cy, endR);
-    g.fill();
-
-    g.lineWidth = 1.5;
-    for (let ax = 0; ax < 6; ax++) {
-      if (!roads[ax]) continue;
+    // ---- 2) 描边：所有边线（直道贯穿、半条带边中点→格心、单方向圆周） ----
+    g.lineWidth = lineW;
+    for (const a of through) {
+      const A = edgeMid(a);
+      const B = edgeMid(a + 3);
+      const dx = B.mx - A.mx;
+      const dy = B.my - A.my;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = -dy / len;
+      const ny = dx / len;
+      g.moveTo(A.mx + nx * halfW, A.my + ny * halfW);
+      g.lineTo(B.mx + nx * halfW, B.my + ny * halfW);
+      g.stroke();
+      g.moveTo(A.mx - nx * halfW, A.my - ny * halfW);
+      g.lineTo(B.mx - nx * halfW, B.my - ny * halfW);
+      g.stroke();
+    }
+    for (const ax of halves) {
       const { mx, my } = edgeMid(ax);
       const dx = mx - cx;
       const dy = my - cy;
@@ -2173,19 +2390,37 @@ export class BattleScene extends Component {
       const uy = dy / len;
       const nx = -uy;
       const ny = ux;
-      const sx = cx + ux * endR;
-      const sy = cy + uy * endR;
-      g.moveTo(sx + nx * halfW, sy + ny * halfW);
+      // 描边一直画到格心；二次填充会擦除汇合圆内部的部分
+      g.moveTo(cx + nx * halfW, cy + ny * halfW);
       g.lineTo(mx + nx * halfW, my + ny * halfW);
       g.stroke();
-      g.moveTo(sx - nx * halfW, sy - ny * halfW);
+      g.moveTo(cx - nx * halfW, cy - ny * halfW);
       g.lineTo(mx - nx * halfW, my - ny * halfW);
       g.stroke();
     }
-
-    if (dirCount === 1) {
+    // 汇合圆周描边：
+    //  - 单方向：恒描，形成"道路尽头"圆轮廓；
+    //  - 无 through 且 ≥2 个 half（弯道 / Y 字 / 多向 half）：描，让凹角弧上的轮廓连续；
+    //  - 其它（含直道、T 字、十字等含 through 的情况）：不描——through 矩形已完整覆盖汇合圆，
+    //    描了反而在格心位置出现两小段"凸起"的圆周描边。
+    const needsHubStroke =
+      dirCount === 1 || (through.length === 0 && halves.length >= 2);
+    if (needsHubStroke) {
       g.circle(cx, cy, endR);
       g.stroke();
+    }
+
+    // ---- 3) 二次填充（halfW - inset）：擦除描边的"路面内侧"部分 ----
+    g.lineWidth = 0;
+    for (const a of through) {
+      fillStrip(edgeMid(a), edgeMid(a + 3), innerHalf);
+    }
+    for (const ax of halves) {
+      fillStrip(edgeMid(ax), { mx: cx, my: cy }, innerHalf);
+    }
+    if (halves.length > 0 || dirCount === 1) {
+      g.circle(cx, cy, innerEndR);
+      g.fill();
     }
 
     g.lineWidth = 2;
