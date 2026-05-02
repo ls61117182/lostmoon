@@ -62,8 +62,10 @@ export interface MenuState {
   unlockedLevel: number;
   /** 通关过的关卡编号列表（用于 ★） */
   completedLevels: number[];
-  /** 音量 0..100，默认 60 */
-  volume: number;
+  /** 背景音乐 0..100 */
+  bgmVolume: number;
+  /** 音效（UI / 战斗）0..100 */
+  sfxVolume: number;
   /** 语言，默认 zh */
   lang: LangCode;
 }
@@ -71,7 +73,8 @@ export interface MenuState {
 const DEFAULT_STATE: MenuState = {
   unlockedLevel: MIN_UNLOCKED_LEVEL,
   completedLevels: [],
-  volume: 60,
+  bgmVolume: 60,
+  sfxVolume: 70,
   lang: 'zh',
 };
 
@@ -89,14 +92,18 @@ function readState(): MenuState {
   try {
     const raw = localStorage.getItem(MENU_STATE_KEY);
     if (!raw) return { ...DEFAULT_STATE };
-    const parsed = JSON.parse(raw) as Partial<MenuState>;
+    const parsed = JSON.parse(raw) as Partial<MenuState> & { volume?: number };
+    const legacyVol = typeof parsed.volume === 'number'
+      ? clamp(parsed.volume, 0, 100)
+      : undefined;
     return {
       unlockedLevel: Math.max(
         MIN_UNLOCKED_LEVEL,
         clamp(parsed.unlockedLevel ?? DEFAULT_STATE.unlockedLevel, 1, LEVELS.length),
       ),
       completedLevels: Array.isArray(parsed.completedLevels) ? parsed.completedLevels.filter(n => typeof n === 'number') : [],
-      volume: clamp(parsed.volume ?? DEFAULT_STATE.volume, 0, 100),
+      bgmVolume: clamp(parsed.bgmVolume ?? legacyVol ?? DEFAULT_STATE.bgmVolume, 0, 100),
+      sfxVolume: clamp(parsed.sfxVolume ?? legacyVol ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,
     };
   } catch (e) {
@@ -143,9 +150,15 @@ export const MenuProgress = {
     writeState(s);
   },
 
-  setVolume(v: number): void {
+  setBgmVolume(v: number): void {
     const s = readState();
-    s.volume = clamp(v, 0, 100);
+    s.bgmVolume = clamp(v, 0, 100);
+    writeState(s);
+  },
+
+  setSfxVolume(v: number): void {
+    const s = readState();
+    s.sfxVolume = clamp(v, 0, 100);
     writeState(s);
   },
 

@@ -211,7 +211,8 @@ menu.locked,未解锁,Locked
 menu.notReady,关卡未开放,Level Not Ready
 menu.version,v0.1.0 · build {b},v0.1.0 · build {b}
 menu.settings.title,设置,Settings
-menu.settings.volume,音量,Volume
+menu.settings.bgmVolume,背景音乐,Music
+menu.settings.sfxVolume,音效,Sound FX
 menu.settings.lang,语言,Language
 menu.settings.langZh,中文,Chinese
 menu.settings.langEn,English,English

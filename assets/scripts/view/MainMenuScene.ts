@@ -25,6 +25,7 @@ import {
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
+import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import { LEVELS, LevelMeta, MenuProgress } from '../core/LevelDB';
 import { SAVE_KEY, SaveData } from '../core/SaveLoad';
 
@@ -114,9 +115,12 @@ export class MainMenuScene extends Component {
 
   // 设置 UI 组件引用（只在设置模态打开时有效）
   private settingsRefs: {
-    volumeFill: Graphics | null;
-    volumeThumb: Node | null;
-    volumeLabel: Label | null;
+    bgmFill: Graphics | null;
+    bgmThumb: Node | null;
+    bgmLabel: Label | null;
+    sfxFill: Graphics | null;
+    sfxThumb: Node | null;
+    sfxLabel: Label | null;
     langZhBtn: ButtonRefs | null;
     langEnBtn: ButtonRefs | null;
   } | null = null;
@@ -163,6 +167,9 @@ export class MainMenuScene extends Component {
 
     this.refreshContinueButton();
     this.refreshLevelButtons();
+
+    initGameAudio();
+    playBgmMenu();
   }
 
   // ================================================================
@@ -443,27 +450,30 @@ export class MainMenuScene extends Component {
   // ================================================================
   private openSettings() {
     this.closeModal();
-    const { panel, contentY } = this.openModal(t('menu.settings.title'), 480, 360);
-
-    // 音量行
-    const volRowY = contentY - 30;
-    this.makeLabel(panel, t('menu.settings.volume'),
-      -panel.getComponent(UITransform)!.contentSize.width / 2 + 80, volRowY,
-      80, 28, 20, TEXT_PRIMARY);
-
-    // 滑条（track / fill / thumb）
+    const { panel, contentY } = this.openModal(t('menu.settings.title'), 480, 500);
+    const labelLeftX = -panel.getComponent(UITransform)!.contentSize.width / 2 + 80;
     const state = MenuProgress.load();
-    const track = this.buildVolumeSlider(panel, 40, volRowY, 220, state.volume);
 
-    // 右侧百分比
-    const volLabel = this.makeLabel(panel, `${state.volume}%`,
-      200, volRowY, 60, 28, 20, TEXT_PRIMARY);
+    const bgmRowY = contentY - 28;
+    this.makeLabel(panel, t('menu.settings.bgmVolume'), labelLeftX, bgmRowY, 100, 28, 20, TEXT_PRIMARY);
+    const bgmTrack = this.buildVolumeSlider(panel, 40, bgmRowY, 220, state.bgmVolume, (vol) => {
+      MenuProgress.setBgmVolume(vol);
+      onMenuVolumesChanged();
+      if (this.settingsRefs?.bgmLabel) this.settingsRefs.bgmLabel.string = `${vol}%`;
+    });
+    const bgmLabel = this.makeLabel(panel, `${state.bgmVolume}%`, 200, bgmRowY, 60, 28, 20, TEXT_PRIMARY);
 
-    // 语言行
-    const langRowY = contentY - 100;
-    this.makeLabel(panel, t('menu.settings.lang'),
-      -panel.getComponent(UITransform)!.contentSize.width / 2 + 80, langRowY,
-      80, 28, 20, TEXT_PRIMARY);
+    const sfxRowY = contentY - 92;
+    this.makeLabel(panel, t('menu.settings.sfxVolume'), labelLeftX, sfxRowY, 100, 28, 20, TEXT_PRIMARY);
+    const sfxTrack = this.buildVolumeSlider(panel, 40, sfxRowY, 220, state.sfxVolume, (vol) => {
+      MenuProgress.setSfxVolume(vol);
+      onMenuVolumesChanged();
+      if (this.settingsRefs?.sfxLabel) this.settingsRefs.sfxLabel.string = `${vol}%`;
+    });
+    const sfxLabel = this.makeLabel(panel, `${state.sfxVolume}%`, 200, sfxRowY, 60, 28, 20, TEXT_PRIMARY);
+
+    const langRowY = contentY - 168;
+    this.makeLabel(panel, t('menu.settings.lang'), labelLeftX, langRowY, 80, 28, 20, TEXT_PRIMARY);
 
     const curLang = getLang();
     const zhBtn = this.makeRectButton(panel, 10, langRowY, 100, 40, LANG_BTN_IDLE,
@@ -475,9 +485,12 @@ export class MainMenuScene extends Component {
     this.makeLabel(enBtn.node, t('menu.settings.langEn'), 0, 0, 100, 40, 18, TEXT_PRIMARY);
 
     this.settingsRefs = {
-      volumeFill: track.fill,
-      volumeThumb: track.thumb,
-      volumeLabel: volLabel,
+      bgmFill: bgmTrack.fill,
+      bgmThumb: bgmTrack.thumb,
+      bgmLabel,
+      sfxFill: sfxTrack.fill,
+      sfxThumb: sfxTrack.thumb,
+      sfxLabel,
       langZhBtn: zhBtn,
       langEnBtn: enBtn,
     };
@@ -486,6 +499,7 @@ export class MainMenuScene extends Component {
 
   private buildVolumeSlider(
     panel: Node, centerX: number, centerY: number, width: number, initial: number,
+    onChange: (vol: number) => void,
   ): { fill: Graphics; thumb: Node } {
     const trackH = 8;
     const root = new Node('VolumeSlider');
@@ -542,11 +556,8 @@ export class MainMenuScene extends Component {
       const local = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
       const pct = Math.max(0, Math.min(1, (local.x + width / 2) / width));
       const vol = Math.round(pct * 100);
-      MenuProgress.setVolume(vol);
+      onChange(vol);
       refreshBar(vol);
-      if (this.settingsRefs?.volumeLabel) {
-        this.settingsRefs.volumeLabel.string = `${vol}%`;
-      }
       ev.propagationStopped = true;
     };
     root.on(Node.EventType.TOUCH_START, setVolFromTouch, this);
@@ -782,6 +793,7 @@ export class MainMenuScene extends Component {
     redraw(color);
 
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      playUiClick();
       onClick();
       ev.propagationStopped = true;
     }, this);
@@ -814,6 +826,7 @@ export class MainMenuScene extends Component {
     const label = this.makeLabel(n, iconText, 0, 0, r * 2, r * 2, r + 2, TEXT_PRIMARY);
 
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      playUiClick();
       onClick();
       ev.propagationStopped = true;
     }, this);

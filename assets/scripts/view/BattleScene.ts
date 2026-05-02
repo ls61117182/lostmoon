@@ -121,6 +121,19 @@ const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
 import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
+import {
+  initGameAudio,
+  onMenuVolumesChanged,
+  playBgmBattle,
+  stopBgm,
+  playCannonFire,
+  playCannonReload,
+  playDiceRoll,
+  playMgFire,
+  startTankManeuver,
+  stopTankManeuver,
+  playUiClick,
+} from '../audio/GameAudio';
 import { Direction, effectiveDiceTerrain, isFootUnit, MissionData, ShermanCrew, TerrainType, Tile, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
@@ -1006,9 +1019,12 @@ export class BattleScene extends Component {
   /** 存读档飘字：叠在所有模态之上，短显后自毁 */
   private battleSettingsToastRoot: Node | null = null;
   private battleSettingsRefs: {
-    volumeFill: Graphics | null;
-    volumeThumb: Node | null;
-    volumeLabel: Label | null;
+    bgmFill: Graphics | null;
+    bgmThumb: Node | null;
+    bgmLabel: Label | null;
+    sfxFill: Graphics | null;
+    sfxThumb: Node | null;
+    sfxLabel: Label | null;
     langZhBtn: BattleRectButtonRefs | null;
     langEnBtn: BattleRectButtonRefs | null;
   } | null = null;
@@ -1038,6 +1054,9 @@ export class BattleScene extends Component {
 
   onLoad() {
     setLang(MenuProgress.load().lang);
+    initGameAudio();
+    stopBgm();
+    playBgmBattle();
     this.buildMainMenuStyleBattleBackground();
     // 自动创建子 Graphics 节点，免去编辑器手动配置
     const gNode = new Node('MapGraphics');
@@ -2061,6 +2080,9 @@ export class BattleScene extends Component {
     }
 
     if (!this.anim || !this.mission) return;
+    if (this.anim.t === 0 && (this.anim.kind === 'move' || this.anim.kind === 'turn')) {
+      startTankManeuver();
+    }
     this.anim.t += dt / this.anim.dur;
     if (this.anim.t < 1) {
       this.redraw();
@@ -2096,6 +2118,7 @@ export class BattleScene extends Component {
         `[BattleScene] ${finishedUnit.kind} 转向完成 facing=${finishedUnit.facing}`,
       );
     }
+    stopTankManeuver();
     this.anim = null;
     if (this.animQueue.length > 0) {
       this.anim = this.animQueue.shift()!;
@@ -3671,7 +3694,10 @@ export class BattleScene extends Component {
     panel.addChild(head);
     this.combatLogTitleLab = hl;
     head.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-      if (!this.combatLogExpanded) this.setCombatLogExpanded(true);
+      if (!this.combatLogExpanded) {
+        playUiClick();
+        this.setCombatLogExpanded(true);
+      }
       e.propagationStopped = true;
     }, this);
 
@@ -3842,7 +3868,10 @@ export class BattleScene extends Component {
     txt.string = text;
     btn.addChild(txtNode);
 
-    btn.on(Node.EventType.TOUCH_END, onClick, this);
+    btn.on(Node.EventType.TOUCH_END, () => {
+      playUiClick();
+      onClick();
+    }, this);
     this.node.addChild(btn);
     return btn;
   }
@@ -3934,7 +3963,10 @@ export class BattleScene extends Component {
     commanderHatchHit.layer = this.node.layer;
     commanderHatchHit.addComponent(UITransform).setContentSize(W - 24, CREW_GAP);
     commanderHatchHit.setPosition(0, crewFirstY, 0);
-    commanderHatchHit.on(Node.EventType.TOUCH_END, () => this.tryToggleHatch(), this);
+    commanderHatchHit.on(Node.EventType.TOUCH_END, () => {
+      playUiClick();
+      this.tryToggleHatch();
+    }, this);
     panel.addChild(commanderHatchHit);
 
     // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
@@ -4319,6 +4351,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const data = this.mission.data;
     // 中断动画与敌方阶段调度，丢弃所有过场视觉 / 阶段残留
+    stopTankManeuver();
     this.anim = null;
     this.animQueue = [];
     this.pendingAfterAnimChain = null;
@@ -4387,7 +4420,10 @@ export class BattleScene extends Component {
       tx.verticalAlign = VerticalTextAlignment.CENTER;
       tx.string = text;
       b.addChild(txtNode);
-      b.on(Node.EventType.TOUCH_END, onClick, this);
+      b.on(Node.EventType.TOUCH_END, () => {
+        playUiClick();
+        onClick();
+      }, this);
       bar.addChild(b);
       return { root: b, label: tx };
     };
@@ -4810,6 +4846,7 @@ export class BattleScene extends Component {
   // ---------- 骰子点击菜单 ----------
 
   private onClickDie(idx: number) {
+    playUiClick();
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
@@ -5040,7 +5077,10 @@ export class BattleScene extends Component {
       lab.verticalAlign = VerticalTextAlignment.CENTER;
       lab.string = it.text;
       btn.addChild(tn);
-      btn.on(Node.EventType.TOUCH_END, () => { it.onClick(); }, this);
+      btn.on(Node.EventType.TOUCH_END, () => {
+        playUiClick();
+        it.onClick();
+      }, this);
       panel.addChild(btn);
     }
     this.diePopover = panel;
@@ -5242,6 +5282,7 @@ export class BattleScene extends Component {
     }
     sherman.loaded = true;
     slot.used = true;
+    playCannonReload();
     this.closeDiePopover();
     this.refreshPhaseUI();
     this.updateHUD();
@@ -5803,6 +5844,7 @@ export class BattleScene extends Component {
     }
     if (!this.consumeDoubles(dieIdx)) return;
     sherman.loaded = true;
+    playCannonReload();
     this.closeDiePopover();
     this.refreshPhaseUI();
     this.updateHUD();
@@ -5820,6 +5862,7 @@ export class BattleScene extends Component {
    *   - 选择阶段且 A+B 已完成、杂项未开始 → 手动进入杂项（与自动进杂项二选一即可）
    */
   private onAdvanceClicked() {
+    playUiClick();
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
@@ -6785,19 +6828,34 @@ export class BattleScene extends Component {
     this.closeBattleModal();
     this.closeBattleExitModal();
     const panelW = 480;
-    const panelH = 420;
+    const panelH = 520;
     const { panel, contentY } = this.openBattleModal(t('battle.settings.title'), panelW, panelH);
     const halfW = panelW / 2;
 
-    const volRowY = contentY - 28;
-    this.makeBattleModalLabel(panel, t('menu.settings.volume'),
-      -halfW + 80, volRowY, 80, 28, 20, HUD_TEXT_COLOR);
+    const bgmRowY = contentY - 28;
+    this.makeBattleModalLabel(panel, t('menu.settings.bgmVolume'),
+      -halfW + 80, bgmRowY, 100, 28, 20, HUD_TEXT_COLOR);
     const state = MenuProgress.load();
-    const track = this.buildBattleVolumeSlider(panel, 40, volRowY, 220, state.volume);
-    const volLabel = this.makeBattleModalLabel(panel, `${state.volume}%`,
-      200, volRowY, 60, 28, 20, HUD_TEXT_COLOR);
+    const bgmTrack = this.buildBattleVolumeSlider(panel, 40, bgmRowY, 220, state.bgmVolume, (vol) => {
+      MenuProgress.setBgmVolume(vol);
+      onMenuVolumesChanged();
+      if (this.battleSettingsRefs?.bgmLabel) this.battleSettingsRefs.bgmLabel.string = `${vol}%`;
+    });
+    const bgmLabel = this.makeBattleModalLabel(panel, `${state.bgmVolume}%`,
+      200, bgmRowY, 60, 28, 20, HUD_TEXT_COLOR);
 
-    const langRowY = contentY - 92;
+    const sfxRowY = contentY - 88;
+    this.makeBattleModalLabel(panel, t('menu.settings.sfxVolume'),
+      -halfW + 80, sfxRowY, 100, 28, 20, HUD_TEXT_COLOR);
+    const sfxTrack = this.buildBattleVolumeSlider(panel, 40, sfxRowY, 220, state.sfxVolume, (vol) => {
+      MenuProgress.setSfxVolume(vol);
+      onMenuVolumesChanged();
+      if (this.battleSettingsRefs?.sfxLabel) this.battleSettingsRefs.sfxLabel.string = `${vol}%`;
+    });
+    const sfxLabel = this.makeBattleModalLabel(panel, `${state.sfxVolume}%`,
+      200, sfxRowY, 60, 28, 20, HUD_TEXT_COLOR);
+
+    const langRowY = contentY - 152;
     this.makeBattleModalLabel(panel, t('menu.settings.lang'),
       -halfW + 80, langRowY, 80, 28, 20, HUD_TEXT_COLOR);
     const curLang = getLang();
@@ -6811,15 +6869,18 @@ export class BattleScene extends Component {
     this.mirrorBattleModalButtonLabel(enLab, () => this.switchBattleLang('en'));
 
     this.battleSettingsRefs = {
-      volumeFill: track.fill,
-      volumeThumb: track.thumb,
-      volumeLabel: volLabel,
+      bgmFill: bgmTrack.fill,
+      bgmThumb: bgmTrack.thumb,
+      bgmLabel,
+      sfxFill: sfxTrack.fill,
+      sfxThumb: sfxTrack.thumb,
+      sfxLabel,
       langZhBtn: zhBtn,
       langEnBtn: enBtn,
     };
     this.refreshLangBattleButtons(curLang);
 
-    const saveRowY = contentY - 156;
+    const saveRowY = contentY - 216;
     const saveB = this.makeBattleRectButton(panel, -110, saveRowY, 140, 44, new Color(60, 120, 80, 230),
       () => { this.onSave(); },
     );
@@ -6831,7 +6892,7 @@ export class BattleScene extends Component {
     const loadLab = this.makeBattleModalLabel(loadB.node, t('btn.load'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
     this.mirrorBattleModalButtonLabel(loadLab, () => { this.onLoad_Save(); });
 
-    const exitRowY = contentY - 220;
+    const exitRowY = contentY - 280;
     const exitB = this.makeBattleRectButton(panel, 0, exitRowY, 200, 44, BTN_EXIT_WARN,
       () => this.openBattleExitConfirm(),
     );
@@ -6919,6 +6980,7 @@ export class BattleScene extends Component {
 
   private buildBattleVolumeSlider(
     panel: Node, centerX: number, centerY: number, width: number, initial: number,
+    onChange: (vol: number) => void,
   ): { fill: Graphics; thumb: Node } {
     const trackH = 8;
     const root = new Node('VolumeSlider');
@@ -6970,11 +7032,8 @@ export class BattleScene extends Component {
       const local = ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
       const pct = Math.max(0, Math.min(1, (local.x + width / 2) / width));
       const vol = Math.round(pct * 100);
-      MenuProgress.setVolume(vol);
+      onChange(vol);
       refreshBar(vol);
-      if (this.battleSettingsRefs?.volumeLabel) {
-        this.battleSettingsRefs.volumeLabel.string = `${vol}%`;
-      }
       ev.propagationStopped = true;
     };
     root.on(Node.EventType.TOUCH_START, setVolFromTouch, this);
@@ -7008,6 +7067,7 @@ export class BattleScene extends Component {
     };
     redraw(color);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      playUiClick();
       onClick();
       ev.propagationStopped = true;
     }, this);
@@ -7036,6 +7096,7 @@ export class BattleScene extends Component {
     redraw(SETTINGS_ICON_BG);
     this.makeBattleModalLabel(n, iconText, 0, 0, r * 2, r * 2, r + 2, HUD_TEXT_COLOR);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      playUiClick();
       onClick();
       ev.propagationStopped = true;
     }, this);
@@ -7251,6 +7312,7 @@ export class BattleScene extends Component {
     this.enemyDice = [];
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
+    stopTankManeuver();
     this.anim = null;          // 若在动画中点读档，直接丢弃动画状态
     this.animQueue = [];
     this.pendingAfterAnimChain = null;
@@ -7759,6 +7821,7 @@ export class BattleScene extends Component {
       crewEffectLabel: panel.crewEffectLabel,
       outcomeLabel: panel.outcomeLabel,
     };
+    playDiceRoll();
   }
 
   /**
@@ -8287,6 +8350,9 @@ export class BattleScene extends Component {
             show.hitVerdictLabel.string = t('dice.panel.hitNo');
             show.hitVerdictLabel.color = DICE_FAIL_TEXT;
           }
+          // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
+          if (show.mg) playMgFire();
+          else playCannonFire();
         }
         break;
       }
