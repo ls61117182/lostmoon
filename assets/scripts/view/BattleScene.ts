@@ -152,6 +152,57 @@ function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
   return k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
 }
 
+/**
+ * 走 PNG 俯视图的"车辆类"单位 kind（共用 applyTopDownTankSprite + TANK_VISUAL_CONFIG）。
+ * 步兵 / 军官走 drawInfantry，贴图与定位规则不同，故不在表内。
+ */
+type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+
+/**
+ * 单辆车辆的视觉配置：
+ * - `fitScale`：最长边目标像素 = hexSize × 1.8 × fitScale。1.0 即"整车占 1.8 倍格半径"。
+ * - `offsetForward` / `offsetRight`：相对**坦克自身朝向**的局部位移，**单位 = 一格距离（相邻六角
+ *   中心间距 = hexSize × √3）**。例如 `offsetForward = 0.20` 表示沿车头朝向移动 0.2 个格子。
+ *   forward 沿炮口方向（贴图朝向）为正；right 是 forward 顺时针 90°（车体右侧）为正。
+ *   屏幕 y 向上的坐标系下：right 单位向量 = (uy, -ux)，其中 (ux, uy) 是 forward。
+ * - `aspectRatioMul`：**每种坦克单独配置**的显示「宽÷高」相对贴图自然比例的倍率（精灵本地坐标；
+ *   在已等比装入 `fit` 之后应用）。`1` = 与贴图一致；`>1` 更宽扁；`<1` 更窄长。用 `sqrt` 拆分
+ *   到宽高上，使 `tw/th` 乘以 `aspectRatioMul`，且 `tw*th` 近似不变、整体仍落在 `fit` 量级附近。
+ */
+interface TankVisualConfig {
+  fitScale: number;
+  offsetForward: number;
+  offsetRight: number;
+  /** 相对贴图自然 (宽÷高) 的倍率；每种车一行单独写 */
+  aspectRatioMul: number;
+}
+
+const TANK_VISUAL_DEFAULT: TankVisualConfig = {
+  fitScale: 1.0,
+  offsetForward: 0,
+  offsetRight: 0,
+  aspectRatioMul: 1,
+};
+
+/**
+ * 各种车辆的尺寸 / 长宽比 / 局部偏移。**每种 kind 一行**，含必填的 `aspectRatioMul`。
+ * offset 是**自身朝向**坐标系，不是屏幕绝对坐标。
+ */
+const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
+  sherman: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 0.9 },
+  tiger:   { fitScale: 0.9, offsetForward: 0.10, offsetRight: 0, aspectRatioMul: 1.1 },
+  panzer4: { fitScale: 0.70, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1 },
+  panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1 },
+  truck:   { fitScale: 0.80, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1 },
+};
+
+function tankVisualConfigOf(k: UnitKind): TankVisualConfig {
+  if (k === 'sherman' || k === 'tiger' || k === 'panzer4' || k === 'panzer3' || k === 'truck') {
+    return TANK_VISUAL_CONFIG[k];
+  }
+  return TANK_VISUAL_DEFAULT;
+}
+
 /** 本关在 turn_end_events 表里配置的主骰颗数（多行取最大，缺省 2） */
 function turnEndDiceCountForMission(missionId: string): number {
   const rows = TURN_END_EVENTS.filter(r => r.missionId === missionId);
@@ -389,9 +440,9 @@ interface Floater {
 
 // ---------- 配色 ----------
 const TERRAIN_COLORS: Record<TerrainType, Color> = {
-  road:     new Color(190, 175, 145, 255),
+  road:     new Color(200, 178, 142, 255), // 公路格：偏棕黄沙土地基，drawRoadHexOverlay 再叠颗粒
   field:    new Color(196, 220, 130, 255),
-  mud:      new Color(140, 110,  80, 255),
+  mud:      new Color(150, 128, 120, 255), // 泥地：深灰带微弱暖调（与 road 棕黄拉开冷暖对比），drawMudOverlay 叠颗粒
   forest:   new Color( 58, 112,  50, 255), // 稍压暗，树冠叠上去后更像林间地面
   water:    new Color( 90, 145, 200, 255),
 };
@@ -400,18 +451,75 @@ const FOREST_TREE_DARK  = new Color( 28,  88,  30, 255);
 const FOREST_TREE_MID   = new Color( 45, 118,  42, 255);
 const FOREST_TREE_LIGHT = new Color( 70, 148,  58, 255);
 const FOREST_SHADE      = new Color(  0,   0,   0,  50);
-/** 格心建筑图案（不改变六角格基底填色，仅叠加绘制） */
+/**
+ * 通用 hex 纹理叠加调色板（用于"沙土 / 路面"等需要颗粒感的格子，参见 `drawHexNoiseOverlay`）：
+ * 每个调色板由"软斑 ×2 + 颗粒 ×3"5 色组成。alpha 较低 → 既保留基底主色，又有"无数小颗粒"近距细节。
+ *
+ * - `MUD_*` 用于 `terrain==='mud'`，色相围绕 mud 基底 (182,168,148)；
+ * - `ROAD_HEX_*` 用于 `terrain==='road'`，色相围绕 road 基底 (190,182,165)，整体偏浅灰；
+ *
+ * 两套色板由 `drawMudOverlay` / `drawRoadHexOverlay` 调用同一个 `drawHexNoiseOverlay` 函数渲染。
+ */
+const MUD_SOFT_LIGHT    = new Color(165, 162, 152,  55);
+const MUD_SOFT_DARK     = new Color( 95,  92,  85,  55);
+const MUD_GRIT_LIGHT    = new Color(168, 165, 155, 130);
+const MUD_GRIT_DARK     = new Color( 85,  82,  75, 140);
+const MUD_GRIT_MID      = new Color(128, 125, 118,  90);
+const ROAD_HEX_SOFT_LIGHT = new Color(228, 208, 172,  55);
+const ROAD_HEX_SOFT_DARK  = new Color(165, 145, 112,  55);
+const ROAD_HEX_GRIT_LIGHT = new Color(228, 208, 172, 130);
+const ROAD_HEX_GRIT_DARK  = new Color(155, 132, 100, 135);
+const ROAD_HEX_GRIT_MID   = new Color(195, 175, 138,  90);
+/**
+ * 建筑图案（不改变六角格基底填色，仅叠加绘制）：
+ * 主战场版本采用「俯视方屋」布局（参见 `drawBuildingOverlay`）：
+ * - 每栋屋顶从 `BUILDING_ROOF_PALETTE` 中按格 axial 种子随机取一色（棕 / 灰 / 蓝灰 / 红棕等主流屋顶色）
+ * - `BUILDING_OUTLINE` 外缘描边（黑棕，对所有调色板色都不糊）
+ * - 屋脊细线使用「屋顶色 +35 亮度」的高光（`BUILDING_RIDGE_PALETTE`，与屋顶一一对应）
+ * 关卡选择菜单仍沿用旧侧视样式：使用 `BUILDING_ROOF_FILL` 作屋顶、`BUILDING_WALL_FILL` 作墙体。
+ */
 const BUILDING_ROOF_FILL  = new Color( 95,  78,  62, 255);
 const BUILDING_WALL_FILL  = new Color(160, 145, 125, 255);
 const BUILDING_OUTLINE    = new Color( 45,  38,  32, 255);
-const BUILDING_DOOR_STROKE= new Color( 55,  48,  42, 255);
+/**
+ * 战场内俯视方屋的屋顶调色板：常见的瓦 / 金属 / 沥青屋顶色，避免与 ROAD_PATH_FILL（米褐）、
+ * 林地绿、水面蓝混淆。每个色都搭配一个「+35 亮度」的屋脊高光（`BUILDING_RIDGE_PALETTE` 同序）。
+ */
+const BUILDING_ROOF_PALETTE: ReadonlyArray<Color> = [
+  new Color( 75,  60,  48, 255), // 暗棕（旧木瓦）
+  new Color(110,  85,  60, 255), // 中棕（沥青瓦 / 木屋顶）
+  new Color(130,  75,  55, 255), // 红棕（陶瓦）
+  new Color( 85,  85,  88, 255), // 暗灰（板岩）
+  new Color(125, 125, 128, 255), // 中灰（水泥瓦）
+  new Color( 95, 110, 120, 255), // 蓝灰（金属屋顶）
+];
+const BUILDING_RIDGE_PALETTE: ReadonlyArray<Color> = BUILDING_ROOF_PALETTE.map(
+  (c) => new Color(Math.min(255, c.r + 35), Math.min(255, c.g + 35), Math.min(255, c.b + 35), 255),
+);
+/** 双坡屋顶的「阴坡」覆盖色（屋顶色 −28 亮度）：与 RIDGE 共同营造屋脊两侧明暗对比，避免屋顶看着像扁箱子 */
+const BUILDING_SHADE_PALETTE: ReadonlyArray<Color> = BUILDING_ROOF_PALETTE.map(
+  (c) => new Color(Math.max(0, c.r - 28), Math.max(0, c.g - 28), Math.max(0, c.b - 28), 255),
+);
+/** 瓦楞 / 椽口阴影线色：黑棕 + 较低 alpha，避免在浅色屋顶上过分扎眼 */
+const BUILDING_RIB_STROKE = new Color(35, 28, 22, 170);
 /** 桥梁叠加（GDD §3.2，绘制于水域格之上）：木板桥面 + 深色边线 */
 const BRIDGE_PLANK_FILL   = new Color(168, 132,  78, 255);
 const BRIDGE_PLANK_OUTLINE= new Color( 60,  44,  26, 255);
 const BRIDGE_RAIL_STROKE  = new Color( 90,  64,  40, 255);
-/** 公路条带（按 `Tile.roads` 方向叠加在公路 / 叠桥水域之上）：略深米褐 + 深棕描边 */
-const ROAD_PATH_FILL      = new Color(170, 152, 118, 255);
+/**
+ * 公路条带（按 `Tile.roads` 方向叠加在公路 / 叠桥水域之上）：浅米白路面 + 深棕描边。
+ * 路面色比 road 基底 (200,178,142) 更浅更白 → 在棕黄路面上"凿"出一条浅色车辙带，方向感明显。
+ */
+const ROAD_PATH_FILL      = new Color(212, 200, 178, 255);
 const ROAD_PATH_OUTLINE   = new Color( 60,  44,  26, 255);
+/**
+ * 路面条带颗粒（drawRoadOverlay 二次填充后的最上层细节）：与基底浅米白相近的"细沙碎屑"。
+ * 3 档颗粒色全部偏浅（亮米黄 / 浅米黄 / 浅米灰），avoiding 深色小石子那种"脏"感；
+ * 仅靠 ±20 亮度差区分层次，使路面条带看起来是干净的浅色路面带细沙颗粒。
+ */
+const ROAD_GRIT_LIGHT     = new Color(238, 225, 195, 120);
+const ROAD_GRIT_MID       = new Color(220, 208, 178, 110);
+const ROAD_GRIT_DARK      = new Color(195, 182, 158, 130);
 /**
  * 水陆河岸过渡（仅在水域格内沿"非水域邻格"方向画的内偏移沙带）：双层条带形成由水→陆的渐变错觉
  * - 外层：略深米褐贴近水侧
@@ -567,7 +675,7 @@ const ONFIRE_BORDER    = new Color(255, 230,  60, 255);
 const ONFIRE_RING_OUT  = new Color(255, 160,  40, 200);
 const DESTROYED_FILL   = new Color( 60,  60,  60, 220);
 const DESTROYED_BORDER = new Color(220,  40,  40, 255);
-// 持久化状态文字（仅「已毁」；起火等改由格子下矢量状态图标）
+// 当回合击毁残骸旁短标签（仅「已毁」；起火等改由格子下矢量状态图标；下回合起不再绘制）
 const STATUS_TEXT_DEAD = new Color(220,  60,  60, 255);
 const STATUS_TEXT_OUT  = new Color(  0,   0,   0, 220);
 
@@ -579,6 +687,8 @@ const TANK_BADGE_GAP = 4;
 const BADGE_BG = new Color(18, 20, 26, 235);
 const BADGE_FRAME = new Color(0, 0, 0, 220);
 // 单位名字标签：常驻显示在每个棋子正下方，方便玩家一眼识别兵种
+/** 名字 Label 中心相对格心的 Y 偏移（向下为正方向用减法）：原为 1.3×hex，间距缩短 40% → 0.78×hex */
+const UNIT_NAME_OFFSET_HEX = 1.3 * 0.6;
 const UNIT_NAME_TEXT_ALLIED = new Color(200, 230, 255, 255);
 const UNIT_NAME_TEXT_GERMAN = new Color(255, 220, 200, 255);
 const UNIT_NAME_TEXT_DEAD   = new Color(180, 180, 180, 220);
@@ -671,6 +781,26 @@ export class BattleScene extends Component {
   private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private enemyTopPoolNext = 0;
   private static readonly ENEMY_TOP_SPRITE_POOL = 16;
+  /**
+   * 步兵 / 军官小队俯视图：每个徒步单位用 3 张 Infantry01~03.png 组成"3 人小队"。
+   * 池大小 = 单位数上限 × 3；redraw 开头与坦克池一并清零。
+   */
+  private infantrySpriteFrames: Array<SpriteFrame | null> = [null, null, null];
+  private infantrySpriteDims: Array<{ dw: number; dh: number }> = [
+    { dw: 0, dh: 0 },
+    { dw: 0, dh: 0 },
+    { dw: 0, dh: 0 },
+  ];
+  private infantryTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private infantryTopPoolNext = 0;
+  private static readonly INFANTRY_SPRITES_PER_UNIT = 3;
+  private static readonly INFANTRY_TOP_SPRITE_POOL = 36; // 12 个步兵 × 3 张图，留余量
+  /** 军官（kind='officer'）单兵棋子：用 Officer.png 替代 3 人小队，大小同 Infantry01 主图 */
+  private officerSpriteFrame: SpriteFrame | null = null;
+  private officerSpriteDim: { dw: number; dh: number } = { dw: 0, dh: 0 };
+  private officerTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private officerTopPoolNext = 0;
+  private static readonly OFFICER_TOP_SPRITE_POOL = 4;
   private mission: LoadedMission | null = null;
   private offsetX = 0;
   private offsetY = 0;
@@ -766,6 +896,11 @@ export class BattleScene extends Component {
   private statusBadgeNodes: Node[] = [];
   // 单位名字文字池（"谢尔曼" / "虎式" 等）：常驻显示，随 redraw 整批重建
   private nameLabels: Node[] = [];
+  /**
+   * 本战斗轮次内**刚被击毁**、应绘制残骸（灰圆+红叉）与「已毁」短标签的单位 id。
+   * 在 `endEnemyPhase` 转入下一玩家回合时清空，即每回合①开始时清除上一轮留下的击毁标记。
+   */
+  private destroyWreckVisualIds = new Set<string>();
 
   // HUD
   /** 左上角最上行：任务 JSON `id` + 关卡名（`LevelDB.titleKey` 或 `MissionData.name`） */
@@ -937,6 +1072,28 @@ export class BattleScene extends Component {
       this.enemyTopSpritePool.push({ node: pz, sprite: spz });
       gNode.addChild(pz);
     }
+    // 步兵 3 人小队：每帧 redraw 时按需占用，单位摧毁 / 不存在时关闭即可
+    for (let i = 0; i < BattleScene.INFANTRY_TOP_SPRITE_POOL; i++) {
+      const inf = new Node(`InfantryTop_${i}`);
+      inf.layer = this.node.layer;
+      inf.addComponent(UITransform).setContentSize(1280, 720);
+      const spi = inf.addComponent(Sprite);
+      spi.sizeMode = Sprite.SizeMode.CUSTOM;
+      inf.active = false;
+      this.infantryTopSpritePool.push({ node: inf, sprite: spi });
+      gNode.addChild(inf);
+    }
+    // 军官单兵棋子（独立池，与 3 人小队互斥；同一格不会同时出现两类徒步单位）
+    for (let i = 0; i < BattleScene.OFFICER_TOP_SPRITE_POOL; i++) {
+      const ofN = new Node(`OfficerTop_${i}`);
+      ofN.layer = this.node.layer;
+      ofN.addComponent(UITransform).setContentSize(1280, 720);
+      const ofS = ofN.addComponent(Sprite);
+      ofS.sizeMode = Sprite.SizeMode.CUSTOM;
+      ofN.active = false;
+      this.officerTopSpritePool.push({ node: ofN, sprite: ofS });
+      gNode.addChild(ofN);
+    }
 
     const enemyTopPaths: Record<EnemyTopKind, string> = {
       panzer4: 'textures/units/panzer4_top/spriteFrame',
@@ -959,6 +1116,46 @@ export class BattleScene extends Component {
         };
         this.redraw();
       });
+    });
+
+    // 步兵小队 3 张图：未加载完成时 drawInfantry 会自动回退到矢量"圆头 + 圆身"
+    const infantryPaths = [
+      'textures/units/Infantry01/spriteFrame',
+      'textures/units/Infantry02/spriteFrame',
+      'textures/units/Infantry03/spriteFrame',
+    ];
+    for (let i = 0; i < infantryPaths.length; i++) {
+      const idx = i;
+      resources.load(infantryPaths[idx], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] 步兵图加载失败 (Infantry0${idx + 1})，该单位将回退矢量小人:`, err);
+          return;
+        }
+        const rw = sf.rect.width;
+        const rh = sf.rect.height;
+        this.infantrySpriteFrames[idx] = sf;
+        this.infantrySpriteDims[idx] = {
+          dw: rw > 0 ? rw : sf.width,
+          dh: rh > 0 ? rh : sf.height,
+        };
+        this.redraw();
+      });
+    }
+
+    // 军官棋子单张：未加载完成时 drawInfantry 在 officer 分支也会回退到矢量小人
+    resources.load('textures/units/Officer/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 军官图加载失败，将回退矢量小人:', err);
+        return;
+      }
+      const rw = sf.rect.width;
+      const rh = sf.rect.height;
+      this.officerSpriteFrame = sf;
+      this.officerSpriteDim = {
+        dw: rw > 0 ? rw : sf.width,
+        dh: rh > 0 ? rh : sf.height,
+      };
+      this.redraw();
     });
 
     // 3.x 动态加载 SpriteFrame 必须指向图片子资源路径 …/spriteFrame（见官方「动态加载资源」）
@@ -1043,6 +1240,7 @@ export class BattleScene extends Component {
     this.clearGunSelection();
     this.outcome = 'ongoing';
     this.clearFloaters();
+    this.clearDestroyWreckVisuals();
     this.closeDiePopover();
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
@@ -1073,6 +1271,10 @@ export class BattleScene extends Component {
     g.clear();
     this.enemyTopPoolNext = 0;
     for (const { node } of this.enemyTopSpritePool) node.active = false;
+    this.infantryTopPoolNext = 0;
+    for (const { node } of this.infantryTopSpritePool) node.active = false;
+    this.officerTopPoolNext = 0;
+    for (const { node } of this.officerTopSpritePool) node.active = false;
     // 命中预览 Label 是常驻节点（非纯 Graphics），需要随每次重绘整批重建，
     // 否则谢尔曼移动后旧位置的预览会留在屏幕上误导玩家。
     this.clearPreviewLabels();
@@ -1106,6 +1308,22 @@ export class BattleScene extends Component {
       this.drawWaterBankOverlay(c.x, c.y, this.hexSize, t, map);
     }
 
+    // 1-mud. 泥地纹理：在 mud 基底色之上叠"软斑 + 沙土颗粒"两层。
+    // 所有斑块按 axial 种子稳定（同格永不抖动），不影响其它地形。
+    for (const t of tiles) {
+      if (t.terrain !== 'mud') continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawMudOverlay(c.x, c.y, this.hexSize, t);
+    }
+
+    // 1-road-hex. 公路格纹理：在 road 基底色之上叠"软斑 + 路面碎屑颗粒"两层（与泥地同算法、不同色板）。
+    // 让 road 格的非条带部分也有路面感，避免整片纯色像塑料。drawRoadOverlay 的方向条带叠在其上。
+    for (const t of tiles) {
+      if (t.terrain !== 'road') continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawRoadHexOverlay(c.x, c.y, this.hexSize, t);
+    }
+
     // 1a. 林地表冠层：示意树木（在基底之上、建筑/树篱之前）
     for (const t of tiles) {
       if (t.terrain !== 'forest') continue;
@@ -1125,14 +1343,14 @@ export class BattleScene extends Component {
     for (const t of tiles) {
       if (!t.roads) continue;
       const c = this.project(t.pos.q, t.pos.r);
-      this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads);
+      this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads, t);
     }
 
-    // 1b. 建筑图案（不改变基底地形色，仅格心矢量房屋）
+    // 1b. 建筑图案（不改变基底地形色，仅格内若干个矢量俯视方屋；公路格自动避开路面）
     for (const t of tiles) {
       if (!t.hasBuilding) continue;
       const c = this.project(t.pos.q, t.pos.r);
-      this.drawBuildingOverlay(c.x, c.y, this.hexSize);
+      this.drawBuildingOverlay(c.x, c.y, this.hexSize, t);
     }
 
     // 2. 树篱（`Tile.hedges` 为轴向 0..5；`drawHedgeEdge` 的边号见 `HEDGE_DRAW_EDGE_BY_AXIAL`）
@@ -1180,7 +1398,7 @@ export class BattleScene extends Component {
     this.drawUnitMaybeAnim(sherman);
     for (const e of enemies) this.drawUnitMaybeAnim(e);
 
-    // 6. 单位状态：已毁短标签 + 坦克矢量状态图标条
+    // 6. 单位状态：本回合击毁的「已毁」短标签 + 坦克矢量状态图标条
     this.clearStatusLabels();
     this.spawnStatusLabelIfAny(sherman);
     for (const e of enemies) this.spawnStatusLabelIfAny(e);
@@ -1454,10 +1672,10 @@ export class BattleScene extends Component {
     return !!u.damaged;
   }
 
-  /** 给已毁单位在格子下方挂「已毁」短文字；起火与其它状态由状态图标条表示。 */
+  /** 给本回合刚毁的单位在格子下方挂「已毁」短文字；下回合起不再生成。 */
   private spawnStatusLabelIfAny(u: Unit) {
     if (!this.mapNode) return;
-    if (!u.destroyed) return;
+    if (!this.shouldShowDestroyWreckVisual(u)) return;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
@@ -1646,10 +1864,11 @@ export class BattleScene extends Component {
 
   /**
    * 在单位格子正下方挂一条单位名字（"谢尔曼" / "虎式" …），常驻显示。
-   * 状态图标在格心下约 hex*0.56；已毁短标签约 hex*0.65；名字更靠下避免遮挡。
+   * 状态图标在格心下约 hex*0.56；已毁短标签约 hex*0.65；名字在其下，偏移 `UNIT_NAME_OFFSET_HEX`×hex。
    */
   private spawnUnitNameLabel(u: Unit) {
     if (!this.mapNode) return;
+    if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
@@ -1674,8 +1893,8 @@ export class BattleScene extends Component {
     l.outlineWidth = 2;
 
     this.mapNode.addChild(n);
-    // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字
-    n.setPosition(c.x, c.y - this.hexSize * 1.3, 0);
+    // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字（UNIT_NAME_OFFSET_HEX×hex）
+    n.setPosition(c.x, c.y - this.hexSize * UNIT_NAME_OFFSET_HEX, 0);
     this.nameLabels.push(n);
   }
 
@@ -1692,6 +1911,38 @@ export class BattleScene extends Component {
     const a = this.project(this.anim.fromQ, this.anim.fromR);
     const b = this.project(this.anim.toQ, this.anim.toR);
     return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
+  }
+
+  /** 是否绘制本回合击毁残骸（灰圆+红叉）及「已毁」标签（与 `destroyWreckVisualIds` 同步）。 */
+  private shouldShowDestroyWreckVisual(u: Unit): boolean {
+    return u.destroyed && this.destroyWreckVisualIds.has(u.id);
+  }
+
+  private registerDestroyWreckVisual(u: Unit): void {
+    if (u.destroyed) this.destroyWreckVisualIds.add(u.id);
+  }
+
+  private clearDestroyWreckVisuals(): void {
+    this.destroyWreckVisualIds.clear();
+  }
+
+  private snapshotDestroyedUnitIds(): Set<string> {
+    const s = new Set<string>();
+    if (!this.mission) return s;
+    if (this.mission.sherman.destroyed) s.add(this.mission.sherman.id);
+    for (const e of this.mission.enemies) {
+      if (e.destroyed) s.add(e.id);
+    }
+    return s;
+  }
+
+  private registerNewlyDestroyedSince(prev: Set<string>): void {
+    if (!this.mission) return;
+    const { sherman, enemies } = this.mission;
+    if (sherman.destroyed && !prev.has(sherman.id)) this.registerDestroyWreckVisual(sherman);
+    for (const e of enemies) {
+      if (e.destroyed && !prev.has(e.id)) this.registerDestroyWreckVisual(e);
+    }
   }
 
   // ---------- 战报浮字 ----------
@@ -1944,6 +2195,114 @@ export class BattleScene extends Component {
   }
 
   /**
+   * 通用「hex 颗粒纹理叠加」：在格内叠"软斑 + 颗粒"两层，做出类似沙土 / 路面的质感。
+   * 调用方传入 5 色调色板 + seedSalt（避免不同地形共用 axial 种子时纹理重合）。
+   *
+   * - 1~2 个极低 alpha 的「软斑」（半径 0.32~0.50 size，24 边轻微抖动多边形）：模拟整体光照不均；
+   * - 12~18 个直径 4~12 px 的「颗粒」实心圆：3 色按 45% / 40% / 15% 概率随机；
+   * - 所有几何按 `axial (q,r) + seedSalt` 种子稳定 → 同格不抖动；
+   * - 颜色与基底差仅 ±25~30 → 保持基底主色，避免做"花斑"。
+   */
+  private drawHexNoiseOverlay(
+    cx: number,
+    cy: number,
+    size: number,
+    tile: Tile,
+    palette: {
+      softLight: Color;
+      softDark: Color;
+      gritLight: Color;
+      gritDark: Color;
+      gritMid: Color;
+    },
+    seedSalt: number,
+  ) {
+    const g = this.g!;
+    const seedRaw =
+      ((tile.pos.q | 0) * 374761393 + (tile.pos.r | 0) * 668265263 + (seedSalt | 0)) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
+
+    /** 颗粒 / 斑块中心允许的最大距格心半径（避免压住六角格线，内切圆 ≈ size·0.866） */
+    const innerR = size * 0.82;
+
+    // ---- 1) 软斑：1~2 个大半径（0.32~0.50 size）、24 边轻微抖动多边形、alpha 仅 55 ----
+    const softN = rng.intRange(1, 2);
+    for (let i = 0; i < softN; i++) {
+      const col = rng.next() < 0.5 ? palette.softLight : palette.softDark;
+      const r0 = size * (0.16 + rng.next() * 0.18);
+      const rPosMax = Math.max(0, innerR - r0 * 0.3);
+      const rPos = Math.sqrt(rng.next()) * rPosMax;
+      const theta = rng.next() * Math.PI * 2;
+      const px = cx + rPos * Math.cos(theta);
+      const py = cy + rPos * Math.sin(theta);
+      const segs = 24;
+      g.fillColor = col;
+      for (let k = 0; k < segs; k++) {
+        const a = (k / segs) * Math.PI * 2;
+        const rr = r0 * (0.92 + 0.16 * rng.next());
+        const x = px + rr * Math.cos(a);
+        const y = py + rr * Math.sin(a);
+        if (k === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.close();
+      g.fill();
+    }
+
+    // ---- 2) 颗粒噪声：12~18 个 2.0~6.0 px 实心圆，3 色按概率随机 ----
+    const noiseN = rng.intRange(12, 18);
+    for (let i = 0; i < noiseN; i++) {
+      const rr = 2.0 + rng.next() * 4.0;
+      const rPosMax = Math.max(0, innerR - rr);
+      const rPos = Math.sqrt(rng.next()) * rPosMax;
+      const theta = rng.next() * Math.PI * 2;
+      const px = cx + rPos * Math.cos(theta);
+      const py = cy + rPos * Math.sin(theta);
+      const v = rng.next();
+      const col = v < 0.45 ? palette.gritLight : v < 0.85 ? palette.gritDark : palette.gritMid;
+      g.fillColor = col;
+      g.circle(px, py, rr);
+      g.fill();
+    }
+  }
+
+  /** 泥地纹理叠加：mud 基底之上的细颗粒沙土感（详见 `drawHexNoiseOverlay`） */
+  private drawMudOverlay(cx: number, cy: number, size: number, tile: Tile) {
+    this.drawHexNoiseOverlay(
+      cx,
+      cy,
+      size,
+      tile,
+      {
+        softLight: MUD_SOFT_LIGHT,
+        softDark: MUD_SOFT_DARK,
+        gritLight: MUD_GRIT_LIGHT,
+        gritDark: MUD_GRIT_DARK,
+        gritMid: MUD_GRIT_MID,
+      },
+      0x12345678,
+    );
+  }
+
+  /** 公路格纹理叠加：road 基底之上的浅灰路面碎屑感（与泥地同算法、不同色板 + 不同种子盐值） */
+  private drawRoadHexOverlay(cx: number, cy: number, size: number, tile: Tile) {
+    this.drawHexNoiseOverlay(
+      cx,
+      cy,
+      size,
+      tile,
+      {
+        softLight: ROAD_HEX_SOFT_LIGHT,
+        softDark: ROAD_HEX_SOFT_DARK,
+        gritLight: ROAD_HEX_GRIT_LIGHT,
+        gritDark: ROAD_HEX_GRIT_DARK,
+        gritMid: ROAD_HEX_GRIT_MID,
+      },
+      0x9e3779b9,
+    );
+  }
+
+  /**
    * 林地格上叠画多簇「俯视树冠」（多圆+半透明阴影）。
    * 冠幅约为原先 2 倍、丛数 2 倍，排布为上下两带，尽量占满格内可绘区域；格 (q,r) 轻微错纹。
    */
@@ -1995,54 +2354,222 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 格心简易侧视房屋（与基底地形填色分离）。
-   * 坐标系：Cocos 画布 Y 向上。旧版中 `yTop` 命名反了：较小 Y 在屏幕下侧、较大 Y
-   * 在屏幕上侧，导致山墙朝「下」；现已改为屋身在下、人字顶（尖）在上。
+   * 格内俯视方形建筑（村庄 / 农场图案）：
+   * - 在六角格内随机布置 2~4 个旋转矩形作为建筑屋顶；
+   * - 公路格（`tile.roads` 不为空）会避开格内的道路条带（含「道路尽头」格心圆）；
+   * - 用格 axial 坐标做种子保证同格视觉稳定（重绘时不会抖动 / 数量不变）；
+   * - 与 `drawHedgeEdge` / `drawBridgeOverlay` 同一套「-30°+60°·i」轴向→几何边映射，
+   *   确保公路条带轴线与 `drawRoadOverlay` 完全一致。
+   *
+   * 颜色：屋顶 `BUILDING_ROOF_FILL` 深棕；外缘描边 `BUILDING_OUTLINE`；
+   * 屋脊（沿矩形长边方向中线一笔）`BUILDING_WALL_FILL` 浅棕，叠在屋顶上做轻微立体感。
    */
-  private drawBuildingOverlay(cx: number, cy: number, size: number) {
+  private drawBuildingOverlay(cx: number, cy: number, size: number, tile: Tile) {
     const g = this.g!;
-    const s = size;
-    const bodyW = s * 0.5;
-    const roofW = s * 0.62;
-    // 墙：从下沿到「檐口」矩形；人字顶：以檐口为底、尖在上方
-    const yBase = cy - s * 0.26;    // 墙下沿（格心偏下）
-    const yWallTop = cy - s * 0.08; // 檐口 / 人字底边
-    const yRoofPeak = cy + s * 0.20; // 人字尖（Y 较大 = 更靠上）
-    const xL = cx - bodyW * 0.5;
-    const xR = cx + bodyW * 0.5;
 
-    g.lineWidth = 2;
+    // ---- 1) 伪随机种子：基于 axial (q,r) 稳定到「同一格永远同样的布置」 ----
+    const seedRaw =
+      ((tile.pos.q | 0) * 374761393 + (tile.pos.r | 0) * 668265263 + 0x9e3779b9) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
 
-    g.fillColor = BUILDING_WALL_FILL;
-    g.strokeColor = BUILDING_OUTLINE;
-    g.moveTo(xL, yBase);
-    g.lineTo(xR, yBase);
-    g.lineTo(xR, yWallTop);
-    g.lineTo(xL, yWallTop);
-    g.close();
-    g.fill();
-    g.stroke();
+    // ---- 2) 收集本格公路条带轴线段，供建筑避让（与 drawRoadOverlay 同步） ----
+    const roads = tile.roads;
+    const roadHalfW = size * 0.18; // 与 drawRoadOverlay 一致
+    let dirCount = 0;
+    if (roads) for (let a = 0; a < 6; a++) if (roads[a]) dirCount++;
+    const endR = dirCount === 1 ? roadHalfW * 1.6 : roadHalfW;
+    const roadSegs: { ax: number; ay: number; bx: number; by: number }[] = [];
+    if (roads && dirCount > 0) {
+      const edgeMid = (axOrEdge: number) => {
+        const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axOrEdge];
+        const a1 = ((-30 + 60 * edge) * Math.PI) / 180;
+        const a2 = ((-30 + 60 * (edge + 1)) * Math.PI) / 180;
+        const x0 = cx + size * Math.cos(a1);
+        const y0 = cy + size * Math.sin(a1);
+        const x1 = cx + size * Math.cos(a2);
+        const y1 = cy + size * Math.sin(a2);
+        return { mx: (x0 + x1) / 2, my: (y0 + y1) / 2 };
+      };
+      for (let a = 0; a < 3; a++) {
+        const fwd = !!roads[a];
+        const bwd = !!roads[a + 3];
+        if (fwd && bwd) {
+          const A = edgeMid(a);
+          const B = edgeMid(a + 3);
+          roadSegs.push({ ax: A.mx, ay: A.my, bx: B.mx, by: B.my });
+        } else if (fwd) {
+          const A = edgeMid(a);
+          roadSegs.push({ ax: A.mx, ay: A.my, bx: cx, by: cy });
+        } else if (bwd) {
+          const A = edgeMid(a + 3);
+          roadSegs.push({ ax: A.mx, ay: A.my, bx: cx, by: cy });
+        }
+      }
+    }
 
-    g.fillColor = BUILDING_ROOF_FILL;
-    g.moveTo(cx - roofW * 0.5, yWallTop);
-    g.lineTo(cx, yRoofPeak);
-    g.lineTo(cx + roofW * 0.5, yWallTop);
-    g.close();
-    g.fill();
-    g.stroke();
+    /** 点到线段最短距离（避道路条带用） */
+    const distToSeg = (
+      px: number,
+      py: number,
+      ax: number,
+      ay: number,
+      bx: number,
+      by: number,
+    ): number => {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const len2 = dx * dx + dy * dy;
+      if (len2 === 0) return Math.hypot(px - ax, py - ay);
+      const tt = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+      return Math.hypot(px - (ax + tt * dx), py - (ay + tt * dy));
+    };
 
-    g.strokeColor = BUILDING_DOOR_STROKE;
-    g.lineWidth = 1.5;
-    const dw = s * 0.12;
-    const dh = s * 0.12;
-    const dTop = yBase + s * 0.05;
-    const dLeft = cx - dw * 0.5;
-    g.moveTo(dLeft, dTop);
-    g.lineTo(dLeft + dw, dTop);
-    g.lineTo(dLeft + dw, dTop + dh);
-    g.lineTo(dLeft, dTop + dh);
-    g.close();
-    g.stroke();
+    // ---- 3) 候选采样：拒绝采样直到放满目标数量（或达到尝试上限） ----
+    /** 目标 2..4：rng.intRange 闭区间 */
+    const target = rng.intRange(2, 4);
+    /** 建筑相互之间预留间距（屋顶相对较大时收紧到 0.02·size，避免 3~4 栋常常塞不下） */
+    const buildingPadding = size * 0.02;
+    /** 建筑与道路之间预留间距 */
+    const roadPadding = size * 0.05;
+    /** 建筑中心允许的最大距格心半径（保证建筑外接圆完全在六角内切圆 ≈ size·√3/2 内） */
+    const innerRadius = size * 0.866;
+
+    type Building = {
+      cx: number;
+      cy: number;
+      w: number;
+      h: number;
+      angle: number;
+      r: number;
+      colorIdx: number;
+    };
+    const placed: Building[] = [];
+    const maxAttemptsPer = 120;
+
+    for (let i = 0; i < target; i++) {
+      let placedThis = false;
+      for (let attempt = 0; attempt < maxAttemptsPer; attempt++) {
+        // 矩形尺寸：长 0.40~0.60 size，宽 0.26~0.36 size（在原版基础上整体放大约 100%）
+        const w = size * (0.40 + rng.next() * 0.20);
+        const h = size * (0.26 + rng.next() * 0.10);
+        const halfDiag = Math.hypot(w, h) * 0.5;
+        // 位置：极坐标在 hex 内（半径上限随建筑大小收缩，避免压到格边）
+        const rMax = Math.max(0, innerRadius - halfDiag);
+        if (rMax <= 0) break; // 建筑过大，放弃此尝试
+        const rPos = Math.sqrt(rng.next()) * rMax; // sqrt 让分布更均匀（按面积），不偏聚格心
+        const theta = rng.next() * Math.PI * 2;
+        const bx = cx + rPos * Math.cos(theta);
+        const by = cy + rPos * Math.sin(theta);
+        const angle = rng.next() * Math.PI * 2;
+
+        // 与已放建筑互斥（圆-圆，半径 = 外接圆 + padding）
+        let okOther = true;
+        for (const o of placed) {
+          if (Math.hypot(bx - o.cx, by - o.cy) < halfDiag + o.r + buildingPadding) {
+            okOther = false;
+            break;
+          }
+        }
+        if (!okOther) continue;
+
+        // 与道路条带互斥（点到线段距离 ≥ 路面半宽 + 建筑外接圆 + padding）
+        let okRoad = true;
+        const minDistToRoad = roadHalfW + halfDiag + roadPadding;
+        for (const seg of roadSegs) {
+          if (distToSeg(bx, by, seg.ax, seg.ay, seg.bx, seg.by) < minDistToRoad) {
+            okRoad = false;
+            break;
+          }
+        }
+        if (!okRoad) continue;
+        // 单方向公路尽头额外避开格心圆（半径放大版）
+        if (dirCount === 1) {
+          if (Math.hypot(bx - cx, by - cy) < endR + halfDiag + roadPadding) continue;
+        }
+
+        // 屋顶颜色：从调色板按种子选一索引（屋脊高光从同序的 RIDGE 调色板取）
+        const colorIdx = rng.intRange(0, BUILDING_ROOF_PALETTE.length - 1);
+        placed.push({ cx: bx, cy: by, w, h, angle, r: halfDiag, colorIdx });
+        placedThis = true;
+        break;
+      }
+      // 若某个建筑实在放不下（如全格被三向路面 + 尽头圆挤满），则少放一个，不强求
+      if (!placedThis) break;
+    }
+
+    // ---- 4) 绘制每栋建筑：双坡瓦顶分层（底面 → 阴坡 → 瓦楞 → 外缘 + 屋脊高光） ----
+    for (const b of placed) {
+      const cosA = Math.cos(b.angle);
+      const sinA = Math.sin(b.angle);
+      const hw = b.w * 0.5;
+      const hh = b.h * 0.5;
+      /** 本地 (lx, ly) → 屏幕坐标（已包含 angle 旋转 + 中心平移） */
+      const rotate = (lx: number, ly: number): [number, number] => [
+        b.cx + lx * cosA - ly * sinA,
+        b.cy + lx * sinA + ly * cosA,
+      ];
+      const c0 = rotate(-hw, -hh);
+      const c1 = rotate(hw, -hh);
+      const c2 = rotate(hw, hh);
+      const c3 = rotate(-hw, hh);
+
+      // (4-1) 屋顶底色：整张矩形铺满（亮坡视为屋顶基色）
+      g.fillColor = BUILDING_ROOF_PALETTE[b.colorIdx];
+      g.lineWidth = 0;
+      g.moveTo(c0[0], c0[1]);
+      g.lineTo(c1[0], c1[1]);
+      g.lineTo(c2[0], c2[1]);
+      g.lineTo(c3[0], c3[1]);
+      g.close();
+      g.fill();
+
+      // (4-2) 阴坡覆盖：屋脊线（局部 y=0）以下半幅再覆盖一层 −28 亮度的同色，
+      //       与上半幅形成「双坡屋顶俯视」的明暗对比，让矩形不再像扁箱子
+      const cM0 = rotate(-hw, 0);
+      const cM1 = rotate(hw, 0);
+      g.fillColor = BUILDING_SHADE_PALETTE[b.colorIdx];
+      g.moveTo(cM0[0], cM0[1]);
+      g.lineTo(cM1[0], cM1[1]);
+      g.lineTo(c2[0], c2[1]);
+      g.lineTo(c3[0], c3[1]);
+      g.close();
+      g.fill();
+
+      // (4-3) 瓦楞 / 椽口短线：与屋脊垂直、跨整宽，等距分布。BUILDING_RIB_STROKE 自带半透明，
+      //       即使在亮屋顶上也只是淡淡的"瓦面分块感"，不会喧宾夺主
+      const ribGap = size * 0.075;
+      const ribN = Math.max(3, Math.round(b.w / ribGap));
+      g.strokeColor = BUILDING_RIB_STROKE;
+      g.lineWidth = 0.6;
+      for (let k = 1; k < ribN; k++) {
+        const lx = -hw + (b.w * k) / ribN;
+        const ra = rotate(lx, -hh);
+        const rb = rotate(lx, hh);
+        g.moveTo(ra[0], ra[1]);
+        g.lineTo(rb[0], rb[1]);
+        g.stroke();
+      }
+
+      // (4-4) 外缘描边：放最后才画，覆盖到阴坡 fill / 瓦楞线压住的下半边缘上，避免轮廓被吃掉
+      g.strokeColor = BUILDING_OUTLINE;
+      g.lineWidth = 1.5;
+      g.moveTo(c0[0], c0[1]);
+      g.lineTo(c1[0], c1[1]);
+      g.lineTo(c2[0], c2[1]);
+      g.lineTo(c3[0], c3[1]);
+      g.close();
+      g.stroke();
+
+      // (4-5) 屋脊高光：长边中线，使用「屋顶 +35 亮度」的同色系亮线，比原版略加粗（1.5 px）
+      //       并稍超出 hw·0.96 端点，模拟屋脊金属脊瓦在山墙处的轻微外凸
+      const ridgeA = rotate(-hw * 0.96, 0);
+      const ridgeB = rotate(hw * 0.96, 0);
+      g.strokeColor = BUILDING_RIDGE_PALETTE[b.colorIdx];
+      g.lineWidth = 1.5;
+      g.moveTo(ridgeA[0], ridgeA[1]);
+      g.lineTo(ridgeB[0], ridgeB[1]);
+      g.stroke();
+    }
 
     g.lineWidth = 2;
   }
@@ -2291,6 +2818,7 @@ export class BattleScene extends Component {
     cy: number,
     size: number,
     roads: NonNullable<Tile['roads']>,
+    tile: Tile,
   ) {
     const g = this.g!;
     const dirCount = roads.reduce((n, b) => n + (b ? 1 : 0), 0);
@@ -2423,6 +2951,63 @@ export class BattleScene extends Component {
       g.fill();
     }
 
+    // ---- 4) 路面颗粒：模拟说明书图例里夯土路面的碎屑感（按 axial 种子稳定，重绘不抖动） ----
+    //         颗粒中心限制在 `innerHalf - gritMargin` 范围内 → 不会越过外缘描边、不会溢出到泥/草。
+    const seed =
+      ((tile.pos.q | 0) * 374761393 + (tile.pos.r | 0) * 668265263 + 0xcafebabe) >>> 0;
+    const rng = new RNG(seed === 0 ? 1 : seed);
+    /** 颗粒最大半径 + 安全间距，避免颗粒贴到外缘描边 */
+    const gritMargin = 2.0;
+    const stripHalfForGrit = Math.max(0, innerHalf - gritMargin);
+    const hubRForGrit = Math.max(0, innerEndR - gritMargin);
+    /** 在 (pA → pB) 矩形条带内撒 count 个颗粒（条带局部坐标 t∈[0.05,0.95], s∈[-h, +h]） */
+    const stripGrits = (
+      pA: { mx: number; my: number },
+      pB: { mx: number; my: number },
+      count: number,
+    ) => {
+      const dx = pB.mx - pA.mx;
+      const dy = pB.my - pA.my;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+      const nx = -uy;
+      const ny = ux;
+      for (let i = 0; i < count; i++) {
+        const tt = 0.05 + rng.next() * 0.90;
+        const ss = (rng.next() * 2 - 1) * stripHalfForGrit;
+        const px = pA.mx + ux * tt * len + nx * ss;
+        const py = pA.my + uy * tt * len + ny * ss;
+        const v = rng.next();
+        const col = v < 0.40 ? ROAD_GRIT_LIGHT : v < 0.85 ? ROAD_GRIT_MID : ROAD_GRIT_DARK;
+        const rr = 0.5 + rng.next() * 1.4;
+        g.fillColor = col;
+        g.circle(px, py, rr);
+        g.fill();
+      }
+    };
+    /** 在格心圆（半径 hubRForGrit）内撒 count 个颗粒（√U 极坐标 → 面积均匀） */
+    const hubGrits = (count: number) => {
+      if (hubRForGrit <= 0) return;
+      for (let i = 0; i < count; i++) {
+        const r = Math.sqrt(rng.next()) * hubRForGrit;
+        const a = rng.next() * Math.PI * 2;
+        const px = cx + r * Math.cos(a);
+        const py = cy + r * Math.sin(a);
+        const v = rng.next();
+        const col = v < 0.40 ? ROAD_GRIT_LIGHT : v < 0.85 ? ROAD_GRIT_MID : ROAD_GRIT_DARK;
+        const rr = 1.0 + rng.next() * 1.4;
+        g.fillColor = col;
+        g.circle(px, py, rr);
+        g.fill();
+      }
+    };
+    if (stripHalfForGrit > 0) {
+      for (const a of through) stripGrits(edgeMid(a), edgeMid(a + 3), rng.intRange(14, 20));
+      for (const ax of halves) stripGrits(edgeMid(ax), { mx: cx, my: cy }, rng.intRange(7, 11));
+    }
+    if (halves.length > 0 || dirCount === 1) hubGrits(rng.intRange(4, 8));
+
     g.lineWidth = 2;
   }
 
@@ -2511,6 +3096,7 @@ export class BattleScene extends Component {
 
   /**
    * 坦克俯视图通用：CUSTOM 尺寸 + 裁切宽高缓存；炮管朝左（-X）时对齐六角朝向用 +180°。
+   * 长宽比：`fitScale` 定整体最长边；`aspectRatioMul` 按车型单独改「显宽÷显高」相对贴图自然比。
    */
   private applyTopDownTankSprite(
     node: Node,
@@ -2523,17 +3109,26 @@ export class BattleScene extends Component {
     facingLerp?: { from: number; to: number; t: number } | null,
   ) {
     node.active = true;
-    node.setPosition(c.x, c.y, 0);
     const w = displayW > 0 ? displayW : sf.width;
     const h = displayH > 0 ? displayH : sf.height;
     sp.spriteFrame = sf;
     const ut = node.getComponent(UITransform)!;
-    const fit = this.hexSize * 1.8;
+
+    // 取本车视觉配置（大小 + 自身朝向局部偏移）
+    const cfg = tankVisualConfigOf(u.kind);
+
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
     const maxDim = Math.max(w, h) || 1;
-    const tw = (w / maxDim) * fit;
-    const th = (h / maxDim) * fit;
+    const tw0 = (w / maxDim) * fit;
+    const th0 = (h / maxDim) * fit;
+    const m = Math.max(1e-6, cfg.aspectRatioMul);
+    const k = Math.sqrt(m);
+    const tw = tw0 * k;
+    const th = th0 / k;
     ut.setContentSize(tw, th);
     node.setScale(1, 1, 1);
+
+    // forward 单位向量（屏幕坐标系，y 向上）
     let ux: number;
     let uy: number;
     if (facingLerp) {
@@ -2551,6 +3146,17 @@ export class BattleScene extends Component {
       ux = 1;
       uy = 0;
     }
+
+    // 局部偏移 → 世界偏移：right = forward 顺时针 90°（屏幕 y 向上）= (uy, -ux)
+    // dx = forward·ux + right·uy；dy = forward·uy + right·(-ux)
+    // 单位采用「一格距离」= 相邻六角中心间距 = hexSize × √3，让 offset = 1.0 直观对应"挪一格"。
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = cfg.offsetForward * offsetUnit;
+    const r = cfg.offsetRight * offsetUnit;
+    const ox = f * ux + r * uy;
+    const oy = f * uy + r * (-ux);
+
+    node.setPosition(c.x + ox, c.y + oy, 0);
     node.angle = (Math.atan2(uy, ux) * 180) / Math.PI + 180;
   }
 
@@ -2597,21 +3203,23 @@ export class BattleScene extends Component {
     }
     const r = this.hexSize * 0.5;
 
-    // 摧毁：暗灰色 + 穿心 X
+    // 摧毁：暗灰色 + 穿心 X（仅本回合内显示；下回合起格上不再留残骸图）
     if (u.destroyed) {
-      g.fillColor = DESTROYED_FILL;
-      g.strokeColor = DESTROYED_BORDER;
-      g.lineWidth = 2;
-      g.circle(c.x, c.y, r);
-      g.fill();
-      g.stroke();
-      g.strokeColor = DESTROYED_BORDER;
-      g.lineWidth = 3;
-      const d = r * 0.8;
-      g.moveTo(c.x - d, c.y - d); g.lineTo(c.x + d, c.y + d); g.stroke();
-      g.moveTo(c.x - d, c.y + d); g.lineTo(c.x + d, c.y - d); g.stroke();
-      g.lineWidth = 2;
-      return; // 摧毁的单位不再画朝向线
+      if (this.shouldShowDestroyWreckVisual(u)) {
+        g.fillColor = DESTROYED_FILL;
+        g.strokeColor = DESTROYED_BORDER;
+        g.lineWidth = 2;
+        g.circle(c.x, c.y, r);
+        g.fill();
+        g.stroke();
+        g.strokeColor = DESTROYED_BORDER;
+        g.lineWidth = 3;
+        const d = r * 0.8;
+        g.moveTo(c.x - d, c.y - d); g.lineTo(c.x + d, c.y + d); g.stroke();
+        g.moveTo(c.x - d, c.y + d); g.lineTo(c.x + d, c.y - d); g.stroke();
+        g.lineWidth = 2;
+      }
+      return; // 摧毁的单位不再画朝向线 / 车体精灵
     }
 
     // 谢尔曼俯视图精灵（已加载、未摧毁）：起火等状态用格子下图标表示，不再替换为矢量橙圆
@@ -2693,55 +3301,151 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 步兵渲染：头（上方小圆）+ 身（下方略大圆），整体比坦克更小更"瘦"，
-   * 没有朝向线（`facing=null`）。摧毁时用灰色 + 红 X，与坦克保持一致的"残骸"观感。
+   * 步兵 / 军官渲染：用 Infantry01~03.png 三张俯视图组成"3 人小队"棋子，整体半径约占格 50%。
    *
-   * 小字说明：
-   *   - 体积更小是因为 §3.1.2 步兵 size=0，只能被机枪打（主炮打不到），视觉上理应与坦克区分
-   *   - 头和身用两个同心的小圆叠出剪影，不依赖任何外部美术资源
+   * 布局：等边三角形（朝上顶点 + 左下 / 右下两个底点），三角内接圆半径 `teamRadius·0.40`；
+   * 单兵 sprite 显示尺寸 `hexSize·0.55`，最远点 ≈ teamRadius·0.475 → 占格半径 ≈ 50% ✓
+   *
+   * 资源未加载完时回退到老版本"圆头 + 圆身"矢量小人；摧毁时统一画灰色残骸圆 + 红 X（仅本回合），与坦克对齐。
+   * 军官 (kind='officer') 在小队外缘叠一圈红色光环，与说明书原图"红框建筑里的德军步兵"呼应。
    */
   private drawInfantry(u: Unit, cx: number, cy: number) {
     const g = this.g!;
-    const bodyR = this.hexSize * 0.30;
-    const headR = this.hexSize * 0.16;
-    const headOffset = this.hexSize * 0.28; // 头部在身体上方
+    const teamRadius = this.hexSize * 0.5;
 
     if (u.destroyed) {
-      // 残骸：暗灰身 + 红 X
-      g.fillColor = DESTROYED_FILL;
-      g.strokeColor = DESTROYED_BORDER;
-      g.lineWidth = 2;
-      g.circle(cx, cy, bodyR);
-      g.fill();
-      g.stroke();
-      g.strokeColor = DESTROYED_BORDER;
-      g.lineWidth = 3;
-      const d = bodyR * 0.9;
-      g.moveTo(cx - d, cy - d); g.lineTo(cx + d, cy + d); g.stroke();
-      g.moveTo(cx - d, cy + d); g.lineTo(cx + d, cy - d); g.stroke();
-      g.lineWidth = 2;
+      if (this.shouldShowDestroyWreckVisual(u)) {
+        const r = this.hexSize * 0.30;
+        g.fillColor = DESTROYED_FILL;
+        g.strokeColor = DESTROYED_BORDER;
+        g.lineWidth = 2;
+        g.circle(cx, cy, r);
+        g.fill();
+        g.stroke();
+        g.lineWidth = 3;
+        const d = r * 0.9;
+        g.moveTo(cx - d, cy - d); g.lineTo(cx + d, cy + d); g.stroke();
+        g.moveTo(cx - d, cy + d); g.lineTo(cx + d, cy - d); g.stroke();
+        g.lineWidth = 2;
+      }
       return;
     }
 
-    const fill = FACTION_COLORS[u.faction];
-    g.fillColor = fill;
-    g.strokeColor = UNIT_BORDER;
-    g.lineWidth = 2;
-    // 身
-    g.circle(cx, cy - bodyR * 0.15, bodyR);
-    g.fill();
-    g.stroke();
-    // 头
-    g.circle(cx, cy + headOffset, headR);
-    g.fill();
-    g.stroke();
-    // 军官（kind='officer'）：身体外加一圈红色光环，与说明书原图「红色边框建筑里的德军步兵」呼应
+    // 军官（kind='officer'）：单兵棋子（一张 Officer.png），与步兵主图（Infantry01）同尺寸；
+    // "高级目标"的视觉提示由格子边线红框（OFFICER_TILE_STROKE，绘制于格 stroke 阶段）承担，
+    // 不再在棋子周围画红圈光环，避免与红框重复。
     if (u.kind === 'officer') {
-      g.strokeColor = OFFICER_HALO_STROKE;
-      g.lineWidth = 3;
-      g.circle(cx, cy - bodyR * 0.05, bodyR * 1.55);
-      g.stroke();
+      const officerFit = this.hexSize * 0.58; // 与步兵 spriteFit 保持一致
+
+      if (
+        this.officerSpriteFrame &&
+        this.officerTopPoolNext < this.officerTopSpritePool.length
+      ) {
+        const slot = this.officerTopSpritePool[this.officerTopPoolNext++];
+        const sf = this.officerSpriteFrame;
+        const { dw, dh } = this.officerSpriteDim;
+        const w = dw > 0 ? dw : sf.width;
+        const h = dh > 0 ? dh : sf.height;
+        const maxDim = Math.max(w, h) || 1;
+        const tw = (w / maxDim) * officerFit;
+        const th = (h / maxDim) * officerFit;
+        slot.sprite.spriteFrame = sf;
+        slot.node.getComponent(UITransform)!.setContentSize(tw, th);
+        slot.node.setPosition(cx, cy, 0);
+        slot.node.angle = 0;
+        slot.node.setScale(1, 1, 1);
+        slot.node.active = true;
+      } else {
+        // 矢量回退（资源未加载完 / 池满）：圆头 + 身，与步兵回退一致
+        const bodyR = this.hexSize * 0.30;
+        const headR = this.hexSize * 0.16;
+        const headOffset = this.hexSize * 0.28;
+        g.fillColor = FACTION_COLORS[u.faction];
+        g.strokeColor = UNIT_BORDER;
+        g.lineWidth = 2;
+        g.circle(cx, cy - bodyR * 0.15, bodyR);
+        g.fill(); g.stroke();
+        g.circle(cx, cy + headOffset, headR);
+        g.fill(); g.stroke();
+      }
+      return;
+    }
+
+    // 资源加载完毕才用 sprite 小队；否则回退矢量小人，避免空白
+    const allLoaded =
+      this.infantrySpriteFrames[0] !== null &&
+      this.infantrySpriteFrames[1] !== null &&
+      this.infantrySpriteFrames[2] !== null;
+
+    if (!allLoaded) {
+      const bodyR = this.hexSize * 0.30;
+      const headR = this.hexSize * 0.16;
+      const headOffset = this.hexSize * 0.28;
+      g.fillColor = FACTION_COLORS[u.faction];
+      g.strokeColor = UNIT_BORDER;
       g.lineWidth = 2;
+      g.circle(cx, cy - bodyR * 0.15, bodyR);
+      g.fill(); g.stroke();
+      g.circle(cx, cy + headOffset, headR);
+      g.fill(); g.stroke();
+      return;
+    }
+
+    // 同格车辆（坦克 / 卡车）检测：步兵棋子默认贴近格心 → 与同格的车辆几何重叠会糊成一团；
+    // 当本格仍有非摧毁的车辆类单位时，把 3 个士兵从 0.27·hexSize 散开到 0.58·hexSize，
+    // 让出格心给车辆显示，3 人各自朝顶 / 右下 / 左下方向退到格内切圆附近（仍保留三角阵相对关系）。
+    let coLocateVehicle = false;
+    if (this.mission && !u.destroyed) {
+      const all: Unit[] = [this.mission.sherman, ...this.mission.enemies];
+      for (const o of all) {
+        if (o === u) continue;
+        if (o.destroyed) continue;
+        if (isFootUnit(o)) continue; // 同为徒步类不需要避让
+        if (o.pos.q === u.pos.q && o.pos.r === u.pos.r) {
+          coLocateVehicle = true;
+          break;
+        }
+      }
+    }
+
+    // 等边三角形布局（顶点朝上）：3 个士兵中心位于半径 ringR 的小圆周上，间隔 120°
+    //   位置 0（Infantry01，主图）：顶（cy + ringR）
+    //   位置 1（Infantry02）：右下（cx + ringR·sin60°, cy - ringR·cos60°）
+    //   位置 2（Infantry03）：左下（cx - ringR·sin60°, cy - ringR·cos60°）
+    // 默认 ringR = teamRadius·0.546 ≈ hexSize·0.273（紧凑成队）；
+    // 同格有车辆时 ringR = hexSize·0.58，三人散到格内切圆（≈ hexSize·0.866）附近，避开车辆体型。
+    const ringR = coLocateVehicle ? this.hexSize * 0.58 : teamRadius * 0.546;
+    const sin60 = Math.sqrt(3) / 2;
+    const offsets: Array<{ ox: number; oy: number }> = [
+      { ox: 0,                oy:  ringR },
+      { ox:  ringR * sin60,   oy: -ringR * 0.5 },
+      { ox: -ringR * sin60,   oy: -ringR * 0.5 },
+    ];
+    /** 单兵 sprite 显示尺寸（按图最长边等比缩放到该值） */
+    const spriteFit = this.hexSize * 0.58;
+    /** 第 1 个兵（Infantry01）保持基础大小，其余两个放大 15% 以视觉拉开「主兵 / 后排」层次 */
+    const spriteFitByIndex = [spriteFit, spriteFit * 1.15, spriteFit * 1.15];
+
+    for (let i = 0; i < BattleScene.INFANTRY_SPRITES_PER_UNIT; i++) {
+      if (this.infantryTopPoolNext >= this.infantryTopSpritePool.length) break;
+      const sf = this.infantrySpriteFrames[i];
+      if (!sf) continue;
+      const slot = this.infantryTopSpritePool[this.infantryTopPoolNext++];
+      const dim = this.infantrySpriteDims[i];
+      const w = dim.dw > 0 ? dim.dw : sf.width;
+      const h = dim.dh > 0 ? dim.dh : sf.height;
+      const maxDim = Math.max(w, h) || 1;
+      const fitI = spriteFitByIndex[i];
+      const tw = (w / maxDim) * fitI;
+      const th = (h / maxDim) * fitI;
+      slot.sprite.spriteFrame = sf;
+      const ut = slot.node.getComponent(UITransform)!;
+      ut.setContentSize(tw, th);
+      const off = offsets[i];
+      slot.node.setPosition(cx + off.ox, cy + off.oy, 0);
+      slot.node.angle = 0;
+      slot.node.setScale(1, 1, 1);
+      slot.node.active = true;
     }
   }
 
@@ -2906,8 +3610,9 @@ export class BattleScene extends Component {
     scrollN.layer = this.node.layer;
     const sW = W0 - pad * 2;
     const sH = H0 - th - pad * 2.5;
-    scrollN.addComponent(UITransform).setContentSize(sW, sH);
-    scrollN.setAnchorPoint(0, 0);
+    const scrollUT = scrollN.addComponent(UITransform);
+    scrollUT.setContentSize(sW, sH);
+    scrollUT.setAnchorPoint(0, 0);
     scrollN.setPosition(pad, pad, 0);
     panel.addChild(scrollN);
     const sv = scrollN.addComponent(ScrollView);
@@ -2952,8 +3657,9 @@ export class BattleScene extends Component {
 
     const head = new Node('CombatLogHead');
     head.layer = this.node.layer;
-    head.addComponent(UITransform).setContentSize(W0 - pad * 2, th);
-    head.setAnchorPoint(0, 0);
+    const headUT = head.addComponent(UITransform);
+    headUT.setContentSize(W0 - pad * 2, th);
+    headUT.setAnchorPoint(0, 0);
     head.setPosition(pad, H0 - th - pad * 0.5, 0);
     const hl = head.addComponent(Label);
     hl.fontSize = 15;
@@ -4805,6 +5511,7 @@ export class BattleScene extends Component {
       () => {
         if (!this.mission) return;
         applyMGAttack(target, report);
+        if (target.destroyed) this.registerDestroyWreckVisual(target);
         capturedSlot.used = true;
         this.selectedMGDieIdx = -1;
         // 面板结束后再补一条目标格上方的短浮字，强化"这次扫射打谁"的视觉记忆
@@ -5347,6 +6054,7 @@ export class BattleScene extends Component {
     switch (effect) {
       case 'destroyed':
         s.destroyed = true;
+        this.registerDestroyWreckVisual(s);
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.destroyed'),
           new Color(255, 100, 100, 255), { size: 26, dur: 1.2, rise: 32 });
         break;
@@ -5796,12 +6504,12 @@ export class BattleScene extends Component {
     const ty = -trackH * 0.5;
     // 底轨（在 vbar 节点内垂直居中）
     g.fillColor = new Color(64, 72, 86, 255);
-    g.roundRect(-3, ty, 6, trackH, 2, 2);
+    g.roundRect(-3, ty, 6, trackH, 2);
     g.fill();
     const maxO = Math.max(0, sv.getMaxScrollOffset().y);
     if (maxO < 0.5) {
       g.fillColor = new Color(160, 168, 180, 255);
-      g.roundRect(-3, ty, 6, trackH, 2, 2);
+      g.roundRect(-3, ty, 6, trackH, 2);
       g.fill();
       return;
     }
@@ -5810,7 +6518,7 @@ export class BattleScene extends Component {
     const th = Math.max(22, Math.min(trackH, (viewH / ch) * trackH));
     const tTop = ty + ratio * (trackH - th);
     g.fillColor = new Color(190, 198, 210, 255);
-    g.roundRect(-3, tTop, 6, th, 2, 2);
+    g.roundRect(-3, tTop, 6, th, 2);
     g.fill();
   }
 
@@ -6551,6 +7259,7 @@ export class BattleScene extends Component {
     this.destroyFireCheckEventUI();
     this.closeDiePopover();
     this.clearFloaters();
+    this.clearDestroyWreckVisuals();
     // 胜负状态也要随读档重新判定
     this.outcome = checkOutcome(this.mission);
     this.updateOutcomeOverlay();
@@ -6821,6 +7530,7 @@ export class BattleScene extends Component {
 
   private endEnemyPhase() {
     this.turn += 1;
+    this.clearDestroyWreckVisuals();
     this.phase = 'player';
     // §2.1 阶段①：移除谢尔曼烟雾（烟雾只保留一回合）
     if (this.mission && this.mission.sherman.smoked) {
@@ -6941,6 +7651,7 @@ export class BattleScene extends Component {
     this.startDiceShow(report, t('actor.player'), target.kind, () => {
       if (!this.mission) return;
       applyAttack(target, report);
+      if (target.destroyed) this.registerDestroyWreckVisual(target);
       slot.used = true;
       if (doublesPartnerIdx >= 0) {
         const p = this.phaseDice[doublesPartnerIdx];
@@ -6982,6 +7693,7 @@ export class BattleScene extends Component {
     this.startDiceShow(report, t('actor.enemyPrefix', { name: enemy.kind }), t('actor.sherman'), () => {
       if (!this.mission) return;
       applyAttack(sherman, report);
+      if (sherman.destroyed) this.registerDestroyWreckVisual(sherman);
       this.presentAttackResult(t('actor.enemyPrefix', { name: enemy.kind }), report, enemy, sherman);
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
       if (this.outcome === 'ongoing' && this.phase === 'enemy') {
@@ -8344,6 +9056,8 @@ export class BattleScene extends Component {
     const body = ui.bodyLabel.string.trim();
     if (body) this.battleLog(`[回合结束] ${body}`);
 
+    const destroyedSnap = this.snapshotDestroyedUnitIds();
+
     const truck =
       truckSegments && truckSegments.length > 0 && this.mission
         ? this.mission.enemies.find(e => e.kind === 'truck' && !e.destroyed)
@@ -8358,6 +9072,7 @@ export class BattleScene extends Component {
         } catch (e) {
           console.error('[TurnEnd] apply failed', e);
         }
+        this.registerNewlyDestroyedSince(destroyedSnap);
         this.refreshStatusPanel();
         this.redraw();
         this.endEnemyPhase();
@@ -8373,6 +9088,7 @@ export class BattleScene extends Component {
     } catch (e) {
       console.error('[TurnEnd] apply failed', e);
     }
+    this.registerNewlyDestroyedSince(destroyedSnap);
     this.destroyTurnEndEventUI();
     this.refreshStatusPanel();
     this.redraw();

@@ -4,6 +4,11 @@
 
   /* Add your custom configuration here. */
   "compilerOptions": {
-    "strict": false
+    "strict": false,
+    /*
+     * 显式包含 ES2017+ 标准库类型（`Array.prototype.includes` 等运行时浏览器原生支持但
+     * 默认 target=ES2015 的类型库不含），同时声明 dom，避免 `window` / `document` 等告警。
+     */
+    "lib": ["es2017", "dom"]
   }
 }
