@@ -379,6 +379,7 @@ interface DieSlot {
 interface DieVisual {
   root: Node;           // 作为容器承接触摸
   bg: Graphics;         // 骰子方块 + 边框
+  pips: Graphics;       // 骰面点阵
   faceLabel: Label;     // 大号点数
   hintLabel: Label;     // 下方动作提示（"转向 / 驾驶 / 主炮 / 装填 / —"）
 }
@@ -619,8 +620,8 @@ const PHASE_BTN_HATCH     = new Color(110,  80, 160, 230);
 const PHASE_BTN_DISABLED  = new Color( 80,  80,  80, 200);
 
 // 骰子配色：底色白/灰（已用）+ 边框；分类颜色直接在动作提示文字上体现
-const DIE_FACE_FILL      = new Color(240, 240, 230, 255);
-const DIE_FACE_USED_FILL = new Color(120, 120, 120, 230);
+const DIE_FACE_FILL      = new Color(245, 245, 235, 255);
+const DIE_FACE_USED_FILL = new Color(245, 245, 235, 255);
 const DIE_FACE_BORDER    = new Color( 30,  30,  30, 255);
 const DIE_FACE_SELECTED  = new Color(250, 215,  90, 255); // 当前选中的主炮骰高亮边框
 const DIE_FACE_TEXT      = new Color( 20,  20,  20, 255);
@@ -839,6 +840,12 @@ export class BattleScene extends Component {
   private miscDone: boolean = false;
   /** 当前子阶段（movement/attack）手上的骰子；回到 choose 时清空 */
   private phaseDice: DieSlot[] = [];
+  private playerDiceRollAnim: {
+    t: number;
+    dur: number;
+    finalPips: number[];
+    logLine: string;
+  } | null = null;
   /** 攻击阶段玩家点击某颗主炮骰 → 进入"选目标"态，这里记录那颗骰在 phaseDice 的下标。-1 = 未选 */
   private selectedGunDieIdx: number = -1;
   /**
@@ -1255,6 +1262,7 @@ export class BattleScene extends Component {
     this.movementDone = false;
     this.attackDone = false;
     this.miscDone = false;
+    this.playerDiceRollAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     this.outcome = 'ongoing';
@@ -2060,6 +2068,8 @@ export class BattleScene extends Component {
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) this.advanceDiceShow(dt);
 
+    if (this.playerDiceRollAnim) this.advancePlayerDiceRollAnim(dt);
+
     if (this.turnEndEventUI) this.advanceTurnEndEventUI(dt);
 
     if (this.fireCheckEventUI) this.advanceFireCheckEventUI(dt);
@@ -2073,8 +2083,10 @@ export class BattleScene extends Component {
       if (p >= 1) {
         this.applyEnemyDiceSortLayout(1);
         this.enemyDiceSortAnim = null;
+        this.refreshEnemyDiceTray();
         this.runNextEnemyStep();
       }
+      this.refreshEnemyDiceTray();
       this.redraw();
       return;
     }
@@ -4363,6 +4375,7 @@ export class BattleScene extends Component {
     this.enemyDice = [];
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
+    this.playerDiceRollAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     this.movementDone = false;
@@ -4513,6 +4526,12 @@ export class BattleScene extends Component {
       face.string = '';
       slot.addChild(faceNode);
 
+      const pipsNode = new Node('Pips');
+      pipsNode.layer = this.node.layer;
+      pipsNode.addComponent(UITransform).setContentSize(SLOT, SLOT);
+      const pips = pipsNode.addComponent(Graphics);
+      slot.addChild(pipsNode);
+
       const hintNode = new Node('Hint');
       hintNode.layer = this.node.layer;
       hintNode.addComponent(UITransform).setContentSize(SLOT + 12, 22);
@@ -4530,7 +4549,7 @@ export class BattleScene extends Component {
       slot.on(Node.EventType.TOUCH_END, () => this.onClickDie(idx), this);
       tray.addChild(slot);
 
-      this.diceVisuals.push({ root: slot, bg, faceLabel: face, hintLabel: hint });
+      this.diceVisuals.push({ root: slot, bg, pips, faceLabel: face, hintLabel: hint });
     }
 
     tray.active = false;
@@ -4634,19 +4653,111 @@ export class BattleScene extends Component {
     const W = ut.contentSize.width, H = ut.contentSize.height;
     const g = vis.bg;
     g.clear();
-    g.fillColor = slot.used ? DIE_FACE_USED_FILL : DIE_FACE_FILL;
-    g.strokeColor = highlighted ? DIE_FACE_SELECTED : DIE_FACE_BORDER;
-    g.lineWidth = highlighted ? 4 : 2;
-    g.rect(-W / 2, -H / 2, W, H);
-    g.fill();
-    g.stroke();
+    this.drawDieBody(g, W, H, {
+      fill: slot.used ? DIE_FACE_USED_FILL : DIE_FACE_FILL,
+      border: highlighted ? DIE_FACE_SELECTED : DIE_FACE_BORDER,
+      lineWidth: highlighted ? 4 : 2,
+      shadow: !slot.used,
+    });
 
-    vis.faceLabel.string = String(slot.pip);
+    vis.pips.clear();
+    this.drawDiePips(
+      vis.pips,
+      slot.pip,
+      Math.min(W, H),
+      slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT,
+    );
+
+    vis.faceLabel.string = '';
     vis.faceLabel.color = slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT;
 
     const hint = this.dieActionHint(slot.pip);
-    vis.hintLabel.string = slot.used ? t('dice.slot.used') : hint.text;
+    vis.hintLabel.string = this.playerDiceRollAnim ? '' : slot.used ? t('dice.slot.used') : hint.text;
     vis.hintLabel.color = slot.used ? DIE_HINT_GREY : hint.color;
+  }
+
+  private advancePlayerDiceRollAnim(dt: number) {
+    const anim = this.playerDiceRollAnim;
+    if (!anim) return;
+    anim.t += dt;
+    if (anim.t < anim.dur) {
+      const frame = Math.floor(anim.t / DICE_CYCLE_INTERVAL);
+      for (let i = 0; i < this.phaseDice.length; i++) {
+        const slot = this.phaseDice[i];
+        if (!slot) continue;
+        slot.pip = (((frame + 1) * (17 + i * 6) + i * 11) % 6) + 1;
+      }
+      this.refreshDiceTray();
+      return;
+    }
+
+    for (let i = 0; i < this.phaseDice.length; i++) {
+      const slot = this.phaseDice[i];
+      if (slot) slot.pip = anim.finalPips[i] ?? slot.pip;
+    }
+    this.playerDiceRollAnim = null;
+    this.battleLog(anim.logLine);
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+  }
+
+  private drawDieBody(
+    g: Graphics,
+    w: number,
+    h: number,
+    opts: { fill: Color; border: Color; lineWidth: number; shadow?: boolean },
+  ) {
+    const r = Math.max(8, Math.min(w, h) * 0.16);
+    if (opts.shadow) {
+      g.fillColor = new Color(0, 0, 0, 70);
+      g.roundRect(-w / 2 + 4, -h / 2 - 5, w, h, r);
+      g.fill();
+    }
+    g.fillColor = opts.fill;
+    g.roundRect(-w / 2, -h / 2, w, h, r);
+    g.fill();
+
+    // A small bevel keeps the flat UI square reading as a physical die.
+    g.strokeColor = new Color(255, 255, 255, 155);
+    g.lineWidth = 2;
+    g.moveTo(-w / 2 + r, h / 2 - 5);
+    g.lineTo(w / 2 - r, h / 2 - 5);
+    g.moveTo(-w / 2 + 5, -h / 2 + r);
+    g.lineTo(-w / 2 + 5, h / 2 - r);
+    g.stroke();
+
+    g.strokeColor = new Color(115, 105, 90, 120);
+    g.lineWidth = 2;
+    g.moveTo(w / 2 - 5, h / 2 - r);
+    g.lineTo(w / 2 - 5, -h / 2 + r);
+    g.moveTo(-w / 2 + r, -h / 2 + 5);
+    g.lineTo(w / 2 - r, -h / 2 + 5);
+    g.stroke();
+
+    g.strokeColor = opts.border;
+    g.lineWidth = opts.lineWidth;
+    g.roundRect(-w / 2, -h / 2, w, h, r);
+    g.stroke();
+  }
+
+  private drawDiePips(g: Graphics, pip: number, size: number, color: Color) {
+    const p = Math.max(1, Math.min(6, Math.floor(pip)));
+    const d = size * 0.24;
+    const r = size * 0.065;
+    const spots: Record<number, Array<[number, number]>> = {
+      1: [[0, 0]],
+      2: [[-d, d], [d, -d]],
+      3: [[-d, d], [0, 0], [d, -d]],
+      4: [[-d, d], [d, d], [-d, -d], [d, -d]],
+      5: [[-d, d], [d, d], [0, 0], [-d, -d], [d, -d]],
+      6: [[-d, d], [d, d], [-d, 0], [d, 0], [-d, -d], [d, -d]],
+    };
+    g.fillColor = color;
+    for (const [x, y] of spots[p]) {
+      g.circle(x, y, r);
+      g.fill();
+    }
   }
 
   /** 给定点数，返回当前阶段该骰面对应的动作名 + 配色，用于骰子下方小字提示。 */
@@ -4766,15 +4877,21 @@ export class BattleScene extends Component {
       crew,
     });
     const pips = rollActionDice(this.rng, count);
-    this.phaseDice = pips.map(pip => ({ pip, used: false }));
+    this.phaseDice = pips.map((_, i) => ({ pip: ((i * 2) % 6) + 1, used: false }));
     this.clearGunSelection();
     this.playerStep = which;
     this.closeDiePopover();
 
     const label = which === 'movement' ? '移动' : which === 'attack' ? '攻击' : '杂项';
     const hatchForLog = hatchOpenRaw && !!crew.commander;
-    this.battleLog(`[Dice] ${label}阶段掷骰: `
-      + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${hatchForLog ? '开' : '关'}）`);
+    this.playerDiceRollAnim = {
+      t: 0,
+      dur: 0.65,
+      finalPips: pips,
+      logLine: `[Dice] ${label}阶段掷骰: `
+        + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${hatchForLog ? '开' : '关'}）`,
+    };
+    playDiceRoll();
 
     this.refreshPhaseUI();
     this.updateHUD();
@@ -4792,6 +4909,7 @@ export class BattleScene extends Component {
     if (was === 'movement') this.movementDone = true;
     else if (was === 'attack') this.attackDone = true;
     else if (was === 'misc') this.miscDone = true;
+    this.playerDiceRollAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     this.closeDiePopover();
@@ -5947,7 +6065,7 @@ export class BattleScene extends Component {
     };
     this.destroyFireCheckEventUI();
     const refs = this.buildFireCheckEventPanel(prep.allDice);
-    for (const lab of refs.dieLabels) lab.string = '?';
+    for (const lab of refs.dieLabels) this.setDieLabelFace(lab, '?');
     refs.sumLabel.string = '';
     refs.bodyLabel.string = '';
     this.fireCheckEventUI = {
@@ -7301,9 +7419,11 @@ export class BattleScene extends Component {
     this.miscDone = result.miscDone ?? false;
     if (this.phase === 'player') {
       this.playerStep = (result.playerStep ?? 'choose') as PlayerStep;
+      this.playerDiceRollAnim = null;
       this.phaseDice = (result.phaseDice ?? []).map(s => ({ pip: s.pip, used: s.used }));
     } else {
       this.playerStep = 'choose';
+      this.playerDiceRollAnim = null;
       this.phaseDice = [];
     }
     this.clearGunSelection();
@@ -7613,6 +7733,7 @@ export class BattleScene extends Component {
     this.movementDone = false;
     this.attackDone = false;
     this.miscDone = false;
+    this.playerDiceRollAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     // 敌方阶段也可能击毁谢尔曼；重入玩家回合时复查胜负
@@ -8016,12 +8137,12 @@ export class BattleScene extends Component {
     container.addComponent(UITransform).setContentSize(size, size);
     container.setPosition(x, y, 0);
     const bg = container.addComponent(Graphics);
-    bg.fillColor = DICE_DIE_FILL;
-    bg.strokeColor = DICE_DIE_BORDER;
-    bg.lineWidth = 2;
-    bg.rect(-size / 2, -size / 2, size, size);
-    bg.fill();
-    bg.stroke();
+    this.drawDieBody(bg, size, size, {
+      fill: DICE_DIE_FILL,
+      border: DICE_DIE_BORDER,
+      lineWidth: 2,
+      shadow: true,
+    });
     parent.addChild(container);
 
     const labelNode = new Node('Face');
@@ -8035,7 +8156,45 @@ export class BattleScene extends Component {
     l.verticalAlign = VerticalTextAlignment.CENTER;
     l.string = '?';
     container.addChild(labelNode);
+
+    const pipsNode = new Node('Pips');
+    pipsNode.layer = this.node.layer;
+    pipsNode.addComponent(UITransform).setContentSize(size, size);
+    const pips = pipsNode.addComponent(Graphics);
+    container.addChild(pipsNode);
+
     return l;
+  }
+
+  private setDieLabelFace(label: Label | null | undefined, value: number | string) {
+    if (!label) return;
+    const text = String(value);
+    const n = Number(text);
+    const container = label.node.parent;
+    const body = container?.getComponent(Graphics);
+    const bodyUt = container?.getComponent(UITransform);
+    const size = bodyUt ? Math.min(bodyUt.contentSize.width, bodyUt.contentSize.height) : 48;
+    if (body) {
+      body.clear();
+      this.drawDieBody(body, size, size, {
+        fill: DICE_DIE_FILL,
+        border: DICE_DIE_BORDER,
+        lineWidth: 2,
+        shadow: true,
+      });
+    }
+    const pips = label.node.parent
+      ?.getChildByName('Pips')
+      ?.getComponent(Graphics);
+    if (pips && Number.isInteger(n) && n >= 1 && n <= 6) {
+      pips.clear();
+      if (body) this.drawDiePips(body, n, size, DICE_DIE_TEXT);
+      else this.drawDiePips(pips, n, size, DICE_DIE_TEXT);
+      label.string = '';
+      return;
+    }
+    if (pips) pips.clear();
+    label.string = text;
   }
 
   // ---------- 敌方 AI 骰子迷你托盘 ----------
@@ -8152,12 +8311,12 @@ export class BattleScene extends Component {
       tile.addComponent(UITransform).setContentSize(DIE_SIZE, DIE_SIZE);
       tile.setPosition(0, subtitleH / 2 + 2, 0);
       const g = tile.addComponent(Graphics);
-      g.lineWidth = 2;
-      g.strokeColor = new Color(30, 30, 30, 255);
-      g.fillColor = new Color(240, 230, 130, 255);
-      g.rect(-DIE_SIZE / 2, -DIE_SIZE / 2, DIE_SIZE, DIE_SIZE);
-      g.fill();
-      g.stroke();
+      this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
+        fill: DICE_DIE_FILL,
+        border: DICE_DIE_BORDER,
+        lineWidth: 2,
+        shadow: true,
+      });
       dieRoot.addChild(tile);
 
       const labNode = new Node('Face');
@@ -8169,7 +8328,7 @@ export class BattleScene extends Component {
       l.color = new Color(20, 20, 20, 255);
       l.horizontalAlign = HorizontalTextAlignment.CENTER;
       l.verticalAlign = VerticalTextAlignment.CENTER;
-      l.string = String(this.enemyDice[i]);
+      l.string = '';
       tile.addChild(labNode);
 
       this.enemyDiceTrayLabels.push(l);
@@ -8216,6 +8375,7 @@ export class BattleScene extends Component {
       const hi = i === this.enemyDiceHighlightIdx;
       const lab = this.enemyDiceTrayLabels[i];
       if (lab) {
+        lab.string = '';
         lab.color = used
           ? new Color(120, 120, 120, 200)
           : new Color(20, 20, 20, 255);
@@ -8230,16 +8390,22 @@ export class BattleScene extends Component {
       const g = this.enemyDiceTrayTileGraphics[i];
       if (!g) continue;
       g.clear();
-      g.fillColor = used
-        ? new Color(160, 150, 100, 220)
-        : new Color(240, 230, 130, 255);
-      g.strokeColor = hi
-        ? new Color(255, 200, 80, 255)
-        : new Color(30, 30, 30, 255);
-      g.lineWidth = hi ? 3.5 : 2;
-      g.rect(-DIE_SIZE / 2, -DIE_SIZE / 2, DIE_SIZE, DIE_SIZE);
-      g.fill();
-      g.stroke();
+      this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
+        fill: DICE_DIE_FILL,
+        border: hi
+          ? new Color(255, 200, 80, 255)
+          : DICE_DIE_BORDER,
+        lineWidth: hi ? 3.5 : 2,
+        shadow: !used,
+      });
+      this.drawDiePips(
+        g,
+        this.enemyDiceSortAnim
+          ? (((Math.floor(this.enemyDiceSortAnim.t / DICE_CYCLE_INTERVAL) + 1) * (13 + i * 4) + i * 7) % 6) + 1
+          : this.enemyDice[i],
+        DIE_SIZE,
+        used ? new Color(90, 90, 80, 180) : new Color(20, 20, 20, 255),
+      );
       const parent = lab?.node.parent;
       if (parent) parent.setScale(used && !hi ? 0.9 : 1, used && !hi ? 0.9 : 1, 1);
     }
@@ -8334,14 +8500,14 @@ export class BattleScene extends Component {
         // 用 frame 当种子简单伪随机：不用真随机以免过于抖动
         const p1 = ((frame * 17) % 6) + 1;
         const p2 = ((frame * 23) % 6) + 1;
-        show.hitDieLabels[0].string = String(p1);
-        show.hitDieLabels[1].string = String(p2);
+        this.setDieLabelFace(show.hitDieLabels[0], p1);
+        this.setDieLabelFace(show.hitDieLabels[1], p2);
         show.hitSumLabel.string = '= ?';
         if (show.t >= DICE_HIT_ROLL_DUR) {
           show.stage = 'hit-show';
           show.t = 0;
-          show.hitDieLabels[0].string = String(show.report.dice[0]);
-          show.hitDieLabels[1].string = String(show.report.dice[1]);
+          this.setDieLabelFace(show.hitDieLabels[0], show.report.dice[0]);
+          this.setDieLabelFace(show.hitDieLabels[1], show.report.dice[1]);
           show.hitSumLabel.string = `= ${show.report.roll}`;
           if (show.report.hit) {
             show.hitVerdictLabel.string = t('dice.panel.hitYes');
@@ -8397,12 +8563,12 @@ export class BattleScene extends Component {
       case 'pen-roll': {
         const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
         const p = ((frame * 13) % 6) + 1;
-        if (show.penDieLabel) show.penDieLabel.string = String(p);
+        this.setDieLabelFace(show.penDieLabel, p);
         if (show.t >= DICE_PEN_ROLL_DUR) {
           show.stage = 'pen-show';
           show.t = 0;
           if (show.penDieLabel && show.report.penDie !== undefined) {
-            show.penDieLabel.string = String(show.report.penDie);
+            this.setDieLabelFace(show.penDieLabel, show.report.penDie);
           }
           if (show.penVerdictLabel) {
             if (show.report.penetrated) {
@@ -8431,7 +8597,7 @@ export class BattleScene extends Component {
             show.stage = 'dmg-roll';
             if (show.dmgDieLabel) {
               show.dmgDieLabel.node.parent!.active = true;
-              show.dmgDieLabel.string = '?';
+              this.setDieLabelFace(show.dmgDieLabel, '?');
             }
             if (show.dmgEffectLabel) {
               show.dmgEffectLabel.node.active = true;
@@ -8445,12 +8611,12 @@ export class BattleScene extends Component {
       case 'dmg-roll': {
         const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
         const p = ((frame * 11) % 6) + 1;
-        if (show.dmgDieLabel) show.dmgDieLabel.string = String(p);
+        this.setDieLabelFace(show.dmgDieLabel, p);
         if (show.t >= DICE_DMG_ROLL_DUR) {
           show.stage = 'dmg-show';
           show.t = 0;
           if (show.dmgDieLabel && show.report.damageDie !== undefined) {
-            show.dmgDieLabel.string = String(show.report.damageDie);
+            this.setDieLabelFace(show.dmgDieLabel, show.report.damageDie);
           }
           if (show.dmgEffectLabel) {
             const lab = damageEffectLabel(show.report.damageEffect);
@@ -8468,7 +8634,7 @@ export class BattleScene extends Component {
             show.stage = 'crew-roll';
             if (show.crewDieLabel) {
               show.crewDieLabel.node.parent!.active = true;
-              show.crewDieLabel.string = '?';
+              this.setDieLabelFace(show.crewDieLabel, '?');
             }
             if (show.crewTitleLabel) show.crewTitleLabel.node.active = true;
             if (show.crewEffectLabel) {
@@ -8487,14 +8653,14 @@ export class BattleScene extends Component {
       case 'crew-roll': {
         const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
         const p = ((frame * 29) % 6) + 1;
-        if (show.crewDieLabel) show.crewDieLabel.string = String(p);
+        this.setDieLabelFace(show.crewDieLabel, p);
         if (show.t >= DICE_CREW_ROLL_DUR) {
           show.stage = 'crew-show';
           show.t = 0;
           const cc = show.report.crewCheck;
           if (show.crewDieLabel && cc) {
             // 重抛过的情况下仍然展示最终那次的点数
-            show.crewDieLabel.string = cc.die > 0 ? String(cc.die) : '-';
+            this.setDieLabelFace(show.crewDieLabel, cc.die > 0 ? cc.die : '-');
           }
           if (show.crewEffectLabel) {
             const lab = crewDeathLabel(cc);
@@ -8545,7 +8711,8 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return this.anim !== null || this.diceShow !== null || this.enemyDiceSortAnim !== null
+    return this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
+      || this.enemyDiceSortAnim !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null
       || this.tileInspectModalRoot !== null;
   }
@@ -8686,12 +8853,12 @@ export class BattleScene extends Component {
     const DUR = 0.55;
     if (ui.t < DUR) {
       const tick = Math.floor(ui.t / 0.08) % 6;
-      for (const lab of ui.dieLabels) lab.string = String((tick % 6) + 1);
+      for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
       return;
     }
     for (let i = 0; i < ui.dieLabels.length; i++) {
       const lab = ui.dieLabels[i];
-      if (lab) lab.string = String(ui.allDice[i] ?? '?');
+      if (lab) this.setDieLabelFace(lab, ui.allDice[i] ?? '?');
     }
     ui.sumLabel.string = t(ui.introKey, ui.introParams);
     ui.bodyLabel.string = ui.bodyText;
@@ -8759,7 +8926,7 @@ export class BattleScene extends Component {
     const effectName = t(TURN_END_LIST_EFFECT_KEYS[row.effectType]);
     this.destroyTurnEndEventUI();
     const refs = this.buildTurnEndEventPanel(primaryDice, extraPhases.length > 0);
-    for (const lab of refs.dieLabels) lab.string = '?';
+    for (const lab of refs.dieLabels) this.setDieLabelFace(lab, '?');
     refs.sumLabel.string = '';
     refs.bodyLabel.string = '';
     this.turnEndEventUI = {
@@ -8996,7 +9163,7 @@ export class BattleScene extends Component {
     for (let i = 0; i < ui.extraDieLabels.length; i++) {
       const lab = ui.extraDieLabels[i];
       if (!lab) continue;
-      lab.string = '?';
+      this.setDieLabelFace(lab, '?');
       const cont = lab.node.parent;
       if (cont) cont.active = i < n;
     }
@@ -9017,12 +9184,12 @@ export class BattleScene extends Component {
       ui.t += dt;
       if (ui.t < DUR) {
         const tick = Math.floor(ui.t / 0.08) % 6;
-        for (const lab of ui.dieLabels) lab.string = String((tick % 6) + 1);
+        for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
         return;
       }
       for (let i = 0; i < ui.dieLabels.length; i++) {
         const lab = ui.dieLabels[i];
-        if (lab) lab.string = String(ui.primaryDice[i] ?? '?');
+        if (lab) this.setDieLabelFace(lab, ui.primaryDice[i] ?? '?');
       }
       const s = ui.primaryDice.reduce((a, b) => a + b, 0);
       ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
@@ -9078,13 +9245,13 @@ export class BattleScene extends Component {
         const tick = Math.floor(ui.t / 0.08) % 6;
         for (let i = 0; i < n; i++) {
           const lab = ui.extraDieLabels[i];
-          if (lab) lab.string = String((tick % 6) + 1);
+          if (lab) this.setDieLabelFace(lab, (tick % 6) + 1);
         }
         return;
       }
       for (let i = 0; i < n; i++) {
         const lab = ui.extraDieLabels[i];
-        if (lab) lab.string = String(phase.dice[i] ?? '?');
+        if (lab) this.setDieLabelFace(lab, phase.dice[i] ?? '?');
       }
       ui.stage = 'wait_after_extra';
       ui.t = 0;
