@@ -156,6 +156,40 @@ function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, f
   g.stroke();
 }
 
+function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: Color, accent: Color) {
+  const x = -w / 2;
+  const y = -h / 2;
+  g.fillColor = new Color(0, 0, 0, 74);
+  g.rect(x + 4, y - 5, w, h);
+  g.fill();
+  g.fillColor = fill;
+  g.rect(x, y, w, h);
+  g.fill();
+  g.fillColor = new Color(255, 240, 180, 20);
+  g.rect(x + 4, y + h - 18, w - 8, 10);
+  g.fill();
+  g.strokeColor = border;
+  g.lineWidth = 2;
+  g.rect(x + 1, y + 1, w - 2, h - 2);
+  g.stroke();
+  g.strokeColor = new Color(14, 16, 14, 185);
+  g.lineWidth = 1;
+  g.rect(x + 6, y + 6, w - 12, h - 12);
+  g.stroke();
+  g.strokeColor = accent;
+  g.lineWidth = 2;
+  const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18));
+  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8 + l, y + h - 8);
+  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8, y + h - 8 - l);
+  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8 - l, y + h - 8);
+  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8, y + h - 8 - l);
+  g.moveTo(x + 8, y + 8); g.lineTo(x + 8 + l, y + 8);
+  g.moveTo(x + 8, y + 8); g.lineTo(x + 8, y + 8 + l);
+  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8 - l, y + 8);
+  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8, y + 8 + l);
+  g.stroke();
+}
+
 const { ccclass, property } = _decorator;
 
 /** 使用俯视 PNG 的德军单位（与谢尔曼同一套 normalizeTankSprites 白边处理） */
@@ -456,7 +490,7 @@ interface Floater {
 const TERRAIN_COLORS: Record<TerrainType, Color> = {
   road:     new Color(200, 178, 142, 255), // 公路格：偏棕黄沙土地基，drawRoadHexOverlay 再叠颗粒
   field:    new Color(196, 220, 130, 255),
-  mud:      new Color(150, 128, 120, 255), // 泥地：深灰带微弱暖调（与 road 棕黄拉开冷暖对比），drawMudOverlay 叠颗粒
+  mud:      new Color(132, 118, 104, 255), // 泥地：灰褐脏土基底，drawMudOverlay 叠污渍 / 擦痕
   forest:   new Color( 58, 112,  50, 255), // 稍压暗，树冠叠上去后更像林间地面
   water:    new Color( 90, 145, 200, 255),
 };
@@ -474,16 +508,23 @@ const FOREST_SHADE      = new Color(  0,   0,   0,  50);
  *
  * 两套色板由 `drawMudOverlay` / `drawRoadHexOverlay` 调用同一个 `drawHexNoiseOverlay` 函数渲染。
  */
-const MUD_SOFT_LIGHT    = new Color(165, 162, 152,  55);
-const MUD_SOFT_DARK     = new Color( 95,  92,  85,  55);
-const MUD_GRIT_LIGHT    = new Color(168, 165, 155, 130);
-const MUD_GRIT_DARK     = new Color( 85,  82,  75, 140);
-const MUD_GRIT_MID      = new Color(128, 125, 118,  90);
+const MUD_SOFT_LIGHT    = new Color(176, 164, 144,  70);
+const MUD_SOFT_DARK     = new Color( 78,  70,  62,  68);
+const MUD_GRIT_LIGHT    = new Color(184, 172, 150, 125);
+const MUD_GRIT_DARK     = new Color( 72,  66,  58, 135);
+const MUD_GRIT_MID      = new Color(122, 112,  98, 100);
+const MUD_SMEAR_LIGHT   = new Color(190, 178, 154,  72);
+const MUD_SMEAR_DARK    = new Color( 66,  58,  52,  82);
+const MUD_EDGE_SHADE    = new Color( 34,  30,  28,  70);
 const ROAD_HEX_SOFT_LIGHT = new Color(228, 208, 172,  55);
 const ROAD_HEX_SOFT_DARK  = new Color(165, 145, 112,  55);
 const ROAD_HEX_GRIT_LIGHT = new Color(228, 208, 172, 130);
 const ROAD_HEX_GRIT_DARK  = new Color(155, 132, 100, 135);
 const ROAD_HEX_GRIT_MID   = new Color(195, 175, 138,  90);
+const FIELD_STROKE_LIGHT  = new Color(232, 242, 170, 105);
+const FIELD_STROKE_MID    = new Color(150, 182,  88, 115);
+const FIELD_STROKE_DARK   = new Color( 92, 124,  58, 125);
+const FIELD_EDGE_SHADE    = new Color( 44,  58,  34,  58);
 /**
  * 建筑图案（不改变六角格基底填色，仅叠加绘制）：
  * 主战场版本采用「俯视方屋」布局（参见 `drawBuildingOverlay`）：
@@ -548,20 +589,21 @@ const FACTION_COLORS = {
 };
 
 /** 树篱上离散「灌木丛」：比林地略深、略灰，与 FOREST_* 区分 */
-const HEDGE_SHADE       = new Color(22, 38, 24, 185);
-const HEDGE_BUSH_DARK  = new Color(36, 78, 38, 255);
-const HEDGE_BUSH_MID   = new Color(48, 98, 46, 255);
-const HEDGE_BUSH_LIGHT = new Color(62, 118, 56, 255);
+const HEDGE_SHADE       = new Color(10, 18, 11, 170);
+const HEDGE_BUSH_DEEP   = new Color(20, 42, 20, 255);
+const HEDGE_BUSH_DARK   = new Color(30, 62, 28, 255);
+const HEDGE_BUSH_MID    = new Color(52, 88, 38, 255);
+const HEDGE_BUSH_LIGHT  = new Color(78, 118, 54, 245);
 const TILE_BORDER        = new Color( 40,  40,  40, 220);
 const FACING_COLOR       = new Color(255, 210,  60, 255);
 const UNIT_BORDER        = new Color(255, 255, 255, 255);
 // HUD 配色：两阶段都执行过后按钮换成"提醒色"，引导玩家结束回合
-const BTN_BG_NORMAL  = new Color( 60,  90, 140, 230);
-const BTN_BG_URGENT  = new Color(190,  80,  60, 240);
-const BTN_BORDER     = new Color(255, 255, 255, 255);
+const BTN_BG_NORMAL  = new Color( 84,  95,  58, 240);
+const BTN_BG_URGENT  = new Color(154,  60,  48, 245);
+const BTN_BORDER     = new Color(204, 190, 142, 235);
 const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
 /** 左上角第一行：关卡 id + 名（与回合条区分的稍弱白） */
-const HUD_MISSION_META_COLOR = new Color(220, 225, 235, 255);
+const HUD_MISSION_META_COLOR = new Color(226, 214, 174, 255);
 /** 与 `buildHUD` 中关卡标题 UITransform 高度一致，改布局须同步 */
 const HUD_MISSION_TITLE_H = 32;
 /** 关卡标题行下缘 与 回合状态行上缘 的间隙 */
@@ -569,11 +611,11 @@ const HUD_MISSION_TO_TURN_GAP = 4;
 /** 原设计：目标首行 y=296、回合行顶 y=344；增加关卡标题后整体下推的步长 */
 const HUD_SHIFT_FOR_MISSION = HUD_MISSION_TITLE_H + HUD_MISSION_TO_TURN_GAP;
 /** 任务目标行：前置未完成 */
-const OBJ_HUD_LOCKED = new Color(150, 150, 158, 255);
+const OBJ_HUD_LOCKED = new Color(150, 148, 132, 255);
 /** 任务目标行：当前可做、未完成 */
-const OBJ_HUD_ACTIVE = new Color(255, 220, 90, 255);
+const OBJ_HUD_ACTIVE = new Color(245, 205, 92, 255);
 /** 任务目标行：已完成 */
-const OBJ_HUD_DONE = new Color(100, 210, 120, 255);
+const OBJ_HUD_DONE = new Color(142, 205, 110, 255);
 /** 右上角：回合结束事件表（左）与 ⚙ 设置（右），与 `buildStatusPanel` 竖向对齐（改一处须同步） */
 const BATTLE_TURNEND_LIST_CX = 520;
 const BATTLE_SETTINGS_CX = 580;
@@ -584,40 +626,40 @@ const BATTLE_SETTINGS_R = 24;
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
 /** 与 MainMenuScene `BG_TOP` / `BG_MID` / `BG_BOTTOM` / `MENU_DIVIDER` 一致（主菜单渐变底图） */
-const MAIN_MENU_STYLE_BG_TOP = new Color(32, 46, 36, 255);
-const MAIN_MENU_STYLE_BG_MID = new Color(22, 32, 26, 255);
-const MAIN_MENU_STYLE_BG_BOTTOM = new Color(14, 20, 18, 255);
-const MAIN_MENU_STYLE_DIVIDER = new Color(120, 150, 120, 200);
+const MAIN_MENU_STYLE_BG_TOP = new Color(40, 52, 38, 255);
+const MAIN_MENU_STYLE_BG_MID = new Color(26, 34, 28, 255);
+const MAIN_MENU_STYLE_BG_BOTTOM = new Color(13, 18, 17, 255);
+const MAIN_MENU_STYLE_DIVIDER = new Color(145, 138, 100, 210);
 /** 底部「阶段选择条 + 玩家骰子托盘」共用行中心 Y（Canvas 坐标，负值越大越靠下） */
 const BOTTOM_PHASE_ROW_Y = -288;
 /** 右下角「下一阶段 / 结束回合」与阶段条大按钮同高，且与底部行垂直对齐 */
 const ADVANCE_BTN_W = 180;
 const ADVANCE_BTN_H = 72;
 const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
-const MODAL_PANEL_BG     = new Color( 34,  40,  54, 240);
-const MODAL_PANEL_BORDER = new Color(180, 180, 180, 220);
-const MODAL_CLOSE_BG     = new Color(180,  60,  60, 240);
-const SETTINGS_ICON_BG   = new Color( 40,  50,  60, 220);
-const SETTINGS_ICON_BD   = new Color(200, 200, 200, 180);
+const MODAL_PANEL_BG     = new Color( 36,  41,  34, 245);
+const MODAL_PANEL_BORDER = new Color(202, 188, 136, 230);
+const MODAL_CLOSE_BG     = new Color(134,  49,  42, 245);
+const SETTINGS_ICON_BG   = new Color( 45,  50,  44, 230);
+const SETTINGS_ICON_BD   = new Color(204, 190, 142, 205);
 const SLIDER_TRACK       = new Color( 70,  80,  90, 255);
 const SLIDER_FILL        = new Color(170, 110,  50, 255);
 const SLIDER_THUMB       = new Color(240, 215, 150, 255);
-const LANG_BTN_IDLE      = new Color( 60,  70,  80, 230);
-const LANG_BTN_ACTIVE    = new Color(170, 110,  50, 240);
+const LANG_BTN_IDLE      = new Color( 59,  64,  54, 235);
+const LANG_BTN_ACTIVE    = new Color(145,  95,  44, 245);
 const LANG_BTN_ACTIVE_BD = new Color(240, 215, 150, 255);
-const BTN_EXIT_WARN      = new Color(160,  70,  70, 230);
-const BATTLE_BTN_ACCENT  = new Color(170, 110,  50, 240);
-const BATTLE_MODAL_DIVIDER = new Color(120, 150, 120, 200);
+const BTN_EXIT_WARN      = new Color(134,  49,  42, 245);
+const BATTLE_BTN_ACCENT  = new Color(145,  95,  44, 245);
+const BATTLE_MODAL_DIVIDER = new Color(145, 138, 100, 210);
 const BATTLE_MODAL_TEXT_OUTLINE = new Color(0, 0, 0, 220);
-const BATTLE_MODAL_LEVEL_BORDER = new Color(200, 200, 200, 220);
+const BATTLE_MODAL_LEVEL_BORDER = new Color(204, 190, 142, 230);
 
 // 阶段选择条配色：两个按钮（移动=绿 / 攻击=红）；已执行过的阶段被灰掉禁用
-const PHASE_BTN_MOVE      = new Color( 60, 130,  80, 230);
-const PHASE_BTN_ATTACK    = new Color(160,  70,  70, 230);
-const PHASE_BTN_MISC      = new Color(110,  80, 160, 230);
+const PHASE_BTN_MOVE      = new Color( 80, 112,  68, 240);
+const PHASE_BTN_ATTACK    = new Color(145,  64,  50, 240);
+const PHASE_BTN_MISC      = new Color(105,  96,  70, 240);
 /** 选择阶段条「舱盖」与杂项同紫系，便于与移动/攻击区分 */
-const PHASE_BTN_HATCH     = new Color(110,  80, 160, 230);
-const PHASE_BTN_DISABLED  = new Color( 80,  80,  80, 200);
+const PHASE_BTN_HATCH     = new Color(105,  96,  70, 240);
+const PHASE_BTN_DISABLED  = new Color( 68,  68,  63, 210);
 
 // 骰子配色：底色白/灰（已用）+ 边框；分类颜色直接在动作提示文字上体现
 const DIE_FACE_FILL      = new Color(245, 245, 235, 255);
@@ -638,8 +680,8 @@ const DRIVE_BLOCKED   = new Color(200,  80,  80, 200);
 
 // 掷骰展示面板配色
 const DICE_BACKDROP    = new Color(  0,   0,   0, 160);
-const DICE_PANEL_BG    = new Color( 34,  40,  54, 240);
-const DICE_PANEL_BORDER= new Color(230, 230, 230, 255);
+const DICE_PANEL_BG    = new Color( 36,  41,  34, 245);
+const DICE_PANEL_BORDER= new Color(204, 190, 142, 245);
 const DICE_DIE_FILL    = new Color(245, 245, 235, 255);
 const DICE_DIE_BORDER  = new Color( 30,  30,  30, 255);
 const DICE_DIE_TEXT    = new Color( 20,  20,  20, 255);
@@ -656,10 +698,10 @@ const DICE_OUTCOME_CREW   = new Color(240, 220, 120, 255); // 阵亡检定
 const DICE_OUTCOME_HURT   = new Color(240, 200, 100, 255); // 受损（德军首发）
 
 // 谢尔曼状态面板配色
-const STATUS_PANEL_BG     = new Color( 28,  34,  48, 220);
-const STATUS_PANEL_BORDER = new Color(220, 220, 220, 220);
-const STATUS_TITLE_COLOR  = new Color(255, 230, 120, 255);
-const STATUS_LABEL_COLOR  = new Color(200, 200, 200, 255);
+const STATUS_PANEL_BG     = new Color( 33,  38,  31, 235);
+const STATUS_PANEL_BORDER = new Color(204, 190, 142, 230);
+const STATUS_TITLE_COLOR  = new Color(235, 207, 142, 255);
+const STATUS_LABEL_COLOR  = new Color(205, 202, 184, 255);
 // 指示灯（值部分）：
 //   正面 = 绿（装填 / 存活 / 完好）
 //   警告 = 琥珀（舱盖开 = 暴露 / 起火）
@@ -783,7 +825,20 @@ export class BattleScene extends Component {
   rngSeed: number = 0;
 
   private g: Graphics | null = null;
+  private terrainLayerNode: Node | null = null;
   private mapNode: Node | null = null;
+  private terrainSpriteFrames: Record<TerrainType, SpriteFrame | null> = {
+    road: null,
+    field: null,
+    mud: null,
+    forest: null,
+    water: null,
+  };
+  private terrainSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private terrainSpritePoolNext = 0;
+  private treeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
+  private foliageSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private foliageSpritePoolNext = 0;
   private shermanSpriteNode: Node | null = null;
   private shermanTopSprite: Sprite | null = null;
   private shermanTopSpriteFrame: SpriteFrame | null = null;
@@ -845,6 +900,12 @@ export class BattleScene extends Component {
     dur: number;
     finalPips: number[];
     logLine: string;
+  } | null = null;
+  private playerDiceSortAnim: {
+    t: number;
+    dur: number;
+    fromX: number[];
+    toX: number[];
   } | null = null;
   /** 攻击阶段玩家点击某颗主炮骰 → 进入"选目标"态，这里记录那颗骰在 phaseDice 的下标。-1 = 未选 */
   private selectedGunDieIdx: number = -1;
@@ -1058,6 +1119,9 @@ export class BattleScene extends Component {
   /** 玩家骰子托盘单槽尺寸与间距（与 buildDiceTray / refreshDiceTray 共用） */
   private static readonly DICE_TRAY_SLOT = 72;
   private static readonly DICE_TRAY_GAP = 12;
+  private static readonly PLAYER_DICE_SORT_DUR = 0.5;
+  private static readonly TERRAIN_SPRITE_POOL = 384;
+  private static readonly FOLIAGE_SPRITE_POOL = 256;
 
   onLoad() {
     setLang(MenuProgress.load().lang);
@@ -1065,6 +1129,21 @@ export class BattleScene extends Component {
     stopBgm();
     playBgmBattle();
     this.buildMainMenuStyleBattleBackground();
+    const terrainNode = new Node('TerrainSprites');
+    terrainNode.layer = this.node.layer;
+    terrainNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.node.addChild(terrainNode);
+    this.terrainLayerNode = terrainNode;
+    for (let i = 0; i < BattleScene.TERRAIN_SPRITE_POOL; i++) {
+      const n = new Node(`TerrainTile_${i}`);
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(1, 1);
+      const sp = n.addComponent(Sprite);
+      sp.sizeMode = Sprite.SizeMode.CUSTOM;
+      n.active = false;
+      this.terrainSpritePool.push({ node: n, sprite: sp });
+      terrainNode.addChild(n);
+    }
     // 自动创建子 Graphics 节点，免去编辑器手动配置
     const gNode = new Node('MapGraphics');
     // UI Graphics 必须在 UI_2D 层才会被 Canvas 的 UI 相机渲染。
@@ -1076,6 +1155,17 @@ export class BattleScene extends Component {
     this.g.lineWidth = 2;
     this.node.addChild(gNode);
     this.mapNode = gNode;
+
+    for (let i = 0; i < BattleScene.FOLIAGE_SPRITE_POOL; i++) {
+      const h = new Node(`Foliage_${i}`);
+      h.layer = this.node.layer;
+      h.addComponent(UITransform).setContentSize(1, 1);
+      const sp = h.addComponent(Sprite);
+      sp.sizeMode = Sprite.SizeMode.CUSTOM;
+      h.active = false;
+      this.foliageSpritePool.push({ node: h, sprite: sp });
+      gNode.addChild(h);
+    }
 
     // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上。
     const shNode = new Node('ShermanTopSprite');
@@ -1184,7 +1274,36 @@ export class BattleScene extends Component {
       this.redraw();
     });
 
+    ['tree_01', 'tree_02', 'tree_03', 'tree_04'].forEach((name, idx) => {
+      resources.load(`textures/terrain/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] tree sprite load failed (${name}), fallback to Graphics:`, err);
+          return;
+        }
+        this.treeSpriteFrames[idx] = sf;
+        this.redraw();
+      });
+    });
+
     // 3.x 动态加载 SpriteFrame 必须指向图片子资源路径 …/spriteFrame（见官方「动态加载资源」）
+    const terrainPaths: Record<TerrainType, string> = {
+      road: 'textures/terrain/terrain_road/spriteFrame',
+      field: 'textures/terrain/terrain_field/spriteFrame',
+      mud: 'textures/terrain/terrain_mud/spriteFrame',
+      forest: 'textures/terrain/terrain_forest/spriteFrame',
+      water: 'textures/terrain/terrain_water/spriteFrame',
+    };
+    (Object.keys(terrainPaths) as TerrainType[]).forEach((terrain) => {
+      resources.load(terrainPaths[terrain], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] terrain sprite load failed (${terrain}), fallback to Graphics:`, err);
+          return;
+        }
+        this.terrainSpriteFrames[terrain] = sf;
+        this.redraw();
+      });
+    });
+
     resources.load('textures/units/sherman_top/spriteFrame', SpriteFrame, (err, sf) => {
       if (err || !sf) {
         console.warn('[BattleScene] 谢尔曼俯视图加载失败，使用矢量车体:', err);
@@ -1263,6 +1382,7 @@ export class BattleScene extends Component {
     this.attackDone = false;
     this.miscDone = false;
     this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     this.outcome = 'ongoing';
@@ -1296,6 +1416,10 @@ export class BattleScene extends Component {
     if (!this.g || !this.mission) return;
     const g = this.g;
     g.clear();
+    this.terrainSpritePoolNext = 0;
+    for (const { node } of this.terrainSpritePool) node.active = false;
+    this.foliageSpritePoolNext = 0;
+    for (const { node } of this.foliageSpritePool) node.active = false;
     this.enemyTopPoolNext = 0;
     for (const { node } of this.enemyTopSpritePool) node.active = false;
     this.infantryTopPoolNext = 0;
@@ -1317,6 +1441,14 @@ export class BattleScene extends Component {
     //    （同色草地会整片「熔合」、看起来像格线突然没了；掷骰后 redraw 变多更明显）。
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
+      if (this.drawTerrainTileSprite(c.x, c.y, this.hexSize, t.terrain)) {
+        continue;
+      }
+      if (t.terrain === 'field') {
+        this.drawHexFill(c.x, c.y, this.hexSize, TERRAIN_COLORS.field);
+        this.drawFieldBrushOverlay(c.x, c.y, this.hexSize, t);
+        continue;
+      }
       this.drawHexFill(c.x, c.y, this.hexSize, TERRAIN_COLORS[t.terrain]);
     }
     g.lineWidth = 2;
@@ -1327,10 +1459,9 @@ export class BattleScene extends Component {
     }
 
     // 1-bank. 水陆河岸：仅在水域格内、沿"非水域邻格"方向画沙色内偏移条带，模拟河 / 湖岸过渡。
-    // 与桥梁互斥：叠桥水域的视觉由 drawBridgeOverlay 负责，跳过；邻居为水或地图外亦跳过。
+    // 桥梁水格也保留岸线，随后 drawBridgeOverlay 会把桥面压在其上；邻居为水或地图外则跳过。
     for (const t of tiles) {
       if (t.terrain !== 'water') continue;
-      if (tileHasBridge(t)) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawWaterBankOverlay(c.x, c.y, this.hexSize, t, map);
     }
@@ -1339,6 +1470,7 @@ export class BattleScene extends Component {
     // 所有斑块按 axial 种子稳定（同格永不抖动），不影响其它地形。
     for (const t of tiles) {
       if (t.terrain !== 'mud') continue;
+      if (this.terrainSpriteFrames.mud) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawMudOverlay(c.x, c.y, this.hexSize, t);
     }
@@ -1347,6 +1479,7 @@ export class BattleScene extends Component {
     // 让 road 格的非条带部分也有路面感，避免整片纯色像塑料。drawRoadOverlay 的方向条带叠在其上。
     for (const t of tiles) {
       if (t.terrain !== 'road') continue;
+      if (this.terrainSpriteFrames.road) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawRoadHexOverlay(c.x, c.y, this.hexSize, t);
     }
@@ -1381,12 +1514,13 @@ export class BattleScene extends Component {
     }
 
     // 2. 树篱（`Tile.hedges` 为轴向 0..5；`drawHedgeEdge` 的边号见 `HEDGE_DRAW_EDGE_BY_AXIAL`）
+    const hedgeTreeKeys = new Set<string>();
     for (const t of tiles) {
       if (!t.hedges) continue;
       const c = this.project(t.pos.q, t.pos.r);
       for (let ax = 0; ax < 6; ax++) {
         if (t.hedges[ax]) {
-          this.drawHedgeEdge(c.x, c.y, this.hexSize, HEDGE_DRAW_EDGE_BY_AXIAL[ax], t.pos.q, t.pos.r);
+          this.drawHedgeEdgeTrees(c.x, c.y, this.hexSize, HEDGE_DRAW_EDGE_BY_AXIAL[ax], t.pos.q, t.pos.r, hedgeTreeKeys);
         }
       }
     }
@@ -2070,6 +2204,11 @@ export class BattleScene extends Component {
 
     if (this.playerDiceRollAnim) this.advancePlayerDiceRollAnim(dt);
 
+    if (this.playerDiceSortAnim) {
+      this.advancePlayerDiceSortAnim(dt);
+      return;
+    }
+
     if (this.turnEndEventUI) this.advanceTurnEndEventUI(dt);
 
     if (this.fireCheckEventUI) this.advanceFireCheckEventUI(dt);
@@ -2213,6 +2352,20 @@ export class BattleScene extends Component {
   }
 
   /** 仅填充实心六边形（格线见 drawHexStroke / redraw 第二遍） */
+  private drawTerrainTileSprite(cx: number, cy: number, size: number, terrain: TerrainType): boolean {
+    const sf = this.terrainSpriteFrames[terrain];
+    if (!sf || this.terrainSpritePoolNext >= this.terrainSpritePool.length) return false;
+    const slot = this.terrainSpritePool[this.terrainSpritePoolNext++];
+    slot.sprite.spriteFrame = sf;
+    const ut = slot.node.getComponent(UITransform);
+    if (ut) ut.setContentSize(size * Math.sqrt(3), size * 2.0);
+    slot.node.setPosition(cx, cy, 0);
+    slot.node.setRotationFromEuler(0, 0, 0);
+    slot.node.setScale(1, 1, 1);
+    slot.node.active = true;
+    return true;
+  }
+
   private drawHexFill(cx: number, cy: number, size: number, fill: Color) {
     const g = this.g!;
     g.fillColor = fill;
@@ -2227,6 +2380,38 @@ export class BattleScene extends Component {
     g.lineWidth = 2;
     this.traceHexPath(cx, cy, size);
     g.stroke();
+  }
+
+  private drawFieldBrushOverlay(cx: number, cy: number, size: number, tile: Tile) {
+    const g = this.g!;
+    const seedRaw =
+      ((tile.pos.q | 0) * 374761393 + (tile.pos.r | 0) * 668265263 + 0x51f15eed) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
+    const innerR = size * 0.78;
+    const strokes = rng.intRange(70, 96);
+
+    g.lineWidth = Math.max(1, size * 0.016);
+    for (let i = 0; i < strokes; i++) {
+      const rPos = Math.sqrt(rng.next()) * innerR;
+      const theta = rng.next() * Math.PI * 2;
+      const px = cx + Math.cos(theta) * rPos;
+      const py = cy + Math.sin(theta) * rPos;
+      const len = size * (0.065 + rng.next() * 0.085);
+      const a = -Math.PI / 2 + (rng.next() - 0.5) * 1.35;
+      const dx = Math.cos(a) * len * 0.5;
+      const dy = Math.sin(a) * len * 0.5;
+      const roll = rng.next();
+      g.strokeColor = roll < 0.32 ? FIELD_STROKE_LIGHT : roll < 0.78 ? FIELD_STROKE_DARK : FIELD_STROKE_MID;
+      g.moveTo(px - dx, py - dy);
+      g.lineTo(px + dx, py + dy);
+      g.stroke();
+    }
+
+    g.strokeColor = FIELD_EDGE_SHADE;
+    g.lineWidth = Math.max(2, size * 0.12);
+    this.traceHexPath(cx, cy, size * 0.965);
+    g.stroke();
+    g.lineWidth = 1;
   }
 
   /**
@@ -2303,6 +2488,12 @@ export class BattleScene extends Component {
 
   /** 泥地纹理叠加：mud 基底之上的细颗粒沙土感（详见 `drawHexNoiseOverlay`） */
   private drawMudOverlay(cx: number, cy: number, size: number, tile: Tile) {
+    const g = this.g!;
+    const seedRaw =
+      ((tile.pos.q | 0) * 1103515245 + (tile.pos.r | 0) * 12345 + 0x2f6e2b1) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
+    const innerR = size * 0.76;
+
     this.drawHexNoiseOverlay(
       cx,
       cy,
@@ -2317,6 +2508,53 @@ export class BattleScene extends Component {
       },
       0x12345678,
     );
+
+    g.lineWidth = 0;
+    for (let i = 0; i < 7; i++) {
+      const rPos = Math.sqrt(rng.next()) * innerR;
+      const theta = rng.next() * Math.PI * 2;
+      const px = cx + Math.cos(theta) * rPos;
+      const py = cy + Math.sin(theta) * rPos;
+      const rx = size * (0.12 + rng.next() * 0.15);
+      const ry = size * (0.045 + rng.next() * 0.08);
+      const a0 = rng.next() * Math.PI * 2;
+      const segs = 18;
+      g.fillColor = rng.next() < 0.55 ? MUD_SMEAR_DARK : MUD_SMEAR_LIGHT;
+      for (let k = 0; k < segs; k++) {
+        const a = (k / segs) * Math.PI * 2;
+        const rr = 0.82 + rng.next() * 0.28;
+        const lx = Math.cos(a) * rx * rr;
+        const ly = Math.sin(a) * ry * rr;
+        const x = px + lx * Math.cos(a0) - ly * Math.sin(a0);
+        const y = py + lx * Math.sin(a0) + ly * Math.cos(a0);
+        if (k === 0) g.moveTo(x, y);
+        else g.lineTo(x, y);
+      }
+      g.close();
+      g.fill();
+    }
+
+    g.lineWidth = Math.max(1, size * 0.018);
+    for (let i = 0; i < 34; i++) {
+      const rPos = Math.sqrt(rng.next()) * innerR;
+      const theta = rng.next() * Math.PI * 2;
+      const px = cx + Math.cos(theta) * rPos;
+      const py = cy + Math.sin(theta) * rPos;
+      const len = size * (0.05 + rng.next() * 0.13);
+      const a = rng.next() * Math.PI * 2;
+      const dx = Math.cos(a) * len * 0.5;
+      const dy = Math.sin(a) * len * 0.5;
+      g.strokeColor = rng.next() < 0.62 ? MUD_SMEAR_LIGHT : MUD_SMEAR_DARK;
+      g.moveTo(px - dx, py - dy);
+      g.lineTo(px + dx, py + dy);
+      g.stroke();
+    }
+
+    g.strokeColor = MUD_EDGE_SHADE;
+    g.lineWidth = Math.max(3, size * 0.12);
+    this.traceHexPath(cx, cy, size * 0.965);
+    g.stroke();
+    g.lineWidth = 1;
   }
 
   /** 公路格纹理叠加：road 基底之上的浅灰路面碎屑感（与泥地同算法、不同色板 + 不同种子盐值） */
@@ -2342,29 +2580,27 @@ export class BattleScene extends Component {
    * 冠幅约为原先 2 倍、丛数 2 倍，排布为上下两带，尽量占满格内可绘区域；格 (q,r) 轻微错纹。
    */
   private drawForestCanopy(cx: number, cy: number, size: number, t: Tile) {
+    const seedRaw =
+      ((t.pos.q | 0) * 92811 + (t.pos.r | 0) * 6899 + 0x4f2a91) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
     const s = size;
-    const hash = t.pos.q * 92811 + t.pos.r * 6899;
-    const jx = (((hash % 7) + 7) % 7) - 3;
-    const h2 = (hash >> 4) ^ (t.pos.r * 3);
-    const jy = (((h2 % 5) + 5) % 5) - 2;
-    const bx = cx + (jx * s) / 85;
-    const by = cy + (jy * s) / 90;
-    const baseR = s * 0.26; // 原 0.13 放大 100%
-    // 6 丛：上排 3 + 下排 3，覆盖格子上半与中部，冠缘相接以「铺满」
-    const clumps: Array<{ ox: number; oy: number; m: number }> = [
-      { ox: -0.32, oy: 0.40, m: 0.95 },
-      { ox: 0.0,  oy: 0.52, m: 1.0  },
-      { ox: 0.32, oy: 0.40, m: 0.95 },
-      { ox: -0.33, oy: 0.05, m: 0.9 },
-      { ox: 0.0,  oy: 0.02, m: 0.95 },
-      { ox: 0.33, oy: 0.05, m: 0.9 },
+    const trees: Array<{ ox: number; oy: number; scale: number }> = [
+      { ox: -0.22, oy: 0.22, scale: 0.60 },
+      { ox: 0.20, oy: 0.26, scale: 0.66 },
+      { ox: -0.04, oy: -0.02, scale: 0.52 },
+      { ox: -0.26, oy: -0.25, scale: 0.48 },
+      { ox: 0.24, oy: -0.22, scale: 0.58 },
     ];
-    for (const c of clumps) {
-      this.drawOneTreeClump(
-        bx + c.ox * s,
-        by + c.oy * s,
-        baseR * c.m,
-      );
+    if (rng.next() < 0.55) trees.push({ ox: 0.02, oy: 0.43, scale: 0.44 });
+
+    for (let i = 0; i < trees.length; i++) {
+      const p = trees[i];
+      const x = cx + (p.ox + (rng.next() - 0.5) * 0.07) * s;
+      const y = cy + (p.oy + (rng.next() - 0.5) * 0.07) * s;
+      const scale = p.scale * (0.92 + rng.next() * 0.18);
+      if (!this.drawTreeSprite(x, y, s, seedRaw + i * 101, scale)) {
+        this.drawOneTreeClump(x, y, s * scale * 0.34);
+      }
     }
   }
 
@@ -2788,16 +3024,23 @@ export class BattleScene extends Component {
             }
           : vb;
 
-      // 内角点：'land' / 'water' → 对角偏移；'edge' → 沿 e 法线偏移 d（封口）
+      // 内角点：
+      // - 相邻边也是 land 时，当前条带先收在自己的内偏移线上，稍后由圆角补丁连接两条岸线；
+      // - water 时仍使用对角偏移，补齐跨水-水共享边的 L 形过渡；
+      // - edge 时沿 e 法线偏移 d（封口）。
       const f = d / Math.cos(Math.PI / 6);
       const vaInner =
         tA === 'edge'
           ? { x: va.x + edgeNorm[e].ux * d, y: va.y + edgeNorm[e].uy * d }
-          : { x: va.x + vToCenter[e].ux * f, y: va.y + vToCenter[e].uy * f };
+          : tA === 'land'
+            ? { x: va.x + edgeNorm[e].ux * d, y: va.y + edgeNorm[e].uy * d }
+            : { x: va.x + vToCenter[e].ux * f, y: va.y + vToCenter[e].uy * f };
       const vbInner =
         tB === 'edge'
           ? { x: vb.x + edgeNorm[e].ux * d, y: vb.y + edgeNorm[e].uy * d }
-          : { x: vb.x + vToCenter[vbi].ux * f, y: vb.y + vToCenter[vbi].uy * f };
+          : tB === 'land'
+            ? { x: vb.x + edgeNorm[e].ux * d, y: vb.y + edgeNorm[e].uy * d }
+            : { x: vb.x + vToCenter[vbi].ux * f, y: vb.y + vToCenter[vbi].uy * f };
 
       // 多边形：外缘 vaPatch → V_a → V_b → vbPatch  → 内缘 vbInner → vaInner
       // 退化：tA=='land'/'edge' 时 vaPatch == V_a，连续两个相同点不影响 fill；
@@ -3059,15 +3302,23 @@ export class BattleScene extends Component {
     g.stroke();
   }
 
-  /** 每条六角边上的树篱丛数（不含顶点，等分弦长；两端留白 = 相邻丛间距） */
-  private static readonly HEDGE_CLUMPS_PER_EDGE = 5;
+  /** 每条六角边上的树篱树木数量：两个端点 + 中点；端点会跨相邻树篱去重共用。 */
+  private static readonly HEDGE_TREES_PER_EDGE = 3;
 
   /**
    * 第 `edgeIndex` 条**几何边**上的树篱（`edgeIndex` = `-30°+60°·i` 划分法中的 i∈0..5），与**轴向**下标不混用：若表示 `HEX_DIRECTIONS[ax]/Tile.hedges[ax]/h[ax]/ef`，入参应取 `HEDGE_DRAW_EDGE_BY_AXIAL[ax]`。
    * 单丛大小统一，在原先基准半径 `size*0.086` 上整体放大 30%。
    * 沿边用 `k/(n+1)` 均匀取点，使两端与顶点留出相同空隙、丛与丛之间等距。
    */
-  private drawHedgeEdge(cx: number, cy: number, size: number, edgeIndex: number, _q: number, _r: number) {
+  private drawHedgeEdgeTrees(
+    cx: number,
+    cy: number,
+    size: number,
+    edgeIndex: number,
+    q: number,
+    r: number,
+    usedKeys: Set<string>,
+  ) {
     const a1 = (-30 + 60 * edgeIndex) * Math.PI / 180;
     const a2 = (-30 + 60 * (edgeIndex + 1)) * Math.PI / 180;
     const x0 = cx + size * Math.cos(a1);
@@ -3076,33 +3327,85 @@ export class BattleScene extends Component {
     const y1 = cy + size * Math.sin(a2);
     const tx = x1 - x0;
     const ty = y1 - y0;
+    const len = Math.hypot(tx, ty) || 1;
+    const ux = tx / len;
+    const uy = ty / len;
+    let nx = cx - (x0 + x1) * 0.5;
+    let ny = cy - (y0 + y1) * 0.5;
+    const nlen = Math.hypot(nx, ny) || 1;
+    nx /= nlen;
+    ny /= nlen;
+    const seedRaw =
+      ((q | 0) * 73856093 + (r | 0) * 19349663 + (edgeIndex | 0) * 83492791 + 0x6d2b79f5) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
 
-    const br = size * 0.086 * 1.3;
-    const n = BattleScene.HEDGE_CLUMPS_PER_EDGE;
-    for (let k = 1; k <= n; k++) {
-      const f = k / (n + 1);
-      const px = x0 + tx * f;
-      const py = y0 + ty * f;
-      this.drawHedgeTreeClump(px, py, br);
+    const n = BattleScene.HEDGE_TREES_PER_EDGE;
+    for (let k = 0; k < n; k++) {
+      const f = k / (n - 1);
+      const baseX = x0 + tx * f;
+      const baseY = y0 + ty * f;
+      const key = `${Math.round(baseX * 8)},${Math.round(baseY * 8)}`;
+      if (usedKeys.has(key)) continue;
+      usedKeys.add(key);
+      const keySeed = this.hashStringToSeed(key);
+      const local = new RNG(keySeed);
+      const along = (local.next() - 0.5) * size * (k === 1 ? 0.08 : 0.025);
+      const across = (local.next() - 0.5) * size * 0.14;
+      const px = x0 + tx * f + ux * along + nx * across;
+      const py = y0 + ty * f + uy * along + ny * across;
+      const scale = 0.40 + local.next() * 0.12;
+      if (!this.drawTreeSprite(px, py, size, keySeed, scale)) {
+        this.drawHedgeTreeClump(px, py, size * scale * 0.30, rng);
+      }
     }
   }
 
+  private drawTreeSprite(cx: number, cy: number, hexSize: number, seed: number, scale: number): boolean {
+    if (this.foliageSpritePoolNext >= this.foliageSpritePool.length) return false;
+    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    if (frames.length === 0) return false;
+    const rng = new RNG(seed || 1);
+    const slot = this.foliageSpritePool[this.foliageSpritePoolNext++];
+    slot.sprite.spriteFrame = frames[Math.abs(seed) % frames.length];
+    slot.node.getComponent(UITransform)!.setContentSize(hexSize * scale, hexSize * scale);
+    slot.node.setPosition(cx, cy, 0);
+    slot.node.angle = (rng.next() - 0.5) * 18;
+    const s = 0.92 + rng.next() * 0.18;
+    slot.node.setScale(s, s, 1);
+    slot.node.active = true;
+    return true;
+  }
+
+  private hashStringToSeed(s: string): number {
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0 || 1;
+  }
+
   /** 树篱单丛：结构与林地树冠类似，配色略深以便与田地/公路上的树篱区分 */
-  private drawHedgeTreeClump(x: number, y: number, r: number) {
+  private drawHedgeTreeClump(x: number, y: number, r: number, rng?: RNG) {
     const g = this.g!;
-    const sh = r * 0.22;
+    const local = rng ?? new RNG(1);
+    const sh = r * 0.24;
     g.lineWidth = 0;
     g.fillColor = HEDGE_SHADE;
-    g.circle(x - sh, y - sh, r * 0.9);
+    g.circle(x - sh, y - sh, r * 0.92);
     g.fill();
-    g.fillColor = HEDGE_BUSH_DARK;
-    g.circle(x - r * 0.08, y + r * 0.05, r);
-    g.fill();
-    g.fillColor = HEDGE_BUSH_MID;
-    g.circle(x + r * 0.18, y - r * 0.05, r * 0.78);
-    g.fill();
+    const blobs = 5 + Math.floor(local.next() * 3);
+    for (let i = 0; i < blobs; i++) {
+      const a = local.next() * Math.PI * 2;
+      const d = r * local.next() * 0.52;
+      const rr = r * (0.42 + local.next() * 0.32);
+      const roll = local.next();
+      g.fillColor = roll < 0.32 ? HEDGE_BUSH_DEEP : roll < 0.68 ? HEDGE_BUSH_DARK : HEDGE_BUSH_MID;
+      g.circle(x + Math.cos(a) * d, y + Math.sin(a) * d, rr);
+      g.fill();
+    }
     g.fillColor = HEDGE_BUSH_LIGHT;
-    g.circle(x, y, r * 0.48);
+    g.circle(x - r * 0.16, y + r * 0.18, r * (0.18 + local.next() * 0.10));
     g.fill();
     g.lineWidth = 1;
   }
@@ -3861,12 +4164,7 @@ export class BattleScene extends Component {
     btn.setPosition(x, y, 0);
 
     const bg = btn.addComponent(Graphics);
-    bg.fillColor = bgColor;
-    bg.strokeColor = BTN_BORDER;
-    bg.lineWidth = 2;
-    bg.rect(-W / 2, -H / 2, W, H);
-    bg.fill();
-    bg.stroke();
+    drawFieldPanel(bg, W, H, bgColor, BTN_BORDER, STATUS_TITLE_COLOR);
 
     const txtNode = new Node('Label');
     txtNode.layer = this.node.layer;
@@ -3932,13 +4230,8 @@ export class BattleScene extends Component {
     panel.addComponent(UITransform).setContentSize(W, H);
     panel.setPosition(x, y, 0);
     const bg = panel.addComponent(Graphics);
-    bg.fillColor = STATUS_PANEL_BG;
-    bg.strokeColor = STATUS_PANEL_BORDER;
-    bg.lineWidth = 2;
-    bg.rect(-W / 2, -H / 2, W, H);
-    bg.fill();
-    bg.stroke();
-    bg.strokeColor = new Color(120, 120, 120, 200);
+    drawFieldPanel(bg, W, H, STATUS_PANEL_BG, STATUS_PANEL_BORDER, STATUS_TITLE_COLOR);
+    bg.strokeColor = new Color(145, 138, 100, 190);
     bg.lineWidth = 1;
     bg.moveTo(-W / 2 + 16, sepY);
     bg.lineTo( W / 2 - 16, sepY);
@@ -4155,13 +4448,7 @@ export class BattleScene extends Component {
     if (!this.endTurnBg) return;
     const g = this.endTurnBg;
     g.clear();
-    g.fillColor = urgent ? BTN_BG_URGENT : BTN_BG_NORMAL;
-    g.strokeColor = BTN_BORDER;
-    g.lineWidth = 2;
-    // 锚点 0.5 → 矩形围绕原点
-    g.rect(-ADVANCE_BTN_W * 0.5, -ADVANCE_BTN_H * 0.5, ADVANCE_BTN_W, ADVANCE_BTN_H);
-    g.fill();
-    g.stroke();
+    drawFieldPanel(g, ADVANCE_BTN_W, ADVANCE_BTN_H, urgent ? BTN_BG_URGENT : BTN_BG_NORMAL, BTN_BORDER, STATUS_TITLE_COLOR);
   }
 
   private updateHUD() {
@@ -4376,6 +4663,7 @@ export class BattleScene extends Component {
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
     this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     this.movementDone = false;
@@ -4639,12 +4927,65 @@ export class BattleScene extends Component {
         continue;
       }
       vis.root.active = true;
-      const x = startX + shown * (SLOT + GAP);
+      const anim = this.playerDiceSortAnim;
+      const x = anim && i < anim.fromX.length
+        ? anim.fromX[i] + (anim.toX[i] - anim.fromX[i]) * easeInOutCubic(Math.min(1, anim.t / anim.dur))
+        : startX + shown * (SLOT + GAP);
       vis.root.setPosition(x, 0, 0);
       shown++;
       // 主炮 / 机枪选中都复用同一种"已高亮"视觉，玩家以颜色与 HUD 文案区分
       this.drawDieSlot(vis, slot, i === this.selectedGunDieIdx || i === this.selectedMGDieIdx);
     }
+  }
+
+  private playerDiceSlotX(index: number, count: number): number {
+    const SLOT = BattleScene.DICE_TRAY_SLOT;
+    const GAP = BattleScene.DICE_TRAY_GAP;
+    const total = count > 0 ? SLOT * count + GAP * (count - 1) : 0;
+    return count > 0 ? -total * 0.5 + SLOT * 0.5 + index * (SLOT + GAP) : 0;
+  }
+
+  private beginPlayerDiceSortAnim(): boolean {
+    const n = this.phaseDice.length;
+    if (n <= 1) return false;
+
+    const order = this.phaseDice
+      .map((slot, index) => ({ slot, index }))
+      .sort((a, b) => (a.slot.pip - b.slot.pip) || (a.index - b.index));
+
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      if (order[i].index !== i) {
+        changed = true;
+        break;
+      }
+    }
+    if (!changed) return false;
+
+    this.phaseDice = order.map(o => o.slot);
+    this.playerDiceSortAnim = {
+      t: 0,
+      dur: BattleScene.PLAYER_DICE_SORT_DUR,
+      fromX: order.map(o => this.playerDiceSlotX(o.index, n)),
+      toX: order.map((_, i) => this.playerDiceSlotX(i, n)),
+    };
+    return true;
+  }
+
+  private advancePlayerDiceSortAnim(dt: number) {
+    const anim = this.playerDiceSortAnim;
+    if (!anim) return;
+    anim.t += dt;
+    if (anim.t >= anim.dur) {
+      anim.t = anim.dur;
+      this.refreshDiceTray();
+      this.playerDiceSortAnim = null;
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      return;
+    }
+    this.refreshDiceTray();
   }
 
   private drawDieSlot(vis: DieVisual, slot: DieSlot, highlighted: boolean) {
@@ -4697,6 +5038,12 @@ export class BattleScene extends Component {
     }
     this.playerDiceRollAnim = null;
     this.battleLog(anim.logLine);
+    if (this.beginPlayerDiceSortAnim()) {
+      this.refreshDiceTray();
+      this.updateHUD();
+      this.redraw();
+      return;
+    }
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -4910,6 +5257,7 @@ export class BattleScene extends Component {
     else if (was === 'attack') this.attackDone = true;
     else if (was === 'misc') this.miscDone = true;
     this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     this.closeDiePopover();
@@ -6866,12 +7214,7 @@ export class BattleScene extends Component {
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(panelW, panelH);
     const pg = panel.addComponent(Graphics);
-    pg.fillColor = MODAL_PANEL_BG;
-    pg.strokeColor = MODAL_PANEL_BORDER;
-    pg.lineWidth = 2;
-    pg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-    pg.fill();
-    pg.stroke();
+    drawFieldPanel(pg, panelW, panelH, MODAL_PANEL_BG, MODAL_PANEL_BORDER, BATTLE_MODAL_DIVIDER);
     pg.strokeColor = BATTLE_MODAL_DIVIDER;
     pg.lineWidth = 1;
     pg.moveTo(-panelW / 2 + 30, panelH / 2 - 64);
@@ -7173,15 +7516,7 @@ export class BattleScene extends Component {
     const g = n.addComponent(Graphics);
     const redraw = (c: Color, opts?: { border?: boolean }) => {
       g.clear();
-      g.fillColor = c;
-      g.rect(-w / 2, -h / 2, w, h);
-      g.fill();
-      if (opts?.border) {
-        g.strokeColor = BATTLE_MODAL_LEVEL_BORDER;
-        g.lineWidth = 2;
-        g.rect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);
-        g.stroke();
-      }
+      drawFieldPanel(g, w, h, c, opts?.border ? BATTLE_MODAL_LEVEL_BORDER : BATTLE_MODAL_DIVIDER, STATUS_TITLE_COLOR);
     };
     redraw(color);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
@@ -7204,11 +7539,18 @@ export class BattleScene extends Component {
     const g = n.addComponent(Graphics);
     const redraw = (c: Color) => {
       g.clear();
+      g.fillColor = new Color(0, 0, 0, 70);
+      g.circle(2, -3, r);
+      g.fill();
       g.fillColor = c;
       g.strokeColor = SETTINGS_ICON_BD;
       g.lineWidth = 2;
       g.circle(0, 0, r);
       g.fill();
+      g.stroke();
+      g.strokeColor = new Color(230, 215, 160, 110);
+      g.lineWidth = 1;
+      g.circle(0, 0, r - 5);
       g.stroke();
     };
     redraw(SETTINGS_ICON_BG);
@@ -7420,10 +7762,12 @@ export class BattleScene extends Component {
     if (this.phase === 'player') {
       this.playerStep = (result.playerStep ?? 'choose') as PlayerStep;
       this.playerDiceRollAnim = null;
+      this.playerDiceSortAnim = null;
       this.phaseDice = (result.phaseDice ?? []).map(s => ({ pip: s.pip, used: s.used }));
     } else {
       this.playerStep = 'choose';
       this.playerDiceRollAnim = null;
+      this.playerDiceSortAnim = null;
       this.phaseDice = [];
     }
     this.clearGunSelection();
@@ -7734,6 +8078,7 @@ export class BattleScene extends Component {
     this.attackDone = false;
     this.miscDone = false;
     this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
     this.phaseDice = [];
     this.clearGunSelection();
     // 敌方阶段也可能击毁谢尔曼；重入玩家回合时复查胜负
@@ -8019,12 +8364,7 @@ export class BattleScene extends Component {
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(PANEL_W, PANEL_H);
     const pg = panel.addComponent(Graphics);
-    pg.fillColor = DICE_PANEL_BG;
-    pg.strokeColor = DICE_PANEL_BORDER;
-    pg.lineWidth = 2;
-    pg.rect(-PANEL_W / 2, -PANEL_H / 2, PANEL_W, PANEL_H);
-    pg.fill();
-    pg.stroke();
+    drawFieldPanel(pg, PANEL_W, PANEL_H, DICE_PANEL_BG, DICE_PANEL_BORDER, STATUS_TITLE_COLOR);
     root.addChild(panel);
 
     // 标题
@@ -8712,6 +9052,7 @@ export class BattleScene extends Component {
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
     return this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
+      || this.playerDiceSortAnim !== null
       || this.enemyDiceSortAnim !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null
       || this.tileInspectModalRoot !== null;
