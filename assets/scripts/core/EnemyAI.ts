@@ -142,6 +142,7 @@ export function decideEnemyTurn(
     const ccwOk = canEnterFront(ccwFront);
     if (cwOk && !ccwOk) return 'cw';
     if (!cwOk && ccwOk) return 'ccw';
+    if (cwOk && ccwOk) return 'cw';
     return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
   };
 

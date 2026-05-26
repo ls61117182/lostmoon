@@ -204,6 +204,11 @@ function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
  * 步兵 / 军官走 drawInfantry，贴图与定位规则不同，故不在表内。
  */
 type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+
+function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+}
 
 /**
  * 单辆车辆的视觉配置：
@@ -847,6 +852,7 @@ export class BattleScene extends Component {
   private shermanSpriteDisplayH = 0;
   /** 德军俯视图（四号/三号/虎/卡）：多单位共用节点池；每帧 redraw 开头清零再按绘制顺序占用 */
   private enemyTopMeta: Partial<Record<EnemyTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
+  private destroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private enemyTopPoolNext = 0;
   private static readonly ENEMY_TOP_SPRITE_POOL = 16;
@@ -1235,6 +1241,30 @@ export class BattleScene extends Component {
     });
 
     // 步兵小队 3 张图：未加载完成时 drawInfantry 会自动回退到矢量"圆头 + 圆身"
+    const destroyedTopPaths: Record<DestroyedTopKind, string> = {
+      sherman: 'textures/units/sherman_top_destroyed/spriteFrame',
+      panzer4: 'textures/units/panzer4_top_destroyed/spriteFrame',
+      panzer3: 'textures/units/panzer3_top_destroyed/spriteFrame',
+      tiger: 'textures/units/tiger_top_destroyed/spriteFrame',
+      truck: 'textures/units/truck_top_destroyed/spriteFrame',
+    };
+    (['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'] as const).forEach((kind) => {
+      resources.load(destroyedTopPaths[kind], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] destroyed tank sprite load failed (${kind}); fallback to vector wreck:`, err);
+          return;
+        }
+        const rw = sf.rect.width;
+        const rh = sf.rect.height;
+        this.destroyedTopMeta[kind] = {
+          sf,
+          dw: rw > 0 ? rw : sf.width,
+          dh: rh > 0 ? rh : sf.height,
+        };
+        this.redraw();
+      });
+    });
+
     const infantryPaths = [
       'textures/units/Infantry01/spriteFrame',
       'textures/units/Infantry02/spriteFrame',
@@ -1422,6 +1452,7 @@ export class BattleScene extends Component {
     for (const { node } of this.foliageSpritePool) node.active = false;
     this.enemyTopPoolNext = 0;
     for (const { node } of this.enemyTopSpritePool) node.active = false;
+    if (this.shermanSpriteNode) this.shermanSpriteNode.active = false;
     this.infantryTopPoolNext = 0;
     for (const { node } of this.infantryTopSpritePool) node.active = false;
     this.officerTopPoolNext = 0;
@@ -1555,9 +1586,14 @@ export class BattleScene extends Component {
     // 4e. 军官单位（任务 8 红框建筑里的高级军官，kind='officer'）：在所在格绘制红色 hex 边框
     this.drawOfficerTileHighlights();
 
-    // 5. 单位 —— 正在动画的那个用插值像素坐标，其余用本格坐标
-    this.drawUnitMaybeAnim(sherman);
-    for (const e of enemies) this.drawUnitMaybeAnim(e);
+    // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
+    const units: Unit[] = [sherman, ...enemies];
+    for (const u of units) {
+      if (u.destroyed) this.drawUnitMaybeAnim(u);
+    }
+    for (const u of units) {
+      if (!u.destroyed) this.drawUnitMaybeAnim(u);
+    }
 
     // 6. 单位状态：本回合击毁的「已毁」短标签 + 坦克矢量状态图标条
     this.clearStatusLabels();
@@ -1567,10 +1603,14 @@ export class BattleScene extends Component {
     this.spawnStatusBadgesIfAny(sherman);
     for (const e of enemies) this.spawnStatusBadgesIfAny(e);
 
-    // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …），整批重建
+    // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …），残骸名先画，活动单位名后画。
     this.clearNameLabels();
-    this.spawnUnitNameLabel(sherman);
-    for (const e of enemies) this.spawnUnitNameLabel(e);
+    for (const u of units) {
+      if (u.destroyed) this.spawnUnitNameLabel(u);
+    }
+    for (const u of units) {
+      if (!u.destroyed) this.spawnUnitNameLabel(u);
+    }
 
     // 8. 任务目标进度（击毁计数等）随地图状态变，与 redraw 同步以免 HUD 漏刷
     this.refreshObjectiveHud();
@@ -1837,6 +1877,7 @@ export class BattleScene extends Component {
   private spawnStatusLabelIfAny(u: Unit) {
     if (!this.mapNode) return;
     if (!this.shouldShowDestroyWreckVisual(u)) return;
+    if (!isFootUnit(u) && isDestroyedTopKind(u.kind)) return;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
@@ -2030,6 +2071,7 @@ export class BattleScene extends Component {
   private spawnUnitNameLabel(u: Unit) {
     if (!this.mapNode) return;
     if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return;
+    if (u.destroyed && this.hasLiveUnitOnSameTile(u)) return;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
@@ -2057,6 +2099,17 @@ export class BattleScene extends Component {
     // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字（UNIT_NAME_OFFSET_HEX×hex）
     n.setPosition(c.x, c.y - this.hexSize * UNIT_NAME_OFFSET_HEX, 0);
     this.nameLabels.push(n);
+  }
+
+  private hasLiveUnitOnSameTile(u: Unit): boolean {
+    if (!this.mission) return false;
+    const units: Unit[] = [this.mission.sherman, ...this.mission.enemies];
+    return units.some(o =>
+      o !== u &&
+      !o.destroyed &&
+      o.pos.q === u.pos.q &&
+      o.pos.r === u.pos.r
+    );
   }
 
   private clearNameLabels() {
@@ -3513,6 +3566,48 @@ export class BattleScene extends Component {
       c,
       facingLerp,
     );
+    if (!u.destroyed && this.mapNode) {
+      this.shermanSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
+    }
+  }
+
+  private drawDestroyedTankSprite(
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: { from: number; to: number; t: number } | null,
+  ): boolean {
+    if (!isDestroyedTopKind(u.kind)) return false;
+    const meta = this.destroyedTopMeta[u.kind];
+    if (!meta) return false;
+
+    if (u.kind === 'sherman') {
+      if (!this.shermanSpriteNode || !this.shermanTopSprite) return false;
+      this.applyTopDownTankSprite(
+        this.shermanSpriteNode,
+        this.shermanTopSprite,
+        meta.sf,
+        meta.dw,
+        meta.dh,
+        u,
+        c,
+        facingLerp,
+      );
+      return true;
+    }
+
+    if (this.enemyTopPoolNext >= this.enemyTopSpritePool.length) return false;
+    const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+    this.applyTopDownTankSprite(
+      slot.node,
+      slot.sprite,
+      meta.sf,
+      meta.dw,
+      meta.dh,
+      u,
+      c,
+      facingLerp,
+    );
+    return true;
   }
 
   /**
@@ -3543,6 +3638,9 @@ export class BattleScene extends Component {
 
     // 摧毁：暗灰色 + 穿心 X（仅本回合内显示；下回合起格上不再留残骸图）
     if (u.destroyed) {
+      if (this.drawDestroyedTankSprite(u, c, facingLerp)) {
+        return;
+      }
       if (this.shouldShowDestroyWreckVisual(u)) {
         g.fillColor = DESTROYED_FILL;
         g.strokeColor = DESTROYED_BORDER;

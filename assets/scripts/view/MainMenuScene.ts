@@ -44,43 +44,43 @@ const LEVEL_GRID_START_X = -410; // 第一列中心 x
 const LEVEL_GRID_START_Y = -30;  // 第一行中心 y
 
 // ---------- 颜色（延续军事风） ----------
-const BG_TOP          = new Color( 32,  46,  36, 255);
-const BG_MID          = new Color( 22,  32,  26, 255);
-const BG_BOTTOM       = new Color( 14,  20,  18, 255);
+const BG_TOP          = new Color( 40,  52,  38, 255);
+const BG_MID          = new Color( 26,  34,  28, 255);
+const BG_BOTTOM       = new Color( 13,  18,  17, 255);
 
 const TEXT_PRIMARY    = new Color(255, 255, 255, 255);
 const TEXT_DISABLED   = new Color(150, 150, 150, 200);
 const TEXT_OUTLINE    = new Color(  0,   0,   0, 220);
-const TEXT_TITLE      = new Color(240, 215, 150, 255);
-const TEXT_SUBTITLE   = new Color(180, 180, 180, 255);
-const TEXT_STAR       = new Color(240, 200,  80, 255);
-const TEXT_DIVIDER    = new Color(200, 220, 200, 255);
+const TEXT_TITLE      = new Color(235, 207, 142, 255);
+const TEXT_SUBTITLE   = new Color(198, 194, 176, 255);
+const TEXT_STAR       = new Color(238, 188,  75, 255);
+const TEXT_DIVIDER    = new Color(214, 204, 168, 255);
 
-const BTN_CONTINUE         = new Color(170, 110,  50, 240);
-const BTN_CONTINUE_HOVER   = new Color(195, 130,  65, 240);
-const BTN_CONTINUE_DISABLE = new Color( 60,  60,  60, 180);
+const BTN_CONTINUE         = new Color(145,  95,  44, 245);
+const BTN_CONTINUE_HOVER   = new Color(177, 118,  58, 245);
+const BTN_CONTINUE_DISABLE = new Color( 56,  58,  56, 190);
 
-const BTN_LEVEL_UNLOCKED  = new Color( 70,  95,  70, 230);
-const BTN_LEVEL_COMPLETED = new Color( 95, 135,  90, 230);
-const BTN_LEVEL_LOCKED    = new Color( 50,  52,  56, 200);
-const BTN_LEVEL_BORDER    = new Color(200, 200, 200, 220);
+const BTN_LEVEL_UNLOCKED  = new Color( 74,  88,  55, 238);
+const BTN_LEVEL_COMPLETED = new Color( 96, 118,  66, 238);
+const BTN_LEVEL_LOCKED    = new Color( 49,  51,  48, 210);
+const BTN_LEVEL_BORDER    = new Color(204, 190, 142, 230);
 
-const ICON_BTN_BG         = new Color( 40,  50,  60, 220);
-const ICON_BTN_BORDER     = new Color(200, 200, 200, 180);
+const ICON_BTN_BG         = new Color( 45,  50,  44, 230);
+const ICON_BTN_BORDER     = new Color(204, 190, 142, 205);
 
-const MENU_DIVIDER        = new Color(120, 150, 120, 200);
+const MENU_DIVIDER        = new Color(145, 138, 100, 210);
 
 const MODAL_BACKDROP      = new Color(  0,   0,   0, 180);
-const MODAL_PANEL_BG      = new Color( 34,  40,  54, 240);
-const MODAL_PANEL_BORDER  = new Color(180, 180, 180, 220);
-const MODAL_CLOSE_BG      = new Color(180,  60,  60, 240);
+const MODAL_PANEL_BG      = new Color( 36,  41,  34, 245);
+const MODAL_PANEL_BORDER  = new Color(202, 188, 136, 230);
+const MODAL_CLOSE_BG      = new Color(134,  49,  42, 245);
 
 const SLIDER_TRACK        = new Color( 70,  80,  90, 255);
 const SLIDER_FILL         = new Color(170, 110,  50, 255);
 const SLIDER_THUMB        = new Color(240, 215, 150, 255);
 
-const LANG_BTN_IDLE       = new Color( 60,  70,  80, 230);
-const LANG_BTN_ACTIVE     = new Color(170, 110,  50, 240);
+const LANG_BTN_IDLE       = new Color( 59,  64,  54, 235);
+const LANG_BTN_ACTIVE     = new Color(145,  95,  44, 245);
 const LANG_BTN_ACTIVE_BD  = new Color(240, 215, 150, 255);
 
 // ---------- 工具类型 ----------
@@ -206,6 +206,31 @@ export class MainMenuScene extends Component {
     g.lineTo( CANVAS_W / 2 - 60, -CANVAS_H / 2 + 60);
     g.stroke();
 
+    // Faint operations-map grid and route marks.
+    g.strokeColor = new Color(210, 198, 150, 32);
+    g.lineWidth = 1;
+    for (let x = -560; x <= 560; x += 80) {
+      g.moveTo(x, -300);
+      g.lineTo(x + 90, 300);
+      g.stroke();
+    }
+    for (let y = -260; y <= 260; y += 52) {
+      g.moveTo(-560, y);
+      g.lineTo(560, y + 18);
+      g.stroke();
+    }
+
+    g.strokeColor = new Color(230, 205, 130, 80);
+    g.lineWidth = 2;
+    g.moveTo(-440, 118);
+    g.bezierCurveTo(-260, 190, -130, 56, 20, 112);
+    g.bezierCurveTo(145, 158, 245, 40, 410, 92);
+    g.stroke();
+    for (const [x, y] of [[-440, 118], [-125, 78], [105, 126], [410, 92]]) {
+      g.circle(x, y, 5);
+      g.stroke();
+    }
+
     this.node.addChild(n);
     this.bgNode = n;
   }
@@ -225,6 +250,23 @@ export class MainMenuScene extends Component {
     sub.enableOutline = true;
     sub.outlineColor = TEXT_OUTLINE;
     sub.outlineWidth = 2;
+
+    const rule = new Node('TitleRule');
+    rule.layer = this.node.layer;
+    rule.addComponent(UITransform).setContentSize(360, 14);
+    rule.setPosition(0, 184, 0);
+    const g = rule.addComponent(Graphics);
+    g.strokeColor = MENU_DIVIDER;
+    g.lineWidth = 2;
+    g.moveTo(-180, 0);
+    g.lineTo(-28, 0);
+    g.moveTo(28, 0);
+    g.lineTo(180, 0);
+    g.stroke();
+    g.fillColor = TEXT_TITLE;
+    g.rect(-18, -3, 36, 6);
+    g.fill();
+    this.node.addChild(rule);
   }
 
   // ================================================================
@@ -707,12 +749,7 @@ export class MainMenuScene extends Component {
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(panelW, panelH);
     const pg = panel.addComponent(Graphics);
-    pg.fillColor = MODAL_PANEL_BG;
-    pg.strokeColor = MODAL_PANEL_BORDER;
-    pg.lineWidth = 2;
-    pg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-    pg.fill();
-    pg.stroke();
+    drawFieldPanel(pg, panelW, panelH, MODAL_PANEL_BG, MODAL_PANEL_BORDER, MENU_DIVIDER);
     // 标题下方装饰横线（复用同一个 Graphics，Cocos 限制一节点只能挂一份）
     pg.strokeColor = MENU_DIVIDER;
     pg.lineWidth = 1;
@@ -780,15 +817,7 @@ export class MainMenuScene extends Component {
 
     const redraw = (c: Color, opts?: { border?: boolean }) => {
       g.clear();
-      g.fillColor = c;
-      g.rect(-w / 2, -h / 2, w, h);
-      g.fill();
-      if (opts?.border) {
-        g.strokeColor = BTN_LEVEL_BORDER;
-        g.lineWidth = 2;
-        g.rect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);
-        g.stroke();
-      }
+      drawFieldPanel(g, w, h, c, opts?.border ? BTN_LEVEL_BORDER : MENU_DIVIDER, TEXT_TITLE);
     };
     redraw(color);
 
@@ -814,11 +843,18 @@ export class MainMenuScene extends Component {
 
     const redraw = (c: Color) => {
       g.clear();
+      g.fillColor = new Color(0, 0, 0, 70);
+      g.circle(2, -3, r);
+      g.fill();
       g.fillColor = c;
       g.strokeColor = ICON_BTN_BORDER;
       g.lineWidth = 2;
       g.circle(0, 0, r);
       g.fill();
+      g.stroke();
+      g.strokeColor = new Color(230, 215, 160, 110);
+      g.lineWidth = 1;
+      g.circle(0, 0, r - 5);
       g.stroke();
     };
     redraw(ICON_BTN_BG);
@@ -868,6 +904,40 @@ function lerp(a: Color, b: Color, tRatio: number): Color {
     Math.round(a.b + (b.b - a.b) * k),
     Math.round(a.a + (b.a - a.a) * k),
   );
+}
+
+function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: Color, accent: Color) {
+  const x = -w / 2;
+  const y = -h / 2;
+  g.fillColor = new Color(0, 0, 0, 70);
+  g.rect(x + 4, y - 5, w, h);
+  g.fill();
+  g.fillColor = fill;
+  g.rect(x, y, w, h);
+  g.fill();
+  g.fillColor = new Color(255, 242, 190, 22);
+  g.rect(x + 4, h / 2 - 18, w - 8, 10);
+  g.fill();
+  g.strokeColor = border;
+  g.lineWidth = 2;
+  g.rect(x + 1, y + 1, w - 2, h - 2);
+  g.stroke();
+  g.strokeColor = new Color(20, 22, 18, 180);
+  g.lineWidth = 1;
+  g.rect(x + 6, y + 6, w - 12, h - 12);
+  g.stroke();
+  g.strokeColor = accent;
+  g.lineWidth = 2;
+  const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18));
+  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8 + l, y + h - 8);
+  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8, y + h - 8 - l);
+  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8 - l, y + h - 8);
+  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8, y + h - 8 - l);
+  g.moveTo(x + 8, y + 8); g.lineTo(x + 8 + l, y + 8);
+  g.moveTo(x + 8, y + 8); g.lineTo(x + 8, y + 8 + l);
+  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8 - l, y + 8);
+  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8, y + 8 + l);
+  g.stroke();
 }
 
 /** 沿父节点链向上找第一个挂 Canvas 组件的祖先节点；找不到返回 null。 */
