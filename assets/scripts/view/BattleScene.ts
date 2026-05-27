@@ -248,6 +248,48 @@ const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
   truck:   { fitScale: 0.80, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1 },
 };
 
+interface TigerSplitVisualConfig {
+  /** 车体最长边目标像素 = hexSize * 1.8 * hullFitScale；保持原图长宽比。 */
+  hullFitScale: number;
+  /** 炮塔相对车体缩放系数；1 表示按源图与车体的原始比例显示。 */
+  turretScale: number;
+  /** 车体整体沿自身车头方向偏移；单位约等于一格中心距。 */
+  hullOffsetForward: number;
+  /** 车体整体沿自身右侧方向偏移；单位约等于一格中心距。 */
+  hullOffsetRight: number;
+  /** 炮塔相对车体沿车头方向微调；正数往车头方向，负数往车尾方向。 */
+  turretOffsetForward: number;
+  /** 炮塔相对车体沿车体右侧方向微调；正数往右侧，负数往左侧。 */
+  turretOffsetRight: number;
+}
+
+const TIGER_SPLIT_VISUAL_CONFIG: TigerSplitVisualConfig = {
+  hullFitScale: 0.65,
+  turretScale: 0.65,
+  hullOffsetForward: -0.02,
+  hullOffsetRight: 0,
+  turretOffsetForward: 0.08,
+  turretOffsetRight: 0,
+};
+
+const PANZER4_SPLIT_VISUAL_CONFIG: TigerSplitVisualConfig = {
+  hullFitScale: 0.70,
+  turretScale: 0.88,
+  hullOffsetForward: 0,
+  hullOffsetRight: 0,
+  turretOffsetForward: 0,
+  turretOffsetRight: 0,
+};
+
+const PANZER3_SPLIT_VISUAL_CONFIG: TigerSplitVisualConfig = {
+  hullFitScale: 0.82,
+  turretScale: 0.615,
+  hullOffsetForward: -0.10,
+  hullOffsetRight: 0,
+  turretOffsetForward: 0.05,
+  turretOffsetRight: 0,
+};
+
 function tankVisualConfigOf(k: UnitKind): TankVisualConfig {
   if (k === 'sherman' || k === 'tiger' || k === 'panzer4' || k === 'panzer3' || k === 'truck') {
     return TANK_VISUAL_CONFIG[k];
@@ -862,6 +904,12 @@ export class BattleScene extends Component {
   private shermanTurretTopSprite: Sprite | null = null;
   private shermanHullSpriteFrame: SpriteFrame | null = null;
   private shermanTurretSpriteFrame: SpriteFrame | null = null;
+  private tigerHullSpriteFrame: SpriteFrame | null = null;
+  private tigerTurretSpriteFrame: SpriteFrame | null = null;
+  private panzer4HullSpriteFrame: SpriteFrame | null = null;
+  private panzer4TurretSpriteFrame: SpriteFrame | null = null;
+  private panzer3HullSpriteFrame: SpriteFrame | null = null;
+  private panzer3TurretSpriteFrame: SpriteFrame | null = null;
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
   private shermanSpriteDisplayH = 0;
@@ -897,6 +945,7 @@ export class BattleScene extends Component {
   private anim: MoveAnim | null = null;
   private turretAimAnim: TurretAimAnim | null = null;
   private shermanTurretFacing: Direction | null = null;
+  private enemyTurretFacing = new Map<string, Direction>();
   /** 多段移动/转向衔接（如回合结束德军卡车沿路推进） */
   private animQueue: MoveAnim[] = [];
   /** 当前 animQueue 播完后执行（避免敌方阶段误进 runNextEnemyStep） */
@@ -1155,6 +1204,42 @@ export class BattleScene extends Component {
   private static readonly SHERMAN_TURRET_TRIM_Y = 24;
   private static readonly SHERMAN_TURRET_TRIM_W = 321;
   private static readonly SHERMAN_TURRET_TRIM_H = 157;
+  private static readonly TIGER_TURRET_PIVOT_X = 447;
+  private static readonly TIGER_TURRET_PIVOT_Y = 289;
+  private static readonly TIGER_TURRET_SPRITE_PIVOT_X = 876;
+  private static readonly TIGER_TURRET_SPRITE_PIVOT_Y = 242;
+  private static readonly TIGER_TOP_TRIM_X = 0;
+  private static readonly TIGER_TOP_TRIM_Y = 0;
+  private static readonly TIGER_TOP_TRIM_W = 905;
+  private static readonly TIGER_TOP_TRIM_H = 578;
+  private static readonly TIGER_TURRET_TRIM_X = 0;
+  private static readonly TIGER_TURRET_TRIM_Y = 0;
+  private static readonly TIGER_TURRET_TRIM_W = 1339;
+  private static readonly TIGER_TURRET_TRIM_H = 499;
+  private static readonly PANZER4_TURRET_PIVOT_X = 589;
+  private static readonly PANZER4_TURRET_PIVOT_Y = 294;
+  private static readonly PANZER4_TURRET_SPRITE_PIVOT_X = 425;
+  private static readonly PANZER4_TURRET_SPRITE_PIVOT_Y = 222;
+  private static readonly PANZER4_TOP_TRIM_X = 0;
+  private static readonly PANZER4_TOP_TRIM_Y = 0;
+  private static readonly PANZER4_TOP_TRIM_W = 1174;
+  private static readonly PANZER4_TOP_TRIM_H = 588;
+  private static readonly PANZER4_TURRET_TRIM_X = 0;
+  private static readonly PANZER4_TURRET_TRIM_Y = 0;
+  private static readonly PANZER4_TURRET_TRIM_W = 769;
+  private static readonly PANZER4_TURRET_TRIM_H = 458;
+  private static readonly PANZER3_TURRET_PIVOT_X = 480;
+  private static readonly PANZER3_TURRET_PIVOT_Y = 296;
+  private static readonly PANZER3_TURRET_SPRITE_PIVOT_X = 711;
+  private static readonly PANZER3_TURRET_SPRITE_PIVOT_Y = 296;
+  private static readonly PANZER3_TOP_TRIM_X = 0;
+  private static readonly PANZER3_TOP_TRIM_Y = 0;
+  private static readonly PANZER3_TOP_TRIM_W = 1463;
+  private static readonly PANZER3_TOP_TRIM_H = 592;
+  private static readonly PANZER3_TURRET_TRIM_X = 0;
+  private static readonly PANZER3_TURRET_TRIM_Y = 0;
+  private static readonly PANZER3_TURRET_TRIM_W = 1373;
+  private static readonly PANZER3_TURRET_TRIM_H = 591;
 
   onLoad() {
     setLang(MenuProgress.load().lang);
@@ -1401,6 +1486,60 @@ export class BattleScene extends Component {
       }
       this.shermanTurretSpriteFrame = sf;
       if (this.shermanTurretTopSprite) this.shermanTurretTopSprite.spriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/tiger_top_hull/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 虎式车体拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.tigerHullSpriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/tiger_top_turret/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 虎式炮塔拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.tigerTurretSpriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/panzer4_top_hull/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 四号车体拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.panzer4HullSpriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/panzer4_top_turret/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 四号炮塔拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.panzer4TurretSpriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/panzer3_top_hull/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 三号车体拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.panzer3HullSpriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/panzer3_top_turret/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 三号炮塔拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.panzer3TurretSpriteFrame = sf;
       this.redraw();
     });
 
@@ -2330,7 +2469,11 @@ export class BattleScene extends Component {
         this.redraw();
         return;
       }
-      this.shermanTurretFacing = a.to;
+      if (a.unit.kind === 'sherman') {
+        this.shermanTurretFacing = a.to;
+      } else if (a.unit.kind === 'tiger' || a.unit.kind === 'panzer4') {
+        this.enemyTurretFacing.set(a.unit.id, a.to);
+      }
       this.turretAimAnim = null;
       this.redraw();
       a.onDone();
@@ -2395,6 +2538,8 @@ export class BattleScene extends Component {
     }
     if (finishedUnit.kind === 'sherman' && finishedUnit.facing !== null) {
       this.shermanTurretFacing = finishedUnit.facing;
+    } else if ((finishedUnit.kind === 'tiger' || finishedUnit.kind === 'panzer4') && finishedUnit.facing !== null) {
+      this.enemyTurretFacing.set(finishedUnit.id, finishedUnit.facing);
     }
     stopTankManeuver();
     this.anim = null;
@@ -3572,6 +3717,7 @@ export class BattleScene extends Component {
     u: Unit,
     c: { x: number; y: number },
     facingLerp?: DirectionLerp | null,
+    preserveAspectRatio = false,
   ) {
     node.active = true;
     const w = displayW > 0 ? displayW : sf.width;
@@ -3587,7 +3733,7 @@ export class BattleScene extends Component {
     const tw0 = (w / maxDim) * fit;
     const th0 = (h / maxDim) * fit;
     const m = Math.max(1e-6, cfg.aspectRatioMul);
-    const k = Math.sqrt(m);
+    const k = preserveAspectRatio ? 1 : Math.sqrt(m);
     const tw = tw0 * k;
     const th = th0 / k;
     ut.setContentSize(tw, th);
@@ -3677,6 +3823,283 @@ export class BattleScene extends Component {
     ut.setAnchorPoint(
       (BattleScene.SHERMAN_TURRET_PIVOT_X - BattleScene.SHERMAN_TURRET_TRIM_X) / BattleScene.SHERMAN_TURRET_TRIM_W,
       1 - ((BattleScene.SHERMAN_TURRET_PIVOT_Y - BattleScene.SHERMAN_TURRET_TRIM_Y) / BattleScene.SHERMAN_TURRET_TRIM_H),
+    );
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      baseX + pivotLocalX * cos - pivotLocalY * sin,
+      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      0,
+    );
+    node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private applyTigerHullSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.tigerHullSpriteFrame) return;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    const ut = node.getComponent(UITransform)!;
+    const body = this.topDownForwardVec(u, c, facingLerp);
+    const srcW = BattleScene.TIGER_TOP_TRIM_W;
+    const srcH = BattleScene.TIGER_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * TIGER_SPLIT_VISUAL_CONFIG.hullFitScale;
+    const scale = fit / (Math.max(srcW, srcH) || 1);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = TIGER_SPLIT_VISUAL_CONFIG.hullOffsetForward * offsetUnit;
+    const r = TIGER_SPLIT_VISUAL_CONFIG.hullOffsetRight * offsetUnit;
+
+    sp.spriteFrame = this.tigerHullSpriteFrame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(srcW * scale, srcH * scale);
+    ut.setAnchorPoint(0.5, 0.5);
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      c.x + f * body.ux + r * body.uy,
+      c.y + f * body.uy + r * (-body.ux),
+      0,
+    );
+    node.angle = (Math.atan2(body.uy, body.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private applyTigerTurretSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+    turretFacingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.tigerTurretSpriteFrame) return;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    const ut = node.getComponent(UITransform)!;
+    const srcW = BattleScene.TIGER_TOP_TRIM_W;
+    const srcH = BattleScene.TIGER_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * TIGER_SPLIT_VISUAL_CONFIG.hullFitScale;
+    const maxDim = Math.max(srcW, srcH) || 1;
+    const scale = fit / maxDim;
+    const turretScale = scale * TIGER_SPLIT_VISUAL_CONFIG.turretScale;
+
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const turret = this.topDownForwardVec(u, c, turretFacingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = TIGER_SPLIT_VISUAL_CONFIG.hullOffsetForward * offsetUnit;
+    const r = TIGER_SPLIT_VISUAL_CONFIG.hullOffsetRight * offsetUnit;
+    const turretF = TIGER_SPLIT_VISUAL_CONFIG.turretOffsetForward * offsetUnit;
+    const turretR = TIGER_SPLIT_VISUAL_CONFIG.turretOffsetRight * offsetUnit;
+    const baseX = c.x + f * body.ux + r * body.uy;
+    const baseY = c.y + f * body.uy + r * (-body.ux);
+
+    const pivotLocalX = (BattleScene.TIGER_TURRET_PIVOT_X
+      - (BattleScene.TIGER_TOP_TRIM_X + BattleScene.TIGER_TOP_TRIM_W / 2)) * scale;
+    const pivotLocalY = ((BattleScene.TIGER_TOP_TRIM_Y + BattleScene.TIGER_TOP_TRIM_H / 2)
+      - BattleScene.TIGER_TURRET_PIVOT_Y) * scale;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+
+    sp.spriteFrame = this.tigerTurretSpriteFrame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(
+      BattleScene.TIGER_TURRET_TRIM_W * turretScale,
+      BattleScene.TIGER_TURRET_TRIM_H * turretScale,
+    );
+    const anchorX = (BattleScene.TIGER_TURRET_SPRITE_PIVOT_X - BattleScene.TIGER_TURRET_TRIM_X) / BattleScene.TIGER_TURRET_TRIM_W;
+    const anchorY = 1 - ((BattleScene.TIGER_TURRET_SPRITE_PIVOT_Y - BattleScene.TIGER_TURRET_TRIM_Y) / BattleScene.TIGER_TURRET_TRIM_H);
+    ut.setAnchorPoint(
+      anchorX + turretF / (BattleScene.TIGER_TURRET_TRIM_W * turretScale),
+      anchorY - turretR / (BattleScene.TIGER_TURRET_TRIM_H * turretScale),
+    );
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      baseX + pivotLocalX * cos - pivotLocalY * sin,
+      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      0,
+    );
+    node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private applyPanzer4HullSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.panzer4HullSpriteFrame) return;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    const ut = node.getComponent(UITransform)!;
+    const body = this.topDownForwardVec(u, c, facingLerp);
+    const srcW = BattleScene.PANZER4_TOP_TRIM_W;
+    const srcH = BattleScene.PANZER4_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * PANZER4_SPLIT_VISUAL_CONFIG.hullFitScale;
+    const scale = fit / (Math.max(srcW, srcH) || 1);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetForward * offsetUnit;
+    const r = PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetRight * offsetUnit;
+
+    sp.spriteFrame = this.panzer4HullSpriteFrame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(srcW * scale, srcH * scale);
+    ut.setAnchorPoint(0.5, 0.5);
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      c.x + f * body.ux + r * body.uy,
+      c.y + f * body.uy + r * (-body.ux),
+      0,
+    );
+    node.angle = (Math.atan2(body.uy, body.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private applyPanzer4TurretSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+    turretFacingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.panzer4TurretSpriteFrame) return;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    const ut = node.getComponent(UITransform)!;
+    const srcW = BattleScene.PANZER4_TOP_TRIM_W;
+    const srcH = BattleScene.PANZER4_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * PANZER4_SPLIT_VISUAL_CONFIG.hullFitScale;
+    const scale = fit / (Math.max(srcW, srcH) || 1);
+    const turretScale = scale * PANZER4_SPLIT_VISUAL_CONFIG.turretScale;
+
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const turret = this.topDownForwardVec(u, c, turretFacingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetForward * offsetUnit;
+    const r = PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetRight * offsetUnit;
+    const turretF = PANZER4_SPLIT_VISUAL_CONFIG.turretOffsetForward * offsetUnit;
+    const turretR = PANZER4_SPLIT_VISUAL_CONFIG.turretOffsetRight * offsetUnit;
+    const baseX = c.x + f * body.ux + r * body.uy;
+    const baseY = c.y + f * body.uy + r * (-body.ux);
+
+    const pivotLocalX = (BattleScene.PANZER4_TURRET_PIVOT_X
+      - (BattleScene.PANZER4_TOP_TRIM_X + BattleScene.PANZER4_TOP_TRIM_W / 2)) * scale;
+    const pivotLocalY = ((BattleScene.PANZER4_TOP_TRIM_Y + BattleScene.PANZER4_TOP_TRIM_H / 2)
+      - BattleScene.PANZER4_TURRET_PIVOT_Y) * scale;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+
+    sp.spriteFrame = this.panzer4TurretSpriteFrame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(
+      BattleScene.PANZER4_TURRET_TRIM_W * turretScale,
+      BattleScene.PANZER4_TURRET_TRIM_H * turretScale,
+    );
+    const anchorX = (BattleScene.PANZER4_TURRET_SPRITE_PIVOT_X - BattleScene.PANZER4_TURRET_TRIM_X) / BattleScene.PANZER4_TURRET_TRIM_W;
+    const anchorY = 1 - ((BattleScene.PANZER4_TURRET_SPRITE_PIVOT_Y - BattleScene.PANZER4_TURRET_TRIM_Y) / BattleScene.PANZER4_TURRET_TRIM_H);
+    ut.setAnchorPoint(
+      anchorX + turretF / (BattleScene.PANZER4_TURRET_TRIM_W * turretScale),
+      anchorY - turretR / (BattleScene.PANZER4_TURRET_TRIM_H * turretScale),
+    );
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      baseX + pivotLocalX * cos - pivotLocalY * sin,
+      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      0,
+    );
+    node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private applyPanzer3HullSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.panzer3HullSpriteFrame) return;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    const ut = node.getComponent(UITransform)!;
+    const body = this.topDownForwardVec(u, c, facingLerp);
+    const srcW = BattleScene.PANZER3_TOP_TRIM_W;
+    const srcH = BattleScene.PANZER3_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * PANZER3_SPLIT_VISUAL_CONFIG.hullFitScale;
+    const scale = fit / (Math.max(srcW, srcH) || 1);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = PANZER3_SPLIT_VISUAL_CONFIG.hullOffsetForward * offsetUnit;
+    const r = PANZER3_SPLIT_VISUAL_CONFIG.hullOffsetRight * offsetUnit;
+
+    sp.spriteFrame = this.panzer3HullSpriteFrame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(srcW * scale, srcH * scale);
+    ut.setAnchorPoint(0.5, 0.5);
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      c.x + f * body.ux + r * body.uy,
+      c.y + f * body.uy + r * (-body.ux),
+      0,
+    );
+    node.angle = (Math.atan2(body.uy, body.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private applyPanzer3TurretSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+    turretFacingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.panzer3TurretSpriteFrame) return;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    const ut = node.getComponent(UITransform)!;
+    const srcW = BattleScene.PANZER3_TOP_TRIM_W;
+    const srcH = BattleScene.PANZER3_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * PANZER3_SPLIT_VISUAL_CONFIG.hullFitScale;
+    const scale = fit / (Math.max(srcW, srcH) || 1);
+    const turretScale = scale * PANZER3_SPLIT_VISUAL_CONFIG.turretScale;
+
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const turret = this.topDownForwardVec(u, c, turretFacingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = PANZER3_SPLIT_VISUAL_CONFIG.hullOffsetForward * offsetUnit;
+    const r = PANZER3_SPLIT_VISUAL_CONFIG.hullOffsetRight * offsetUnit;
+    const turretF = PANZER3_SPLIT_VISUAL_CONFIG.turretOffsetForward * offsetUnit;
+    const turretR = PANZER3_SPLIT_VISUAL_CONFIG.turretOffsetRight * offsetUnit;
+    const baseX = c.x + f * body.ux + r * body.uy;
+    const baseY = c.y + f * body.uy + r * (-body.ux);
+
+    const pivotLocalX = (BattleScene.PANZER3_TURRET_PIVOT_X
+      - (BattleScene.PANZER3_TOP_TRIM_X + BattleScene.PANZER3_TOP_TRIM_W / 2)) * scale;
+    const pivotLocalY = ((BattleScene.PANZER3_TOP_TRIM_Y + BattleScene.PANZER3_TOP_TRIM_H / 2)
+      - BattleScene.PANZER3_TURRET_PIVOT_Y) * scale;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+
+    sp.spriteFrame = this.panzer3TurretSpriteFrame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(
+      BattleScene.PANZER3_TURRET_TRIM_W * turretScale,
+      BattleScene.PANZER3_TURRET_TRIM_H * turretScale,
+    );
+    const anchorX = (BattleScene.PANZER3_TURRET_SPRITE_PIVOT_X - BattleScene.PANZER3_TURRET_TRIM_X) / BattleScene.PANZER3_TURRET_TRIM_W;
+    const anchorY = 1 - ((BattleScene.PANZER3_TURRET_SPRITE_PIVOT_Y - BattleScene.PANZER3_TURRET_TRIM_Y) / BattleScene.PANZER3_TURRET_TRIM_H);
+    ut.setAnchorPoint(
+      anchorX + turretF / (BattleScene.PANZER3_TURRET_TRIM_W * turretScale),
+      anchorY - turretR / (BattleScene.PANZER3_TURRET_TRIM_H * turretScale),
     );
     node.setScale(1, 1, 1);
     node.setPosition(
@@ -3790,6 +4213,41 @@ export class BattleScene extends Component {
     };
   }
 
+  private currentEnemyTurretLerp(u: Unit): DirectionLerp | null {
+    if (this.turretAimAnim && this.turretAimAnim.unit === u) {
+      return {
+        from: this.turretAimAnim.from,
+        to: this.turretAimAnim.to,
+        t: easeInOutCubic(Math.min(1, Math.max(0, this.turretAimAnim.t))),
+        angular: true,
+      };
+    }
+
+    if (this.anim?.unit === u && u.facing !== null) {
+      const stored = this.enemyTurretFacing.get(u.id);
+      const from = (stored ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
+      const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as Direction;
+      if (from === to) return null;
+      if (this.anim.kind === 'turn' && from === this.anim.turnFrom) {
+        return {
+          from,
+          to,
+          t: Math.min(1, Math.max(0, this.anim.t)),
+        };
+      }
+      return {
+        from,
+        to,
+        t: easeInOutCubic(Math.min(1, Math.max(0, this.anim.t))),
+        angular: true,
+      };
+    }
+
+    const facing = this.enemyTurretFacing.get(u.id);
+    if (facing === undefined) return null;
+    return { from: facing, to: facing, t: 1 };
+  }
+
   private drawDestroyedTankSprite(
     u: Unit,
     c: { x: number; y: number },
@@ -3890,6 +4348,36 @@ export class BattleScene extends Component {
     // 德军俯视图：四号 / 三号 / 虎 / 卡（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存）
     if (isEnemyTopKind(u.kind)
         && this.enemyTopPoolNext < this.enemyTopSpritePool.length) {
+      if (u.kind === 'tiger'
+          && this.tigerHullSpriteFrame
+          && this.tigerTurretSpriteFrame
+          && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
+        const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyTigerHullSprite(hullSlot, u, c, facingLerp);
+        const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyTigerTurretSprite(turretSlot, u, c, facingLerp, this.currentEnemyTurretLerp(u) ?? facingLerp);
+        return;
+      }
+      if (u.kind === 'panzer4'
+          && this.panzer4HullSpriteFrame
+          && this.panzer4TurretSpriteFrame
+          && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
+        const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyPanzer4HullSprite(hullSlot, u, c, facingLerp);
+        const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyPanzer4TurretSprite(turretSlot, u, c, facingLerp, this.currentEnemyTurretLerp(u) ?? facingLerp);
+        return;
+      }
+      if (u.kind === 'panzer3'
+          && this.panzer3HullSpriteFrame
+          && this.panzer3TurretSpriteFrame
+          && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
+        const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyPanzer3HullSprite(hullSlot, u, c, facingLerp);
+        const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyPanzer3TurretSprite(turretSlot, u, c, facingLerp, this.currentEnemyTurretLerp(u) ?? facingLerp);
+        return;
+      }
       const meta = this.enemyTopMeta[u.kind];
       if (meta?.sf) {
         const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
@@ -8479,6 +8967,33 @@ export class BattleScene extends Component {
     this.redraw();
   }
 
+  private startEnemyTurretAim(enemy: Unit, target: Unit, onDone: () => void) {
+    const splitReady =
+      (enemy.kind === 'tiger' && this.tigerHullSpriteFrame && this.tigerTurretSpriteFrame)
+      || (enemy.kind === 'panzer4' && this.panzer4HullSpriteFrame && this.panzer4TurretSpriteFrame);
+    if (!splitReady) {
+      onDone();
+      return;
+    }
+    const to = (directionTo(enemy.pos, target.pos) ?? approximateDirection(enemy.pos, target.pos)) as Direction;
+    const from = (this.enemyTurretFacing.get(enemy.id) ?? enemy.facing ?? to) as Direction;
+    if (from === to) {
+      this.enemyTurretFacing.set(enemy.id, to);
+      this.redraw();
+      onDone();
+      return;
+    }
+    this.turretAimAnim = {
+      unit: enemy,
+      from,
+      to,
+      t: 0,
+      dur: 0.22,
+      onDone,
+    };
+    this.redraw();
+  }
+
   private tryAttack(target: Unit) {
     if (!this.mission) return;
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
@@ -8556,14 +9071,24 @@ export class BattleScene extends Component {
     const { map, sherman } = this.mission;
     if (!canAttack({ attacker: enemy, target: sherman, map }).ok) return false;
 
-    // 开火前转向目标，否则可能用错装甲面（其实算的是 sherman 的面，但视觉上敌人面对玩家更合理）
-    enemy.facing = approximateDirection(enemy.pos, sherman.pos);
-    this.redraw();
+    const aimDir = approximateDirection(enemy.pos, sherman.pos);
+    const splitTurretReady =
+      (enemy.kind === 'tiger' && this.tigerHullSpriteFrame && this.tigerTurretSpriteFrame)
+      || (enemy.kind === 'panzer4' && this.panzer4HullSpriteFrame && this.panzer4TurretSpriteFrame);
+    if (splitTurretReady) {
+      if (!this.enemyTurretFacing.has(enemy.id) && enemy.facing !== null) {
+        this.enemyTurretFacing.set(enemy.id, enemy.facing);
+      }
+    } else {
+      // 开火前转向目标，否则可能用错装甲面（其实算的是 sherman 的面，但视觉上敌人面对玩家更合理）
+      enemy.facing = aimDir;
+      this.redraw();
+    }
 
     // 保留本车 AI 行动骰托盘；掷骰面板打开时会挂到 DiceShow 遮罩之上（见 liftEnemyDiceTrayIntoDiceShowIfNeeded）
 
     const report = rollAttack({ attacker: enemy, target: sherman, map }, this.rng);
-    this.startDiceShow(report, t('actor.enemyPrefix', { name: enemy.kind }), t('actor.sherman'), () => {
+    const showDice = () => this.startDiceShow(report, t('actor.enemyPrefix', { name: enemy.kind }), t('actor.sherman'), () => {
       if (!this.mission) return;
       applyAttack(sherman, report);
       if (sherman.destroyed) this.registerDestroyWreckVisual(sherman);
@@ -8578,6 +9103,11 @@ export class BattleScene extends Component {
         this.runNextEnemyStep();
       }
     });
+    if (splitTurretReady) {
+      this.startEnemyTurretAim(enemy, sherman, showDice);
+    } else {
+      showDice();
+    }
     return true;
   }
 
