@@ -393,6 +393,17 @@ interface MoveAnim {
   truckExitDefeat?: boolean;
 }
 
+interface TurretAimAnim {
+  unit: Unit;
+  from: Direction;
+  to: Direction;
+  t: number;
+  dur: number;
+  onDone: () => void;
+}
+
+type DirectionLerp = { from: number; to: number; t: number; angular?: boolean };
+
 type Phase = 'player' | 'enemy';
 
 /**
@@ -847,6 +858,10 @@ export class BattleScene extends Component {
   private shermanSpriteNode: Node | null = null;
   private shermanTopSprite: Sprite | null = null;
   private shermanTopSpriteFrame: SpriteFrame | null = null;
+  private shermanTurretSpriteNode: Node | null = null;
+  private shermanTurretTopSprite: Sprite | null = null;
+  private shermanHullSpriteFrame: SpriteFrame | null = null;
+  private shermanTurretSpriteFrame: SpriteFrame | null = null;
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
   private shermanSpriteDisplayH = 0;
@@ -880,6 +895,8 @@ export class BattleScene extends Component {
   private offsetX = 0;
   private offsetY = 0;
   private anim: MoveAnim | null = null;
+  private turretAimAnim: TurretAimAnim | null = null;
+  private shermanTurretFacing: Direction | null = null;
   /** 多段移动/转向衔接（如回合结束德军卡车沿路推进） */
   private animQueue: MoveAnim[] = [];
   /** 当前 animQueue 播完后执行（避免敌方阶段误进 runNextEnemyStep） */
@@ -1128,6 +1145,16 @@ export class BattleScene extends Component {
   private static readonly PLAYER_DICE_SORT_DUR = 0.5;
   private static readonly TERRAIN_SPRITE_POOL = 384;
   private static readonly FOLIAGE_SPRITE_POOL = 256;
+  private static readonly SHERMAN_TURRET_PIVOT_X = 309;
+  private static readonly SHERMAN_TURRET_PIVOT_Y = 99;
+  private static readonly SHERMAN_TOP_TRIM_X = 83;
+  private static readonly SHERMAN_TOP_TRIM_Y = 0;
+  private static readonly SHERMAN_TOP_TRIM_W = 440;
+  private static readonly SHERMAN_TOP_TRIM_H = 198;
+  private static readonly SHERMAN_TURRET_TRIM_X = 94;
+  private static readonly SHERMAN_TURRET_TRIM_Y = 24;
+  private static readonly SHERMAN_TURRET_TRIM_W = 321;
+  private static readonly SHERMAN_TURRET_TRIM_H = 157;
 
   onLoad() {
     setLang(MenuProgress.load().lang);
@@ -1184,6 +1211,16 @@ export class BattleScene extends Component {
     shNode.active = false;
 
     gNode.addChild(shNode);
+
+    const shTurretNode = new Node('ShermanTurretTopSprite');
+    shTurretNode.layer = this.node.layer;
+    shTurretNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.shermanTurretTopSprite = shTurretNode.addComponent(Sprite);
+    this.shermanTurretTopSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.shermanTurretSpriteNode = shTurretNode;
+    shTurretNode.active = false;
+    gNode.addChild(shTurretNode);
+
     for (let i = 0; i < BattleScene.ENEMY_TOP_SPRITE_POOL; i++) {
       const pz = new Node(`EnemyTop_${i}`);
       pz.layer = this.node.layer;
@@ -1348,6 +1385,25 @@ export class BattleScene extends Component {
       this.redraw();
     });
 
+    resources.load('textures/units/sherman_top_hull/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 谢尔曼车体拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.shermanHullSpriteFrame = sf;
+      this.redraw();
+    });
+
+    resources.load('textures/units/sherman_top_turret/spriteFrame', SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn('[BattleScene] 谢尔曼炮塔拆分图加载失败，回退整车图:', err);
+        return;
+      }
+      this.shermanTurretSpriteFrame = sf;
+      if (this.shermanTurretTopSprite) this.shermanTurretTopSprite.spriteFrame = sf;
+      this.redraw();
+    });
+
     // 注册触摸事件（点击地图任意位置）
     gNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
 
@@ -1453,6 +1509,7 @@ export class BattleScene extends Component {
     this.enemyTopPoolNext = 0;
     for (const { node } of this.enemyTopSpritePool) node.active = false;
     if (this.shermanSpriteNode) this.shermanSpriteNode.active = false;
+    if (this.shermanTurretSpriteNode) this.shermanTurretSpriteNode.active = false;
     this.infantryTopPoolNext = 0;
     for (const { node } of this.infantryTopSpritePool) node.active = false;
     this.officerTopPoolNext = 0;
@@ -2266,6 +2323,20 @@ export class BattleScene extends Component {
 
     if (this.fireCheckEventUI) this.advanceFireCheckEventUI(dt);
 
+    if (this.turretAimAnim) {
+      const a = this.turretAimAnim;
+      a.t += dt / a.dur;
+      if (a.t < 1) {
+        this.redraw();
+        return;
+      }
+      this.shermanTurretFacing = a.to;
+      this.turretAimAnim = null;
+      this.redraw();
+      a.onDone();
+      return;
+    }
+
     // 敌方 AI 骰：掷完后的槽位排序动画（约 1s），播完再开始按序执行各骰
     if (this.enemyDiceSortAnim && this.mission && this.enemyDiceTrayRoot) {
       const s = this.enemyDiceSortAnim;
@@ -2321,6 +2392,9 @@ export class BattleScene extends Component {
       this.battleLog(
         `[BattleScene] ${finishedUnit.kind} 转向完成 facing=${finishedUnit.facing}`,
       );
+    }
+    if (finishedUnit.kind === 'sherman' && finishedUnit.facing !== null) {
+      this.shermanTurretFacing = finishedUnit.facing;
     }
     stopTankManeuver();
     this.anim = null;
@@ -3497,7 +3571,7 @@ export class BattleScene extends Component {
     displayH: number,
     u: Unit,
     c: { x: number; y: number },
-    facingLerp?: { from: number; to: number; t: number } | null,
+    facingLerp?: DirectionLerp | null,
   ) {
     node.active = true;
     const w = displayW > 0 ? displayW : sf.width;
@@ -3546,35 +3620,180 @@ export class BattleScene extends Component {
     const r = cfg.offsetRight * offsetUnit;
     const ox = f * ux + r * uy;
     const oy = f * uy + r * (-ux);
-
+    const angle = (Math.atan2(uy, ux) * 180) / Math.PI + 180;
+    ut.setAnchorPoint(0.5, 0.5);
     node.setPosition(c.x + ox, c.y + oy, 0);
-    node.angle = (Math.atan2(uy, ux) * 180) / Math.PI + 180;
+    node.angle = angle;
+  }
+
+  private applyShermanTurretSprite(
+    u: Unit,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+    turretFacingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.shermanTurretSpriteNode || !this.shermanTurretTopSprite || !this.shermanTurretSpriteFrame) return;
+
+    const sf = this.shermanTurretSpriteFrame;
+    const node = this.shermanTurretSpriteNode;
+    const sp = this.shermanTurretTopSprite;
+    const ut = node.getComponent(UITransform)!;
+    const cfg = tankVisualConfigOf(u.kind);
+    const srcW = BattleScene.SHERMAN_TOP_TRIM_W;
+    const srcH = BattleScene.SHERMAN_TOP_TRIM_H;
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
+    const maxDim = Math.max(srcW, srcH) || 1;
+    const tw0 = (srcW / maxDim) * fit;
+    const th0 = (srcH / maxDim) * fit;
+    const m = Math.max(1e-6, cfg.aspectRatioMul);
+    const k = Math.sqrt(m);
+    const topW = tw0 * k;
+    const topH = th0 / k;
+    const scaleX = topW / srcW;
+    const scaleY = topH / srcH;
+
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const turret = this.topDownForwardVec(u, c, turretFacingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = cfg.offsetForward * offsetUnit;
+    const r = cfg.offsetRight * offsetUnit;
+    const baseX = c.x + f * body.ux + r * body.uy;
+    const baseY = c.y + f * body.uy + r * (-body.ux);
+
+    const pivotLocalX = (BattleScene.SHERMAN_TURRET_PIVOT_X
+      - (BattleScene.SHERMAN_TOP_TRIM_X + BattleScene.SHERMAN_TOP_TRIM_W / 2)) * scaleX;
+    const pivotLocalY = ((BattleScene.SHERMAN_TOP_TRIM_Y + BattleScene.SHERMAN_TOP_TRIM_H / 2)
+      - BattleScene.SHERMAN_TURRET_PIVOT_Y) * scaleY;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(
+      BattleScene.SHERMAN_TURRET_TRIM_W * scaleX,
+      BattleScene.SHERMAN_TURRET_TRIM_H * scaleY,
+    );
+    ut.setAnchorPoint(
+      (BattleScene.SHERMAN_TURRET_PIVOT_X - BattleScene.SHERMAN_TURRET_TRIM_X) / BattleScene.SHERMAN_TURRET_TRIM_W,
+      1 - ((BattleScene.SHERMAN_TURRET_PIVOT_Y - BattleScene.SHERMAN_TURRET_TRIM_Y) / BattleScene.SHERMAN_TURRET_TRIM_H),
+    );
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      baseX + pivotLocalX * cos - pivotLocalY * sin,
+      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      0,
+    );
+    node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
+    node.active = true;
+  }
+
+  private topDownForwardVec(
+    u: Unit,
+    c: { x: number; y: number },
+    facingLerp?: DirectionLerp | null,
+  ): { ux: number; uy: number } {
+    if (facingLerp) {
+      if (!facingLerp.angular) {
+        return this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
+      }
+      const a = this.directionScreenAngle(u.pos, c, facingLerp.from);
+      const b = this.directionScreenAngle(u.pos, c, facingLerp.to);
+      let d = b - a;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      const ang = a + d * Math.min(1, Math.max(0, facingLerp.t));
+      return { ux: Math.cos(ang), uy: Math.sin(ang) };
+    }
+    if (u.facing !== null) {
+      const ang = this.directionScreenAngle(u.pos, c, u.facing);
+      return { ux: Math.cos(ang), uy: Math.sin(ang) };
+    }
+    return { ux: 1, uy: 0 };
+  }
+
+  private directionScreenAngle(
+    pos: { q: number; r: number },
+    c: { x: number; y: number },
+    dir: Direction,
+  ): number {
+    const np = this.project(neighbor(pos, dir).q, neighbor(pos, dir).r);
+    return Math.atan2(np.y - c.y, np.x - c.x);
   }
 
   private updateShermanTopSprite(
     u: Unit,
     c: { x: number; y: number },
-    facingLerp?: { from: number; to: number; t: number } | null,
+    facingLerp?: DirectionLerp | null,
   ) {
+    const splitReady =
+      this.shermanHullSpriteFrame &&
+      this.shermanTurretSpriteFrame &&
+      this.shermanTurretSpriteNode &&
+      this.shermanTurretTopSprite;
+
     this.applyTopDownTankSprite(
       this.shermanSpriteNode!,
       this.shermanTopSprite!,
-      this.shermanTopSpriteFrame!,
+      splitReady ? this.shermanHullSpriteFrame! : this.shermanTopSpriteFrame!,
       this.shermanSpriteDisplayW,
       this.shermanSpriteDisplayH,
       u,
       c,
       facingLerp,
     );
+    if (splitReady) {
+      this.applyShermanTurretSprite(u, c, facingLerp, this.currentShermanTurretLerp(u) ?? facingLerp);
+    }
     if (!u.destroyed && this.mapNode) {
       this.shermanSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
+      if (splitReady) {
+        this.shermanTurretSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
+      }
     }
+  }
+
+  private currentShermanTurretLerp(u: Unit): DirectionLerp | null {
+    if (this.turretAimAnim && this.turretAimAnim.unit === u) {
+      return {
+        from: this.turretAimAnim.from,
+        to: this.turretAimAnim.to,
+        t: easeInOutCubic(Math.min(1, Math.max(0, this.turretAimAnim.t))),
+        angular: true,
+      };
+    }
+
+    if (u.kind === 'sherman' && this.anim?.unit === u && u.facing !== null) {
+      const from = (this.shermanTurretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
+      const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as Direction;
+      if (from === to) return null;
+      if (this.anim.kind === 'turn' && from === this.anim.turnFrom) {
+        return {
+          from,
+          to,
+          t: Math.min(1, Math.max(0, this.anim.t)),
+        };
+      }
+      return {
+        from,
+        to,
+        t: easeInOutCubic(Math.min(1, Math.max(0, this.anim.t))),
+        angular: true,
+      };
+    }
+
+    if (this.shermanTurretFacing === null) return null;
+    return {
+      from: this.shermanTurretFacing,
+      to: this.shermanTurretFacing,
+      t: 1,
+    };
   }
 
   private drawDestroyedTankSprite(
     u: Unit,
     c: { x: number; y: number },
-    facingLerp?: { from: number; to: number; t: number } | null,
+    facingLerp?: DirectionLerp | null,
   ): boolean {
     if (!isDestroyedTopKind(u.kind)) return false;
     const meta = this.destroyedTopMeta[u.kind];
@@ -3618,7 +3837,7 @@ export class BattleScene extends Component {
     u: Unit,
     overrideX?: number,
     overrideY?: number,
-    facingLerp?: { from: number; to: number; t: number } | null,
+    facingLerp?: DirectionLerp | null,
   ) {
     const g = this.g!;
     const c = overrideX !== undefined && overrideY !== undefined
@@ -3632,6 +3851,7 @@ export class BattleScene extends Component {
     if (u.kind === 'sherman' && this.shermanSpriteNode) {
       if (u.destroyed || !this.shermanTopSpriteFrame) {
         this.shermanSpriteNode.active = false;
+        if (this.shermanTurretSpriteNode) this.shermanTurretSpriteNode.active = false;
       }
     }
     const r = this.hexSize * 0.5;
@@ -8234,6 +8454,31 @@ export class BattleScene extends Component {
    * 玩家开火：必须已选中主炮骰 + 已装填 + canAttack 通过。
    * 结算后消耗那颗骰子 + 清空 loaded（手册：一炮一装）。
    */
+  private startShermanTurretAim(target: Unit, onDone: () => void) {
+    if (!this.mission || !this.shermanTurretSpriteFrame || !this.shermanHullSpriteFrame) {
+      onDone();
+      return;
+    }
+    const sherman = this.mission.sherman;
+    const to = (directionTo(sherman.pos, target.pos) ?? approximateDirection(sherman.pos, target.pos)) as Direction;
+    const from = (this.shermanTurretFacing ?? sherman.facing ?? to) as Direction;
+    if (from === to) {
+      this.shermanTurretFacing = to;
+      this.redraw();
+      onDone();
+      return;
+    }
+    this.turretAimAnim = {
+      unit: sherman,
+      from,
+      to,
+      t: 0,
+      dur: 0.22,
+      onDone,
+    };
+    this.redraw();
+  }
+
   private tryAttack(target: Unit) {
     if (!this.mission) return;
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
@@ -8274,21 +8519,23 @@ export class BattleScene extends Component {
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
     // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，onDone 时一并消耗。
     const doublesPartnerIdx = this.selectedGunDoublesIdx;
-    this.startDiceShow(report, t('actor.player'), target.kind, () => {
-      if (!this.mission) return;
-      applyAttack(target, report);
-      if (target.destroyed) this.registerDestroyWreckVisual(target);
-      slot.used = true;
-      if (doublesPartnerIdx >= 0) {
-        const p = this.phaseDice[doublesPartnerIdx];
-        if (p) p.used = true;
-      }
-      sherman.loaded = false;
-      this.clearGunSelection();
-      this.presentAttackResult(t('actor.player'), report, sherman, target);
-      this.refreshPhaseUI();
-      this.updateHUD();
-      this.autoEndPhaseIfDone();
+    this.startShermanTurretAim(target, () => {
+      this.startDiceShow(report, t('actor.player'), target.kind, () => {
+        if (!this.mission) return;
+        applyAttack(target, report);
+        if (target.destroyed) this.registerDestroyWreckVisual(target);
+        slot.used = true;
+        if (doublesPartnerIdx >= 0) {
+          const p = this.phaseDice[doublesPartnerIdx];
+          if (p) p.used = true;
+        }
+        sherman.loaded = false;
+        this.clearGunSelection();
+        this.presentAttackResult(t('actor.player'), report, sherman, target);
+        this.refreshPhaseUI();
+        this.updateHUD();
+        this.autoEndPhaseIfDone();
+      });
     });
     // 立即刷新一次 HUD，让"点敌人开火"提示消失
     this.updateHUD();
@@ -9151,6 +9398,7 @@ export class BattleScene extends Component {
   private isBusy(): boolean {
     return this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
+      || this.turretAimAnim !== null
       || this.enemyDiceSortAnim !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null
       || this.tileInspectModalRoot !== null;
