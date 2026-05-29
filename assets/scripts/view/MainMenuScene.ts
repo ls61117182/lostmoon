@@ -13,13 +13,13 @@
  *   - 跨场景状态通过 `GameSession` 传递，BattleScene 启动时读取
  *
  * 交互：
- *   - 继续游戏：读战斗存档 `SAVE_KEY`；无存档时按钮灰态
+ *   - 继续游戏：读取当前账号对应的本地战斗存档；无存档时按钮灰态
  *   - 关卡按钮：未解锁 / 已解锁 / 已通关 三态；点击后切战斗场景
  *   - 顶部 ⚙ / ?：弹出模态面板，点击 ✕ 或遮罩空白处关闭
  */
 
 import {
-  _decorator, Canvas, Color, Component, EventTouch, Graphics,
+  _decorator, Canvas, Color, Component, EditBox, EventTouch, Graphics,
   HorizontalTextAlignment, Label, Layers, Mask, Node, ScrollView, UITransform,
   Vec3, VerticalTextAlignment, director,
 } from 'cc';
@@ -27,7 +27,9 @@ import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import { LEVELS, LevelMeta, MenuProgress } from '../core/LevelDB';
-import { SAVE_KEY, SaveData } from '../core/SaveLoad';
+import { SaveData } from '../core/SaveLoad';
+import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
+import { readActiveSaveRaw } from '../core/SaveSlot';
 
 const { ccclass, property } = _decorator;
 
@@ -83,6 +85,16 @@ const LANG_BTN_IDLE       = new Color( 59,  64,  54, 235);
 const LANG_BTN_ACTIVE     = new Color(145,  95,  44, 245);
 const LANG_BTN_ACTIVE_BD  = new Color(240, 215, 150, 255);
 
+const AUTH_CARD_BG        = new Color( 44,  50,  42, 245);
+const AUTH_CARD_ACTIVE    = new Color( 77,  88,  57, 248);
+const AUTH_INPUT_BG       = new Color( 18,  22,  20, 245);
+const AUTH_INPUT_BD       = new Color(116, 118,  92, 230);
+const AUTH_PRIMARY        = new Color(150,  98,  48, 245);
+const AUTH_OFFLINE        = new Color( 68,  82,  92, 245);
+const AUTH_HINT           = new Color(202, 196, 174, 235);
+
+type LoginMode = 'online' | 'offline';
+
 // ---------- 工具类型 ----------
 interface ButtonRefs {
   node: Node;
@@ -112,6 +124,9 @@ export class MainMenuScene extends Component {
 
   // 当前打开的模态；非 null 时主菜单点击被遮罩吞掉
   private modalRoot: Node | null = null;
+
+  private authNameLabel: Label | null = null;
+  private authStatusLabel: Label | null = null;
 
   // 设置 UI 组件引用（只在设置模态打开时有效）
   private settingsRefs: {
@@ -170,6 +185,11 @@ export class MainMenuScene extends Component {
 
     initGameAudio();
     playBgmMenu();
+
+    this.scheduleOnce(() => {
+      if (!getAuthSession()) this.openLoginGate();
+      this.refreshAuthBadge();
+    }, 0);
   }
 
   // ================================================================
@@ -474,8 +494,28 @@ export class MainMenuScene extends Component {
     const help = this.makeCircleButton(this.node, 520, 320, 24, '?', () => this.openHelp());
     help.node.name = 'HelpIcon';
 
-    // 防止 TS 未使用警告
-    void settings; void help;
+    const account = this.makeCircleButton(this.node, 460, 320, 24, 'ID', () => this.openLoginGate());
+    account.node.name = 'AccountIcon';
+    this.authNameLabel = this.makeLabel(this.node, '', 350, 320, 180, 24, 16, TEXT_SUBTITLE);
+    this.authNameLabel.horizontalAlign = HorizontalTextAlignment.RIGHT;
+
+    void settings;
+    void help;
+    void account;
+  }
+
+  private refreshAuthBadge() {
+    if (!this.authNameLabel) return;
+    const s = getAuthSession();
+    if (!s) {
+      this.authNameLabel.string = authText('auth.badge.none');
+      this.authNameLabel.color = TEXT_DISABLED;
+      return;
+    }
+    this.authNameLabel.string = s.mode === 'online'
+      ? authText('auth.badge.online', { name: s.username || authText('auth.defaultUser') })
+      : authText('auth.badge.offline');
+    this.authNameLabel.color = s.mode === 'online' ? TEXT_TITLE : TEXT_SUBTITLE;
   }
 
   // ================================================================
@@ -485,6 +525,253 @@ export class MainMenuScene extends Component {
     const label = this.makeLabel(this.node, t('menu.version', { b: '2026' }),
       500, -340, 260, 20, 14, TEXT_DISABLED);
     label.horizontalAlign = HorizontalTextAlignment.RIGHT;
+  }
+
+  private openLoginGate() {
+    this.closeModal(true);
+    const panelW = 860;
+    const panelH = 510;
+    const { panel, contentY } = this.openModal(authText('auth.title'), panelW, panelH);
+    if (this.modalRoot) this.modalRoot.name = 'AuthGate';
+
+    const intro = this.makeLabel(panel, authText('auth.subtitle'), 0, contentY - 4, panelW - 120, 30, 18, AUTH_HINT);
+    intro.horizontalAlign = HorizontalTextAlignment.CENTER;
+
+    const cardY = -10;
+    this.buildLoginCard(panel, -218, cardY);
+    this.buildOfflineCard(panel, 218, cardY);
+
+    this.authStatusLabel = this.makeLabel(panel, '', 0, -panelH / 2 + 34, panelW - 120, 26, 17, TEXT_DISABLED);
+  }
+
+  private buildLoginCard(panel: Node, x: number, y: number) {
+    const cardW = 360;
+    const cardH = 310;
+    const card = new Node('LoginCard');
+    card.layer = this.node.layer;
+    card.addComponent(UITransform).setContentSize(cardW, cardH);
+    card.setPosition(x, y, 0);
+    const g = card.addComponent(Graphics);
+    drawFieldPanel(g, cardW, cardH, AUTH_CARD_ACTIVE, MODAL_PANEL_BORDER, TEXT_TITLE);
+    panel.addChild(card);
+
+    const title = this.makeLabel(card, authText('auth.login.title'), 0, 112, cardW - 40, 34, 25, TEXT_TITLE);
+    title.enableOutline = true;
+    title.outlineColor = TEXT_OUTLINE;
+    title.outlineWidth = 2;
+    this.makeLabel(card, authText('auth.login.desc'), 0, 76, cardW - 52, 42, 16, AUTH_HINT);
+
+    const userLab = this.makeLabel(card, authText('auth.username'), -118, 28, 92, 24, 16, TEXT_SUBTITLE);
+    userLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    const username = this.makeInputField(card, 54, 28, 220, 38, authText('auth.username.placeholder'), false);
+    const passLab = this.makeLabel(card, authText('auth.password'), -118, -32, 92, 24, 16, TEXT_SUBTITLE);
+    passLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    const password = this.makeInputField(card, 54, -32, 220, 38, authText('auth.password.placeholder'), true);
+
+    const loginBtn = this.makeRectButton(card, 0, -104, 250, 46, AUTH_PRIMARY, async () => {
+      const name = username.string.trim();
+      if (!name) {
+        this.setAuthStatus(authText('auth.error.username'), false);
+        return;
+      }
+      this.setAuthStatus(authText('auth.login.busy'), true);
+      const result = await loginServer(name, password.string);
+      if (!result.ok && result.code === 'ACCOUNT_NOT_FOUND') {
+        this.openRegisterGate(name);
+        return;
+      }
+      if (!result.ok) {
+        this.setAuthStatus(authText(serverAuthMessageKey(result.code), { msg: result.message ?? '' }), false);
+        return;
+      }
+      const displayName = result.username || name;
+      setAuthSession({ mode: 'online', username: displayName });
+      applyServerProfile(result.profile);
+      this.setAuthStatus(authText('auth.login.ok', { name: displayName }), true);
+      this.refreshAuthBadge();
+      this.refreshContinueButton();
+      this.refreshLevelButtons();
+      this.scheduleOnce(() => this.closeModal(), 0.35);
+    });
+    this.makeLabel(loginBtn.node, authText('auth.login.button'), 0, 0, 250, 46, 19, TEXT_PRIMARY);
+  }
+
+  private openRegisterGate(prefillName: string) {
+    this.closeModal(true);
+    const panelW = 620;
+    const panelH = 460;
+    const { panel, contentY } = this.openModal(authText('auth.register.title'), panelW, panelH);
+    if (this.modalRoot) this.modalRoot.name = 'AuthGate';
+
+    const intro = this.makeLabel(panel, authText('auth.register.subtitle'), 0, contentY - 4, panelW - 100, 44, 18, AUTH_HINT);
+    intro.overflow = Label.Overflow.RESIZE_HEIGHT;
+    intro.enableWrapText = true;
+    intro.lineHeight = 24;
+
+    const formY = 64;
+    const labelX = -210;
+    const inputX = 58;
+    const nameLab = this.makeLabel(panel, authText('auth.username'), labelX, formY, 90, 24, 17, TEXT_SUBTITLE);
+    nameLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    const username = this.makeInputField(panel, inputX, formY, 290, 40, authText('auth.username.placeholder'), false, prefillName);
+
+    const passLab = this.makeLabel(panel, authText('auth.password'), labelX, formY - 62, 90, 24, 17, TEXT_SUBTITLE);
+    passLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    const password = this.makeInputField(panel, inputX, formY - 62, 290, 40, authText('auth.password.placeholder'), true);
+
+    const confirmLab = this.makeLabel(panel, authText('auth.register.confirm'), labelX, formY - 124, 90, 24, 17, TEXT_SUBTITLE);
+    confirmLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    const confirm = this.makeInputField(panel, inputX, formY - 124, 290, 40, authText('auth.register.confirmPlaceholder'), true);
+
+    const registerBtn = this.makeRectButton(panel, -76, -156, 220, 46, AUTH_PRIMARY, async () => {
+      const name = username.string.trim();
+      if (!name) {
+        this.setAuthStatus(authText('auth.error.username'), false);
+        return;
+      }
+      if (!password.string) {
+        this.setAuthStatus(authText('auth.error.passwordEmpty'), false);
+        return;
+      }
+      if (password.string !== confirm.string) {
+        this.setAuthStatus(authText('auth.error.passwordConfirm'), false);
+        return;
+      }
+      this.setAuthStatus(authText('auth.register.busy'), true);
+      const result = await registerServer(name, password.string, buildCurrentServerProfile());
+      if (!result.ok) {
+        this.setAuthStatus(authText(serverAuthMessageKey(result.code), { msg: result.message ?? '' }), false);
+        return;
+      }
+      const displayName = result.username || name;
+      setAuthSession({ mode: 'online', username: displayName });
+      applyServerProfile(result.profile);
+      this.setAuthStatus(authText('auth.register.ok', { name: displayName }), true);
+      this.refreshAuthBadge();
+      this.refreshContinueButton();
+      this.refreshLevelButtons();
+      this.scheduleOnce(() => this.closeModal(), 0.35);
+    });
+    this.makeLabel(registerBtn.node, authText('auth.register.button'), 0, 0, 220, 46, 19, TEXT_PRIMARY);
+
+    const backBtn = this.makeRectButton(panel, 170, -156, 160, 46, AUTH_OFFLINE, () => this.openLoginGate());
+    this.makeLabel(backBtn.node, authText('auth.register.back'), 0, 0, 160, 46, 18, TEXT_PRIMARY);
+
+    this.authStatusLabel = this.makeLabel(panel, authText('auth.register.prefill', { name: prefillName }), 0, -panelH / 2 + 34, panelW - 100, 26, 17, TEXT_DISABLED);
+  }
+
+  private buildOfflineCard(panel: Node, x: number, y: number) {
+    const cardW = 360;
+    const cardH = 310;
+    const card = new Node('OfflineCard');
+    card.layer = this.node.layer;
+    card.addComponent(UITransform).setContentSize(cardW, cardH);
+    card.setPosition(x, y, 0);
+    const g = card.addComponent(Graphics);
+    drawFieldPanel(g, cardW, cardH, AUTH_CARD_BG, MODAL_PANEL_BORDER, TEXT_TITLE);
+    panel.addChild(card);
+
+    const title = this.makeLabel(card, authText('auth.offline.title'), 0, 112, cardW - 40, 34, 25, TEXT_TITLE);
+    title.enableOutline = true;
+    title.outlineColor = TEXT_OUTLINE;
+    title.outlineWidth = 2;
+    const desc = this.makeLabel(card, authText('auth.offline.desc'), 0, 42, cardW - 56, 118, 17, AUTH_HINT);
+    desc.overflow = Label.Overflow.RESIZE_HEIGHT;
+    desc.enableWrapText = true;
+    desc.lineHeight = 24;
+
+    const offlineBtn = this.makeRectButton(card, 0, -104, 250, 46, AUTH_OFFLINE, () => {
+      setAuthSession({ mode: 'offline', username: '' });
+      this.setAuthStatus(authText('auth.offline.ok'), true);
+      this.refreshAuthBadge();
+      this.refreshContinueButton();
+      this.scheduleOnce(() => this.closeModal(), 0.25);
+    });
+    this.makeLabel(offlineBtn.node, authText('auth.offline.button'), 0, 0, 250, 46, 19, TEXT_PRIMARY);
+  }
+
+  private makeInputField(parent: Node, x: number, y: number, w: number, h: number, placeholder: string, password: boolean, initial = ''): EditBox {
+    const root = new Node('InputField');
+    root.layer = this.node.layer;
+    const rootUt = root.addComponent(UITransform);
+    rootUt.setContentSize(w, h);
+    root.setPosition(x, y, 0);
+    const g = root.addComponent(Graphics);
+    g.fillColor = AUTH_INPUT_BG;
+    g.rect(-w / 2, -h / 2, w, h);
+    g.fill();
+    g.strokeColor = AUTH_INPUT_BD;
+    g.lineWidth = 2;
+    g.rect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2);
+    g.stroke();
+
+    const textPadX = 12;
+    const textPadY = 5;
+    const textW = w - textPadX * 2;
+    const textH = h - textPadY * 2;
+
+    const textNode = new Node('TEXT_LABEL');
+    textNode.layer = this.node.layer;
+    const textUt = textNode.addComponent(UITransform);
+    textUt.setAnchorPoint(0, 1);
+    textUt.setContentSize(textW, textH);
+    textNode.setPosition(-w / 2 + textPadX, h / 2 - textPadY, 0);
+    const textLabel = textNode.addComponent(Label);
+    textLabel.fontSize = 18;
+    textLabel.lineHeight = 24;
+    textLabel.color = TEXT_PRIMARY;
+    textLabel.overflow = Label.Overflow.CLAMP;
+    textLabel.enableWrapText = false;
+    textLabel.horizontalAlign = HorizontalTextAlignment.LEFT;
+    textLabel.verticalAlign = VerticalTextAlignment.CENTER;
+    root.addChild(textNode);
+
+    const placeholderNode = new Node('PLACEHOLDER_LABEL');
+    placeholderNode.layer = this.node.layer;
+    const placeholderUt = placeholderNode.addComponent(UITransform);
+    placeholderUt.setAnchorPoint(0, 1);
+    placeholderUt.setContentSize(textW, textH);
+    placeholderNode.setPosition(-w / 2 + textPadX, h / 2 - textPadY, 0);
+    const placeholderLabel = placeholderNode.addComponent(Label);
+    placeholderLabel.fontSize = 16;
+    placeholderLabel.lineHeight = 22;
+    placeholderLabel.color = TEXT_DISABLED;
+    placeholderLabel.overflow = Label.Overflow.CLAMP;
+    placeholderLabel.enableWrapText = false;
+    placeholderLabel.horizontalAlign = HorizontalTextAlignment.LEFT;
+    placeholderLabel.verticalAlign = VerticalTextAlignment.CENTER;
+    placeholderLabel.string = placeholder;
+    root.addChild(placeholderNode);
+
+    const edit = root.addComponent(EditBox);
+    edit.fontSize = 18;
+    edit.fontColor = TEXT_PRIMARY;
+    edit.placeholder = placeholder;
+    edit.placeholderFontSize = 16;
+    edit.placeholderFontColor = TEXT_DISABLED;
+    edit.string = initial;
+    textLabel.string = initial;
+    edit.maxLength = 24;
+    edit.inputMode = EditBox.InputMode.SINGLE_LINE;
+    if (password) edit.inputFlag = EditBox.InputFlag.PASSWORD;
+    const editInternal = edit as unknown as {
+      textLabel?: Label;
+      placeholderLabel?: Label;
+      _textLabel?: Label;
+      _placeholderLabel?: Label;
+    };
+    editInternal.textLabel = textLabel;
+    editInternal.placeholderLabel = placeholderLabel;
+    editInternal._textLabel = textLabel;
+    editInternal._placeholderLabel = placeholderLabel;
+    parent.addChild(root);
+    return edit;
+  }
+
+  private setAuthStatus(text: string, good: boolean) {
+    if (!this.authStatusLabel) return;
+    this.authStatusLabel.string = text;
+    this.authStatusLabel.color = good ? TEXT_TITLE : new Color(230, 125, 100, 255);
   }
 
   // ================================================================
@@ -502,6 +789,7 @@ export class MainMenuScene extends Component {
       MenuProgress.setBgmVolume(vol);
       onMenuVolumesChanged();
       if (this.settingsRefs?.bgmLabel) this.settingsRefs.bgmLabel.string = `${vol}%`;
+      syncServerProfile(MenuProgress.load());
     });
     const bgmLabel = this.makeLabel(panel, `${state.bgmVolume}%`, 200, bgmRowY, 60, 28, 20, TEXT_PRIMARY);
 
@@ -511,6 +799,7 @@ export class MainMenuScene extends Component {
       MenuProgress.setSfxVolume(vol);
       onMenuVolumesChanged();
       if (this.settingsRefs?.sfxLabel) this.settingsRefs.sfxLabel.string = `${vol}%`;
+      syncServerProfile(MenuProgress.load());
     });
     const sfxLabel = this.makeLabel(panel, `${state.sfxVolume}%`, 200, sfxRowY, 60, 28, 20, TEXT_PRIMARY);
 
@@ -612,6 +901,7 @@ export class MainMenuScene extends Component {
     if (getLang() === lang) return;
     setLang(lang);
     MenuProgress.setLang(lang);
+    syncServerProfile(MenuProgress.load());
     // 切语言后刷新整个菜单：简单粗暴地关掉模态 + 重建所有文字
     this.closeModal();
     this.rebuildAllText();
@@ -633,6 +923,8 @@ export class MainMenuScene extends Component {
     this.continueBtn = null;
     this.continueTitleLabel = null;
     this.continueSubLabel = null;
+    this.authNameLabel = null;
+    this.authStatusLabel = null;
     this.modalRoot = null;
     this.settingsRefs = null;
     this.onLoad();
@@ -780,7 +1072,11 @@ export class MainMenuScene extends Component {
     return { panel, contentY: panelH / 2 - 80 };
   }
 
-  private closeModal() {
+  private closeModal(force = false) {
+    if (!force && this.modalRoot?.name === 'AuthGate' && !getAuthSession()) {
+      this.setAuthStatus(authText('auth.error.chooseMode'), false);
+      return;
+    }
     if (this.modalRoot && this.modalRoot.isValid) this.modalRoot.destroy();
     this.modalRoot = null;
     this.settingsRefs = null;
@@ -967,12 +1263,220 @@ function findFirstCanvasNode(): Node | null {
 /** 安全读取战斗存档：缺失 / 解析失败都返回 null，不抛 */
 function readSaveSafe(): SaveData | null {
   try {
-    if (typeof localStorage === 'undefined' || !localStorage) return null;
-    const raw = localStorage.getItem(SAVE_KEY);
+    const raw = readActiveSaveRaw();
     if (!raw) return null;
     return JSON.parse(raw) as SaveData;
   } catch (e) {
     console.warn('[Menu] 存档读取失败', e);
     return null;
   }
+}
+
+interface AuthSession {
+  mode: LoginMode;
+  username: string;
+}
+
+interface AuthAccount {
+  username: string;
+  password: string;
+}
+
+const AUTH_SESSION_KEY = 'lone_sherman_auth_session_v1';
+const AUTH_ACCOUNTS_KEY = 'lone_sherman_auth_accounts_v1';
+let memoryAuthSession: AuthSession | null = null;
+let memoryAuthAccounts: AuthAccount[] = [];
+
+function getAuthSession(): AuthSession | null {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return memoryAuthSession;
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) return memoryAuthSession;
+    const parsed = JSON.parse(raw) as Partial<AuthSession>;
+    if (parsed.mode !== 'online' && parsed.mode !== 'offline') return null;
+    return {
+      mode: parsed.mode,
+      username: typeof parsed.username === 'string' ? parsed.username : '',
+    };
+  } catch (e) {
+    console.warn('[Menu] auth session read failed', e);
+    return null;
+  }
+}
+
+function setAuthSession(s: AuthSession): void {
+  memoryAuthSession = s;
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return;
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(s));
+  } catch (e) {
+    console.warn('[Menu] auth session write failed', e);
+  }
+}
+
+function loadAuthAccounts(): AuthAccount[] {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return memoryAuthAccounts;
+    const raw = localStorage.getItem(AUTH_ACCOUNTS_KEY);
+    if (!raw) return memoryAuthAccounts;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return memoryAuthAccounts;
+    return parsed
+      .filter((a): a is AuthAccount => !!a && typeof a.username === 'string' && typeof a.password === 'string')
+      .map(a => ({ username: a.username, password: a.password }));
+  } catch (e) {
+    console.warn('[Menu] auth accounts read failed', e);
+    return memoryAuthAccounts;
+  }
+}
+
+function writeAuthAccounts(accounts: AuthAccount[]): void {
+  memoryAuthAccounts = accounts;
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return;
+    localStorage.setItem(AUTH_ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch (e) {
+    console.warn('[Menu] auth accounts write failed', e);
+  }
+}
+
+function normalizeAuthName(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function hasAuthAccount(name: string): boolean {
+  const key = normalizeAuthName(name);
+  return loadAuthAccounts().some(a => normalizeAuthName(a.username) === key);
+}
+
+function verifyAuthAccount(name: string, password: string): boolean {
+  const key = normalizeAuthName(name);
+  const account = loadAuthAccounts().find(a => normalizeAuthName(a.username) === key);
+  return !!account && account.password === password;
+}
+
+function saveAuthAccount(name: string, password: string): void {
+  const accounts = loadAuthAccounts();
+  accounts.push({ username: name.trim(), password });
+  writeAuthAccounts(accounts);
+}
+
+function buildCurrentServerProfile(): ServerProfile {
+  return {
+    menuState: MenuProgress.load(),
+    settings: null,
+  };
+}
+
+function applyServerProfile(profile?: ServerProfile): void {
+  if (!profile) return;
+  if (profile.menuState) {
+    MenuProgress.replace(profile.menuState);
+  }
+}
+
+function serverAuthMessageKey(code?: string): string {
+  switch (code) {
+    case 'BAD_PASSWORD': return 'auth.error.password';
+    case 'ACCOUNT_EXISTS': return 'auth.error.accountExists';
+    case 'NETWORK_ERROR': return 'auth.error.network';
+    case 'NETWORK_TIMEOUT': return 'auth.error.timeout';
+    default: return 'auth.error.server';
+  }
+}
+
+const AUTH_EXTRA_ZH: Record<string, string> = {
+  'auth.error.password': '密码不正确',
+  'auth.error.passwordEmpty': '请输入密码',
+  'auth.error.passwordConfirm': '两次输入的密码不一致',
+  'auth.error.accountExists': '该账号已存在，请返回登录',
+  'auth.error.network': '无法连接服务器，请确认 server 已启动',
+  'auth.error.timeout': '服务器响应超时',
+  'auth.error.server': '服务器错误：{msg}',
+  'auth.login.busy': '正在登录...',
+  'auth.register.busy': '正在注册...',
+  'auth.register.title': '注册账号',
+  'auth.register.subtitle': '未找到该账号。你可以直接注册一个新账号，账号名已为你填好，也可以手动修改。',
+  'auth.register.confirm': '确认密码',
+  'auth.register.confirmPlaceholder': '再次输入密码',
+  'auth.register.button': '注册并登录',
+  'auth.register.back': '返回登录',
+  'auth.register.ok': '注册成功：{name}',
+  'auth.register.prefill': '已填入刚才输入的账号：{name}',
+};
+
+const AUTH_EXTRA_EN: Record<string, string> = {
+  'auth.error.password': 'Incorrect password',
+  'auth.error.passwordEmpty': 'Enter a password',
+  'auth.error.passwordConfirm': 'Passwords do not match',
+  'auth.error.accountExists': 'This account already exists; return to sign in',
+  'auth.error.network': 'Cannot connect to server. Make sure server is running.',
+  'auth.error.timeout': 'Server timed out',
+  'auth.error.server': 'Server error: {msg}',
+  'auth.login.busy': 'Signing in...',
+  'auth.register.busy': 'Creating account...',
+  'auth.register.title': 'Create Account',
+  'auth.register.subtitle': 'Account not found. Create a new account below; the name is prefilled and can be changed.',
+  'auth.register.confirm': 'Confirm',
+  'auth.register.confirmPlaceholder': 'Enter password again',
+  'auth.register.button': 'Create & Sign In',
+  'auth.register.back': 'Back',
+  'auth.register.ok': 'Account created: {name}',
+  'auth.register.prefill': 'Prefilled from your login attempt: {name}',
+};
+
+function authText(key: string, params?: Record<string, string | number>): string {
+  const zh: Record<string, string> = {
+    'auth.title': '选择游玩模式',
+    'auth.subtitle': '登录后可同步关卡进度、游戏存档和音量设置；离线模式保持当前本地玩法。',
+    'auth.login.title': '账号登录',
+    'auth.login.desc': '适合长期存档和跨设备同步。',
+    'auth.username': '账号',
+    'auth.password': '密码',
+    'auth.username.placeholder': '输入账号',
+    'auth.password.placeholder': '输入密码',
+    'auth.login.button': '登录并进入',
+    'auth.login.ok': '已登录：{name}',
+    'auth.error.username': '请输入账号后再登录',
+    'auth.error.chooseMode': '请选择登录或离线模式',
+    'auth.offline.title': '离线作战',
+    'auth.offline.desc': '不连接服务器，直接进入游戏。进度、存档和设置继续保存在本机，行为与现在一致。',
+    'auth.offline.button': '离线进入',
+    'auth.offline.ok': '已进入离线模式',
+    'auth.badge.none': '未选择模式',
+    'auth.badge.online': '账号：{name}',
+    'auth.badge.offline': '离线模式',
+    'auth.defaultUser': '玩家',
+  };
+  const en: Record<string, string> = {
+    'auth.title': 'Choose Play Mode',
+    'auth.subtitle': 'Sign in to sync progress, saves, and volume settings. Offline keeps the current local flow.',
+    'auth.login.title': 'Account Login',
+    'auth.login.desc': 'Best for long-term saves and cross-device sync.',
+    'auth.username': 'Account',
+    'auth.password': 'Password',
+    'auth.username.placeholder': 'Enter account',
+    'auth.password.placeholder': 'Enter password',
+    'auth.login.button': 'Sign In',
+    'auth.login.ok': 'Signed in: {name}',
+    'auth.error.username': 'Enter an account first',
+    'auth.error.chooseMode': 'Choose login or offline mode',
+    'auth.offline.title': 'Offline',
+    'auth.offline.desc': 'No server connection. Progress, saves, and settings stay on this device, just like the current game.',
+    'auth.offline.button': 'Play Offline',
+    'auth.offline.ok': 'Offline mode selected',
+    'auth.badge.none': 'No mode selected',
+    'auth.badge.online': 'Account: {name}',
+    'auth.badge.offline': 'Offline mode',
+    'auth.defaultUser': 'Player',
+  };
+  const dict = getLang() === 'en' ? en : zh;
+  const extra = getLang() === 'en' ? AUTH_EXTRA_EN : AUTH_EXTRA_ZH;
+  let s = dict[key] ?? extra[key] ?? key;
+  if (params) {
+    for (const k of Object.keys(params)) {
+      s = s.split('{' + k + '}').join(String(params[k]));
+    }
+  }
+  return s;
 }

@@ -194,7 +194,7 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "hexSize": 46.8,
+    "hexSize": 60,
     "missionPath": "missions/mission_01",
     "mainMenuSceneName": "main",
     "showReachable": true,

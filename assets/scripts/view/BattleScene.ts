@@ -118,9 +118,11 @@ const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
   panzer4_spawn: 'battle.turnEndList.effect.panzer4_spawn',
   german_truck_move: 'battle.turnEndList.effect.german_truck_move',
 };
-import { applySave, captureSave, SAVE_KEY, SaveData, SavePlayerStep } from '../core/SaveLoad';
+import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
+import { syncServerProfile } from '../core/AuthService';
+import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
   initGameAudio,
   onMenuVolumesChanged,
@@ -264,9 +266,9 @@ interface TigerSplitVisualConfig {
 }
 
 const TIGER_SPLIT_VISUAL_CONFIG: TigerSplitVisualConfig = {
-  hullFitScale: 0.65,
-  turretScale: 0.65,
-  hullOffsetForward: -0.02,
+  hullFitScale: 0.9,
+  turretScale: 0.8,
+  hullOffsetForward: -0.15,
   hullOffsetRight: 0,
   turretOffsetForward: 0.08,
   turretOffsetRight: 0,
@@ -282,8 +284,8 @@ const PANZER4_SPLIT_VISUAL_CONFIG: TigerSplitVisualConfig = {
 };
 
 const PANZER3_SPLIT_VISUAL_CONFIG: TigerSplitVisualConfig = {
-  hullFitScale: 0.82,
-  turretScale: 0.615,
+  hullFitScale: 0.84,
+  turretScale: 0.63,
   hullOffsetForward: -0.10,
   hullOffsetRight: 0,
   turretOffsetForward: 0.05,
@@ -323,14 +325,8 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-/** 敌方 AI 骰子迷你托盘：相对原 28px 约 +100% */
-const ENEMY_AI_DIE_SIZE = 56;
-const ENEMY_AI_DIE_GAP = 12;
 /** 掷骰展示后、按点排序到槽位的动画时长（秒） */
 const ENEMY_TRAY_SORT_DUR = 1.0;
-/** 敌方 AI 骰子托盘锚点（Canvas 中心为原点）：中上方，避开左侧回合/任务 HUD */
-const ENEMY_DICE_TRAY_ANCHOR_X = 0;
-const ENEMY_DICE_TRAY_ANCHOR_Y = 308;
 
 /** 把 AIActionEntry 转成控制台日志里的 "射击>转向" 这种紧凑表达 */
 function describeEntry(entry: AIActionEntry): string {
@@ -683,6 +679,7 @@ const BATTLE_SETTINGS_R = 24;
 // 战斗内设置 / 退出确认模态（与主菜单风格一致）
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
+const BOARD_CENTER_OFFSET_Y = 38;
 /** 与 MainMenuScene `BG_TOP` / `BG_MID` / `BG_BOTTOM` / `MENU_DIVIDER` 一致（主菜单渐变底图） */
 const MAIN_MENU_STYLE_BG_TOP = new Color(40, 52, 38, 255);
 const MAIN_MENU_STYLE_BG_MID = new Color(26, 34, 28, 255);
@@ -862,7 +859,7 @@ interface BattleRectButtonRefs {
 export class BattleScene extends Component {
 
   @property({ tooltip: '六角形单边长度（像素）。地图过大请调小，过小请调大。' })
-  hexSize: number = 46.8;
+  hexSize: number = 60;
 
   @property({ tooltip: '任务 JSON 在 resources/ 下的相对路径，无需扩展名。' })
   missionPath: string = 'missions/mission_01';
@@ -1204,18 +1201,18 @@ export class BattleScene extends Component {
   private static readonly SHERMAN_TURRET_TRIM_Y = 24;
   private static readonly SHERMAN_TURRET_TRIM_W = 321;
   private static readonly SHERMAN_TURRET_TRIM_H = 157;
-  private static readonly TIGER_TURRET_PIVOT_X = 447;
-  private static readonly TIGER_TURRET_PIVOT_Y = 289;
-  private static readonly TIGER_TURRET_SPRITE_PIVOT_X = 876;
-  private static readonly TIGER_TURRET_SPRITE_PIVOT_Y = 242;
+  private static readonly TIGER_TURRET_PIVOT_X = 454;
+  private static readonly TIGER_TURRET_PIVOT_Y = 292;
+  private static readonly TIGER_TURRET_SPRITE_PIVOT_X = 875;
+  private static readonly TIGER_TURRET_SPRITE_PIVOT_Y = 243;
   private static readonly TIGER_TOP_TRIM_X = 0;
   private static readonly TIGER_TOP_TRIM_Y = 0;
-  private static readonly TIGER_TOP_TRIM_W = 905;
-  private static readonly TIGER_TOP_TRIM_H = 578;
+  private static readonly TIGER_TOP_TRIM_W = 1201;
+  private static readonly TIGER_TOP_TRIM_H = 592;
   private static readonly TIGER_TURRET_TRIM_X = 0;
   private static readonly TIGER_TURRET_TRIM_Y = 0;
-  private static readonly TIGER_TURRET_TRIM_W = 1339;
-  private static readonly TIGER_TURRET_TRIM_H = 499;
+  private static readonly TIGER_TURRET_TRIM_W = 1341;
+  private static readonly TIGER_TURRET_TRIM_H = 500;
   private static readonly PANZER4_TURRET_PIVOT_X = 589;
   private static readonly PANZER4_TURRET_PIVOT_Y = 294;
   private static readonly PANZER4_TURRET_SPRITE_PIVOT_X = 425;
@@ -1597,7 +1594,7 @@ export class BattleScene extends Component {
     }
     this.offsetX = -(minX + maxX) / 2;
     // Cocos Y 朝上，但我们希望 row 0 在屏幕顶部 → Y 取负
-    this.offsetY = (minY + maxY) / 2;
+    this.offsetY = (minY + maxY) / 2 + BOARD_CENTER_OFFSET_Y;
 
     // 初始化回合状态
     this.turn = 1;
@@ -2471,7 +2468,7 @@ export class BattleScene extends Component {
       }
       if (a.unit.kind === 'sherman') {
         this.shermanTurretFacing = a.to;
-      } else if (a.unit.kind === 'tiger' || a.unit.kind === 'panzer4') {
+      } else if (this.enemySupportsSplitTurret(a.unit)) {
         this.enemyTurretFacing.set(a.unit.id, a.to);
       }
       this.turretAimAnim = null;
@@ -2538,7 +2535,7 @@ export class BattleScene extends Component {
     }
     if (finishedUnit.kind === 'sherman' && finishedUnit.facing !== null) {
       this.shermanTurretFacing = finishedUnit.facing;
-    } else if ((finishedUnit.kind === 'tiger' || finishedUnit.kind === 'panzer4') && finishedUnit.facing !== null) {
+    } else if (this.enemySupportsSplitTurret(finishedUnit) && finishedUnit.facing !== null) {
       this.enemyTurretFacing.set(finishedUnit.id, finishedUnit.facing);
     }
     stopTankManeuver();
@@ -4248,6 +4245,14 @@ export class BattleScene extends Component {
     return { from: facing, to: facing, t: 1 };
   }
 
+  private enemySupportsSplitTurret(u: Unit): boolean {
+    return (
+      (u.kind === 'tiger' && !!this.tigerHullSpriteFrame && !!this.tigerTurretSpriteFrame)
+      || (u.kind === 'panzer4' && !!this.panzer4HullSpriteFrame && !!this.panzer4TurretSpriteFrame)
+      || (u.kind === 'panzer3' && !!this.panzer3HullSpriteFrame && !!this.panzer3TurretSpriteFrame)
+    );
+  }
+
   private drawDestroyedTankSprite(
     u: Unit,
     c: { x: number; y: number },
@@ -4997,16 +5002,16 @@ export class BattleScene extends Component {
   /**
    * 右侧常驻信息面板（自上而下）：
    *   ┌──────────────────┐
-   *   │   乘员             │
-   *   │  ① 车长  打开/关闭  │  ← 与舱盖合并：阵亡显示「阵亡」；存活可点切换舱盖
-   *   │  ② 装填手 …        │
-   *   │  …                 │
-   *   │  ─────────────     │
    *   │   谢尔曼状态       │
    *   │  装填    已装填    │
    *   │  炮塔    完好      │
    *   │  机动    正常      │
    *   │  着火程度  2 / -   │
+   *   │  ─────────────     │
+   *   │   乘员             │
+   *   │  ① 车长  打开/关闭  │  ← 与舱盖合并：阵亡显示「阵亡」；存活可点切换舱盖
+   *   │  ② 装填手 …        │
+   *   │  …                 │
    *   └──────────────────┘
    *
    * 每行左列 = 灰色固定名字，右列 = 根据数据着色的状态文字；
@@ -5024,12 +5029,12 @@ export class BattleScene extends Component {
     const CREW_GAP = 22;
     const BODY_GAP = 24;
     const innerTop = H / 2 - 8;
-    const crewTitleY = innerTop - 14;
-    const crewFirstY = crewTitleY - 26;
-    const sepY = crewFirstY - 5 * CREW_GAP - 10;
-    const shermanTitleY = sepY - 16;
+    const shermanTitleY = innerTop - 14;
     const bodyFirstY = shermanTitleY - 24;
     const bodyRowY = [0, 1, 2, 3].map(j => bodyFirstY - j * BODY_GAP);
+    const sepY = bodyRowY[bodyRowY.length - 1] - 20;
+    const crewTitleY = sepY - 18;
+    const crewFirstY = crewTitleY - 26;
 
     const panel = new Node('ShermanStatus');
     panel.layer = this.node.layer;
@@ -5048,7 +5053,7 @@ export class BattleScene extends Component {
     this.statusBodyLeftLabels = [];
     this.statusCrewLeftLabels = [];
 
-    // 1) 乘员区（在「谢尔曼状态」之上）
+    // 1) 乘员区（在「谢尔曼状态」之下）
     this.statusCrewTitleLabel = this.makeCenteredLabel(panel, t('status.row.crewTitle'),
       0, crewTitleY, W - 20, 22, 18, STATUS_TITLE_COLOR);
 
@@ -5749,6 +5754,10 @@ export class BattleScene extends Component {
     const GAP = BattleScene.DICE_TRAY_GAP;
     const total = count > 0 ? SLOT * count + GAP * (count - 1) : 0;
     return count > 0 ? -total * 0.5 + SLOT * 0.5 + index * (SLOT + GAP) : 0;
+  }
+
+  private placeEnemyDiceTrayRoot(tray: Node) {
+    tray.setPosition(0, BOTTOM_PHASE_ROW_Y, 0);
   }
 
   private beginPlayerDiceSortAnim(): boolean {
@@ -7483,13 +7492,19 @@ export class BattleScene extends Component {
   }
 
   private unitOnTileAxial(pos: { q: number; r: number }): Unit | null {
-    if (!this.mission) return null;
+    return this.unitsOnTileAxial(pos)[0] ?? null;
+  }
+
+  private unitsOnTileAxial(pos: { q: number; r: number }): Unit[] {
+    if (!this.mission) return [];
     const { sherman, enemies } = this.mission;
-    if (!sherman.destroyed && sherman.pos.q === pos.q && sherman.pos.r === pos.r) return sherman;
-    for (const e of enemies) {
-      if (!e.destroyed && e.pos.q === pos.q && e.pos.r === pos.r) return e;
-    }
-    return null;
+    const all = [sherman, ...enemies];
+    const units = all.filter(u => !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r);
+    return units.sort((a, b) => {
+      const af = isFootUnit(a) ? 1 : 0;
+      const bf = isFootUnit(b) ? 1 : 0;
+      return af - bf;
+    });
   }
 
   private collectUnitInspectStatusLines(u: Unit): string[] {
@@ -7554,16 +7569,20 @@ export class BattleScene extends Component {
     const at = b.attack[eff];
     const ms = b.misc[eff];
     blocks.push(t('tileInspect.diceIntro', { capMin: pool.capMin, capMax: pool.capMax }));
-    blocks.push(t('tileInspect.diceRow.move', { n: mv }));
-    blocks.push(t('tileInspect.diceRow.attack', { n: at }));
-    blocks.push(t('tileInspect.diceRow.misc', { n: ms }));
-    blocks.push(t('tileInspect.diceMods', {
+    blocks.push(t('tileInspect.diceRow.move', {
+      n: mv,
       md: pool.moveMods.driver,
       mc: pool.moveMods.codriver,
       mh: pool.moveMods.hatch,
+    }));
+    blocks.push(t('tileInspect.diceRow.attack', {
+      n: at,
       ag: pool.attackMods.gunner,
       al: pool.attackMods.loader,
       ah: pool.attackMods.hatch,
+    }));
+    blocks.push(t('tileInspect.diceRow.misc', {
+      n: ms,
       xc: pool.miscMods.commander,
     }));
 
@@ -7649,17 +7668,22 @@ export class BattleScene extends Component {
   ): { totalH: number; lowest: number } {
     const pl = padL;
     const pr = 8;
-    const textW = innerW - pl - pr;
-    const x0 = -innerW / 2 + pl;
+    const imageColW = 132;
+    const imageGap = 18;
+    const textW = innerW - pl - pr - imageColW - imageGap;
+    const imageCX = -innerW / 2 + pl + imageColW * 0.5;
+    const x0 = -innerW / 2 + pl + imageColW + imageGap;
     let y = -10;
     let low = 0;
     const mark = (top: number, h: number) => { low = Math.min(low, top - h); };
     const gapL = 12;
     // 地形/骰子
     {
+      this.addTileInspectTilePreview(content, tile, imageCX, y, 38);
       const { h } = this.makeTileScrollText(content, x0, y, textW, this.buildTileInspectTerrainText(tile), 16);
-      mark(y, h);
-      y = y - h - gapL;
+      const blockH = Math.max(h, 114);
+      mark(y, blockH);
+      y = y - blockH - gapL;
     }
     // 分割线
     {
@@ -7680,51 +7704,80 @@ export class BattleScene extends Component {
       y = y - padDiv - 2;
     }
     // 单位区
-    const u = this.unitOnTileAxial(tile.pos);
-    if (!u) {
+    const units = this.unitsOnTileAxial(tile.pos);
+    if (units.length === 0) {
       const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.noUnit'), 16);
       mark(y, h);
       return { totalH: -low + 16, lowest: low };
     }
-    {
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      const unitTopY = y;
+      this.addTileInspectUnitPreview(content, u, imageCX, unitTopY, 34);
       const title = t('tileInspect.currentUnit', { name: t(`unit.name.${u.kind}`) });
       const { h } = this.makeTileScrollText(content, x0, y, textW, title, 17);
-      mark(y, h);
       y = y - h - 8;
+
+      if (isFootUnit(u)) {
+        // 徒步类（步兵 / 军官）：无装甲 / 穿甲数据表，仅显示提示
+        const { h: footH } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.infantryNoTable'), 15);
+        y = y - footH - gapL;
+      } else {
+        const st = u.stats;
+        const cols = 5;
+        const gap = 4;
+        const colW = (textW - (cols - 1) * gap) / cols;
+        const heads = [t('tileInspect.colFront'), t('tileInspect.colFrontSide'), t('tileInspect.colRearSide'),
+          t('tileInspect.colRear'), t('tileInspect.colPen')];
+        const th = this.makeTileScrollSmallCaptions(content, x0, y, colW, heads, 12, gap).h;
+        y = y - th - 6;
+        const { h: vh } = this.makeTileScrollValueRow(content, x0, y, colW, [
+          st.armorFront, st.armorFrontSide, st.armorRearSide, st.armorRear, st.penetration,
+        ], 17, gap);
+        y = y - vh - gapL;
+      }
+
+      const stLines = this.collectUnitInspectStatusLines(u);
+      const stText = stLines.length ? stLines.join(t('tileInspect.statusSep')) : t('tileInspect.statusNone');
+      const { h: hs } = this.makeTileScrollText(
+        content, x0, y, textW, t('tileInspect.currentStatus', { status: stText }), 16,
+      );
+      y = y - hs;
+      const unitBlockH = Math.max(unitTopY - y, 92);
+      mark(unitTopY, unitBlockH);
+      y = unitTopY - unitBlockH;
+      if (i < units.length - 1) {
+        const divPad = 18;
+        const d = new Node('UnitDiv');
+        d.layer = this.node.layer;
+        d.addComponent(UITransform).setContentSize(textW, divPad);
+        d.getComponent(UITransform)!.setAnchorPoint(0, 1);
+        d.setPosition(x0, y - 8, 0);
+        const g = d.addComponent(Graphics);
+        g.lineWidth = 0;
+        g.fillColor = BATTLE_MODAL_DIVIDER;
+        g.rect(0, 0, textW, 1);
+        g.fill();
+        content.addChild(d);
+        mark(y - 8, divPad);
+        y = y - divPad - 2;
+      }
     }
-    if (isFootUnit(u)) {
-      // 徒步类（步兵 / 军官）：无装甲 / 穿甲数据表，仅显示提示
-      const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.infantryNoTable'), 15);
-      mark(y, h);
-      y = y - h - gapL;
-    } else {
-      const st = u.stats;
-      const cols = 5;
-      const gap = 4;
-      const colW = (textW - (cols - 1) * gap) / cols;
-      const heads = [t('tileInspect.colFront'), t('tileInspect.colFrontSide'), t('tileInspect.colRearSide'),
-        t('tileInspect.colRear'), t('tileInspect.colPen')];
-      const th = this.makeTileScrollSmallCaptions(content, x0, y, colW, heads, 12, gap).h;
-      mark(y, th);
-      y = y - th - 6;
-      const { h: vh } = this.makeTileScrollValueRow(content, x0, y, colW, [
-        st.armorFront, st.armorFrontSide, st.armorRearSide, st.armorRear, st.penetration,
-      ], 17, gap);
-      mark(y, vh);
-      y = y - vh - gapL;
-    }
-    const stLines = this.collectUnitInspectStatusLines(u);
-    const stText = stLines.length ? stLines.join(t('tileInspect.statusSep')) : t('tileInspect.statusNone');
-    const { h: hs } = this.makeTileScrollText(
-      content, x0, y, textW, t('tileInspect.currentStatus', { status: stText }), 16,
-    );
-    mark(y, hs);
     return { totalH: -low + 16, lowest: low };
   }
 
   /** 在模态小预览区绘制六角地形 + 林冠/建筑示意 */
   private paintTileInspectPreview(g: Graphics, tile: Tile, cx: number, cy: number, hexR: number) {
-    drawMiniHexTerrain(g, cx, cy, hexR, TERRAIN_COLORS[tile.terrain], TILE_BORDER);
+    const oldG = this.g;
+    this.g = g;
+    const hasTerrainSprite = !!this.terrainSpriteFrames[tile.terrain];
+    if (!hasTerrainSprite) {
+      this.drawHexFill(cx, cy, hexR, TERRAIN_COLORS[tile.terrain]);
+      if (tile.terrain === 'field') this.drawFieldBrushOverlay(cx, cy, hexR, tile);
+    }
+    this.drawHexStroke(cx, cy, hexR);
+    if (tile.terrain === 'mud' && !hasTerrainSprite) this.drawMudOverlay(cx, cy, hexR, tile);
+    if (tile.terrain === 'road' && !hasTerrainSprite) this.drawRoadHexOverlay(cx, cy, hexR, tile);
     if (tile.terrain === 'forest') {
       const s = hexR;
       g.lineWidth = 0;
@@ -7738,72 +7791,427 @@ export class BattleScene extends Component {
       g.circle(cx + s * 0.22, cy + s * 0.05, s * 0.32);
       g.fill();
     }
-    if (tile.hasBuilding) {
-      const s = hexR;
-      const yBase = cy - s * 0.22;
-      const yWallTop = cy - s * 0.06;
-      const yRoofPeak = cy + s * 0.18;
-      const bodyW = s * 0.55;
-      const roofW = s * 0.68;
-      g.lineWidth = 1.5;
-      g.fillColor = BUILDING_WALL_FILL;
-      g.strokeColor = BUILDING_OUTLINE;
-      g.moveTo(cx - bodyW, yBase);
-      g.lineTo(cx + bodyW, yBase);
-      g.lineTo(cx + bodyW, yWallTop);
-      g.lineTo(cx - bodyW, yWallTop);
-      g.close();
-      g.fill();
-      g.stroke();
-      g.fillColor = BUILDING_ROOF_FILL;
-      g.moveTo(cx - roofW, yWallTop);
-      g.lineTo(cx, yRoofPeak);
-      g.lineTo(cx + roofW, yWallTop);
-      g.close();
-      g.fill();
-      g.stroke();
+    if (tileHasBridge(tile)) this.drawBridgeOverlay(cx, cy, hexR, tile.bridgeEnds!);
+    if (tile.roads) this.drawRoadOverlay(cx, cy, hexR, tile.roads, tile);
+    if (tile.hasBuilding) this.drawBuildingOverlay(cx, cy, hexR, tile);
+    this.drawHexStroke(cx, cy, hexR);
+    this.g = oldG;
+  }
+
+  private addTileInspectTerrainSprite(parent: Node, tile: Tile, cx: number, cy: number, hexR: number) {
+    const sf = this.terrainSpriteFrames[tile.terrain];
+    if (!sf) return;
+    const n = new Node('TileInspectTerrainSprite');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    const sp = n.addComponent(Sprite);
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(hexR * Math.sqrt(3), hexR * 2);
+    n.setPosition(cx, cy, 0);
+    parent.addChild(n);
+  }
+
+  private addTileInspectTilePreview(parent: Node, tile: Tile, centerX: number, topY: number, hexR: number) {
+    const h = 114;
+    const preview = new Node('TilePreview');
+    preview.layer = this.node.layer;
+    preview.addComponent(UITransform).setContentSize(132, h);
+    preview.setPosition(centerX, topY - h * 0.5, 0);
+    parent.addChild(preview);
+
+    const hexCY = 24;
+    this.addTileInspectTerrainSprite(preview, tile, 0, hexCY, hexR);
+    const overlay = new Node('TilePreviewOverlay');
+    overlay.layer = this.node.layer;
+    overlay.addComponent(UITransform).setContentSize(132, h);
+    preview.addChild(overlay);
+    const pvg = overlay.addComponent(Graphics);
+    this.paintTileInspectPreview(pvg, tile, 0, hexCY, hexR);
+
+    const baseTerrainName = t(`terrain.${tile.terrain}`);
+    const titleStr = tileHasBridge(tile)
+      ? `${baseTerrainName} + ${t('terrain.bridge')}`
+      : baseTerrainName;
+    const lab = this.makeBattleModalLabel(
+      preview, titleStr,
+      0, -42, 132, 24, 18, new Color(235, 240, 245, 255),
+    );
+    lab.horizontalAlign = HorizontalTextAlignment.CENTER;
+    lab.verticalAlign = VerticalTextAlignment.CENTER;
+  }
+
+  private addTileInspectSprite(
+    parent: Node,
+    sf: SpriteFrame,
+    dw: number,
+    dh: number,
+    fit: number,
+    x = 0,
+    y = 0,
+    angle = 0,
+  ) {
+    const n = new Node('TileInspectUnitSprite');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    const sp = n.addComponent(Sprite);
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    const w = dw > 0 ? dw : sf.width;
+    const h = dh > 0 ? dh : sf.height;
+    const maxDim = Math.max(w, h) || 1;
+    ut.setContentSize((w / maxDim) * fit, (h / maxDim) * fit);
+    n.setPosition(x, y, 0);
+    n.angle = angle;
+    parent.addChild(n);
+  }
+
+  private addTileInspectCustomSprite(
+    parent: Node,
+    sf: SpriteFrame,
+    w: number,
+    h: number,
+    x: number,
+    y: number,
+    angle: number,
+    anchorX = 0.5,
+    anchorY = 0.5,
+  ) {
+    const n = new Node('TileInspectUnitSprite');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    const sp = n.addComponent(Sprite);
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(w, h);
+    ut.setAnchorPoint(anchorX, anchorY);
+    n.setPosition(x, y, 0);
+    n.angle = angle;
+    parent.addChild(n);
+  }
+
+  private tileInspectFacingAngle(u: Unit): number {
+    if (u.facing === null) return 180;
+    const edge = HEDGE_DRAW_EDGE_BY_AXIAL[u.facing];
+    const a = (60 * edge * Math.PI) / 180;
+    return (Math.atan2(Math.sin(a), Math.cos(a)) * 180) / Math.PI + 180;
+  }
+
+  private tileInspectForwardVec(u: Unit): { ux: number; uy: number } {
+    const a = ((this.tileInspectFacingAngle(u) - 180) * Math.PI) / 180;
+    return { ux: Math.cos(a), uy: Math.sin(a) };
+  }
+
+  private addTileInspectTopDownTankSprite(
+    parent: Node,
+    u: Unit,
+    sf: SpriteFrame,
+    displayW: number,
+    displayH: number,
+    hexR: number,
+    preserveAspectRatio = false,
+  ) {
+    const cfg = tankVisualConfigOf(u.kind);
+    const w = displayW > 0 ? displayW : sf.width;
+    const h = displayH > 0 ? displayH : sf.height;
+    const fit = hexR * 1.8 * cfg.fitScale;
+    const maxDim = Math.max(w, h) || 1;
+    const tw0 = (w / maxDim) * fit;
+    const th0 = (h / maxDim) * fit;
+    const k = preserveAspectRatio ? 1 : Math.sqrt(Math.max(1e-6, cfg.aspectRatioMul));
+    const body = this.tileInspectForwardVec(u);
+    const offsetUnit = hexR * Math.sqrt(3);
+    const f = cfg.offsetForward * offsetUnit;
+    const r = cfg.offsetRight * offsetUnit;
+    this.addTileInspectCustomSprite(
+      parent,
+      sf,
+      tw0 * k,
+      th0 / k,
+      f * body.ux + r * body.uy,
+      f * body.uy + r * (-body.ux),
+      this.tileInspectFacingAngle(u),
+    );
+  }
+
+  private addTileInspectShermanSplit(parent: Node, u: Unit, hexR: number): boolean {
+    const hull = this.shermanHullSpriteFrame;
+    const turret = this.shermanTurretSpriteFrame;
+    if (!hull || !turret) return false;
+    const cfg = tankVisualConfigOf(u.kind);
+    const srcW = BattleScene.SHERMAN_TOP_TRIM_W;
+    const srcH = BattleScene.SHERMAN_TOP_TRIM_H;
+    const fit = hexR * 1.8 * cfg.fitScale;
+    const maxDim = Math.max(srcW, srcH) || 1;
+    const tw0 = (srcW / maxDim) * fit;
+    const th0 = (srcH / maxDim) * fit;
+    const k = Math.sqrt(Math.max(1e-6, cfg.aspectRatioMul));
+    const topW = tw0 * k;
+    const topH = th0 / k;
+    const scaleX = topW / srcW;
+    const scaleY = topH / srcH;
+    const body = this.tileInspectForwardVec(u);
+    const offsetUnit = hexR * Math.sqrt(3);
+    const f = cfg.offsetForward * offsetUnit;
+    const r = cfg.offsetRight * offsetUnit;
+    const baseX = f * body.ux + r * body.uy;
+    const baseY = f * body.uy + r * (-body.ux);
+    const angle = this.tileInspectFacingAngle(u);
+
+    this.addTileInspectCustomSprite(parent, hull, topW, topH, baseX, baseY, angle);
+
+    const pivotLocalX = (BattleScene.SHERMAN_TURRET_PIVOT_X
+      - (BattleScene.SHERMAN_TOP_TRIM_X + BattleScene.SHERMAN_TOP_TRIM_W / 2)) * scaleX;
+    const pivotLocalY = ((BattleScene.SHERMAN_TOP_TRIM_Y + BattleScene.SHERMAN_TOP_TRIM_H / 2)
+      - BattleScene.SHERMAN_TURRET_PIVOT_Y) * scaleY;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+    this.addTileInspectCustomSprite(
+      parent,
+      turret,
+      BattleScene.SHERMAN_TURRET_TRIM_W * scaleX,
+      BattleScene.SHERMAN_TURRET_TRIM_H * scaleY,
+      baseX + pivotLocalX * cos - pivotLocalY * sin,
+      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      angle,
+      (BattleScene.SHERMAN_TURRET_PIVOT_X - BattleScene.SHERMAN_TURRET_TRIM_X) / BattleScene.SHERMAN_TURRET_TRIM_W,
+      1 - ((BattleScene.SHERMAN_TURRET_PIVOT_Y - BattleScene.SHERMAN_TURRET_TRIM_Y) / BattleScene.SHERMAN_TURRET_TRIM_H),
+    );
+    return true;
+  }
+
+  private addTileInspectSplitTank(
+    parent: Node,
+    u: Unit,
+    hexR: number,
+    hullFrame: SpriteFrame | null,
+    turretFrame: SpriteFrame | null,
+    cfg: TigerSplitVisualConfig,
+    topTrim: { x: number; y: number; w: number; h: number },
+    turretTrim: { x: number; y: number; w: number; h: number },
+    pivot: { bodyX: number; bodyY: number; spriteX: number; spriteY: number },
+  ): boolean {
+    if (!hullFrame || !turretFrame) return false;
+    const body = this.tileInspectForwardVec(u);
+    const angle = this.tileInspectFacingAngle(u);
+    const fit = hexR * 1.8 * cfg.hullFitScale;
+    const scale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
+    const offsetUnit = hexR * Math.sqrt(3);
+    const f = cfg.hullOffsetForward * offsetUnit;
+    const r = cfg.hullOffsetRight * offsetUnit;
+    const baseX = f * body.ux + r * body.uy;
+    const baseY = f * body.uy + r * (-body.ux);
+
+    this.addTileInspectCustomSprite(
+      parent,
+      hullFrame,
+      topTrim.w * scale,
+      topTrim.h * scale,
+      baseX,
+      baseY,
+      angle,
+    );
+
+    const turretScale = scale * cfg.turretScale;
+    const turretF = cfg.turretOffsetForward * offsetUnit;
+    const turretR = cfg.turretOffsetRight * offsetUnit;
+    const pivotLocalX = (pivot.bodyX - (topTrim.x + topTrim.w / 2)) * scale;
+    const pivotLocalY = ((topTrim.y + topTrim.h / 2) - pivot.bodyY) * scale;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+    const anchorX = (pivot.spriteX - turretTrim.x) / turretTrim.w;
+    const anchorY = 1 - ((pivot.spriteY - turretTrim.y) / turretTrim.h);
+    this.addTileInspectCustomSprite(
+      parent,
+      turretFrame,
+      turretTrim.w * turretScale,
+      turretTrim.h * turretScale,
+      baseX + pivotLocalX * cos - pivotLocalY * sin,
+      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      angle,
+      anchorX + turretF / (turretTrim.w * turretScale),
+      anchorY - turretR / (turretTrim.h * turretScale),
+    );
+    return true;
+  }
+
+  private paintTileInspectUnitPreview(parent: Node, u: Unit, hexR: number) {
+    const g = parent.addComponent(Graphics);
+    const oldG = this.g;
+    this.g = g;
+    g.strokeColor = new Color(220, 225, 210, 75);
+    g.lineWidth = 2;
+    this.drawHexOutline(0, 0, hexR);
+
+    if (isFootUnit(u)) {
+      if (u.kind === 'officer' && this.officerSpriteFrame) {
+        this.addTileInspectSprite(parent, this.officerSpriteFrame, this.officerSpriteDim.dw, this.officerSpriteDim.dh, hexR * 1.06);
+        this.g = oldG;
+        return;
+      }
+      const allLoaded = this.infantrySpriteFrames.every((sf) => !!sf);
+      if (!allLoaded) {
+        const bodyR = hexR * 0.30;
+        const headR = hexR * 0.16;
+        g.fillColor = FACTION_COLORS[u.faction];
+        g.strokeColor = UNIT_BORDER;
+        g.lineWidth = 2;
+        g.circle(0, -bodyR * 0.15, bodyR);
+        g.fill(); g.stroke();
+        g.circle(0, hexR * 0.28, headR);
+        g.fill(); g.stroke();
+        this.g = oldG;
+        return;
+      }
+      const ringR = hexR * 0.50 * 0.546;
+      const sin60 = Math.sqrt(3) / 2;
+      const offsets = [
+        { ox: 0, oy: ringR },
+        { ox: ringR * sin60, oy: -ringR * 0.5 },
+        { ox: -ringR * sin60, oy: -ringR * 0.5 },
+      ];
+      const spriteFit = hexR * 0.58;
+      for (let i = 0; i < BattleScene.INFANTRY_SPRITES_PER_UNIT; i++) {
+        const sf = this.infantrySpriteFrames[i];
+        if (!sf) continue;
+        const dim = this.infantrySpriteDims[i];
+        const fit = i === 0 ? spriteFit : spriteFit * 1.15;
+        this.addTileInspectSprite(parent, sf, dim.dw, dim.dh, fit, offsets[i].ox, offsets[i].oy);
+      }
+      this.g = oldG;
+      return;
     }
-    // 桥梁叠加（GDD §3.2）：在水域底色上叠桥面 + 双侧栏杆，与主战场同款几何（这里取小尺寸即可）
-    if (tileHasBridge(tile)) {
-      const ends = tile.bridgeEnds!;
-      const mid = (axial: Direction): { x: number; y: number } => {
-        const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axial];
-        const a1 = (-30 + 60 * edge) * Math.PI / 180;
-        const a2 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
-        const x0 = cx + hexR * Math.cos(a1);
-        const y0 = cy + hexR * Math.sin(a1);
-        const x1 = cx + hexR * Math.cos(a2);
-        const y1 = cy + hexR * Math.sin(a2);
-        return { x: (x0 + x1) / 2, y: (y0 + y1) / 2 };
-      };
-      const p0 = mid(ends[0]);
-      const p1 = mid(ends[1]);
-      const dx = p1.x - p0.x;
-      const dy = p1.y - p0.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const nx = -dy / len;
-      const ny = dx / len;
-      const halfW = hexR * 0.18;
-      g.lineWidth = 1.5;
-      g.fillColor = BRIDGE_PLANK_FILL;
-      g.strokeColor = BRIDGE_PLANK_OUTLINE;
-      g.moveTo(p0.x + nx * halfW, p0.y + ny * halfW);
-      g.lineTo(p1.x + nx * halfW, p1.y + ny * halfW);
-      g.lineTo(p1.x - nx * halfW, p1.y - ny * halfW);
-      g.lineTo(p0.x - nx * halfW, p0.y - ny * halfW);
-      g.close();
-      g.fill();
-      g.stroke();
-      g.strokeColor = BRIDGE_RAIL_STROKE;
-      g.lineWidth = 1.5;
-      const rail = halfW + hexR * 0.04;
-      g.moveTo(p0.x + nx * rail, p0.y + ny * rail);
-      g.lineTo(p1.x + nx * rail, p1.y + ny * rail);
-      g.stroke();
-      g.moveTo(p0.x - nx * rail, p0.y - ny * rail);
-      g.lineTo(p1.x - nx * rail, p1.y - ny * rail);
-      g.stroke();
+
+    const destroyedMeta = u.destroyed ? this.destroyedTopMeta[u.kind as DestroyedTopKind] : null;
+    if (destroyedMeta?.sf) {
+      this.addTileInspectSprite(parent, destroyedMeta.sf, destroyedMeta.dw, destroyedMeta.dh, hexR * 1.45, 0, 0, this.tileInspectFacingAngle(u));
+      this.g = oldG;
+      return;
     }
+    if (u.kind === 'sherman' && this.shermanTopSpriteFrame) {
+      if (this.addTileInspectShermanSplit(parent, u, hexR)) {
+        this.g = oldG;
+        return;
+      }
+      this.addTileInspectTopDownTankSprite(parent, u, this.shermanTopSpriteFrame, this.shermanSpriteDisplayW, this.shermanSpriteDisplayH, hexR);
+      this.g = oldG;
+      return;
+    }
+    if (isEnemyTopKind(u.kind)) {
+      if (u.kind === 'tiger' && this.addTileInspectSplitTank(
+        parent,
+        u,
+        hexR,
+        this.tigerHullSpriteFrame,
+        this.tigerTurretSpriteFrame,
+        TIGER_SPLIT_VISUAL_CONFIG,
+        {
+          x: BattleScene.TIGER_TOP_TRIM_X,
+          y: BattleScene.TIGER_TOP_TRIM_Y,
+          w: BattleScene.TIGER_TOP_TRIM_W,
+          h: BattleScene.TIGER_TOP_TRIM_H,
+        },
+        {
+          x: BattleScene.TIGER_TURRET_TRIM_X,
+          y: BattleScene.TIGER_TURRET_TRIM_Y,
+          w: BattleScene.TIGER_TURRET_TRIM_W,
+          h: BattleScene.TIGER_TURRET_TRIM_H,
+        },
+        {
+          bodyX: BattleScene.TIGER_TURRET_PIVOT_X,
+          bodyY: BattleScene.TIGER_TURRET_PIVOT_Y,
+          spriteX: BattleScene.TIGER_TURRET_SPRITE_PIVOT_X,
+          spriteY: BattleScene.TIGER_TURRET_SPRITE_PIVOT_Y,
+        },
+      )) {
+        this.g = oldG;
+        return;
+      }
+      if (u.kind === 'panzer4' && this.addTileInspectSplitTank(
+        parent,
+        u,
+        hexR,
+        this.panzer4HullSpriteFrame,
+        this.panzer4TurretSpriteFrame,
+        PANZER4_SPLIT_VISUAL_CONFIG,
+        {
+          x: BattleScene.PANZER4_TOP_TRIM_X,
+          y: BattleScene.PANZER4_TOP_TRIM_Y,
+          w: BattleScene.PANZER4_TOP_TRIM_W,
+          h: BattleScene.PANZER4_TOP_TRIM_H,
+        },
+        {
+          x: BattleScene.PANZER4_TURRET_TRIM_X,
+          y: BattleScene.PANZER4_TURRET_TRIM_Y,
+          w: BattleScene.PANZER4_TURRET_TRIM_W,
+          h: BattleScene.PANZER4_TURRET_TRIM_H,
+        },
+        {
+          bodyX: BattleScene.PANZER4_TURRET_PIVOT_X,
+          bodyY: BattleScene.PANZER4_TURRET_PIVOT_Y,
+          spriteX: BattleScene.PANZER4_TURRET_SPRITE_PIVOT_X,
+          spriteY: BattleScene.PANZER4_TURRET_SPRITE_PIVOT_Y,
+        },
+      )) {
+        this.g = oldG;
+        return;
+      }
+      if (u.kind === 'panzer3' && this.addTileInspectSplitTank(
+        parent,
+        u,
+        hexR,
+        this.panzer3HullSpriteFrame,
+        this.panzer3TurretSpriteFrame,
+        PANZER3_SPLIT_VISUAL_CONFIG,
+        {
+          x: BattleScene.PANZER3_TOP_TRIM_X,
+          y: BattleScene.PANZER3_TOP_TRIM_Y,
+          w: BattleScene.PANZER3_TOP_TRIM_W,
+          h: BattleScene.PANZER3_TOP_TRIM_H,
+        },
+        {
+          x: BattleScene.PANZER3_TURRET_TRIM_X,
+          y: BattleScene.PANZER3_TURRET_TRIM_Y,
+          w: BattleScene.PANZER3_TURRET_TRIM_W,
+          h: BattleScene.PANZER3_TURRET_TRIM_H,
+        },
+        {
+          bodyX: BattleScene.PANZER3_TURRET_PIVOT_X,
+          bodyY: BattleScene.PANZER3_TURRET_PIVOT_Y,
+          spriteX: BattleScene.PANZER3_TURRET_SPRITE_PIVOT_X,
+          spriteY: BattleScene.PANZER3_TURRET_SPRITE_PIVOT_Y,
+        },
+      )) {
+        this.g = oldG;
+        return;
+      }
+      const meta = this.enemyTopMeta[u.kind];
+      if (meta?.sf) {
+        this.addTileInspectTopDownTankSprite(parent, u, meta.sf, meta.dw, meta.dh, hexR);
+        this.g = oldG;
+        return;
+      }
+    }
+
+    g.fillColor = FACTION_COLORS[u.faction];
+    g.strokeColor = UNIT_BORDER;
+    g.lineWidth = 2;
+    g.circle(0, 0, hexR * 0.5);
+    g.fill();
+    g.stroke();
+    this.g = oldG;
+  }
+
+  private addTileInspectUnitPreview(parent: Node, u: Unit, centerX: number, topY: number, hexR: number) {
+    const h = 92;
+    const unitPreview = new Node('UnitPreview');
+    unitPreview.layer = this.node.layer;
+    unitPreview.addComponent(UITransform).setContentSize(116, h);
+    unitPreview.setPosition(centerX, topY - h * 0.5, 0);
+    parent.addChild(unitPreview);
+    this.paintTileInspectUnitPreview(unitPreview, u, hexR);
   }
 
   private syncTileInspectVBar() {
@@ -7831,7 +8239,7 @@ export class BattleScene extends Component {
     const cur = Math.max(0, sv.getScrollOffset().y);
     const ratio = maxO < 0.5 ? 0 : Math.max(0, Math.min(1, cur / maxO));
     const th = Math.max(22, Math.min(trackH, (viewH / ch) * trackH));
-    const tTop = ty + ratio * (trackH - th);
+    const tTop = ty + (1 - ratio) * (trackH - th);
     g.fillColor = new Color(190, 198, 210, 255);
     g.roundRect(-3, tTop, 6, th, 2);
     g.fill();
@@ -7841,13 +8249,12 @@ export class BattleScene extends Component {
     this.closeTileInspectModal();
     const panelW = 600;
     const panelH = 520;
-    const leftColW = 156;
     const barW = 10;
     const marginX = 12;
     const contentTopY = panelH / 2 - 64;
     const contentBottomY = -panelH / 2 + 24;
     const scrollH = contentTopY - contentBottomY;
-    const rightAreaW = panelW - 2 * marginX - leftColW - 8;
+    const rightAreaW = panelW - 2 * marginX - 8;
     const viewW = rightAreaW - barW;
     const innerW = viewW - 6;
     const root = new Node('TileInspectModal');
@@ -7903,32 +8310,11 @@ export class BattleScene extends Component {
     const closeLabTop = this.makeBattleModalLabel(closeBtnTop.node, '✕', 0, 0, 36, 36, 22, HUD_TEXT_COLOR);
     this.mirrorBattleModalButtonLabel(closeLabTop, () => this.closeTileInspectModal());
 
-    // 左上：地形预览 + 名称
-    const preview = new Node('TilePreview');
-    preview.layer = this.node.layer;
-    preview.addComponent(UITransform).setContentSize(150, 130);
-    const previewCenterX = -panelW * 0.5 + 12 + 75;
-    const previewCenterY = contentTopY - 12 - 65;
-    preview.setPosition(previewCenterX, previewCenterY);
-    panel.addChild(preview);
-    const pvg = preview.addComponent(Graphics);
-    this.paintTileInspectPreview(pvg, tile, 0, 5, 40);
-    // 标题：基底地形名；桥梁叠加（GDD §3.2）时在末尾追加「+ 桥梁」标识
-    const baseTerrainName = t(`terrain.${tile.terrain}`);
-    const titleStr = tileHasBridge(tile)
-      ? `${baseTerrainName} + ${t('terrain.bridge')}`
-      : baseTerrainName;
-    const terrainNameLab = this.makeBattleModalLabel(
-      panel, titleStr,
-      previewCenterX, previewCenterY - 80, 200, 28, 20, new Color(235, 240, 245, 255),
-    );
-    terrainNameLab.horizontalAlign = HorizontalTextAlignment.CENTER;
-    terrainNameLab.verticalAlign = VerticalTextAlignment.CENTER;
     // 右侧可滚动区 + 纵轴指示条
     const scrollN = new Node('TileInspectScroll');
     scrollN.layer = this.node.layer;
     scrollN.addComponent(UITransform).setContentSize(rightAreaW, scrollH);
-    const rightBlockLeft = -panelW * 0.5 + marginX + leftColW;
+    const rightBlockLeft = -panelW * 0.5 + marginX;
     const rightBlockRight = panelW * 0.5 - marginX;
     const scx = (rightBlockLeft + rightBlockRight) * 0.5;
     const scy = (contentTopY + contentBottomY) * 0.5;
@@ -8107,6 +8493,7 @@ export class BattleScene extends Component {
       MenuProgress.setBgmVolume(vol);
       onMenuVolumesChanged();
       if (this.battleSettingsRefs?.bgmLabel) this.battleSettingsRefs.bgmLabel.string = `${vol}%`;
+      this.syncProfileToServer();
     });
     const bgmLabel = this.makeBattleModalLabel(panel, `${state.bgmVolume}%`,
       200, bgmRowY, 60, 28, 20, HUD_TEXT_COLOR);
@@ -8118,6 +8505,7 @@ export class BattleScene extends Component {
       MenuProgress.setSfxVolume(vol);
       onMenuVolumesChanged();
       if (this.battleSettingsRefs?.sfxLabel) this.battleSettingsRefs.sfxLabel.string = `${vol}%`;
+      this.syncProfileToServer();
     });
     const sfxLabel = this.makeBattleModalLabel(panel, `${state.sfxVolume}%`,
       200, sfxRowY, 60, 28, 20, HUD_TEXT_COLOR);
@@ -8394,6 +8782,7 @@ export class BattleScene extends Component {
     if (getLang() === lang) return;
     setLang(lang);
     MenuProgress.setLang(lang);
+    this.syncProfileToServer();
     this.closeDiePopover();
     // 与主菜单一致：切语言后关掉模态，避免面板上残留旧语言文案
     this.closeAllBattleModals();
@@ -8522,7 +8911,7 @@ export class BattleScene extends Component {
       phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
     });
     try {
-      sys.localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+      writeActiveSaveRaw(JSON.stringify(data));
       this.battleLog(`[Save] 已存档：回合 ${data.turn}`);
       this.flashBattleSettingsHint(t('battle.save.ok'));
       return true;
@@ -8533,6 +8922,10 @@ export class BattleScene extends Component {
     }
   }
 
+  private syncProfileToServer() {
+    syncServerProfile(MenuProgress.load());
+  }
+
   /** @param skipHint 主菜单「继续游戏」自动读档时为 true，不飘「已读档」以免干扰开场 */
   private onLoad_Save(skipHint?: boolean) {
     if (!this.mission) return;
@@ -8540,7 +8933,7 @@ export class BattleScene extends Component {
       this.flashBattleSettingsHint(t('battle.load.busy'));
       return;
     }
-    const raw = sys.localStorage.getItem(SAVE_KEY);
+    const raw = readActiveSaveRaw();
     if (!raw) {
       this.flashBattleSettingsHint(t('battle.load.none'));
       return;
@@ -8968,9 +9361,7 @@ export class BattleScene extends Component {
   }
 
   private startEnemyTurretAim(enemy: Unit, target: Unit, onDone: () => void) {
-    const splitReady =
-      (enemy.kind === 'tiger' && this.tigerHullSpriteFrame && this.tigerTurretSpriteFrame)
-      || (enemy.kind === 'panzer4' && this.panzer4HullSpriteFrame && this.panzer4TurretSpriteFrame);
+    const splitReady = this.enemySupportsSplitTurret(enemy);
     if (!splitReady) {
       onDone();
       return;
@@ -9071,18 +9462,11 @@ export class BattleScene extends Component {
     const { map, sherman } = this.mission;
     if (!canAttack({ attacker: enemy, target: sherman, map }).ok) return false;
 
-    const aimDir = approximateDirection(enemy.pos, sherman.pos);
-    const splitTurretReady =
-      (enemy.kind === 'tiger' && this.tigerHullSpriteFrame && this.tigerTurretSpriteFrame)
-      || (enemy.kind === 'panzer4' && this.panzer4HullSpriteFrame && this.panzer4TurretSpriteFrame);
+    const splitTurretReady = this.enemySupportsSplitTurret(enemy);
     if (splitTurretReady) {
       if (!this.enemyTurretFacing.has(enemy.id) && enemy.facing !== null) {
         this.enemyTurretFacing.set(enemy.id, enemy.facing);
       }
-    } else {
-      // 开火前转向目标，否则可能用错装甲面（其实算的是 sherman 的面，但视觉上敌人面对玩家更合理）
-      enemy.facing = aimDir;
-      this.redraw();
     }
 
     // 保留本车 AI 行动骰托盘；掷骰面板打开时会挂到 DiceShow 遮罩之上（见 liftEnemyDiceTrayIntoDiceShowIfNeeded）
@@ -9441,8 +9825,7 @@ export class BattleScene extends Component {
     const m = this.enemyTrayMetrics;
     const s = this.enemyDiceSortAnim;
     if (!m || !s) return;
-    const slotCenterX = (slot: number) =>
-      -m.totalW / 2 + m.dieSize / 2 + slot * (m.dieSize + m.gap);
+    const slotCenterX = (slot: number) => this.playerDiceSlotX(slot, m.count);
     for (let i = 0; i < m.count; i++) {
       const root = this.enemyDiceTrayDieRoots[i];
       if (!root || !root.isValid) continue;
@@ -9463,13 +9846,12 @@ export class BattleScene extends Component {
     const count = this.enemyDice.length;
     if (count <= 0) return;
 
-    const DIE_SIZE = ENEMY_AI_DIE_SIZE;
-    const GAP = ENEMY_AI_DIE_GAP;
+    const DIE_SIZE = BattleScene.DICE_TRAY_SLOT;
+    const GAP = BattleScene.DICE_TRAY_GAP;
     const totalW = count * DIE_SIZE + (count - 1) * GAP;
     const subtitleH = 22;
-    const headerBand = 28;
-    const trayH = headerBand + DIE_SIZE + subtitleH + 8;
-    const rowY = -subtitleH / 2 - 4;
+    const trayH = 120;
+    const rowY = 0;
 
     this.enemyTrayMetrics = { dieSize: DIE_SIZE, gap: GAP, totalW, count, rowY };
 
@@ -9481,16 +9863,15 @@ export class BattleScene extends Component {
 
     const root = new Node('EnemyDiceTray');
     root.layer = this.node.layer;
-    root.addComponent(UITransform).setContentSize(totalW, trayH);
-    // 中上方：与左侧回合/任务目标错开；仍须挂在 this.node 子节点**最后**，以免被后绘 UI 盖住。
-    root.setPosition(ENEMY_DICE_TRAY_ANCHOR_X, ENEMY_DICE_TRAY_ANCHOR_Y, 0);
+    root.addComponent(UITransform).setContentSize(640, trayH);
+    this.placeEnemyDiceTrayRoot(root);
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
 
     const header = new Node('AICol');
     header.layer = this.node.layer;
-    header.addComponent(UITransform).setContentSize(totalW + 48, 24);
-    header.setPosition(0, trayH / 2 - headerBand / 2 - 2, 0);
+    header.addComponent(UITransform).setContentSize(420, 28);
+    header.setPosition(0, 52, 0);
     const hl = header.addComponent(Label);
     hl.fontSize = 22;
     hl.lineHeight = 26;
@@ -9509,8 +9890,7 @@ export class BattleScene extends Component {
     this.enemyDiceTrayDieRoots = [];
     this.enemyDiceTraySubtitleLabels = [];
 
-    const slotCenterX = (slot: number) =>
-      -totalW / 2 + DIE_SIZE / 2 + slot * (DIE_SIZE + GAP);
+    const slotCenterX = (slot: number) => this.playerDiceSlotX(slot, count);
 
     for (let i = 0; i < count; i++) {
       const dieRoot = new Node(`D${i}`);
@@ -9524,7 +9904,7 @@ export class BattleScene extends Component {
       const tile = new Node('Tile');
       tile.layer = this.node.layer;
       tile.addComponent(UITransform).setContentSize(DIE_SIZE, DIE_SIZE);
-      tile.setPosition(0, subtitleH / 2 + 2, 0);
+      tile.setPosition(0, 0, 0);
       const g = tile.addComponent(Graphics);
       this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
         fill: DICE_DIE_FILL,
@@ -9538,9 +9918,9 @@ export class BattleScene extends Component {
       labNode.layer = this.node.layer;
       labNode.addComponent(UITransform).setContentSize(DIE_SIZE, DIE_SIZE);
       const l = labNode.addComponent(Label);
-      l.fontSize = 30;
-      l.lineHeight = 34;
-      l.color = new Color(20, 20, 20, 255);
+      l.fontSize = 40;
+      l.lineHeight = 44;
+      l.color = DIE_FACE_TEXT;
       l.horizontalAlign = HorizontalTextAlignment.CENTER;
       l.verticalAlign = VerticalTextAlignment.CENTER;
       l.string = '';
@@ -9551,11 +9931,11 @@ export class BattleScene extends Component {
 
       const subNode = new Node('Action');
       subNode.layer = this.node.layer;
-      subNode.addComponent(UITransform).setContentSize(DIE_SIZE + 16, subtitleH);
-      subNode.setPosition(0, -DIE_SIZE / 2 - 8, 0);
+      subNode.addComponent(UITransform).setContentSize(DIE_SIZE + 12, subtitleH);
+      subNode.setPosition(0, -DIE_SIZE / 2 - 14, 0);
       const sub = subNode.addComponent(Label);
-      sub.fontSize = 13;
-      sub.lineHeight = 15;
+      sub.fontSize = 18;
+      sub.lineHeight = 20;
       sub.color = new Color(200, 200, 180, 255);
       sub.horizontalAlign = HorizontalTextAlignment.CENTER;
       sub.verticalAlign = VerticalTextAlignment.TOP;
@@ -9583,7 +9963,7 @@ export class BattleScene extends Component {
   private refreshEnemyDiceTray() {
     if (!this.enemyDiceTrayRoot) return;
     const m = this.enemyTrayMetrics;
-    const DIE_SIZE = m?.dieSize ?? ENEMY_AI_DIE_SIZE;
+    const DIE_SIZE = m?.dieSize ?? BattleScene.DICE_TRAY_SLOT;
     const enemy = this.enemyDiceTraySubject;
     for (let i = 0; i < this.enemyDiceTrayLabels.length; i++) {
       const used = !!this.enemyDiceUsed[i];
@@ -9638,7 +10018,7 @@ export class BattleScene extends Component {
     const back = diceShowRoot.getChildByName('Backdrop');
     const insertAt = back ? 1 : 0;
     diceShowRoot.insertChild(tray, insertAt);
-    tray.setPosition(ENEMY_DICE_TRAY_ANCHOR_X, ENEMY_DICE_TRAY_ANCHOR_Y, 0);
+    this.placeEnemyDiceTrayRoot(tray);
   }
 
   /** 关闭 DiceShow 前将托盘移回 this.node，避免随 panelRoot.destroy 一起被销毁 */
@@ -9648,7 +10028,7 @@ export class BattleScene extends Component {
     if (tray.parent?.name !== 'DiceShow') return;
     tray.removeFromParent();
     this.node.addChild(tray);
-    tray.setPosition(ENEMY_DICE_TRAY_ANCHOR_X, ENEMY_DICE_TRAY_ANCHOR_Y, 0);
+    this.placeEnemyDiceTrayRoot(tray);
     tray.setSiblingIndex(this.node.children.length - 1);
   }
 

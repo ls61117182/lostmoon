@@ -47,7 +47,7 @@ export function findLevelByMissionId(missionId: string): LevelMeta | undefined {
 
 // ---------- 菜单本地进度 ----------
 
-const MENU_STATE_KEY = 'lone_sherman_menu_v1';
+export const MENU_STATE_KEY = 'lone_sherman_menu_v1';
 
 /**
  * 至少解锁到此关：测试期间设为 `LEVELS.length`（当前 = 12），主菜单全部关卡开放，
@@ -130,6 +130,16 @@ export const MenuProgress = {
   /** 读取（每次都从 localStorage 取，避免多处缓存不同步） */
   load(): MenuState {
     return readState();
+  },
+
+  replace(state: MenuState): void {
+    writeState({
+      unlockedLevel: clamp(state.unlockedLevel ?? DEFAULT_STATE.unlockedLevel, 1, LEVELS.length),
+      completedLevels: Array.isArray(state.completedLevels) ? state.completedLevels.filter(n => typeof n === 'number') : [],
+      bgmVolume: clamp(state.bgmVolume ?? DEFAULT_STATE.bgmVolume, 0, 100),
+      sfxVolume: clamp(state.sfxVolume ?? DEFAULT_STATE.sfxVolume, 0, 100),
+      lang: (state.lang === 'en' || state.lang === 'zh') ? state.lang : DEFAULT_STATE.lang,
+    });
   },
 
   isUnlocked(levelId: number): boolean {

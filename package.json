@@ -5,6 +5,8 @@
     "version": "3.8.8"
   },
   "scripts": {
+    "start": "node server/server.js",
+    "server": "node server/server.js",
     "normalize-tanks": "node tools/normalizeTankSprites.cjs",
     "audit-tanks": "node tools/auditTankPngWhite.cjs"
   },
