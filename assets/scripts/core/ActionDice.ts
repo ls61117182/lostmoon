@@ -105,7 +105,7 @@ export interface ActionDicePoolOpts {
   subPhase: ActionDiceSubPhase;
   /** 谢尔曼当前所在格的地形 */
   terrain: TerrainType;
-  /** 车长舱盖是否打开（仅移动 / 攻击子阶段参与加骰；杂项不加舱盖骰） */
+  /** 车长舱盖是否打开（移动 / 攻击 / 杂项子阶段均可参与加骰） */
   hatchOpen: boolean;
   /** 五名乘员存活标记；缺省按全 false 处理 */
   crew: ShermanCrew;
@@ -132,7 +132,7 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
     if (opts.crew.loader) n += cfg.attackMods.loader;
     if (hatchOpenForDice) n += cfg.attackMods.hatch;
   } else {
-    if (opts.crew.commander) n += cfg.miscMods.commander;
+    if (hatchOpenForDice) n += cfg.miscMods.hatch;
   }
 
   return Math.max(cfg.capMin, Math.min(cfg.capMax, n));

@@ -24,7 +24,7 @@ unit.status.fire,起火,On Fire
 hud.init,回合 - | 行动力 -/-,Turn - | AP -/-
 hud.missionLine,{id} · {name},{id} — {name}
 hud.enemyTurn,回合 {n} | 敌方行动中...,Turn {n} | Enemy acting...
-hud.playerChoose,回合 {n} | 玩家 | 选择阶段 · {tags},Turn {n} | Player | Choose phase · {tags} (misc auto after both)
+hud.playerChoose,回合 {n} | 玩家 | 选择阶段 · {tags},Turn {n} | Player | Choose phase · {tags}
 hud.movePhase,回合 {n} | 移动阶段 | 骰子 {dice},Turn {n} | Move phase | Dice {dice}
 hud.attackPhase,回合 {n} | 攻击阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack phase | {loaded} | Dice {dice}{sel}
 hud.attackSelectHint,点敌人开火,Click enemy to fire
@@ -77,8 +77,8 @@ status.crew.4,④ 驾驶员,④ Driver
 status.crew.5,⑤ 副驾驶,⑤ Co-driver
 status.val.loaded,已装填,Loaded
 status.val.unloaded,未装填,Unloaded
-status.val.hatchOpen,打开舱盖,Hatch open
-status.val.hatchClosed,关闭舱盖,Hatch closed
+status.val.hatchOpen,打开,Open
+status.val.hatchClosed,关闭,Closed
 status.val.destroyed,已毁,Destroyed
 status.val.fireN,起火({n}),Fire({n})
 status.val.damaged,受损,Damaged
@@ -190,6 +190,10 @@ unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
 unit.name.officer,军官,Officer
 dice.aiHeader,{col}  {n}骰,{col}  {n}d
+dice.aiCol.road,公路,Road
+dice.aiCol.field,田野,Field
+dice.aiCol.mud,泥地,Mud
+dice.aiCol.damaged,受损,Damaged
 dice.aiEnemy.shoot,主炮射击,Main gun
 dice.aiEnemy.turn,转向,Turn
 dice.aiEnemy.advance,前进,Advance
@@ -242,14 +246,13 @@ tileInspect.title,格子介绍,Tile info
 tileInspect.building,建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。,Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile.
 tileInspect.rules.forest,森林：谢尔曼与德军坦克不可进入；步兵可进入；遮挡视线。,Forest: Sherman and German tanks cannot enter; infantry can enter; blocks line of sight.
 tileInspect.rules.water,水域：任何单位不可进入；不遮挡视线。,Water: impassable to all units; does not block line of sight.
-tileInspect.hedges,本格带树篱边：谢尔曼与德军坦克不可翻越；步兵可翻越；不遮挡视线。,This tile has hedge edges: Sherman and German tanks cannot cross; infantry can cross; does not block line of sight.
+tileInspect.hedges,主炮射击时视线上的每个树篱使命中所需点数+1，但攻击者相邻的树篱不增加命中所需点数。,"For main-gun fire, each hedge along the line of sight adds +1 to the hit number, but hedges adjacent to the attacker do not increase the hit number."
 tileInspect.markerRid,援军标记 rid={n},Reinforcement marker rid={n}
 tileInspect.markerEid,敌军出生点标记 eid={n},Enemy start marker eid={n}
 tileInspect.diceIntro,掷骰规则：各地形在移动 / 攻击 / 杂项子阶段的基础颗数见下；再叠加乘员与舱盖修正后，总颗数限制在 {capMin}～{capMax}。,Dice: per-terrain base counts for movement / attack / misc below; crew and hatch modifiers apply; total dice are clamped to {capMin}–{capMax}.
-tileInspect.diceRow.move,移动阶段基础骰：{n} 颗,Movement base dice: {n}
-tileInspect.diceRow.attack,攻击阶段基础骰：{n} 颗,Attack base dice: {n}
-tileInspect.diceRow.misc,杂项阶段基础骰：{n} 颗,Misc base dice: {n}
-tileInspect.diceMods,修正（每满足一项通常 +1，以规则为准）：移动阶段 驾驶员存活 +{md}、副驾驶存活 +{mc}、车长开舱 +{mh}；攻击阶段 炮手存活 +{ag}、装填手存活 +{al}、车长开舱 +{ah}；杂项阶段 车长存活 +{xc}。,"Modifiers (typically +1 each when applicable): move — driver +{md}, co-driver +{mc}, commander hatch open +{mh}; attack — gunner +{ag}, loader +{al}, commander hatch open +{ah}; misc — commander +{xc}."
+tileInspect.diceRow.move,移动阶段：基础骰子 {n} 颗，驾驶员存活 +{md}、副驾驶存活 +{mc}、车长开舱 +{mh}。,"Movement: base {n} dice; driver alive +{md}, co-driver alive +{mc}, commander hatch open +{mh}."
+tileInspect.diceRow.attack,攻击阶段：基础骰子 {n} 颗，炮手存活 +{ag}、装填手存活 +{al}、车长开舱 +{ah}。,"Attack: base {n} dice; gunner alive +{ag}, loader alive +{al}, commander hatch open +{ah}."
+tileInspect.diceRow.misc,杂项阶段：基础骰子 {n} 颗，车长开舱 +{xc}。,Misc: base {n} dice; commander hatch open +{xc}.
 tileInspect.unitBlock,{name}\n状态：{status},{name}\nStatus: {status}
 tileInspect.currentUnit,当前单位：{name},Current unit: {name}
 tileInspect.currentStatus,当前状态：{status},Current status: {status}
@@ -358,4 +361,3 @@ fireCheck.stepLine,第{idx}次：d6={die} → {outcome},Roll {idx}: d6={die} →
 fireCheck.crewKia,阵亡检定 d6={cd}：{role} 阵亡,Crew check d6={cd}: {role} KIA
 fireCheck.crewSafe,阵亡检定 d6={cd}：虚惊,Crew check d6={cd}: false alarm
 fireCheck.batchFire,其中 {k} 次为「起火+1」。,{k} roll(s) add fire.
-

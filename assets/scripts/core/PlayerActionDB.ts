@@ -51,8 +51,8 @@ export interface PlayerDicePoolConfig {
   moveMods: { driver: number; codriver: number; hatch: number };
   /** 攻击阶段：炮手 / 装填手存活、开舱 */
   attackMods: { gunner: number; loader: number; hatch: number };
-  /** 杂项阶段：车长存活（与舱盖无关） */
-  miscMods: { commander: number };
+  /** 杂项阶段：车长开舱 */
+  miscMods: { hatch: number };
   capMin: number;
   capMax: number;
 }
@@ -92,7 +92,7 @@ export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {
     hatch: 1,
   },
   miscMods: {
-    commander: 1,
+    hatch: 1,
   },
   capMin: 1,
   capMax: 5,

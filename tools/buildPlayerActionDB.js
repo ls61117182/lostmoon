@@ -68,7 +68,7 @@ const REQUIRED_POOL_KEYS = [
   'mod_attack_gunner',
   'mod_attack_loader',
   'mod_attack_hatch',
-  'mod_misc_commander',
+  'mod_misc_hatch',
   'cap_min',
   'cap_max',
 ];
@@ -274,8 +274,8 @@ function build() {
   lines.push('  moveMods: { driver: number; codriver: number; hatch: number };');
   lines.push('  /** 攻击阶段：炮手 / 装填手存活、开舱 */');
   lines.push('  attackMods: { gunner: number; loader: number; hatch: number };');
-  lines.push('  /** 杂项阶段：车长存活（与舱盖无关） */');
-  lines.push('  miscMods: { commander: number };');
+  lines.push('  /** 杂项阶段：车长开舱 */');
+  lines.push('  miscMods: { hatch: number };');
   lines.push('  capMin: number;');
   lines.push('  capMax: number;');
   lines.push('}');
@@ -301,7 +301,7 @@ function build() {
   lines.push(`    hatch: ${pool.mod_attack_hatch},`);
   lines.push('  },');
   lines.push('  miscMods: {');
-  lines.push(`    commander: ${pool.mod_misc_commander},`);
+  lines.push(`    hatch: ${pool.mod_misc_hatch},`);
   lines.push('  },');
   lines.push(`  capMin: ${pool.cap_min},`);
   lines.push(`  capMax: ${pool.cap_max},`);

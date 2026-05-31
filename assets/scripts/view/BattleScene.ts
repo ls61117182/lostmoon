@@ -412,6 +412,20 @@ function crewOutcomeLabel(cc: CrewDeathResult | undefined): { text: string; colo
   };
 }
 
+function unitDisplayName(kind: UnitKind): string {
+  return t(`unit.name.${kind}`);
+}
+
+function missionDisplayId(id: string): string {
+  if (getLang() !== 'zh') return id;
+  const m = /^mission_(\d+)$/i.exec(id);
+  return m ? `任务 ${m[1]}` : id;
+}
+
+function aiColumnDisplayName(col: AIColumn): string {
+  return t(`dice.aiCol.${col}`);
+}
+
 /** 任意单位正在播放的移动 / 转向动画（谢尔曼 / 敌坦克通用） */
 interface MoveAnim {
   unit: Unit;
@@ -716,14 +730,15 @@ const PHASE_BTN_MISC      = new Color(105,  96,  70, 240);
 const PHASE_BTN_HATCH     = new Color(105,  96,  70, 240);
 const PHASE_BTN_DISABLED  = new Color( 68,  68,  63, 210);
 
-// 骰子配色：底色白/灰（已用）+ 边框；分类颜色直接在动作提示文字上体现
+// 骰子托盘配色：未使用统一亮底 + 亮色提示；已使用统一灰底 + 灰色提示。
 const DIE_FACE_FILL      = new Color(245, 245, 235, 255);
-const DIE_FACE_USED_FILL = new Color(245, 245, 235, 255);
+const DIE_FACE_USED_FILL = new Color(145, 145, 138, 235);
 const DIE_FACE_BORDER    = new Color( 30,  30,  30, 255);
 const DIE_FACE_SELECTED  = new Color(250, 215,  90, 255); // 当前选中的主炮骰高亮边框
 const DIE_FACE_TEXT      = new Color( 20,  20,  20, 255);
 const DIE_FACE_TEXT_USED = new Color( 60,  60,  60, 200);
-// 动作提示配色：转向/驾驶 = 绿系；装填/主炮 = 红系；机枪/无 = 灰
+// 动作提示分类色仍供动作菜单等细节使用；托盘未使用态统一用 DIE_HINT_ACTIVE。
+const DIE_HINT_ACTIVE = new Color(235, 225, 190, 255);
 const DIE_HINT_GREEN = new Color( 70, 180,  70, 255);
 const DIE_HINT_RED   = new Color(220, 100,  80, 255);
 const DIE_HINT_GREY  = new Color(130, 130, 130, 255);
@@ -1126,6 +1141,7 @@ export class BattleScene extends Component {
   // ---- 右侧谢尔曼状态面板 ----
   private statusPanel: Node | null = null;
   private statusLoaded: Label | null = null;   // 装填 / 未装填
+  private statusHatch: Label | null = null;    // 舱盖开闭
   private statusFire: Label | null = null;     // 着火层数 / "-"（车体旧文案已迁出）
   private statusTurret: Label | null = null;   // 完好 / 受损
   private statusMobility: Label | null = null; // 正常 / 痛痪
@@ -2322,6 +2338,7 @@ export class BattleScene extends Component {
 
   /** 是否绘制本回合击毁残骸（灰圆+红叉）及「已毁」标签（与 `destroyWreckVisualIds` 同步）。 */
   private shouldShowDestroyWreckVisual(u: Unit): boolean {
+    if (isFootUnit(u)) return false;
     return u.destroyed && this.destroyWreckVisualIds.has(u.id);
   }
 
@@ -4455,30 +4472,14 @@ export class BattleScene extends Component {
    * 布局：等边三角形（朝上顶点 + 左下 / 右下两个底点），三角内接圆半径 `teamRadius·0.40`；
    * 单兵 sprite 显示尺寸 `hexSize·0.55`，最远点 ≈ teamRadius·0.475 → 占格半径 ≈ 50% ✓
    *
-   * 资源未加载完时回退到老版本"圆头 + 圆身"矢量小人；摧毁时统一画灰色残骸圆 + 红 X（仅本回合），与坦克对齐。
+   * 资源未加载完时回退到老版本"圆头 + 圆身"矢量小人；击毙后不留残骸 / 标志 / 名字。
    * 军官 (kind='officer') 在小队外缘叠一圈红色光环，与说明书原图"红框建筑里的德军步兵"呼应。
    */
   private drawInfantry(u: Unit, cx: number, cy: number) {
     const g = this.g!;
     const teamRadius = this.hexSize * 0.5;
 
-    if (u.destroyed) {
-      if (this.shouldShowDestroyWreckVisual(u)) {
-        const r = this.hexSize * 0.30;
-        g.fillColor = DESTROYED_FILL;
-        g.strokeColor = DESTROYED_BORDER;
-        g.lineWidth = 2;
-        g.circle(cx, cy, r);
-        g.fill();
-        g.stroke();
-        g.lineWidth = 3;
-        const d = r * 0.9;
-        g.moveTo(cx - d, cy - d); g.lineTo(cx + d, cy + d); g.stroke();
-        g.moveTo(cx - d, cy + d); g.lineTo(cx + d, cy - d); g.stroke();
-        g.lineWidth = 2;
-      }
-      return;
-    }
+    if (u.destroyed) return;
 
     // 军官（kind='officer'）：单兵棋子（一张 Officer.png），与步兵主图（Infantry01）同尺寸；
     // "高级目标"的视觉提示由格子边线红框（OFFICER_TILE_STROKE，绘制于格 stroke 阶段）承担，
@@ -4609,8 +4610,8 @@ export class BattleScene extends Component {
     mUT.setContentSize(540, HUD_MISSION_TITLE_H);
     mUT.setAnchorPoint(0, 1);
     const mLab = mNode.addComponent(Label);
-    mLab.fontSize = 22;
-    mLab.lineHeight = 26;
+    mLab.fontSize = 26;
+    mLab.lineHeight = 30;
     mLab.color = HUD_MISSION_META_COLOR;
     mLab.horizontalAlign = HorizontalTextAlignment.LEFT;
     mLab.verticalAlign = VerticalTextAlignment.TOP;
@@ -4627,8 +4628,8 @@ export class BattleScene extends Component {
     lUT.setContentSize(420, 60);
     lUT.setAnchorPoint(0, 1); // 锚点在左上，方便对齐屏幕角
     const label = labelNode.addComponent(Label);
-    label.fontSize = 26;
-    label.lineHeight = 30;
+    label.fontSize = 22;
+    label.lineHeight = 26;
     label.color = HUD_TEXT_COLOR;
     label.horizontalAlign = HorizontalTextAlignment.LEFT;
     label.verticalAlign = VerticalTextAlignment.TOP;
@@ -5018,20 +5019,20 @@ export class BattleScene extends Component {
    * refresh 时只改 string + color，不重建节点。
    */
   private buildStatusPanel() {
-    const W = 220;
+    const W = 240;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
-    const H = 312;
+    const H = 334;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
     const x = CANVAS_W * 0.5 - W * 0.5 - 10;
 
     const CREW_GAP = 22;
-    const BODY_GAP = 24;
+    const BODY_GAP = 22;
     const innerTop = H / 2 - 8;
     const shermanTitleY = innerTop - 14;
     const bodyFirstY = shermanTitleY - 24;
-    const bodyRowY = [0, 1, 2, 3].map(j => bodyFirstY - j * BODY_GAP);
+    const bodyRowY = [0, 1, 2, 3, 4].map(j => bodyFirstY - j * BODY_GAP);
     const sepY = bodyRowY[bodyRowY.length - 1] - 20;
     const crewTitleY = sepY - 18;
     const crewFirstY = crewTitleY - 26;
@@ -5067,29 +5068,18 @@ export class BattleScene extends Component {
     this.statusCrewLabels = [];
     for (let i = 0; i < crewNames.length; i++) {
       const rowY = crewFirstY - i * CREW_GAP;
-      const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 120, 22, 18, STATUS_LABEL_COLOR);
+      const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 132, 22, 18, STATUS_LABEL_COLOR);
       this.statusCrewLeftLabels.push(crewLeft);
-      const valW = i === 0 ? 128 : 70;
-      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, valW, 22, 18, STATUS_VALUE_OK);
+      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 68, 22, 18, STATUS_VALUE_OK);
       this.statusCrewLabels.push(val);
     }
 
-    // 车长行整行热区：存活时切换舱盖（逻辑见 tryToggleHatch / canToggleHatch）
-    const commanderHatchHit = new Node('CommanderHatchHit');
-    commanderHatchHit.layer = this.node.layer;
-    commanderHatchHit.addComponent(UITransform).setContentSize(W - 24, CREW_GAP);
-    commanderHatchHit.setPosition(0, crewFirstY, 0);
-    commanderHatchHit.on(Node.EventType.TOUCH_END, () => {
-      playUiClick();
-      this.tryToggleHatch();
-    }, this);
-    panel.addChild(commanderHatchHit);
-
-    // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
+    // 2) 谢尔曼状态：装填 → 舱盖 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
     this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
       0, shermanTitleY, W - 20, 28, 22, STATUS_TITLE_COLOR);
-    const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'fire']> = [
+    const bodyRows: Array<[string, 'loaded' | 'hatch' | 'turret' | 'mobility' | 'fire']> = [
       [t('status.row.loaded'),    'loaded'],
+      [t('status.row.hatch'),     'hatch'],
       [t('status.row.turret'),    'turret'],
       [t('status.row.mobility'),  'mobility'],
       [t('status.row.fireLevel'), 'fire'],
@@ -5101,6 +5091,7 @@ export class BattleScene extends Component {
       const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
       switch (key) {
         case 'loaded':   this.statusLoaded = val; break;
+        case 'hatch':    this.statusHatch = val; break;
         case 'fire':     this.statusFire = val; break;
         case 'turret':   this.statusTurret = val; break;
         case 'mobility': this.statusMobility = val; break;
@@ -5126,6 +5117,7 @@ export class BattleScene extends Component {
     l.color = color;
     l.horizontalAlign = HorizontalTextAlignment.LEFT;
     l.verticalAlign = VerticalTextAlignment.CENTER;
+    l.overflow = Label.Overflow.CLAMP;
     l.string = text;
     parent.addChild(n);
     return l;
@@ -5149,6 +5141,7 @@ export class BattleScene extends Component {
     l.color = color;
     l.horizontalAlign = HorizontalTextAlignment.RIGHT;
     l.verticalAlign = VerticalTextAlignment.CENTER;
+    l.overflow = Label.Overflow.CLAMP;
     l.string = text;
     parent.addChild(n);
     return l;
@@ -5173,6 +5166,23 @@ export class BattleScene extends Component {
       } else {
         this.statusLoaded.string = t('status.val.unloaded');
         this.statusLoaded.color = STATUS_VALUE_DOWN;
+      }
+    }
+
+    // 舱盖：独立于乘员行显示，避免英文版 "Commander" 与 "Hatch closed" 挤在同一行。
+    if (this.statusHatch) {
+      if (s.destroyed) {
+        this.statusHatch.string = '—';
+        this.statusHatch.color = STATUS_VALUE_DOWN;
+      } else if (!s.crew?.commander) {
+        this.statusHatch.string = t('status.val.crewDead');
+        this.statusHatch.color = STATUS_VALUE_DEAD;
+      } else if (s.hatchOpen) {
+        this.statusHatch.string = t('status.val.hatchOpen');
+        this.statusHatch.color = STATUS_VALUE_WARN;
+      } else {
+        this.statusHatch.string = t('status.val.hatchClosed');
+        this.statusHatch.color = STATUS_VALUE_DOWN;
       }
     }
 
@@ -5218,27 +5228,13 @@ export class BattleScene extends Component {
       }
     }
 
-    // 乘员：① 车长与舱盖合并（阵亡 →「阵亡」；存活 → 打开/关闭，点行切换舱盖）
-    //       ②—⑤ 仅存活 / 阵亡
+    // 乘员：只显示存活 / 阵亡；舱盖状态已提升到上方独立行。
     const crew = s.crew;
     const crewFlags: boolean[] = crew
       ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
       : [true, true, true, true, true];
 
-    const lab0 = this.statusCrewLabels[0];
-    if (lab0) {
-      if (s.destroyed || !crewFlags[0]) {
-        lab0.string = t('status.val.crewDead');
-        lab0.color = STATUS_VALUE_DEAD;
-      } else if (s.hatchOpen) {
-        lab0.string = t('status.val.hatchOpen');
-        lab0.color = STATUS_VALUE_WARN;
-      } else {
-        lab0.string = t('status.val.hatchClosed');
-        lab0.color = STATUS_VALUE_DOWN;
-      }
-    }
-    for (let i = 1; i < this.statusCrewLabels.length; i++) {
+    for (let i = 0; i < this.statusCrewLabels.length; i++) {
       const lab = this.statusCrewLabels[i];
       if (s.destroyed) {
         lab.string = t('status.val.crewDead');
@@ -5267,7 +5263,7 @@ export class BattleScene extends Component {
       const d = this.mission.data;
       const meta = findLevelByMissionId(d.id);
       const nameStr = meta ? t(meta.titleKey) : d.name;
-      this.missionTitleLabel.string = t('hud.missionLine', { id: d.id, name: nameStr });
+      this.missionTitleLabel.string = t('hud.missionLine', { id: missionDisplayId(d.id), name: nameStr });
     }
 
     if (this.hudLabel) {
@@ -5829,7 +5825,7 @@ export class BattleScene extends Component {
 
     const hint = this.dieActionHint(slot.pip);
     vis.hintLabel.string = this.playerDiceRollAnim ? '' : slot.used ? t('dice.slot.used') : hint.text;
-    vis.hintLabel.color = slot.used ? DIE_HINT_GREY : hint.color;
+    vis.hintLabel.color = slot.used ? DIE_HINT_GREY : DIE_HINT_ACTIVE;
   }
 
   private advancePlayerDiceRollAnim(dt: number) {
@@ -6829,7 +6825,7 @@ export class BattleScene extends Component {
     this.startDiceShow(
       panelReport,
       t('actor.player'),
-      target.kind,
+      unitDisplayName(target.kind),
       () => {
         if (!this.mission) return;
         applyMGAttack(target, report);
@@ -7551,7 +7547,7 @@ export class BattleScene extends Component {
         b: tile.bridgeEnds![1],
       }));
     }
-    if (tile.hedges?.some(Boolean)) {
+    if (this.tileInspectVisibleHedgeDirs(tile).some(Boolean)) {
       blocks.push(t('tileInspect.hedges'));
     }
     if (tile.reinforceId != null) {
@@ -7568,7 +7564,6 @@ export class BattleScene extends Component {
     const mv = b.movement[eff];
     const at = b.attack[eff];
     const ms = b.misc[eff];
-    blocks.push(t('tileInspect.diceIntro', { capMin: pool.capMin, capMax: pool.capMax }));
     blocks.push(t('tileInspect.diceRow.move', {
       n: mv,
       md: pool.moveMods.driver,
@@ -7583,7 +7578,7 @@ export class BattleScene extends Component {
     }));
     blocks.push(t('tileInspect.diceRow.misc', {
       n: ms,
-      xc: pool.miscMods.commander,
+      xc: pool.miscMods.hatch,
     }));
 
     return blocks.join('\n\n');
@@ -7776,26 +7771,141 @@ export class BattleScene extends Component {
       if (tile.terrain === 'field') this.drawFieldBrushOverlay(cx, cy, hexR, tile);
     }
     this.drawHexStroke(cx, cy, hexR);
+    if (tile.terrain === 'water' && this.mission?.map) {
+      this.drawWaterBankOverlay(cx, cy, hexR, tile, this.mission.map);
+    }
     if (tile.terrain === 'mud' && !hasTerrainSprite) this.drawMudOverlay(cx, cy, hexR, tile);
     if (tile.terrain === 'road' && !hasTerrainSprite) this.drawRoadHexOverlay(cx, cy, hexR, tile);
-    if (tile.terrain === 'forest') {
-      const s = hexR;
-      g.lineWidth = 0;
-      g.fillColor = FOREST_SHADE;
-      g.circle(cx - s * 0.2, cy - s * 0.15, s * 0.55);
-      g.fill();
-      g.fillColor = FOREST_TREE_DARK;
-      g.circle(cx - s * 0.25, cy + s * 0.1, s * 0.38);
-      g.fill();
-      g.fillColor = FOREST_TREE_LIGHT;
-      g.circle(cx + s * 0.22, cy + s * 0.05, s * 0.32);
-      g.fill();
-    }
     if (tileHasBridge(tile)) this.drawBridgeOverlay(cx, cy, hexR, tile.bridgeEnds!);
     if (tile.roads) this.drawRoadOverlay(cx, cy, hexR, tile.roads, tile);
     if (tile.hasBuilding) this.drawBuildingOverlay(cx, cy, hexR, tile);
     this.drawHexStroke(cx, cy, hexR);
     this.g = oldG;
+  }
+
+  private tileInspectVisibleHedgeDirs(tile: Tile): boolean[] {
+    const map = this.mission?.map;
+    const dirs: boolean[] = [];
+    for (let ax = 0; ax < 6; ax++) {
+      if (tile.hedges?.[ax]) {
+        dirs[ax] = true;
+        continue;
+      }
+      const np = neighbor(tile.pos, ax as Direction);
+      const nt = map?.get(np);
+      const back = directionTo(np, tile.pos);
+      dirs[ax] = back !== null && !!nt?.hedges?.[back];
+    }
+    return dirs;
+  }
+
+  private addTileInspectForestSprites(parent: Node, cx: number, cy: number, size: number, tile: Tile) {
+    if (tile.terrain !== 'forest') return;
+    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    if (frames.length === 0) return;
+    const seedRaw =
+      ((tile.pos.q | 0) * 92811 + (tile.pos.r | 0) * 6899 + 0x4f2a91) >>> 0;
+    const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
+    const trees: Array<{ ox: number; oy: number; scale: number }> = [
+      { ox: -0.22, oy: 0.22, scale: 0.60 },
+      { ox: 0.20, oy: 0.26, scale: 0.66 },
+      { ox: -0.04, oy: -0.02, scale: 0.52 },
+      { ox: -0.26, oy: -0.25, scale: 0.48 },
+      { ox: 0.24, oy: -0.22, scale: 0.58 },
+    ];
+    if (rng.next() < 0.55) trees.push({ ox: 0.02, oy: 0.43, scale: 0.44 });
+
+    for (let i = 0; i < trees.length; i++) {
+      const p = trees[i];
+      const x = cx + (p.ox + (rng.next() - 0.5) * 0.07) * size;
+      const y = cy + (p.oy + (rng.next() - 0.5) * 0.07) * size;
+      const scale = p.scale * (0.92 + rng.next() * 0.18);
+      this.addTileInspectTreeSprite(parent, x, y, size, seedRaw + i * 101, scale);
+    }
+  }
+
+  private addTileInspectTreeSprite(parent: Node, cx: number, cy: number, hexSize: number, seed: number, scale: number) {
+    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    if (frames.length === 0) return;
+    const rng = new RNG(seed || 1);
+    const n = new Node('TileInspectTreeSprite');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    const sp = n.addComponent(Sprite);
+    sp.spriteFrame = frames[Math.abs(seed) % frames.length];
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(hexSize * scale, hexSize * scale);
+    n.setPosition(cx, cy, 0);
+    n.angle = (rng.next() - 0.5) * 18;
+    const spriteScale = 0.92 + rng.next() * 0.18;
+    n.setScale(spriteScale, spriteScale, 1);
+    parent.addChild(n);
+  }
+
+  private addTileInspectHedgeSprites(parent: Node, cx: number, cy: number, size: number, tile: Tile) {
+    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    if (frames.length === 0) return;
+    const dirs = this.tileInspectVisibleHedgeDirs(tile);
+    const usedKeys = new Set<string>();
+    for (let ax = 0; ax < 6; ax++) {
+      if (!dirs[ax]) continue;
+      this.addTileInspectHedgeEdgeSprites(
+        parent,
+        cx,
+        cy,
+        size,
+        HEDGE_DRAW_EDGE_BY_AXIAL[ax],
+        tile.pos.q,
+        tile.pos.r,
+        usedKeys,
+      );
+    }
+  }
+
+  private addTileInspectHedgeEdgeSprites(
+    parent: Node,
+    cx: number,
+    cy: number,
+    size: number,
+    edgeIndex: number,
+    q: number,
+    r: number,
+    usedKeys: Set<string>,
+  ) {
+    const a1 = (-30 + 60 * edgeIndex) * Math.PI / 180;
+    const a2 = (-30 + 60 * (edgeIndex + 1)) * Math.PI / 180;
+    const x0 = cx + size * Math.cos(a1);
+    const y0 = cy + size * Math.sin(a1);
+    const x1 = cx + size * Math.cos(a2);
+    const y1 = cy + size * Math.sin(a2);
+    const tx = x1 - x0;
+    const ty = y1 - y0;
+    const len = Math.hypot(tx, ty) || 1;
+    const ux = tx / len;
+    const uy = ty / len;
+    let nx = cx - (x0 + x1) * 0.5;
+    let ny = cy - (y0 + y1) * 0.5;
+    const nlen = Math.hypot(nx, ny) || 1;
+    nx /= nlen;
+    ny /= nlen;
+
+    const n = BattleScene.HEDGE_TREES_PER_EDGE;
+    for (let k = 0; k < n; k++) {
+      const f = k / (n - 1);
+      const baseX = x0 + tx * f;
+      const baseY = y0 + ty * f;
+      const key = `${Math.round(baseX * 8)},${Math.round(baseY * 8)}`;
+      if (usedKeys.has(key)) continue;
+      usedKeys.add(key);
+      const keySeed = this.hashStringToSeed(key);
+      const local = new RNG(keySeed);
+      const along = (local.next() - 0.5) * size * (k === 1 ? 0.08 : 0.025);
+      const across = (local.next() - 0.5) * size * 0.14;
+      const px = baseX + ux * along + nx * across;
+      const py = baseY + uy * along + ny * across;
+      const scale = 0.40 + local.next() * 0.12;
+      this.addTileInspectTreeSprite(parent, px, py, size, keySeed, scale);
+    }
   }
 
   private addTileInspectTerrainSprite(parent: Node, tile: Tile, cx: number, cy: number, hexR: number) {
@@ -7828,6 +7938,8 @@ export class BattleScene extends Component {
     preview.addChild(overlay);
     const pvg = overlay.addComponent(Graphics);
     this.paintTileInspectPreview(pvg, tile, 0, hexCY, hexR);
+    this.addTileInspectForestSprites(preview, 0, hexCY, hexR, tile);
+    this.addTileInspectHedgeSprites(preview, 0, hexCY, hexR, tile);
 
     const baseTerrainName = t(`terrain.${tile.terrain}`);
     const titleStr = tileHasBridge(tile)
@@ -8802,6 +8914,7 @@ export class BattleScene extends Component {
     if (this.statusPanelTitleLabel) this.statusPanelTitleLabel.string = t('status.panelTitle');
     const bodyKeys = [
       'status.row.loaded',
+      'status.row.hatch',
       'status.row.turret',
       'status.row.mobility',
       'status.row.fireLevel',
@@ -9031,7 +9144,7 @@ export class BattleScene extends Component {
     this.enemyDiceExecOrder = this.computeEnemyDiceExecOrder();
 
     this.battleLog(
-      `[AI] ${enemy.kind}@(${enemy.pos.q},${enemy.pos.r}) 列=${this.enemyAICol} 掷 ${count} 骰 → [${this.enemyDice.join(',')}] 执行序=${this.enemyDiceExecOrder.map(i => this.enemyDice[i]).join(',')}`
+      `[AI] ${unitDisplayName(enemy.kind)}@(${enemy.pos.q},${enemy.pos.r}) 列=${aiColumnDisplayName(this.enemyAICol)} 掷 ${count} 骰 → [${this.enemyDice.join(',')}] 执行序=${this.enemyDiceExecOrder.map(i => this.enemyDice[i]).join(',')}`
     );
 
     this.buildEnemyDiceTray(enemy, { playSort: true });
@@ -9079,7 +9192,7 @@ export class BattleScene extends Component {
       const chosen = this.chooseActionForEntry(enemy, entry);
       const entryLabel = describeEntry(entry);
       this.battleLog(
-        `[AI] ${enemy.kind} #${dieIdx + 1} d6=${pip} → ${entryLabel}` +
+        `[AI] ${unitDisplayName(enemy.kind)} #${dieIdx + 1} d6=${pip} → ${entryLabel}` +
         (chosen ? ` ⇒ ${chosen}` : ' ⇒ 无可行动作（空转）')
       );
 
@@ -9157,7 +9270,7 @@ export class BattleScene extends Component {
         const occupied = this.buildOccupiedSet(enemy);
         const decision = decideEnemyTurn(enemy, sherman, map, occupied);
         if (decision === 'stay') {
-          this.battleLog(`[AI] ${enemy.kind} 转向 → 保持 facing=${enemy.facing}`);
+          this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 转向 → 保持 facing=${enemy.facing}`);
           this.redraw();
           return 'done';
         }
@@ -9166,7 +9279,7 @@ export class BattleScene extends Component {
         const to = rotateDirection(from, step);
         // §3.5 隐蔽：坦克任何移动动作（转向 / 前进 / 后退）都会脱离隐蔽，与谢尔曼一致
         this.breakConcealment(enemy);
-        this.battleLog(`[AI] ${enemy.kind} 转向 ${decision.toUpperCase()} → facing=${to}（动画中）`);
+        this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 转向 ${decision.toUpperCase()} → facing=${to}（动画中）`);
         this.anim = {
           unit: enemy,
           kind: 'turn',
@@ -9203,14 +9316,14 @@ export class BattleScene extends Component {
           t: 0,
           dur: Math.max(0.05, this.moveDuration),
         };
-        this.battleLog(`[AI] ${enemy.kind} ${action === 'advance' ? '前进' : '后退'} → (${to.q},${to.r})`);
+        this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} ${action === 'advance' ? '前进' : '后退'} → (${to.q},${to.r})`);
         this.redraw();
         return 'animating';
       }
 
       case 'smoke': {
         enemy.smoked = true;
-        this.battleLog(`[AI] ${enemy.kind} 施放烟雾`);
+        this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 施放烟雾`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.smoke'),
           new Color(200, 200, 220, 255), { size: 24 });
         this.redraw();
@@ -9220,7 +9333,7 @@ export class BattleScene extends Component {
       case 'repair': {
         if (enemy.damaged) {
           enemy.damaged = false;
-          this.battleLog(`[AI] ${enemy.kind} 修复成功`);
+          this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 修复成功`);
           this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.repair'),
             new Color(160, 220, 160, 255), { size: 24 });
           this.redraw();
@@ -9230,7 +9343,7 @@ export class BattleScene extends Component {
 
       case 'conceal': {
         enemy.hidden = true;
-        this.battleLog(`[AI] ${enemy.kind} 进入隐蔽`);
+        this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 进入隐蔽`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.concealed'),
           new Color(160, 200, 160, 255), { size: 24 });
         this.redraw();
@@ -9426,7 +9539,7 @@ export class BattleScene extends Component {
     // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，onDone 时一并消耗。
     const doublesPartnerIdx = this.selectedGunDoublesIdx;
     this.startShermanTurretAim(target, () => {
-      this.startDiceShow(report, t('actor.player'), target.kind, () => {
+      this.startDiceShow(report, t('actor.player'), unitDisplayName(target.kind), () => {
         if (!this.mission) return;
         applyAttack(target, report);
         if (target.destroyed) this.registerDestroyWreckVisual(target);
@@ -9472,11 +9585,12 @@ export class BattleScene extends Component {
     // 保留本车 AI 行动骰托盘；掷骰面板打开时会挂到 DiceShow 遮罩之上（见 liftEnemyDiceTrayIntoDiceShowIfNeeded）
 
     const report = rollAttack({ attacker: enemy, target: sherman, map }, this.rng);
-    const showDice = () => this.startDiceShow(report, t('actor.enemyPrefix', { name: enemy.kind }), t('actor.sherman'), () => {
+    const enemyActor = t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) });
+    const showDice = () => this.startDiceShow(report, enemyActor, t('actor.sherman'), () => {
       if (!this.mission) return;
       applyAttack(sherman, report);
       if (sherman.destroyed) this.registerDestroyWreckVisual(sherman);
-      this.presentAttackResult(t('actor.enemyPrefix', { name: enemy.kind }), report, enemy, sherman);
+      this.presentAttackResult(enemyActor, report, enemy, sherman);
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
       if (this.outcome === 'ongoing' && this.phase === 'enemy') {
         // 重新浮出托盘（可能还剩骰子），再继续调度
@@ -9637,25 +9751,30 @@ export class BattleScene extends Component {
     const hitNeed = this.makeCenteredLabel(panel, hitNeedText,
       0, PANEL_H / 2 - 72, PANEL_W - 40, 28, 20, DICE_INFO_TEXT);
 
-    // 三/四行骰子等距摆放：hit / pen / dmg (/ crew)
-    const DIE_SIZE = 72, DIE_GAP = 24, ROW_GAP = 82;
+    // 三/四行使用固定列：骰子列 / 数值或需求列 / 结果列，避免各行文字左右漂移。
+    const DIE_SIZE = 68, DIE_GAP = 24, ROW_GAP = 82;
     const hitDiceY = PANEL_H / 2 - 148;
     const penDiceY = hitDiceY - ROW_GAP;
     const dmgDiceY = penDiceY - ROW_GAP;
     const crewDiceY = dmgDiceY - ROW_GAP;
-    const leftDieCenter = -(DIE_SIZE + DIE_GAP / 2);
+    const DIE_COL_1 = -126;
+    const DIE_COL_2 = DIE_COL_1 + DIE_SIZE + DIE_GAP;
+    const MID_COL_X = 52;
+    const RESULT_COL_X = 178;
+    const MID_COL_W = 120;
+    const RESULT_COL_W = 190;
 
     // 2d6 两颗骰
-    const d1 = this.makeDieSquare(panel, leftDieCenter, hitDiceY, DIE_SIZE);
-    const d2 = this.makeDieSquare(panel, leftDieCenter + DIE_SIZE + DIE_GAP, hitDiceY, DIE_SIZE);
+    const d1 = this.makeDieSquare(panel, DIE_COL_1, hitDiceY, DIE_SIZE);
+    const d2 = this.makeDieSquare(panel, DIE_COL_2, hitDiceY, DIE_SIZE);
 
     // "= N"
     const hitSum = this.makeCenteredLabel(panel, '= ?',
-      96, hitDiceY, 80, 40, 30, DICE_INFO_TEXT);
+      MID_COL_X, hitDiceY, MID_COL_W, 40, 30, DICE_INFO_TEXT);
 
     // 命中判定文字
     const hitVerdict = this.makeCenteredLabel(panel, '',
-      190, hitDiceY, 160, 40, 28, DICE_OK_TEXT);
+      RESULT_COL_X, hitDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
 
     // 1d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有 2d6 命中这一段。
     let penDie: Label | null = null;
@@ -9669,26 +9788,26 @@ export class BattleScene extends Component {
     let crewEffect: Label | null = null;
     if (!mg) {
       // 1d6 穿甲骰 + 需求 + 判定
-      penDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), penDiceY, DIE_SIZE);
+      penDie = this.makeDieSquare(panel, DIE_COL_1, penDiceY, DIE_SIZE);
       penNeed = this.makeCenteredLabel(panel, '',
-        70, penDiceY, 170, 28, 18, DICE_INFO_TEXT);
+        MID_COL_X, penDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
       penVerdict = this.makeCenteredLabel(panel, '',
-        200, penDiceY, 160, 40, 28, DICE_OK_TEXT);
+        RESULT_COL_X, penDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
 
       // 1d6 伤害骰 + "伤害检定" + 效果文字
-      dmgDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), dmgDiceY, DIE_SIZE);
+      dmgDie = this.makeDieSquare(panel, DIE_COL_1, dmgDiceY, DIE_SIZE);
       dmgTitle = this.makeCenteredLabel(panel, t('dice.panel.dmgTitle'),
-        70, dmgDiceY, 170, 28, 18, DICE_INFO_TEXT);
+        MID_COL_X, dmgDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
       dmgEffect = this.makeCenteredLabel(panel, '',
-        200, dmgDiceY, 180, 40, 28, DICE_OUTCOME_HIT);
+        RESULT_COL_X, dmgDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_HIT);
 
       // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
       if (needsCrewRow) {
-        crewDie = this.makeDieSquare(panel, -(DIE_SIZE / 2 + 60), crewDiceY, DIE_SIZE);
+        crewDie = this.makeDieSquare(panel, DIE_COL_1, crewDiceY, DIE_SIZE);
         crewTitle = this.makeCenteredLabel(panel, t('dice.panel.crewTitle'),
-          70, crewDiceY, 170, 28, 18, DICE_INFO_TEXT);
+          MID_COL_X, crewDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
         crewEffect = this.makeCenteredLabel(panel, '',
-          200, crewDiceY, 180, 40, 28, DICE_OUTCOME_CREW);
+          RESULT_COL_X, crewDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_CREW);
         // 阵亡检定行默认 hidden，直到 crew-roll 才亮
         crewDie.node.parent!.active = false;
         crewTitle.node.active = false;
@@ -9878,7 +9997,7 @@ export class BattleScene extends Component {
     hl.color = new Color(230, 230, 200, 255);
     hl.horizontalAlign = HorizontalTextAlignment.CENTER;
     hl.verticalAlign = VerticalTextAlignment.CENTER;
-    hl.string = t('dice.aiHeader', { col: this.enemyAICol, n: count });
+    hl.string = t('dice.aiHeader', { col: aiColumnDisplayName(this.enemyAICol), n: count });
     hl.enableOutline = true;
     hl.outlineColor = new Color(0, 0, 0, 220);
     hl.outlineWidth = 2;
@@ -10732,7 +10851,7 @@ export class BattleScene extends Component {
     }
 
     const v = volleys[idx];
-    const actor = t('actor.enemyPrefix', { name: v.attackerKind });
+    const actor = t('actor.enemyPrefix', { name: unitDisplayName(v.attackerKind) });
     const sh = this.mission.sherman;
 
     this.startDiceShow(
@@ -11012,13 +11131,13 @@ export class BattleScene extends Component {
             ? `阵亡检定1d6=${cc.die} → 虚惊（舱盖关）`
             : `阵亡检定1d6=${cc.die} → ${crewRoleName(cc.slot)} 阵亡`
               + (cc.rerolled ? '（有已死乘员重抛）' : '');
-          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${crewInfo} → ${target.kind}`);
+          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${crewInfo} → ${unitDisplayName(target.kind)}`);
           const out = crewOutcomeLabel(cc);
           text = out.text;
           color = out.color;
           size = cc.slot === null ? 36 : 44;
         } else {
-          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${target.kind}`);
+          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${unitDisplayName(target.kind)}`);
           const out = damageOutcomeLabel(effect);
           text = out.text;
           color = out.color;
