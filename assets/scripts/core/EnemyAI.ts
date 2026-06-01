@@ -9,7 +9,7 @@
  *
  * 转向规则（4 条优先级）：
  *   1. 谢尔曼在"正前直线" + 正前一格可通行 → 不转向
- *   2. 谢尔曼在"正前直线" + 正前一格不可通行 → 朝"转向后正前可通行"的一侧转 1 步
+ *   2. 谢尔曼在"正前直线" + 正前一格不可通行 → 随机转向左右可通行的一侧
  *   3. 谢尔曼在"正后直线" + 正后一格可通行 → 朝"转向后正前可通行"的一侧转 1 步
  *   4. 否则 → 朝"approximateDirection(enemy→sherman)"最近的一侧转 1 步
  *
@@ -122,6 +122,7 @@ export function decideEnemyTurn(
   sherman: Unit,
   map: HexMap,
   occupied: Set<string>,
+  rng?: RNG,
 ): TurnDecision {
   const facing = enemy.facing;
   if (facing === null) return 'cw'; // 无朝向兜底：随便转一下
@@ -134,28 +135,24 @@ export function decideEnemyTurn(
     return true;
   };
 
-  // 规则 2 / 3 共用：尝试 CW / CCW 一步旋转，挑"新正前可通行"那侧；都行/都不行 → 朝谢尔曼最短转。
-  const pickTurnToOpenFront = (): TurnDecision => {
+  // 规则 2 / 3 共用：尝试 CW / CCW 一步旋转，挑"新正前可通行"那侧；都行时可随机；都不行 → 朝谢尔曼最短转。
+  const pickTurnToOpenFront = (randomTie = false): TurnDecision => {
     const cwFront  = rotateDirection(facing, 1);
     const ccwFront = rotateDirection(facing, 5);
     const cwOk  = canEnterFront(cwFront);
     const ccwOk = canEnterFront(ccwFront);
     if (cwOk && !ccwOk) return 'cw';
     if (!cwOk && ccwOk) return 'ccw';
-    if (cwOk && ccwOk) return 'cw';
+    if (cwOk && ccwOk) return randomTie && rng ? (rng.d6() <= 3 ? 'cw' : 'ccw') : 'cw';
+    if (randomTie && rng) return rng.d6() <= 3 ? 'cw' : 'ccw';
     return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
   };
 
   const straightDir = directionTo(enemy.pos, sherman.pos);
 
-  // 规则 1：谢尔曼在正前直线 + 正前可通行 → 不转
-  if (straightDir === facing && canEnterFront(facing)) {
-    return 'stay';
-  }
-
-  // 规则 2：谢尔曼在正前直线 + 正前不可通行 → 朝"旋转后正前可通行"一侧转 1 步
-  if (straightDir === facing && !canEnterFront(facing)) {
-    return pickTurnToOpenFront();
+  // 规则 1/2：严格正对谢尔曼时，正前可通行才 stay；正前被挡则转向左右可通行的一侧。
+  if (straightDir === facing) {
+    return canEnterFront(facing) ? 'stay' : pickTurnToOpenFront(true);
   }
 
   // 规则 3：谢尔曼在正后直线 + 正后可通行 → 朝"旋转后正前可通行"一侧转 1 步
@@ -168,18 +165,31 @@ export function decideEnemyTurn(
   return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
 }
 
-/** 辅助：朝 target 最短方向旋 1 步（已正对则返回 'stay'） */
+/** 辅助：朝 target 最短方向旋 1 步；仅严格正对时返回 stay，近似正对时仍会实际转向。 */
 function pickShortestTurnTowards(
   facing: Direction,
   target: Axial,
   from: Axial,
 ): TurnDecision {
-  const want = approximateDirection(from, target);
-  if (want === facing) return 'stay';
-  // diff ∈ 1..5；0 已在上面返回
+  const exact = directionTo(from, target);
+  if (exact === facing) return 'stay';
+  const want = exact ?? approximateDirection(from, target);
   const diff = ((want - facing) + 6) % 6;
-  if (diff === 0) return 'stay';
+  if (diff === 0) return pickCloserTurnSide(facing, target, from);
   return diff <= 3 ? 'cw' : 'ccw';
+}
+
+/** 目标落在当前朝向扇区内但不允许原地不动时，比较转后两侧哪边更接近目标。 */
+function pickCloserTurnSide(
+  facing: Direction,
+  target: Axial,
+  from: Axial,
+): TurnDecision {
+  const cwFront = neighbor(from, rotateDirection(facing, 1));
+  const ccwFront = neighbor(from, rotateDirection(facing, 5));
+  const cwDist = hexDistance(cwFront, target);
+  const ccwDist = hexDistance(ccwFront, target);
+  return cwDist <= ccwDist ? 'cw' : 'ccw';
 }
 
 // ---------- 可执行性判定 ----------

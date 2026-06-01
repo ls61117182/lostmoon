@@ -9268,7 +9268,7 @@ export class BattleScene extends Component {
       case 'turn': {
         if (enemy.facing === null) enemy.facing = 0;
         const occupied = this.buildOccupiedSet(enemy);
-        const decision = decideEnemyTurn(enemy, sherman, map, occupied);
+        const decision = decideEnemyTurn(enemy, sherman, map, occupied, this.rng);
         if (decision === 'stay') {
           this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 转向 → 保持 facing=${enemy.facing}`);
           this.redraw();
