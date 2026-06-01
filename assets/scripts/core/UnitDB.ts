@@ -12,13 +12,13 @@ const DB: Record<UnitKind, UnitStats> = {
     size: 4, armorFront: 6, armorFrontSide: 5, armorRearSide: 4, armorRear: 4, penetration: 1,
   },
   tiger: { // 虎式 - 重型敌方坦克
-    size: 3, armorFront: 7, armorFrontSide: 5, armorRearSide: 4, armorRear: 4, penetration: 2,
+    size: 3, armorFront: 7, armorFrontSide: 6, armorRearSide: 5, armorRear: 4, penetration: 2,
   },
   panzer4: { // 四号坦克 - 中坚敌方坦克
     size: 4, armorFront: 6, armorFrontSide: 5, armorRearSide: 4, armorRear: 4, penetration: 1,
   },
   panzer3: { // 三号坦克 - 次级敌方坦克
-    size: 5, armorFront: 5, armorFrontSide: 4, armorRearSide: 3, armorRear: 3, penetration: 1,
+    size: 5, armorFront: 5, armorFrontSide: 4, armorRearSide: 3, armorRear: 3, penetration: 0,
   },
   truck: { // 卡车 - 占位 - 后续按特殊规则结算
     size: 3, armorFront: 1, armorFrontSide: 1, armorRearSide: 1, armorRear: 1, penetration: 1,

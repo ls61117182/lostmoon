@@ -127,6 +127,9 @@ function findTileByEnemyStartId(mission: LoadedMission, eid: number) {
 
 function unitAt(mission: LoadedMission, pos: { q: number; r: number }): Unit | null {
   if (mission.sherman.pos.q === pos.q && mission.sherman.pos.r === pos.r) return mission.sherman;
+  for (const a of mission.allies) {
+    if (!a.destroyed && a.pos.q === pos.q && a.pos.r === pos.r) return a;
+  }
   for (const e of mission.enemies) {
     if (!e.destroyed && e.pos.q === pos.q && e.pos.r === pos.r) return e;
   }

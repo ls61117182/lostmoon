@@ -7,10 +7,10 @@
  *       ① 2d6 命中检定（阈值 = 体型 + 距离 + 树篱 + 建筑 + …）
  *       ② 命中后再掷 1d6 穿甲检定（d6 ≥ 装甲 - 穿甲 才击穿；未击穿 = 跳弹，命中无效）
  *       ③ 击穿后再掷 1d6 伤害检定（§3.4 Step 3 的伤害结果表）：
- *            谢尔曼： 1=摧毁 / 2=阵亡检定 / 3,4=着火 +1 / 5=炮塔受损 / 6=痛痪
- *            德军坦克： 1–4=受损（已受损→摧毁） / 5,6=摧毁
+ *            主角： 1=摧毁 / 2=阵亡检定 / 3,4=着火 +1 / 5=炮塔受损 / 6=痛痪
+ *            其他坦克： 1–4=受损（已受损→摧毁） / 5,6=摧毁
  *          → 对应效果写回 target 的 destroyed/damaged/fireLevel/turretDamaged/paralyzed
- *   - "阵亡检定"（d6=2，谢尔曼）未实装乘员抽签；MVP 简化等价于着火 +1，并打日志说明
+ *   - "阵亡检定"（d6=2，主角）会再掷 1d6 决定乘员
  *   - 不处理对子（doubles）特殊事件
  *   - 不校验乘员存活（假设炮手总是可用）
  */
@@ -27,13 +27,12 @@ export type HitStatusChange = 'none' | 'damaged' | 'destroyed';
 
 /**
  * §3.4 Step 3 伤害表的具体结果。
- *   - 'destroyed'   目标直接摧毁（谢 1；德 5,6；德 已受损时 1-4）
- *   - 'damaged'     受损（德军首次受伤；MVP 语义 = "起火状态"，下次击穿直接摧毁）
- *   - 'fire'        着火 / 着火程度 +1（谢尔曼 3,4）
- *   - 'turret'      炮塔受损：不能用主炮射击（谢尔曼 5）
- *   - 'paralyzed'   痛痪：不能前进/后退/转向（谢尔曼 6）
- *   - 'crewCheck'   阵亡检定：再掷 1d6 映射乘员 1-5（谢尔曼 2）。MVP 未实装乘员抽签，
- *                   视觉上等同 'fire' +1，保留该枚举值以便以后补
+ *   - 'destroyed'   目标直接摧毁（主角 1；其他坦克 5,6；其他坦克已受损时 1-4）
+ *   - 'damaged'     受损（其他坦克首次受伤；下次击穿直接摧毁）
+ *   - 'fire'        着火 / 着火程度 +1（主角 3,4）
+ *   - 'turret'      炮塔受损：不能用主炮射击（主角 5）
+ *   - 'paralyzed'   痛痪：不能前进/后退/转向（主角 6）
+ *   - 'crewCheck'   阵亡检定：再掷 1d6 映射乘员 1-5（主角 2）
  */
 export type DamageEffect =
   | 'destroyed'
@@ -72,8 +71,10 @@ export interface AttackReport {
   /** 伤害检定分段：仅在 hit && penetrated 时有值 */
   damageDie?: number;       // 1d6 伤害表掷骰
   damageEffect?: DamageEffect;
-  /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（目前只会在谢尔曼身上发生） */
+  /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（只会在主角受伤表中发生） */
   crewCheck?: CrewDeathResult;
+  /** 本次伤害是否按主角受伤表结算；用于 applyAttack 区分同型号队友。 */
+  protagonistTarget?: boolean;
   statusChange: HitStatusChange;
 }
 
@@ -81,6 +82,8 @@ export interface AttackContext {
   attacker: Unit;
   target: Unit;
   map: HexMap;
+  /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
+  protagonist?: Unit;
 }
 
 /**
@@ -166,6 +169,10 @@ export function probDie1d6(threshold: number): number {
   return (7 - threshold) / 6;
 }
 
+function isProtagonistTarget(ctx: AttackContext): boolean {
+  return ctx.protagonist ? ctx.target === ctx.protagonist : ctx.target.kind === 'sherman';
+}
+
 /**
  * 攻击方向相对目标车体朝向的夹角 → 装甲面。
  * diff=0 正面；diff=±1 前侧；diff=±2 后侧；diff=3 后方。
@@ -202,6 +209,7 @@ export function armorValue(target: Unit, face: ArmorFace): number {
  */
 export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const { attacker, target } = ctx;
+  const protagonistTarget = isProtagonistTarget(ctx);
   const d1 = rng.d6();
   const d2 = rng.d6();
   const roll = d1 + d2;
@@ -234,10 +242,10 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
   // 第三段：伤害检定（§3.4 Step 3）
   const damageDie = rng.d6();
-  const damageEffect = resolveDamageEffect(target, damageDie);
+  const damageEffect = resolveDamageEffect(target, damageDie, protagonistTarget);
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
-  // 阵亡检定：只对谢尔曼（crewCheck）再掷一次，决定哪位乘员死
+  // 阵亡检定：只对主角（crewCheck）再掷一次，决定哪位乘员死
   let crewCheck: CrewDeathResult | undefined;
   if (damageEffect === 'crewCheck') {
     crewCheck = resolveCrewCheck(target, rng);
@@ -250,17 +258,17 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     penDie, penThreshold, penetrated,
     damageDie, damageEffect,
     crewCheck,
+    protagonistTarget,
     statusChange,
   };
 }
 
 /**
- * §3.4 Step 3 伤害结果表。两条路线（谢尔曼 / 德军坦克）；
- * 步兵等单位按"德军坦克"路线处理（MVP 下不会成为被击穿的目标）。
+ * §3.4 Step 3 伤害结果表。两条路线（主角 / 其他坦克）；
+ * 步兵等单位按"其他坦克"路线处理（MVP 下不会成为被击穿的目标）。
  */
-export function resolveDamageEffect(target: Unit, die: number): DamageEffect {
-  const isSherman = target.kind === 'sherman';
-  if (isSherman) {
+export function resolveDamageEffect(target: Unit, die: number, protagonistTarget = target.kind === 'sherman'): DamageEffect {
+  if (protagonistTarget) {
     switch (die) {
       case 1: return 'destroyed';
       case 2: return 'crewCheck';
@@ -271,13 +279,13 @@ export function resolveDamageEffect(target: Unit, die: number): DamageEffect {
       default: return 'paralyzed';
     }
   }
-  // 德军坦克：5/6 直接摧毁；1-4 受损，已受损则升级为摧毁
+  // 其他坦克：5/6 直接摧毁；1-4 受损，已受损则升级为摧毁
   if (die >= 5) return 'destroyed';
   return target.damaged ? 'destroyed' : 'damaged';
 }
 
 /**
- * §3.2 + §3.4 的"谢尔曼阵亡检定"。
+ * §3.2 + §3.4 的"主角阵亡检定"。
  *
  * 规则：
  *   - 1d6 = 1..5 → 直接映射到 1=车长 / 2=装填手 / 3=炮手 / 4=驾驶员 / 5=副驾驶
@@ -341,15 +349,15 @@ export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
  * 未命中 / 未击穿 → 不改任何字段（跳弹）。
  * 击穿 → 按 §3.4 Step 3 的 damageEffect 映射到具体状态位。
  *
- * 注：`damaged` 主要用于德军坦克 MVP「首次受伤 / 起火中」；谢尔曼不再写入该位，
+ * 注：`damaged` 主要用于其他坦克「首次受伤」；主角不写入该位，
  * 着火用 fireLevel，炮塔 / 瘫痪 / 乘员等有独立字段。
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
   if (!report.hit) return;
   if (!report.penetrated) return;
   const effect = report.damageEffect;
-  const sh = target.kind === 'sherman';
-  const markHullDamaged = !sh;
+  const protagonistTarget = report.protagonistTarget ?? target.kind === 'sherman';
+  const markHullDamaged = !protagonistTarget;
   // 历史分支（未带 damageEffect 的旧 report）：按 statusChange 走二段式
   if (!effect) {
     if (report.statusChange === 'destroyed') target.destroyed = true;
@@ -380,7 +388,7 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       if (markHullDamaged) target.damaged = true;
       if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
         killCrewSlot(target.crew, report.crewCheck.slot);
-        if (report.crewCheck.slot === 1 && target.kind === 'sherman') {
+        if (report.crewCheck.slot === 1 && protagonistTarget) {
           target.hatchOpen = false;
         }
       }

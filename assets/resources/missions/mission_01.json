@@ -71,6 +71,14 @@
     "at": { "col": 1, "row": 5 },
     "facing": 5
   },
+  "allies": [
+    {
+      "kind": "sherman",
+      "faction": "allied",
+      "at": { "col": 2, "row": 5 },
+      "facing": 5
+    }
+  ],
   "enemies": [
     { "kind": "panzer4", "faction": "german" },
     { "kind": "panzer4", "faction": "german" }

@@ -1,8 +1,8 @@
 ﻿unitKind,displayName,size,armorFront,armorFrontSide,armorRearSide,armorRear,penetration,notes
 sherman,谢尔曼 M4,4,6,5,4,4,1,玩家方坦克
-tiger,虎式,3,7,5,4,4,2,重型敌方坦克
+tiger,虎式,3,7,6,5,4,2,重型敌方坦克
 panzer4,四号坦克,4,6,5,4,4,1,中坚敌方坦克
-panzer3,三号坦克,5,5,4,3,3,1,次级敌方坦克
+panzer3,三号坦克,5,5,4,3,3,0,次级敌方坦克
 truck,卡车,3,1,1,1,1,1,占位 - 后续按特殊规则结算
 infantry,步兵,0,0,0,0,0,1,占位 - 仅事件中作为攻击方
 officer,军官,0,0,0,0,0,1,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）

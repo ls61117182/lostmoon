@@ -210,6 +210,8 @@ export interface MissionData {
   tiles: TileDef[][];
   /** 谢尔曼初始放置 */
   sherman: UnitPlacement;
+  /** 玩家阵营 AI 队友；玩家不可直接控制 */
+  allies?: UnitPlacement[];
   /** 德军初始放置 */
   enemies: UnitPlacement[];
   /**

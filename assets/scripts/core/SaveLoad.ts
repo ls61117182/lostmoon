@@ -10,7 +10,7 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  *   2: 追加 attacksLeft + 每个单位的 damaged/destroyed 状态（战斗系统）
  *   3: 追加玩家子阶段 / 本阶段骰子 / 谢尔曼与敌军的战术字段（装填、舱盖、乘员、烟雾等）
  */
-const SAVE_VERSION = 3 as const;
+const SAVE_VERSION = 4 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -34,13 +34,14 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 2;
+  version: typeof SAVE_VERSION | 3 | 2;
   missionId: string;
   turn: number;
   phase: 'player' | 'enemy';
   movesLeft: number;
   attacksLeft: number;
   sherman: UnitSnapshot;
+  allies?: UnitSnapshot[];
   enemies: UnitSnapshot[];
   /** v3：杂项阶段是否已结束 */
   miscDone?: boolean;
@@ -97,6 +98,21 @@ export function captureSave(p: SnapshotParams): SaveData {
       crew: sh.crew ? { ...sh.crew } : undefined,
       smoked: sh.smoked,
     },
+    allies: p.mission.allies.map(e => ({
+      kind: e.kind,
+      q: e.pos.q,
+      r: e.pos.r,
+      facing: e.facing,
+      damaged: e.damaged,
+      destroyed: e.destroyed,
+      fireLevel: e.fireLevel,
+      turretDamaged: e.turretDamaged,
+      paralyzed: e.paralyzed,
+      loaded: e.loaded,
+      hatchOpen: e.hatchOpen,
+      crew: e.crew ? { ...e.crew } : undefined,
+      smoked: e.smoked,
+    })),
     enemies: p.mission.enemies.map(e => ({
       kind: e.kind,
       q: e.pos.q,
@@ -136,7 +152,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -156,6 +172,20 @@ export function applySave(
       return { ok: false, reason: `敌人 #${i} 种类不匹配` };
     }
   }
+  if (save.version >= 4) {
+    const allies = save.allies ?? [];
+    if (allies.length !== mission.allies.length) {
+      return {
+        ok: false,
+        reason: `友军数不匹配 (${allies.length} vs ${mission.allies.length})`,
+      };
+    }
+    for (let i = 0; i < allies.length; i++) {
+      if (allies[i].kind !== mission.allies[i].kind) {
+        return { ok: false, reason: `友军 #${i} 种类不匹配` };
+      }
+    }
+  }
 
   // 校验通过，写入状态
   mission.sherman.pos = { q: save.sherman.q, r: save.sherman.r };
@@ -170,6 +200,23 @@ export function applySave(
     live.facing = s.facing;
     live.damaged = s.damaged ?? false;
     live.destroyed = s.destroyed ?? false;
+  }
+  if (save.version >= 4 && save.allies) {
+    for (let i = 0; i < save.allies.length; i++) {
+      const s = save.allies[i];
+      const live = mission.allies[i];
+      live.pos = { q: s.q, r: s.r };
+      live.facing = s.facing;
+      live.damaged = s.damaged ?? false;
+      live.destroyed = s.destroyed ?? false;
+      if (s.fireLevel !== undefined) live.fireLevel = s.fireLevel;
+      if (s.turretDamaged !== undefined) live.turretDamaged = s.turretDamaged;
+      if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
+      if (s.loaded !== undefined) live.loaded = s.loaded;
+      if (s.hatchOpen !== undefined) live.hatchOpen = s.hatchOpen;
+      if (s.crew) live.crew = { ...s.crew };
+      if (s.smoked !== undefined) live.smoked = s.smoked;
+    }
   }
 
   if (save.version >= 3) {

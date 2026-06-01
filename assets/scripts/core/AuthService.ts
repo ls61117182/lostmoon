@@ -18,7 +18,7 @@ export interface ServerAuthResult {
 const API_BASE_KEY = 'lone_sherman_api_base_v1';
 const AUTH_TOKEN_KEY = 'lone_sherman_server_token_v1';
 const AUTH_USER_KEY = 'lone_sherman_server_user_v1';
-const DEFAULT_API_BASE = 'http://127.0.0.1:3000';
+const DEFAULT_API_BASE = 'http://119.91.156.212';
 
 export function getApiBase(): string {
   try {
@@ -102,6 +102,10 @@ function requestJson(path: string, method: 'GET' | 'POST' | 'PUT', body?: unknow
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.onreadystatechange = () => {
       if (xhr.readyState !== 4) return;
+      if (xhr.status === 0) {
+        resolve({ ok: false, code: 'NETWORK_ERROR', message: 'Cannot connect to server' });
+        return;
+      }
       let payload: ServerAuthResult;
       try {
         payload = JSON.parse(xhr.responseText || '{}') as ServerAuthResult;

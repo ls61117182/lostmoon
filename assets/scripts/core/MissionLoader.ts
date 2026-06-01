@@ -37,6 +37,7 @@ const TERRAIN_MAP = {
 export interface LoadedMission {
   map: HexMap;
   sherman: Unit;
+  allies: Unit[];
   enemies: Unit[];
   data: MissionData;
   /** destroy_kind_evac：谢尔曼已成功执行离场移动（驶出地图） */
@@ -139,6 +140,14 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   }
 
   const takenBeforeSherman = new Set<string>();
+  for (let i = 0; i < (data.allies ?? []).length; i++) {
+    const p = data.allies![i];
+    if (!p.at) {
+      throw new Error(`任务 ${data.id}：友军单位 ${i} 缺少 at`);
+    }
+    const ax = offsetToAxial(p.at);
+    takenBeforeSherman.add(`${ax.q},${ax.r}`);
+  }
   for (let i = 0; i < data.enemies.length; i++) {
     const p = data.enemies[i];
     if (p.at) {
@@ -167,13 +176,14 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     shermanPlacement = data.sherman as UnitPlacement;
   }
   const sherman = makeUnit('sherman_player', shermanPlacement);
+  const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p));
 
   // 3. 德军：可选掷骰出生
   // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位掷 1d6 链式占位——
   // 步兵用红格 rid（1..6），坦克等非步兵用黑格 eid（1..6）（见 GDD）
   const diceList =
     useDice && needsEnemyDice && rngResolved
-      ? resolveEnemyDicePlacements(data, map, sherman.pos, rngResolved)
+      ? resolveEnemyDicePlacements(data, map, sherman.pos, allies.map(u => u.pos), rngResolved)
       : null;
 
   let di = 0;
@@ -211,7 +221,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     validateTruckPath(data, map);
   }
 
-  const mission: LoadedMission = { map, sherman, enemies, data, shermanEvacuated: false, truckEscapeDefeat: false };
+  const mission: LoadedMission = { map, sherman, allies, enemies, data, shermanEvacuated: false, truckEscapeDefeat: false };
   if (data.truckPath && data.truckPath.length >= 2) {
     const truckU = enemies.find(e => e.kind === 'truck' && !e.destroyed);
     if (truckU) {
@@ -287,6 +297,7 @@ function resolveEnemyDicePlacements(
   data: MissionData,
   map: HexMap,
   shermanPos: Axial,
+  alliedBlockedPositions: Axial[],
   rng: RNG,
 ): Array<{ at: Offset; facing: Direction }> {
   const cellsByEid = buildCellsByEidFromMap(data.id, map);
@@ -306,6 +317,9 @@ function resolveEnemyDicePlacements(
   }
 
   const taken = new Set<string>([`${shermanPos.q},${shermanPos.r}`]);
+  for (const pos of alliedBlockedPositions) {
+    taken.add(`${pos.q},${pos.r}`);
+  }
   for (let i = 0; i < data.enemies.length; i++) {
     const p = data.enemies[i];
     if (p.at) {

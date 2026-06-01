@@ -59,6 +59,7 @@ import {
   axialToPixel,
   approximateDirection,
   directionTo,
+  hexDistance,
   neighbor,
   offsetToAxial,
   rotateDirection,
@@ -81,11 +82,12 @@ import {
   AIActionEntry,
   AIColumn,
   canExecuteAction,
+  currentTargetFor,
   DEFAULT_AI_TABLE,
   decideEnemyTurn,
   EnemyAction,
   rollAIDice,
-  selectEnemyOrder,
+  selectAIOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
@@ -194,11 +196,11 @@ function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: 
 
 const { ccclass, property } = _decorator;
 
-/** 使用俯视 PNG 的德军单位（与谢尔曼同一套 normalizeTankSprites 白边处理） */
-type EnemyTopKind = Extract<UnitKind, 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+/** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
 }
 
 /**
@@ -1009,6 +1011,7 @@ export class BattleScene extends Component {
   private enemyOrder: Unit[] = [];
   /** enemyOrder 的下标指针 */
   private enemyIndex: number = 0;
+  private aiSide: 'ally' | 'german' = 'german';
   /** 当前敌坦本回合掷出的一串 d6 点数 */
   private enemyDice: number[] = [];
   /** 与 enemyDice 同长度：每颗是否已消耗 */
@@ -1353,12 +1356,13 @@ export class BattleScene extends Component {
     }
 
     const enemyTopPaths: Record<EnemyTopKind, string> = {
+      sherman: 'textures/units/sherman_top/spriteFrame',
       panzer4: 'textures/units/panzer4_top/spriteFrame',
       panzer3: 'textures/units/panzer3_top/spriteFrame',
       tiger: 'textures/units/tiger_top/spriteFrame',
       truck: 'textures/units/truck_top/spriteFrame',
     };
-    (['panzer4', 'panzer3', 'tiger', 'truck'] as const).forEach((kind) => {
+    (['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'] as const).forEach((kind) => {
       resources.load(enemyTopPaths[kind], SpriteFrame, (err, sf) => {
         if (err || !sf) {
           console.warn(`[BattleScene] 俯视图加载失败 (${kind})，该类型将回退矢量车体:`, err);
@@ -1639,8 +1643,9 @@ export class BattleScene extends Component {
     this.redraw();
     this.battleLog(
       `[BattleScene] 任务加载成功: ${data.name}, ${tiles.length} 格, ` +
-      `1 + ${this.mission.enemies.length} 个单位`
+      `1 + ${this.mission.allies.length} + ${this.mission.enemies.length} 个单位`
     );
+    this.beginPlayerPhaseForNewTurn();
   }
 
   private project(q: number, r: number) {
@@ -1796,7 +1801,7 @@ export class BattleScene extends Component {
     this.drawOfficerTileHighlights();
 
     // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
-    const units: Unit[] = [sherman, ...enemies];
+    const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
     for (const u of units) {
       if (u.destroyed) this.drawUnitMaybeAnim(u);
     }
@@ -1807,9 +1812,11 @@ export class BattleScene extends Component {
     // 6. 单位状态：本回合击毁的「已毁」短标签 + 坦克矢量状态图标条
     this.clearStatusLabels();
     this.spawnStatusLabelIfAny(sherman);
+    for (const a of this.mission.allies) this.spawnStatusLabelIfAny(a);
     for (const e of enemies) this.spawnStatusLabelIfAny(e);
     this.clearStatusBadges();
     this.spawnStatusBadgesIfAny(sherman);
+    for (const a of this.mission.allies) this.spawnStatusBadgesIfAny(a);
     for (const e of enemies) this.spawnStatusBadgesIfAny(e);
 
     // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …），残骸名先画，活动单位名后画。
@@ -2312,7 +2319,7 @@ export class BattleScene extends Component {
 
   private hasLiveUnitOnSameTile(u: Unit): boolean {
     if (!this.mission) return false;
-    const units: Unit[] = [this.mission.sherman, ...this.mission.enemies];
+    const units: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
     return units.some(o =>
       o !== u &&
       !o.destroyed &&
@@ -2354,6 +2361,9 @@ export class BattleScene extends Component {
     const s = new Set<string>();
     if (!this.mission) return s;
     if (this.mission.sherman.destroyed) s.add(this.mission.sherman.id);
+    for (const a of this.mission.allies) {
+      if (a.destroyed) s.add(a.id);
+    }
     for (const e of this.mission.enemies) {
       if (e.destroyed) s.add(e.id);
     }
@@ -2364,6 +2374,9 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const { sherman, enemies } = this.mission;
     if (sherman.destroyed && !prev.has(sherman.id)) this.registerDestroyWreckVisual(sherman);
+    for (const a of this.mission.allies) {
+      if (a.destroyed && !prev.has(a.id)) this.registerDestroyWreckVisual(a);
+    }
     for (const e of enemies) {
       if (e.destroyed && !prev.has(e.id)) this.registerDestroyWreckVisual(e);
     }
@@ -2483,7 +2496,7 @@ export class BattleScene extends Component {
         this.redraw();
         return;
       }
-      if (a.unit.kind === 'sherman') {
+      if (a.unit === this.mission?.sherman) {
         this.shermanTurretFacing = a.to;
       } else if (this.enemySupportsSplitTurret(a.unit)) {
         this.enemyTurretFacing.set(a.unit.id, a.to);
@@ -2550,7 +2563,7 @@ export class BattleScene extends Component {
         `[BattleScene] ${finishedUnit.kind} 转向完成 facing=${finishedUnit.facing}`,
       );
     }
-    if (finishedUnit.kind === 'sherman' && finishedUnit.facing !== null) {
+    if (finishedUnit === this.mission?.sherman && finishedUnit.facing !== null) {
       this.shermanTurretFacing = finishedUnit.facing;
     } else if (this.enemySupportsSplitTurret(finishedUnit) && finishedUnit.facing !== null) {
       this.enemyTurretFacing.set(finishedUnit.id, finishedUnit.facing);
@@ -2600,10 +2613,12 @@ export class BattleScene extends Component {
    */
   private drawDriveCandidates() {
     if (!this.g || !this.mission) return;
-    const { map, sherman, enemies } = this.mission;
+    const { map, sherman } = this.mission;
     if (sherman.facing === null) return;
     const occupied = new Set(
-      enemies.filter(e => !e.destroyed).map(e => `${e.pos.q},${e.pos.r}`),
+      this.allUnits()
+        .filter(e => e !== sherman && !e.destroyed)
+        .map(e => `${e.pos.q},${e.pos.r}`),
     );
 
     const cands: Array<{ dir: number; color: Color }> = [
@@ -3793,10 +3808,26 @@ export class BattleScene extends Component {
     turretFacingLerp?: DirectionLerp | null,
   ) {
     if (!this.shermanTurretSpriteNode || !this.shermanTurretTopSprite || !this.shermanTurretSpriteFrame) return;
+    this.applyShermanTurretSpriteTo(
+      { node: this.shermanTurretSpriteNode, sprite: this.shermanTurretTopSprite },
+      u,
+      c,
+      bodyFacingLerp,
+      turretFacingLerp,
+    );
+  }
 
+  private applyShermanTurretSpriteTo(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+    turretFacingLerp?: DirectionLerp | null,
+  ) {
+    if (!this.shermanTurretSpriteFrame) return;
     const sf = this.shermanTurretSpriteFrame;
-    const node = this.shermanTurretSpriteNode;
-    const sp = this.shermanTurretTopSprite;
+    const node = slot.node;
+    const sp = slot.sprite;
     const ut = node.getComponent(UITransform)!;
     const cfg = tankVisualConfigOf(u.kind);
     const srcW = BattleScene.SHERMAN_TOP_TRIM_W;
@@ -4200,7 +4231,7 @@ export class BattleScene extends Component {
       };
     }
 
-    if (u.kind === 'sherman' && this.anim?.unit === u && u.facing !== null) {
+    if (u === this.mission?.sherman && this.anim?.unit === u && u.facing !== null) {
       const from = (this.shermanTurretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
       const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as Direction;
       if (from === to) return null;
@@ -4264,7 +4295,8 @@ export class BattleScene extends Component {
 
   private enemySupportsSplitTurret(u: Unit): boolean {
     return (
-      (u.kind === 'tiger' && !!this.tigerHullSpriteFrame && !!this.tigerTurretSpriteFrame)
+      (u.kind === 'sherman' && !!this.shermanHullSpriteFrame && !!this.shermanTurretSpriteFrame)
+      || (u.kind === 'tiger' && !!this.tigerHullSpriteFrame && !!this.tigerTurretSpriteFrame)
       || (u.kind === 'panzer4' && !!this.panzer4HullSpriteFrame && !!this.panzer4TurretSpriteFrame)
       || (u.kind === 'panzer3' && !!this.panzer3HullSpriteFrame && !!this.panzer3TurretSpriteFrame)
     );
@@ -4279,7 +4311,7 @@ export class BattleScene extends Component {
     const meta = this.destroyedTopMeta[u.kind];
     if (!meta) return false;
 
-    if (u.kind === 'sherman') {
+    if (u.kind === 'sherman' && u === this.mission?.sherman) {
       if (!this.shermanSpriteNode || !this.shermanTopSprite) return false;
       this.applyTopDownTankSprite(
         this.shermanSpriteNode,
@@ -4328,7 +4360,7 @@ export class BattleScene extends Component {
       this.drawInfantry(u, c.x, c.y);
       return;
     }
-    if (u.kind === 'sherman' && this.shermanSpriteNode) {
+    if (u.kind === 'sherman' && u === this.mission?.sherman && this.shermanSpriteNode) {
       if (u.destroyed || !this.shermanTopSpriteFrame) {
         this.shermanSpriteNode.active = false;
         if (this.shermanTurretSpriteNode) this.shermanTurretSpriteNode.active = false;
@@ -4360,6 +4392,7 @@ export class BattleScene extends Component {
 
     // 谢尔曼俯视图精灵（已加载、未摧毁）：起火等状态用格子下图标表示，不再替换为矢量橙圆
     if (u.kind === 'sherman'
+        && u === this.mission?.sherman
         && this.shermanTopSpriteFrame
         && this.shermanSpriteNode
         && this.shermanTopSprite) {
@@ -4370,6 +4403,25 @@ export class BattleScene extends Component {
     // 德军俯视图：四号 / 三号 / 虎 / 卡（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存）
     if (isEnemyTopKind(u.kind)
         && this.enemyTopPoolNext < this.enemyTopSpritePool.length) {
+      if (u.kind === 'sherman'
+          && this.shermanHullSpriteFrame
+          && this.shermanTurretSpriteFrame
+          && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
+        const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyTopDownTankSprite(
+          hullSlot.node,
+          hullSlot.sprite,
+          this.shermanHullSpriteFrame,
+          this.shermanSpriteDisplayW,
+          this.shermanSpriteDisplayH,
+          u,
+          c,
+          facingLerp,
+        );
+        const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        this.applyShermanTurretSpriteTo(turretSlot, u, c, facingLerp, this.currentEnemyTurretLerp(u) ?? facingLerp);
+        return;
+      }
       if (u.kind === 'tiger'
           && this.tigerHullSpriteFrame
           && this.tigerTurretSpriteFrame
@@ -4546,7 +4598,7 @@ export class BattleScene extends Component {
     // 让出格心给车辆显示，3 人各自朝顶 / 右下 / 左下方向退到格内切圆附近（仍保留三角阵相对关系）。
     let coLocateVehicle = false;
     if (this.mission && !u.destroyed) {
-      const all: Unit[] = [this.mission.sherman, ...this.mission.enemies];
+      const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
       for (const o of all) {
         if (o === u) continue;
         if (o.destroyed) continue;
@@ -6444,7 +6496,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    const { map, sherman, enemies } = this.mission;
+    const { map, sherman } = this.mission;
     // §3.5 瘫痪：不可前进 / 后退；骰子保留不消耗
     if (sherman.paralyzed) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
@@ -6488,7 +6540,7 @@ export class BattleScene extends Component {
       this.closeDiePopover();
       return;
     }
-    const blocker = enemies.find(e => !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    const blocker = this.allUnits().find(e => e !== sherman && !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
     if (blocker) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.enemyBlock'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -6986,7 +7038,7 @@ export class BattleScene extends Component {
     if (!slot || slot.used) return;
     if (!this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
 
-    const { map, sherman, enemies } = this.mission;
+    const { map, sherman } = this.mission;
     if (sherman.paralyzed) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
         new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -7030,7 +7082,7 @@ export class BattleScene extends Component {
       this.closeDiePopover();
       return;
     }
-    const blocker = enemies.find(e => !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    const blocker = this.allUnits().find(e => e !== sherman && !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
     if (blocker) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.enemyBlock'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -7153,9 +7205,137 @@ export class BattleScene extends Component {
     }
   }
 
+  private allUnits(): Unit[] {
+    if (!this.mission) return [];
+    return [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
+  }
+
+  private aiTargetsFor(actor: Unit): Unit[] {
+    if (!this.mission) return [];
+    return actor.faction === 'german'
+      ? [this.mission.sherman, ...this.mission.allies]
+      : this.mission.enemies;
+  }
+
+  private currentAITarget(actor: Unit): Unit | null {
+    if (!this.mission) return null;
+    return currentTargetFor(actor, this.aiTargetsFor(actor), this.mission.sherman, this.rng);
+  }
+
+  private selectAIShootTarget(actor: Unit, randomizeTies: boolean): Unit | null {
+    if (!this.mission) return null;
+    const { map } = this.mission;
+    let bestDist = Infinity;
+    const tied: Unit[] = [];
+    for (const target of this.aiTargetsFor(actor)) {
+      if (target.faction === actor.faction) continue;
+      if (isFootUnit(target) || target.kind === 'truck') continue;
+      if (!canAttack({ attacker: actor, target, map }).ok) continue;
+      const d = hexDistance(actor.pos, target.pos);
+      if (d < bestDist) {
+        bestDist = d;
+        tied.length = 0;
+        tied.push(target);
+      } else if (d === bestDist) {
+        tied.push(target);
+      }
+    }
+    if (tied.length === 0) return null;
+    if (tied.length === 1 || !randomizeTies) return tied[0];
+    return tied[this.rng.intRange(0, tied.length - 1)];
+  }
+
+  private beginAllyPhase() {
+    if (!this.mission) return;
+    this.phase = 'enemy';
+    this.aiSide = 'ally';
+    this.outcome = checkOutcome(this.mission);
+    this.updateOutcomeOverlay();
+    if (this.outcome !== 'ongoing') {
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      return;
+    }
+    const aiCandidates = this.mission.allies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
+    this.enemyOrder = selectAIOrder(aiCandidates, this.mission.enemies, this.mission.sherman, this.rng);
+    this.enemyIndex = 0;
+    this.enemyDice = [];
+    this.enemyDiceUsed = [];
+    this.destroyEnemyDiceTray();
+    this.closeDiePopover();
+    if (this.enemyOrder.length === 0) {
+      this.beginGermanAIPhase();
+      return;
+    }
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.battleLog(`[BattleScene] === 回合 ${this.turn} 友军阶段开始 (${this.enemyOrder.length} 辆友军坦克)`);
+    this.beginCurrentEnemyTurn();
+  }
+
+  private beginGermanAIPhase() {
+    if (!this.mission) return;
+    this.phase = 'enemy';
+    this.aiSide = 'german';
+    const aiCandidates = this.mission.enemies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
+    this.enemyOrder = selectAIOrder(
+      aiCandidates,
+      [this.mission.sherman, ...this.mission.allies],
+      this.mission.sherman,
+      this.rng,
+    );
+    this.enemyIndex = 0;
+    this.enemyDice = [];
+    this.enemyDiceUsed = [];
+    this.destroyEnemyDiceTray();
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.battleLog(`[BattleScene] === Turn ${this.turn} German AI phase (${this.enemyOrder.length}) ===`);
+    this.beginCurrentEnemyTurn();
+  }
+
+  private beginPlayerPhaseForNewTurn() {
+    this.phase = 'player';
+    this.aiSide = 'german';
+    this.enemyOrder = [];
+    this.enemyIndex = 0;
+    this.enemyDice = [];
+    this.enemyDiceUsed = [];
+    this.destroyEnemyDiceTray();
+    this.playerStep = 'choose';
+    this.movementDone = false;
+    this.attackDone = false;
+    this.miscDone = false;
+    this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
+    this.phaseDice = [];
+    this.clearGunSelection();
+    if (this.mission) {
+      for (const u of [this.mission.sherman, ...this.mission.allies]) {
+        if (!u.destroyed && u.smoked) {
+          u.smoked = false;
+          this.spawnFloater(u.pos.q, u.pos.r, t('floater.smokeCleared'),
+            new Color(200, 200, 220, 255), { size: 20, dur: 0.8, rise: 22 });
+          this.battleLog(`[Phase 1] ${unitDisplayName(u.kind)} smoke cleared`);
+        }
+      }
+      this.outcome = checkOutcome(this.mission);
+      this.updateOutcomeOverlay();
+    }
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.battleLog(`[BattleScene] === 进入回合 ${this.turn}（玩家） ===`);
+  }
+
   private beginEnemyPhase() {
     if (!this.mission) return;
     this.phase = 'enemy';
+    this.aiSide = 'ally';
     // §2.1 阶段④：移除德军烟雾（烟雾只保留一回合）
     for (const e of this.mission.enemies) {
       if (!e.destroyed && e.smoked) {
@@ -7182,8 +7362,17 @@ export class BattleScene extends Component {
       return;
     }
     // 徒步类（步兵 / 军官）无俯视图 AI；卡车仅在回合结束事件 german_truck_move 中沿路移动，不参与敌方阶段掷骰
+    if (this.aiSide !== 'german') {
+      this.beginAllyPhase();
+      return;
+    }
     const aiCandidates = this.mission.enemies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
-    this.enemyOrder = selectEnemyOrder(aiCandidates, this.mission.sherman, this.rng);
+    this.enemyOrder = selectAIOrder(
+      aiCandidates,
+      [this.mission.sherman, ...this.mission.allies],
+      this.mission.sherman,
+      this.rng,
+    );
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
@@ -7494,7 +7683,7 @@ export class BattleScene extends Component {
   private unitsOnTileAxial(pos: { q: number; r: number }): Unit[] {
     if (!this.mission) return [];
     const { sherman, enemies } = this.mission;
-    const all = [sherman, ...enemies];
+    const all = [sherman, ...this.mission.allies, ...enemies];
     const units = all.filter(u => !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r);
     return units.sort((a, b) => {
       const af = isFootUnit(a) ? 1 : 0;
@@ -9130,7 +9319,11 @@ export class BattleScene extends Component {
     }
     if (this.enemyIndex >= this.enemyOrder.length) {
       this.destroyEnemyDiceTray();
-      this.maybeBeginTurnEndEventOrEndEnemyPhase();
+      if (this.aiSide === 'ally') {
+        this.beginGermanAIPhase();
+      } else {
+        this.maybeBeginTurnEndEventOrEndEnemyPhase();
+      }
       return;
     }
 
@@ -9225,22 +9418,17 @@ export class BattleScene extends Component {
    */
   private chooseActionForEntry(enemy: Unit, entry: AIActionEntry): EnemyAction | null {
     if (!this.mission) return null;
-    const { map, sherman, enemies } = this.mission;
-    const occupied = new Set<string>();
-    for (const u of enemies) {
-      if (u === enemy || u.destroyed) continue;
-      // 敌方坦克 / 卡车不被己方徒步类（步兵 / 军官）占格阻挡，可驶入与徒步单位叠格
-      if (!isFootUnit(enemy) && isFootUnit(u)) continue;
-      occupied.add(`${u.pos.q},${u.pos.r}`);
-    }
-    occupied.add(`${sherman.pos.q},${sherman.pos.r}`);
+    const { map } = this.mission;
+    const target = this.currentAITarget(enemy);
+    if (!target) return null;
+    const occupied = this.buildOccupiedSet(enemy);
 
     // shoot 的真正可行性必须由 canAttack 决定，这里先做再说
     const tryOne = (a: EnemyAction): boolean => {
       if (a === 'shoot') {
-        return canAttack({ attacker: enemy, target: sherman, map }).ok;
+        return !!this.selectAIShootTarget(enemy, false);
       }
-      return canExecuteAction(enemy, a, sherman, map, occupied);
+      return canExecuteAction(enemy, a, target, map, occupied);
     };
 
     if (entry.primary !== 'none' && tryOne(entry.primary)) return entry.primary;
@@ -9254,7 +9442,7 @@ export class BattleScene extends Component {
    */
   private executeEnemyAction(enemy: Unit, action: EnemyAction): 'done' | 'animating' {
     if (!this.mission) return 'done';
-    const { map, sherman } = this.mission;
+    const { map } = this.mission;
 
     switch (action) {
       case 'none':
@@ -9266,9 +9454,11 @@ export class BattleScene extends Component {
       }
 
       case 'turn': {
+        const target = this.currentAITarget(enemy);
+        if (!target) return 'done';
         if (enemy.facing === null) enemy.facing = 0;
         const occupied = this.buildOccupiedSet(enemy);
-        const decision = decideEnemyTurn(enemy, sherman, map, occupied, this.rng);
+        const decision = decideEnemyTurn(enemy, target, map, occupied, this.rng);
         if (decision === 'stay') {
           this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 转向 → 保持 facing=${enemy.facing}`);
           this.redraw();
@@ -9356,52 +9546,30 @@ export class BattleScene extends Component {
   private buildOccupiedSet(self: Unit): Set<string> {
     const occ = new Set<string>();
     if (!this.mission) return occ;
-    for (const u of this.mission.enemies) {
+    for (const u of this.allUnits()) {
       if (u === self || u.destroyed) continue;
       // 敌方坦克 / 卡车不被己方徒步类（步兵 / 军官）占格阻挡，可驶入与徒步单位叠格
       if (!isFootUnit(self) && isFootUnit(u)) continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
-    occ.add(`${this.mission.sherman.pos.q},${this.mission.sherman.pos.r}`);
     return occ;
   }
 
   private endEnemyPhase() {
     this.turn += 1;
     this.clearDestroyWreckVisuals();
-    this.phase = 'player';
-    // §2.1 阶段①：移除谢尔曼烟雾（烟雾只保留一回合）
-    if (this.mission && this.mission.sherman.smoked) {
-      this.mission.sherman.smoked = false;
-      this.spawnFloater(this.mission.sherman.pos.q, this.mission.sherman.pos.r,
-        t('floater.smokeCleared'), new Color(200, 200, 220, 255),
-        { size: 20, dur: 0.8, rise: 22 });
-      this.battleLog('[Phase①] 谢尔曼烟雾消散');
-    }
     // 清理敌方调度中间态
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
     this.destroyEnemyDiceTray();
-    // 新回合：子阶段标记重置；玩家先选移动或攻击，两阶段均完成后自动进杂项
-    this.playerStep = 'choose';
-    this.movementDone = false;
-    this.attackDone = false;
-    this.miscDone = false;
-    this.playerDiceRollAnim = null;
-    this.playerDiceSortAnim = null;
-    this.phaseDice = [];
-    this.clearGunSelection();
     // 敌方阶段也可能击毁谢尔曼；重入玩家回合时复查胜负
     if (this.mission) {
       this.outcome = checkOutcome(this.mission);
       this.updateOutcomeOverlay();
     }
-    this.refreshPhaseUI();
-    this.updateHUD();
-    this.redraw();
-    this.battleLog(`[BattleScene] === 进入回合 ${this.turn}（玩家） ===`);
+    this.beginPlayerPhaseForNewTurn();
   }
 
   // ---------- 交互 ----------
@@ -9533,7 +9701,7 @@ export class BattleScene extends Component {
     // 先掷骰拿到确定结果，再让面板按这个结果播 2d6→1d6 两段动画；
     // 真正 applyAttack / 消耗骰子 / 推进胜负判定全部放到 onDone 里执行，
     // 这样动画过程中玩家看到的状态（骰子托盘 / 敌人图示）不会提前变。
-    const report = rollAttack({ attacker: sherman, target, map }, this.rng);
+    const report = rollAttack({ attacker: sherman, target, map, protagonist: sherman }, this.rng);
     // 骰子先标"用掉了"不行 —— 动画期间得看出主炮骰仍在选中态。
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
     // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，onDone 时一并消耗。
@@ -9562,7 +9730,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 敌方在结束自身移动子阶段时尝试朝谢尔曼开火（每个敌人 1 发/回合）。
+   * AI 坦克执行主炮射击时，会在所有视野内合法敌方坦克中选择最近目标。
    *
    * 返回值：
    *   true  → 本敌人已启动掷骰动画，runNextEnemyStep 应"暂停"，由 onDone 回调恢复调度
@@ -9572,8 +9740,9 @@ export class BattleScene extends Component {
     if (!this.mission) return false;
     if (enemy.destroyed) return false;
     if (this.outcome !== 'ongoing') return false; // 谢尔曼已死，无需再补刀
-    const { map, sherman } = this.mission;
-    if (!canAttack({ attacker: enemy, target: sherman, map }).ok) return false;
+    const { map } = this.mission;
+    const target = this.selectAIShootTarget(enemy, true);
+    if (!target) return false;
 
     const splitTurretReady = this.enemySupportsSplitTurret(enemy);
     if (splitTurretReady) {
@@ -9584,13 +9753,20 @@ export class BattleScene extends Component {
 
     // 保留本车 AI 行动骰托盘；掷骰面板打开时会挂到 DiceShow 遮罩之上（见 liftEnemyDiceTrayIntoDiceShowIfNeeded）
 
-    const report = rollAttack({ attacker: enemy, target: sherman, map }, this.rng);
-    const enemyActor = t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) });
-    const showDice = () => this.startDiceShow(report, enemyActor, t('actor.sherman'), () => {
+    const report = rollAttack({ attacker: enemy, target, map, protagonist: this.mission.sherman }, this.rng);
+    const enemyActor = enemy.faction === 'german'
+      ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
+      : `友军 ${unitDisplayName(enemy.kind)}`;
+    const targetLabel = target === this.mission.sherman
+      ? t('actor.sherman')
+      : target.faction === 'german'
+        ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
+        : unitDisplayName(target.kind);
+    const showDice = () => this.startDiceShow(report, enemyActor, targetLabel, () => {
       if (!this.mission) return;
-      applyAttack(sherman, report);
-      if (sherman.destroyed) this.registerDestroyWreckVisual(sherman);
-      this.presentAttackResult(enemyActor, report, enemy, sherman);
+      applyAttack(target, report);
+      if (target.destroyed) this.registerDestroyWreckVisual(target);
+      this.presentAttackResult(enemyActor, report, enemy, target);
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
       if (this.outcome === 'ongoing' && this.phase === 'enemy') {
         // 重新浮出托盘（可能还剩骰子），再继续调度
@@ -9602,7 +9778,7 @@ export class BattleScene extends Component {
       }
     });
     if (splitTurretReady) {
-      this.startEnemyTurretAim(enemy, sherman, showDice);
+      this.startEnemyTurretAim(enemy, target, showDice);
     } else {
       showDice();
     }

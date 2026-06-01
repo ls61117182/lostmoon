@@ -36,7 +36,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, TerrainType, Unit } from './types';
+import { Axial, Direction, isFootUnit, TerrainType, Unit } from './types';
 
 // ---------- 行动分类 ----------
 
@@ -91,15 +91,55 @@ export function selectEnemyOrder(
   sherman: Unit,
   rng: RNG,
 ): Unit[] {
-  const alive = enemies.filter(e => !e.destroyed);
+  return selectAIOrder(enemies, [sherman], sherman, rng);
+}
+
+export function isTankAITarget(u: Unit): boolean {
+  return !u.destroyed && !isFootUnit(u) && u.kind !== 'truck';
+}
+
+export function currentTargetFor(
+  actor: Unit,
+  candidates: Unit[],
+  playerUnit: Unit,
+  rng: RNG,
+): Unit | null {
+  const hostile = candidates.filter(u => u.faction !== actor.faction && isTankAITarget(u));
+  if (hostile.length === 0) return null;
+  let bestDist = Infinity;
+  const tied: Unit[] = [];
+  for (const u of hostile) {
+    const d = hexDistance(actor.pos, u.pos);
+    if (d < bestDist) {
+      bestDist = d;
+      tied.length = 0;
+      tied.push(u);
+    } else if (d === bestDist) {
+      tied.push(u);
+    }
+  }
+  const playerTied = tied.find(u => u === playerUnit);
+  if (playerTied) return playerTied;
+  return tied.length === 1 ? tied[0] : tied[rng.intRange(0, tied.length - 1)];
+}
+
+export function selectAIOrder(
+  actors: Unit[],
+  potentialTargets: Unit[],
+  playerUnit: Unit,
+  rng: RNG,
+): Unit[] {
+  const alive = actors.filter(e => !e.destroyed && !isFootUnit(e) && e.kind !== 'truck');
   const withKey = alive.map(e => ({
     e,
-    dist: hexDistance(e.pos, sherman.pos),
+    target: currentTargetFor(e, potentialTargets, playerUnit, rng),
     // 同距 tiebreak：RNG 抽一次
     tie: rng.d6() * 6 + rng.d6(),
-  }));
+  })).filter((x): x is { e: Unit; target: Unit; tie: number } => !!x.target);
   withKey.sort((a, b) => {
-    if (a.dist !== b.dist) return a.dist - b.dist;
+    const ad = hexDistance(a.e.pos, a.target.pos);
+    const bd = hexDistance(b.e.pos, b.target.pos);
+    if (ad !== bd) return ad - bd;
     return a.tie - b.tie;
   });
   return withKey.map(x => x.e);
