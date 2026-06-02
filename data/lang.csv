@@ -100,13 +100,13 @@ floater.hatchCommanderDead,车长已阵亡，操作无效,Commander is dead; act
 die.hint.reload,装填,Reload
 die.hint.gun,主炮,Gun
 die.hint.mg,机枪,MG
-die.hint.repair,修复,Repair
+die.hint.repair,修复,Re
 die.hint.fireSuppress,灭火,Put Out Fire
-die.hint.smoke,烟雾,Smoke
+die.hint.smoke,烟雾,Sm
 die.hint.conceal,隐蔽,Conceal
 die.hint.gunOrLoad,炮/填,Gun/Load
 die.hint.driverTurnOrDrive,驾:转/进,Driver:Turn/Advance
-die.hint.smokeOrRepair,烟/修,Smoke/Repair
+die.hint.smokeOrRepair,烟/修,Sm/Re
 die.hint.codriverMG,副机枪,Co-MG
 die.hint.none,—,—
 action.turnCW,↻ 顺时针 60°,↻ CW 60°
@@ -182,6 +182,7 @@ dice.panel.outcomeRic,跳弹,Ricochet
 actor.player,玩家,Player
 actor.sherman,谢尔曼,Sherman
 actor.enemyPrefix,敌方 {name},Enemy {name}
+actor.allyPrefix,友军 {name},Allied {name}
 unit.name.sherman,谢尔曼,Sherman
 unit.name.tiger,虎式,Tiger
 unit.name.panzer4,四号,Panzer IV
@@ -276,6 +277,50 @@ tileInspect.status.hatchOpen,舱盖打开,Hatches open
 tileInspect.status.enemyDamaged,车体受损,Hull damaged
 battleLog.title,战斗记录 · 点标题放大,Combat log · tap title to expand
 battleLog.ready,[系统] 战斗记录就绪。,[System] Combat log ready.
+battleLog.missionLoaded,[战斗] 任务加载成功：{name}，{tiles} 格，1 + {allies} + {enemies} 个单位,"[Battle] Mission loaded: {name}, {tiles} tiles, 1 + {allies} + {enemies} units"
+battleLog.playerTurnStart,[战斗] === 进入回合 {turn}（玩家）===,[Battle] === Enter turn {turn} (Player) ===
+battleLog.hatch,[舱盖] 车长舱盖 -> {state},[Hatch] Commander hatch -> {state}
+battleLog.phase.movement,移动,Move
+battleLog.phase.attack,攻击,Attack
+battleLog.phase.misc,杂项,Misc
+battleLog.diceRoll,[骰子] {phase}阶段掷骰：[{dice}]（{count} 颗，地形 {terrain}，舱盖 {hatch}）,"[Dice] {phase} phase roll: [{dice}] ({count} dice, terrain {terrain}, hatch {hatch})"
+battleLog.diceAutoEnd,[骰子] {phase}阶段骰子用尽，自动结束阶段,[Dice] {phase} phase dice exhausted; auto-ending phase
+battleLog.outcome.victory,胜利,Victory
+battleLog.outcome.defeat,战败,Defeat
+battleLog.outcome.ongoing,进行中,Ongoing
+battleLog.unitArrived,[战斗] {unit} 到达（q={q}, r={r}）,[Battle] {unit} arrived (q={q}, r={r})
+battleLog.unitTurnDone,[战斗] {unit} 转向完成，朝向={facing},[Battle] {unit} finished turning, facing={facing}
+battleLog.unitEvacuated,[战斗] {unit} 撤离完成 -> {outcome},[Battle] {unit} evacuated -> {outcome}
+battleLog.truckExitDefeat,[战斗] 卡车驶离公路终点 -> {outcome},[Battle] Truck exited the road end -> {outcome}
+battleLog.move.turn,[移动] 转向 {dir} -> 朝向={facing}（动画中）,[Move] Turn {dir} -> facing={facing} (animating)
+battleLog.move.drive,[移动] {action} -> ({q},{r}),[Move] {action} -> ({q},{r})
+battleLog.move.evacuate,[移动] 撤离离场 -> ({q},{r})（目标格无地形）,[Move] Evacuate off-map -> ({q},{r}) (no terrain)
+battleLog.move.doublesDrive,[移动] 对子：驾驶员前进 -> ({q},{r})（消耗两颗骰）,[Move] Pair: driver advance -> ({q},{r}) (spend two dice)
+battleLog.move.doublesEvacuate,[移动] 对子：驾驶员撤离离场 -> ({q},{r}),[Move] Pair: driver evacuates off-map -> ({q},{r})
+battleLog.move.doublesTurn,[移动] 对子：副驾驶转向 {dir} -> 朝向={facing}（动画中）,[Move] Pair: co-driver turn {dir} -> facing={facing} (animating)
+battleLog.attack.reload,[攻击] 装填完成,[Attack] Reload complete
+battleLog.attack.doublesReload,[攻击] 对子：装填手装填完成（消耗两颗骰）,[Attack] Pair: loader reload complete (spend two dice)
+battleLog.attack.doublesGunReady,[攻击] 对子：炮手主炮射击已备（主骰 {dieIdx} + 搭档 {partnerIdx}，点数 {pip}）,[Attack] Pair: gunner main-gun shot ready (die {dieIdx} + partner {partnerIdx}, pip {pip})
+battleLog.misc.repairTurret,[杂项] 修复炮塔,[Misc] Turret repaired
+battleLog.misc.repairMobility,[杂项] 修复瘫痪,[Misc] Mobility repaired
+battleLog.misc.fireSuppress,[杂项] 灭火 -> 着火层数 {from} -> {to},[Misc] Fire suppression -> fire level {from} -> {to}
+battleLog.misc.smoke,[杂项] 施放烟雾 -> 谢尔曼进入烟雾状态,[Misc] Smoke deployed -> Sherman smoked
+battleLog.misc.conceal,[杂项] 进入隐蔽（消耗骰 {dieIdx} + {partnerIdx}，点数 {pip}）,[Misc] Concealed (spent dice {dieIdx} + {partnerIdx}, pip {pip})
+battleLog.side.ally,友军阶段,Allied phase
+battleLog.side.german,德军阶段,German phase
+battleLog.phaseSide,[战斗] === 回合 {turn} {side}开始（{count} 个单位）===,[Battle] === Turn {turn} {side} begins ({count} units) ===
+battleLog.armorFace.front,正面,front
+battleLog.armorFace.frontSide,前侧,front side
+battleLog.armorFace.rearSide,后侧,rear side
+battleLog.armorFace.rear,后方,rear
+battleLog.combat.miss,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 未命中,[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> miss
+battleLog.combat.cannotAttack,[战斗] 无法攻击：{reason},[Combat] Cannot attack: {reason}
+battleLog.combatMg,[战斗] 玩家机枪 2d6={d1}+{d2}={roll}，需要 ≥{need} -> {result},[Combat] Player MG 2d6={d1}+{d2}={roll}, needs ≥{need} -> {result}
+battleLog.combatMg.hit,命中击毙,Hit and killed
+battleLog.combatMg.miss,未命中,Miss
+battleLog.combat.ricochet,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 命中{face}（装甲 {armor} / 穿甲 {pen}），穿甲骰 1d6={penDie}，需要 {penNeed} -> 跳弹,"[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> hit {face} (armor {armor} / pen {pen}), AP 1d6={penDie}, needs {penNeed} -> ricochet"
+battleLog.combat.damage,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 命中{face}（装甲 {armor} / 穿甲 {pen}），穿甲骰 1d6={penDie}，需要 {penNeed} -> 击穿 -> 伤害骰 1d6={dmgDie} -> {effect} -> {target},"[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> hit {face} (armor {armor} / pen {pen}), AP 1d6={penDie}, needs {penNeed} -> penetrated -> damage 1d6={dmgDie} -> {effect} -> {target}"
+battleLog.unknown,未知,unknown
 battle.settings.title,战斗设置,Battle Settings
 battle.settings.exit,退出关卡,Exit Level
 battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)

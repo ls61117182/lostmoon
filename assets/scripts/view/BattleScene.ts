@@ -542,6 +542,13 @@ interface DiceShow {
   outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪 / 乘员阵亡
 }
 
+type CombatLogParams = Record<string, string | number>;
+interface CombatLogI18nEntry {
+  key: string;
+  params?: CombatLogParams;
+}
+type CombatLogEntry = string | CombatLogI18nEntry;
+
 /** 战报浮字：一条挂在 mapNode 下的 Label，会上浮 + 渐隐 + 自毁 */
 interface Floater {
   node: Node;
@@ -817,6 +824,7 @@ const BADGE_FRAME = new Color(0, 0, 0, 220);
 // 单位名字标签：常驻显示在每个棋子正下方，方便玩家一眼识别兵种
 /** 名字 Label 中心相对格心的 Y 偏移（向下为正方向用减法）：原为 1.3×hex，间距缩短 40% → 0.78×hex */
 const UNIT_NAME_OFFSET_HEX = 1.3 * 0.6;
+const UNIT_NAME_TEXT_PLAYER = new Color(184, 255, 200, 255);
 const UNIT_NAME_TEXT_ALLIED = new Color(200, 230, 255, 255);
 const UNIT_NAME_TEXT_GERMAN = new Color(255, 220, 200, 255);
 const UNIT_NAME_TEXT_DEAD   = new Color(180, 180, 180, 220);
@@ -985,7 +993,7 @@ export class BattleScene extends Component {
     t: number;
     dur: number;
     finalPips: number[];
-    logLine: string;
+    logEntry: CombatLogI18nEntry;
   } | null = null;
   private playerDiceSortAnim: {
     t: number;
@@ -1195,7 +1203,7 @@ export class BattleScene extends Component {
   private combatLogLabel: Label | null = null;
   private combatLogViewN: Node | null = null;
   private combatLogTitleLab: Label | null = null;
-  private combatLogLines: string[] = [];
+  private combatLogLines: CombatLogEntry[] = [];
   private combatLogExpanded = false;
   private static readonly COMBAT_LOG_MAX = 500;
   private static readonly COMBAT_LOG_W0 = 260;
@@ -1641,10 +1649,14 @@ export class BattleScene extends Component {
     this.updateOutcomeOverlay();
 
     this.redraw();
-    this.battleLog(
-      `[BattleScene] 任务加载成功: ${data.name}, ${tiles.length} 格, ` +
-      `1 + ${this.mission.allies.length} + ${this.mission.enemies.length} 个单位`
-    );
+    const levelMeta = findLevelByMissionId(data.id);
+    this.battleLogI18n('battleLog.missionLoaded', {
+      name: data.name,
+      nameKey: levelMeta?.titleKey ?? '',
+      tiles: tiles.length,
+      allies: this.mission.allies.length,
+      enemies: this.mission.enemies.length,
+    });
     this.beginPlayerPhaseForNewTurn();
   }
 
@@ -2303,7 +2315,9 @@ export class BattleScene extends Component {
     l.lineHeight = 18;
     l.color = u.destroyed
       ? UNIT_NAME_TEXT_DEAD
-      : (u.faction === 'allied' ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
+      : u === this.mission?.sherman
+        ? UNIT_NAME_TEXT_PLAYER
+        : (u.faction === 'allied' ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
     l.horizontalAlign = HorizontalTextAlignment.CENTER;
     l.verticalAlign = VerticalTextAlignment.CENTER;
     l.string = t(`unit.name.${u.kind}`);
@@ -2542,26 +2556,28 @@ export class BattleScene extends Component {
         this.mission.shermanEvacuated = true;
         this.outcome = checkOutcome(this.mission);
         this.updateOutcomeOverlay();
-        this.battleLog(
-          `[BattleScene] ${finishedUnit.kind} 撤离完成 → 胜负=${this.outcome}`,
-        );
+        this.battleLogI18n('battleLog.unitEvacuated', {
+          unitKind: finishedUnit.kind,
+          outcome: this.outcome,
+        });
       } else if (anim.truckExitDefeat && this.mission && finishedUnit.kind === 'truck') {
         this.mission.truckEscapeDefeat = true;
         this.outcome = checkOutcome(this.mission);
         this.updateOutcomeOverlay();
-        this.battleLog(
-          `[BattleScene] truck 驶离公路终点 → 胜负=${this.outcome}`,
-        );
+        this.battleLogI18n('battleLog.truckExitDefeat', { outcome: this.outcome });
       } else {
-        this.battleLog(
-          `[BattleScene] ${finishedUnit.kind} 到达 (q=${finishedUnit.pos.q}, r=${finishedUnit.pos.r})`,
-        );
+        this.battleLogI18n('battleLog.unitArrived', {
+          unitKind: finishedUnit.kind,
+          q: finishedUnit.pos.q,
+          r: finishedUnit.pos.r,
+        });
       }
     } else {
       finishedUnit.facing = anim.turnTo!;
-      this.battleLog(
-        `[BattleScene] ${finishedUnit.kind} 转向完成 facing=${finishedUnit.facing}`,
-      );
+      this.battleLogI18n('battleLog.unitTurnDone', {
+        unitKind: finishedUnit.kind,
+        facing: finishedUnit.facing,
+      });
     }
     if (finishedUnit === this.mission?.sherman && finishedUnit.facing !== null) {
       this.shermanTurretFacing = finishedUnit.facing;
@@ -4882,7 +4898,7 @@ export class BattleScene extends Component {
 
     this.applyCombatLogChrome(false);
     this.combatLogLines = [];
-    this.battleLog(t('battleLog.ready'));
+    this.battleLogI18n('battleLog.ready');
 
     root.setSiblingIndex(Math.max(0, this.node.children.length - 1));
   }
@@ -4897,15 +4913,140 @@ export class BattleScene extends Component {
     return Math.max(8, v.contentSize.width - 4);
   }
 
+  private combatLogText(entry: CombatLogEntry): string {
+    if (typeof entry === 'string') return entry;
+    const params = entry.params;
+    if (entry.key === 'battleLog.hatch' && params?.stateKey) {
+      return t(entry.key, { state: t(String(params.stateKey)) });
+    }
+    if (entry.key === 'battleLog.diceRoll' && params) {
+      return t(entry.key, {
+        dice: params.dice,
+        count: params.count,
+        phase: t(String(params.phaseKey)),
+        terrain: t(String(params.terrainKey)),
+        hatch: t(String(params.hatchKey)),
+      });
+    }
+    if (entry.key === 'battleLog.diceAutoEnd' && params?.phaseKey) {
+      return t(entry.key, { phase: t(String(params.phaseKey)) });
+    }
+    if (entry.key === 'battleLog.missionLoaded' && params) {
+      return t(entry.key, {
+        name: params.nameKey ? t(String(params.nameKey)) : params.name,
+        tiles: params.tiles,
+        allies: params.allies,
+        enemies: params.enemies,
+      });
+    }
+    if (entry.key === 'battleLog.unitArrived' && params) {
+      return t(entry.key, {
+        unit: t(`unit.name.${params.unitKind}`),
+        q: params.q,
+        r: params.r,
+      });
+    }
+    if (entry.key === 'battleLog.unitTurnDone' && params) {
+      return t(entry.key, {
+        unit: t(`unit.name.${params.unitKind}`),
+        facing: params.facing,
+      });
+    }
+    if (entry.key === 'battleLog.unitEvacuated' && params) {
+      return t(entry.key, {
+        unit: t(`unit.name.${params.unitKind}`),
+        outcome: t(`battleLog.outcome.${params.outcome}`),
+      });
+    }
+    if (entry.key === 'battleLog.truckExitDefeat' && params) {
+      return t(entry.key, { outcome: t(`battleLog.outcome.${params.outcome}`) });
+    }
+    if (entry.key === 'battleLog.move.turn' && params) {
+      return t(entry.key, { dir: params.dir, facing: params.facing });
+    }
+    if (entry.key === 'battleLog.move.drive' && params) {
+      return t(entry.key, {
+        action: t(String(params.actionKey)),
+        q: params.q,
+        r: params.r,
+      });
+    }
+    if (entry.key === 'battleLog.move.doublesDrive' && params) {
+      return t(entry.key, { q: params.q, r: params.r });
+    }
+    if (entry.key === 'battleLog.move.doublesTurn' && params) {
+      return t(entry.key, { dir: params.dir, facing: params.facing });
+    }
+    if (entry.key === 'battleLog.phaseSide' && params) {
+      return t(entry.key, {
+        turn: params.turn,
+        side: t(String(params.sideKey)),
+        count: params.count,
+      });
+    }
+    if (entry.key === 'battleLog.combatMg' && params) {
+      return t(entry.key, {
+        d1: params.d1,
+        d2: params.d2,
+        roll: params.roll,
+        need: params.need,
+        result: t(String(params.resultKey)),
+      });
+    }
+    if (entry.key.startsWith('battleLog.combat.') && params) {
+      if (entry.key === 'battleLog.combat.cannotAttack') {
+        return t(entry.key, { reason: t(String(params.reasonKey ?? 'attack.reason.unknown')) });
+      }
+      const actor = params.actorKey
+        ? t(String(params.actorKey))
+        : params.actorNameKey
+          ? t('actor.enemyPrefix', { name: t(String(params.actorNameKey)) })
+          : String(params.actorText ?? '');
+      const target = params.targetKind ? t(`unit.name.${params.targetKind}`) : '';
+      return t(entry.key, {
+        actor,
+        target,
+        d1: params.d1,
+        d2: params.d2,
+        roll: params.roll,
+        need: params.need,
+        face: params.faceKey ? t(String(params.faceKey)) : params.face,
+        armor: params.armor,
+        pen: params.pen,
+        penDie: params.penDie,
+        penNeed: params.penNeed,
+        dmgDie: params.dmgDie,
+        effect: params.effectKey ? t(String(params.effectKey)) : String(params.effect ?? ''),
+      });
+    }
+    if (entry.key === 'battleLog.misc.fireSuppress' && params) {
+      return t(entry.key, { from: params.from, to: params.to });
+    }
+    return t(entry.key, params);
+  }
+
   /** 写入战斗 UI 记录（并保留 console 便于开发器查看） */
   private battleLog(msg: string) {
-    console.log(msg);
+    this.pushCombatLogEntry(msg);
+  }
+
+  private battleLogI18n(key: string, params?: CombatLogParams) {
+    this.pushCombatLogEntry({ key, params });
+  }
+
+  private pushCombatLogEntry(entry: CombatLogEntry) {
+    console.log(this.combatLogText(entry));
     if (!this.combatLogLabel) return;
-    this.combatLogLines.push(msg);
+    this.combatLogLines.push(entry);
     if (this.combatLogLines.length > BattleScene.COMBAT_LOG_MAX) {
       this.combatLogLines.splice(0, this.combatLogLines.length - BattleScene.COMBAT_LOG_MAX);
     }
-    this.combatLogLabel.string = this.combatLogLines.join('\n');
+    this.refreshCombatLogText();
+  }
+
+  private refreshCombatLogText() {
+    if (!this.combatLogLabel) return;
+    this.combatLogLabel.string = this.combatLogLines.map(e => this.combatLogText(e)).join('\n');
     this.combatLogLabel.updateRenderData(true);
     const ut = this.combatLogContent?.getComponent(UITransform);
     if (ut && this.combatLogScroll) {
@@ -5900,7 +6041,7 @@ export class BattleScene extends Component {
       if (slot) slot.pip = anim.finalPips[i] ?? slot.pip;
     }
     this.playerDiceRollAnim = null;
-    this.battleLog(anim.logLine);
+    this.pushCombatLogEntry(anim.logEntry);
     if (this.beginPlayerDiceSortAnim()) {
       this.refreshDiceTray();
       this.updateHUD();
@@ -6043,7 +6184,9 @@ export class BattleScene extends Component {
       return;
     }
     s.hatchOpen = !s.hatchOpen;
-    this.battleLog(`[Hatch] 车长舱盖 → ${s.hatchOpen ? '打开' : '关闭'}`);
+    this.battleLogI18n('battleLog.hatch', {
+      stateKey: s.hatchOpen ? 'status.val.hatchOpen' : 'status.val.hatchClosed',
+    });
     this.refreshStatusPanel();
     this.refreshChooseHatchButton();
   }
@@ -6092,14 +6235,23 @@ export class BattleScene extends Component {
     this.playerStep = which;
     this.closeDiePopover();
 
-    const label = which === 'movement' ? '移动' : which === 'attack' ? '攻击' : '杂项';
+    const phaseKey = which === 'movement' ? 'battleLog.phase.movement'
+      : which === 'attack' ? 'battleLog.phase.attack' : 'battleLog.phase.misc';
     const hatchForLog = hatchOpenRaw && !!crew.commander;
     this.playerDiceRollAnim = {
       t: 0,
       dur: 0.65,
       finalPips: pips,
-      logLine: `[Dice] ${label}阶段掷骰: `
-        + `[${pips.join(', ')}]（${count} 颗，地形 ${terrain}, 舱盖 ${hatchForLog ? '开' : '关'}）`,
+      logEntry: {
+        key: 'battleLog.diceRoll',
+        params: {
+          phaseKey,
+          dice: pips.join(', '),
+          count,
+          terrainKey: `terrain.${terrain}`,
+          hatchKey: hatchForLog ? 'status.val.hatchOpen' : 'status.val.hatchClosed',
+        },
+      },
     };
     playDiceRoll();
 
@@ -6165,9 +6317,9 @@ export class BattleScene extends Component {
     if (this.phaseDice.length === 0) return;
     const anyLeft = this.phaseDice.some(d => !d.used);
     if (!anyLeft) {
-      const label = this.playerStep === 'movement' ? '移动'
-        : this.playerStep === 'attack' ? '攻击' : '杂项';
-      this.battleLog(`[Dice] ${label}阶段骰子用尽，自动结束阶段`);
+      const phaseKey = this.playerStep === 'movement' ? 'battleLog.phase.movement'
+        : this.playerStep === 'attack' ? 'battleLog.phase.attack' : 'battleLog.phase.misc';
+      this.battleLogI18n('battleLog.diceAutoEnd', { phaseKey });
       this.endCurrentSubPhase();
     }
   }
@@ -6466,7 +6618,10 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[Move] 转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
+    this.battleLogI18n('battleLog.move.turn', {
+      dir: dirSign === 1 ? 'CW' : 'CCW',
+      facing: to,
+    });
   }
 
   /**
@@ -6529,7 +6684,7 @@ export class BattleScene extends Component {
       this.refreshPhaseUI();
       this.updateHUD();
       this.redraw();
-      this.battleLog(`[Move] 撤离离场 → (${to.q},${to.r})（目标格无地形）`);
+      this.battleLogI18n('battleLog.move.evacuate', { q: to.q, r: to.r });
       return;
     }
     const tile = map.get(to);
@@ -6565,7 +6720,11 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[Move] ${dirSign === 1 ? '前进' : '后退'} → (${to.q},${to.r})`);
+    this.battleLogI18n('battleLog.move.drive', {
+      actionKey: dirSign === 1 ? 'die.hint.drive' : 'die.hint.reverse',
+      q: to.q,
+      r: to.r,
+    });
     // 动画结束时的 update() 回调里不再派发敌方阶段；
     // 但我们需要在动画完成后检查骰子是否用完。
     // 简单做法：标记"驱动动画结束时要检查"。这里直接留给 update() 的分支处理：
@@ -6616,7 +6775,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog('[Attack] 装填完成');
+    this.battleLogI18n('battleLog.attack.reload');
     this.autoEndPhaseIfDone();
   }
 
@@ -6675,7 +6834,11 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[Attack] 对子 炮手主炮射击已备（主骰 ${dieIdx} + 搭档 ${partnerIdx}，点数 ${slot.pip}）`);
+    this.battleLogI18n('battleLog.attack.doublesGunReady', {
+      dieIdx,
+      partnerIdx,
+      pip: slot.pip,
+    });
   }
 
   /**
@@ -6774,13 +6937,13 @@ export class BattleScene extends Component {
       sherman.turretDamaged = false;
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.turretFixed'),
         new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-      this.battleLog('[Misc] 修复炮塔');
+      this.battleLogI18n('battleLog.misc.repairTurret');
     } else {
       if (!sherman.paralyzed) return;
       sherman.paralyzed = false;
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.mobilityFixed'),
         new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-      this.battleLog('[Misc] 修复瘫痪');
+      this.battleLogI18n('battleLog.misc.repairMobility');
     }
     slot.used = true;
     this.closeDiePopover();
@@ -6812,7 +6975,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.fireReduced'),
       new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-    this.battleLog(`[Misc] 灭火 → fireLevel ${lvl} → ${sherman.fireLevel}`);
+    this.battleLogI18n('battleLog.misc.fireSuppress', { from: lvl, to: sherman.fireLevel ?? 0 });
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -6847,7 +7010,9 @@ export class BattleScene extends Component {
 
     const check = canMGAttack({ attacker: sherman, target, map });
     if (!check.ok) {
-      this.battleLog(`[Combat-MG] cannot attack: ${check.reason}`);
+      this.battleLogI18n('battleLog.combat.cannotAttack', {
+        reasonKey: check.reason ?? 'attack.reason.unknown',
+      });
       const msg = t(check.reason ?? 'attack.reason.unknown');
       this.spawnFloater(sherman.pos.q, sherman.pos.r, msg,
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -6858,10 +7023,13 @@ export class BattleScene extends Component {
     // 真正 applyMGAttack / 消耗骰子 / 胜负判定都放到 onDone 里，
     // 这样动画期间托盘 + 敌人图示不会提前变。
     const report = rollMGAttack({ attacker: sherman, target, map }, this.rng);
-    this.battleLog(
-      `[Combat-MG] 玩家机枪 2d6=${report.dice[0]}+${report.dice[1]}=${report.roll}`
-      + ` 需要≥${report.threshold} → ${report.hit ? 'HIT 击毙' : 'MISS'}`
-    );
+    this.battleLogI18n('battleLog.combatMg', {
+      d1: report.dice[0],
+      d2: report.dice[1],
+      roll: report.roll,
+      need: report.threshold,
+      resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
+    });
 
     // MGReport → 面板可用的 AttackReport 视图：只用 2d6/threshold/hit 四个字段，
     // 其余 pen/dmg/crew 分段字段都留空；mg=true 下 advanceDiceShow 不会读它们。
@@ -6923,7 +7091,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.smokeDeployed'),
       new Color(200, 200, 220, 255), { size: 22, dur: 0.9, rise: 24 });
-    this.battleLog('[Misc] 施放烟雾 → sherman.smoked=true');
+    this.battleLogI18n('battleLog.misc.smoke');
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -6959,7 +7127,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.concealed'),
       new Color(160, 220, 180, 255), { size: 22, dur: 0.9, rise: 24 });
-    this.battleLog(`[Misc] 进入隐蔽（消耗骰 ${dieIdx} + ${partnerIdx}，点数 ${slot.pip}）`);
+    this.battleLogI18n('battleLog.misc.conceal', { dieIdx, partnerIdx, pip: slot.pip });
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -7071,7 +7239,7 @@ export class BattleScene extends Component {
       this.refreshPhaseUI();
       this.updateHUD();
       this.redraw();
-      this.battleLog(`[Move] 对子 驾驶员撤离离场 → (${to.q},${to.r})`);
+      this.battleLogI18n('battleLog.move.doublesEvacuate', { q: to.q, r: to.r });
       return;
     }
     const tile = map.get(to);
@@ -7107,7 +7275,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[Move] 对子 驾驶员前进 → (${to.q},${to.r})（消耗两颗骰）`);
+    this.battleLogI18n('battleLog.move.doublesDrive', { q: to.q, r: to.r });
   }
 
   /**
@@ -7150,7 +7318,10 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[Move] 对子 副驾驶转向 ${dirSign === 1 ? 'CW' : 'CCW'} → facing=${to}（动画中）`);
+    this.battleLogI18n('battleLog.move.doublesTurn', {
+      dir: dirSign === 1 ? 'CW' : 'CCW',
+      facing: to,
+    });
   }
 
   /**
@@ -7179,7 +7350,7 @@ export class BattleScene extends Component {
     this.updateHUD();
     this.redraw();
     this.refreshStatusPanel();
-    this.battleLog('[Attack] 对子 装填手装填完成（消耗两颗骰）');
+    this.battleLogI18n('battleLog.attack.doublesReload');
     this.autoEndPhaseIfDone();
   }
 
@@ -7271,7 +7442,11 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[BattleScene] === 回合 ${this.turn} 友军阶段开始 (${this.enemyOrder.length} 辆友军坦克)`);
+    this.battleLogI18n('battleLog.phaseSide', {
+      turn: this.turn,
+      sideKey: 'battleLog.side.ally',
+      count: this.enemyOrder.length,
+    });
     this.beginCurrentEnemyTurn();
   }
 
@@ -7294,7 +7469,11 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[BattleScene] === Turn ${this.turn} German AI phase (${this.enemyOrder.length}) ===`);
+    this.battleLogI18n('battleLog.phaseSide', {
+      turn: this.turn,
+      sideKey: 'battleLog.side.german',
+      count: this.enemyOrder.length,
+    });
     this.beginCurrentEnemyTurn();
   }
 
@@ -7329,7 +7508,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[BattleScene] === 进入回合 ${this.turn}（玩家） ===`);
+    this.battleLogI18n('battleLog.playerTurnStart', { turn: this.turn });
   }
 
   private beginEnemyPhase() {
@@ -7381,7 +7560,11 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
-    this.battleLog(`[BattleScene] === 回合 ${this.turn} 敌方阶段开始 (${this.enemyOrder.length} 辆敌坦)`);
+    this.battleLogI18n('battleLog.phaseSide', {
+      turn: this.turn,
+      sideKey: 'battleLog.side.german',
+      count: this.enemyOrder.length,
+    });
     this.beginCurrentEnemyTurn();
   }
 
@@ -9119,6 +9302,7 @@ export class BattleScene extends Component {
     if (this.chooseMoveLabel) this.chooseMoveLabel.string = t('btn.movePhase');
     if (this.chooseAttackLabel) this.chooseAttackLabel.string = t('btn.attackPhase');
     if (this.combatLogTitleLab) this.combatLogTitleLab.string = t('battleLog.title');
+    this.refreshCombatLogText();
     if (this.restartBtnLabel) this.restartBtnLabel.string = t('btn.restart');
     if (this.backToMenuBtnLabel) this.backToMenuBtnLabel.string = t('btn.backToMenu');
     if (this.outcomeLabel && this.outcome !== 'ongoing') {
@@ -9686,7 +9870,9 @@ export class BattleScene extends Component {
     }
     const check = canAttack({ attacker: sherman, target, map });
     if (!check.ok) {
-      this.battleLog(`[Combat] cannot attack: ${check.reason}`);
+      this.battleLogI18n('battleLog.combat.cannotAttack', {
+        reasonKey: check.reason ?? 'attack.reason.unknown',
+      });
       // 玩家点到一个"其实打不到"的敌人（比如偏出六向直线 / 被树遮挡），给一条
       // 从射击者向上飘的浮字，免得玩家以为点击没响应。
       // 非六向直线有专门的简短提示，其他原因用对应文案；缺失时兜底到"无法攻击"。
@@ -9756,12 +9942,12 @@ export class BattleScene extends Component {
     const report = rollAttack({ attacker: enemy, target, map, protagonist: this.mission.sherman }, this.rng);
     const enemyActor = enemy.faction === 'german'
       ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
-      : `友军 ${unitDisplayName(enemy.kind)}`;
+      : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
     const targetLabel = target === this.mission.sherman
       ? t('actor.sherman')
       : target.faction === 'german'
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
-        : unitDisplayName(target.kind);
+        : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     const showDice = () => this.startDiceShow(report, enemyActor, targetLabel, () => {
       if (!this.mission) return;
       applyAttack(target, report);
@@ -11284,36 +11470,53 @@ export class BattleScene extends Component {
    */
   private presentAttackResult(actor: string, report: AttackReport, _attacker: Unit, target: Unit) {
     if (!this.mission) return;
-    const base = `[Combat] ${actor} 2d6=${report.dice[0]}+${report.dice[1]}=${report.roll} 需要${report.threshold}`;
+    const actorParams: CombatLogParams = _attacker === this.mission.sherman && target !== this.mission.sherman
+      ? { actorKey: 'actor.player' }
+      : _attacker.faction === 'german'
+        ? { actorNameKey: `unit.name.${_attacker.kind}` }
+        : { actorText: actor };
+    const baseParams: CombatLogParams = {
+      ...actorParams,
+      d1: report.dice[0],
+      d2: report.dice[1],
+      roll: report.roll,
+      need: report.threshold,
+      targetKind: target.kind,
+    };
     let text: string;
     let color: Color;
     let size: number;
     if (!report.hit) {
-      this.battleLog(`${base} → miss`);
+      this.battleLogI18n('battleLog.combat.miss', baseParams);
       text = t('dice.panel.outcomeMiss'); color = new Color(230, 230, 230, 255); size = 32;
     } else {
-      const armorInfo = `hit ${report.armorFace} (armor${report.armor} / pen${report.penetration})`
-        + ` 1d6=${report.penDie} need${report.penThreshold}`;
+      const armorParams: CombatLogParams = {
+        ...baseParams,
+        faceKey: `battleLog.armorFace.${report.armorFace}`,
+        armor: report.armor ?? 0,
+        pen: report.penetration ?? 0,
+        penDie: report.penDie ?? 0,
+        penNeed: report.penThreshold ?? 0,
+      };
       if (!report.penetrated) {
-        this.battleLog(`${base} → ${armorInfo} → ricochet`);
+        this.battleLogI18n('battleLog.combat.ricochet', armorParams);
         text = t('dice.panel.outcomeRic'); color = new Color(180, 200, 240, 255); size = 34;
       } else {
         const effect = report.damageEffect;
-        const dmgInfo = `伤害1d6=${report.damageDie} → ${effect ?? 'unknown'}`;
+        const damageParams: CombatLogParams = {
+          ...armorParams,
+          dmgDie: report.damageDie ?? 0,
+          effectKey: this.damageEffectLogKey(effect),
+        };
         if (effect === 'crewCheck' && report.crewCheck) {
-          // 阵亡检定：把 crew 骰 + 结果也打到日志
           const cc = report.crewCheck;
-          const crewInfo = cc.slot === null
-            ? `阵亡检定1d6=${cc.die} → 虚惊（舱盖关）`
-            : `阵亡检定1d6=${cc.die} → ${crewRoleName(cc.slot)} 阵亡`
-              + (cc.rerolled ? '（有已死乘员重抛）' : '');
-          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${crewInfo} → ${unitDisplayName(target.kind)}`);
+          this.battleLogI18n('battleLog.combat.damage', damageParams);
           const out = crewOutcomeLabel(cc);
           text = out.text;
           color = out.color;
           size = cc.slot === null ? 36 : 44;
         } else {
-          this.battleLog(`${base} → ${armorInfo} → 击穿 → ${dmgInfo} → ${unitDisplayName(target.kind)}`);
+          this.battleLogI18n('battleLog.combat.damage', damageParams);
           const out = damageOutcomeLabel(effect);
           text = out.text;
           color = out.color;
@@ -11328,6 +11531,18 @@ export class BattleScene extends Component {
     this.outcome = checkOutcome(this.mission);
     if (this.outcome !== 'ongoing') {
       this.updateOutcomeOverlay();
+    }
+  }
+
+  private damageEffectLogKey(effect: DamageEffect | undefined): string {
+    switch (effect) {
+      case 'destroyed': return 'dmg.outcome.destroyed';
+      case 'damaged': return 'dmg.outcome.damaged';
+      case 'fire': return 'dmg.outcome.fire';
+      case 'turret': return 'dmg.outcome.turret';
+      case 'paralyzed': return 'dmg.outcome.paralyzed';
+      case 'crewCheck': return 'dmg.outcome.crewCheck';
+      default: return 'battleLog.unknown';
     }
   }
 
