@@ -384,11 +384,11 @@ row6:    ·     r↗S    f      f      f      f      ·
 |---|---|---|
 | 数据来源 | `data/units.csv` 第 7 行（`size=0`，无装甲，`penetration=1`） | `data/units.csv` 第 8 行（与 `'infantry'` 数值完全一致） |
 | 出生方式 | 关卡 JSON 直接 `at` / `enemyStartByDice` 走 `rid` 链 / 回合结束 `infantry_spawn` 事件 | 关卡 JSON 直接 `at`（`enemyStartByDice` 走 `rid` 链亦可，但本关用固定坐标） |
-| 攻击 / 移动规则 | `isFootKind` / `isFootUnit` 通用判定：仅可被机枪打、不参与坦克 AI、不阻塞坦克叠格 | 同左 |
+| 攻击 / 移动规则 | `isFootKind` / `isFootUnit` 通用判定：仅可被机枪打、不参与坦克 AI；占格按阵营判定，己方坦克可与己方徒步单位叠格，敌对坦克不可进入其所在格 | 同左 |
 | 视觉 | 普通步兵小人 | 同步兵小人 + **红色光环**（`OFFICER_HALO_STROKE`）+ 所在格红色 hex 边框（`drawOfficerTileHighlights`） |
 | 关卡目标关联 | `destroy_kind_evac kind='infantry'`：所有步兵 destroyed 才算前置达成 | `destroy_kind_evac kind='officer'`：所有军官 destroyed 才算前置达成 —— 与 spawn 出来的步兵互不影响 |
 
-> **`isFootKind / isFootUnit`**：在 `types.ts` 中导出，供 `BattleScene` / `Combat` / `TurnEndEventApply` / `MissionLoader` 等共用，统一处理「徒步类」单位（步兵 / 军官）的所有特判位置（机枪目标、相邻齐射、视线检查、AI 排除、叠格阻塞、tile inspect 装甲面板隐藏等）。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），`Objective.allEnemiesOfKindDestroyed(mission, 'officer')` 等按 `kind` 精确判定的位置不应换成 helper。
+> **`isFootKind / isFootUnit`**：在 `types.ts` 中导出，供 `BattleScene` / `Combat` / `TurnEndEventApply` / `MissionLoader` 等共用，统一处理「徒步类」单位（步兵 / 军官）的所有特判位置（机枪目标、相邻齐射、视线检查、AI 排除、敌对叠格阻塞、tile inspect 装甲面板隐藏等）。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），`Objective.allEnemiesOfKindDestroyed(mission, 'officer')` 等按 `kind` 精确判定的位置不应换成 helper。
 
 ### 回合结束事件（本关 · 掷 **2d6**）
 

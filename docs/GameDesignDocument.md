@@ -124,7 +124,7 @@
 | III 号坦克 | 4 | 6 | 5 | 5 | 4 | 4 |
 | 卡车 | — | — | — | — | — | — |
 | 德军步兵 | 无朝向，只在回合结束事件中行动 | | | | | |
-| 斯图卡（俯冲轰炸机）| 回合结束事件触发，攻击顶部装甲 | | | | | |
+| 斯图卡（俯冲轰炸机）| 回合结束事件触发，攻击顶部装甲（事件固定按装甲 4 / 穿甲 1 结算） | | | | | |
 
 ### 3.2 地形系统
 
@@ -409,7 +409,7 @@ AI 行动顺序：
 | 6 | 地雷（公路上且未痛痪）：装甲 4 / 穿甲 0 自动命中 |
 | 7–8 | 所有相邻德军步兵攻击：装甲 4 / 穿甲 1 |
 | 9 | 车长额外行动（装填 / 修复 / 灭火）|
-| 10 | 斯图卡：俯冲轰炸顶部装甲 |
+| 10 | 斯图卡：俯冲轰炸顶部装甲；先判定轰炸命中，命中后固定按装甲 4 / 穿甲 1 结算 |
 | 11+ | III 号坦克：在红色数字格生成 1 辆 |
 
 ---
@@ -566,7 +566,7 @@ function axialToWorld(q: number, r: number): Vec2 {
 
 **复合目标 `destroy_kind_evac`**：在击毁 `objective.kind` 所指全部敌方单位后，谢尔曼须从 **`evacAt`** 六角格沿 **`evacExitDir`** 六向之一执行 **前进** 或 **后退**（后退的位移方向 = `facing+3`，须等于 `evacExitDir`），且 **邻格不在地图内**（无 `Tile`）时撤离成功并判胜；动画结束后谢尔曼坐标可落在网格外。存档字段 `shermanEvacuated` 由 `SaveLoad` 持久化。若配置 **`objective.kinds`**（`UnitKind[]`，非空），则须将所列 **每一种** kind 的敌方单位**全部**击毁后才允许撤离（与单独的 `kind` 二选一：有 `kinds` 时优先用 `kinds`，典型见任务 9：虎式 + IV 号，步兵不计入）。
 
-**徒步类单位（步兵 / 军官，`isFootKind` / `isFootUnit`）**：`UnitKind` 中 `'infantry'`（步兵）与 `'officer'`（军官，任务 8 起）共享「徒步类」语义——`size = 0`，无装甲，仅可被机枪打死、不参与坦克 AI、不阻塞坦克叠格、不渲染装甲 / 装填面板。`types.ts` 导出的 `isFootKind(kind)` / `isFootUnit(unit)` 是这两类共有判定的统一入口；`Combat.canMGAttack`、`TurnEndEventApply.adjacent_infantry_fire`、`BattleScene` 的目标筛选 / 渲染分支等都通过它们进行兼容判定。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），所以「按 `kind` 精确判定」的位置（如 `Objective.allEnemiesOfKindDestroyed(mission, 'officer')`）不能换成 helper。
+**徒步类单位（步兵 / 军官，`isFootKind` / `isFootUnit`）**：`UnitKind` 中 `'infantry'`（步兵）与 `'officer'`（军官，任务 8 起）共享「徒步类」语义——`size = 0`，无装甲，仅可被机枪打死、不参与坦克 AI、不渲染装甲 / 装填面板。占格规则按阵营判定：坦克 / 卡车可与**己方**徒步单位叠格，但不能进入**敌对**徒步单位所在格；例如玩家谢尔曼不能驶入德军步兵格，德军坦克也不能驶入玩家阵营步兵格。`types.ts` 导出的 `isFootKind(kind)` / `isFootUnit(unit)` 是这两类共有判定的统一入口；`Combat.canMGAttack`、`TurnEndEventApply.adjacent_infantry_fire`、`BattleScene` 的目标筛选 / 渲染分支等都通过它们进行兼容判定。**唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 `kind` 始终为 `'infantry'`（不会复活军官），所以「按 `kind` 精确判定」的位置（如 `Objective.allEnemiesOfKindDestroyed(mission, 'officer')`）不能换成 helper。
 
 **新单位 `'officer'`（军官）**：与 `'infantry'` 数值一致（见 `data/units.csv`），但 `kind` 独立——典型用法见任务 8（`mission_08.json`）：建筑里固定放置 1 只军官，objective 为 `{ type:"destroy_kind_evac", kind:"officer", evacAt, evacExitDir }`，与回合结束 5–6 spawn 出来的普通步兵互不混淆。UI 会在军官身周加红色光环、并在所在格绘制红色 hex 边框（`OFFICER_HALO_STROKE` / `OFFICER_TILE_STROKE`），与说明书原图「红色边框建筑里的德军步兵」一致。
 

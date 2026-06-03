@@ -634,10 +634,11 @@ const BUILDING_SHADE_PALETTE: ReadonlyArray<Color> = BUILDING_ROOF_PALETTE.map(
 );
 /** 瓦楞 / 椽口阴影线色：黑棕 + 较低 alpha，避免在浅色屋顶上过分扎眼 */
 const BUILDING_RIB_STROKE = new Color(35, 28, 22, 170);
-/** 桥梁叠加（GDD §3.2，绘制于水域格之上）：木板桥面 + 深色边线 */
-const BRIDGE_PLANK_FILL   = new Color(168, 132,  78, 255);
-const BRIDGE_PLANK_OUTLINE= new Color( 60,  44,  26, 255);
-const BRIDGE_RAIL_STROKE  = new Color( 90,  64,  40, 255);
+/** 桥梁叠加（GDD §3.2，绘制于水域格之上）：棕色桥体 + 与公路等宽的浅色路面 */
+const BRIDGE_PLANK_FILL   = new Color(128,  92,  58, 255);
+const BRIDGE_PLANK_OUTLINE= new Color( 76,  61,  42, 220);
+const BRIDGE_PLANK_SEAM   = new Color( 76,  61,  42, 150);
+const BRIDGE_RAIL_STROKE  = new Color( 72,  50,  32, 255);
 /**
  * 公路条带（按 `Tile.roads` 方向叠加在公路 / 叠桥水域之上）：浅米白路面 + 深棕描边。
  * 路面色比 road 基底 (200,178,142) 更浅更白 → 在棕黄路面上"凿"出一条浅色车辙带，方向感明显。
@@ -672,7 +673,7 @@ const HEDGE_BUSH_DARK   = new Color(30, 62, 28, 255);
 const HEDGE_BUSH_MID    = new Color(52, 88, 38, 255);
 const HEDGE_BUSH_LIGHT  = new Color(78, 118, 54, 245);
 const TILE_BORDER        = new Color( 40,  40,  40, 220);
-const FACING_COLOR       = new Color(255, 210,  60, 255);
+const WATER_SHARED_BORDER = new Color(40, 40, 40, 22);
 const UNIT_BORDER        = new Color(255, 255, 255, 255);
 // HUD 配色：两阶段都执行过后按钮换成"提醒色"，引导玩家结束回合
 const BTN_BG_NORMAL  = new Color( 84,  95,  58, 240);
@@ -1712,7 +1713,7 @@ export class BattleScene extends Component {
     g.strokeColor = TILE_BORDER;
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
-      this.drawHexStroke(c.x, c.y, this.hexSize);
+      this.drawTileBorder(c.x, c.y, this.hexSize, t, map);
     }
 
     // 1-bank. 水陆河岸：仅在水域格内、沿"非水域邻格"方向画沙色内偏移条带，模拟河 / 湖岸过渡。
@@ -2152,7 +2153,7 @@ export class BattleScene extends Component {
     // 徒步类（步兵 / 军官）没有装甲 / 装填等坦克状态，跳过坦克 badge 列。
     if (isFootUnit(u) || u.destroyed) return [];
     const out: TankStatusBadgeKind[] = [];
-    if (u.kind !== 'sherman' && u.damaged && !this.isOnFire(u)) {
+    if (u !== this.mission?.sherman && u.damaged && !this.isOnFire(u)) {
       out.push('damaged');
     }
     if (u.smoked) out.push('smoke');
@@ -2699,6 +2700,30 @@ export class BattleScene extends Component {
     g.stroke();
   }
 
+  private drawTileBorder(cx: number, cy: number, size: number, tile: Tile, map: HexMap) {
+    const g = this.g!;
+    g.lineWidth = 2;
+    for (let edge = 0; edge < 6; edge++) {
+      const axialDir = HEDGE_DRAW_EDGE_BY_AXIAL[edge] as Direction;
+      const n = map.get(neighbor(tile.pos, axialDir));
+      const isSharedWaterBorder = tile.terrain === 'water' && n?.terrain === 'water';
+      if (isSharedWaterBorder && (
+        tile.pos.q > n.pos.q || (tile.pos.q === n.pos.q && tile.pos.r > n.pos.r)
+      )) {
+        continue;
+      }
+      g.strokeColor =
+        isSharedWaterBorder
+          ? WATER_SHARED_BORDER
+          : TILE_BORDER;
+      const a0 = (-30 + 60 * edge) * Math.PI / 180;
+      const a1 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
+      g.moveTo(cx + size * Math.cos(a0), cy + size * Math.sin(a0));
+      g.lineTo(cx + size * Math.cos(a1), cy + size * Math.sin(a1));
+      g.stroke();
+    }
+  }
+
   private drawFieldBrushOverlay(cx: number, cy: number, size: number, tile: Tile) {
     const g = this.g!;
     const seedRaw =
@@ -3193,15 +3218,27 @@ export class BattleScene extends Component {
     const uy = dy / len;
     const nx = -uy;
     const ny = ux;
-    const halfW = size * 0.18;
+    const bridgeHalfW = size * 0.26;
+    const roadHalfW = size * 0.18;
 
     g.lineWidth = 1.5;
     g.strokeColor = BRIDGE_PLANK_OUTLINE;
     g.fillColor = BRIDGE_PLANK_FILL;
-    g.moveTo(p0.x + nx * halfW, p0.y + ny * halfW);
-    g.lineTo(p1.x + nx * halfW, p1.y + ny * halfW);
-    g.lineTo(p1.x - nx * halfW, p1.y - ny * halfW);
-    g.lineTo(p0.x - nx * halfW, p0.y - ny * halfW);
+    g.moveTo(p0.x + nx * bridgeHalfW, p0.y + ny * bridgeHalfW);
+    g.lineTo(p1.x + nx * bridgeHalfW, p1.y + ny * bridgeHalfW);
+    g.lineTo(p1.x - nx * bridgeHalfW, p1.y - ny * bridgeHalfW);
+    g.lineTo(p0.x - nx * bridgeHalfW, p0.y - ny * bridgeHalfW);
+    g.close();
+    g.fill();
+    g.stroke();
+
+    g.fillColor = ROAD_PATH_FILL;
+    g.strokeColor = ROAD_PATH_OUTLINE;
+    g.lineWidth = 1.2;
+    g.moveTo(p0.x + nx * roadHalfW, p0.y + ny * roadHalfW);
+    g.lineTo(p1.x + nx * roadHalfW, p1.y + ny * roadHalfW);
+    g.lineTo(p1.x - nx * roadHalfW, p1.y - ny * roadHalfW);
+    g.lineTo(p0.x - nx * roadHalfW, p0.y - ny * roadHalfW);
     g.close();
     g.fill();
     g.stroke();
@@ -3209,7 +3246,7 @@ export class BattleScene extends Component {
     // 两侧栏杆：再外移一点，以便玩家一眼看出"边界 / 不可越水"语义
     g.strokeColor = BRIDGE_RAIL_STROKE;
     g.lineWidth = 2;
-    const railOffset = halfW + size * 0.04;
+    const railOffset = bridgeHalfW + size * 0.055;
     g.moveTo(p0.x + nx * railOffset, p0.y + ny * railOffset);
     g.lineTo(p1.x + nx * railOffset, p1.y + ny * railOffset);
     g.stroke();
@@ -3218,15 +3255,17 @@ export class BattleScene extends Component {
     g.stroke();
 
     // 桥面上等距画几条板缝，明确"木桥"质感
-    g.strokeColor = BRIDGE_PLANK_OUTLINE;
+    g.strokeColor = BRIDGE_PLANK_SEAM;
     g.lineWidth = 1;
     const PLANKS = 5;
     for (let k = 1; k <= PLANKS; k++) {
       const f = k / (PLANKS + 1);
       const cxk = p0.x + dx * f;
       const cyk = p0.y + dy * f;
-      g.moveTo(cxk + nx * halfW, cyk + ny * halfW);
-      g.lineTo(cxk - nx * halfW, cyk - ny * halfW);
+      g.moveTo(cxk + nx * bridgeHalfW, cyk + ny * bridgeHalfW);
+      g.lineTo(cxk + nx * roadHalfW, cyk + ny * roadHalfW);
+      g.moveTo(cxk - nx * roadHalfW, cyk - ny * roadHalfW);
+      g.lineTo(cxk - nx * bridgeHalfW, cyk - ny * bridgeHalfW);
       g.stroke();
     }
     g.lineWidth = 2;
@@ -4509,29 +4548,7 @@ export class BattleScene extends Component {
       g.stroke();
     }
 
-    if (facingLerp) {
-      const { ux, uy } = this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
-      g.strokeColor = FACING_COLOR;
-      g.lineWidth = 4;
-      g.moveTo(c.x, c.y);
-      g.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
-      g.stroke();
-      g.lineWidth = 2;
-    } else if (u.facing !== null) {
-      const np = this.project(neighbor(u.pos, u.facing).q, neighbor(u.pos, u.facing).r);
-      const dx = np.x - c.x;
-      const dy = np.y - c.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const ux = dx / len;
-      const uy = dy / len;
-
-      g.strokeColor = FACING_COLOR;
-      g.lineWidth = 4;
-      g.moveTo(c.x, c.y);
-      g.lineTo(c.x + ux * r * 1.1, c.y + uy * r * 1.1);
-      g.stroke();
-      g.lineWidth = 2;
-    }
+    // PNG 车辆通过炮管/炮塔表达朝向；fallback 矢量车体不再额外画长朝向线，避免出现多余细边线。
   }
 
   /**
@@ -9732,8 +9749,8 @@ export class BattleScene extends Component {
     if (!this.mission) return occ;
     for (const u of this.allUnits()) {
       if (u === self || u.destroyed) continue;
-      // 敌方坦克 / 卡车不被己方徒步类（步兵 / 军官）占格阻挡，可驶入与徒步单位叠格
-      if (!isFootUnit(self) && isFootUnit(u)) continue;
+      // 坦克/卡车可与己方徒步单位叠格，但不能驶入敌对徒步单位所在格。
+      if (!isFootUnit(self) && isFootUnit(u) && u.faction === self.faction) continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
     return occ;

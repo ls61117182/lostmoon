@@ -76,6 +76,7 @@ function buildStukaExtraDicePhases(sim: {
   bomb?: [number, number];
   shotDown: boolean;
   report: AttackReport | null;
+  stukaPenDie?: number;
   /** 击穿后伤害表 1d6（与 report.damageDie 同源）；单独带回避免 UI 漏段 */
   stukaDamageDie?: number;
 }): TurnEndExtraDicePhase[] {
@@ -87,8 +88,9 @@ function buildStukaExtraDicePhases(sim: {
     out.push({ dice: [...sim.bomb], captionKey: 'turnEnd.extra.stukaBomb' });
   }
   const rep = sim.report;
-  if (rep && rep.penDie !== undefined) {
-    out.push({ dice: [rep.penDie], captionKey: 'turnEnd.extra.stukaPen' });
+  const penDie = sim.stukaPenDie ?? rep?.penDie;
+  if (penDie !== undefined && penDie !== null) {
+    out.push({ dice: [penDie], captionKey: 'turnEnd.extra.stukaPen' });
   }
   const dmg = sim.stukaDamageDie ?? rep?.damageDie;
   if (dmg !== undefined && dmg !== null) {
@@ -230,6 +232,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
   bomb?: [number, number];
   shotDown: boolean;
   report: AttackReport | null;
+  stukaPenDie?: number;
   stukaDamageDie?: number;
 } {
   if (sh.destroyed) return { shotDown: false, report: null };
@@ -244,7 +247,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
     if (bombSum < 8) return { aa, bomb, shotDown: false, report: null };
     const penDie = rng.d6();
     const penTh = 3;
-    if (penDie < penTh) return { aa, bomb, shotDown: false, report: null };
+    if (penDie < penTh) return { aa, bomb, shotDown: false, report: null, stukaPenDie: penDie };
     const damageDie = rng.d6();
     const damageEffect = resolveDamageEffect(sh, damageDie);
     const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
@@ -252,6 +255,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
       aa,
       bomb,
       shotDown: false,
+      stukaPenDie: penDie,
       stukaDamageDie: damageDie,
       report: {
         dice: [bomb[0], bomb[1]],
@@ -276,13 +280,14 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
   if (bombSum < 8) return { bomb, shotDown: false, report: null };
   const penDie = rng.d6();
   const penTh = 3;
-  if (penDie < penTh) return { bomb, shotDown: false, report: null };
+  if (penDie < penTh) return { bomb, shotDown: false, report: null, stukaPenDie: penDie };
   const damageDie = rng.d6();
   const damageEffect = resolveDamageEffect(sh, damageDie);
   const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
   return {
     bomb,
     shotDown: false,
+    stukaPenDie: penDie,
     stukaDamageDie: damageDie,
     report: {
       dice: [bomb[0], bomb[1]],
