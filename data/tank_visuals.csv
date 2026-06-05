@@ -1,0 +1,6 @@
+﻿kind,displayName,fitScale,offsetForward,offsetRight,aspectRatioMul,hullFitScale,turretScale,hullOffsetForward,hullOffsetRight,turretOffsetForward,turretOffsetRight,turretLocalOffsetForward,turretLocalOffsetRight,topTrimX,topTrimY,topTrimW,topTrimH,turretTrimX,turretTrimY,turretTrimW,turretTrimH,turretPivotX,turretPivotY,turretSpritePivotX,turretSpritePivotY,destroyedOffsetForward,destroyedOffsetRight,notes
+sherman,Sherman,0.76,0,0,1,0.76,3,0,0,0,0,0,0,259,12,1310,576,94,24,286,157,927,296,309,99,-7.5,0,new hull and turret assets
+tiger,Tiger,0.9,0.1,0,1.1,0.6755,0.8,0,0,0.08,0,0,0,0,0,901,592,0,0,1341,500,454,292,875,243,0,0,split hull turret
+panzer4,Panzer IV,0.7,0,0,1,0.7,0.88,0,0,0,0,0,0,0,0,1174,588,0,0,769,458,589,294,425,222,0,0,split hull turret
+panzer3,Panzer III,0.66,0,0,1,0.84,0.63,-0.1,0,0.05,0,0,0,0,0,1463,592,0,0,1373,591,480,296,711,296,0,0,split hull turret
+truck,Truck,0.8,0,0,1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,top sprite only

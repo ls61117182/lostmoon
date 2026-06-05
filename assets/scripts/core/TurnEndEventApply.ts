@@ -42,6 +42,13 @@ export type GermanTruckMoveSegment =
   | { type: 'turn'; at: Axial; from: Direction; to: Direction }
   | { type: 'move'; from: Axial; to: Axial };
 
+export interface TurnEndTankReinforceMove {
+  unitId: string;
+  from: Axial;
+  to: Axial;
+  facing: Direction;
+}
+
 /** 相邻步兵对谢尔曼齐射：一发对应一条预掷战报（UI 用主炮同款 DiceShow 逐发播放） */
 export interface AdjacentInfantryVolleyPreview {
   report: AttackReport;
@@ -58,6 +65,7 @@ export interface TurnEndPrepared {
   germanTruckMoveSegments?: GermanTruckMoveSegment[];
   /** 仅「已在路径末端、沿朝向驶离地图」：在驶离移动的动画帧上置 truckEscapeDefeat，勿在 apply 里置位（避免与抵达最后一格混淆） */
   germanTruckDefeatAfterExitMove?: boolean;
+  tankReinforceMove?: TurnEndTankReinforceMove;
   /** 相邻步兵集火：由 BattleScene 在主骰后串联完整攻击骰面板（命中→穿甲→伤害），确认后再 apply */
   adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
 }
@@ -464,17 +472,22 @@ export function prepareTurnEndEvent(
       const blocked = !!occ && tankKinds.includes(occ.kind);
       const placed = !!pos && !blocked;
       const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
+      const unitId = nextEnemyId();
+      const entryPos = pos ? neighbor(pos, rotateDirection(face, 3)) : null;
       return {
         bodyKey: placed ? 'turnEnd.panzer3.placed' : 'turnEnd.panzer3.blocked',
         bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
         extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.panzer3Start' }],
+        tankReinforceMove: placed && pos && entryPos
+          ? { unitId, from: { ...entryPos }, to: { ...pos }, facing: face }
+          : undefined,
         apply: () => {
           if (!placed || !pos) return;
           mission.enemies.push({
-            id: nextEnemyId(),
+            id: unitId,
             kind: 'panzer3',
             faction: 'german',
-            pos: { ...pos },
+            pos: entryPos ? { ...entryPos } : { ...pos },
             facing: face,
             stats: getUnitStats('panzer3'),
           });
@@ -490,17 +503,22 @@ export function prepareTurnEndEvent(
       const blocked = !!occ && tankKinds.includes(occ.kind);
       const placed = !!pos && !blocked;
       const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
+      const unitId = nextEnemyId();
+      const entryPos = pos ? neighbor(pos, rotateDirection(face, 3)) : null;
       return {
         bodyKey: placed ? 'turnEnd.panzer4.placed' : 'turnEnd.panzer4.blocked',
         bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
         extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.panzer4Start' }],
+        tankReinforceMove: placed && pos && entryPos
+          ? { unitId, from: { ...entryPos }, to: { ...pos }, facing: face }
+          : undefined,
         apply: () => {
           if (!placed || !pos) return;
           mission.enemies.push({
-            id: nextEnemyId(),
+            id: unitId,
             kind: 'panzer4',
             faction: 'german',
-            pos: { ...pos },
+            pos: entryPos ? { ...entryPos } : { ...pos },
             facing: face,
             stats: getUnitStats('panzer4'),
           });
