@@ -9,6 +9,15 @@ import { UnitKind } from './types';
 
 export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
 export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3'>;
+export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck'];
+export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = ['sherman', 'tiger', 'panzer4', 'panzer3'];
+
+export interface TankVisualAssetConfig {
+  topSpritePath: string;
+  hullSpritePath: string;
+  turretSpritePath: string;
+  destroyedSpritePath: string;
+}
 
 export interface TankVisualConfig {
   fitScale: number;
@@ -43,6 +52,14 @@ const TANK_VISUAL_DEFAULT: TankVisualConfig = {
   aspectRatioMul: 1,
   destroyedOffsetForward: 0,
   destroyedOffsetRight: 0,
+};
+
+const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = {
+  sherman: { topSpritePath: "textures/units/sherman_top/spriteFrame", hullSpritePath: "textures/units/sherman_top_hull/spriteFrame", turretSpritePath: "textures/units/sherman_top_turret/spriteFrame", destroyedSpritePath: "textures/units/sherman_top_destroyed/spriteFrame" },
+  tiger: { topSpritePath: "textures/units/tiger_top/spriteFrame", hullSpritePath: "textures/units/tiger_top_hull/spriteFrame", turretSpritePath: "textures/units/tiger_top_turret/spriteFrame", destroyedSpritePath: "textures/units/tiger_top_destroyed/spriteFrame" },
+  panzer4: { topSpritePath: "textures/units/panzer4_top/spriteFrame", hullSpritePath: "textures/units/panzer4_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer4_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer4_top_destroyed/spriteFrame" },
+  panzer3: { topSpritePath: "textures/units/panzer3_top/spriteFrame", hullSpritePath: "textures/units/panzer3_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer3_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer3_top_destroyed/spriteFrame" },
+  truck: { topSpritePath: "textures/units/truck_top/spriteFrame", hullSpritePath: "", turretSpritePath: "", destroyedSpritePath: "textures/units/truck_top_destroyed/spriteFrame" },
 };
 
 const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
@@ -82,6 +99,10 @@ const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig>
     pivot: { bodyX: 480, bodyY: 296, spriteX: 711, spriteY: 296 },
   },
 };
+
+export function tankVisualAssetConfigOf(kind: TankVisualKind): TankVisualAssetConfig {
+  return TANK_VISUAL_ASSET_CONFIG[kind];
+}
 
 export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {
   if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'truck') {

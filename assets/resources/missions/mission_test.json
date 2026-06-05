@@ -1,5 +1,5 @@
 {
-  "id": "mission_01",
+  "id": "mission_test",
   "name": "村庄",
   "description": "目标：摧毁 2 辆 IV 号坦克；随后在撤离格（col=5,row=6）将车体朝向正东，执行前进驶出地图东侧（邻格无地形亦可胜利）。\n谢尔曼初始在左下公路格；2 辆 IV 号按 eid 掷骰出生（见 GDD）。",
   "_comment": "说明书任务 1（P26）。tiles[row][col] 使用 odd-r 偏移。\n基底：r=公路 f=田地 m=泥地 F=林地；bd=1 建筑；h/ef/rd 方向同序：0=E…5=NE，h[i] 为第 i 向格边树篱、ef 为同索引朝向（见 HexGrid.hedgeFlagsFromMapJson）；rd[i]=1 在格内沿第 i 向边中点→格心画道路条带（仅公路/桥梁可配，单方向时格心绘道路尽头圆，纯视觉）。rid 援军；eid 黑格 1..6（全图唯一）。\nenemyStartByDice：敌方无固定 at，开局掷骰放置。",
@@ -71,6 +71,14 @@
     "at": { "col": 1, "row": 5 },
     "facing": 5
   },
+  "allies": [
+    {
+      "kind": "sherman",
+      "faction": "allied",
+      "at": { "col": 2, "row": 5 },
+      "facing": 5
+    }
+  ],
   "enemies": [
     { "kind": "panzer4", "faction": "german" },
     { "kind": "panzer4", "faction": "german" }

@@ -45,6 +45,12 @@ const NUM_FIELDS = [
   'destroyedOffsetForward',
   'destroyedOffsetRight',
 ];
+const STRING_FIELDS = [
+  'topSpritePath',
+  'hullSpritePath',
+  'turretSpritePath',
+  'destroyedSpritePath',
+];
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);
@@ -138,6 +144,10 @@ function emitNum(n) {
   return Number.isInteger(n) ? String(n) : String(n);
 }
 
+function emitString(s) {
+  return JSON.stringify(s);
+}
+
 function build() {
   const records = toRecords(parseCSV(readCsvSmart(CSV_PATH)));
   const byKind = new Map();
@@ -152,6 +162,9 @@ function build() {
     }
     for (const field of NUM_FIELDS) {
       rec[field] = numberOrThrow(rec, field);
+    }
+    for (const field of STRING_FIELDS) {
+      rec[field] = rec[field] || '';
     }
     byKind.set(rec.kind, rec);
   }
@@ -172,6 +185,15 @@ function build() {
   lines.push('');
   lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;");
   lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3'>;");
+  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'truck\'];');
+  lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\'];');
+  lines.push('');
+  lines.push('export interface TankVisualAssetConfig {');
+  lines.push('  topSpritePath: string;');
+  lines.push('  hullSpritePath: string;');
+  lines.push('  turretSpritePath: string;');
+  lines.push('  destroyedSpritePath: string;');
+  lines.push('}');
   lines.push('');
   lines.push('export interface TankVisualConfig {');
   lines.push('  fitScale: number;');
@@ -208,6 +230,13 @@ function build() {
   lines.push('  destroyedOffsetRight: 0,');
   lines.push('};');
   lines.push('');
+  lines.push('const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = {');
+  for (const kind of REQUIRED_KINDS) {
+    const r = byKind.get(kind);
+    lines.push(`  ${kind}: { topSpritePath: ${emitString(r.topSpritePath)}, hullSpritePath: ${emitString(r.hullSpritePath)}, turretSpritePath: ${emitString(r.turretSpritePath)}, destroyedSpritePath: ${emitString(r.destroyedSpritePath)} },`);
+  }
+  lines.push('};');
+  lines.push('');
   lines.push('const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {');
   for (const kind of REQUIRED_KINDS) {
     const r = byKind.get(kind);
@@ -232,6 +261,10 @@ function build() {
     lines.push('  },');
   }
   lines.push('};');
+  lines.push('');
+  lines.push('export function tankVisualAssetConfigOf(kind: TankVisualKind): TankVisualAssetConfig {');
+  lines.push('  return TANK_VISUAL_ASSET_CONFIG[kind];');
+  lines.push('}');
   lines.push('');
   lines.push('export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {');
   lines.push("  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'truck') {");

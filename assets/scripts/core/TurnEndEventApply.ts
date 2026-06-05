@@ -46,7 +46,9 @@ export interface TurnEndTankReinforceMove {
   unitId: string;
   from: Axial;
   to: Axial;
+  /** Facing used while driving from `from` into `to`. */
   facing: Direction;
+  finalFacing: Direction;
 }
 
 /** 相邻步兵对谢尔曼齐射：一发对应一条预掷战报（UI 用主炮同款 DiceShow 逐发播放） */
@@ -150,7 +152,89 @@ function isTankUnitKind(k: UnitKind): boolean {
   return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
 }
 
+function directionPriorityAround(dir: Direction): Direction[] {
+  return [
+    dir,
+    rotateDirection(dir, 1),
+    rotateDirection(dir, 5),
+    rotateDirection(dir, 2),
+    rotateDirection(dir, 4),
+    rotateDirection(dir, 3),
+  ];
+}
+
+function selectTankReinforceEntry(
+  mission: LoadedMission,
+  target: Axial,
+  finalFacing: Direction,
+): { from: Axial; facing: Direction; finalFacing: Direction } | null {
+  const preferredEntryDir = rotateDirection(finalFacing, 3);
+  const dirs = directionPriorityAround(preferredEntryDir);
+
+  for (const dir of dirs) {
+    const from = neighbor(target, dir);
+    if (mission.map.has(from)) continue;
+    return {
+      from,
+      facing: rotateDirection(dir, 3),
+      finalFacing,
+    };
+  }
+
+  for (const dir of dirs) {
+    const from = neighbor(target, dir);
+    if (!mission.map.canTankEnter(from)) continue;
+    return {
+      from,
+      facing: rotateDirection(dir, 3),
+      finalFacing,
+    };
+  }
+
+  return null;
+}
+
 /** 某格上是否站着任何坦克（含谢尔曼 / 敌坦 / 另一辆 truck，不计已毁） */
+function prepareTankSpawnEvent(
+  kind: Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger'>,
+  keyStem: 'sherman' | 'panzer4' | 'panzer3' | 'tiger',
+  mission: LoadedMission,
+  rng: RNG,
+  nextEnemyId: () => string,
+  sh: Unit,
+  baseParams: Record<string, string | number>,
+): TurnEndPrepared {
+  const spawnDie = rng.d6();
+  const tile = findTileByEnemyStartId(mission, spawnDie);
+  const pos = tile?.pos;
+  const occ = pos ? unitAt(mission, pos) : null;
+  const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'];
+  const blocked = !!occ && tankKinds.includes(occ.kind);
+  const placed = !!pos && !blocked;
+  const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
+  const unitId = nextEnemyId();
+  const entry = pos ? selectTankReinforceEntry(mission, pos, face) : null;
+  return {
+    bodyKey: placed ? `turnEnd.${keyStem}.placed` : `turnEnd.${keyStem}.blocked`,
+    bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
+    extraDicePhases: [{ dice: [spawnDie], captionKey: `turnEnd.extra.${keyStem}Start` }],
+    tankReinforceMove: placed && pos && entry
+      ? { unitId, from: { ...entry.from }, to: { ...pos }, facing: entry.facing, finalFacing: entry.finalFacing }
+      : undefined,
+    apply: () => {
+      if (!placed || !pos) return;
+      mission.enemies.push({
+        id: unitId,
+        kind,
+        faction: 'german',
+        pos: entry ? { ...entry.from } : { ...pos },
+        facing: entry ? entry.facing : face,
+        stats: getUnitStats(kind),
+      });
+    },
+  };
+}
+
 function cellHasTank(mission: LoadedMission, pos: { q: number; r: number }, selfTruck: Unit): boolean {
   const u = unitAt(mission, pos);
   if (!u || u.destroyed || u === selfTruck) return false;
@@ -464,66 +548,16 @@ export function prepareTurnEndEvent(
       };
     }
     case 'panzer3_spawn': {
-      const spawnDie = rng.d6();
-      const tile = findTileByEnemyStartId(mission, spawnDie);
-      const pos = tile?.pos;
-      const occ = pos ? unitAt(mission, pos) : null;
-      const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'];
-      const blocked = !!occ && tankKinds.includes(occ.kind);
-      const placed = !!pos && !blocked;
-      const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
-      const unitId = nextEnemyId();
-      const entryPos = pos ? neighbor(pos, rotateDirection(face, 3)) : null;
-      return {
-        bodyKey: placed ? 'turnEnd.panzer3.placed' : 'turnEnd.panzer3.blocked',
-        bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
-        extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.panzer3Start' }],
-        tankReinforceMove: placed && pos && entryPos
-          ? { unitId, from: { ...entryPos }, to: { ...pos }, facing: face }
-          : undefined,
-        apply: () => {
-          if (!placed || !pos) return;
-          mission.enemies.push({
-            id: unitId,
-            kind: 'panzer3',
-            faction: 'german',
-            pos: entryPos ? { ...entryPos } : { ...pos },
-            facing: face,
-            stats: getUnitStats('panzer3'),
-          });
-        },
-      };
+      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams);
     }
     case 'panzer4_spawn': {
-      const spawnDie = rng.d6();
-      const tile = findTileByEnemyStartId(mission, spawnDie);
-      const pos = tile?.pos;
-      const occ = pos ? unitAt(mission, pos) : null;
-      const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'];
-      const blocked = !!occ && tankKinds.includes(occ.kind);
-      const placed = !!pos && !blocked;
-      const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
-      const unitId = nextEnemyId();
-      const entryPos = pos ? neighbor(pos, rotateDirection(face, 3)) : null;
-      return {
-        bodyKey: placed ? 'turnEnd.panzer4.placed' : 'turnEnd.panzer4.blocked',
-        bodyParams: { ...baseParams, spawnDie, eid: spawnDie },
-        extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.panzer4Start' }],
-        tankReinforceMove: placed && pos && entryPos
-          ? { unitId, from: { ...entryPos }, to: { ...pos }, facing: face }
-          : undefined,
-        apply: () => {
-          if (!placed || !pos) return;
-          mission.enemies.push({
-            id: unitId,
-            kind: 'panzer4',
-            faction: 'german',
-            pos: entryPos ? { ...entryPos } : { ...pos },
-            facing: face,
-            stats: getUnitStats('panzer4'),
-          });
-        },
-      };
+      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams);
+    }
+    case 'tiger_spawn': {
+      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams);
+    }
+    case 'sherman_spawn': {
+      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams);
     }
     case 'german_truck_move': {
       const path = ctx.mission.data.truckPath;

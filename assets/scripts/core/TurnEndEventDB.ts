@@ -1,10 +1,10 @@
 /**
- * 回合结束事件表 —— 自动生成，请勿手改。
+ * 回合结束事件表 - 自动生成，请勿手改。
  * 数据源：data/turn_end_events.csv
  * 生成：node tools/buildTurnEndEventDB.js
  */
 
-export type TurnEndEffectType = 'none' | 'sniper' | 'commander_extra' | 'infantry_spawn' | 'adjacent_infantry_fire' | 'mechanical_failure' | 'stuka' | 'panzer3_spawn' | 'road_mine' | 'panzer4_spawn' | 'german_truck_move';
+export type TurnEndEffectType = 'none' | 'sniper' | 'commander_extra' | 'infantry_spawn' | 'adjacent_infantry_fire' | 'mechanical_failure' | 'stuka' | 'panzer3_spawn' | 'road_mine' | 'panzer4_spawn' | 'tiger_spawn' | 'sherman_spawn' | 'german_truck_move';
 
 export interface TurnEndEventRow {
   missionId: string;
@@ -22,6 +22,13 @@ export const TURN_END_EVENTS: TurnEndEventRow[] = [
   { missionId: 'mission_01', sumMin: 9, sumMax: 9, diceCount: 2, effectType: 'mechanical_failure' },
   { missionId: 'mission_01', sumMin: 10, sumMax: 10, diceCount: 2, effectType: 'stuka' },
   { missionId: 'mission_01', sumMin: 11, sumMax: 12, diceCount: 2, effectType: 'panzer3_spawn' },
+  { missionId: 'mission_test', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'tiger_spawn' },
+  { missionId: 'mission_test', sumMin: 4, sumMax: 4, diceCount: 2, effectType: 'sherman_spawn' },
+  { missionId: 'mission_test', sumMin: 5, sumMax: 6, diceCount: 2, effectType: 'infantry_spawn' },
+  { missionId: 'mission_test', sumMin: 7, sumMax: 8, diceCount: 2, effectType: 'adjacent_infantry_fire' },
+  { missionId: 'mission_test', sumMin: 9, sumMax: 9, diceCount: 2, effectType: 'mechanical_failure' },
+  { missionId: 'mission_test', sumMin: 10, sumMax: 10, diceCount: 2, effectType: 'stuka' },
+  { missionId: 'mission_test', sumMin: 11, sumMax: 12, diceCount: 2, effectType: 'panzer3_spawn' },
   { missionId: 'mission_02', sumMin: 2, sumMax: 5, diceCount: 2, effectType: 'infantry_spawn' },
   { missionId: 'mission_02', sumMin: 6, sumMax: 6, diceCount: 2, effectType: 'road_mine' },
   { missionId: 'mission_02', sumMin: 7, sumMax: 8, diceCount: 2, effectType: 'adjacent_infantry_fire' },

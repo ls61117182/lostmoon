@@ -6,6 +6,13 @@ mission_01,7,8,2,adjacent_infantry_fire,相邻步兵齐射
 mission_01,9,9,2,mechanical_failure,机械故障→瘫痪
 mission_01,10,10,2,stuka,斯图卡
 mission_01,11,12,2,panzer3_spawn,III号→黑格 eid
+mission_test,2,3,2,tiger_spawn,测试关卡：复制任务1
+mission_test,4,4,2,sherman_spawn,测试关卡：复制任务1
+mission_test,5,6,2,infantry_spawn,测试关卡：复制任务1
+mission_test,7,8,2,adjacent_infantry_fire,测试关卡：复制任务1
+mission_test,9,9,2,mechanical_failure,测试关卡：复制任务1
+mission_test,10,10,2,stuka,测试关卡：复制任务1
+mission_test,11,12,2,panzer3_spawn,测试关卡：复制任务1
 mission_02,2,5,2,infantry_spawn,任务2：德军步兵→红格
 mission_02,6,6,2,road_mine,任务2：公路地雷（AP0）
 mission_02,7,8,2,adjacent_infantry_fire,相邻步兵

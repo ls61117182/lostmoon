@@ -45,6 +45,9 @@ const LEVEL_GRID_GAP_Y = 24;
 const LEVEL_GRID_START_X = -410; // 第一列中心 x
 const LEVEL_GRID_START_Y = -30;  // 第一行中心 y
 
+const TEST_MISSION_LEVEL_ID = 0;
+const TEST_MISSION_PATH = 'missions/mission_test';
+
 // ---------- 颜色（延续军事风） ----------
 const BG_TOP          = new Color( 40,  52,  38, 255);
 const BG_MID          = new Color( 26,  34,  28, 255);
@@ -175,6 +178,7 @@ export class MainMenuScene extends Component {
     this.buildBackground();
     this.buildTitle();
     this.buildContinueButton();
+    this.buildTestMissionButton();
     this.buildDivider();
     this.buildLevelGrid();
     this.buildTopIcons();
@@ -357,6 +361,31 @@ export class MainMenuScene extends Component {
     } else {
       GameSession.resumeMission(lvl.id, lvl.missionPath);
     }
+    this.loadBattleScene();
+  }
+
+  private buildTestMissionButton() {
+    const btn = this.makeRectButton(
+      this.node, 406, 130, 148, 72, BTN_LEVEL_UNLOCKED,
+      () => this.onClickTestMission(),
+    );
+    btn.node.name = 'TestMissionBtn';
+
+    const label = this.makeLabel(btn.node, getLang() === 'en' ? 'Test Mission' : '测试关卡',
+      0, 6, 130, 30, 22, TEXT_PRIMARY);
+    label.enableOutline = true;
+    label.outlineColor = TEXT_OUTLINE;
+    label.outlineWidth = 2;
+
+    const sub = this.makeLabel(btn.node, 'MISSION TEST',
+      0, -20, 130, 20, 12, TEXT_SUBTITLE);
+    sub.enableOutline = true;
+    sub.outlineColor = TEXT_OUTLINE;
+    sub.outlineWidth = 1;
+  }
+
+  private onClickTestMission() {
+    GameSession.selectMission(TEST_MISSION_LEVEL_ID, TEST_MISSION_PATH);
     this.loadBattleScene();
   }
 
