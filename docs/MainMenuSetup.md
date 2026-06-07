@@ -47,6 +47,12 @@
 
 ## 4. 数据流回顾（方便你日后排查）
 
+主菜单的章节与关卡元数据集中在 `assets/scripts/core/LevelDB.ts`：
+
+- `CHAPTERS` 是战区/章节列表；当前包含 `europe`（欧洲战场，12 个已实装任务）、`pacific`（太平洋战场，预留章节）和 `test`（测试关卡，挂载 `mission_test`）。
+- `LEVELS` 仍然保留为从 `CHAPTERS` 展开的扁平兼容数组，战斗场景回写通关进度和继续游戏仍可按 `missionId` 找到旧关卡。
+- 后续新增章节时，先在 `CHAPTERS` 增加一个 `ChapterMeta`，再给它的 `levels` 填入对应 mission JSON；主菜单会自动生成章节切换按钮和关卡网格。
+
 ```
 MainMenuScene                GameSession (纯静态)          BattleScene
 ────────────────────────     ─────────────────────────     ───────────────────────────
@@ -101,7 +107,7 @@ MenuProgress.reset();
 新增：
 
 - `assets/scripts/core/GameSession.ts` —— 跨场景会话状态（选关 / 是否读档）
-- `assets/scripts/core/LevelDB.ts` —— 12 关卡元数据 + localStorage 进度
+- `assets/scripts/core/LevelDB.ts` —— 章节/关卡元数据 + localStorage 进度
 - `assets/scripts/view/MainMenuScene.ts` —— 主菜单场景脚本
 
 修改：

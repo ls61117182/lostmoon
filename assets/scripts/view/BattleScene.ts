@@ -72,7 +72,7 @@ import {
   rollActionDice,
 } from '../core/ActionDice';
 import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
+import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
@@ -152,7 +152,7 @@ import {
   stopTankManeuver,
   playUiClick,
 } from '../audio/GameAudio';
-import { Direction, effectiveDiceTerrain, isFootUnit, MissionData, ShermanCrew, TerrainType, Tile, tileHasBridge, Unit, UnitKind } from '../core/types';
+import { Direction, effectiveDiceTerrain, isFootUnit, MissionData, TerrainType, Tile, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -7403,8 +7403,9 @@ export class BattleScene extends Component {
     const introKey = 'fireCheck.intro';
     const introParams: Record<string, string | number> = {
       n: nSnap,
-      rolls: prep.steps.length,
+      rolls: prep.allDice.length,
       dice: prep.allDice.join('+'),
+      lowest: prep.steps[0]?.die ?? 0,
     };
     this.destroyFireCheckEventUI();
     const refs = this.buildFireCheckEventPanel(prep.allDice);
@@ -7442,8 +7443,8 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 预掷本批次全部着火检定（快照 n 次），用于 UI 展示；不在此写回 fireLevel（由确认后 apply 批量 +）。
-   * 阵亡检定二次骰在预掷中按与实机相同规则消耗 RNG，并用本地 hatch/crew 快照推演后续检定。
+   * 预掷本批次全部着火检定骰，用于 UI 展示；只按最低点数生成 1 次伤害结算。
+   * 阵亡检定二次骰复用 Combat.resolveCrewCheck，保持已死乘员重掷等细节一致。
    */
   private prepareFireCheckSteps(nSnap: number): {
     steps: FireCheckPreparedStep[];
@@ -7452,57 +7453,26 @@ export class BattleScene extends Component {
   } {
     const steps: FireCheckPreparedStep[] = [];
     const allDice: number[] = [];
-    let pendingFire = 0;
-    let destroyed = !!this.mission!.sherman.destroyed;
-    let hatchOpen = !!this.mission!.sherman.hatchOpen;
-    const crew: ShermanCrew | undefined = this.mission!.sherman.crew
-      ? { ...this.mission!.sherman.crew }
-      : undefined;
 
     for (let i = 0; i < nSnap; i++) {
-      if (destroyed) break;
-      const die = this.rng.d6();
-      allDice.push(die);
-      const effect = resolveDamageEffect({ kind: 'sherman' } as Unit, die);
-      this.battleLog(`[Phase⑤] d6=${die} → ${effect}`);
+      allDice.push(this.rng.d6());
+    }
 
-      if (effect === 'destroyed') {
-        destroyed = true;
-        steps.push({ die, effect });
-        continue;
-      }
-      if (effect === 'fire') {
-        pendingFire += 1;
-        steps.push({ die, effect });
-        continue;
-      }
-      if (effect === 'crewCheck') {
-        const crewDie = this.rng.d6();
-        const slot = crewDie >= 1 && crewDie <= 5
-          ? (crewDie as 1 | 2 | 3 | 4 | 5)
-          : (hatchOpen ? 1 : null);
-        steps.push({ die, effect, crewDie, crewSlot: slot });
-        if (slot !== null && crew) {
-          switch (slot) {
-            case 1:
-              crew.commander = false;
-              hatchOpen = false;
-              break;
-            case 2: crew.loader = false; break;
-            case 3: crew.gunner = false; break;
-            case 4: crew.driver = false; break;
-            case 5: crew.coDriver = false; break;
-          }
-        }
-        continue;
-      }
-      if (effect === 'turret' || effect === 'paralyzed' || effect === 'damaged') {
-        steps.push({ die, effect });
-        continue;
-      }
+    if (allDice.length === 0) {
+      return { steps, pendingFire: 0, allDice };
+    }
+
+    const die = Math.min(...allDice);
+    const effect = resolveDamageEffect(this.mission!.sherman, die, true);
+    this.battleLog(`[Phase⑤] dice=${allDice.join('+')} min=${die} → ${effect}`);
+
+    if (effect === 'crewCheck') {
+      const crew = resolveCrewCheck(this.mission!.sherman, this.rng);
+      steps.push({ die, effect, crewDie: crew.die, crewSlot: crew.slot });
+    } else {
       steps.push({ die, effect });
     }
-    return { steps, pendingFire, allDice };
+    return { steps, pendingFire: effect === 'fire' ? 1 : 0, allDice };
   }
 
   private formatFireCheckBodyText(
@@ -7513,7 +7483,6 @@ export class BattleScene extends Component {
     const lines: string[] = [];
     for (let i = 0; i < steps.length; i++) {
       const st = steps[i];
-      const idx = i + 1;
       let outcome = '';
       if (st.effect === 'crewCheck') {
         outcome = st.crewSlot != null
@@ -7522,7 +7491,7 @@ export class BattleScene extends Component {
       } else {
         outcome = this.fireCheckOutcomePhrase(st.effect);
       }
-      lines.push(t('fireCheck.stepLine', { idx, die: st.die, outcome }));
+      lines.push(t('fireCheck.lowestLine', { die: st.die, outcome }));
     }
     if (pendingFire > 0) {
       lines.push(t('fireCheck.batchFire', { k: pendingFire, n: nSnap }));

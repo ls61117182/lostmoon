@@ -26,7 +26,15 @@ import {
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
-import { LEVELS, LevelMeta, MenuProgress } from '../core/LevelDB';
+import {
+  CHAPTERS,
+  DEFAULT_CHAPTER_ID,
+  LEVELS,
+  LevelMeta,
+  MenuProgress,
+  getChapter,
+  getChapterLevels,
+} from '../core/LevelDB';
 import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
@@ -43,10 +51,12 @@ const LEVEL_BTN_H = 120;
 const LEVEL_GRID_GAP_X = 24;
 const LEVEL_GRID_GAP_Y = 24;
 const LEVEL_GRID_START_X = -410; // 第一列中心 x
-const LEVEL_GRID_START_Y = -30;  // 第一行中心 y
-
-const TEST_MISSION_LEVEL_ID = 0;
-const TEST_MISSION_PATH = 'missions/mission_test';
+const LEVEL_GRID_START_Y = -88;
+const CHAPTER_BTN_W = 210;
+const CHAPTER_BTN_H = 44;
+const CHAPTER_BTN_GAP = 18;
+const CHAPTER_VIEW_W = 760;
+const CHAPTER_VIEW_H = 54;
 
 // ---------- 颜色（延续军事风） ----------
 const BG_TOP          = new Color( 40,  52,  38, 255);
@@ -87,6 +97,9 @@ const SLIDER_THUMB        = new Color(240, 215, 150, 255);
 const LANG_BTN_IDLE       = new Color( 59,  64,  54, 235);
 const LANG_BTN_ACTIVE     = new Color(145,  95,  44, 245);
 const LANG_BTN_ACTIVE_BD  = new Color(240, 215, 150, 255);
+const CHAPTER_BTN_IDLE    = new Color( 58,  66,  56, 235);
+const CHAPTER_BTN_ACTIVE  = new Color(148,  96,  46, 245);
+const CHAPTER_EMPTY_BG    = new Color( 42,  48,  42, 222);
 
 const AUTH_CARD_BG        = new Color( 44,  50,  42, 245);
 const AUTH_CARD_ACTIVE    = new Color( 77,  88,  57, 248);
@@ -124,6 +137,10 @@ export class MainMenuScene extends Component {
 
   // 关卡按钮池（1..12，对应 LEVELS）
   private levelBtns: ButtonRefs[] = [];
+  private chapterBtns: ButtonRefs[] = [];
+  private selectedChapterId: string = DEFAULT_CHAPTER_ID;
+  private levelGridRoot: Node | null = null;
+  private chapterSubtitleLabel: Label | null = null;
 
   // 当前打开的模态；非 null 时主菜单点击被遮罩吞掉
   private modalRoot: Node | null = null;
@@ -173,13 +190,14 @@ export class MainMenuScene extends Component {
     this.node.setPosition(0, 0, 0);
 
     // 每次进菜单读一次持久化语言，确保设置面板里切的语言已生效
-    setLang(MenuProgress.load().lang);
+    const menuState = MenuProgress.load();
+    setLang(menuState.lang);
+    this.selectedChapterId = getChapter(menuState.selectedChapterId) ? menuState.selectedChapterId : DEFAULT_CHAPTER_ID;
 
     this.buildBackground();
     this.buildTitle();
     this.buildContinueButton();
-    this.buildTestMissionButton();
-    this.buildDivider();
+    this.buildChapterTabs();
     this.buildLevelGrid();
     this.buildTopIcons();
     this.buildVersion();
@@ -298,20 +316,20 @@ export class MainMenuScene extends Component {
   // ================================================================
   private buildContinueButton() {
     const btn = this.makeRectButton(
-      this.node, 0, 130, 480, 72, BTN_CONTINUE,
+      this.node, 0, 126, 420, 58, BTN_CONTINUE,
       () => this.onClickContinue(),
     );
     this.continueBtn = btn;
 
     // 两行文字：主（"继续游戏"）+ 副（"回合 5 · 攻击阶段 · 诺曼底"）
     this.continueTitleLabel = this.makeLabel(btn.node, t('menu.continue'),
-      0, 14, 460, 32, 28, TEXT_PRIMARY);
+      0, 10, 400, 28, 24, TEXT_PRIMARY);
     this.continueTitleLabel.enableOutline = true;
     this.continueTitleLabel.outlineColor = TEXT_OUTLINE;
     this.continueTitleLabel.outlineWidth = 2;
 
     this.continueSubLabel = this.makeLabel(btn.node, '',
-      0, -16, 460, 22, 16, TEXT_PRIMARY);
+      0, -13, 400, 20, 15, TEXT_PRIMARY);
   }
 
   private refreshContinueButton() {
@@ -364,70 +382,134 @@ export class MainMenuScene extends Component {
     this.loadBattleScene();
   }
 
-  private buildTestMissionButton() {
-    const btn = this.makeRectButton(
-      this.node, 406, 130, 148, 72, BTN_LEVEL_UNLOCKED,
-      () => this.onClickTestMission(),
-    );
-    btn.node.name = 'TestMissionBtn';
+  private buildChapterTabs() {
+    this.chapterBtns = [];
+    const chapters = CHAPTERS.slice().sort((a, b) => a.order - b.order);
+    const totalW = chapters.length * CHAPTER_BTN_W + Math.max(0, chapters.length - 1) * CHAPTER_BTN_GAP;
+    const contentW = Math.max(CHAPTER_VIEW_W, totalW);
 
-    const label = this.makeLabel(btn.node, getLang() === 'en' ? 'Test Mission' : '测试关卡',
-      0, 6, 130, 30, 22, TEXT_PRIMARY);
-    label.enableOutline = true;
-    label.outlineColor = TEXT_OUTLINE;
-    label.outlineWidth = 2;
+    const viewport = new Node('ChapterTabsViewport');
+    viewport.layer = this.node.layer;
+    viewport.addComponent(UITransform).setContentSize(CHAPTER_VIEW_W, CHAPTER_VIEW_H);
+    viewport.setPosition(0, 54, 0);
+    viewport.addComponent(Mask);
+    this.node.addChild(viewport);
 
-    const sub = this.makeLabel(btn.node, 'MISSION TEST',
-      0, -20, 130, 20, 12, TEXT_SUBTITLE);
-    sub.enableOutline = true;
-    sub.outlineColor = TEXT_OUTLINE;
-    sub.outlineWidth = 1;
+    const sv = viewport.addComponent(ScrollView);
+    sv.horizontal = true;
+    sv.vertical = false;
+    sv.inertia = true;
+    sv.brake = 0.55;
+    sv.cancelInnerEvents = false;
+
+    const content = new Node('ChapterTabsContent');
+    content.layer = this.node.layer;
+    const cut = content.addComponent(UITransform);
+    cut.setAnchorPoint(0.5, 0.5);
+    cut.setContentSize(contentW, CHAPTER_VIEW_H);
+    content.setPosition(0, 0, 0);
+    viewport.addChild(content);
+    sv.content = content;
+
+    const startX = -totalW / 2 + CHAPTER_BTN_W / 2;
+    for (let i = 0; i < chapters.length; i++) {
+      const chapter = chapters[i]!;
+      const x = startX + i * (CHAPTER_BTN_W + CHAPTER_BTN_GAP);
+      const btn = this.makeRectButton(
+        content, x, 0, CHAPTER_BTN_W, CHAPTER_BTN_H,
+        CHAPTER_BTN_IDLE, () => this.onClickChapter(chapter.id),
+      );
+      btn.node.name = `ChapterBtn_${chapter.id}`;
+      const label = this.makeLabel(btn.node, t(chapter.titleKey), 0, 0, CHAPTER_BTN_W - 18, 28, 20, TEXT_PRIMARY);
+      label.enableOutline = true;
+      label.outlineColor = TEXT_OUTLINE;
+      label.outlineWidth = 2;
+      btn.label = label;
+      this.chapterBtns.push(btn);
+    }
+    this.chapterSubtitleLabel = this.makeLabel(this.node, '', 0, 14, 700, 24, 17, TEXT_SUBTITLE);
+    this.refreshChapterTabs();
   }
 
-  private onClickTestMission() {
-    GameSession.selectMission(TEST_MISSION_LEVEL_ID, TEST_MISSION_PATH);
-    this.loadBattleScene();
+  private refreshChapterTabs() {
+    const chapters = CHAPTERS.slice().sort((a, b) => a.order - b.order);
+    for (let i = 0; i < this.chapterBtns.length; i++) {
+      const chapter = chapters[i];
+      const btn = this.chapterBtns[i];
+      if (!chapter || !btn) continue;
+      const active = chapter.id === this.selectedChapterId;
+      btn.redraw(active ? CHAPTER_BTN_ACTIVE : CHAPTER_BTN_IDLE, { border: active });
+      if (btn.label) {
+        btn.label.string = t(chapter.titleKey);
+        btn.label.color = active ? TEXT_TITLE : TEXT_PRIMARY;
+      }
+    }
+    const current = getChapter(this.selectedChapterId) ?? getChapter(DEFAULT_CHAPTER_ID);
+    if (this.chapterSubtitleLabel && current) {
+      this.chapterSubtitleLabel.string = t(current.subtitleKey);
+    }
   }
 
-  // ================================================================
-  // "选 择 任 务" 分隔行：左右两条横线 + 中间文字
-  // ================================================================
-  private buildDivider() {
-    const n = new Node('MenuDivider');
-    n.layer = this.node.layer;
-    n.addComponent(UITransform).setContentSize(1000, 30);
-    n.setPosition(0, 60, 0);
-    const g = n.addComponent(Graphics);
-    g.strokeColor = MENU_DIVIDER;
-    g.lineWidth = 2;
-    // 左右两条
-    g.moveTo(-480, 0); g.lineTo(-120, 0); g.stroke();
-    g.moveTo( 120, 0); g.lineTo( 480, 0); g.stroke();
-    this.node.addChild(n);
-
-    this.makeLabel(this.node, t('menu.selectMission'),
-      0, 60, 240, 32, 22, TEXT_DIVIDER);
+  private onClickChapter(chapterId: string) {
+    if (chapterId === this.selectedChapterId) return;
+    this.selectedChapterId = getChapter(chapterId) ? chapterId : DEFAULT_CHAPTER_ID;
+    MenuProgress.setSelectedChapterId(this.selectedChapterId);
+    this.refreshChapterTabs();
+    this.buildLevelGrid();
+    this.refreshLevelButtons();
   }
 
   // ================================================================
   // 12 关卡栅格（6 × 2）
   // ================================================================
   private buildLevelGrid() {
-    for (let i = 0; i < LEVELS.length; i++) {
-      const meta = LEVELS[i];
+    if (this.levelGridRoot && this.levelGridRoot.isValid) this.levelGridRoot.destroy();
+    this.levelBtns = [];
+
+    const root = new Node('LevelGridRoot');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, 300);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    this.levelGridRoot = root;
+
+    const levels = getChapterLevels(this.selectedChapterId);
+    if (levels.length === 0) {
+      const panelW = 520;
+      const panelH = 126;
+      const panel = new Node('ChapterEmptyPanel');
+      panel.layer = this.node.layer;
+      panel.addComponent(UITransform).setContentSize(panelW, panelH);
+      panel.setPosition(0, -130, 0);
+      const pg = panel.addComponent(Graphics);
+      drawFieldPanel(pg, panelW, panelH, CHAPTER_EMPTY_BG, MENU_DIVIDER, TEXT_TITLE);
+      root.addChild(panel);
+      const title = this.makeLabel(panel, t('chapter.empty.title'), 0, 24, panelW - 48, 32, 24, TEXT_TITLE);
+      title.enableOutline = true;
+      title.outlineColor = TEXT_OUTLINE;
+      title.outlineWidth = 2;
+      const body = this.makeLabel(panel, t('chapter.empty.body'), 0, -20, panelW - 64, 42, 17, TEXT_SUBTITLE);
+      body.overflow = Label.Overflow.RESIZE_HEIGHT;
+      body.enableWrapText = true;
+      body.lineHeight = 22;
+      return;
+    }
+
+    for (let i = 0; i < levels.length; i++) {
+      const meta = levels[i];
       const col = i % 6;
       const row = Math.floor(i / 6);
       const x = LEVEL_GRID_START_X + col * (LEVEL_BTN_W + LEVEL_GRID_GAP_X);
       const y = LEVEL_GRID_START_Y - row * (LEVEL_BTN_H + LEVEL_GRID_GAP_Y);
 
       const btn = this.makeRectButton(
-        this.node, x, y, LEVEL_BTN_W, LEVEL_BTN_H,
+        root, x, y, LEVEL_BTN_W, LEVEL_BTN_H,
         BTN_LEVEL_LOCKED, () => this.onClickLevel(meta),
       );
       btn.node.name = `LevelBtn_${meta.id}`;
 
       // 左上角大编号
-      const idStr = String(meta.id).padStart(2, '0');
+      const idStr = meta.id > 0 ? String(meta.id).padStart(2, '0') : 'T';
       const idLabel = this.makeLabel(btn.node, idStr,
         -LEVEL_BTN_W / 2 + 32, LEVEL_BTN_H / 2 - 26, 60, 36, 30, TEXT_PRIMARY);
       idLabel.horizontalAlign = HorizontalTextAlignment.LEFT;
@@ -481,9 +563,11 @@ export class MainMenuScene extends Component {
 
   private refreshLevelButtons() {
     const state = MenuProgress.load();
+    const levels = getChapterLevels(this.selectedChapterId);
     for (let i = 0; i < this.levelBtns.length; i++) {
-      const meta = LEVELS[i];
+      const meta = levels[i];
       const btn = this.levelBtns[i];
+      if (!meta || !btn) continue;
       const unlocked = meta.id <= state.unlockedLevel;
       const completed = state.completedLevels.indexOf(meta.id) >= 0;
 

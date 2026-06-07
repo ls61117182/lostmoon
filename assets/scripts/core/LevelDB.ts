@@ -12,7 +12,11 @@
 
 import { LangCode } from './Lang';
 
+export type ChapterId = string;
+
 export interface LevelMeta {
+  /** Chapter this level belongs to. */
+  chapterId: ChapterId;
   /** 关卡编号 1..12；也是解锁顺序 */
   id: number;
   /** 任务 JSON 在 resources/ 下的相对路径（无扩展名） */
@@ -23,23 +27,75 @@ export interface LevelMeta {
   missionId: string;
 }
 
+export interface ChapterMeta {
+  /** Stable chapter id for progress and future chapter routing. */
+  id: ChapterId;
+  /** Display order in the main menu. */
+  order: number;
+  /** Chapter name key in lang.csv. */
+  titleKey: string;
+  /** Short status/description key in lang.csv. */
+  subtitleKey: string;
+  /** Levels currently implemented for this chapter. */
+  levels: LevelMeta[];
+}
+
+export const DEFAULT_CHAPTER_ID = 'europe';
+
 /**
  * 12 关卡配置。当前已实装到 mission_12（`assets/resources/missions/mission_12.json`）。
  */
-export const LEVELS: LevelMeta[] = [
-  { id: 1,  missionPath: 'missions/mission_01', titleKey: 'level.01.title', missionId: 'mission_01' },
-  { id: 2,  missionPath: 'missions/mission_02', titleKey: 'level.02.title', missionId: 'mission_02' },
-  { id: 3,  missionPath: 'missions/mission_03', titleKey: 'level.03.title', missionId: 'mission_03' },
-  { id: 4,  missionPath: 'missions/mission_04', titleKey: 'level.04.title', missionId: 'mission_04' },
-  { id: 5,  missionPath: 'missions/mission_05', titleKey: 'level.05.title', missionId: 'mission_05' },
-  { id: 6,  missionPath: 'missions/mission_06', titleKey: 'level.06.title', missionId: 'mission_06' },
-  { id: 7,  missionPath: 'missions/mission_07', titleKey: 'level.07.title', missionId: 'mission_07' },
-  { id: 8,  missionPath: 'missions/mission_08', titleKey: 'level.08.title', missionId: 'mission_08' },
-  { id: 9,  missionPath: 'missions/mission_09', titleKey: 'level.09.title', missionId: 'mission_09' },
-  { id: 10, missionPath: 'missions/mission_10', titleKey: 'level.10.title', missionId: 'mission_10' },
-  { id: 11, missionPath: 'missions/mission_11', titleKey: 'level.11.title', missionId: 'mission_11' },
-  { id: 12, missionPath: 'missions/mission_12', titleKey: 'level.12.title', missionId: 'mission_12' },
+export const CHAPTERS: ChapterMeta[] = [
+  {
+    id: DEFAULT_CHAPTER_ID,
+    order: 1,
+    titleKey: 'chapter.europe.title',
+    subtitleKey: 'chapter.europe.subtitle',
+    levels: [
+      { chapterId: DEFAULT_CHAPTER_ID, id: 1,  missionPath: 'missions/mission_01', titleKey: 'level.01.title', missionId: 'mission_01' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 2,  missionPath: 'missions/mission_02', titleKey: 'level.02.title', missionId: 'mission_02' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 3,  missionPath: 'missions/mission_03', titleKey: 'level.03.title', missionId: 'mission_03' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 4,  missionPath: 'missions/mission_04', titleKey: 'level.04.title', missionId: 'mission_04' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 5,  missionPath: 'missions/mission_05', titleKey: 'level.05.title', missionId: 'mission_05' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 6,  missionPath: 'missions/mission_06', titleKey: 'level.06.title', missionId: 'mission_06' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 7,  missionPath: 'missions/mission_07', titleKey: 'level.07.title', missionId: 'mission_07' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 8,  missionPath: 'missions/mission_08', titleKey: 'level.08.title', missionId: 'mission_08' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 9,  missionPath: 'missions/mission_09', titleKey: 'level.09.title', missionId: 'mission_09' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 10, missionPath: 'missions/mission_10', titleKey: 'level.10.title', missionId: 'mission_10' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 11, missionPath: 'missions/mission_11', titleKey: 'level.11.title', missionId: 'mission_11' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 12, missionPath: 'missions/mission_12', titleKey: 'level.12.title', missionId: 'mission_12' },
+    ],
+  },
+  {
+    id: 'pacific',
+    order: 2,
+    titleKey: 'chapter.pacific.title',
+    subtitleKey: 'chapter.pacific.subtitle',
+    levels: [],
+  },
+  {
+    id: 'test',
+    order: 99,
+    titleKey: 'chapter.test.title',
+    subtitleKey: 'chapter.test.subtitle',
+    levels: [
+      { chapterId: 'test', id: 0, missionPath: 'missions/mission_test', titleKey: 'level.test.title', missionId: 'mission_test' },
+    ],
+  },
 ];
+
+export const LEVELS: LevelMeta[] = CHAPTERS
+  .slice()
+  .sort((a, b) => a.order - b.order)
+  .flatMap(chapter => chapter.levels);
+
+export function getChapter(id: ChapterId): ChapterMeta | undefined {
+  return CHAPTERS.find(c => c.id === id);
+}
+
+export function getChapterLevels(id: ChapterId): LevelMeta[] {
+  return getChapter(id)?.levels ?? [];
+}
 
 export function findLevelByMissionId(missionId: string): LevelMeta | undefined {
   return LEVELS.find(l => l.missionId === missionId);
@@ -55,7 +111,7 @@ export const MENU_STATE_KEY = 'lone_sherman_menu_v1';
  * 正式发布前若要恢复「按通关顺序解锁」可把
  * 它改回 1（仅首关默认开放），既有玩家存档里 unlockedLevel 较大的值会照常保留。
  */
-const MIN_UNLOCKED_LEVEL = LEVELS.length;
+const MIN_UNLOCKED_LEVEL = Math.max(...LEVELS.map(l => l.id));
 
 export interface MenuState {
   /** 已解锁到第几关（1..12）。新档至少为 MIN_UNLOCKED_LEVEL。通关 n 后解锁 n+1 */
@@ -68,6 +124,8 @@ export interface MenuState {
   sfxVolume: number;
   /** 语言，默认 zh */
   lang: LangCode;
+  /** Main menu chapter selection. */
+  selectedChapterId: ChapterId;
 }
 
 const DEFAULT_STATE: MenuState = {
@@ -76,6 +134,7 @@ const DEFAULT_STATE: MenuState = {
   bgmVolume: 60,
   sfxVolume: 70,
   lang: 'zh',
+  selectedChapterId: DEFAULT_CHAPTER_ID,
 };
 
 function hasLS(): boolean {
@@ -105,6 +164,7 @@ function readState(): MenuState {
       bgmVolume: clamp(parsed.bgmVolume ?? legacyVol ?? DEFAULT_STATE.bgmVolume, 0, 100),
       sfxVolume: clamp(parsed.sfxVolume ?? legacyVol ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,
+      selectedChapterId: getChapter(parsed.selectedChapterId ?? '') ? parsed.selectedChapterId! : DEFAULT_CHAPTER_ID,
     };
   } catch (e) {
     console.warn('[LevelDB] 解析菜单存档失败，重置', e);
@@ -139,6 +199,7 @@ export const MenuProgress = {
       bgmVolume: clamp(state.bgmVolume ?? DEFAULT_STATE.bgmVolume, 0, 100),
       sfxVolume: clamp(state.sfxVolume ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (state.lang === 'en' || state.lang === 'zh') ? state.lang : DEFAULT_STATE.lang,
+      selectedChapterId: getChapter(state.selectedChapterId ?? '') ? state.selectedChapterId : DEFAULT_CHAPTER_ID,
     });
   },
 
@@ -175,6 +236,13 @@ export const MenuProgress = {
   setLang(lang: LangCode): void {
     const s = readState();
     s.lang = lang;
+    writeState(s);
+  },
+
+  setSelectedChapterId(chapterId: ChapterId): void {
+    if (!getChapter(chapterId)) return;
+    const s = readState();
+    s.selectedChapterId = chapterId;
     writeState(s);
   },
 
