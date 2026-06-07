@@ -70,15 +70,15 @@ status.row.turret,炮塔,Turret
 status.row.mobility,机动,Mobility
 status.row.fireLevel,着火程度,Fire level
 status.row.crewTitle,乘员,Crew
-status.crew.1,① 车长,① Commander
-status.crew.2,② 装填手,② Loader
-status.crew.3,③ 炮手,③ Gunner
-status.crew.4,④ 驾驶员,④ Driver
-status.crew.5,⑤ 副驾驶,⑤ Co-driver
+status.crew.1,① 车长,① COM
+status.crew.2,② 装填手,② LDR
+status.crew.3,③ 炮手,③ GUN
+status.crew.4,④ 驾驶员,④ DRV
+status.crew.5,⑤ 副驾驶,⑤ ASD
 status.val.loaded,已装填,Loaded
 status.val.unloaded,未装填,Unloaded
-status.val.hatchOpen,打开,Open
-status.val.hatchClosed,关闭,Closed
+status.val.hatchOpen,打开舱盖,PU
+status.val.hatchClosed,关闭舱盖,BU
 status.val.destroyed,已毁,Destroyed
 status.val.fireN,起火({n}),Fire({n})
 status.val.damaged,受损,Damaged

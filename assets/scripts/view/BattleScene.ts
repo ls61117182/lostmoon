@@ -1093,7 +1093,6 @@ export class BattleScene extends Component {
   // ---- 右侧谢尔曼状态面板 ----
   private statusPanel: Node | null = null;
   private statusLoaded: Label | null = null;   // 装填 / 未装填
-  private statusHatch: Label | null = null;    // 舱盖开闭
   private statusFire: Label | null = null;     // 着火层数 / "-"（车体旧文案已迁出）
   private statusTurret: Label | null = null;   // 完好 / 受损
   private statusMobility: Label | null = null; // 正常 / 痛痪
@@ -5044,7 +5043,7 @@ export class BattleScene extends Component {
     const W = 240;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
-    const H = 334;
+    const H = 312;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
     const x = CANVAS_W * 0.5 - W * 0.5 - 10;
@@ -5054,7 +5053,7 @@ export class BattleScene extends Component {
     const innerTop = H / 2 - 8;
     const shermanTitleY = innerTop - 14;
     const bodyFirstY = shermanTitleY - 24;
-    const bodyRowY = [0, 1, 2, 3, 4].map(j => bodyFirstY - j * BODY_GAP);
+    const bodyRowY = [0, 1, 2, 3].map(j => bodyFirstY - j * BODY_GAP);
     const sepY = bodyRowY[bodyRowY.length - 1] - 20;
     const crewTitleY = sepY - 18;
     const crewFirstY = crewTitleY - 26;
@@ -5090,18 +5089,17 @@ export class BattleScene extends Component {
     this.statusCrewLabels = [];
     for (let i = 0; i < crewNames.length; i++) {
       const rowY = crewFirstY - i * CREW_GAP;
-      const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 132, 22, 18, STATUS_LABEL_COLOR);
+      const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 116, 22, 18, STATUS_LABEL_COLOR);
       this.statusCrewLeftLabels.push(crewLeft);
-      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 68, 22, 18, STATUS_VALUE_OK);
+      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 88, 22, 18, STATUS_VALUE_OK);
       this.statusCrewLabels.push(val);
     }
 
-    // 2) 谢尔曼状态：装填 → 舱盖 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
+    // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
     this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
       0, shermanTitleY, W - 20, 28, 22, STATUS_TITLE_COLOR);
-    const bodyRows: Array<[string, 'loaded' | 'hatch' | 'turret' | 'mobility' | 'fire']> = [
+    const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'fire']> = [
       [t('status.row.loaded'),    'loaded'],
-      [t('status.row.hatch'),     'hatch'],
       [t('status.row.turret'),    'turret'],
       [t('status.row.mobility'),  'mobility'],
       [t('status.row.fireLevel'), 'fire'],
@@ -5113,7 +5111,6 @@ export class BattleScene extends Component {
       const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22, 18, STATUS_VALUE_DOWN);
       switch (key) {
         case 'loaded':   this.statusLoaded = val; break;
-        case 'hatch':    this.statusHatch = val; break;
         case 'fire':     this.statusFire = val; break;
         case 'turret':   this.statusTurret = val; break;
         case 'mobility': this.statusMobility = val; break;
@@ -5191,23 +5188,6 @@ export class BattleScene extends Component {
       }
     }
 
-    // 舱盖：独立于乘员行显示，避免英文版 "Commander" 与 "Hatch closed" 挤在同一行。
-    if (this.statusHatch) {
-      if (s.destroyed) {
-        this.statusHatch.string = '—';
-        this.statusHatch.color = STATUS_VALUE_DOWN;
-      } else if (!s.crew?.commander) {
-        this.statusHatch.string = t('status.val.crewDead');
-        this.statusHatch.color = STATUS_VALUE_DEAD;
-      } else if (s.hatchOpen) {
-        this.statusHatch.string = t('status.val.hatchOpen');
-        this.statusHatch.color = STATUS_VALUE_WARN;
-      } else {
-        this.statusHatch.string = t('status.val.hatchClosed');
-        this.statusHatch.color = STATUS_VALUE_DOWN;
-      }
-    }
-
     // 着火程度：仅当前层数；未着火「-」；已毁该行无意义
     if (this.statusFire) {
       if (s.destroyed) {
@@ -5250,7 +5230,7 @@ export class BattleScene extends Component {
       }
     }
 
-    // 乘员：只显示存活 / 阵亡；舱盖状态已提升到上方独立行。
+    // 乘员：车长行显示舱盖三态，其余乘员显示存活 / 阵亡。
     const crew = s.crew;
     const crewFlags: boolean[] = crew
       ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
@@ -5261,6 +5241,9 @@ export class BattleScene extends Component {
       if (s.destroyed) {
         lab.string = t('status.val.crewDead');
         lab.color = STATUS_VALUE_DEAD;
+      } else if (i === 0 && crewFlags[i]) {
+        lab.string = s.hatchOpen ? t('status.val.hatchOpen') : t('status.val.hatchClosed');
+        lab.color = s.hatchOpen ? STATUS_VALUE_WARN : STATUS_VALUE_DOWN;
       } else if (!crewFlags[i]) {
         lab.string = t('status.val.crewDead');
         lab.color = STATUS_VALUE_DEAD;
@@ -9073,7 +9056,6 @@ export class BattleScene extends Component {
     if (this.statusPanelTitleLabel) this.statusPanelTitleLabel.string = t('status.panelTitle');
     const bodyKeys = [
       'status.row.loaded',
-      'status.row.hatch',
       'status.row.turret',
       'status.row.mobility',
       'status.row.fireLevel',
