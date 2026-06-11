@@ -11,13 +11,13 @@
  *            其他坦克： 1–4=受损（已受损→摧毁） / 5,6=摧毁
  *          → 对应效果写回 target 的 destroyed/damaged/fireLevel/turretDamaged/paralyzed
  *   - "阵亡检定"（d6=2，主角）会再掷 1d6 决定乘员
- *   - 不处理对子（doubles）特殊事件
+ *   - 命中成功且命中判定对子会处理开舱主角车长阵亡风险
  *   - 不校验乘员存活（假设炮手总是可用）
  */
 
 import { RNG } from './Dice';
-import { HexMap, approximateDirection, directionTo, hexDistance, rotateDirection } from './HexGrid';
-import { Axial, CrewSlot, isFootUnit, ShermanCrew, Unit } from './types';
+import { HexMap, approximateDirection, directionTo, hexDistance, hexLine, rotateDirection } from './HexGrid';
+import { Axial, CrewSlot, isFootUnit, ShermanCrew, Theater, Unit, UnitKind } from './types';
 
 export type ArmorFace = 'front' | 'frontSide' | 'rearSide' | 'rear';
 
@@ -57,6 +57,8 @@ export interface CrewDeathResult {
 
 export interface AttackReport {
   dice: [number, number];
+  hitDiceCount?: number;
+  hitBonus?: number;
   roll: number;
   threshold: number;
   hit: boolean;
@@ -65,7 +67,8 @@ export interface AttackReport {
   armor?: number;
   penetration?: number;
   /** 穿甲检定分段：仅在 hit=true 时有值 */
-  penDie?: number;          // 1d6 击穿掷骰
+  penDie?: number;          // 击穿掷骰总和（Europe=1d6；Pacific=2d6）
+  penDice?: number[];       // 击穿掷骰明细（Europe 1 颗；Pacific 2 颗）
   penThreshold?: number;    // 击穿所需 = armor - penetration（≤0 必穿，≥7 不可击穿）
   penetrated?: boolean;     // 是否击穿装甲；未击穿 = 命中无效
   /** 伤害检定分段：仅在 hit && penetrated 时有值 */
@@ -73,6 +76,8 @@ export interface AttackReport {
   damageEffect?: DamageEffect;
   /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（只会在主角受伤表中发生） */
   crewCheck?: CrewDeathResult;
+  /** Enemy hit-roll doubles kill an open-hatch protagonist commander on a successful hit. */
+  commanderKilledByHitDoubles?: boolean;
   /** 本次伤害是否按主角受伤表结算；用于 applyAttack 区分同型号队友。 */
   protagonistTarget?: boolean;
   statusChange: HitStatusChange;
@@ -82,8 +87,31 @@ export interface AttackContext {
   attacker: Unit;
   target: Unit;
   map: HexMap;
+  theater?: Theater;
   /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
   protagonist?: Unit;
+}
+
+const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set([
+  'type95',
+  'type97',
+  'at_gun',
+  'japanese_infantry',
+  'heavy_artillery',
+]);
+
+function isPacificCombat(ctx: AttackContext): boolean {
+  return ctx.theater === 'pacific'
+    || PACIFIC_UNIT_KINDS.has(ctx.attacker.kind)
+    || PACIFIC_UNIT_KINDS.has(ctx.target.kind);
+}
+
+function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: number): boolean {
+  return ctx.attacker.faction !== ctx.target.faction
+    && isProtagonistTarget(ctx)
+    && d1 === d2
+    && !!ctx.target.hatchOpen
+    && !!ctx.target.crew?.commander;
 }
 
 /**
@@ -95,19 +123,31 @@ export type AttackDenyReason =
   | 'attack.reason.destroyedTarget'
   | 'attack.reason.overlap'
   | 'attack.reason.notStraight'
+  | 'attack.reason.fixedGunFacing'
   | 'attack.reason.blocked'
   | 'attack.reason.turretDamaged';
+
+function isForwardOnlyGun(unit: Unit): boolean {
+  return unit.kind === 'at_gun' || unit.kind === 'heavy_artillery';
+}
 
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
+  if (target.kind === 'japanese_infantry' && map.get(target.pos)?.terrain === 'rocky') {
+    return { ok: false, reason: 'attack.reason.blocked' };
+  }
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
   // 射角限制：只能朝 6 条轴向直线射击。directionTo 只在 from→to 落在某条六向射线上才返回
   // 方向编号，否则返回 null——非 null 即表示"同线"。
-  if (directionTo(attacker.pos, target.pos) === null) return { ok: false, reason: 'attack.reason.notStraight' };
+  const fireDir = directionTo(attacker.pos, target.pos);
+  if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
+  if (isForwardOnlyGun(attacker) && attacker.facing !== fireDir) {
+    return { ok: false, reason: 'attack.reason.fixedGunFacing' };
+  }
   if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
@@ -132,6 +172,8 @@ export interface HitBreakdown {
   smoke: number;        // 0 或 1 —— 目标处于烟雾掩护中（§3.5）
   concealed: number;    // 0 或 2 —— 目标隐蔽（§3.5）
   threshold: number;    // = size + distance + hedges + building + smoke + concealed
+  trees?: number;
+  rearArc?: number;
 }
 
 export function hitBreakdown(ctx: AttackContext): HitBreakdown {
@@ -141,13 +183,41 @@ export function hitBreakdown(ctx: AttackContext): HitBreakdown {
   const targetTile = map.get(target.pos);
   const building = targetTile?.hasBuilding ? 1 : 0;
   const size = target.stats.size;
-  // §3.5 状态系统：烟雾掩护 +1；隐蔽 +2。两者都作用在目标身上（被打者的难命中度）。
   const smoke = target.smoked ? 1 : 0;
-  const concealed = target.hidden ? 2 : 0;
+  const concealed = target.hidden && !isInfantryAttacker(attacker) ? 2 : 0;
+  const pacific = isPacificCombat(ctx);
+  const trees = pacific ? countPacificTreesAlong(ctx) : 0;
+  const rearArc = pacific && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
   return {
-    size, distance, hedges, building, smoke, concealed,
-    threshold: size + distance + hedges + building + smoke + concealed,
+    size, distance, hedges, building, smoke, concealed, trees, rearArc,
+    threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc,
   };
+}
+
+function countPacificTreesAlong(ctx: AttackContext): number {
+  const path = hexLine(ctx.attacker.pos, ctx.target.pos);
+  let n = 0;
+  for (let i = 1; i < path.length; i++) {
+    if (ctx.map.get(path[i])?.terrain === 'trees') n++;
+  }
+  return n;
+}
+
+function isTargetInRearArc(attacker: Unit, target: Unit): boolean {
+  if (attacker.facing === null) return false;
+  const bearing = directionTo(attacker.pos, target.pos) ?? approximateDirection(attacker.pos, target.pos);
+  const diff = rotateDirection(bearing, -attacker.facing);
+  return diff === 2 || diff === 3 || diff === 4;
+}
+
+function isTargetInFrontArc(attacker: Unit, target: Unit): boolean {
+  if (attacker.facing === null) return false;
+  const bearing = directionTo(attacker.pos, target.pos) ?? approximateDirection(attacker.pos, target.pos);
+  return bearing === attacker.facing;
+}
+
+function isInfantryAttacker(attacker: Unit): boolean {
+  return isFootUnit(attacker) || attacker.kind === 'japanese_infantry';
 }
 
 /** 2d6 ≥ N 的概率（N 在 [0..14] 内取值；越界自动夹到 1 或 0）。 */
@@ -209,24 +279,26 @@ export function armorValue(target: Unit, face: ArmorFace): number {
  */
 export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const { attacker, target } = ctx;
+  const pacific = isPacificCombat(ctx);
   const protagonistTarget = isProtagonistTarget(ctx);
   const d1 = rng.d6();
   const d2 = rng.d6();
   const roll = d1 + d2;
   const threshold = hitThreshold(ctx);
   const hit = roll >= threshold;
+  const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
   if (!hit) {
-    return { dice: [d1, d2], roll, threshold, hit: false, statusChange: 'none' };
+    return { dice: [d1, d2], roll, threshold, hit: false, commanderKilledByHitDoubles: false, statusChange: 'none' };
   }
 
   const face = armorFaceFrom(target, attacker.pos);
   const armor = armorValue(target, face);
   const pen = attacker.stats.penetration;
 
-  // 第二段：穿甲检定。手册规则：d6 ≥ 装甲 - 穿甲 才造成伤害。
-  // 阈值可能 ≤0（必穿）或 ≥7（不可能击穿，但仍掷骰让玩家看到结果）。
-  const penDie = rng.d6();
+  // 第二段：穿甲检定。Europe 使用 1d6；Pacific 章节覆盖为 2d6。
+  const penDice = pacific ? [rng.d6(), rng.d6()] : [rng.d6()];
+  const penDie = penDice.reduce((a, b) => a + b, 0);
   const penThreshold = armor - pen;
   const penetrated = penDie >= penThreshold;
 
@@ -235,32 +307,63 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       dice: [d1, d2], roll, threshold,
       hit: true,
       armorFace: face, armor, penetration: pen,
-      penDie, penThreshold, penetrated,
+      penDie, penDice, penThreshold, penetrated,
+      commanderKilledByHitDoubles,
       statusChange: 'none',
     };
   }
 
-  // 第三段：伤害检定（§3.4 Step 3）
+  if (pacific && !protagonistTarget) {
+    return {
+      dice: [d1, d2], roll, threshold,
+      hit: true,
+      armorFace: face, armor, penetration: pen,
+      penDie, penDice, penThreshold, penetrated,
+      damageEffect: 'destroyed',
+      commanderKilledByHitDoubles,
+      protagonistTarget,
+      statusChange: 'destroyed',
+    };
+  }
+
+  // 第三段：伤害检定（§3.4 Step 3；Pacific 主角使用 M4 Damage 表）
   const damageDie = rng.d6();
-  const damageEffect = resolveDamageEffect(target, damageDie, protagonistTarget);
+  const damageEffect = pacific && protagonistTarget
+    ? resolvePacificShermanDamageEffect(damageDie)
+    : resolveDamageEffect(target, damageDie, protagonistTarget);
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
   // 阵亡检定：只对主角（crewCheck）再掷一次，决定哪位乘员死
   let crewCheck: CrewDeathResult | undefined;
   if (damageEffect === 'crewCheck') {
-    crewCheck = resolveCrewCheck(target, rng);
+    const crewTarget = commanderKilledByHitDoubles && target.crew
+      ? { ...target, hatchOpen: false, crew: { ...target.crew, commander: false } }
+      : target;
+    crewCheck = resolveCrewCheck(crewTarget, rng);
   }
 
   return {
     dice: [d1, d2], roll, threshold,
     hit: true,
     armorFace: face, armor, penetration: pen,
-    penDie, penThreshold, penetrated,
+    penDie, penDice, penThreshold, penetrated,
     damageDie, damageEffect,
     crewCheck,
+    commanderKilledByHitDoubles,
     protagonistTarget,
     statusChange,
   };
+}
+
+export function resolvePacificShermanDamageEffect(die: number): DamageEffect {
+  switch (die) {
+    case 1: return 'crewCheck';
+    case 2:
+    case 3:
+    case 4: return 'fire';
+    case 5: return 'turret';
+    default: return 'paralyzed';
+  }
 }
 
 /**
@@ -353,6 +456,10 @@ export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
  * 着火用 fireLevel，炮塔 / 瘫痪 / 乘员等有独立字段。
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
+  if (report.hit && report.commanderKilledByHitDoubles && target.crew?.commander) {
+    target.crew.commander = false;
+    target.hatchOpen = false;
+  }
   if (!report.hit) return;
   if (!report.penetrated) return;
   const effect = report.damageEffect;
@@ -408,7 +515,7 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 // §3.6 行动表 B 列 3/4 + C 列 2："机枪射击：相邻步兵 7+ 命中"。
 // 乘员门控在 BattleScene.selectMGDie：B 列机枪不因乘员阵亡禁用；C 列副驾驶机枪需副驾驶存活。
 // 相对主炮攻击的差异：
-//   - 目标仅限「徒步类」单位（步兵 / 军官，`isFootUnit` 判定）且必须与攻击方相邻（hexDistance===1）
+//   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵）且必须与攻击方相邻（hexDistance===1）
 //   - 单段 2d6 检定：点数之和 ≥ 7 = 命中；命中即直接击毙（徒步单位无装甲）
 //   - 不吃树篱 / 建筑 / 烟雾 / 隐蔽修正（相邻近距离扫射）
 //   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
@@ -422,19 +529,34 @@ export type MGDenyReason =
   | 'attack.reason.selfFire'
   | 'attack.reason.destroyedTarget'
   | 'attack.reason.mgRange'
+  | 'attack.reason.notStraight'
+  | 'attack.reason.blocked'
   | 'attack.reason.notInfantry';
 
+function isMGInfantryTarget(target: Unit): boolean {
+  return isFootUnit(target) || target.kind === 'japanese_infantry';
+}
+
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
-  const { attacker, target } = ctx;
+  const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
-  if (!isFootUnit(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
+  if (!isMGInfantryTarget(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
+  if (isPacificCombat(ctx)) {
+    if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
+    const fireDir = directionTo(attacker.pos, target.pos);
+    if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
+    if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
+    return { ok: true };
+  }
   if (hexDistance(attacker.pos, target.pos) !== 1) return { ok: false, reason: 'attack.reason.mgRange' };
   return { ok: true };
 }
 
 export interface MGReport {
   dice: [number, number];
+  hitDiceCount: number;
+  hitBonus: number;
   roll: number;
   threshold: number;
   hit: boolean;
@@ -442,9 +564,21 @@ export interface MGReport {
 
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
   const d1 = rng.d6();
+  if (isPacificCombat(ctx)) {
+    const hitBonus = isTargetInFrontArc(ctx.attacker, ctx.target) ? 1 : 0;
+    const roll = d1 + hitBonus;
+    const threshold = hitThreshold(ctx);
+    return { dice: [d1, 0], hitDiceCount: 1, hitBonus, roll, threshold, hit: roll >= threshold };
+  }
   const d2 = rng.d6();
   const roll = d1 + d2;
-  return { dice: [d1, d2], roll, threshold: MG_HIT_THRESHOLD, hit: roll >= MG_HIT_THRESHOLD };
+  return { dice: [d1, d2], hitDiceCount: 2, hitBonus: 0, roll, threshold: MG_HIT_THRESHOLD, hit: roll >= MG_HIT_THRESHOLD };
+}
+
+export function maxMGHitRoll(ctx: AttackContext): number {
+  return isPacificCombat(ctx)
+    ? 6 + (isTargetInFrontArc(ctx.attacker, ctx.target) ? 1 : 0)
+    : 12;
 }
 
 /** 写入机枪攻击结果：命中 = 目标直接击毙。 */
@@ -481,7 +615,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const armor = armorValue(ctx.target, face);
   const pen = ctx.attacker.stats.penetration;
   const penThreshold = armor - pen;
-  const penProb = probDie1d6(penThreshold);
+  const penProb = isPacificCombat(ctx) ? probHit2d6(penThreshold) : probDie1d6(penThreshold);
 
   return {
     hit: { ...hb, probability: hitProb },

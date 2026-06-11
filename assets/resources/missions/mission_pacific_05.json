@@ -1,0 +1,90 @@
+{
+  "id": "mission_pacific_05",
+  "name": "Saipan - North towards Garapan",
+  "description": "Pacific Scenario B5. Move off the map along the red arrow. The Heavy Artillery starts on the fixed hexagonal building hex. Place 2 AT Guns and 1 Type 97 randomly on different red numbered start hexes. Place 1 Japanese Infantry randomly on a blue numbered start hex. The Sherman starts on the black outlined hex.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "c", "bd": 1, "eid": 6, "ef": 2 },
+      { "t": "c", "eid": 5, "ef": 2 },
+      { "t": "c", "eid": 4, "ef": 2 },
+      { "t": "c", "bd": 1, "eid": 2, "ef": 3 },
+      { "t": "c", "bd": 1, "eid": 1, "ef": 2 },
+      null
+    ],
+    [
+      null,
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T", "eid": 3, "ef": 2 },
+      { "t": "c" },
+      { "t": "c", "bd": 1 }
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "T", "rid": 6, "rf": 2 },
+      { "t": "T" },
+      { "t": "H", "rid": 4, "rf": 2 },
+      { "t": "c" },
+      { "t": "H", "rid": 2, "rf": 2 },
+      { "t": "T" }
+    ],
+    [
+      { "t": "T" },
+      { "t": "H" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "T" }
+    ],
+    [
+      null,
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "H", "rid": 5, "rf": 2 },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "T", "rid": 1, "rf": 2 },
+      null
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "H", "rid": 3, "rf": 2 },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 0, "row": 3 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "heavy_artillery", "faction": "japanese", "at": { "col": 6, "row": 1 }, "facing": 3 },
+    { "kind": "at_gun", "faction": "japanese", "startEids": [2, 3, 4, 5, 6] },
+    { "kind": "at_gun", "faction": "japanese", "startEids": [2, 3, 4, 5, 6] },
+    { "kind": "type97", "faction": "japanese", "startEids": [2, 3, 4, 5, 6] },
+    { "kind": "japanese_infantry", "faction": "japanese", "startRids": [1, 3, 4, 5, 6] }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "evacAt": { "col":7 , "row": 2 },
+    "evacExitDir": 0
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_05"
+}

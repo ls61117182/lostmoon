@@ -1,8 +1,13 @@
-﻿unitKind,displayName,size,armorFront,armorFrontSide,armorRearSide,armorRear,penetration,notes
-sherman,谢尔曼 M4,4,6,5,4,4,1,玩家方坦克
-tiger,虎式,3,7,6,5,4,2,重型敌方坦克
-panzer4,四号坦克,4,6,5,4,4,1,中坚敌方坦克
-panzer3,三号坦克,5,5,4,3,3,0,次级敌方坦克
-truck,卡车,3,1,1,1,1,1,占位 - 后续按特殊规则结算
-infantry,步兵,0,0,0,0,0,1,占位 - 仅事件中作为攻击方
-officer,军官,0,0,0,0,0,1,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
+﻿unitKind,displayName,faction,size,armorFront,armorFrontSide,armorRearSide,armorRear,penetration,usCasualtyDice,moveSound,attackSound,notes
+sherman,谢尔曼 M4,allied,4,6,5,4,4,1,0,audio/tank_move,audio/cannon_fire,玩家方坦克；Pacific profile 由 UnitDB 覆盖为 4/11/10/9/8/AP2
+tiger,虎式,german,3,7,6,5,4,2,0,audio/tank_move,audio/cannon_fire,重型敌方坦克
+panzer4,四号坦克,german,4,6,5,4,4,1,0,audio/tank_move,audio/cannon_fire,中坚敌方坦克
+panzer3,三号坦克,german,5,5,4,3,3,0,0,audio/tank_move,audio/cannon_fire,次级敌方坦克
+truck,卡车,german,3,1,1,1,1,1,0,audio/tank_move,,占位 - 后续按特殊规则结算
+infantry,步兵,german,0,0,0,0,0,1,0,,,占位 - 仅事件中作为攻击方
+officer,军官,german,0,0,0,0,0,1,0,,,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
+type95,九五式轻战车,japanese,4,11,10,9,8,0,1,audio/tank_move,audio/cannon_fire,Pacific D11: Type 95 Ha-Go
+type97,九七式中战车,japanese,4,9,8,8,7,1,2,audio/tank_move,audio/cannon_fire,Pacific: Type 97 Chi-Ha
+at_gun,反坦克炮,japanese,5,8,8,7,6,2,1,,audio/cannon_fire,Pacific: AT Gun
+japanese_infantry,日本步兵,japanese,2,0,0,0,0,3,1,,,Pacific: Japanese Infantry
+heavy_artillery,重炮,japanese,4,10,9,7,6,4,2,,audio/cannon_fire,Pacific: Heavy Artillery

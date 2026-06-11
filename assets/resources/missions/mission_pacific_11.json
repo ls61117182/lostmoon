@@ -1,0 +1,89 @@
+{
+  "id": "mission_pacific_11",
+  "name": "Peleliu - Japanese Tank Charge",
+  "description": "Pacific Scenario D11. Clear the map of all Japanese units at any point to win. Place 3 Type 95 Ha-Go and 3 Type 97 Chi-Ha randomly on the six red numbered hexes, facing the numbered edge. Rocky high ground blocks line of sight and tanks cannot enter it.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 1, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "T" },
+      { "t": "H" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 2, "ef": 3 }
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 3, "ef": 3 }
+    ],
+    [
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "H" },
+      { "t": "c" },
+      { "t": "T", "eid": 4, "ef": 3 }
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "T", "eid": 5, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 6, "ef": 3 },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 0, "row": 3 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "type95", "faction": "japanese" },
+    { "kind": "type95", "faction": "japanese" },
+    { "kind": "type95", "faction": "japanese" },
+    { "kind": "type97", "faction": "japanese" },
+    { "kind": "type97", "faction": "japanese" },
+    { "kind": "type97", "faction": "japanese" }
+  ],
+  "objective": {
+    "type": "destroy_all_enemies"
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_11"
+}

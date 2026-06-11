@@ -14,6 +14,7 @@ export type ObjHudTemplate =
   | { key: 'evacFromMark' }
   | { key: 'destroyAll'; cur: number; total: number }
   | { key: 'destroyTruck'; cur: number; total: number }
+  | { key: 'usCasualties'; cur: number; limit: number }
   | { key: 'exitEdge' }
   | { key: 'unknownType'; type: string };
 
@@ -53,6 +54,19 @@ function truckProgress(mission: LoadedMission): { cur: number; total: number } {
 /** 根据当前任务与进度生成 1..N 行目标；与 GDD 任务类型一一对应。 */
 export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
   const obj: MissionObjective = mission.data.objective;
+  const withUsCasualties = (lines: ObjHudLine[]): ObjHudLine[] => {
+    const limit = mission.data.usCasualtyLimit ?? 0;
+    if (limit <= 0) return lines;
+    const cur = mission.usCasualties ?? 0;
+    return [
+      ...lines,
+      {
+        displayIndex: lines.length + 1,
+        state: cur > limit ? 'locked' : 'active',
+        template: { key: 'usCasualties', cur, limit },
+      },
+    ];
+  };
 
   switch (obj.type) {
     case 'destroy_kind_evac': {
@@ -76,20 +90,20 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
           state: !allDestroy ? 'locked' : evacDone ? 'done' : 'active',
           template: { key: 'evacFromMark' },
         });
-        return lines;
+        return withUsCasualties(lines);
       }
       if (!obj.kind) {
-        return [
+        return withUsCasualties([
           {
             displayIndex: 1,
             state: evacDone ? 'done' : 'active',
             template: { key: 'evacFromMark' },
           },
-        ];
+        ]);
       }
       const { cur, total } = kindProgress(mission, obj.kind);
       const destroyDone = allEnemiesOfKindDestroyed(mission, obj.kind);
-      return [
+      return withUsCasualties([
         {
           displayIndex: 1,
           state: destroyDone ? 'done' : 'active',
@@ -100,48 +114,48 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
           state: !destroyDone ? 'locked' : evacDone ? 'done' : 'active',
           template: { key: 'evacFromMark' },
         },
-      ];
+      ]);
     }
     case 'destroy_kind': {
-      if (!obj.kind) return [];
+      if (!obj.kind) return withUsCasualties([]);
       const { cur, total } = kindProgress(mission, obj.kind);
       const done = allEnemiesOfKindDestroyed(mission, obj.kind);
-      return [{
+      return withUsCasualties([{
         displayIndex: 1,
         state: done ? 'done' : 'active',
         template: { key: 'destroyProgress', unitKind: obj.kind, cur, total },
-      }];
+      }]);
     }
     case 'destroy_all_enemies': {
       const { cur, total } = allEnemyProgress(mission);
       const done = total > 0 && mission.enemies.every(e => e.destroyed);
-      return [{
+      return withUsCasualties([{
         displayIndex: 1,
         state: done ? 'done' : 'active',
         template: { key: 'destroyAll', cur, total },
-      }];
+      }]);
     }
     case 'destroy_truck': {
       const { cur, total } = truckProgress(mission);
       const done = total > 0 && mission.enemies.filter(e => e.kind === 'truck').every(e => e.destroyed);
-      return [{
+      return withUsCasualties([{
         displayIndex: 1,
         state: done ? 'done' : 'active',
         template: { key: 'destroyTruck', cur, total },
-      }];
+      }]);
     }
     case 'exit_from_edge': {
-      return [{
+      return withUsCasualties([{
         displayIndex: 1,
         state: 'active',
         template: { key: 'exitEdge' },
-      }];
+      }]);
     }
     default:
-      return [{
+      return withUsCasualties([{
         displayIndex: 1,
         state: 'active',
         template: { key: 'unknownType', type: String((obj as MissionObjective).type) },
-      }];
+      }]);
   }
 }

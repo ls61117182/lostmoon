@@ -3,3 +3,8 @@ road,4,公路格掷 4 骰
 field,4,田地格掷 4 骰
 mud,3,泥地格掷 3 骰
 damaged,2,受损状态掷 2 骰（不论地形）
+type95,4,Type 95 Ha-Go 掷 4 骰
+type97,4,Type 97 Chi-Ha 掷 4 骰
+at_gun,2,AT Gun 掷 2 骰
+japanese_infantry,3,Japanese Infantry 掷 3 骰
+heavy_artillery,1,Heavy Artillery 掷 1 骰

@@ -36,7 +36,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isFootUnit, TerrainType, Unit } from './types';
+import { Axial, Direction, isFootUnit, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
 
 // ---------- 行动分类 ----------
 
@@ -57,6 +57,13 @@ export type { AIActionEntry, AIActionTable, AIColumn, EnemyAction };
  * 而非 `tile.terrain`，让水域+桥梁折算成 'road'，确保站在桥上的敌坦走公路 AI 列。
  */
 export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
+  switch (enemy.kind) {
+    case 'type95': return 'type95';
+    case 'type97': return 'type97';
+    case 'at_gun': return 'at_gun';
+    case 'japanese_infantry': return 'japanese_infantry';
+    case 'heavy_artillery': return 'heavy_artillery';
+  }
   if (enemy.damaged) return 'damaged';
   switch (terrain) {
     case 'road': return 'road';
@@ -170,7 +177,7 @@ export function decideEnemyTurn(
   const canEnterFront = (d: Direction) => {
     const p = neighbor(enemy.pos, d);
     // 桥梁边向（GDD §3.2）：通过 canTankCrossEdge 同时校验「水域+桥梁可入」与「方向落在桥端」。
-    if (!map.canTankCrossEdge(enemy.pos, p)) return false;
+    if (!map.canTankCrossEdge(enemy.pos, p, { ignoreBreakwater: enemy.faction === 'japanese' })) return false;
     if (occupied.has(`${p.q},${p.r}`)) return false;
     return true;
   };
@@ -248,13 +255,28 @@ export function canExecuteAction(
   occupied: Set<string>,
 ): boolean {
   if (enemy.destroyed) return false;
+  const currentTile = map.get(enemy.pos);
   switch (action) {
     case 'none':   return false;
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
     case 'turn':   return true;
-    case 'smoke':  return !enemy.smoked;
+    case 'smoke':  return !enemy.smoked && !tileForbidsSmokeOrConcealment(currentTile);
     case 'repair': return !!enemy.damaged;
-    case 'conceal': return !enemy.hidden;
+    case 'conceal': return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
+    case 'shoot_adjacent': return enemy.facing !== null && hexDistance(enemy.pos, sherman.pos) === 1;
+    case 'infantry_move':
+      return enemy.kind === 'japanese_infantry';
+    case 'advance_to_building': {
+      if (enemy.paralyzed) return false;
+      if (enemy.facing === null) return false;
+      const to = neighbor(enemy.pos, enemy.facing);
+      if (!map.canTankCrossEdge(enemy.pos, to, { ignoreBreakwater: enemy.faction === 'japanese' })) return false;
+      if (occupied.has(`${to.q},${to.r}`)) return false;
+      const tile = map.get(to);
+      return !!tile?.hasBuilding;
+    }
+    case 'hull_down':
+      return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
     case 'advance':
     case 'reverse': {
       if (enemy.paralyzed) return false;
@@ -264,7 +286,7 @@ export function canExecuteAction(
         : rotateDirection(enemy.facing, 3);
       const to = neighbor(enemy.pos, dir);
       // 桥梁边向（GDD §3.2）：水域+桥梁可入需 dir 落在 br 端；非桥梁场景 canTankCrossEdge 行为退化为 canTankEnter。
-      if (!map.canTankCrossEdge(enemy.pos, to)) return false;
+      if (!map.canTankCrossEdge(enemy.pos, to, { ignoreBreakwater: enemy.faction === 'japanese' })) return false;
       if (occupied.has(`${to.q},${to.r}`)) return false;
       // 终点格的移动成本不看上限（AI 回合没有"移动力"概念），只要能进就算可执行
       const tile = map.get(to);
@@ -302,7 +324,7 @@ export function decideEnemyMove(
   let bestCost = Infinity;
 
   for (const n of neighbors(enemy.pos)) {
-    if (!map.canTankCrossEdge(enemy.pos, n)) continue;
+    if (!map.canTankCrossEdge(enemy.pos, n, { ignoreBreakwater: enemy.faction === 'japanese' })) continue;
     if (occupied.has(`${n.q},${n.r}`)) continue;
     const tile = map.get(n);
     if (!tile) continue;

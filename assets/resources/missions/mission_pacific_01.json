@@ -1,0 +1,89 @@
+{
+  "id": "mission_pacific_01",
+  "name": "Tarawa, Red Beach 1 - Landing at the Bird\u0027s Beak",
+  "description": "Pacific Scenario A1. Destroy the Heavy Artillery, then move off the map along the red arrow. Place 1 Heavy Artillery and 2 AT Guns randomly on the six numbered red hexes, facing the numbered edge. The Sherman starts on the black outlined landing hex.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c", "rid": 3, "rf": 1 },
+      { "t": "c", "rid": 2, "rf": 1 },
+      { "t": "c", "bd": 1, "eid": 1, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 2, "ef": 3 },
+      { "t": "T", "rid": 1, "rf": 3 }
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 3, "ef": 3, "bw": "000110" },
+      { "t": "T" },
+      { "t": "c" }
+    ],
+    [
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "T", "eid": 6, "ef": 4, "bw": "011111" },
+      { "t": "c", "bd": 1, "eid": 5, "ef": 4, "bw": "001010" },
+      { "t": "T" },
+      { "t": "T", "rid": 4, "rf": 3 }
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 4, "ef": 3, "bw": "011100" },
+      { "t": "T" },
+      null
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c", "rid": 6, "rf": 4 },
+      { "t": "c" },
+      { "t": "c", "rid": 5, "rf": 5 },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 1, "row": 4 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "heavy_artillery", "faction": "japanese" },
+    { "kind": "at_gun", "faction": "japanese" },
+    { "kind": "at_gun", "faction": "japanese" }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kind": "heavy_artillery",
+    "evacAt": { "col": 7, "row": 2 },
+    "evacExitDir": 0
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_01"
+}

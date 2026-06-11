@@ -54,6 +54,14 @@ export function hedgeFlagsFromMapJson(s: string | undefined): Tile['hedges'] {
   ] as Tile['hedges'];
 }
 
+export function breakwaterFlagsFromMapJson(s: string | undefined): Tile['breakwaters'] {
+  if (!s || s.length !== 6) return undefined;
+  return [
+    s[0] === '1', s[1] === '1', s[2] === '1',
+    s[3] === '1', s[4] === '1', s[5] === '1',
+  ] as Tile['breakwaters'];
+}
+
 /**
  * 将关卡 JSON 的 `rd` 字串解析为六条边方向上的"公路绘制"标记（与 `Tile.roads` 一致）。
  *
@@ -268,9 +276,18 @@ export class HexMap {
   canTankEnter(p: Axial): boolean {
     const t = this.get(p);
     if (!t) return false;
-    if (t.terrain === 'forest') return false;
-    if (t.terrain === 'water') return tileHasBridge(t);
+    if (t.terrain === 'forest' || t.terrain === 'rocky') return false;
+    if (t.terrain === 'water' || t.terrain === 'deep_water') return tileHasBridge(t);
     return true;
+  }
+
+  hasBreakwaterBetween(from: Axial, to: Axial): boolean {
+    if (hexDistance(from, to) !== 1) return false;
+    const dirAB = directionTo(from, to);
+    if (dirAB !== null && this.get(from)?.breakwaters?.[dirAB]) return true;
+    const dirBA = directionTo(to, from);
+    if (dirBA !== null && this.get(to)?.breakwaters?.[dirBA]) return true;
+    return false;
   }
 
   /**
@@ -284,9 +301,10 @@ export class HexMap {
    *
    * 不在桥梁场景下，本函数行为退化为 `canTankEnter(to) && from-to 相邻`，与旧逻辑一致。
    */
-  canTankCrossEdge(from: Axial, to: Axial): boolean {
+  canTankCrossEdge(from: Axial, to: Axial, opts: { ignoreBreakwater?: boolean } = {}): boolean {
     if (hexDistance(from, to) !== 1) return false;
     if (!this.canTankEnter(to)) return false;
+    if (!opts.ignoreBreakwater && this.hasBreakwaterBetween(from, to)) return false;
     const tFrom = this.get(from);
     const tTo = this.get(to);
     if (tileHasBridge(tFrom)) {
@@ -308,7 +326,7 @@ export class HexMap {
    * 建筑在起止格不调用本方法故不挡视线（含：建筑格内的单位可作为视线起点向外射击）。
    */
   lineOfSightBlockedByTile(t: Tile): boolean {
-    if (t.terrain === 'forest') return true;
+    if (t.terrain === 'forest' || t.terrain === 'rocky') return true;
     if (t.hasBuilding) return true;
     return false;
   }

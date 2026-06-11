@@ -19,6 +19,8 @@ export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 export function checkOutcome(mission: LoadedMission): MissionOutcome {
   if (mission.sherman.destroyed) return 'defeat';
   if (mission.truckEscapeDefeat) return 'defeat';
+  const usLimit = mission.data.usCasualtyLimit ?? 0;
+  if (usLimit > 0 && (mission.usCasualties ?? 0) > usLimit) return 'defeat';
   if (isObjectiveMet(mission.data.objective, mission)) return 'victory';
   return 'ongoing';
 }

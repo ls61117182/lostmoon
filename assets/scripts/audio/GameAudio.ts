@@ -190,12 +190,13 @@ export function playDiceRoll(): void {
 }
 
 /** 开始播放坦克机动音（前进 / 后退 / 转向同一 clip）；动画进行中保持循环，结束请调 `stopTankManeuver`。 */
-export function startTankManeuver(): void {
+export function startManeuverSound(key?: string | null): void {
+  if (!key) return;
   ensureRoot();
   const s = MenuProgress.load();
   if (s.sfxVolume <= 0) return;
   const myId = ++maneuverPlayId;
-  getClip(AudioKeys.tankManeuver, (clip) => {
+  getClip(key, (clip) => {
     if (myId !== maneuverPlayId || !clip || !maneuverSource) return;
     refreshVolumes();
     maneuverSource.stop();
@@ -205,18 +206,31 @@ export function startTankManeuver(): void {
   });
 }
 
+export function startTankManeuver(): void {
+  startManeuverSound(AudioKeys.tankManeuver);
+}
+
 /** 当前段移动 / 转向动画结束时调用，立即停止机动音。 */
-export function stopTankManeuver(): void {
+export function stopManeuverSound(): void {
   maneuverPlayId++;
   if (maneuverSource) maneuverSource.stop();
+}
+
+export function stopTankManeuver(): void {
+  stopManeuverSound();
 }
 
 /** 主炮开火：在 SFX 基准上再拉高（大 cap 以免顶到 1 后无法再响） */
 const CANNON_FIRE_VOL_MUL = 6;
 const CANNON_FIRE_VOL_CAP = 4;
 
+export function playConfiguredAttackSound(key?: string | null): void {
+  if (!key) return;
+  playSfxKey(key, CANNON_FIRE_VOL_MUL, CANNON_FIRE_VOL_CAP);
+}
+
 export function playCannonFire(): void {
-  playSfxKey(AudioKeys.cannonFire, CANNON_FIRE_VOL_MUL, CANNON_FIRE_VOL_CAP);
+  playConfiguredAttackSound(AudioKeys.cannonFire);
 }
 
 export function playMgFire(): void {

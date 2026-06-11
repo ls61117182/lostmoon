@@ -1,0 +1,91 @@
+{
+  "id": "mission_pacific_10",
+  "name": "Peleliu - The Landing",
+  "description": "Pacific Scenario D10. Move off the map along the red arrow. Place 3 AT Guns and 1 Type 97 tank on 4 different red numbered hexes, facing the numbered edge. Place an Infantry unit on 2 different blue numbered hexes. The Sherman starts on the black outlined hex.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 1, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "T" },
+      { "t": "H" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 2, "ef": 3 }
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 3, "ef": 3 }
+    ],
+    [
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "H" },
+      { "t": "c" },
+      { "t": "T", "eid": 4, "ef": 3 }
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "T", "rid": 1, "rf": 3 },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "T", "eid": 5, "ef": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "c", "rid": 2, "rf": 3 },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 6, "ef": 3 },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 4, "row": 5 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "at_gun", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
+    { "kind": "at_gun", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
+    { "kind": "at_gun", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
+    { "kind": "type97", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
+    { "kind": "japanese_infantry", "faction": "japanese", "startRids": [1, 2] },
+    { "kind": "japanese_infantry", "faction": "japanese", "startRids": [1, 2] }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "evacAt": { "col": 4, "row": 0 },
+    "evacExitDir": 5
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_10"
+}

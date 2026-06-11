@@ -20,6 +20,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readCsvRowsSmart } = require('./csvSmart');
 
 const ROOT = path.resolve(__dirname, '..');
 const ACTION_CSV = path.join(ROOT, 'data', 'player_action_table.csv');
@@ -45,7 +46,7 @@ const MISC_VALUES = [
 const REQUIRED_ACTION_ROWS = ['1', '2', '3', '4', '5', '6', 'doubles'];
 
 /** 与 types.TerrainType 一致 */
-const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'water'];
+const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'water', 'deep_water', 'clear', 'trees', 'beach', 'rocky', 'airstrip'];
 const POOL_PHASES = [
   { csv: 'move', ts: 'movement' },
   { csv: 'attack', ts: 'attack' },
@@ -162,7 +163,10 @@ function enumOrThrow(raw, allowed, labelForError) {
 
 /** 解析行动表，返回 { '1': {move, attack, misc}, ..., 'doubles': {...} } */
 function parseActionTable() {
-  const recs = toRecords(parseCSV(readCsvSmart(ACTION_CSV)), ACTION_CSV);
+  const recs = toRecords(readCsvRowsSmart(ACTION_CSV, {
+    toolName: 'buildPlayerActionDB',
+    requiredHeaders: ['die', 'move', 'attack', 'misc'],
+  }), ACTION_CSV);
   const map = {};
   const seen = new Set();
   for (const r of recs) {
@@ -188,7 +192,10 @@ function parseActionTable() {
 
 /** 解析骰池表，返回 modifier → 整数的平面 map（键见 REQUIRED_POOL_KEYS） */
 function parsePoolTable() {
-  const recs = toRecords(parseCSV(readCsvSmart(POOL_CSV)), POOL_CSV);
+  const recs = toRecords(readCsvRowsSmart(POOL_CSV, {
+    toolName: 'buildPlayerActionDB',
+    requiredHeaders: ['modifier', 'value'],
+  }), POOL_CSV);
   const map = {};
   const seen = new Set();
   for (const r of recs) {

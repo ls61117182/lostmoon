@@ -1,0 +1,89 @@
+{
+  "id": "mission_pacific_07",
+  "name": "Tarawa, Red Beach 2 - The Landing",
+  "description": "Pacific Scenario C7. Move off the map along the red arrow. Place 1 Heavy Artillery on the fixed hexagonal building hex. Place AT Guns on the three red numbered hexes 4, 5, and 6. The Sherman starts on the black outlined hex. Sherman can only cross the sea wall using Misc action 5.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": false,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "dw" },
+      { "t": "dw" },
+      { "t": "c", "rid": 3, "rf": 1 },
+      { "t": "c", "rid": 2, "rf": 1 },
+      { "t": "c", "bd": 1 },
+      null
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1 },
+      { "t": "T", "rid": 1, "rf": 3 }
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1 },
+      { "t": "T" },
+      { "t": "c" }
+    ],
+    [
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "T" },
+      { "t": "c", "bd": 1 },
+      { "t": "T" },
+      { "t": "T", "rid": 4, "rf": 3 }
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1 },
+      { "t": "T" },
+      null
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c", "rid": 6, "rf": 4 },
+      { "t": "c" },
+      { "t": "c", "rid": 5, "rf": 5 },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 5, "row": 5 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "heavy_artillery", "faction": "japanese", "at": { "col": 6, "row": 0 }, "facing": 1 },
+    { "kind": "at_gun", "faction": "japanese", "at": { "col": 6, "row": 3 }, "facing": 3 },
+    { "kind": "at_gun", "faction": "japanese", "at": { "col": 5, "row": 4 }, "facing": 5 },
+    { "kind": "at_gun", "faction": "japanese", "at": { "col": 3, "row": 5 }, "facing": 4 }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "evacAt": { "col": 2, "row": 0 },
+    "evacExitDir": 3
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_07"
+}

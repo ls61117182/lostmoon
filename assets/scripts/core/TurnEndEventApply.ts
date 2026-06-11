@@ -9,6 +9,7 @@ import {
   canAttack,
   resolveCrewCheck,
   resolveDamageEffect,
+  resolvePacificShermanDamageEffect,
   rollAttack,
 } from './Combat';
 import { RNG } from './Dice';
@@ -116,7 +117,7 @@ function shermanLosToAnyInfantry(mission: LoadedMission): boolean {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
     // 「徒步类」单位（步兵 / 军官）都纳入狙击手视线检查 —— 任务 8 起军官与步兵共享 LOS 触发条件。
-    if (e.destroyed || !isFootUnit(e)) continue;
+    if (e.destroyed || (!isFootUnit(e) && e.kind !== 'japanese_infantry')) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return true;
   }
@@ -125,7 +126,7 @@ function shermanLosToAnyInfantry(mission: LoadedMission): boolean {
 
 function findTileByReinforceId(mission: LoadedMission, rid: number) {
   for (const t of mission.map.all()) {
-    if (t.reinforceId === rid) return t.pos;
+    if (t.reinforceId === rid) return t;
   }
   return null;
 }
@@ -149,7 +150,7 @@ function unitAt(mission: LoadedMission, pos: { q: number; r: number }): Unit | n
 }
 
 function isTankUnitKind(k: UnitKind): boolean {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck' || k === 'type95' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery';
 }
 
 function directionPriorityAround(dir: Direction): Direction[] {
@@ -196,22 +197,28 @@ function selectTankReinforceEntry(
 
 /** 某格上是否站着任何坦克（含谢尔曼 / 敌坦 / 另一辆 truck，不计已毁） */
 function prepareTankSpawnEvent(
-  kind: Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger'>,
-  keyStem: 'sherman' | 'panzer4' | 'panzer3' | 'tiger',
+  kind: Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type95' | 'type97'>,
+  keyStem: 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type95' | 'type97',
   mission: LoadedMission,
   rng: RNG,
   nextEnemyId: () => string,
   sh: Unit,
   baseParams: Record<string, string | number>,
+  spawnPoint: 'eid' | 'rid' = 'eid',
 ): TurnEndPrepared {
   const spawnDie = rng.d6();
-  const tile = findTileByEnemyStartId(mission, spawnDie);
+  const tile = spawnPoint === 'rid'
+    ? findTileByReinforceId(mission, spawnDie)
+    : findTileByEnemyStartId(mission, spawnDie);
   const pos = tile?.pos;
   const occ = pos ? unitAt(mission, pos) : null;
-  const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck'];
+  const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck', 'type95', 'type97', 'at_gun', 'heavy_artillery'];
   const blocked = !!occ && tankKinds.includes(occ.kind);
-  const placed = !!pos && !blocked;
-  const face = (tile?.enemyStartFacing ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
+  const invalidTerrain = kind === 'type97' && tile?.terrain === 'rocky';
+  const placed = !!pos && !blocked && !invalidTerrain;
+  const face = ((spawnPoint === 'rid'
+    ? tile?.reinforceFacing
+    : tile?.enemyStartFacing) ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
   const unitId = nextEnemyId();
   const entry = pos ? selectTankReinforceEntry(mission, pos, face) : null;
   return {
@@ -223,13 +230,14 @@ function prepareTankSpawnEvent(
       : undefined,
     apply: () => {
       if (!placed || !pos) return;
+      const stats = getUnitStats(kind, mission.data.theater ?? 'europe');
       mission.enemies.push({
         id: unitId,
         kind,
-        faction: 'german',
+        faction: stats.faction,
         pos: entry ? { ...entry.from } : { ...pos },
         facing: entry ? entry.facing : face,
-        stats: getUnitStats(kind),
+        stats,
       });
     },
   };
@@ -358,6 +366,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
         armor: 4,
         penetration: 1,
         penDie,
+        penDice: [penDie],
         penThreshold: penTh,
         penetrated: true,
         damageDie,
@@ -390,6 +399,7 @@ function simulateStukaReport(sh: Unit, rng: RNG): {
       armor: 4,
       penetration: 1,
       penDie,
+      penDice: [penDie],
       penThreshold: penTh,
       penetrated: true,
       damageDie,
@@ -466,23 +476,29 @@ export function prepareTurnEndEvent(
     }
     case 'infantry_spawn': {
       const spawnDie = rng.d6();
-      const pos = findTileByReinforceId(mission, spawnDie);
+      const tile = findTileByReinforceId(mission, spawnDie);
+      const pos = tile?.pos;
       const occ = pos ? unitAt(mission, pos) : null;
       const placed = !!pos && !occ;
+      const pacific = mission.data.theater === 'pacific';
       return {
-        bodyKey: placed ? 'turnEnd.infantry.placed' : 'turnEnd.infantry.blocked',
+        bodyKey: placed
+          ? (pacific ? 'turnEnd.japaneseInfantry.placed' : 'turnEnd.infantry.placed')
+          : (pacific ? 'turnEnd.japaneseInfantry.blocked' : 'turnEnd.infantry.blocked'),
         bodyParams: { ...baseParams, spawnDie, rid: spawnDie },
         extraDicePhases: [{ dice: [spawnDie], captionKey: 'turnEnd.extra.spawnReinforce' }],
         apply: () => {
           if (!placed || !pos) return;
-          const facing = approximateDirection(pos, sh.pos) as Direction;
+          const facing = (tile?.reinforceFacing ?? approximateDirection(pos, sh.pos)) as Direction;
+          const kind: UnitKind = mission.data.theater === 'pacific' ? 'japanese_infantry' : 'infantry';
+          const stats = getUnitStats(kind, mission.data.theater ?? 'europe');
           mission.enemies.push({
             id: nextEnemyId(),
-            kind: 'infantry',
-            faction: 'german',
+            kind,
+            faction: stats.faction,
             pos: { ...pos },
             facing,
-            stats: getUnitStats('infantry'),
+            stats,
           });
         },
       };
@@ -549,6 +565,12 @@ export function prepareTurnEndEvent(
     }
     case 'panzer3_spawn': {
       return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams);
+    }
+    case 'type97_spawn': {
+      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, 'rid');
+    }
+    case 'type95_spawn': {
+      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, 'rid');
     }
     case 'panzer4_spawn': {
       return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams);
@@ -686,7 +708,9 @@ export function prepareTurnEndEvent(
         };
       }
       const damageDie = rng.d6();
-      const damageEffect = resolveDamageEffect(sh, damageDie);
+      const damageEffect = mission.data.theater === 'pacific'
+        ? resolvePacificShermanDamageEffect(damageDie)
+        : resolveDamageEffect(sh, damageDie);
       const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
       const rep: AttackReport = {
         dice: [d1, d2],
@@ -709,6 +733,97 @@ export function prepareTurnEndEvent(
         bodyParams: { ...baseParams, penDie, damageDie },
         extraDicePhases: [
           { dice: [penDie], captionKey: 'turnEnd.extra.minePen' },
+          { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
+        ],
+        apply: () => applyAttack(sh, rep),
+      };
+    }
+    case 'clear_mine': {
+      const t = mission.map.get(sh.pos);
+      const onClear = t?.terrain === 'clear';
+      if (sh.destroyed || sh.paralyzed || !onClear) {
+        return {
+          bodyKey: 'turnEnd.clearMine.skip',
+          bodyParams: { ...baseParams, onClear: onClear ? 1 : 0, paralyzed: sh.paralyzed ? 1 : 0 },
+          apply: () => {},
+        };
+      }
+      const damageDie = rng.d6();
+      const damageEffect = resolvePacificShermanDamageEffect(damageDie);
+      const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
+      const rep: AttackReport = {
+        dice: [d1, d2],
+        roll: sum,
+        threshold: 0,
+        hit: true,
+        armorFace: 'rear',
+        armor: 0,
+        penetration: 0,
+        penDie: 0,
+        penDice: [0],
+        penThreshold: 0,
+        penetrated: true,
+        damageDie,
+        damageEffect,
+        crewCheck,
+        protagonistTarget: true,
+        statusChange: damageEffect === 'destroyed' ? 'destroyed' : 'damaged',
+      };
+      return {
+        bodyKey: 'turnEnd.clearMine.hit',
+        bodyParams: { ...baseParams, damageDie },
+        extraDicePhases: [{ dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' }],
+        apply: () => applyAttack(sh, rep),
+      };
+    }
+    case 'heavy_mortar': {
+      const spotter = mission.enemies.find(
+        e => !e.destroyed && e.kind === 'japanese_infantry' && hexDistance(e.pos, sh.pos) > 1,
+      );
+      if (sh.destroyed || !spotter) {
+        return {
+          bodyKey: 'turnEnd.heavyMortar.skip',
+          bodyParams: { ...baseParams, hasSpotter: spotter ? 1 : 0 },
+          apply: () => {},
+        };
+      }
+      const penDice: [number, number] = [rng.d6(), rng.d6()];
+      const penSum = penDice[0] + penDice[1];
+      const penThreshold = 8;
+      if (penSum < penThreshold) {
+        return {
+          bodyKey: 'turnEnd.heavyMortar.ric',
+          bodyParams: { ...baseParams, pen1: penDice[0], pen2: penDice[1], penSum, penThreshold },
+          extraDicePhases: [{ dice: penDice, captionKey: 'turnEnd.extra.mortarPen' }],
+          apply: () => {},
+        };
+      }
+      const damageDie = rng.d6();
+      const damageEffect = resolvePacificShermanDamageEffect(damageDie);
+      const crewCheck = damageEffect === 'crewCheck' ? resolveCrewCheck(sh, rng) : undefined;
+      const rep: AttackReport = {
+        dice: [d1, d2],
+        roll: sum,
+        threshold: 0,
+        hit: true,
+        armorFace: 'front',
+        armor: 8,
+        penetration: 0,
+        penDie: penSum,
+        penDice,
+        penThreshold,
+        penetrated: true,
+        damageDie,
+        damageEffect,
+        crewCheck,
+        protagonistTarget: true,
+        statusChange: damageEffect === 'destroyed' ? 'destroyed' : 'damaged',
+      };
+      return {
+        bodyKey: 'turnEnd.heavyMortar.hit',
+        bodyParams: { ...baseParams, pen1: penDice[0], pen2: penDice[1], penSum, penThreshold, damageDie },
+        extraDicePhases: [
+          { dice: penDice, captionKey: 'turnEnd.extra.mortarPen' },
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
         ],
         apply: () => applyAttack(sh, rep),

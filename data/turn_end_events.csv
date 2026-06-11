@@ -76,3 +76,74 @@ mission_12,7,8,2,none,任务12：7–8 本回合无事件
 mission_12,9,9,2,commander_extra,任务12：9 车长额外行动（装填/修复/灭火）
 mission_12,10,10,2,stuka,任务12：10 斯图卡（舱盖开→2d6≥6 击落；否则2d6≥8 命中；装甲4/穿甲1）
 mission_12,11,12,2,panzer3_spawn,任务12：11+ III号→黑格 eid（不重掷）
+mission_pacific_01,2,4,2,sniper,Pacific A1：2-4 狙击手
+mission_pacific_01,5,5,2,clear_mine,Pacific A1：Clear 地雷（未瘫痪自动命中，掷伤害）
+mission_pacific_01,6,7,2,type95_spawn,Pacific A1：Type 95 掷 1d6 放到红色编号格；无重掷
+mission_pacific_01,8,9,2,infantry_spawn,Pacific A1：日军步兵掷 1d6 放到红色编号格；无重掷
+mission_pacific_01,10,12,2,commander_extra,Pacific A1：车长未阵亡则装填/修复/灭火
+mission_pacific_02,2,3,2,clear_mine,Pacific A2：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_02,4,4,2,mechanical_failure,Pacific A2：4 Sherman 瘫痪（若尚未瘫痪）
+mission_pacific_02,5,6,2,sniper,Pacific A2：5-6 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_02,7,9,2,infantry_spawn,Pacific A2：7-9 日军步兵掷 1d6 放到编号格；无重掷
+mission_pacific_02,10,12,2,commander_extra,Pacific A2：10+ 车长未阵亡则装填/修复/灭火
+mission_pacific_03,2,3,2,clear_mine,Pacific A3：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_03,4,4,2,mechanical_failure,Pacific A3：4 Sherman 瘫痪（若尚未瘫痪）
+mission_pacific_03,5,6,2,sniper,Pacific A3：5-6 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_03,7,8,2,none,Pacific A3：7-8 无事件
+mission_pacific_03,9,9,2,infantry_spawn,Pacific A3：9 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_03,10,12,2,commander_extra,Pacific A3：10+ 车长额外行动（装填/修复/灭火）
+mission_pacific_04,2,3,2,none,Pacific B4：2-3 无事件（截图未显示，保留空档）
+mission_pacific_04,4,4,2,sniper,Pacific B4：狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_04,5,5,2,clear_mine,Pacific B4：Clear 地雷（未瘫痪自动命中，掷伤害）
+mission_pacific_04,6,6,2,type97_spawn,Pacific B4：Type 97 掷 1d6 放到红色编号格；无重掷
+mission_pacific_04,7,7,2,infantry_spawn,Pacific B4：日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_04,8,12,2,commander_extra,Pacific B4：车长未阵亡则装填/修复/灭火
+mission_pacific_05,2,3,2,clear_mine,Pacific B5：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_05,4,4,2,mechanical_failure,Pacific B5：4 Sherman 瘫痪（若尚未瘫痪）
+mission_pacific_05,5,6,2,sniper,Pacific B5：5-6 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_05,7,7,2,type97_spawn,Pacific B5：7 Type 97 掷 1d6 放到红色编号格；无重掷
+mission_pacific_05,8,8,2,infantry_spawn,Pacific B5：8 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_05,9,9,2,none,Pacific B5：9 无事件
+mission_pacific_05,10,12,2,commander_extra,Pacific B5：10+ 车长未阵亡则装填/修复/灭火
+mission_pacific_06,2,3,2,clear_mine,Pacific B6：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_06,4,4,2,mechanical_failure,Pacific B6：4 Sherman 瘫痪（若尚未瘫痪）
+mission_pacific_06,5,6,2,sniper,Pacific B6：5-6 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_06,7,8,2,none,Pacific B6：7-8 无事件
+mission_pacific_06,9,9,2,infantry_spawn,Pacific B6：9 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_06,10,12,2,commander_extra,Pacific B6：10+ 车长未阵亡则装填/修复/灭火
+mission_pacific_07,2,3,2,sniper,Pacific C7：2-3 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_07,4,4,2,none,Pacific C7：4 无事件
+mission_pacific_07,5,6,2,clear_mine,Pacific C7：5-6 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_07,7,8,2,infantry_spawn,Pacific C7：7-8 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_07,9,10,2,type95_spawn,Pacific C7：9-10 Type 95 掷 1d6 放到红色编号格；无重掷
+mission_pacific_07,11,12,2,commander_extra,Pacific C7：11+ 车长未阵亡则装填/修复/灭火
+mission_pacific_08,2,3,2,clear_mine,Pacific C8：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_08,4,4,2,mechanical_failure,Pacific C8：4 Sherman 瘫痪（若尚未瘫痪）
+mission_pacific_08,5,6,2,sniper,Pacific C8：5-6 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_08,7,8,2,none,Pacific C8：7-8 无事件
+mission_pacific_08,9,9,2,infantry_spawn,Pacific C8：9 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_08,10,12,2,commander_extra,Pacific C8：10+ 车长未阵亡则装填/修复/灭火
+mission_pacific_09,2,3,2,clear_mine,Pacific C9：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_09,4,4,2,mechanical_failure,Pacific C9：4 Sherman 瘫痪（若尚未瘫痪）
+mission_pacific_09,5,6,2,sniper,Pacific C9：5-6 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_09,7,7,2,infantry_spawn,Pacific C9：7 日军步兵掷 1d6 放到红色编号格；无重掷
+mission_pacific_09,8,9,2,none,Pacific C9：8-9 无事件
+mission_pacific_09,10,12,2,commander_extra,Pacific C9：10+ 车长未阵亡则装填/修复/灭火
+mission_pacific_10,2,3,2,clear_mine,Pacific D10：2-3 Sherman 在 Clear 格且未瘫痪则自动命中，掷伤害
+mission_pacific_10,4,4,2,sniper,Pacific D10：4 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_10,5,5,2,none,Pacific D10：5 无事件
+mission_pacific_10,6,6,2,type97_spawn,Pacific D10：6 Type 97 掷 1d6 放到红色编号格；无重掷
+mission_pacific_10,7,7,2,infantry_spawn,Pacific D10：7 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_10,8,9,2,heavy_mortar,Pacific D10：8-9 重迫击炮；有非相邻日军步兵时自动命中，AP0/AV8
+mission_pacific_10,10,12,2,commander_extra,Pacific D10：10+ 车长未阵亡则装填/修复/灭火
+mission_pacific_11,2,4,2,clear_mine,Pacific D11：2-4 Sherman 在开阔地且未瘫痪则自动命中，掷伤害
+mission_pacific_11,5,5,2,type97_spawn,Pacific D11：Type 97 掷 1d6 放到红色编号格；无重掷
+mission_pacific_11,6,9,2,none,Pacific D11：6-9 无事件
+mission_pacific_11,10,12,2,commander_extra,Pacific D11：车长未阵亡则装填/修复/灭火
+mission_pacific_12,2,3,2,clear_mine,Pacific D12：2-3 Sherman 在开阔地且未瘫痪则自动命中，掷伤害
+mission_pacific_12,4,4,2,sniper,Pacific D12：4 狙击手（舱盖开+车长存活+视线步兵→车长阵亡）
+mission_pacific_12,5,5,2,none,Pacific D12：5 无事件
+mission_pacific_12,6,6,2,type97_spawn,Pacific D12：6 Type 97 掷 1d6 放到红色编号格；无重掷
+mission_pacific_12,7,7,2,infantry_spawn,Pacific D12：7 日军步兵掷 1d6 放到蓝色编号格；无重掷
+mission_pacific_12,8,9,2,heavy_mortar,Pacific D12：8-9 重迫击炮；有非相邻日军步兵时自动命中，AP0/AV8
+mission_pacific_12,10,12,2,commander_extra,Pacific D12：10+ 车长未阵亡则装填/修复/灭火

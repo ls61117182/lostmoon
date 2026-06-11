@@ -26,6 +26,12 @@ export function terrainMoveCost(t: TerrainType): number {
     case 'mud':      return 2;
     case 'forest':   return Infinity;
     case 'water':    return Infinity;
+    case 'deep_water': return Infinity;
+    case 'clear':    return 1;
+    case 'trees':    return 1;
+    case 'beach':    return 1;
+    case 'rocky':    return Infinity;
+    case 'airstrip': return 1;
   }
 }
 

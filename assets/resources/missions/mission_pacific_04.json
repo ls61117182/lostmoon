@@ -1,0 +1,90 @@
+{
+  "id": "mission_pacific_04",
+  "name": "Saipan - The Landing",
+  "description": "Pacific Scenario B4. Destroy the Heavy Artillery, then move off the map along the red arrow. Map tiles are placeholder-configured; final hex terrain can be adjusted in this JSON.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 1, "ef": 2 },
+      { "t": "T", "rid": 1, "rf": 1 },
+      { "t": "T" },
+      { "t": "T" },
+      null
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 2, "ef": 2 },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "H", "rid": 3, "rf": 2 }
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 3, "ef": 3 },
+      { "t": "T" },
+      { "t": "T" }
+    ],
+    [
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 4, "ef": 3 },
+      { "t": "H", "rid": 4, "ef": 2 },
+      { "t": "T", "rid": 5, "ef": 4 }
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 5, "ef": 3 },
+      { "t": "T", "rid": 6, "rf": 3 },
+      null
+    ],
+    [
+      null,
+      { "t": "B" },
+      { "t": "B" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 6, "ef": 3 },
+      { "t": "T" },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 1, "row": 4 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "heavy_artillery", "faction": "japanese" },
+    { "kind": "heavy_artillery", "faction": "japanese" },
+    { "kind": "at_gun", "faction": "japanese" },
+    { "kind": "at_gun", "faction": "japanese" }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kind": "heavy_artillery",
+    "evacAt": { "col": 6, "row": 0 },
+    "evacExitDir": 5
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_04"
+}

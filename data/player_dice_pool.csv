@@ -4,16 +4,34 @@ move_field,1,移动阶段·田地基础骰
 move_mud,0,移动阶段·泥地基础骰
 move_forest,0,移动阶段·林地（不可入占位）
 move_water,0,移动阶段·水域（不可入占位）
+move_deep_water,0,Pacific 移动阶段·深海（不可入占位）
+move_clear,2,Pacific 移动阶段·沙地/开阔地
+move_trees,1,Pacific 移动阶段·树木
+move_beach,-1,Pacific 移动阶段·海滩
+move_rocky,0,Pacific 移动阶段·岩石高地（坦克不可入占位）
+move_airstrip,2,Pacific 移动阶段·机场跑道
 attack_road,2,攻击阶段·公路基础骰
 attack_field,2,攻击阶段·田地基础骰
 attack_mud,1,攻击阶段·泥地基础骰
 attack_forest,0,攻击阶段·林地占位
 attack_water,0,攻击阶段·水域占位
+attack_deep_water,0,Pacific 攻击阶段·深海占位
+attack_clear,2,Pacific 攻击阶段·沙地/开阔地
+attack_trees,1,Pacific 攻击阶段·树木
+attack_beach,0,Pacific 攻击阶段·海滩
+attack_rocky,0,Pacific 攻击阶段·岩石高地（坦克不可入占位）
+attack_airstrip,2,Pacific 攻击阶段·机场跑道
 misc_road,1,杂项阶段·公路基础骰
 misc_field,2,杂项阶段·田地基础骰
 misc_mud,1,杂项阶段·泥地基础骰
 misc_forest,0,杂项阶段·林地占位
 misc_water,0,杂项阶段·水域占位
+misc_deep_water,0,Pacific 杂项阶段·深海占位
+misc_clear,1,Pacific 杂项阶段·沙地/开阔地
+misc_trees,2,Pacific 杂项阶段·树木
+misc_beach,1,Pacific 杂项阶段·海滩
+misc_rocky,0,Pacific 杂项阶段·岩石高地（坦克不可入占位）
+misc_airstrip,1,Pacific 杂项阶段·机场跑道
 mod_move_driver,1,移动：驾驶员存活则加骰
 mod_move_codriver,1,移动：副驾驶存活则加骰
 mod_move_hatch,1,移动：车长开舱则加骰

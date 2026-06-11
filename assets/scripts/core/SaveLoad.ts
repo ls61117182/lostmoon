@@ -53,6 +53,8 @@ export interface SaveData {
   shermanEvacuated?: boolean;
   /** 任务 5：德军卡车是否因回合结束事件已驶出地图而判负 */
   truckEscapeDefeat?: boolean;
+  /** Pacific: accumulated US casualties. */
+  usCasualties?: number;
 }
 
 export interface SnapshotParams {
@@ -124,6 +126,7 @@ export function captureSave(p: SnapshotParams): SaveData {
     })),
     shermanEvacuated: p.mission.shermanEvacuated ?? false,
     truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
+    usCasualties: p.mission.usCasualties ?? 0,
   };
 }
 
@@ -235,6 +238,7 @@ export function applySave(
     }
     mission.shermanEvacuated = save.shermanEvacuated ?? false;
     mission.truckEscapeDefeat = save.truckEscapeDefeat ?? false;
+    mission.usCasualties = save.usCasualties ?? 0;
   }
 
   return {

@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readCsvRowsSmart } = require('./csvSmart');
 
 const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
@@ -149,7 +150,9 @@ function emitString(s) {
 }
 
 function build() {
-  const records = toRecords(parseCSV(readCsvSmart(CSV_PATH)));
+  const records = toRecords(readCsvRowsSmart(CSV_PATH, {
+    toolName: 'buildTankVisualDB',
+  }));
   const byKind = new Map();
 
   for (const rec of records) {

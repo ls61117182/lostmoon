@@ -23,11 +23,17 @@ export type Direction = 0 | 1 | 2 | 3 | 4 | 5;
 
 // ---------- 地形 ----------
 export type TerrainType =
-  | 'road'      // 公路：移动 +1 骰
-  | 'field'     // 田地
-  | 'mud'       // 泥地：移动 -1 骰
-  | 'forest'    // 林地：坦克不可入，阻挡视线
-  | 'water';    // 水域：任何单位不可入，不阻挡视线
+  | 'road'
+  | 'field'
+  | 'mud'
+  | 'forest'
+  | 'water'
+  | 'deep_water'
+  | 'clear'
+  | 'trees'
+  | 'beach'
+  | 'rocky'
+  | 'airstrip';
 
 export interface Tile {
   pos: Axial;
@@ -36,6 +42,8 @@ export interface Tile {
   hasBuilding?: boolean;
   /** 沿 6 条边是否有树篱（按 Direction 索引） */
   hedges?: [boolean, boolean, boolean, boolean, boolean, boolean];
+  /** Pacific breakwater edge flags; same axial 0..5 index as hedges. */
+  breakwaters?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /**
    * 公路视觉：第 i 位为 true 表示本格与「第 i 向邻格」之间那条格边中点 → 本格心绘有一段道路。
    * 仅对 `terrain==='road'` 或叠桥水域有效；纯视觉字段，不影响移动 / 视线 / 骰子规则。
@@ -45,6 +53,8 @@ export interface Tile {
   roads?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** 援军生成位编号（如说明书的红色数字 1..6） */
   reinforceId?: number;
+  /** Reinforcement/support spawn facing for `reinforceId` (`rf` in mission JSON). */
+  reinforceFacing?: Direction;
   /** 德军初始位编号（黑色数字 1..6；掷骰出生时全图同编号至多一格） */
   enemyStartId?: number;
   /** 与 `enemyStartId` 同格：该出生点坦克初始朝向（与盘面数字贴近的边一致，0=E…5=NE） */
@@ -63,6 +73,11 @@ export function tileHasBridge(tile: Tile | undefined | null): boolean {
   return !!tile && tile.terrain === 'water' && !!tile.bridgeEnds;
 }
 
+/** Pacific beach hexes do not allow smoke, concealment, or hull-down cover. */
+export function tileForbidsSmokeOrConcealment(tile: Tile | undefined | null): boolean {
+  return tile?.terrain === 'beach';
+}
+
 /**
  * 计算掷骰 / 移动力使用的「等效地形」：
  * - 水域 + 桥梁 → 视为公路（GDD §3.2「骰子规则与公路相同」）；
@@ -78,7 +93,9 @@ export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType
 }
 
 // ---------- 单位 ----------
-export type Faction = 'allied' | 'german';
+export type Faction = 'allied' | 'german' | 'japanese';
+
+export type Theater = 'europe' | 'pacific';
 
 export type UnitKind =
   | 'sherman'
@@ -87,6 +104,11 @@ export type UnitKind =
   | 'panzer3'
   | 'truck'
   | 'infantry'
+  | 'type95'
+  | 'type97'
+  | 'at_gun'
+  | 'japanese_infantry'
+  | 'heavy_artillery'
   /**
    * 高级军官（任务 8 起）：与步兵同属「徒步类」单位（size=0、不可朝向、机枪打、不参与坦克 AI），
    * 但在关卡目标上是与 `infantry` **互不替代**的独立 `kind`——避免与回合结束 5–6 spawn 的普通步兵
@@ -110,12 +132,16 @@ export function isFootUnit(u: { kind: UnitKind }): boolean {
 }
 
 export interface UnitStats {
+  faction: Faction;          // 阵营
   size: number;            // 体型
   armorFront: number;      // 前装甲
   armorFrontSide: number;  // 前侧装甲
   armorRearSide: number;   // 后侧装甲
   armorRear: number;       // 后装甲
   penetration: number;     // 穿甲值
+  usCasualtyDice: number;
+  moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
+  attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
 }
 
 export interface Unit {
@@ -178,13 +204,17 @@ export interface MissionObjective {
 
 export interface UnitPlacement {
   kind: UnitKind;
-  faction: Faction;
+  faction?: Faction;
   /** Offset 坐标；若关卡 `enemyStartByDice` 则可省略（步兵→rid 链，坦克等→eid 链）；谢尔曼在 `shermanStartByDice` 时亦可省略 */
   at?: Offset;
   /** 与 `at` 同：谢尔曼在 `shermanStartByDice` 时由格上 `ef` 写入 */
   facing?: Direction;
   /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `rid`（步兵）/ `eid`（坦克等） */
   startId?: number;
+  /** enemyStartByDice 下非步兵单位可选：只从这些 eid 黑格中随机开局。 */
+  startEids?: number[];
+  /** enemyStartByDice 下可选：从这些 rid 援军/蓝编号格中随机开局。 */
+  startRids?: number[];
   /** 任务 6 等：单位以**初始瘫痪**入场（放置「瘫痪」标记）；与回合结束 `mechanical_failure` 同义，由 `MissionLoader` 写入 `unit.paralyzed = true`。 */
   paralyzed?: boolean;
   /** 谢尔曼专用：乘员存活；键缺省视为 `true`（存活），显式 `false` 表示该槽位开局阵亡 */
@@ -203,6 +233,7 @@ export interface MissionData {
   id: string;
   name: string;
   description: string;
+  theater?: Theater;
   /** 地图列数 / 行数（offset） */
   cols: number;
   rows: number;
@@ -231,6 +262,8 @@ export interface MissionData {
   shermanStartByDice?: boolean;
   /** 胜负条件 */
   objective: MissionObjective;
+  /** Pacific: US casualty defeat threshold. Omit or set <=0 to disable. */
+  usCasualtyLimit?: number;
   /** 使用的行动表 / AI 表 / 事件表 ID（默认 'standard'） */
   actionTableId?: string;
   aiTableId?: string;
@@ -258,7 +291,7 @@ export interface TileDef {
    * 基底地形简写：r=公路 f=田地 m=泥地 F=林地 w=水域。
    * 旧版 `b` 表示「整格为建筑」已废弃，见 MissionLoader 会转为 f+建筑。
    */
-  t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b';
+  t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b' | 'c' | 'T' | 'B' | 'H' | 'dw' | 'a';
   /**
    * 建筑叠加在基底上：`1` 表示有建筑（坦克可进入；命中+1；视线仅路径「中间格」阻挡）。
    * 田/泥+建筑在任务表述上为「农场」，公路+建筑为「村庄」。
@@ -269,6 +302,8 @@ export interface TileDef {
    * 为 `1` 表示本格与**第 i 向邻格**之间那条格边外缘有树篱，与 `HexGrid.hedgeFlagsFromMapJson` 一致。
    */
   h?: string;
+  /** Pacific breakwater edge flags: 6 chars, same axial index as h. */
+  bw?: string;
   /**
    * 公路绘制方向：6 位 `0/1`，与 `h` 共享轴向索引（0=E, 顺时针 1=SE … 5=NE）。
    * `1` 表示本格内沿"第 i 向邻边中点 → 格心"绘制一段道路条带。仅 `t==='r'` 或水域+桥梁允许配置（其它基底 MissionLoader 抛错）。
@@ -278,6 +313,8 @@ export interface TileDef {
   rd?: string;
   /** 援军编号 1..6（红格；掷骰放置步兵时用，全图不重复） */
   rid?: number;
+  /** `rid` support spawn facing; same 0..5 direction index as `ef`. */
+  rf?: number;
   /** 敌方坦克起始编号 1..6（黑格；掷骰放置坦克等非步兵时用，全图不重复） */
   eid?: number;
   /**

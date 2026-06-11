@@ -18,6 +18,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readCsvRowsSmart } = require('./csvSmart');
 
 const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'turn_end_events.csv');
@@ -39,6 +40,10 @@ const EFFECT_TYPES = [
   'tiger_spawn',
   'sherman_spawn',
   'german_truck_move',
+  'clear_mine',
+  'type95_spawn',
+  'type97_spawn',
+  'heavy_mortar',
 ];
 
 function decodeTable(filePath) {
@@ -166,14 +171,10 @@ function normalizeSourceFile(records, sourceInfo) {
 }
 
 function readRecordsSmart(filePath) {
-  const decoded = decodeTable(filePath);
-  const parsed = chooseParsedRows(decoded.text);
-  const records = rowsToRecords(parsed.rows);
-  normalizeSourceFile(records, {
-    encoding: decoded.encoding,
-    delimiterName: parsed.name,
-  });
-  return records;
+  return rowsToRecords(readCsvRowsSmart(filePath, {
+    toolName: 'buildTurnEndEventDB',
+    requiredHeaders: HEADERS,
+  }));
 }
 
 function intOrThrow(raw, labelForError) {

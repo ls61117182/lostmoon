@@ -6,7 +6,7 @@
  *   const { map, sherman, enemies } = loadMission(data, rng);
  */
 
-import { directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
+import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
 import {
   Axial,
   Direction,
@@ -32,7 +32,15 @@ const TERRAIN_MAP = {
   m: 'mud',
   F: 'forest',
   w: 'water',
+  c: 'clear',
+  T: 'trees',
+  B: 'beach',
+  H: 'rocky',
+  dw: 'deep_water',
+  a: 'airstrip',
 } as const;
+
+let currentMissionTheater: MissionData['theater'] = 'europe';
 
 export interface LoadedMission {
   map: HexMap;
@@ -44,6 +52,8 @@ export interface LoadedMission {
   shermanEvacuated?: boolean;
   /** 任务 5：德军卡车因回合结束事件驶出地图底/终点 → 玩家判负 */
   truckEscapeDefeat?: boolean;
+  /** Pacific: accumulated US casualties for this mission. */
+  usCasualties?: number;
 }
 
 /** 从地图收集 eid 1..6 → 轴向坐标 + 朝向（掷骰放坦克 / 谢尔曼共用）。 */
@@ -89,7 +99,69 @@ function pickEidDiceSlot(
   );
 }
 
+function normalizeStartEids(missionId: string, raw: UnitPlacement['startEids'], ctxLabel: string): number[] | null {
+  if (raw === undefined || raw === null) return null;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`任务 ${missionId}：${ctxLabel} startEids 须为非空数组`);
+  }
+  const seen = new Set<number>();
+  for (const eid of raw) {
+    if (!Number.isInteger(eid) || eid < 1 || eid > 6) {
+      throw new Error(`任务 ${missionId}：${ctxLabel} startEids=${JSON.stringify(raw)} 非法，eid 须为 1..6 整数`);
+    }
+    if (seen.has(eid)) {
+      throw new Error(`任务 ${missionId}：${ctxLabel} startEids=${JSON.stringify(raw)} 含重复 eid=${eid}`);
+    }
+    seen.add(eid);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+function normalizeStartRids(missionId: string, raw: UnitPlacement['startRids'], ctxLabel: string): number[] | null {
+  if (raw === undefined || raw === null) return null;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`任务 ${missionId}：${ctxLabel} startRids 须为非空数组`);
+  }
+  const seen = new Set<number>();
+  for (const rid of raw) {
+    if (!Number.isInteger(rid) || rid < 1 || rid > 6) {
+      throw new Error(`任务 ${missionId}：${ctxLabel} startRids=${JSON.stringify(raw)} 非法，rid 须为 1..6 整数`);
+    }
+    if (seen.has(rid)) {
+      throw new Error(`任务 ${missionId}：${ctxLabel} startRids=${JSON.stringify(raw)} 含重复 rid=${rid}`);
+    }
+    seen.add(rid);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+function pickRestrictedNumberedSlot(
+  missionId: string,
+  cellsByNumber: Map<number, { pos: Axial; facing: Direction }>,
+  taken: Set<string>,
+  rng: RNG,
+  ctxLabel: string,
+  allowedNumbers: number[],
+  markerLabel: 'eid' | 'rid',
+): { pos: Axial; facing: Direction } {
+  const available: Array<{ n: number; cell: { pos: Axial; facing: Direction } }> = [];
+  for (const n of allowedNumbers) {
+    const cell = cellsByNumber.get(n);
+    if (!cell) continue;
+    const key = `${cell.pos.q},${cell.pos.r}`;
+    if (taken.has(key)) continue;
+    available.push({ n, cell });
+  }
+  if (available.length === 0) {
+    throw new Error(
+      `任务 ${missionId}：${ctxLabel} 限定 ${markerLabel}=${allowedNumbers.join('/')} 的随机出生失败（均无空位或缺格）`,
+    );
+  }
+  return rng.pick(available).cell;
+}
+
 export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
+  currentMissionTheater = data.theater ?? 'europe';
   // 1. 构建 HexMap
   const map = new HexMap(data.cols, data.rows);
   for (let row = 0; row < data.rows; row++) {
@@ -103,6 +175,10 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       const facing: Direction | undefined = efRaw !== undefined && efRaw !== null
         ? ((((Number(efRaw) % 6) + 6) % 6) as Direction)
         : undefined;
+      const rfRaw = def.rf;
+      const reinforceFacing: Direction | undefined = rfRaw !== undefined && rfRaw !== null
+        ? ((((Number(rfRaw) % 6) + 6) % 6) as Direction)
+        : undefined;
       const bridgeEnds = parseBridgeEnds(data.id, { col, row }, terrain, def.br);
       const roads = parseRoadFlags(data.id, { col, row }, terrain, !!bridgeEnds, def.rd);
       const tile: Tile = {
@@ -110,8 +186,10 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         terrain,
         ...(hasBuilding ? { hasBuilding: true } : {}),
         hedges: hedgeFlagsFromMapJson(def.h),
+        breakwaters: breakwaterFlagsFromMapJson(def.bw),
         ...(roads ? { roads } : {}),
         reinforceId: def.rid,
+        ...(reinforceFacing !== undefined ? { reinforceFacing } : {}),
         ...(eid !== undefined && eid !== null ? { enemyStartId: eid } : {}),
         ...(facing !== undefined ? { enemyStartFacing: facing } : {}),
         ...(bridgeEnds ? { bridgeEnds } : {}),
@@ -221,7 +299,16 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     validateTruckPath(data, map);
   }
 
-  const mission: LoadedMission = { map, sherman, allies, enemies, data, shermanEvacuated: false, truckEscapeDefeat: false };
+  const mission: LoadedMission = {
+    map,
+    sherman,
+    allies,
+    enemies,
+    data,
+    shermanEvacuated: false,
+    truckEscapeDefeat: false,
+    usCasualties: 0,
+  };
   if (data.truckPath && data.truckPath.length >= 2) {
     const truckU = enemies.find(e => e.kind === 'truck' && !e.destroyed);
     if (truckU) {
@@ -311,7 +398,7 @@ function resolveEnemyDicePlacements(
       if (cellsByRid.has(rid)) {
         throw new Error(`任务 ${data.id}：重复的援军编号 rid=${rid}（全图须唯一）`);
       }
-      const facing = (tile.enemyStartFacing ?? 0) as Direction;
+      const facing = (tile.reinforceFacing ?? tile.enemyStartFacing ?? 0) as Direction;
       cellsByRid.set(rid, { pos: tile.pos, facing });
     }
   }
@@ -332,6 +419,25 @@ function resolveEnemyDicePlacements(
   for (let ei = 0; ei < data.enemies.length; ei++) {
     const p = data.enemies[ei];
     if (p.at) {
+      if (p.startEids || p.startRids) {
+        throw new Error(`任务 ${data.id}：第 ${ei + 1} 个敌方单位已固定 at，不能同时配置 startEids/startRids`);
+      }
+      continue;
+    }
+    const ctxLabel = `第 ${ei + 1} 个无坐标敌方单位`;
+    if (p.startEids && p.startRids) {
+      throw new Error(`任务 ${data.id}：${ctxLabel} 不能同时配置 startEids 与 startRids`);
+    }
+    const allowedRids = normalizeStartRids(data.id, p.startRids, ctxLabel);
+    if (allowedRids) {
+      if (cellsByRid.size === 0) {
+        throw new Error(
+          `任务 ${data.id}：${ctxLabel} 配置了 startRids，但地图上没有 rid 编号格`,
+        );
+      }
+      const placed = pickRestrictedNumberedSlot(data.id, cellsByRid, taken, rng, ctxLabel, allowedRids, 'rid');
+      taken.add(`${placed.pos.q},${placed.pos.r}`);
+      out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
       continue;
     }
     const useRid = isFootKind(p.kind);
@@ -342,18 +448,24 @@ function resolveEnemyDicePlacements(
       );
     }
     if (!useRid) {
-      const maxEid = data.enemyDiceEidMax ?? 6;
-      const placed = pickEidDiceSlot(
-        data.id,
-        cellsByEid,
-        taken,
-        rng,
-        `第 ${ei + 1} 个无坐标敌方单位（坦克 eid）`,
-        maxEid,
-      );
+      const eidCtxLabel = `${ctxLabel}（坦克 eid）`;
+      const allowedEids = normalizeStartEids(data.id, p.startEids, eidCtxLabel);
+      const placed = allowedEids
+        ? pickRestrictedNumberedSlot(data.id, cellsByEid, taken, rng, eidCtxLabel, allowedEids, 'eid')
+        : pickEidDiceSlot(
+          data.id,
+          cellsByEid,
+          taken,
+          rng,
+          eidCtxLabel,
+          data.enemyDiceEidMax ?? 6,
+        );
       taken.add(`${placed.pos.q},${placed.pos.r}`);
       out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
       continue;
+    }
+    if (p.startEids) {
+      throw new Error(`任务 ${data.id}：第 ${ei + 1} 个无坐标步兵单位不能配置 startEids（步兵使用 rid）`);
     }
     const d = rng.d6();
     let placedRid: { pos: Axial; facing: Direction } | null = null;
@@ -444,7 +556,7 @@ function parseRoadFlags(
   raw: TileDef['rd'],
 ): Tile['roads'] {
   if (raw === undefined || raw === null) return undefined;
-  if (terrain !== 'road' && !hasBridge) {
+  if (terrain !== 'road' && terrain !== 'airstrip' && !hasBridge) {
     throw new Error(
       `任务 ${missionId}：tile (${pos.col},${pos.row}) 配置了道路方向 rd='${raw}'，但基底地形非公路（t='${terrain}'）。`
       + `公路视觉字段仅允许在 t='r' 或叠桥水域上使用`,
@@ -464,7 +576,7 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
   if (!p.at) {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }
-  const stats = getUnitStats(p.kind);
+  const stats = getUnitStats(p.kind, currentMissionTheater ?? 'europe');
   /** 朝向仅 0..5（E…NE）。关卡 JSON 误填 6 或负数时归一，避免 neighbor → axialAdd 读 undefined.q 崩溃。 */
   let facingNorm: Direction | null = p.facing ?? null;
   if (facingNorm !== null) {
@@ -474,7 +586,7 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
   const u: Unit = {
     id,
     kind: p.kind,
-    faction: p.faction,
+    faction: p.faction ?? stats.faction,
     pos: offsetToAxial(p.at),
     facing: facingNorm,
     stats,

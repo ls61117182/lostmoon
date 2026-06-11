@@ -1,25 +1,55 @@
-﻿column,die,primary,fallback,notes
-road,1,shoot,turn,射击>转向
-road,2,advance,shoot,前进>射击
-road,3,shoot,advance,射击>前进
-road,4,advance,turn,前进>转向
-road,5,advance,reverse,前进>后退
-road,6,shoot,smoke,射击>烟雾
-field,1,shoot,turn,射击>转向
-field,2,advance,turn,前进>转向
-field,3,shoot,advance,射击>前进
-field,4,turn,,转向
-field,5,advance,reverse,前进>后退
-field,6,shoot,conceal,射击>隐蔽
-mud,1,shoot,,射击
-mud,2,turn,,转向
-mud,3,advance,turn,前进>转向
-mud,4,advance,reverse,前进>后退
-mud,5,shoot,,射击
-mud,6,smoke,,烟雾
-damaged,1,repair,,修复
-damaged,2,turn,,转向
-damaged,3,advance,turn,前进>转向
-damaged,4,advance,reverse,前进>后退
-damaged,5,shoot,,射击
-damaged,6,smoke,,烟雾
+﻿column,die,primary,fallback,fallback2,notes
+road,1,shoot,turn,,射击>转向
+road,2,advance,shoot,,前进>射击
+road,3,shoot,advance,,射击>前进
+road,4,advance,turn,,前进>转向
+road,5,advance,reverse,,前进>后退
+road,6,shoot,smoke,,射击>烟雾
+field,1,shoot,turn,,射击>转向
+field,2,advance,turn,,前进>转向
+field,3,shoot,advance,,射击>前进
+field,4,turn,,,转向
+field,5,advance,reverse,,前进>后退
+field,6,shoot,conceal,,射击>隐蔽
+mud,1,shoot,,,射击
+mud,2,turn,,,转向
+mud,3,advance,turn,,前进>转向
+mud,4,advance,reverse,,前进>后退
+mud,5,shoot,,,射击
+mud,6,smoke,,,烟雾
+damaged,1,repair,,,修复
+damaged,2,turn,,,转向
+damaged,3,advance,turn,,前进>转向
+damaged,4,advance,reverse,,前进>后退
+damaged,5,shoot,,,射击
+damaged,6,smoke,,,烟雾
+type95,1,shoot,turn,,FIRE>TURN
+type95,2,advance,turn,,MOVE>TURN
+type95,3,shoot,advance,,FIRE>MOVE
+type95,4,turn,,,TURN
+type95,5,advance,reverse,,MOVE>REVERSE
+type95,6,shoot,advance,hull_down,FIRE>MOVE>HULL DN
+type97,1,shoot,turn,,FIRE>TURN
+type97,2,advance,turn,,MOVE>TURN
+type97,3,shoot,advance,,FIRE>MOVE
+type97,4,turn,,,TURN
+type97,5,advance,reverse,,MOVE>REVERSE
+type97,6,shoot,advance,hull_down,FIRE>MOVE>HULL DN
+at_gun,1,turn,,,TURN towards Sherman random
+at_gun,2,advance_to_building,,,If facing building hex, move to it
+at_gun,3,turn,,,TURN towards Sherman random
+at_gun,4,none,,,No action
+at_gun,5,shoot,,,FIRE
+at_gun,6,shoot,,,FIRE
+japanese_infantry,1,shoot_adjacent,,,FIRE if adjacent to Sherman
+japanese_infantry,2,infantry_move,,,MOVE R>B>T>V>H
+japanese_infantry,3,shoot_adjacent,,,FIRE if adjacent to Sherman
+japanese_infantry,4,infantry_move,,,MOVE R>B>T>V>H
+japanese_infantry,5,infantry_move,,,MOVE R>B>T>V>H
+japanese_infantry,6,shoot_adjacent,,,FIRE if adjacent to Sherman
+heavy_artillery,1,none,,,No Action
+heavy_artillery,2,none,,,No Action
+heavy_artillery,3,shoot,,,FIRE
+heavy_artillery,4,shoot,,,FIRE
+heavy_artillery,5,shoot,,,FIRE
+heavy_artillery,6,shoot,,,FIRE

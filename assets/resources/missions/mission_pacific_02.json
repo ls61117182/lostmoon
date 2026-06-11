@@ -1,0 +1,90 @@
+{
+  "id": "mission_pacific_02",
+  "name": "Tarawa, Red Beach 1 - Pushing Inland",
+  "description": "Pacific Scenario A2. Destroy the Heavy Artillery and the Type 95s, then move off the map along the red arrow. Place the Heavy Artillery and AT Gun randomly on eid 5 and eid 6, and place the two Type 95s randomly on the remaining eid start hexes. The Sherman starts on the black outlined landing hex.",
+  "theater": "pacific",
+  "usCasualtyLimit": 10,
+  "cols": 8,
+  "rows": 6,
+  "enemyStartByDice": true,
+  "tiles": [
+    [
+      null,
+      null,
+      { "t": "dw" },
+      { "t": "dw" },
+      { "t": "c", "bd": 1, "eid": 6, "ef": 1 },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "rid": 2, "rf": 2 },
+      null
+    ],
+    [
+      null,
+      { "t": "c", "bd": 1, "rid": 6, "rf": 1 },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T", "rid": 1, "rf": 2 },
+      { "t": "c", "bd": 1, "eid": 1, "ef": 3 },
+      { "t": "T" }
+    ],
+    [
+      null,
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 2, "ef": 3 },
+      { "t": "c" },
+      { "t": "c" }
+    ],
+    [
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T" },
+      { "t": "T" },
+      { "t": "c", "bd": 1, "eid": 3, "ref": 3 },
+      { "t": "T", "rid": 3, "rf": 3 }
+    ],
+    [
+      null,
+      { "t": "T" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "c" },
+      { "t": "T", "eid": 4, "ef": 4 },
+      { "t": "T" },
+      null
+    ],
+    [
+      null,
+      { "t": "c" },
+      { "t": "T", "rid": 5, "rf": 3 },
+      { "t": "c" },
+      { "t": "c", "bd": 1, "eid": 5, "ef": 4 },
+      { "t": "c", "rid": 4, "rf": 3 },
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "faction": "allied",
+    "at": { "col": 0, "row": 3 },
+    "facing": 0
+  },
+  "enemies": [
+    { "kind": "heavy_artillery", "faction": "japanese", "startEids": [5, 6] },
+    { "kind": "at_gun", "faction": "japanese", "startEids": [5, 6] },
+    { "kind": "type95", "faction": "japanese", "startEids": [1, 2, 3, 4] },
+    { "kind": "type95", "faction": "japanese", "startEids": [1, 2, 3, 4] }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kinds": ["heavy_artillery", "type95"],
+    "evacAt": { "col": 7, "row": 2 },
+    "evacExitDir": 0
+  },
+  "actionTableId": "pacific_b4",
+  "aiTableId": "pacific_b4",
+  "eventTableId": "mission_pacific_02"
+}

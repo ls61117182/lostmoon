@@ -14,14 +14,28 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readCsvRowsSmart } = require('./csvSmart');
 
 const ROOT = path.resolve(__dirname, '..');
 const TABLE_CSV = path.join(ROOT, 'data', 'enemy_ai_table.csv');
 const DICE_CSV = path.join(ROOT, 'data', 'enemy_ai_dice.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'EnemyAIDB.ts');
 
-const AI_COLUMNS = ['road', 'field', 'mud', 'damaged'];
-const AI_ACTIONS = ['shoot', 'turn', 'advance', 'reverse', 'smoke', 'repair', 'conceal', 'none'];
+const AI_COLUMNS = ['road', 'field', 'mud', 'damaged', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
+const AI_ACTIONS = [
+  'shoot',
+  'turn',
+  'advance',
+  'reverse',
+  'smoke',
+  'repair',
+  'conceal',
+  'shoot_adjacent',
+  'infantry_move',
+  'advance_to_building',
+  'hull_down',
+  'none',
+];
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);
@@ -91,7 +105,10 @@ function toRecords(rows, csvPath) {
 }
 
 function parseAITable() {
-  const recs = toRecords(parseCSV(readCsvSmart(TABLE_CSV)), TABLE_CSV);
+  const recs = toRecords(readCsvRowsSmart(TABLE_CSV, {
+    toolName: 'buildEnemyAIDB',
+    requiredHeaders: ['column', 'die', 'primary'],
+  }), TABLE_CSV);
   // table[col][pip] = { primary, fallback? }
   const table = {};
   for (const c of AI_COLUMNS) table[c] = {};
@@ -118,7 +135,12 @@ function parseAITable() {
     else if (!AI_ACTIONS.includes(fallback)) {
       throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：fallback="${fallback}" 不在 {${AI_ACTIONS.join(' / ')}}`);
     }
-    table[col][die] = { primary, fallback };
+    let fallback2 = r.fallback2;
+    if (fallback2 === '' || fallback2 === undefined) fallback2 = undefined;
+    else if (!AI_ACTIONS.includes(fallback2)) {
+      throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：fallback2="${fallback2}" 不在 {${AI_ACTIONS.join(' / ')}}`);
+    }
+    table[col][die] = { primary, fallback, fallback2 };
   }
   // 必须每列都有 1..6 全覆盖
   for (const c of AI_COLUMNS) {
@@ -130,7 +152,10 @@ function parseAITable() {
 }
 
 function parseAIDice() {
-  const recs = toRecords(parseCSV(readCsvSmart(DICE_CSV)), DICE_CSV);
+  const recs = toRecords(readCsvRowsSmart(DICE_CSV, {
+    toolName: 'buildEnemyAIDB',
+    requiredHeaders: ['column', 'dice'],
+  }), DICE_CSV);
   const map = {};
   const seen = new Set();
   for (const r of recs) {
@@ -179,6 +204,7 @@ function build() {
   lines.push('export interface AIActionEntry {');
   lines.push('  primary: EnemyAction;');
   lines.push('  fallback?: EnemyAction;');
+  lines.push('  fallback2?: EnemyAction;');
   lines.push('}');
   lines.push('');
   lines.push('/** AI 表的列键：地形或"受损"（受损优先于地形） */');
@@ -199,7 +225,8 @@ function build() {
     for (let p = 1; p <= 6; p++) {
       const e = table[c][p];
       const fb = e.fallback ? `, fallback: '${e.fallback}'` : '';
-      lines.push(`    ${p}: { primary: '${e.primary}'${fb} },`);
+      const fb2 = e.fallback2 ? `, fallback2: '${e.fallback2}'` : '';
+      lines.push(`    ${p}: { primary: '${e.primary}'${fb}${fb2} },`);
     }
     lines.push('  },');
   }

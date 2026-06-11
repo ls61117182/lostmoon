@@ -20,6 +20,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { readCsvRowsSmart } = require('./csvSmart');
 
 const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'lang.csv');
@@ -103,8 +104,10 @@ function escapeForTs(s) {
 }
 
 function build() {
-  const csv = readCsvSmart(CSV_PATH);
-  const rows = parseCSV(csv);
+  const rows = readCsvRowsSmart(CSV_PATH, {
+    toolName: 'buildLangDB',
+    requiredHeaders: ['key', 'zh', 'en'],
+  });
   if (rows.length < 2) throw new Error('lang.csv 除表头外没有任何行');
 
   const headers = rows[0];
