@@ -72,18 +72,18 @@ export const CHAPTERS: ChapterMeta[] = [
     titleKey: 'chapter.pacific.title',
     subtitleKey: 'chapter.pacific.subtitle',
     levels: [
-      { chapterId: 'pacific', id: 101, missionPath: 'missions/mission_pacific_01', titleKey: 'level.pacific.01.title', missionId: 'mission_pacific_01' },
-      { chapterId: 'pacific', id: 102, missionPath: 'missions/mission_pacific_02', titleKey: 'level.pacific.02.title', missionId: 'mission_pacific_02' },
-      { chapterId: 'pacific', id: 103, missionPath: 'missions/mission_pacific_03', titleKey: 'level.pacific.03.title', missionId: 'mission_pacific_03' },
-      { chapterId: 'pacific', id: 104, missionPath: 'missions/mission_pacific_04', titleKey: 'level.pacific.04.title', missionId: 'mission_pacific_04' },
-      { chapterId: 'pacific', id: 105, missionPath: 'missions/mission_pacific_05', titleKey: 'level.pacific.05.title', missionId: 'mission_pacific_05' },
-      { chapterId: 'pacific', id: 106, missionPath: 'missions/mission_pacific_06', titleKey: 'level.pacific.06.title', missionId: 'mission_pacific_06' },
-      { chapterId: 'pacific', id: 107, missionPath: 'missions/mission_pacific_07', titleKey: 'level.pacific.07.title', missionId: 'mission_pacific_07' },
-      { chapterId: 'pacific', id: 108, missionPath: 'missions/mission_pacific_08', titleKey: 'level.pacific.08.title', missionId: 'mission_pacific_08' },
-      { chapterId: 'pacific', id: 109, missionPath: 'missions/mission_pacific_09', titleKey: 'level.pacific.09.title', missionId: 'mission_pacific_09' },
-      { chapterId: 'pacific', id: 110, missionPath: 'missions/mission_pacific_10', titleKey: 'level.pacific.10.title', missionId: 'mission_pacific_10' },
-      { chapterId: 'pacific', id: 111, missionPath: 'missions/mission_pacific_11', titleKey: 'level.pacific.11.title', missionId: 'mission_pacific_11' },
-      { chapterId: 'pacific', id: 112, missionPath: 'missions/mission_pacific_12', titleKey: 'level.pacific.12.title', missionId: 'mission_pacific_12' },
+      { chapterId: 'pacific', id: 1,  missionPath: 'missions/mission_pacific_01', titleKey: 'level.pacific.01.title', missionId: 'mission_pacific_01' },
+      { chapterId: 'pacific', id: 2,  missionPath: 'missions/mission_pacific_02', titleKey: 'level.pacific.02.title', missionId: 'mission_pacific_02' },
+      { chapterId: 'pacific', id: 3,  missionPath: 'missions/mission_pacific_03', titleKey: 'level.pacific.03.title', missionId: 'mission_pacific_03' },
+      { chapterId: 'pacific', id: 4,  missionPath: 'missions/mission_pacific_04', titleKey: 'level.pacific.04.title', missionId: 'mission_pacific_04' },
+      { chapterId: 'pacific', id: 5,  missionPath: 'missions/mission_pacific_05', titleKey: 'level.pacific.05.title', missionId: 'mission_pacific_05' },
+      { chapterId: 'pacific', id: 6,  missionPath: 'missions/mission_pacific_06', titleKey: 'level.pacific.06.title', missionId: 'mission_pacific_06' },
+      { chapterId: 'pacific', id: 7,  missionPath: 'missions/mission_pacific_07', titleKey: 'level.pacific.07.title', missionId: 'mission_pacific_07' },
+      { chapterId: 'pacific', id: 8,  missionPath: 'missions/mission_pacific_08', titleKey: 'level.pacific.08.title', missionId: 'mission_pacific_08' },
+      { chapterId: 'pacific', id: 9,  missionPath: 'missions/mission_pacific_09', titleKey: 'level.pacific.09.title', missionId: 'mission_pacific_09' },
+      { chapterId: 'pacific', id: 10, missionPath: 'missions/mission_pacific_10', titleKey: 'level.pacific.10.title', missionId: 'mission_pacific_10' },
+      { chapterId: 'pacific', id: 11, missionPath: 'missions/mission_pacific_11', titleKey: 'level.pacific.11.title', missionId: 'mission_pacific_11' },
+      { chapterId: 'pacific', id: 12, missionPath: 'missions/mission_pacific_12', titleKey: 'level.pacific.12.title', missionId: 'mission_pacific_12' },
     ],
   },
   {
@@ -131,6 +131,10 @@ export interface MenuState {
   unlockedLevel: number;
   /** 通关过的关卡编号列表（用于 ★） */
   completedLevels: number[];
+  chapterProgress: Record<ChapterId, {
+    unlockedLevel: number;
+    completedLevels: number[];
+  }>;
   /** 背景音乐 0..100 */
   bgmVolume: number;
   /** 音效（UI / 战斗）0..100 */
@@ -144,11 +148,71 @@ export interface MenuState {
 const DEFAULT_STATE: MenuState = {
   unlockedLevel: MIN_UNLOCKED_LEVEL,
   completedLevels: [],
+  chapterProgress: emptyChapterProgress(),
   bgmVolume: 60,
   sfxVolume: 70,
   lang: 'zh',
   selectedChapterId: DEFAULT_CHAPTER_ID,
 };
+
+function maxLevelIdForChapter(chapterId: ChapterId): number {
+  const ids = getChapterLevels(chapterId).map(l => l.id);
+  return ids.length > 0 ? Math.max(...ids) : MIN_UNLOCKED_LEVEL;
+}
+
+function clampLevelForChapter(chapterId: ChapterId, levelId: number): number {
+  return clamp(levelId, 1, maxLevelIdForChapter(chapterId));
+}
+
+function emptyChapterProgress(): Record<ChapterId, { unlockedLevel: number; completedLevels: number[] }> {
+  const out: Record<ChapterId, { unlockedLevel: number; completedLevels: number[] }> = {};
+  for (const chapter of CHAPTERS) {
+    out[chapter.id] = {
+      unlockedLevel: maxLevelIdForChapter(chapter.id),
+      completedLevels: [],
+    };
+  }
+  return out;
+}
+
+function normalizeCompletedForChapter(chapterId: ChapterId, values: unknown): number[] {
+  if (!Array.isArray(values)) return [];
+  const maxId = maxLevelIdForChapter(chapterId);
+  const seen = new Set<number>();
+  for (const value of values) {
+    if (typeof value !== 'number' || !isFinite(value)) continue;
+    const n = Math.trunc(value);
+    if (n >= 1 && n <= maxId) seen.add(n);
+  }
+  return Array.from(seen).sort((a, b) => a - b);
+}
+
+function normalizeChapterProgress(parsed: Partial<MenuState>): Record<ChapterId, { unlockedLevel: number; completedLevels: number[] }> {
+  const out = emptyChapterProgress();
+  const raw = parsed.chapterProgress;
+  if (raw && typeof raw === 'object') {
+    for (const chapter of CHAPTERS) {
+      const entry = raw[chapter.id];
+      if (!entry || typeof entry !== 'object') continue;
+      out[chapter.id] = {
+        unlockedLevel: clampLevelForChapter(chapter.id, entry.unlockedLevel ?? out[chapter.id].unlockedLevel),
+        completedLevels: normalizeCompletedForChapter(chapter.id, entry.completedLevels),
+      };
+    }
+  }
+
+  if (!raw && Array.isArray(parsed.completedLevels)) {
+    out[DEFAULT_CHAPTER_ID]!.completedLevels = normalizeCompletedForChapter(DEFAULT_CHAPTER_ID, parsed.completedLevels);
+    out.pacific!.completedLevels = normalizeCompletedForChapter(
+      'pacific',
+      parsed.completedLevels
+        .filter(n => typeof n === 'number' && n >= 101 && n <= 112)
+        .map(n => n - 100),
+    );
+  }
+
+  return out;
+}
 
 function hasLS(): boolean {
   // Cocos 预览 / 构建后都挂 window.localStorage；保险起见 try/catch
@@ -160,20 +224,22 @@ function hasLS(): boolean {
 }
 
 function readState(): MenuState {
-  if (!hasLS()) return { ...DEFAULT_STATE };
+  if (!hasLS()) return { ...DEFAULT_STATE, chapterProgress: emptyChapterProgress() };
   try {
     const raw = localStorage.getItem(MENU_STATE_KEY);
-    if (!raw) return { ...DEFAULT_STATE };
+    if (!raw) return { ...DEFAULT_STATE, chapterProgress: emptyChapterProgress() };
     const parsed = JSON.parse(raw) as Partial<MenuState> & { volume?: number };
     const legacyVol = typeof parsed.volume === 'number'
       ? clamp(parsed.volume, 0, 100)
       : undefined;
+    const chapterProgress = normalizeChapterProgress(parsed);
     return {
       unlockedLevel: Math.max(
         MIN_UNLOCKED_LEVEL,
         clamp(parsed.unlockedLevel ?? DEFAULT_STATE.unlockedLevel, 1, LEVELS.length),
       ),
       completedLevels: Array.isArray(parsed.completedLevels) ? parsed.completedLevels.filter(n => typeof n === 'number') : [],
+      chapterProgress,
       bgmVolume: clamp(parsed.bgmVolume ?? legacyVol ?? DEFAULT_STATE.bgmVolume, 0, 100),
       sfxVolume: clamp(parsed.sfxVolume ?? legacyVol ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,
@@ -181,7 +247,7 @@ function readState(): MenuState {
     };
   } catch (e) {
     console.warn('[LevelDB] 解析菜单存档失败，重置', e);
-    return { ...DEFAULT_STATE };
+    return { ...DEFAULT_STATE, chapterProgress: emptyChapterProgress() };
   }
 }
 
@@ -206,9 +272,11 @@ export const MenuProgress = {
   },
 
   replace(state: MenuState): void {
+    const chapterProgress = normalizeChapterProgress(state);
     writeState({
       unlockedLevel: clamp(state.unlockedLevel ?? DEFAULT_STATE.unlockedLevel, 1, LEVELS.length),
       completedLevels: Array.isArray(state.completedLevels) ? state.completedLevels.filter(n => typeof n === 'number') : [],
+      chapterProgress,
       bgmVolume: clamp(state.bgmVolume ?? DEFAULT_STATE.bgmVolume, 0, 100),
       sfxVolume: clamp(state.sfxVolume ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (state.lang === 'en' || state.lang === 'zh') ? state.lang : DEFAULT_STATE.lang,
@@ -216,20 +284,33 @@ export const MenuProgress = {
     });
   },
 
-  isUnlocked(levelId: number): boolean {
-    return levelId <= this.load().unlockedLevel;
+  isUnlocked(levelId: number, chapterId: ChapterId = DEFAULT_CHAPTER_ID): boolean {
+    const progress = this.load().chapterProgress[chapterId];
+    return levelId <= (progress?.unlockedLevel ?? DEFAULT_STATE.unlockedLevel);
   },
 
-  isCompleted(levelId: number): boolean {
-    return this.load().completedLevels.indexOf(levelId) >= 0;
+  isCompleted(levelId: number, chapterId: ChapterId = DEFAULT_CHAPTER_ID): boolean {
+    const progress = this.load().chapterProgress[chapterId];
+    return (progress?.completedLevels ?? []).indexOf(levelId) >= 0;
   },
 
   /** 通关回调：战斗胜利后调用 */
-  markCompleted(levelId: number): void {
+  markCompleted(levelId: number, chapterId: ChapterId = DEFAULT_CHAPTER_ID): void {
     const s = readState();
-    if (s.completedLevels.indexOf(levelId) < 0) s.completedLevels.push(levelId);
-    if (levelId >= s.unlockedLevel && levelId < LEVELS.length) {
-      s.unlockedLevel = levelId + 1;
+    const progress = s.chapterProgress[chapterId] ?? {
+      unlockedLevel: maxLevelIdForChapter(chapterId),
+      completedLevels: [],
+    };
+    if (progress.completedLevels.indexOf(levelId) < 0) progress.completedLevels.push(levelId);
+    progress.completedLevels.sort((a, b) => a - b);
+    const maxId = maxLevelIdForChapter(chapterId);
+    if (levelId >= progress.unlockedLevel && levelId < maxId) {
+      progress.unlockedLevel = levelId + 1;
+    }
+    s.chapterProgress[chapterId] = progress;
+    if (chapterId === DEFAULT_CHAPTER_ID) {
+      s.unlockedLevel = progress.unlockedLevel;
+      s.completedLevels = progress.completedLevels.slice();
     }
     writeState(s);
   },
@@ -261,6 +342,6 @@ export const MenuProgress = {
 
   /** 调试/测试重置：清空进度 */
   reset(): void {
-    writeState({ ...DEFAULT_STATE });
+    writeState({ ...DEFAULT_STATE, chapterProgress: emptyChapterProgress() });
   },
 };

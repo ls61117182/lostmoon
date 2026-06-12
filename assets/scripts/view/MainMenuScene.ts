@@ -562,14 +562,13 @@ export class MainMenuScene extends Component {
   }
 
   private refreshLevelButtons() {
-    const state = MenuProgress.load();
     const levels = getChapterLevels(this.selectedChapterId);
     for (let i = 0; i < this.levelBtns.length; i++) {
       const meta = levels[i];
       const btn = this.levelBtns[i];
       if (!meta || !btn) continue;
-      const unlocked = meta.id <= state.unlockedLevel;
-      const completed = state.completedLevels.indexOf(meta.id) >= 0;
+      const unlocked = MenuProgress.isUnlocked(meta.id, meta.chapterId);
+      const completed = MenuProgress.isCompleted(meta.id, meta.chapterId);
 
       const color = !unlocked
         ? BTN_LEVEL_LOCKED
@@ -589,7 +588,7 @@ export class MainMenuScene extends Component {
   }
 
   private onClickLevel(meta: LevelMeta) {
-    if (!MenuProgress.isUnlocked(meta.id)) {
+    if (!MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
       console.log('[Menu] 关卡未解锁:', meta.id);
       return;
     }

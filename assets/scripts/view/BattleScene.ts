@@ -224,16 +224,16 @@ function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: 
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
-type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'truck'>;
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
-type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
 function isSplitTankKind(k: UnitKind): k is SplitTankKind {
@@ -4662,7 +4662,7 @@ export class BattleScene extends Component {
     /** 单兵 sprite 显示尺寸（按图最长边等比缩放到该值） */
     const spriteFit = this.hexSize * 0.58;
     /** 第 1 个兵（Infantry01）保持基础大小，其余两个放大 15% 以视觉拉开「主兵 / 后排」层次 */
-    const spriteFitByIndex = [spriteFit, spriteFit * 1.15, spriteFit * 1.15];
+    const spriteFitByIndex = [spriteFit, spriteFit * 1.00, spriteFit * 1.15];
 
     for (let i = 0; i < BattleScene.INFANTRY_SPRITES_PER_UNIT; i++) {
       if (this.infantryTopPoolNext >= this.infantryTopSpritePool.length) break;
@@ -5615,10 +5615,9 @@ export class BattleScene extends Component {
     }
     // 胜利时回写菜单进度，下次主菜单会显示 ★ 并解锁下一关。
     // markCompleted 内部幂等，重复调用无副作用。
-    if (this.outcome === 'victory'
-        && GameSession.selectedLevelId > 0
-        && findLevelByMissionId(this.missionId)) {
-      MenuProgress.markCompleted(GameSession.selectedLevelId);
+    const completedLevel = findLevelByMissionId(this.missionId);
+    if (this.outcome === 'victory' && completedLevel) {
+      MenuProgress.markCompleted(completedLevel.id, completedLevel.chapterId);
     }
     if (!this.outcomeLabel) {
       const n = new Node('OutcomeLabel');

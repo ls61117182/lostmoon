@@ -16,7 +16,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97', 'at_gun', 'truck'];
+const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97', 'at_gun', 'heavy_artillery', 'truck'];
 const SPLIT_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97'];
 const NUM_FIELDS = [
   'fitScale',
@@ -153,7 +153,7 @@ function build() {
   const records = toRecords(readCsvRowsSmart(CSV_PATH, {
     toolName: 'buildTankVisualDB',
   }));
-  const dataRecords = records.filter(rec => rec.kind !== '字段含义');
+  const dataRecords = records.filter(rec => rec.kind !== '字段含义' && rec.kind !== '单位类型ID');
   const byKind = new Map();
 
   for (const rec of dataRecords) {
@@ -187,9 +187,9 @@ function build() {
   lines.push('');
   lines.push("import { UnitKind } from './types';");
   lines.push('');
-  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'truck'>;");
+  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;");
   lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3' | 'type97'>;");
-  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\', \'at_gun\', \'truck\'];');
+  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\', \'at_gun\', \'heavy_artillery\', \'truck\'];');
   lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\'];');
   lines.push('');
   lines.push('export interface TankVisualAssetConfig {');
@@ -271,7 +271,7 @@ function build() {
   lines.push('}');
   lines.push('');
   lines.push('export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {');
-  lines.push("  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'type97' || kind === 'at_gun' || kind === 'truck') {");
+  lines.push("  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'type97' || kind === 'at_gun' || kind === 'heavy_artillery' || kind === 'truck') {");
   lines.push('    return TANK_VISUAL_CONFIG[kind];');
   lines.push('  }');
   lines.push('  return TANK_VISUAL_DEFAULT;');

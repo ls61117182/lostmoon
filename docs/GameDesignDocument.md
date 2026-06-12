@@ -479,6 +479,7 @@ AI 行动顺序：
 
 - Type 97 Chi-Ha 使用 `tank_visuals.csv` 中的分体车身 / 炮塔 / 击毁资源；炮塔开火前会沿独立炮塔节点转向，转轴由 `turretPivotX/Y` 与 `turretSpritePivotX/Y` 对齐到炮塔环红圈位置。
 - AT Gun 使用 `tank_visuals.csv` 中的普通俯视图 / 击毁资源；它没有独立炮塔，不进入分体炮塔列表，显示时随单位朝向整体旋转。
+- Heavy Artillery 使用 `tank_visuals.csv` 中的普通俯视图 / 击毁资源；它没有独立炮塔，不进入分体炮塔列表，显示时随单位朝向整体旋转。
 
 > 上表数字来自截图可辨认信息，后续录入单位数据前需要用实体规则书或高清图核对。Pacific 使用 2d6 击穿，装甲值会整体高于欧洲 1d6 规则下的装甲值；即使单位名称相同，也应按章节建立独立配置（例如 `sherman_europe` / `sherman_pacific` 或等价的 chapter-scoped unit profile），不覆盖欧洲单位数值。
 
