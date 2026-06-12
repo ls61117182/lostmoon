@@ -498,4 +498,11 @@ export const LANG_DB: Record<string, LangEntry> = {
   'fireCheck.crewKia': { zh: "阵亡检定 d6={cd}：{role} 阵亡", en: "Crew check d6={cd}: {role} KIA" },
   'fireCheck.crewSafe': { zh: "阵亡检定 d6={cd}：虚惊", en: "Crew check d6={cd}: false alarm" },
   'fireCheck.batchFire': { zh: "本次结果为「起火+1」。最低点结算后着火程度 +{k}。", en: "This result adds fire. Fire level +{k} after resolving the lowest die." },
+  'usCasualty.title': { zh: "美军伤亡检定", en: "US Casualty Check" },
+  'usCasualty.providers': { zh: "各单位提供的骰子数量：\\n{lines}", en: "Dice provided by units:\\n{lines}" },
+  'usCasualty.providerLine': { zh: "{unit}*{units}：{dice}颗", en: "{unit}*{units}: {dice}" },
+  'usCasualty.noProviders': { zh: "各单位提供的骰子数量：无", en: "Dice provided by units: none" },
+  'usCasualty.noDice': { zh: "无骰子", en: "No dice" },
+  'usCasualty.result': { zh: "美军伤亡+{hits}", en: "US Casualties +{hits}" },
+  'usCasualty.confirm': { zh: "确定", en: "OK" },
 };

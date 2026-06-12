@@ -153,8 +153,13 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
 }
 
 /** 命中所需 = 体型 + 距离 + 树篱数 + 建筑格 + 烟雾 + 隐蔽 */
-export function hitThreshold(ctx: AttackContext): number {
-  const b = hitBreakdown(ctx);
+export interface HitBreakdownOptions {
+  includeRearArc?: boolean;
+  frontArcModifier?: number;
+}
+
+export function hitThreshold(ctx: AttackContext, opts: HitBreakdownOptions = {}): number {
+  const b = hitBreakdown(ctx, opts);
   return b.threshold;
 }
 
@@ -176,7 +181,7 @@ export interface HitBreakdown {
   rearArc?: number;
 }
 
-export function hitBreakdown(ctx: AttackContext): HitBreakdown {
+export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
   const { attacker, target, map } = ctx;
   const distance = hexDistance(attacker.pos, target.pos);
   const hedges = map.countHedgesAlong(attacker.pos, target.pos);
@@ -187,10 +192,12 @@ export function hitBreakdown(ctx: AttackContext): HitBreakdown {
   const concealed = target.hidden && !isInfantryAttacker(attacker) ? 2 : 0;
   const pacific = isPacificCombat(ctx);
   const trees = pacific ? countPacificTreesAlong(ctx) : 0;
-  const rearArc = pacific && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
+  const includeRearArc = opts.includeRearArc ?? true;
+  const rearArc = includeRearArc && pacific && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
+  const frontArcModifier = opts.frontArcModifier ?? 0;
   return {
     size, distance, hedges, building, smoke, concealed, trees, rearArc,
-    threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc,
+    threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc + frontArcModifier,
   };
 }
 
@@ -562,13 +569,18 @@ export interface MGReport {
   hit: boolean;
 }
 
+export function mgHitThreshold(ctx: AttackContext): number {
+  if (!isPacificCombat(ctx)) return MG_HIT_THRESHOLD;
+  const frontArcModifier = isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0;
+  return hitThreshold(ctx, { includeRearArc: false, frontArcModifier });
+}
+
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
   const d1 = rng.d6();
   if (isPacificCombat(ctx)) {
-    const hitBonus = isTargetInFrontArc(ctx.attacker, ctx.target) ? 1 : 0;
-    const roll = d1 + hitBonus;
-    const threshold = hitThreshold(ctx);
-    return { dice: [d1, 0], hitDiceCount: 1, hitBonus, roll, threshold, hit: roll >= threshold };
+    const roll = d1;
+    const threshold = mgHitThreshold(ctx);
+    return { dice: [d1, 0], hitDiceCount: 1, hitBonus: 0, roll, threshold, hit: roll >= threshold };
   }
   const d2 = rng.d6();
   const roll = d1 + d2;
@@ -577,7 +589,7 @@ export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
 
 export function maxMGHitRoll(ctx: AttackContext): number {
   return isPacificCombat(ctx)
-    ? 6 + (isTargetInFrontArc(ctx.attacker, ctx.target) ? 1 : 0)
+    ? 6
     : 12;
 }
 

@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck'];
-const SPLIT_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3'];
+const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97', 'at_gun', 'truck'];
+const SPLIT_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',
@@ -153,9 +153,10 @@ function build() {
   const records = toRecords(readCsvRowsSmart(CSV_PATH, {
     toolName: 'buildTankVisualDB',
   }));
+  const dataRecords = records.filter(rec => rec.kind !== '字段含义');
   const byKind = new Map();
 
-  for (const rec of records) {
+  for (const rec of dataRecords) {
     if (!rec.kind) throw new Error(`row ${rec.__row}: kind is empty`);
     if (!REQUIRED_KINDS.includes(rec.kind)) {
       throw new Error(`row ${rec.__row}: unknown kind "${rec.kind}"`);
@@ -186,10 +187,10 @@ function build() {
   lines.push('');
   lines.push("import { UnitKind } from './types';");
   lines.push('');
-  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;");
-  lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3'>;");
-  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'truck\'];');
-  lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\'];');
+  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'truck'>;");
+  lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3' | 'type97'>;");
+  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\', \'at_gun\', \'truck\'];');
+  lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\'];');
   lines.push('');
   lines.push('export interface TankVisualAssetConfig {');
   lines.push('  topSpritePath: string;');
@@ -270,7 +271,7 @@ function build() {
   lines.push('}');
   lines.push('');
   lines.push('export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {');
-  lines.push("  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'truck') {");
+  lines.push("  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'type97' || kind === 'at_gun' || kind === 'truck') {");
   lines.push('    return TANK_VISUAL_CONFIG[kind];');
   lines.push('  }');
   lines.push('  return TANK_VISUAL_DEFAULT;');
@@ -286,7 +287,7 @@ function build() {
   lines.push('');
 
   fs.writeFileSync(OUT_PATH, lines.join('\n'), 'utf8');
-  console.log(`[buildTankVisualDB] OK  ${records.length} rows -> ${path.relative(ROOT, OUT_PATH)}`);
+  console.log(`[buildTankVisualDB] OK  ${dataRecords.length} rows -> ${path.relative(ROOT, OUT_PATH)}`);
 }
 
 try {

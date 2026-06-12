@@ -486,3 +486,10 @@ fireCheck.lowestLine,最低骰：d6={die} → {outcome},Lowest die: d6={die} →
 fireCheck.crewKia,阵亡检定 d6={cd}：{role} 阵亡,Crew check d6={cd}: {role} KIA
 fireCheck.crewSafe,阵亡检定 d6={cd}：虚惊,Crew check d6={cd}: false alarm
 fireCheck.batchFire,本次结果为「起火+1」。最低点结算后着火程度 +{k}。,This result adds fire. Fire level +{k} after resolving the lowest die.
+usCasualty.title,美军伤亡检定,US Casualty Check
+usCasualty.providers,各单位提供的骰子数量：\n{lines},Dice provided by units:\n{lines}
+usCasualty.providerLine,{unit}*{units}：{dice}颗,{unit}*{units}: {dice}
+usCasualty.noProviders,各单位提供的骰子数量：无,Dice provided by units: none
+usCasualty.noDice,无骰子,No dice
+usCasualty.result,美军伤亡+{hits},US Casualties +{hits}
+usCasualty.confirm,确定,OK

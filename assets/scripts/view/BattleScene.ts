@@ -73,7 +73,7 @@ import {
   rollActionDice,
 } from '../core/ActionDice';
 import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, maxMGHitRoll, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
+import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, maxMGHitRoll, mgHitThreshold, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
@@ -224,16 +224,16 @@ function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: 
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
-type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'truck';
 }
 
-type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'truck'>;
 
 function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'truck';
 }
 
 function isSplitTankKind(k: UnitKind): k is SplitTankKind {
@@ -1128,6 +1128,17 @@ export class BattleScene extends Component {
     bodyText: string;
     apply: () => void;
   } | null = null;
+  private usCasualtyEventUI: {
+    root: Node;
+    stage: 'roll' | 'hold';
+    t: number;
+    dieLabels: Label[];
+    dice: number[];
+    providerLabel: Label;
+    resultLabel: Label;
+    hits: number;
+    limit: number;
+  } | null = null;
 
   // ---- 右侧谢尔曼状态面板 ----
   private statusPanel: Node | null = null;
@@ -1578,6 +1589,7 @@ export class BattleScene extends Component {
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
+    this.destroyUsCasualtyEventUI();
     this.closeTileInspectModal();
     this.turnEndUnitSeq = 0;
     this.refreshPhaseUI();
@@ -1849,7 +1861,7 @@ export class BattleScene extends Component {
       this.g.lineWidth = 3;
       this.drawHexOutline(c.x, c.y, this.hexSize - 3);
       const maxRoll = maxMGHitRoll(ctx);
-      const need = maxRoll <= 7 ? hitThreshold(ctx) : 7;
+      const need = mgHitThreshold(ctx);
       const prob = maxRoll <= 7
         ? Math.max(0, Math.min(1, (maxRoll + 1 - need) / 6))
         : undefined;
@@ -2467,6 +2479,8 @@ export class BattleScene extends Component {
     if (this.turnEndEventUI) this.advanceTurnEndEventUI(dt);
 
     if (this.fireCheckEventUI) this.advanceFireCheckEventUI(dt);
+
+    if (this.usCasualtyEventUI) this.advanceUsCasualtyEventUI(dt);
 
     if (this.turretAimAnim) {
       const a = this.turretAimAnim;
@@ -5679,6 +5693,7 @@ export class BattleScene extends Component {
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
+    this.destroyUsCasualtyEventUI();
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -7055,7 +7070,7 @@ export class BattleScene extends Component {
 
     const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater };
     const maxRoll = maxMGHitRoll(ctx);
-    const impossibleThreshold = hitThreshold(ctx);
+    const impossibleThreshold = mgHitThreshold(ctx);
     const impossible = maxRoll < impossibleThreshold;
     const report = impossible
       ? {
@@ -7670,6 +7685,7 @@ export class BattleScene extends Component {
       lowest: prep.steps[0]?.die ?? 0,
     };
     this.destroyFireCheckEventUI();
+    this.destroyUsCasualtyEventUI();
     const refs = this.buildFireCheckEventPanel(prep.allDice);
     for (const lab of refs.dieLabels) this.setDieLabelFace(lab, '?');
     refs.sumLabel.string = '';
@@ -7865,6 +7881,7 @@ export class BattleScene extends Component {
     this.closeBattleExitModal();
     this.closeBattleModal();
     this.closeTileInspectModal();
+    this.destroyUsCasualtyEventUI();
     this.setCombatLogExpanded(false);
   }
 
@@ -9500,6 +9517,7 @@ export class BattleScene extends Component {
     this.finalizeDiceShow(true);
     this.destroyTurnEndEventUI();
     this.destroyFireCheckEventUI();
+    this.destroyUsCasualtyEventUI();
     this.closeDiePopover();
     this.clearFloaters();
     this.clearDestroyWreckVisuals();
@@ -10248,7 +10266,7 @@ export class BattleScene extends Component {
 
     const hitDiceCount = Math.max(1, Math.min(2, report.hitDiceCount ?? 2));
 
-    // 命中骰：主炮/欧洲机枪 2d6；Pacific 机枪 1d6（可带正面 +1）。
+    // 命中骰：主炮/欧洲机枪 2d6；Pacific 机枪 1d6（正面 -1 已计入命中所需）。
     const d1 = this.makeDieSquare(panel, DIE_COL_1, hitDiceY, DIE_SIZE);
     const d2 = this.makeDieSquare(panel, DIE_COL_2, hitDiceY, DIE_SIZE);
     if (hitDiceCount === 1) {
@@ -10947,7 +10965,7 @@ export class BattleScene extends Component {
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null
       || this.enemyDiceSortAnim !== null
-      || this.turnEndEventUI !== null || this.fireCheckEventUI !== null
+      || this.turnEndEventUI !== null || this.fireCheckEventUI !== null || this.usCasualtyEventUI !== null
       || this.tileInspectModalRoot !== null;
   }
 
@@ -11111,6 +11129,208 @@ export class BattleScene extends Component {
     this.continueEnemyPhaseAfterFireCheck();
   }
 
+  private destroyUsCasualtyEventUI() {
+    const ui = this.usCasualtyEventUI;
+    if (!ui) return;
+    this.usCasualtyEventUI = null;
+    if (ui.root.isValid) ui.root.destroy();
+  }
+
+  private buildUsCasualtyEventPanel(diceCount: number, providerLineCount: number): {
+    root: Node;
+    dieLabels: Label[];
+    providerLabel: Label;
+    resultLabel: Label;
+  } {
+    const perRow = 8;
+    const rows = Math.max(1, Math.ceil(Math.max(1, diceCount) / perRow));
+    const dieSize = diceCount > 12 ? 36 : 44;
+    const gap = diceCount > 12 ? 38 : 50;
+    const diceBlockH = diceCount > 0 ? rows * (dieSize + 10) - 10 : 32;
+    const providerBlockH = Math.min(176, Math.max(56, providerLineCount * 24 + 28));
+
+    const root = new Node('UsCasualtyEventPanel');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.setPosition(0, 0, 0);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+
+    const mask = new Node('Mask');
+    mask.layer = this.node.layer;
+    mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.addChild(mask);
+    const maskG = mask.addComponent(Graphics);
+    maskG.fillColor = MODAL_BACKDROP;
+    maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    maskG.fill();
+    mask.addComponent(BlockInputEvents);
+
+    const pw = Math.min(760, CANVAS_W - 40);
+    const ph = Math.min(310 + providerBlockH + diceBlockH, CANVAS_H - 64);
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    root.addChild(panel);
+    panel.addComponent(UITransform).setContentSize(pw, ph);
+    const panelG = panel.addComponent(Graphics);
+    panelG.fillColor = MODAL_PANEL_BG;
+    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
+    panelG.fill();
+    panelG.strokeColor = MODAL_PANEL_BORDER;
+    panelG.lineWidth = 2;
+    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
+    panelG.stroke();
+
+    this.makeBattleModalLabel(panel, t('usCasualty.title'), 0, ph * 0.5 - 34, pw - 48, 34, 26, HUD_TEXT_COLOR);
+
+    const providerNode = new Node('ProviderLabel');
+    providerNode.layer = this.node.layer;
+    panel.addChild(providerNode);
+    const providerUt = providerNode.addComponent(UITransform);
+    providerUt.setAnchorPoint(0.5, 1);
+    providerUt.setContentSize(Math.min(620, pw - 96), providerBlockH);
+    const providerL = providerNode.addComponent(Label);
+    providerL.fontSize = 18;
+    providerL.lineHeight = 24;
+    providerL.color = new Color(225, 225, 215, 255);
+    providerL.horizontalAlign = HorizontalTextAlignment.LEFT;
+    providerL.verticalAlign = VerticalTextAlignment.TOP;
+    providerL.overflow = Label.Overflow.CLAMP;
+    providerL.string = '';
+    providerNode.setPosition(0, ph * 0.5 - 76);
+
+    const dieWrap = new Node('DieWrap');
+    dieWrap.layer = this.node.layer;
+    panel.addChild(dieWrap);
+    dieWrap.setPosition(0, ph * 0.5 - 106 - providerBlockH - diceBlockH * 0.5);
+    const dieLabels: Label[] = [];
+    if (diceCount > 0) {
+      for (let r = 0; r < rows; r++) {
+        const inRow = Math.min(perRow, diceCount - r * perRow);
+        const startX = -((inRow - 1) * gap) * 0.5;
+        for (let c = 0; c < inRow; c++) {
+          dieLabels.push(this.makeDieSquare(dieWrap, startX + c * gap, -r * (dieSize + 10), dieSize));
+        }
+      }
+    } else {
+      this.makeBattleModalLabel(dieWrap, t('usCasualty.noDice'), 0, 0, 360, 32, 19, DICE_INFO_TEXT);
+    }
+
+    const resultNode = new Node('ResultLabel');
+    resultNode.layer = this.node.layer;
+    panel.addChild(resultNode);
+    resultNode.addComponent(UITransform).setContentSize(Math.min(620, pw - 96), 52);
+    const resultL = resultNode.addComponent(Label);
+    resultL.fontSize = 28;
+    resultL.lineHeight = 34;
+    resultL.color = DICE_OUTCOME_KO;
+    resultL.horizontalAlign = HorizontalTextAlignment.CENTER;
+    resultL.verticalAlign = VerticalTextAlignment.CENTER;
+    resultL.overflow = Label.Overflow.CLAMP;
+    resultL.string = '';
+    resultNode.setPosition(0, ph * 0.5 - 136 - providerBlockH - diceBlockH);
+
+    const confirmB = this.makeBattleRectButton(
+      panel,
+      0,
+      -ph * 0.5 + 48,
+      200,
+      44,
+      BATTLE_BTN_ACCENT,
+      () => this.onUsCasualtyConfirmClick(),
+    );
+    const confirmLab = this.makeBattleModalLabel(
+      confirmB.node,
+      t('usCasualty.confirm'),
+      0,
+      0,
+      200,
+      44,
+      22,
+      Color.WHITE,
+    );
+    this.mirrorBattleModalButtonLabel(confirmLab, () => this.onUsCasualtyConfirmClick());
+
+    return { root, dieLabels, providerLabel: providerL, resultLabel: resultL };
+  }
+
+  private setUsCasualtyDieFace(label: Label | null | undefined, value: number | string, hot: boolean) {
+    if (!label) return;
+    const n = Number(value);
+    const container = label.node.parent;
+    const body = container?.getComponent(Graphics);
+    const bodyUt = container?.getComponent(UITransform);
+    const size = bodyUt ? Math.min(bodyUt.contentSize.width, bodyUt.contentSize.height) : 44;
+    if (body) {
+      body.clear();
+      this.drawDieBody(body, size, size, {
+        fill: hot ? new Color(255, 244, 196, 255) : DICE_DIE_FILL,
+        border: hot ? new Color(255, 196, 48, 255) : DICE_DIE_BORDER,
+        lineWidth: hot ? 4 : 2,
+        shadow: true,
+      });
+    }
+    const pips = label.node.parent?.getChildByName('Pips')?.getComponent(Graphics);
+    if (pips) pips.clear();
+    if (body && Number.isInteger(n) && n >= 1 && n <= 6) {
+      this.drawDiePips(body, n, size, hot ? new Color(160, 38, 24, 255) : DICE_DIE_TEXT);
+      label.string = '';
+    } else {
+      label.string = String(value);
+      label.color = hot ? new Color(160, 38, 24, 255) : DICE_DIE_TEXT;
+    }
+  }
+
+  private advanceUsCasualtyEventUI(dt: number) {
+    const ui = this.usCasualtyEventUI;
+    if (!ui) return;
+    ui.t += dt;
+    if (ui.stage === 'roll') {
+      const DUR = 0.55;
+      if (ui.t < DUR) {
+        const tick = Math.floor(ui.t / 0.08) % 6;
+        for (const lab of ui.dieLabels) this.setUsCasualtyDieFace(lab, (tick % 6) + 1, false);
+        return;
+      }
+      ui.stage = 'hold';
+      ui.t = 0;
+      ui.resultLabel.string = t('usCasualty.result', { hits: ui.hits });
+      this.battleLogI18n('battleLog.usCasualtyCheck', {
+        dice: ui.dice.length > 0 ? ui.dice.join('+') : '-',
+        hits: ui.hits,
+        cur: this.mission?.usCasualties ?? 0,
+        limit: ui.limit,
+      });
+      this.refreshObjectiveHud();
+      this.outcome = this.mission ? checkOutcome(this.mission) : this.outcome;
+      if (this.outcome !== 'ongoing') {
+        this.battleLogI18n('battleLog.usCasualtyDefeat', {
+          cur: this.mission?.usCasualties ?? 0,
+          limit: ui.limit,
+        });
+      }
+    }
+    if (ui.stage === 'hold') {
+      const hotOn = Math.floor(ui.t / 0.22) % 2 === 0;
+      for (let i = 0; i < ui.dieLabels.length; i++) {
+        const value = ui.dice[i] ?? '?';
+        this.setUsCasualtyDieFace(ui.dieLabels[i], value, value === 6 && hotOn);
+      }
+    }
+  }
+
+  private onUsCasualtyConfirmClick() {
+    const ui = this.usCasualtyEventUI;
+    if (!ui || ui.stage !== 'hold') return;
+    this.destroyUsCasualtyEventUI();
+    if (this.outcome !== 'ongoing') {
+      this.refreshObjectiveHud();
+      this.updateOutcomeOverlay();
+      return;
+    }
+    this.continueAfterPacificUsCasualtyCheck();
+  }
+
   private destroyTurnEndEventUI() {
     const ui = this.turnEndEventUI;
     if (!ui) return;
@@ -11130,12 +11350,16 @@ export class BattleScene extends Component {
       this.endEnemyPhase();
       return;
     }
-    this.resolvePacificUsCasualtyCheck();
-    if (this.outcome !== 'ongoing') {
-      this.refreshObjectiveHud();
-      this.updateOutcomeOverlay();
+    if (this.beginPacificUsCasualtyCheckOrContinue()) return;
+    this.continueAfterPacificUsCasualtyCheck();
+  }
+
+  private continueAfterPacificUsCasualtyCheck() {
+    if (!this.mission) {
+      this.endEnemyPhase();
       return;
     }
+    const mid = this.mission.data.id;
     if (!hasTurnEndEvents(mid)) {
       this.endEnemyPhase();
       return;
@@ -11143,34 +11367,50 @@ export class BattleScene extends Component {
     this.startTurnEndEventFlow(mid);
   }
 
-  private resolvePacificUsCasualtyCheck() {
-    if (!this.mission) return;
+  private beginPacificUsCasualtyCheckOrContinue(): boolean {
+    if (!this.mission) return false;
     const limit = this.mission.data.usCasualtyLimit ?? 0;
-    if (this.mission.data.theater !== 'pacific' || limit <= 0) return;
+    if (this.mission.data.theater !== 'pacific' || limit <= 0) return false;
 
     const dice: number[] = [];
+    const providerByKind = new Map<UnitKind, { unitCount: number; diceCount: number }>();
     for (const enemy of this.mission.enemies) {
       if (enemy.destroyed || enemy.faction !== 'japanese') continue;
       const count = Math.max(0, Math.floor(enemy.stats.usCasualtyDice ?? 0));
+      if (count <= 0) continue;
+      const prev = providerByKind.get(enemy.kind) ?? { unitCount: 0, diceCount: 0 };
+      prev.unitCount += 1;
+      prev.diceCount += count;
+      providerByKind.set(enemy.kind, prev);
       for (let i = 0; i < count; i++) dice.push(this.rng.d6());
     }
 
+    const providerLines = Array.from(providerByKind.entries()).map(([kind, info]) => t('usCasualty.providerLine', {
+      unit: unitDisplayName(kind),
+      units: info.unitCount,
+      dice: info.diceCount,
+    }));
     const hits = dice.filter(d => d === 6).length;
     this.mission.usCasualties = (this.mission.usCasualties ?? 0) + hits;
-    this.battleLogI18n('battleLog.usCasualtyCheck', {
-      dice: dice.length > 0 ? dice.join('+') : '-',
+    this.destroyUsCasualtyEventUI();
+    const refs = this.buildUsCasualtyEventPanel(dice.length, Math.max(1, providerLines.length));
+    refs.providerLabel.string = providerLines.length > 0
+      ? t('usCasualty.providers', { lines: providerLines.join('\n') })
+      : t('usCasualty.noProviders');
+    refs.resultLabel.string = '';
+    for (const lab of refs.dieLabels) this.setUsCasualtyDieFace(lab, '?', false);
+    this.usCasualtyEventUI = {
+      root: refs.root,
+      stage: 'roll',
+      t: 0,
+      dieLabels: refs.dieLabels,
+      dice,
+      providerLabel: refs.providerLabel,
+      resultLabel: refs.resultLabel,
       hits,
-      cur: this.mission.usCasualties ?? 0,
       limit,
-    });
-    this.refreshObjectiveHud();
-    this.outcome = checkOutcome(this.mission);
-    if (this.outcome !== 'ongoing') {
-      this.battleLogI18n('battleLog.usCasualtyDefeat', {
-        cur: this.mission.usCasualties ?? 0,
-        limit,
-      });
-    }
+    };
+    return true;
   }
 
   private startTurnEndEventFlow(missionId: string) {
