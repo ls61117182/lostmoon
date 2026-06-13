@@ -1,5 +1,5 @@
 ﻿key,zh,en
-dmg.effect.destroyed,摧毁！,Destroyed!
+dmg.effect.destroyed,摧毁,Destroyed
 dmg.effect.damaged,受损,Damaged
 dmg.effect.fire,起火 +1,On Fire +1
 dmg.effect.turret,炮塔受损,Turret Hit
@@ -172,14 +172,15 @@ attack.reason.unknown,无法攻击,Cannot Attack
 preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
 dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}
 dice.panel.mgHitNeed,机枪扫射 命中需 ≥{n},MG Burst · Hit ≥{n}
-dice.panel.outcomeMGKill,步兵击毙！,Infantry Down!
-dice.panel.hitYes,命中！,Hit!
+dice.panel.outcomeMGKill,步兵击毙,Infantry Down
+dice.panel.hitYes,命中,Hit
 dice.panel.hitNo,未命中,Miss
 dice.panel.hitDoublesCommanderKia,命中骰对子：车长阵亡,Hit doubles: Commander KIA
 dice.panel.penMustPen,必穿 (≤0),Auto-Pen (≤0)
 dice.panel.penNeed,需 ≥{n},Need ≥{n}
-dice.panel.penYes,击穿！,Penetrate!
+dice.panel.penYes,击穿,Penetrate
 dice.panel.penNo,跳弹,Ricochet
+dice.panel.invalid,无效,Invalid
 dice.panel.dmgTitle,伤害检定,Damage Check
 dice.panel.crewTitle,阵亡检定,Crew Check
 dice.panel.outcomeMiss,MISS,MISS

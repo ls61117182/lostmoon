@@ -10,37 +10,37 @@ import { Theater, UnitKind, UnitStats } from './types';
 const DB: Record<UnitKind, UnitStats> = {
   sherman: { // 谢尔曼 M4 - 玩家方坦克；Pacific profile 由 UnitDB 覆盖为 4/11/10/9/8/AP2
     faction: "allied",
-    size: 4, armorFront: 6, armorFrontSide: 5, armorRearSide: 4, armorRear: 4, penetration: 1, usCasualtyDice: 0,
+    size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 2, usCasualtyDice: 0,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
   },
   tiger: { // 虎式 - 重型敌方坦克
     faction: "german",
-    size: 3, armorFront: 7, armorFrontSide: 6, armorRearSide: 5, armorRear: 4, penetration: 2, usCasualtyDice: 0,
+    size: 3, armorFront: 12, armorFrontSide: 11, armorRearSide: 10, armorRear: 9, penetration: 3, usCasualtyDice: 0,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
   },
   panzer4: { // 四号坦克 - 中坚敌方坦克
     faction: "german",
-    size: 4, armorFront: 6, armorFrontSide: 5, armorRearSide: 4, armorRear: 4, penetration: 1, usCasualtyDice: 0,
+    size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 2, usCasualtyDice: 0,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
   },
   panzer3: { // 三号坦克 - 次级敌方坦克
     faction: "german",
-    size: 5, armorFront: 5, armorFrontSide: 4, armorRearSide: 3, armorRear: 3, penetration: 0, usCasualtyDice: 0,
+    size: 5, armorFront: 10, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, penetration: 1, usCasualtyDice: 0,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
   },
   truck: { // 卡车 - 占位 - 后续按特殊规则结算
     faction: "german",
-    size: 3, armorFront: 1, armorFrontSide: 1, armorRearSide: 1, armorRear: 1, penetration: 1, usCasualtyDice: 0,
+    size: 3, armorFront: 2, armorFrontSide: 2, armorRearSide: 2, armorRear: 2, penetration: 0, usCasualtyDice: 0,
     moveSound: "audio/tank_move",
     attackSound: "",
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
-    size: 0, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 1, usCasualtyDice: 0,
+    size: 0, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 2, usCasualtyDice: 0,
     moveSound: "",
     attackSound: "",
   },

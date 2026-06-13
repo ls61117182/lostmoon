@@ -5,7 +5,7 @@
  *   - 命中公式只算 "体型 + 距离 + 树篱 + 建筑"，忽略烟雾/隐蔽
  *   - 流程（§3.4 三段式）：
  *       ① 2d6 命中检定（阈值 = 体型 + 距离 + 树篱 + 建筑 + …）
- *       ② 命中后再掷 1d6 穿甲检定（d6 ≥ 装甲 - 穿甲 才击穿；未击穿 = 跳弹，命中无效）
+ *       ② 命中后再掷 2d6 穿甲检定（2d6 ≥ 装甲 - 穿甲 才击穿；未击穿 = 跳弹，命中无效）
  *       ③ 击穿后再掷 1d6 伤害检定（§3.4 Step 3 的伤害结果表）：
  *            主角： 1=摧毁 / 2=阵亡检定 / 3,4=着火 +1 / 5=炮塔受损 / 6=痛痪
  *            其他坦克： 1–4=受损（已受损→摧毁） / 5,6=摧毁
@@ -67,13 +67,17 @@ export interface AttackReport {
   armor?: number;
   penetration?: number;
   /** 穿甲检定分段：仅在 hit=true 时有值 */
-  penDie?: number;          // 击穿掷骰总和（Europe=1d6；Pacific=2d6）
-  penDice?: number[];       // 击穿掷骰明细（Europe 1 颗；Pacific 2 颗）
+  penDie?: number;          // 击穿掷骰总和（2d6）
+  penDice?: number[];       // 击穿掷骰明细（2 颗）
   penThreshold?: number;    // 击穿所需 = armor - penetration（≤0 必穿，≥7 不可击穿）
   penetrated?: boolean;     // 是否击穿装甲；未击穿 = 命中无效
   /** 伤害检定分段：仅在 hit && penetrated 时有值 */
   damageDie?: number;       // 1d6 伤害表掷骰
   damageEffect?: DamageEffect;
+  /** 展示用预掷伤害骰：只有本攻击类型可能需要伤害检定时有值；前置判定失败时仍显示为无效。 */
+  stagedDamageDie?: number;
+  stagedDamageEffect?: DamageEffect;
+  stagedCrewCheck?: CrewDeathResult;
   /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（只会在主角受伤表中发生） */
   crewCheck?: CrewDeathResult;
   /** Enemy hit-roll doubles kill an open-hatch protagonist commander on a successful hit. */
@@ -295,19 +299,41 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const hit = roll >= threshold;
   const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
-  if (!hit) {
-    return { dice: [d1, d2], roll, threshold, hit: false, commanderKilledByHitDoubles: false, statusChange: 'none' };
-  }
-
   const face = armorFaceFrom(target, attacker.pos);
   const armor = armorValue(target, face);
   const pen = attacker.stats.penetration;
 
-  // 第二段：穿甲检定。Europe 使用 1d6；Pacific 章节覆盖为 2d6。
-  const penDice = pacific ? [rng.d6(), rng.d6()] : [rng.d6()];
+  // 第二段：穿甲检定。Europe / Pacific 统一使用 2d6。
+  const penDice = [rng.d6(), rng.d6()];
   const penDie = penDice.reduce((a, b) => a + b, 0);
   const penThreshold = armor - pen;
   const penetrated = penDie >= penThreshold;
+  const damagePossible = !(pacific && !protagonistTarget);
+  const stagedDamageDie = damagePossible ? rng.d6() : undefined;
+  const stagedDamageEffect = stagedDamageDie !== undefined
+    ? (pacific && protagonistTarget
+      ? resolvePacificShermanDamageEffect(stagedDamageDie)
+      : resolveDamageEffect(target, stagedDamageDie, protagonistTarget))
+    : undefined;
+  let stagedCrewCheck: CrewDeathResult | undefined;
+  if (protagonistTarget && damagePossible) {
+    const crewTarget = commanderKilledByHitDoubles && target.crew
+      ? { ...target, hatchOpen: false, crew: { ...target.crew, commander: false } }
+      : target;
+    stagedCrewCheck = resolveCrewCheck(crewTarget, rng);
+  }
+
+  if (!hit) {
+    return {
+      dice: [d1, d2], roll, threshold, hit: false,
+      armorFace: face, armor, penetration: pen,
+      penDie, penDice, penThreshold, penetrated,
+      stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
+      commanderKilledByHitDoubles: false,
+      protagonistTarget,
+      statusChange: 'none',
+    };
+  }
 
   if (!penetrated) {
     return {
@@ -315,7 +341,9 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       hit: true,
       armorFace: face, armor, penetration: pen,
       penDie, penDice, penThreshold, penetrated,
+      stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
       commanderKilledByHitDoubles,
+      protagonistTarget,
       statusChange: 'none',
     };
   }
@@ -327,6 +355,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       armorFace: face, armor, penetration: pen,
       penDie, penDice, penThreshold, penetrated,
       damageEffect: 'destroyed',
+      stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
       commanderKilledByHitDoubles,
       protagonistTarget,
       statusChange: 'destroyed',
@@ -334,20 +363,12 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   }
 
   // 第三段：伤害检定（§3.4 Step 3；Pacific 主角使用 M4 Damage 表）
-  const damageDie = rng.d6();
-  const damageEffect = pacific && protagonistTarget
-    ? resolvePacificShermanDamageEffect(damageDie)
-    : resolveDamageEffect(target, damageDie, protagonistTarget);
+  const damageDie = stagedDamageDie!;
+  const damageEffect = stagedDamageEffect!;
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
   // 阵亡检定：只对主角（crewCheck）再掷一次，决定哪位乘员死
-  let crewCheck: CrewDeathResult | undefined;
-  if (damageEffect === 'crewCheck') {
-    const crewTarget = commanderKilledByHitDoubles && target.crew
-      ? { ...target, hatchOpen: false, crew: { ...target.crew, commander: false } }
-      : target;
-    crewCheck = resolveCrewCheck(crewTarget, rng);
-  }
+  const crewCheck = damageEffect === 'crewCheck' ? stagedCrewCheck : undefined;
 
   return {
     dice: [d1, d2], roll, threshold,
@@ -355,6 +376,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     armorFace: face, armor, penetration: pen,
     penDie, penDice, penThreshold, penetrated,
     damageDie, damageEffect,
+    stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
     crewCheck,
     commanderKilledByHitDoubles,
     protagonistTarget,
@@ -627,7 +649,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const armor = armorValue(ctx.target, face);
   const pen = ctx.attacker.stats.penetration;
   const penThreshold = armor - pen;
-  const penProb = isPacificCombat(ctx) ? probHit2d6(penThreshold) : probDie1d6(penThreshold);
+  const penProb = probHit2d6(penThreshold);
 
   return {
     hit: { ...hb, probability: hitProb },

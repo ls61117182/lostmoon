@@ -11,7 +11,7 @@ export interface LangEntry {
 }
 
 export const LANG_DB: Record<string, LangEntry> = {
-  'dmg.effect.destroyed': { zh: "摧毁！", en: "Destroyed!" },
+  'dmg.effect.destroyed': { zh: "摧毁", en: "Destroyed" },
   'dmg.effect.damaged': { zh: "受损", en: "Damaged" },
   'dmg.effect.fire': { zh: "起火 +1", en: "On Fire +1" },
   'dmg.effect.turret': { zh: "炮塔受损", en: "Turret Hit" },
@@ -184,14 +184,15 @@ export const LANG_DB: Record<string, LangEntry> = {
   'preview.impossible': { zh: "≥{n}\\n几乎不可能", en: "≥{n}\\nImpossible" },
   'dice.panel.hitNeed': { zh: "命中需 ≥{n}", en: "Hit ≥{n}" },
   'dice.panel.mgHitNeed': { zh: "机枪扫射 命中需 ≥{n}", en: "MG Burst · Hit ≥{n}" },
-  'dice.panel.outcomeMGKill': { zh: "步兵击毙！", en: "Infantry Down!" },
-  'dice.panel.hitYes': { zh: "命中！", en: "Hit!" },
+  'dice.panel.outcomeMGKill': { zh: "步兵击毙", en: "Infantry Down" },
+  'dice.panel.hitYes': { zh: "命中", en: "Hit" },
   'dice.panel.hitNo': { zh: "未命中", en: "Miss" },
   'dice.panel.hitDoublesCommanderKia': { zh: "命中骰对子：车长阵亡", en: "Hit doubles: Commander KIA" },
   'dice.panel.penMustPen': { zh: "必穿 (≤0)", en: "Auto-Pen (≤0)" },
   'dice.panel.penNeed': { zh: "需 ≥{n}", en: "Need ≥{n}" },
-  'dice.panel.penYes': { zh: "击穿！", en: "Penetrate!" },
+  'dice.panel.penYes': { zh: "击穿", en: "Penetrate" },
   'dice.panel.penNo': { zh: "跳弹", en: "Ricochet" },
+  'dice.panel.invalid': { zh: "无效", en: "Invalid" },
   'dice.panel.dmgTitle': { zh: "伤害检定", en: "Damage Check" },
   'dice.panel.crewTitle': { zh: "阵亡检定", en: "Crew Check" },
   'dice.panel.outcomeMiss': { zh: "MISS", en: "MISS" },

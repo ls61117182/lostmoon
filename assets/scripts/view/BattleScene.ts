@@ -221,6 +221,16 @@ function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: 
   g.stroke();
 }
 
+function drawDicePopupPanel(g: Graphics, w: number, h: number, fill: Color, border: Color) {
+  g.fillColor = fill;
+  g.roundRect(-w * 0.5, -h * 0.5, w, h, 12);
+  g.fill();
+  g.strokeColor = border;
+  g.lineWidth = 2;
+  g.roundRect(-w * 0.5, -h * 0.5, w, h, 12);
+  g.stroke();
+}
+
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
@@ -452,8 +462,8 @@ interface DieVisual {
  * 攻击掷骰展示面板的状态机（§3.4 三段式）：
  *   - hit-roll : 2d6 骰子面在飞速循环
  *   - hit-show : 锁定 2d6 真值并显示"命中 / 未命中"
- *   - pen-roll : （仅命中时进入）1d6 穿甲骰在飞速循环
- *   - pen-show : 锁定 1d6 并显示"击穿 / 跳弹"
+ *   - pen-roll : （仅命中时进入）2d6 穿甲骰在飞速循环
+ *   - pen-show : 锁定 2d6 并显示"击穿 / 跳弹"
  *   - dmg-roll : （仅击穿时进入）1d6 伤害骰在飞速循环
  *   - dmg-show : 锁定 1d6 并显示"摧毁 / 起火 / 炮塔受损 / 痛痪 / 阵亡检定 / 受损"
  *   - hold     : 显示最终结果（起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪…），停顿后自毁
@@ -492,7 +502,7 @@ interface DiceShow {
   hitNeedLabel: Label;       // "需≥N"
   hitVerdictLabel: Label;    // "命中！" / "未命中"
   hitSpecialLabel: Label | null;
-  penDieLabels: Label[];    // 穿甲骰（Europe 1 颗；Pacific 2 颗）
+  penDieLabels: Label[];    // 穿甲骰（2 颗）
   penNeedLabel: Label | null;
   penVerdictLabel: Label | null;
   dmgDieLabel: Label | null; // 1 颗伤害骰（仅 penetrated 时展示）
@@ -502,6 +512,7 @@ interface DiceShow {
   crewTitleLabel: Label | null;  // "阵亡检定" 标题
   crewEffectLabel: Label | null; // "驾驶员阵亡 / 虚惊 / …"
   outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪 / 乘员阵亡
+  confirmButton: Node | null;
 }
 
 type CombatLogParams = Record<string, string | number>;
@@ -691,6 +702,8 @@ const ADVANCE_BTN_W = 180;
 const ADVANCE_BTN_H = 72;
 const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
 const MODAL_PANEL_BG     = new Color( 36,  41,  34, 245);
+const DICE_EVENT_PANEL_BG = new Color(40, 44, 52, 128);
+const DICE_EVENT_PANEL_BORDER = new Color(90, 98, 110, 255);
 const MODAL_PANEL_BORDER = new Color(202, 188, 136, 230);
 const MODAL_CLOSE_BG     = new Color(134,  49,  42, 245);
 const SETTINGS_ICON_BG   = new Color( 45,  50,  44, 230);
@@ -734,9 +747,9 @@ const DRIVE_BWD_COLOR = new Color(240, 190,  80, 255);
 const DRIVE_BLOCKED   = new Color(200,  80,  80, 200);
 
 // 掷骰展示面板配色
-const DICE_BACKDROP    = new Color(  0,   0,   0, 160);
-const DICE_PANEL_BG    = new Color( 36,  41,  34, 245);
-const DICE_PANEL_BORDER= new Color(204, 190, 142, 245);
+const DICE_BACKDROP    = new Color(  0,   0,   0, 180);
+const DICE_PANEL_BG    = DICE_EVENT_PANEL_BG;
+const DICE_PANEL_BORDER= DICE_EVENT_PANEL_BORDER;
 const DICE_DIE_FILL    = new Color(245, 245, 235, 255);
 const DICE_DIE_BORDER  = new Color( 30,  30,  30, 255);
 const DICE_DIE_TEXT    = new Color( 20,  20,  20, 255);
@@ -1033,6 +1046,12 @@ export class BattleScene extends Component {
     fromSlot: number[];
     toSlot: number[];
   } | null = null;
+  /** AI 骰结果无可执行动作时，保留高亮和点数一小段时间再推进下一颗骰 */
+  private enemyNoActionHold: {
+    t: number;
+    dur: number;
+    dieIdx: number;
+  } | null = null;
   /** 敌方当前正在执行的那颗骰下标；-1 无高亮 */
   private enemyDiceHighlightIdx: number = -1;
   // 战斗 / 胜负
@@ -1210,6 +1229,8 @@ export class BattleScene extends Component {
   /** 玩家骰子托盘单槽尺寸与间距（与 buildDiceTray / refreshDiceTray 共用） */
   private static readonly DICE_TRAY_SLOT = 72;
   private static readonly DICE_TRAY_GAP = 12;
+  private static readonly EN_LABEL_AVG_CHAR_W = 0.56;
+  private static readonly EN_LABEL_SAFE_PAD = 8;
   private static readonly PLAYER_DICE_SORT_DUR = 0.5;
   private static readonly TERRAIN_SPRITE_POOL = 384;
   private static readonly FOLIAGE_SPRITE_POOL = 256;
@@ -2514,6 +2535,23 @@ export class BattleScene extends Component {
       }
       this.refreshEnemyDiceTray();
       this.redraw();
+      return;
+    }
+
+    if (this.enemyNoActionHold && this.mission && this.enemyDiceTrayRoot) {
+      const hold = this.enemyNoActionHold;
+      hold.t += dt;
+      if (hold.t < hold.dur) {
+        this.refreshEnemyDiceTray();
+        this.redraw();
+        return;
+      }
+      this.enemyDiceUsed[hold.dieIdx] = true;
+      this.enemyDiceHighlightIdx = -1;
+      this.enemyNoActionHold = null;
+      this.refreshEnemyDiceTray();
+      this.redraw();
+      this.runNextEnemyStep();
       return;
     }
 
@@ -5755,7 +5793,8 @@ export class BattleScene extends Component {
       tx.color = HUD_TEXT_COLOR;
       tx.horizontalAlign = HorizontalTextAlignment.CENTER;
       tx.verticalAlign = VerticalTextAlignment.CENTER;
-      tx.string = text;
+      tx.overflow = Label.Overflow.SHRINK;
+      tx.string = this.fitEnglishText(text, W, tx.fontSize);
       b.addChild(txtNode);
       b.on(Node.EventType.TOUCH_END, () => {
         playUiClick();
@@ -5794,10 +5833,11 @@ export class BattleScene extends Component {
     const s = this.mission.sherman;
     const commanderDead = !!(s.crew && !s.crew.commander);
     if (commanderDead) {
-      this.chooseHatchLabel.string = t('btn.hatchCommanderKia');
+      this.chooseHatchLabel.string = this.fitTextForLabel(this.chooseHatchLabel, t('btn.hatchCommanderKia'), 200);
       this.setPhaseBtnEnabled(this.chooseHatchBtn, false, PHASE_BTN_HATCH);
     } else {
-      this.chooseHatchLabel.string = s.hatchOpen ? t('btn.hatchClose') : t('btn.hatchOpen');
+      const hatchText = s.hatchOpen ? t('btn.hatchClose') : t('btn.hatchOpen');
+      this.chooseHatchLabel.string = this.fitTextForLabel(this.chooseHatchLabel, hatchText, 200);
       this.setPhaseBtnEnabled(this.chooseHatchBtn, true, PHASE_BTN_HATCH);
     }
   }
@@ -5822,6 +5862,7 @@ export class BattleScene extends Component {
     tl.color = HUD_TEXT_COLOR;
     tl.horizontalAlign = HorizontalTextAlignment.CENTER;
     tl.verticalAlign = VerticalTextAlignment.CENTER;
+    tl.overflow = Label.Overflow.SHRINK;
     tl.string = '';
     tray.addChild(titleNode);
     this.diceTitleLabel = tl;
@@ -5866,6 +5907,7 @@ export class BattleScene extends Component {
       hint.color = DIE_HINT_GREEN;
       hint.horizontalAlign = HorizontalTextAlignment.CENTER;
       hint.verticalAlign = VerticalTextAlignment.CENTER;
+      hint.overflow = Label.Overflow.SHRINK;
       hint.string = '';
       slot.addChild(hintNode);
 
@@ -5905,13 +5947,14 @@ export class BattleScene extends Component {
       );
     }
     if (this.diceTitleLabel) {
-      this.diceTitleLabel.string = this.playerStep === 'movement'
+      const titleText = this.playerStep === 'movement'
         ? t('dice.tray.move')
         : this.playerStep === 'attack'
           ? t('dice.tray.attack')
           : this.playerStep === 'misc'
             ? t('dice.tray.misc')
             : '';
+      this.diceTitleLabel.string = this.fitTextForLabel(this.diceTitleLabel, titleText, 420);
     }
     this.refreshDiceTray();
     // 点击骰子后弹出的菜单，状态变化时（比如骰子被消耗）一并关闭
@@ -5948,6 +5991,35 @@ export class BattleScene extends Component {
   }
 
   /** 遍历 diceVisuals，按 phaseDice 的当前内容重绘每个骰子（点数 + 动作提示 + 用/未用态）。 */
+  private estimateEnLabelWidth(text: string, fontSize: number): number {
+    let units = 0;
+    for (const ch of text) {
+      if (ch === ' ') units += 0.32;
+      else if (ch === 'i' || ch === 'l' || ch === 'I' || ch === '.' || ch === ',' || ch === ':' || ch === ';' || ch === "'") units += 0.28;
+      else if (ch === 'W' || ch === 'M' || ch === 'w' || ch === 'm') units += 0.86;
+      else if (ch.charCodeAt(0) > 127) units += 0.9;
+      else units += BattleScene.EN_LABEL_AVG_CHAR_W;
+    }
+    return units * fontSize;
+  }
+
+  private abbreviateEnglishWords(text: string): string {
+    return text.replace(/[A-Za-z]+/g, word => word.length <= 2 ? word : word.slice(0, 2));
+  }
+
+  private fitEnglishText(text: string, maxWidth: number, fontSize: number): string {
+    if (getLang() !== 'en') return text;
+    const usableWidth = Math.max(0, maxWidth - BattleScene.EN_LABEL_SAFE_PAD);
+    if (this.estimateEnLabelWidth(text, fontSize) <= usableWidth) return text;
+    return this.abbreviateEnglishWords(text);
+  }
+
+  private fitTextForLabel(label: Label, text: string, fallbackWidth: number): string {
+    const ut = label.node.getComponent(UITransform);
+    const width = ut ? ut.contentSize.width : fallbackWidth;
+    return this.fitEnglishText(text, width, label.fontSize);
+  }
+
   private refreshDiceTray() {
     const SLOT = BattleScene.DICE_TRAY_SLOT;
     const GAP = BattleScene.DICE_TRAY_GAP;
@@ -6053,7 +6125,8 @@ export class BattleScene extends Component {
     vis.faceLabel.color = slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT;
 
     const hint = this.dieActionHint(slot.pip);
-    vis.hintLabel.string = this.playerDiceRollAnim ? '' : slot.used ? t('dice.slot.used') : hint.text;
+    const hintText = this.playerDiceRollAnim ? '' : slot.used ? t('dice.slot.used') : hint.text;
+    vis.hintLabel.string = this.fitTextForLabel(vis.hintLabel, hintText, BattleScene.DICE_TRAY_SLOT + 12);
     vis.hintLabel.color = slot.used ? DIE_HINT_GREY : DIE_HINT_ACTIVE;
   }
 
@@ -6597,7 +6670,8 @@ export class BattleScene extends Component {
       lab.color = HUD_TEXT_COLOR;
       lab.horizontalAlign = HorizontalTextAlignment.CENTER;
       lab.verticalAlign = VerticalTextAlignment.CENTER;
-      lab.string = it.text;
+      lab.overflow = Label.Overflow.SHRINK;
+      lab.string = this.fitTextForLabel(lab, it.text, ITEM_W);
       btn.addChild(tn);
       btn.on(Node.EventType.TOUCH_END, () => {
         playUiClick();
@@ -9347,8 +9421,8 @@ export class BattleScene extends Component {
       const key = `status.crew.${i + 1}` as const;
       this.statusCrewLeftLabels[i].string = t(key);
     }
-    if (this.chooseMoveLabel) this.chooseMoveLabel.string = t('btn.movePhase');
-    if (this.chooseAttackLabel) this.chooseAttackLabel.string = t('btn.attackPhase');
+    if (this.chooseMoveLabel) this.chooseMoveLabel.string = this.fitTextForLabel(this.chooseMoveLabel, t('btn.movePhase'), 200);
+    if (this.chooseAttackLabel) this.chooseAttackLabel.string = this.fitTextForLabel(this.chooseAttackLabel, t('btn.attackPhase'), 200);
     if (this.combatLogTitleLab) this.combatLogTitleLab.string = t('battleLog.title');
     this.refreshCombatLogText();
     if (this.restartBtnLabel) this.restartBtnLabel.string = t('btn.restart');
@@ -9624,16 +9698,16 @@ export class BattleScene extends Component {
 
       this.enemyDiceHighlightIdx = dieIdx;
       // 消耗这颗骰子（无论是否真正执行成功，都算"本骰已用")
-      this.enemyDiceUsed[dieIdx] = true;
       this.refreshEnemyDiceTray();
 
       if (!chosen) {
-        this.enemyDiceHighlightIdx = -1;
-        this.refreshEnemyDiceTray();
-        continue;
+        this.enemyNoActionHold = { t: 0, dur: 1.0, dieIdx };
+        return;
       }
 
       // 执行选中的动作；返回表明本次是否"挂起"（有动画在播）
+      this.enemyDiceUsed[dieIdx] = true;
+      this.refreshEnemyDiceTray();
       const result = this.executeEnemyAction(enemy, chosen);
       if (this.outcome !== 'ongoing') return; // 可能谢尔曼被击毁
       if (result === 'animating') return;     // 等动画 / dice-show 回调再 runNextEnemyStep
@@ -10156,6 +10230,7 @@ export class BattleScene extends Component {
       crewTitleLabel: panel.crewTitleLabel,
       crewEffectLabel: panel.crewEffectLabel,
       outcomeLabel: panel.outcomeLabel,
+      confirmButton: panel.confirmButton,
     };
     playDiceRoll();
   }
@@ -10171,7 +10246,7 @@ export class BattleScene extends Component {
    *   │   │ 5│ │ 3│   = 8     命中！          │   2d6 + 判定
    *   │   └──┘ └──┘                          │
    *   │   ┌──┐                                │
-   *   │   │ 4│        需 ≥2     击穿！        │   1d6 穿甲（仅命中时出现）
+   *   │   │ 4│        需 ≥2     击穿！        │   2d6 穿甲（仅命中时出现）
    *   │   └──┘                                │
    *   │   ┌──┐                                │
    *   │   │ 3│        伤害检定    起火         │   1d6 伤害（仅击穿时出现）
@@ -10204,13 +10279,15 @@ export class BattleScene extends Component {
     crewTitleLabel: Label | null;
     crewEffectLabel: Label | null;
     outcomeLabel: Label;
+    confirmButton: Node | null;
   } {
-    // 只有"命中 + 击穿 + 伤害效果为阵亡检定"时才需要第 4 行
-    const needsCrewRow = !mg && report.hit && report.penetrated && report.damageEffect === 'crewCheck';
+    // 按"一次性预掷所有可能骰子"建行；日军击穿即毁不建伤害行。
+    const needsDamageRow = !mg && report.stagedDamageDie !== undefined;
+    const needsCrewRow = needsDamageRow && !!report.stagedCrewCheck;
     const hasHitDoublesCommanderKill = !mg && report.hit && !!report.commanderKilledByHitDoubles;
     const PANEL_W = 560;
     // 机枪模式：只有标题 + 命中阈值 + 2d6 + 结果大字，用更矮的面板
-    const PANEL_H = mg ? 280 : (needsCrewRow || hasHitDoublesCommanderKill) ? 520 : 440;
+    const PANEL_H = mg ? 280 : needsCrewRow ? 560 : hasHitDoublesCommanderKill ? 520 : 440;
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -10236,7 +10313,7 @@ export class BattleScene extends Component {
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(PANEL_W, PANEL_H);
     const pg = panel.addComponent(Graphics);
-    drawFieldPanel(pg, PANEL_W, PANEL_H, DICE_PANEL_BG, DICE_PANEL_BORDER, STATUS_TITLE_COLOR);
+    drawDicePopupPanel(pg, PANEL_W, PANEL_H, DICE_PANEL_BG, DICE_PANEL_BORDER);
     root.addChild(panel);
 
     // 标题
@@ -10282,11 +10359,11 @@ export class BattleScene extends Component {
       RESULT_COL_X, hitDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
     const hitSpecial = hasHitDoublesCommanderKill
       ? this.makeCenteredLabel(panel, '',
-        0, -PANEL_H / 2 + 92, PANEL_W - 52, 30, 24, new Color(255, 90, 90, 255))
+        0, -PANEL_H / 2 + 132, PANEL_W - 52, 30, 24, new Color(255, 90, 90, 255))
       : null;
     if (hitSpecial) hitSpecial.node.active = false;
 
-    // 1d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有 2d6 命中这一段。
+    // 2d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有命中这一段。
     const penDice: Label[] = [];
     let penNeed: Label | null = null;
     let penVerdict: Label | null = null;
@@ -10297,7 +10374,7 @@ export class BattleScene extends Component {
     let crewTitle: Label | null = null;
     let crewEffect: Label | null = null;
     if (!mg) {
-      // 1d6 穿甲骰 + 需求 + 判定
+      // 2d6 穿甲骰 + 需求 + 判定
       const penDiceCount = Math.max(1, report.penDice?.length ?? 1);
       const penStartX = penDiceCount >= 2 ? DIE_COL_1 : DIE_COL_1 + (DIE_SIZE + DIE_GAP) / 2;
       for (let i = 0; i < penDiceCount; i++) {
@@ -10309,11 +10386,13 @@ export class BattleScene extends Component {
         RESULT_COL_X, penDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
 
       // 1d6 伤害骰 + "伤害检定" + 效果文字
-      dmgDie = this.makeDieSquare(panel, DIE_COL_1, dmgDiceY, DIE_SIZE);
-      dmgTitle = this.makeCenteredLabel(panel, t('dice.panel.dmgTitle'),
-        MID_COL_X, dmgDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
-      dmgEffect = this.makeCenteredLabel(panel, '',
-        RESULT_COL_X, dmgDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_HIT);
+      if (needsDamageRow) {
+        dmgDie = this.makeDieSquare(panel, DIE_COL_1, dmgDiceY, DIE_SIZE);
+        dmgTitle = this.makeCenteredLabel(panel, t('dice.panel.dmgTitle'),
+          MID_COL_X, dmgDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
+        dmgEffect = this.makeCenteredLabel(panel, '',
+          RESULT_COL_X, dmgDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_HIT);
+      }
 
       // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
       if (needsCrewRow) {
@@ -10322,22 +10401,17 @@ export class BattleScene extends Component {
           MID_COL_X, crewDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
         crewEffect = this.makeCenteredLabel(panel, '',
           RESULT_COL_X, crewDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_CREW);
-        // 阵亡检定行默认 hidden，直到 crew-roll 才亮
-        crewDie.node.parent!.active = false;
-        crewTitle.node.active = false;
-        crewEffect.node.active = false;
       }
 
-      // 伤害骰行在 dmg-roll 前不应该出现，默认整行 hidden
-      // （骰子方块容器 / 标题 / 效果文字 三个节点一起关掉）
-      dmgDie.node.parent!.active = false;
-      dmgTitle.node.active = false;
-      dmgEffect.node.active = false;
+      // 主炮三段检定同屏滚动；未命中 / 未击穿时，伤害行在揭示时显示"无效"。
     }
 
     // 底部大字结果
     const outcome = this.makeCenteredLabel(panel, '',
-      0, -PANEL_H / 2 + 44, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
+      0, -PANEL_H / 2 + 86, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
+    outcome.node.active = false;
+    const confirmButton = this.makeDiceShowConfirmButton(panel, 0, -PANEL_H / 2 + 52);
+    confirmButton.active = false;
 
     // title / hitNeed 仅作标题用，外部不再更新它们，但避免 TS 报"未使用"，
     // 保留到返回结构里（外部不用就不用，Label 生命周期跟随 root.destroy 自动回收）
@@ -10360,10 +10434,36 @@ export class BattleScene extends Component {
       crewTitleLabel: crewTitle,
       crewEffectLabel: crewEffect,
       outcomeLabel: outcome,
+      confirmButton,
     };
   }
 
   /** 在 panel 下挂一个带白底黑边的骰子方块 + 内部点数 Label，返回 Label 便于后续 setString。 */
+  private makeDiceShowConfirmButton(parent: Node, x: number, y: number): Node {
+    const W = 200, H = 44;
+    const btn = this.makeBattleRectButton(
+      parent,
+      x,
+      y,
+      W,
+      H,
+      BATTLE_BTN_ACCENT,
+      () => this.finalizeDiceShow(false),
+    );
+    const lab = this.makeBattleModalLabel(
+      btn.node,
+      t('turnEnd.confirm'),
+      0,
+      0,
+      W,
+      H,
+      22,
+      Color.WHITE,
+    );
+    this.mirrorBattleModalButtonLabel(lab, () => this.finalizeDiceShow(false));
+    return btn.node;
+  }
+
   private makeDieSquare(parent: Node, x: number, y: number, size: number): Label {
     const container = new Node('Die');
     container.layer = this.node.layer;
@@ -10428,6 +10528,116 @@ export class BattleScene extends Component {
     }
     if (pips) pips.clear();
     label.string = text;
+  }
+
+  private spinMainGunDiceRows(show: DiceShow, frame: number) {
+    for (let i = 0; i < show.penDieLabels.length; i++) {
+      this.setDieLabelFace(show.penDieLabels[i], ((frame * (13 + i * 4)) % 6) + 1);
+    }
+    this.setDieLabelFace(show.dmgDieLabel, ((frame * 11) % 6) + 1);
+    this.setDieLabelFace(show.crewDieLabel, ((frame * 29) % 6) + 1);
+    if (show.penNeedLabel && show.penNeedLabel.string === '') show.penNeedLabel.string = '= ?';
+    if (show.penVerdictLabel) show.penVerdictLabel.string = '';
+    if (show.dmgEffectLabel) show.dmgEffectLabel.string = '';
+    if (show.crewEffectLabel) show.crewEffectLabel.string = '';
+  }
+
+  private revealMainGunDiceRows(show: DiceShow) {
+    if (show.report.hit) {
+      if (show.report.penDice?.length) {
+        show.penDieLabels.forEach((label, i) => this.setDieLabelFace(label, show.report.penDice![i] ?? '?'));
+      } else if (show.report.penDie !== undefined) {
+        show.penDieLabels.forEach(label => this.setDieLabelFace(label, show.report.penDie ?? '?'));
+      }
+      if (show.penNeedLabel && show.report.penThreshold !== undefined) {
+        const thr = show.report.penThreshold;
+        show.penNeedLabel.string = thr <= 0
+          ? t('dice.panel.penMustPen')
+          : t('dice.panel.penNeed', { n: thr });
+      }
+      if (show.penVerdictLabel) {
+        if (show.report.penetrated) {
+          show.penVerdictLabel.string = show.report.stagedDamageDie === undefined && show.report.damageEffect === 'destroyed'
+            ? t('dmg.outcome.destroyed')
+            : t('dice.panel.penYes');
+          show.penVerdictLabel.color = DICE_OK_TEXT;
+        } else {
+          show.penVerdictLabel.string = t('dice.panel.penNo');
+          show.penVerdictLabel.color = DICE_FAIL_TEXT;
+        }
+      }
+    } else {
+      if (show.penNeedLabel) {
+        show.penNeedLabel.string = t('dice.panel.invalid');
+        show.penNeedLabel.color = DICE_FAIL_TEXT;
+      }
+      if (show.penVerdictLabel) {
+        show.penVerdictLabel.string = t('dice.panel.invalid');
+        show.penVerdictLabel.color = DICE_FAIL_TEXT;
+      }
+    }
+
+    if (show.report.stagedDamageDie !== undefined) {
+      this.setDieLabelFace(show.dmgDieLabel, show.report.stagedDamageDie);
+    }
+    if (!show.report.hit || !show.report.penetrated) {
+      if (show.dmgEffectLabel) {
+        show.dmgEffectLabel.string = t('dice.panel.invalid');
+        show.dmgEffectLabel.color = DICE_FAIL_TEXT;
+      }
+      if (show.report.stagedCrewCheck) {
+        this.setDieLabelFace(show.crewDieLabel, show.report.stagedCrewCheck.die > 0 ? show.report.stagedCrewCheck.die : '-');
+        if (show.crewEffectLabel) {
+          show.crewEffectLabel.string = t('dice.panel.invalid');
+          show.crewEffectLabel.color = DICE_FAIL_TEXT;
+        }
+      }
+      return;
+    }
+
+    if (show.dmgEffectLabel) {
+      const lab = damageEffectLabel(show.report.damageEffect);
+      show.dmgEffectLabel.string = lab.text;
+      show.dmgEffectLabel.color = lab.color;
+    }
+    if (show.report.stagedCrewCheck) {
+      this.setDieLabelFace(show.crewDieLabel, show.report.stagedCrewCheck.die > 0 ? show.report.stagedCrewCheck.die : '-');
+      if (show.crewEffectLabel) {
+        if (show.report.damageEffect === 'crewCheck') {
+          const lab = crewDeathLabel(show.report.stagedCrewCheck);
+          show.crewEffectLabel.string = lab.text;
+          show.crewEffectLabel.color = lab.color;
+        } else {
+          show.crewEffectLabel.string = t('dice.panel.invalid');
+          show.crewEffectLabel.color = DICE_FAIL_TEXT;
+        }
+      }
+    }
+  }
+
+  private setMainGunDiceOutcome(show: DiceShow) {
+    if (!show.report.hit) {
+      show.outcomeLabel.string = t('dice.panel.outcomeMiss');
+      show.outcomeLabel.color = DICE_OUTCOME_MISS;
+    } else if (!show.report.penetrated) {
+      show.outcomeLabel.string = t('dice.panel.outcomeRic');
+      show.outcomeLabel.color = DICE_OUTCOME_RIC;
+    } else if (show.report.damageEffect === 'crewCheck' && show.report.crewCheck) {
+      const out = crewOutcomeLabel(show.report.crewCheck);
+      show.outcomeLabel.string = out.text;
+      show.outcomeLabel.color = out.color;
+    } else {
+      const out = damageOutcomeLabel(show.report.damageEffect);
+      show.outcomeLabel.string = out.text;
+      show.outcomeLabel.color = out.color;
+    }
+  }
+
+  private enterDiceShowHold(show: DiceShow) {
+    show.stage = 'hold';
+    show.t = 0;
+    show.outcomeLabel.node.active = false;
+    if (show.confirmButton) show.confirmButton.active = !show.mg;
   }
 
   // ---------- 敌方 AI 骰子迷你托盘 ----------
@@ -10579,8 +10789,7 @@ export class BattleScene extends Component {
     }
 
     this.enemyDiceTrayRoot = root;
-    const hasSortMove = fromSlot.some((slot, i) => slot !== toSlot[i]);
-    if (playSort && count > 1 && hasSortMove) {
+    if (playSort) {
       this.enemyDiceSortAnim = { t: 0, dur: ENEMY_TRAY_SORT_DUR, fromSlot, toSlot };
       this.applyEnemyDiceSortLayout(0);
     } else {
@@ -10671,6 +10880,7 @@ export class BattleScene extends Component {
   private destroyEnemyDiceTray() {
     this.lowerEnemyDiceTrayFromDiceShowIfNeeded();
     this.enemyDiceSortAnim = null;
+    this.enemyNoActionHold = null;
     this.enemyTrayMetrics = null;
     this.enemyDiceTraySubject = null;
     this.enemyDiceTrayDieRoots = [];
@@ -10734,6 +10944,7 @@ export class BattleScene extends Component {
         this.setDieLabelFace(show.hitDieLabels[0], p1);
         if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], p2);
         show.hitSumLabel.string = '= ?';
+        if (!show.mg) this.spinMainGunDiceRows(show, frame);
         if (show.t >= DICE_HIT_ROLL_DUR) {
           show.stage = 'hit-show';
           show.t = 0;
@@ -10753,6 +10964,11 @@ export class BattleScene extends Component {
             show.hitSpecialLabel.node.active = true;
             show.hitSpecialLabel.string = t('dice.panel.hitDoublesCommanderKia');
           }
+          if (!show.mg) {
+            this.revealMainGunDiceRows(show);
+            this.setMainGunDiceOutcome(show);
+            this.enterDiceShowHold(show);
+          }
           // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
           if (show.mg) playMgFire();
           else playConfiguredAttackSound(show.attackSound);
@@ -10765,7 +10981,6 @@ export class BattleScene extends Component {
           if (show.mg) {
             // 机枪模式：2d6 一段式，hit-show 结束后直接到 hold；
             // 命中 = 步兵击毙，未命中 = MISS。不会进入 pen/dmg/crew。
-            show.stage = 'hold';
             if (show.report.hit) {
               show.outcomeLabel.string = t('dice.panel.outcomeMGKill');
               show.outcomeLabel.color = DICE_OUTCOME_HIT;
@@ -10773,9 +10988,9 @@ export class BattleScene extends Component {
               show.outcomeLabel.string = t('dice.panel.outcomeMiss');
               show.outcomeLabel.color = DICE_OUTCOME_MISS;
             }
+            this.enterDiceShowHold(show);
           } else if (!show.report.hit) {
             // 未命中直接跳到 hold 显示 MISS，并隐藏穿甲骰那一行（视觉更干净）
-            show.stage = 'hold';
             for (const label of show.penDieLabels) label.node.parent!.active = false;
             if (show.penNeedLabel) show.penNeedLabel.node.active = false;
             if (show.penVerdictLabel) show.penVerdictLabel.node.active = false;
@@ -10786,6 +11001,7 @@ export class BattleScene extends Component {
               show.outcomeLabel.string = t('dice.panel.outcomeMiss');
               show.outcomeLabel.color = DICE_OUTCOME_MISS;
             }
+            this.enterDiceShowHold(show);
           } else {
             // 准备 pen 阶段：标题文字 + 骰子进入滚动
             show.stage = 'pen-roll';
@@ -10816,7 +11032,9 @@ export class BattleScene extends Component {
           }
           if (show.penVerdictLabel) {
             if (show.report.penetrated) {
-              show.penVerdictLabel.string = t('dice.panel.penYes');
+              show.penVerdictLabel.string = show.report.stagedDamageDie === undefined && show.report.damageEffect === 'destroyed'
+                ? t('dmg.outcome.destroyed')
+                : t('dice.panel.penYes');
               show.penVerdictLabel.color = DICE_OK_TEXT;
             } else {
               show.penVerdictLabel.string = t('dice.panel.penNo');
@@ -10831,16 +11049,16 @@ export class BattleScene extends Component {
           show.t = 0;
           if (!show.report.penetrated) {
             // 跳弹：不再进入伤害检定，直接到 hold
-            show.stage = 'hold';
             if (show.dmgDieLabel) show.dmgDieLabel.node.parent!.active = false;
             if (show.dmgEffectLabel) show.dmgEffectLabel.node.active = false;
             show.outcomeLabel.string = t('dice.panel.outcomeRic');
             show.outcomeLabel.color = DICE_OUTCOME_RIC;
+            this.enterDiceShowHold(show);
           } else if (show.report.damageDie === undefined) {
-            show.stage = 'hold';
             const out = damageOutcomeLabel(show.report.damageEffect);
             show.outcomeLabel.string = out.text;
             show.outcomeLabel.color = out.color;
+            this.enterDiceShowHold(show);
           } else {
             // 准备伤害检定阶段：打开该行可见性 + 骰子进入滚动
             show.stage = 'dmg-roll';
@@ -10878,7 +11096,7 @@ export class BattleScene extends Component {
       case 'dmg-show': {
         if (show.t >= DICE_DMG_SHOW_DUR) {
           show.t = 0;
-          if (show.report.damageEffect === 'crewCheck' && show.report.crewCheck) {
+          if (show.report.stagedDamageEffect === 'crewCheck' && show.report.stagedCrewCheck) {
             // 阵亡检定：再掷一颗 1d6 决定死谁
             show.stage = 'crew-roll';
             if (show.crewDieLabel) {
@@ -10891,10 +11109,10 @@ export class BattleScene extends Component {
               show.crewEffectLabel.string = '';
             }
           } else {
-            show.stage = 'hold';
             const out = damageOutcomeLabel(show.report.damageEffect);
             show.outcomeLabel.string = out.text;
             show.outcomeLabel.color = out.color;
+            this.enterDiceShowHold(show);
           }
         }
         break;
@@ -10906,15 +11124,20 @@ export class BattleScene extends Component {
         if (show.t >= DICE_CREW_ROLL_DUR) {
           show.stage = 'crew-show';
           show.t = 0;
-          const cc = show.report.crewCheck;
+          const cc = show.report.stagedCrewCheck;
           if (show.crewDieLabel && cc) {
             // 重抛过的情况下仍然展示最终那次的点数
             this.setDieLabelFace(show.crewDieLabel, cc.die > 0 ? cc.die : '-');
           }
           if (show.crewEffectLabel) {
-            const lab = crewDeathLabel(cc);
-            show.crewEffectLabel.string = lab.text;
-            show.crewEffectLabel.color = lab.color;
+            if (!show.report.hit || !show.report.penetrated || show.report.damageEffect !== 'crewCheck') {
+              show.crewEffectLabel.string = t('dice.panel.invalid');
+              show.crewEffectLabel.color = DICE_FAIL_TEXT;
+            } else {
+              const lab = crewDeathLabel(cc);
+              show.crewEffectLabel.string = lab.text;
+              show.crewEffectLabel.color = lab.color;
+            }
           }
         }
         break;
@@ -10922,15 +11145,17 @@ export class BattleScene extends Component {
       case 'crew-show': {
         if (show.t >= DICE_CREW_SHOW_DUR) {
           show.t = 0;
-          show.stage = 'hold';
-          const out = crewOutcomeLabel(show.report.crewCheck);
-          show.outcomeLabel.string = out.text;
-          show.outcomeLabel.color = out.color;
+          if (show.report.hit && show.report.penetrated && show.report.damageEffect === 'crewCheck') {
+            const out = crewOutcomeLabel(show.report.crewCheck);
+            show.outcomeLabel.string = out.text;
+            show.outcomeLabel.color = out.color;
+          }
+          this.enterDiceShowHold(show);
         }
         break;
       }
       case 'hold': {
-        if (show.t >= DICE_HOLD_DUR) {
+        if (show.mg && show.t >= DICE_HOLD_DUR) {
           show.stage = 'done';
           this.finalizeDiceShow(false);
         }
@@ -10964,6 +11189,7 @@ export class BattleScene extends Component {
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null
       || this.enemyDiceSortAnim !== null
+      || this.enemyNoActionHold !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null || this.usCasualtyEventUI !== null
       || this.tileInspectModalRoot !== null;
   }
@@ -11000,7 +11226,7 @@ export class BattleScene extends Component {
     mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
     root.addChild(mask);
     const maskG = mask.addComponent(Graphics);
-    maskG.fillColor = new Color(0, 0, 0, 180);
+    maskG.fillColor = DICE_BACKDROP;
     maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
     maskG.fill();
     mask.addComponent(BlockInputEvents);
@@ -11012,13 +11238,7 @@ export class BattleScene extends Component {
     root.addChild(panel);
     panel.addComponent(UITransform).setContentSize(pw, ph);
     const panelG = panel.addComponent(Graphics);
-    panelG.fillColor = new Color(40, 44, 52, 255);
-    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
-    panelG.fill();
-    panelG.strokeColor = new Color(90, 98, 110, 255);
-    panelG.lineWidth = 2;
-    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
-    panelG.stroke();
+    drawDicePopupPanel(panelG, pw, ph, DICE_PANEL_BG, DICE_PANEL_BORDER);
 
     const title = new Node('Title');
     title.layer = this.node.layer;
@@ -11055,7 +11275,7 @@ export class BattleScene extends Component {
     sumL.verticalAlign = VerticalTextAlignment.CENTER;
     sumL.overflow = Label.Overflow.CLAMP;
     sumL.string = '';
-    sumLabelN.setPosition(0, ph * 0.5 - 72 - diceBlockH - 8);
+    sumLabelN.setPosition(0, ph * 0.5 - 86 - diceBlockH);
 
     const bodyN = new Node('BodyLabel');
     bodyN.layer = this.node.layer;
@@ -11071,12 +11291,12 @@ export class BattleScene extends Component {
     bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
     bodyL.verticalAlign = VerticalTextAlignment.TOP;
     bodyL.string = '';
-    bodyN.setPosition(0, ph * 0.5 - 110 - diceBlockH - 8);
+    bodyN.setPosition(0, ph * 0.5 - 126 - diceBlockH);
 
     const confirmB = this.makeBattleRectButton(
       panel,
       0,
-      -ph * 0.5 + 48,
+      -ph * 0.5 + 52,
       200,
       44,
       BATTLE_BTN_ACCENT,
@@ -11160,7 +11380,7 @@ export class BattleScene extends Component {
     mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
     root.addChild(mask);
     const maskG = mask.addComponent(Graphics);
-    maskG.fillColor = MODAL_BACKDROP;
+    maskG.fillColor = DICE_BACKDROP;
     maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
     maskG.fill();
     mask.addComponent(BlockInputEvents);
@@ -11172,13 +11392,7 @@ export class BattleScene extends Component {
     root.addChild(panel);
     panel.addComponent(UITransform).setContentSize(pw, ph);
     const panelG = panel.addComponent(Graphics);
-    panelG.fillColor = MODAL_PANEL_BG;
-    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
-    panelG.fill();
-    panelG.strokeColor = MODAL_PANEL_BORDER;
-    panelG.lineWidth = 2;
-    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
-    panelG.stroke();
+    drawDicePopupPanel(panelG, pw, ph, DICE_PANEL_BG, DICE_PANEL_BORDER);
 
     this.makeBattleModalLabel(panel, t('usCasualty.title'), 0, ph * 0.5 - 34, pw - 48, 34, 26, HUD_TEXT_COLOR);
 
@@ -11227,12 +11441,12 @@ export class BattleScene extends Component {
     resultL.verticalAlign = VerticalTextAlignment.CENTER;
     resultL.overflow = Label.Overflow.CLAMP;
     resultL.string = '';
-    resultNode.setPosition(0, ph * 0.5 - 136 - providerBlockH - diceBlockH);
+    resultNode.setPosition(0, ph * 0.5 - 170 - providerBlockH - diceBlockH);
 
     const confirmB = this.makeBattleRectButton(
       panel,
       0,
-      -ph * 0.5 + 48,
+      -ph * 0.5 + 52,
       200,
       44,
       BATTLE_BTN_ACCENT,
@@ -11486,7 +11700,7 @@ export class BattleScene extends Component {
     mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
     root.addChild(mask);
     const maskG = mask.addComponent(Graphics);
-    maskG.fillColor = new Color(0, 0, 0, 180);
+    maskG.fillColor = DICE_BACKDROP;
     maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
     maskG.fill();
     mask.addComponent(BlockInputEvents);
@@ -11498,13 +11712,7 @@ export class BattleScene extends Component {
     const ph = Math.min(420, CANVAS_H - 80);
     panel.addComponent(UITransform).setContentSize(pw, ph);
     const panelG = panel.addComponent(Graphics);
-    panelG.fillColor = new Color(40, 44, 52, 255);
-    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
-    panelG.fill();
-    panelG.strokeColor = new Color(90, 98, 110, 255);
-    panelG.lineWidth = 2;
-    panelG.roundRect(-pw * 0.5, -ph * 0.5, pw, ph, 12);
-    panelG.stroke();
+    drawDicePopupPanel(panelG, pw, ph, DICE_PANEL_BG, DICE_PANEL_BORDER);
 
     const title = new Node('Title');
     title.layer = this.node.layer;
