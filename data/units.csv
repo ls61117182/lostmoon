@@ -4,7 +4,7 @@ tiger,虎式,german,3,12,11,10,9,3,0,audio/tank_move,audio/cannon_fire,重型敌
 panzer4,四号坦克,german,4,11,10,9,8,2,0,audio/tank_move,audio/cannon_fire,中坚敌方坦克
 panzer3,三号坦克,german,5,10,9,8,7,1,0,audio/tank_move,audio/cannon_fire,次级敌方坦克
 truck,卡车,german,3,2,2,2,2,0,0,audio/tank_move,,占位 - 后续按特殊规则结算
-infantry,步兵,german,0,0,0,0,0,2,0,,,占位 - 仅事件中作为攻击方
+infantry,步兵,german,2,0,0,0,0,3,0,,,占位 - 仅事件中作为攻击方
 officer,军官,german,0,0,0,0,0,1,0,,,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
 type95,九五式轻战车,japanese,4,11,10,9,8,0,1,audio/tank_move,audio/cannon_fire,Pacific D11: Type 95 Ha-Go
 type97,九七式中战车,japanese,4,9,8,8,7,1,2,audio/tank_move,audio/cannon_fire,Pacific: Type 97 Chi-Ha

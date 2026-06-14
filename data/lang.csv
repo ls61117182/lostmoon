@@ -133,7 +133,7 @@ floater.repair,修复,Repair
 floater.noRepair,无需修复,Nothing to Repair
 floater.noFire,无起火,No Fire
 floater.notImplemented,暂未实装,Not Yet Implemented
-floater.noInfantry,无相邻步兵,No Adjacent Infantry
+floater.noInfantry,无可射击步兵,No Valid Infantry
 floater.fireReduced,起火程度 -1,Fire Level -1
 floater.turretFixed,炮塔已修复,Turret Repaired
 floater.mobilityFixed,机动已修复,Mobility Repaired
@@ -149,7 +149,7 @@ floater.smokeCleared,烟雾消散,Smoke Cleared
 floater.fireCheck,着火检定,Fire Check
 floater.mgMiss,机枪未命中,MG Miss
 floater.mgHit,步兵击毙,Infantry Down
-floater.mgDice,机枪 2d6={d1}+{d2}={sum},MG 2d6={d1}+{d2}={sum}
+floater.mgDice,机枪 1d6={sum},MG 1d6={sum}
 floater.roleUnavailable,{role}已阵亡，无法操作,{role} KIA: cannot act
 action.concealPair,隐蔽（+同点骰）,Go Concealed (+pair)
 action.doublesDriverAdvance,前进（+同点骰）,Driver Advance (+pair)
@@ -270,7 +270,7 @@ menu.settings.langZh,中文,Chinese
 menu.settings.langEn,English,English
 menu.settings.close,关闭,Close
 menu.help.title,游戏说明,How to Play
-menu.help.body,· 目标：操控谢尔曼完成每关任务要求。\n\n· 每回合行动阶段由攻击/移动/杂项3个阶段组成，攻击和移动可自由选择先后顺序，每个阶段根据所在地形获得对应数量的行动骰子。\n\n· 移动阶段：使用对应点数转向、前进、后退，两个相同骰子可以合并执行新的动作。\n\n· 攻击阶段：主炮需要装填后才可使用，可攻击直线上未被视线阻挡的装甲单位；机枪可扫射相邻步兵（2D6≥7 命中）。\n\n· 杂项阶段：装填、灭火、隐蔽、烟雾、副驾驶机枪等。\n\n· 敌方回合：按距离由近到远依次行动；步兵只在回合结束事件里出没。\n\n· 操作：点骰子弹出动作菜单；选中对应选项后执行动作。,"· Goal: Complete each mission's objectives with the Sherman.\n\n· Each turn has three action phases (Attack / Move / Misc). Attack and Move may be resolved in either order; each phase grants action dice according to the terrain you occupy.\n\n· Move phase: spend matching pips to turn, advance, or reverse; two identical dice may be merged to perform new actions.\n\n· Attack phase: the main gun can only be used after loading; it may fire at armored targets along a straight line if line of sight is clear. The machine gun may strafe adjacent infantry (roll 2d6; hit on ≥7).\n\n· Misc phase: reload, extinguish fire, concealment, smoke, co-driver MG, and more.\n\n· Enemy phase: enemies act from nearest to farthest; enemy infantry only appear during end-of-turn events.\n\n· Controls: tap a die to open its action menu; pick an option to execute it."
+menu.help.body,· 目标：操控谢尔曼完成每关任务要求。\n\n· 每回合行动阶段由攻击/移动/杂项3个阶段组成，攻击和移动可自由选择先后顺序，每个阶段根据所在地形获得对应数量的行动骰子。\n\n· 移动阶段：使用对应点数转向、前进、后退，两个相同骰子可以合并执行新的动作。\n\n· 攻击阶段：主炮需要装填后才可使用，可攻击直线上未被视线阻挡的装甲单位；机枪可扫射直线上未被视线阻挡的步兵（1D6 命中检定）。\n\n· 杂项阶段：装填、灭火、隐蔽、烟雾、副驾驶机枪等。\n\n· 敌方回合：按距离由近到远依次行动；步兵只在回合结束事件里出没。\n\n· 操作：点骰子弹出动作菜单；选中对应选项后执行动作。,"· Goal: Complete each mission's objectives with the Sherman.\n\n· Each turn has three action phases (Attack / Move / Misc). Attack and Move may be resolved in either order; each phase grants action dice according to the terrain you occupy.\n\n· Move phase: spend matching pips to turn, advance, or reverse; two identical dice may be merged to perform new actions.\n\n· Attack phase: the main gun can only be used after loading; it may fire at armored targets along a straight line if line of sight is clear. The machine gun may strafe infantry along a clear straight line (roll 1d6 to hit).\n\n· Misc phase: reload, extinguish fire, concealment, smoke, co-driver MG, and more.\n\n· Enemy phase: enemies act from nearest to farthest; enemy infantry only appear during end-of-turn events.\n\n· Controls: tap a die to open its action menu; pick an option to execute it."
 menu.help.gotIt,已 了 解,Got it
 menu.modal.close,✕,✕
 level.01.title,村庄,Village

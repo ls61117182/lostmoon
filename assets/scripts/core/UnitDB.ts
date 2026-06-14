@@ -40,7 +40,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
-    size: 0, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 2, usCasualtyDice: 0,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, usCasualtyDice: 0,
     moveSound: "",
     attackSound: "",
   },

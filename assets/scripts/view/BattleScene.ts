@@ -144,6 +144,7 @@ import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
   SPLIT_TANK_KINDS,
   SplitTankKind,
+  SplitTankGeometryConfig,
   SplitTankVisualConfig,
   TANK_VISUAL_KINDS,
   TankVisualKind,
@@ -493,6 +494,8 @@ interface DiceShow {
   */
   mg: boolean;
   attackSound: string;
+  attacker: Unit | null;
+  target: Unit | null;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
   // 视觉
@@ -537,6 +540,18 @@ interface Floater {
 }
 
 // ---------- 配色 ----------
+interface MuzzleFlash {
+  node: Node;
+  g: Graphics;
+  x: number;
+  y: number;
+  ux: number;
+  uy: number;
+  size: number;
+  t: number;
+  dur: number;
+}
+
 const TERRAIN_COLORS: Record<TerrainType, Color> = {
   road:     new Color(200, 178, 142, 255), // 公路格：偏棕黄沙土地基，drawRoadHexOverlay 再叠颗粒
   field:    new Color(196, 220, 130, 255),
@@ -1062,6 +1077,7 @@ export class BattleScene extends Component {
   private backToMenuBtn: Node | null = null;
   // 战报浮字池：挂在 mapNode 下，随 update() 上浮 + 渐隐自毁
   private floaters: Floater[] = [];
+  private muzzleFlashes: MuzzleFlash[] = [];
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
   // 单位状态文字池（仅已毁短标签）：随 redraw 整批重建
@@ -1605,6 +1621,7 @@ export class BattleScene extends Component {
     this.clearGunSelection();
     this.outcome = 'ongoing';
     this.clearFloaters();
+    this.clearMuzzleFlashes();
     this.clearDestroyWreckVisuals();
     this.closeDiePopover();
     this.finalizeDiceShow(true);
@@ -1796,7 +1813,7 @@ export class BattleScene extends Component {
         && this.outcome === 'ongoing') {
       this.drawAttackableHighlights();
     }
-    // 4b. 机枪目标高亮：选中机枪骰时，把 *相邻步兵* 圈出来
+    // 4b. 机枪目标高亮：选中机枪骰时，把 canMGAttack 认可的步兵圈出来
     if (!this.anim && this.phase === 'player'
         && (this.playerStep === 'attack' || this.playerStep === 'misc')
         && this.selectedMGDieIdx >= 0
@@ -1867,14 +1884,15 @@ export class BattleScene extends Component {
 
   /**
    * 机枪目标高亮：与 drawAttackableHighlights 并列。
-   * 仅把 *相邻* 且 *未被摧毁* 的步兵圈出来，并在格上方标"≥7  58%"（2d6≥7 固定概率 21/36 = 58%）。
+   * 仅把 canMGAttack 认可且未被摧毁的步兵圈出来，并在格上方标动态命中需求与 1d6 概率。
    */
   private drawMGTargetHighlights() {
     if (!this.g || !this.mission) return;
     const { map, sherman, enemies } = this.mission;
+    const units = this.allUnits();
     for (const e of enemies) {
       if (e.destroyed) continue;
-      const ctx = { attacker: sherman, target: e, map };
+      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units };
       if (!canMGAttack(ctx).ok) continue;
 
       const c = this.project(e.pos.q, e.pos.r);
@@ -2463,6 +2481,151 @@ export class BattleScene extends Component {
   }
 
   /** 同一接口画任意单位：若该单位正是当前动画对象，使用插值位置 / 插值朝向 */
+  private spawnMuzzleFlash(attacker: Unit | null, target: Unit | null) {
+    if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
+    const pos = this.muzzleFlashPosition(attacker, target);
+    if (!pos) return;
+
+    const n = new Node('MuzzleFlash');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(1, 1);
+    ut.setAnchorPoint(0.5, 0.5);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    n.setPosition(pos.x, pos.y, 0);
+    n.setSiblingIndex(this.mapNode.children.length - 1);
+
+    const flash: MuzzleFlash = {
+      node: n,
+      g,
+      x: pos.x,
+      y: pos.y,
+      ux: pos.ux,
+      uy: pos.uy,
+      size: Math.max(10, this.hexSize * 0.24),
+      t: 0,
+      dur: 0.12,
+    };
+    this.drawMuzzleFlash(flash, 0);
+    this.muzzleFlashes.push(flash);
+  }
+
+  private muzzleFlashPosition(attacker: Unit, target: Unit): { x: number; y: number; ux: number; uy: number } | null {
+    const dir = (directionTo(attacker.pos, target.pos) ?? approximateDirection(attacker.pos, target.pos)) as Direction;
+    const c = this.project(attacker.pos.q, attacker.pos.r);
+    const aimAngle = this.directionScreenAngle(attacker.pos, c, dir);
+    const aim = { ux: Math.cos(aimAngle), uy: Math.sin(aimAngle) };
+
+    if (!attacker.destroyed && isSplitTankKind(attacker.kind)) {
+      const cfg = splitTankVisualConfigOf(attacker.kind);
+      const geometry = splitTankGeometryConfigOf(attacker.kind);
+      const precise = this.splitTankMuzzlePosition(attacker, c, cfg, geometry, aim);
+      if (precise) return precise;
+    }
+
+    const dist = this.hexSize * 0.72;
+    return {
+      x: c.x + aim.ux * dist,
+      y: c.y + aim.uy * dist,
+      ux: aim.ux,
+      uy: aim.uy,
+    };
+  }
+
+  private splitTankMuzzlePosition(
+    u: Unit,
+    c: { x: number; y: number },
+    cfg: SplitTankVisualConfig,
+    geometry: SplitTankGeometryConfig,
+    aim: { ux: number; uy: number },
+  ): { x: number; y: number; ux: number; uy: number } | null {
+    const topTrim = geometry.topTrim;
+    const turretTrim = geometry.turretTrim;
+    if (topTrim.w <= 0 || topTrim.h <= 0 || turretTrim.w <= 0 || turretTrim.h <= 0) return null;
+
+    const body = this.topDownForwardVec(u, c, null);
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
+    const scale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
+    const turretScale = scale * cfg.turretScale;
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const hullF = cfg.hullOffsetForward * offsetUnit;
+    const hullR = cfg.hullOffsetRight * offsetUnit;
+    const turretF = cfg.turretOffsetForward * offsetUnit;
+    const turretR = cfg.turretOffsetRight * offsetUnit;
+    const baseX = c.x + hullF * body.ux + hullR * body.uy;
+    const baseY = c.y + hullF * body.uy + hullR * (-body.ux);
+
+    const pivot = geometry.pivot;
+    const pivotLocalX = (pivot.bodyX - (topTrim.x + topTrim.w / 2)) * scale;
+    const pivotLocalY = ((topTrim.y + topTrim.h / 2) - pivot.bodyY) * scale;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+    const pivotX = baseX + pivotLocalX * cos - pivotLocalY * sin;
+    const pivotY = baseY + pivotLocalX * sin + pivotLocalY * cos;
+
+    const localX = (geometry.muzzle.spriteX - pivot.spriteX) * turretScale - turretF;
+    const localY = (pivot.spriteY - geometry.muzzle.spriteY) * turretScale + turretR;
+    const right = { ux: aim.uy, uy: -aim.ux };
+    return {
+      x: pivotX + localX * (-aim.ux) + localY * right.ux,
+      y: pivotY + localX * (-aim.uy) + localY * right.uy,
+      ux: aim.ux,
+      uy: aim.uy,
+    };
+  }
+
+  private advanceMuzzleFlashes(dt: number) {
+    for (let i = this.muzzleFlashes.length - 1; i >= 0; i--) {
+      const f = this.muzzleFlashes[i];
+      f.t += dt;
+      const p = Math.min(f.t / f.dur, 1);
+      if (p >= 1) {
+        f.node.destroy();
+        this.muzzleFlashes.splice(i, 1);
+        continue;
+      }
+      f.node.setPosition(f.x + f.ux * f.size * 0.24 * p, f.y + f.uy * f.size * 0.24 * p, 0);
+      this.drawMuzzleFlash(f, p);
+    }
+  }
+
+  private drawMuzzleFlash(f: MuzzleFlash, p: number) {
+    const g = f.g;
+    g.clear();
+    const alpha = Math.max(0, Math.min(255, Math.round((1 - p) * 255)));
+    const s = f.size * (1 + p * 0.85);
+    const ux = f.ux;
+    const uy = f.uy;
+    const rx = uy;
+    const ry = -ux;
+
+    g.fillColor = new Color(255, 130, 36, Math.round(alpha * 0.68));
+    g.moveTo(ux * s * 1.35, uy * s * 1.35);
+    g.lineTo(-ux * s * 0.38 + rx * s * 0.48, -uy * s * 0.38 + ry * s * 0.48);
+    g.lineTo(-ux * s * 0.16, -uy * s * 0.16);
+    g.lineTo(-ux * s * 0.38 - rx * s * 0.48, -uy * s * 0.38 - ry * s * 0.48);
+    g.close();
+    g.fill();
+
+    g.fillColor = new Color(255, 226, 90, Math.round(alpha * 0.86));
+    g.moveTo(ux * s * 0.94, uy * s * 0.94);
+    g.lineTo(-ux * s * 0.20 + rx * s * 0.28, -uy * s * 0.20 + ry * s * 0.28);
+    g.lineTo(-ux * s * 0.20 - rx * s * 0.28, -uy * s * 0.20 - ry * s * 0.28);
+    g.close();
+    g.fill();
+
+    g.fillColor = new Color(255, 255, 232, alpha);
+    g.circle(ux * s * 0.16, uy * s * 0.16, s * 0.24);
+    g.fill();
+  }
+
+  private clearMuzzleFlashes() {
+    for (const f of this.muzzleFlashes) f.node.destroy();
+    this.muzzleFlashes.length = 0;
+  }
+
   private drawUnitMaybeAnim(u: Unit) {
     if (this.anim && this.anim.unit === u) {
       if (this.anim.kind === 'turn') {
@@ -2486,6 +2649,7 @@ export class BattleScene extends Component {
   update(dt: number) {
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
     if (this.floaters.length > 0) this.advanceFloaters(dt);
+    if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) this.advanceDiceShow(dt);
@@ -3131,6 +3295,47 @@ export class BattleScene extends Component {
     }
 
     // ---- 4) 绘制每栋建筑：双坡瓦顶分层（底面 → 阴坡 → 瓦楞 → 外缘 + 屋脊高光） ----
+    if (placed.length === 0) {
+      const w = size * 0.34;
+      const h = size * 0.24;
+      const halfDiag = Math.hypot(w, h) * 0.5;
+      const rMax = Math.max(0, innerRadius - halfDiag);
+      const fallbackOffsets: Array<[number, number]> = [
+        [0.00, -0.42],
+        [0.34, -0.22],
+        [-0.34, -0.22],
+        [0.34, 0.22],
+        [-0.34, 0.22],
+        [0.00, 0.42],
+        [0.00, 0.00],
+      ];
+      let best = fallbackOffsets[fallbackOffsets.length - 1];
+      let bestScore = Number.NEGATIVE_INFINITY;
+      for (const off of fallbackOffsets) {
+        const ox = off[0] * size;
+        const oy = off[1] * size;
+        if (Math.hypot(ox, oy) > rMax) continue;
+        let score = roadSegs.length === 0 ? -Math.hypot(ox, oy) : Number.POSITIVE_INFINITY;
+        for (const seg of roadSegs) {
+          score = Math.min(score, distToSeg(cx + ox, cy + oy, seg.ax, seg.ay, seg.bx, seg.by) - roadHalfW);
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = off;
+        }
+      }
+      const colorIdx = (seedRaw >>> 3) % BUILDING_ROOF_PALETTE.length;
+      placed.push({
+        cx: cx + best[0] * size,
+        cy: cy + best[1] * size,
+        w,
+        h,
+        angle: (seedRaw % 6) * Math.PI / 6,
+        r: halfDiag,
+        colorIdx,
+      });
+    }
+
     for (const b of placed) {
       const cosA = Math.cos(b.angle);
       const sinA = Math.sin(b.angle);
@@ -5547,7 +5752,7 @@ export class BattleScene extends Component {
       } else {
         const sherman = this.mission?.sherman;
         const loaded = sherman?.loaded ? t('hud.loaded') : t('hud.unloaded');
-        // 选中主炮 → "点敌人开火"；选中机枪 → "点相邻步兵扫射"；两者互斥
+        // 选中主炮 → "点敌人开火"；选中机枪 → "点步兵扫射"；两者互斥
         let sel = '';
         if (this.selectedGunDieIdx >= 0) sel = ` | ${t('hud.attackSelectHint')}`;
         else if (this.selectedMGDieIdx >= 0) sel = ` | ${t('hud.mgSelectHint')}`;
@@ -5746,6 +5951,7 @@ export class BattleScene extends Component {
     this.playerStep = 'choose';
     this.closeDiePopover();
     this.clearFloaters();
+    this.clearMuzzleFlashes();
     // 隐藏胜负覆盖层与按钮（loadAndDraw 内部 updateOutcomeOverlay 也会再做一次保险）
     if (this.outcomeLabel) this.outcomeLabel.node.active = false;
     if (this.restartBtn) this.restartBtn.active = false;
@@ -6571,7 +6777,7 @@ export class BattleScene extends Component {
             onClick: () => this.selectGunDie(idx) });
           break;
         case 'codriver_mg':
-          // 2 点 C 列：副驾驶机枪射击相邻步兵
+          // 2 点 C 列：副驾驶机枪射击步兵
           items.push({ text: t('action.fireMGCoDriver'), color: PHASE_BTN_ATTACK,
             onClick: () => this.selectMGDie(idx) });
           break;
@@ -6971,7 +7177,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 选中一颗机枪骰进入"选步兵"态；之后点相邻步兵格触发扫射。
+   * 选中一颗机枪骰进入"选步兵"态；之后点合法步兵格触发扫射。
    *
    * 合法骰面：
    *   - 攻击阶段：pip ∈ {3, 4}（classifyAttackDie == 'mg'）
@@ -7114,9 +7320,9 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 玩家机枪扫射：必须已选中机枪骰 + target 为相邻步兵（canMGAttack 通过）。
+   * 玩家机枪扫射：必须已选中机枪骰 + target 为 canMGAttack 认可的步兵。
    *
-   * 命中模型（§3.6 行动表 B3/B4 / C2）：2d6 ≥ 7 即命中，命中直接击毙步兵。
+   * 命中模型与 Pacific 机枪一致：1d6 ≥ 动态命中阈值即命中，命中直接击毙步兵。
    * 不吃装甲检定、不消耗 loaded、不受 turretDamaged 影响。
    *
    * 动画路径与主炮 DiceShow 分离 —— 走一条轻量"骰面浮字 + 结果浮字"的路线，
@@ -7127,10 +7333,11 @@ export class BattleScene extends Component {
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
     if (this.selectedMGDieIdx < 0) return;
     const { map, sherman } = this.mission;
+    const units = this.allUnits();
     const slot = this.phaseDice[this.selectedMGDieIdx];
     if (!slot || slot.used) return;
 
-    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater });
+    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units });
     if (!check.ok) {
       this.battleLogI18n('battleLog.combat.cannotAttack', {
         reasonKey: check.reason ?? 'attack.reason.unknown',
@@ -7141,7 +7348,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater };
+    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units };
     const maxRoll = maxMGHitRoll(ctx);
     const impossibleThreshold = mgHitThreshold(ctx);
     const impossible = maxRoll < impossibleThreshold;
@@ -7219,7 +7426,7 @@ export class BattleScene extends Component {
       },
       { mg: true },
     );
-    // 立即刷一次 HUD，让 "点相邻步兵扫射" 提示消失，避免玩家以为还能再点
+    // 立即刷一次 HUD，让 "点步兵扫射" 提示消失，避免玩家以为还能再点
     this.updateHUD();
     this.redraw();
   }
@@ -9593,6 +9800,7 @@ export class BattleScene extends Component {
     this.destroyUsCasualtyEventUI();
     this.closeDiePopover();
     this.clearFloaters();
+    this.clearMuzzleFlashes();
     this.clearDestroyWreckVisuals();
     // 胜负状态也要随读档重新判定
     this.outcome = checkOutcome(this.mission);
@@ -9990,7 +10198,8 @@ export class BattleScene extends Component {
     if (attackOrMisc && enemiesOnTile.length > 0) {
       // 叠格场景：机枪挑 canMGAttack 认可的步兵目标；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
       if (mgSel) {
-        const inf = enemiesOnTile.find(e => canMGAttack({ attacker: this.mission!.sherman, target: e, map: this.mission!.map, theater: this.mission!.data.theater }).ok) ?? enemiesOnTile[0]!;
+        const units = this.allUnits();
+        const inf = enemiesOnTile.find(e => canMGAttack({ attacker: this.mission!.sherman, target: e, map: this.mission!.map, theater: this.mission!.data.theater, units }).ok) ?? enemiesOnTile[0]!;
         this.tryMGAttack(inf);
         return;
       }
@@ -10115,7 +10324,7 @@ export class BattleScene extends Component {
         this.refreshPhaseUI();
         this.updateHUD();
         this.autoEndPhaseIfDone();
-      }, { attackSound: sherman.stats.attackSound });
+      }, { attackSound: sherman.stats.attackSound, attacker: sherman, target });
     });
     // 立即刷新一次 HUD，让"点敌人开火"提示消失
     this.updateHUD();
@@ -10169,7 +10378,7 @@ export class BattleScene extends Component {
         }
         this.runNextEnemyStep();
       }
-    }, { attackSound: enemy.stats.attackSound });
+    }, { attackSound: enemy.stats.attackSound, attacker: enemy, target });
     if (splitTurretReady) {
       this.startEnemyTurretAim(enemy, target, showDice);
     } else {
@@ -10193,7 +10402,7 @@ export class BattleScene extends Component {
     attackerLabel: string,
     targetLabel: string,
     onDone: () => void,
-    opts: { mg?: boolean; keepTurnEndPanel?: boolean; attackSound?: string } = {},
+    opts: { mg?: boolean; keepTurnEndPanel?: boolean; attackSound?: string; attacker?: Unit | null; target?: Unit | null } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
@@ -10212,6 +10421,8 @@ export class BattleScene extends Component {
       targetLabel,
       mg,
       attackSound: opts.attackSound ?? '',
+      attacker: opts.attacker ?? null,
+      target: opts.target ?? null,
       onDone,
       finalized: false,
       panelRoot: panel.root,
@@ -10243,7 +10454,7 @@ export class BattleScene extends Component {
    *   │  玩家 → panzer4                      │   标题
    *   │  命中需 ≥7                           │
    *   │   ┌──┐ ┌──┐                          │
-   *   │   │ 5│ │ 3│   = 8     命中！          │   2d6 + 判定
+   *   │   │ 5│        = 5     命中！          │   1d6 + 判定
    *   │   └──┘ └──┘                          │
    *   │   ┌──┐                                │
    *   │   │ 4│        需 ≥2     击穿！        │   2d6 穿甲（仅命中时出现）
@@ -10286,7 +10497,7 @@ export class BattleScene extends Component {
     const needsCrewRow = needsDamageRow && !!report.stagedCrewCheck;
     const hasHitDoublesCommanderKill = !mg && report.hit && !!report.commanderKilledByHitDoubles;
     const PANEL_W = 560;
-    // 机枪模式：只有标题 + 命中阈值 + 2d6 + 结果大字，用更矮的面板
+    // 机枪模式：只有标题 + 命中阈值 + 1d6 + 结果大字，用更矮的面板
     const PANEL_H = mg ? 280 : needsCrewRow ? 560 : hasHitDoublesCommanderKill ? 520 : 440;
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
@@ -10320,7 +10531,7 @@ export class BattleScene extends Component {
     const title = this.makeCenteredLabel(panel, `${attackerLabel} → ${targetLabel}`,
       0, PANEL_H / 2 - 34, PANEL_W - 40, 34, 26, HUD_TEXT_COLOR);
 
-    // 命中需求：机枪用单独文案（"机枪扫射 需 ≥7"），主炮走原来的命中阈值行
+    // 命中需求：机枪用单独文案（"机枪扫射 命中需 ≥N"），主炮走原来的命中阈值行
     const hitNeedText = mg
       ? t('dice.panel.mgHitNeed', { n: report.threshold })
       : t('dice.panel.hitNeed', { n: report.threshold });
@@ -10342,7 +10553,7 @@ export class BattleScene extends Component {
 
     const hitDiceCount = Math.max(1, Math.min(2, report.hitDiceCount ?? 2));
 
-    // 命中骰：主炮/欧洲机枪 2d6；Pacific 机枪 1d6（正面 -1 已计入命中所需）。
+    // 命中骰：主炮 2d6；机枪 1d6（正面 -1 已计入命中所需）。
     const d1 = this.makeDieSquare(panel, DIE_COL_1, hitDiceY, DIE_SIZE);
     const d2 = this.makeDieSquare(panel, DIE_COL_2, hitDiceY, DIE_SIZE);
     if (hitDiceCount === 1) {
@@ -10971,7 +11182,10 @@ export class BattleScene extends Component {
           }
           // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
           if (show.mg) playMgFire();
-          else playConfiguredAttackSound(show.attackSound);
+          else {
+            this.spawnMuzzleFlash(show.attacker, show.target);
+            playConfiguredAttackSound(show.attackSound);
+          }
         }
         break;
       }

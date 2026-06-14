@@ -43,6 +43,7 @@ export interface SplitTankGeometryConfig {
   topTrim: { x: number; y: number; w: number; h: number };
   turretTrim: { x: number; y: number; w: number; h: number };
   pivot: { bodyX: number; bodyY: number; spriteX: number; spriteY: number };
+  muzzle: { spriteX: number; spriteY: number };
 }
 
 const TANK_VISUAL_DEFAULT: TankVisualConfig = {
@@ -89,26 +90,31 @@ const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig>
     topTrim: { x: 259, y: 12, w: 1310, h: 576 },
     turretTrim: { x: 94, y: 24, w: 286, h: 157 },
     pivot: { bodyX: 927, bodyY: 296, spriteX: 309, spriteY: 99 },
+    muzzle: { spriteX: 94, spriteY: 99 },
   },
   tiger: {
     topTrim: { x: 0, y: 0, w: 901, h: 592 },
     turretTrim: { x: 0, y: 0, w: 1341, h: 500 },
     pivot: { bodyX: 454, bodyY: 292, spriteX: 875, spriteY: 243 },
+    muzzle: { spriteX: 0, spriteY: 243 },
   },
   panzer4: {
     topTrim: { x: 0, y: 0, w: 1174, h: 588 },
     turretTrim: { x: 0, y: 0, w: 769, h: 458 },
     pivot: { bodyX: 589, bodyY: 294, spriteX: 425, spriteY: 222 },
+    muzzle: { spriteX: 0, spriteY: 222 },
   },
   panzer3: {
     topTrim: { x: 0, y: 0, w: 1463, h: 592 },
     turretTrim: { x: 0, y: 0, w: 1373, h: 591 },
     pivot: { bodyX: 480, bodyY: 296, spriteX: 711, spriteY: 296 },
+    muzzle: { spriteX: 0, spriteY: 296 },
   },
   type97: {
     topTrim: { x: 0, y: 0, w: 1509, h: 632 },
     turretTrim: { x: 0, y: 0, w: 959, h: 410 },
     pivot: { bodyX: 737, bodyY: 281, spriteX: 687, spriteY: 205 },
+    muzzle: { spriteX: 0, spriteY: 205 },
   },
 };
 

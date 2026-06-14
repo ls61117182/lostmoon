@@ -92,6 +92,7 @@ export interface AttackContext {
   target: Unit;
   map: HexMap;
   theater?: Theater;
+  units?: readonly Unit[];
   /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
   protagonist?: Unit;
 }
@@ -541,17 +542,17 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
 // ---------- 机枪（MG）攻击 ----------
 //
-// §3.6 行动表 B 列 3/4 + C 列 2："机枪射击：相邻步兵 7+ 命中"。
+// §3.6 行动表 B 列 3/4 + C 列 2：机枪射击步兵。
 // 乘员门控在 BattleScene.selectMGDie：B 列机枪不因乘员阵亡禁用；C 列副驾驶机枪需副驾驶存活。
 // 相对主炮攻击的差异：
-//   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵）且必须与攻击方相邻（hexDistance===1）
-//   - 单段 2d6 检定：点数之和 ≥ 7 = 命中；命中即直接击毙（徒步单位无装甲）
-//   - 不吃树篱 / 建筑 / 烟雾 / 隐蔽修正（相邻近距离扫射）
+//   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵），且必须在同一直线可视范围内
+//   - 单段 1d6 检定：点数 ≥ 命中公式 = 命中；命中即直接击毙（徒步单位无装甲）
+//   - 吃距离 / 树篱 / 建筑 / 烟雾 / 隐蔽修正；目标在正面时命中所需 -1
 //   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
 //
 // canMGAttack 返回的 reason 同样是 i18n key，由 UI 层翻译。
 
-/** 机枪命中阈值：2d6 ≥ 7 */
+/** 旧版机枪固定阈值；保留导出以兼容外部引用。 */
 export const MG_HIT_THRESHOLD = 7;
 
 export type MGDenyReason =
@@ -566,19 +567,41 @@ function isMGInfantryTarget(target: Unit): boolean {
   return isFootUnit(target) || target.kind === 'japanese_infantry';
 }
 
+function sameHex(a: Axial, b: Axial): boolean {
+  return a.q === b.q && a.r === b.r;
+}
+
+function isTankCoordinationUnit(unit: Unit): boolean {
+  return unit.kind === 'sherman'
+    || unit.kind === 'tiger'
+    || unit.kind === 'panzer4'
+    || unit.kind === 'panzer3'
+    || unit.kind === 'type95'
+    || unit.kind === 'type97';
+}
+
+function mgTankCoordinationModifier(ctx: AttackContext): number {
+  if (!isMGInfantryTarget(ctx.target)) return 0;
+  const units = ctx.units;
+  if (!units) return 0;
+  const hasTankInTargetHex = units.some(u =>
+    u !== ctx.target
+    && !u.destroyed
+    && isTankCoordinationUnit(u)
+    && sameHex(u.pos, ctx.target.pos)
+  );
+  return hasTankInTargetHex ? 2 : 0;
+}
+
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   if (!isMGInfantryTarget(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
-  if (isPacificCombat(ctx)) {
-    if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
-    const fireDir = directionTo(attacker.pos, target.pos);
-    if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
-    if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
-    return { ok: true };
-  }
-  if (hexDistance(attacker.pos, target.pos) !== 1) return { ok: false, reason: 'attack.reason.mgRange' };
+  if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
+  const fireDir = directionTo(attacker.pos, target.pos);
+  if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
+  if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
 
@@ -592,27 +615,20 @@ export interface MGReport {
 }
 
 export function mgHitThreshold(ctx: AttackContext): number {
-  if (!isPacificCombat(ctx)) return MG_HIT_THRESHOLD;
   const frontArcModifier = isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0;
-  return hitThreshold(ctx, { includeRearArc: false, frontArcModifier });
+  return hitThreshold(ctx, { includeRearArc: false, frontArcModifier })
+    + mgTankCoordinationModifier(ctx);
 }
 
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
   const d1 = rng.d6();
-  if (isPacificCombat(ctx)) {
-    const roll = d1;
-    const threshold = mgHitThreshold(ctx);
-    return { dice: [d1, 0], hitDiceCount: 1, hitBonus: 0, roll, threshold, hit: roll >= threshold };
-  }
-  const d2 = rng.d6();
-  const roll = d1 + d2;
-  return { dice: [d1, d2], hitDiceCount: 2, hitBonus: 0, roll, threshold: MG_HIT_THRESHOLD, hit: roll >= MG_HIT_THRESHOLD };
+  const roll = d1;
+  const threshold = mgHitThreshold(ctx);
+  return { dice: [d1, 0], hitDiceCount: 1, hitBonus: 0, roll, threshold, hit: roll >= threshold };
 }
 
 export function maxMGHitRoll(ctx: AttackContext): number {
-  return isPacificCombat(ctx)
-    ? 6
-    : 12;
+  return 6;
 }
 
 /** 写入机枪攻击结果：命中 = 目标直接击毙。 */

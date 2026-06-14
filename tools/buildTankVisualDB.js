@@ -43,6 +43,8 @@ const NUM_FIELDS = [
   'turretPivotY',
   'turretSpritePivotX',
   'turretSpritePivotY',
+  'muzzleSpriteX',
+  'muzzleSpriteY',
   'destroyedOffsetForward',
   'destroyedOffsetRight',
 ];
@@ -223,6 +225,7 @@ function build() {
   lines.push('  topTrim: { x: number; y: number; w: number; h: number };');
   lines.push('  turretTrim: { x: number; y: number; w: number; h: number };');
   lines.push('  pivot: { bodyX: number; bodyY: number; spriteX: number; spriteY: number };');
+  lines.push('  muzzle: { spriteX: number; spriteY: number };');
   lines.push('}');
   lines.push('');
   lines.push('const TANK_VISUAL_DEFAULT: TankVisualConfig = {');
@@ -262,6 +265,7 @@ function build() {
     lines.push(`    topTrim: { x: ${emitNum(r.topTrimX)}, y: ${emitNum(r.topTrimY)}, w: ${emitNum(r.topTrimW)}, h: ${emitNum(r.topTrimH)} },`);
     lines.push(`    turretTrim: { x: ${emitNum(r.turretTrimX)}, y: ${emitNum(r.turretTrimY)}, w: ${emitNum(r.turretTrimW)}, h: ${emitNum(r.turretTrimH)} },`);
     lines.push(`    pivot: { bodyX: ${emitNum(r.turretPivotX)}, bodyY: ${emitNum(r.turretPivotY)}, spriteX: ${emitNum(r.turretSpritePivotX)}, spriteY: ${emitNum(r.turretSpritePivotY)} },`);
+    lines.push(`    muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} },`);
     lines.push('  },');
   }
   lines.push('};');
