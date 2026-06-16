@@ -18,8 +18,9 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 
 const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'usCasualtyDice'];
 const STRING_FIELDS = ['moveSound', 'attackSound'];
+const BONUS_FIELDS = ['infantryTankCoordination'];
 const FACTIONS = ['allied', 'german', 'japanese'];
-const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...STRING_FIELDS, 'notes'];
+const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, 'notes'];
 const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck', 'infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
 
 function readCsvSmart(filePath) {
@@ -166,6 +167,7 @@ function build() {
 
   for (const rec of records) {
     for (const f of NUM_FIELDS) intOrThrow(rec, f);
+    for (const f of BONUS_FIELDS) intOrThrow(rec, f);
   }
 
   const lines = [];
@@ -196,6 +198,9 @@ function build() {
     );
     for (const f of STRING_FIELDS) {
       lines.push(`    ${f}: ${jsString(r[f])},`);
+    }
+    for (const f of BONUS_FIELDS) {
+      lines.push(`    ${f}: ${intOrThrow(r, f)},`);
     }
     lines.push('  },');
   }

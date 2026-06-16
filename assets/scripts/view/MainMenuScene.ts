@@ -25,6 +25,7 @@ import {
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
+import { CustomMissionStore } from '../core/CustomMissionStore';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import {
   CHAPTERS,
@@ -345,7 +346,10 @@ export class MainMenuScene extends Component {
       }
       if (this.continueSubLabel) {
         const lvl = LEVELS.find(l => l.missionId === save.missionId);
-        const missionTitle = lvl ? t(lvl.titleKey) : save.missionId;
+        const customPkg = save.missionSource?.type === 'custom'
+          ? CustomMissionStore.load(save.missionSource.packageId)
+          : null;
+        const missionTitle = customPkg?.mission.name || (lvl ? t(lvl.titleKey) : save.missionId);
         const phaseStr = save.phase === 'player'
           ? t('menu.phase.player')
           : t('menu.phase.enemy');
@@ -372,6 +376,14 @@ export class MainMenuScene extends Component {
     if (!this.continueEnabled) return;
     const save = readSaveSafe();
     if (!save) return;
+    if (save.missionSource?.type === 'custom') {
+      const pkg = CustomMissionStore.load(save.missionSource.packageId);
+      if (pkg) {
+        GameSession.resumeCustomMission(save.missionSource.packageId);
+        this.loadBattleScene();
+        return;
+      }
+    }
     const lvl = LEVELS.find(l => l.missionId === save.missionId);
     if (!lvl) {
       // 存档指向的关卡已不在配置里（版本差异）；按新局进入默认关卡兜底
@@ -1200,6 +1212,7 @@ export class MainMenuScene extends Component {
   private loadBattleScene() {
     console.log('[Menu] load battle scene:', this.battleSceneName,
       '  mission =', GameSession.selectedMissionPath,
+      '  source =', GameSession.selectedMissionSource,
       '  resume =', GameSession.resumeFromSave);
     director.loadScene(this.battleSceneName, (err) => {
       if (err) console.error('[Menu] 加载战斗场景失败:', this.battleSceneName, err);

@@ -142,6 +142,7 @@ export interface UnitStats {
   usCasualtyDice: number;
   moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
+  infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
 }
 
 export interface Unit {

@@ -43,6 +43,7 @@ import {
   Label,
   Mask,
   Node,
+  RichText,
   ScrollView,
   Sprite,
   SpriteFrame,
@@ -102,12 +103,13 @@ import {
   TurnEndTankReinforceMove,
 } from '../core/TurnEndEventApply';
 import {
-  hasTurnEndEvents,
-  TURN_END_EVENTS,
   TurnEndEffectType,
-  turnEndEventsForMission,
-  turnEndRowForSum,
 } from '../core/TurnEndEventDB';
+import {
+  createCustomTurnEndEventProvider,
+  OfficialTurnEndEventProvider,
+} from '../core/TurnEndEventRuntime';
+import type { TurnEndEventProvider } from '../core/TurnEndEventRuntime';
 
 /** 回合结束事件表弹窗：效果类型 → lang key */
 const TURN_END_LIST_EFFECT_KEYS: Record<TurnEndEffectType, string> = {
@@ -138,6 +140,8 @@ function turnEndListEffectKey(effectType: TurnEndEffectType, theater?: string): 
 }
 import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
+import { CustomMissionStore } from '../core/CustomMissionStore';
+import type { MissionSource } from '../core/CustomMissionStore';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
@@ -147,6 +151,7 @@ import {
   SplitTankGeometryConfig,
   SplitTankVisualConfig,
   TANK_VISUAL_KINDS,
+  TankVisualConfig,
   TankVisualKind,
   splitTankGeometryConfigOf,
   splitTankVisualConfigOf,
@@ -266,13 +271,6 @@ const SHERMAN_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('sherman');
 const TIGER_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('tiger');
 const PANZER4_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('panzer4');
 const PANZER3_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('panzer3');
-
-/** 本关在 turn_end_events 表里配置的主骰颗数（多行取最大，缺省 2） */
-function turnEndDiceCountForMission(missionId: string): number {
-  const rows = TURN_END_EVENTS.filter(r => r.missionId === missionId);
-  if (!rows.length) return 2;
-  return Math.max(...rows.map(r => r.diceCount));
-}
 
 /** 着火检定预掷结果：确认后才写入谢尔曼状态 */
 interface FireCheckPreparedStep {
@@ -524,6 +522,44 @@ interface CombatLogI18nEntry {
   params?: CombatLogParams;
 }
 type CombatLogEntry = string | CombatLogI18nEntry;
+type CombatLogTone = 'good' | 'bad' | 'neutral';
+
+const COMBAT_LOG_COLOR = {
+  good: '#72f08a',
+  bad: '#ff6b6b',
+  fire: '#ffad4f',
+  damage: '#ffd166',
+  mobility: '#c89cff',
+  guard: '#9fd3ff',
+  neutral: '#e4e9f0',
+};
+
+const COMBAT_LOG_ALWAYS_GOOD = [
+  '灭火', 'Fire suppression', 'fire suppression', 'fire level -1', 'Fire Level -1',
+  '着火层数 -1', '击落', 'shot down', 'unharmed', '虚惊', 'False Alarm', 'false alarm',
+];
+const COMBAT_LOG_ALWAYS_BAD = [
+  '任务失败', 'mission failed', 'limit exceeded', '超过上限', '无法攻击', 'Cannot attack',
+];
+const COMBAT_LOG_CONTEXTUAL_GOOD = [
+  '命中击毙', 'Hit and killed', '目标摧毁', 'target destroyed', '击毁', '摧毁', 'Destroyed',
+  'destroyed', '阵亡', 'KIA', '击穿', 'penetrated',
+];
+const COMBAT_LOG_CONTEXTUAL_BAD = [
+  '未命中', 'MISS', 'miss', 'Miss', '跳弹', 'Ricochet', 'ricochet',
+];
+const COMBAT_LOG_FIRE_WORDS = ['着火', '起火', 'On Fire', 'Fire level', 'fire level'];
+const COMBAT_LOG_DAMAGE_WORDS = ['受损', 'Damaged', 'damage', '炮塔受损', 'Turret Hit'];
+const COMBAT_LOG_MOBILITY_WORDS = ['瘫痪', 'Immobilized'];
+const COMBAT_LOG_HIGHLIGHT_WORDS = [
+  ...COMBAT_LOG_ALWAYS_GOOD,
+  ...COMBAT_LOG_ALWAYS_BAD,
+  ...COMBAT_LOG_CONTEXTUAL_GOOD,
+  ...COMBAT_LOG_CONTEXTUAL_BAD,
+  ...COMBAT_LOG_FIRE_WORDS,
+  ...COMBAT_LOG_DAMAGE_WORDS,
+  ...COMBAT_LOG_MOBILITY_WORDS,
+].sort((a, b) => b.length - a.length);
 
 /** 战报浮字：一条挂在 mapNode 下的 Label，会上浮 + 渐隐 + 自毁 */
 interface Floater {
@@ -717,7 +753,7 @@ const ADVANCE_BTN_W = 180;
 const ADVANCE_BTN_H = 72;
 const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
 const MODAL_PANEL_BG     = new Color( 36,  41,  34, 245);
-const DICE_EVENT_PANEL_BG = new Color(40, 44, 52, 128);
+const DICE_EVENT_PANEL_BG = new Color(40, 44, 52, 51);
 const DICE_EVENT_PANEL_BORDER = new Color(90, 98, 110, 255);
 const MODAL_PANEL_BORDER = new Color(202, 188, 136, 230);
 const MODAL_CLOSE_BG     = new Color(134,  49,  42, 245);
@@ -760,6 +796,9 @@ const DIE_HINT_GREY  = new Color(130, 130, 130, 255);
 const DRIVE_FWD_COLOR = new Color(120, 230, 120, 255);
 const DRIVE_BWD_COLOR = new Color(240, 190,  80, 255);
 const DRIVE_BLOCKED   = new Color(200,  80,  80, 200);
+const ACTIVE_UNIT_PLAYER_FRAME = new Color(150, 245, 170, 255);
+const ACTIVE_UNIT_ALLIED_FRAME = new Color(125, 220, 255, 255);
+const ACTIVE_UNIT_ENEMY_FRAME  = new Color(255, 230, 135, 255);
 
 // 掷骰展示面板配色
 const DICE_BACKDROP    = new Color(  0,   0,   0, 180);
@@ -1061,14 +1100,18 @@ export class BattleScene extends Component {
     fromSlot: number[];
     toSlot: number[];
   } | null = null;
-  /** AI 骰结果无可执行动作时，保留高亮和点数一小段时间再推进下一颗骰 */
-  private enemyNoActionHold: {
+  /** AI 单位所有骰都执行完后，保留整组骰子结果一小段时间再切到下一单位 */
+  private enemyDiceResultHold: {
     t: number;
     dur: number;
-    dieIdx: number;
   } | null = null;
+  /** 当前单位本轮 AI 骰是否至少执行过一次有效动作 */
+  private enemyDidActThisTurn: boolean = false;
   /** 敌方当前正在执行的那颗骰下标；-1 无高亮 */
   private enemyDiceHighlightIdx: number = -1;
+  private activeActingUnit: Unit | null = null;
+  private activeActingFrameNode: Node | null = null;
+  private activeActingFrameGraphics: Graphics | null = null;
   // 战斗 / 胜负
   private rng: RNG = new RNG(1);
   private outcome: MissionOutcome = 'ongoing';
@@ -1080,12 +1123,16 @@ export class BattleScene extends Component {
   private muzzleFlashes: MuzzleFlash[] = [];
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
+  private previewLabelNext = 0;
   // 单位状态文字池（仅已毁短标签）：随 redraw 整批重建
   private statusLabels: Node[] = [];
+  private statusLabelNext = 0;
   /** 坦克状态图标条（矢量），在格心下方横向排列 */
   private statusBadgeNodes: Node[] = [];
+  private statusBadgeNext = 0;
   // 单位名字文字池（"谢尔曼" / "虎式" 等）：常驻显示，随 redraw 整批重建
   private nameLabels: Node[] = [];
+  private nameLabelNext = 0;
   /**
    * 本战斗轮次内**刚被击毁**、应绘制残骸（灰圆+红叉）与「已毁」短标签的单位 id。
    * 在 `endEnemyPhase` 转入下一玩家回合时清空，即每回合①开始时清除上一轮留下的击毁标记。
@@ -1173,6 +1220,7 @@ export class BattleScene extends Component {
     resultLabel: Label;
     hits: number;
     limit: number;
+    applied: boolean;
   } | null = null;
 
   // ---- 右侧谢尔曼状态面板 ----
@@ -1196,6 +1244,8 @@ export class BattleScene extends Component {
 
   // 存档/读档
   private missionId: string = '';
+  private missionSource: MissionSource = { type: 'resource', missionPath: 'missions/mission_01' };
+  private turnEndEventProvider: TurnEndEventProvider = OfficialTurnEndEventProvider;
 
   /** 战斗内模态（设置）；退出确认单独一层叠在上面 */
   private battleModalRoot: Node | null = null;
@@ -1225,7 +1275,8 @@ export class BattleScene extends Component {
   private combatLogPanelBg: Graphics | null = null;
   private combatLogScroll: ScrollView | null = null;
   private combatLogContent: Node | null = null;
-  private combatLogLabel: Label | null = null;
+  private combatLogLabel: RichText | null = null;
+  private combatLogPlainLabel: Label | null = null;
   private combatLogViewN: Node | null = null;
   private combatLogTitleLab: Label | null = null;
   private combatLogLines: CombatLogEntry[] = [];
@@ -1564,27 +1615,45 @@ export class BattleScene extends Component {
 
     // 主菜单选关时会写入 GameSession.selectedMissionPath；绕过菜单直接启动场景
     // 也安全（GameSession 默认值 = 'missions/mission_01'，与本脚本 @property 默认一致）。
-    if (GameSession.selectedMissionPath) {
-      this.missionPath = GameSession.selectedMissionPath;
-    }
-
-    // 从 resources/ 加载任务 JSON（注意：路径不含扩展名）
-    resources.load(this.missionPath, JsonAsset, (err, asset) => {
-      if (err || !asset) {
-        console.error('[BattleScene] 加载任务失败:', this.missionPath, err);
-        return;
-      }
-      this.loadAndDraw(asset.json as MissionData);
-      // 主菜单"继续游戏"入口：任务加载完成后立刻读档覆盖，随后清掉 resume 标志
-      // 避免下次"再来一局"又被读回旧存档。
-      if (GameSession.resumeFromSave) {
-        this.onLoad_Save(/* skipHint */ true);
-        GameSession.clearResumeFlag();
-      }
-    });
+    this.loadSelectedMissionFromSession();
   }
 
   // ---------- 状态 ----------
+
+  private loadSelectedMissionFromSession() {
+    const source = GameSession.selectedMissionSource;
+    if (source.type === 'custom') {
+      const pkg = CustomMissionStore.load(source.packageId);
+      if (!pkg) {
+        console.error('[BattleScene] custom mission package not found:', source.packageId);
+        return;
+      }
+      this.missionSource = source;
+      this.turnEndEventProvider = createCustomTurnEndEventProvider(pkg.turnEndEvents);
+      this.loadAndDraw(pkg.mission);
+      this.resumeAfterMissionLoadedIfNeeded();
+      return;
+    }
+
+    const missionPath = source.missionPath || GameSession.selectedMissionPath || this.missionPath;
+    this.missionPath = missionPath;
+    this.missionSource = { type: 'resource', missionPath };
+    this.turnEndEventProvider = OfficialTurnEndEventProvider;
+    resources.load(this.missionPath, JsonAsset, (err, asset) => {
+      if (err || !asset) {
+        console.error('[BattleScene] load mission failed:', this.missionPath, err);
+        return;
+      }
+      this.loadAndDraw(asset.json as MissionData);
+      this.resumeAfterMissionLoadedIfNeeded();
+    });
+  }
+
+  private resumeAfterMissionLoadedIfNeeded() {
+    if (!GameSession.resumeFromSave) return;
+    this.onLoad_Save(/* skipHint */ true);
+    GameSession.clearResumeFlag();
+  }
 
   private loadAndDraw(data: MissionData) {
     this.missionId = data.id;
@@ -1827,6 +1896,7 @@ export class BattleScene extends Component {
     this.drawEvacExitArrow();
     // 4e. 军官单位（任务 8 红框建筑里的高级军官，kind='officer'）：在所在格绘制红色 hex 边框
     this.drawOfficerTileHighlights();
+    this.drawActiveActingUnitFrame();
 
     // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
     const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
@@ -1877,7 +1947,7 @@ export class BattleScene extends Component {
 
       // 命中预览：≥需要值 + 命中概率
       const need = hitThreshold(ctx);
-      this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.7, need);
+      this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.28, need);
     }
     this.g.lineWidth = 2;
   }
@@ -1904,7 +1974,7 @@ export class BattleScene extends Component {
       const prob = maxRoll <= 7
         ? Math.max(0, Math.min(1, (maxRoll + 1 - need) / 6))
         : undefined;
-      this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.7, need, prob);
+      this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.28, need, prob);
     }
     this.g.lineWidth = 2;
   }
@@ -2058,6 +2128,87 @@ export class BattleScene extends Component {
     if (drewAny) g.lineWidth = 2;
   }
 
+  private setActiveActingUnit(unit: Unit | null) {
+    this.activeActingUnit = unit && !unit.destroyed ? unit : null;
+    this.syncActiveActingUnitFrame();
+  }
+
+  private clearActiveActingUnit(unit?: Unit | null) {
+    if (unit && this.activeActingUnit !== unit) return;
+    this.activeActingUnit = null;
+    this.destroyActiveActingUnitFrame();
+  }
+
+  private activeActingUnitFrameColor(unit: Unit): Color {
+    if (unit === this.mission?.sherman) return ACTIVE_UNIT_PLAYER_FRAME;
+    if (unit.faction === 'allied') return ACTIVE_UNIT_ALLIED_FRAME;
+    return ACTIVE_UNIT_ENEMY_FRAME;
+  }
+
+  private activeActingUnitIsFoot(unit: Unit): boolean {
+    return isFootUnit(unit) || unit.kind === 'japanese_infantry';
+  }
+
+  private drawActiveActingUnitFrame() {
+    this.syncActiveActingUnitFrame();
+  }
+
+  private destroyActiveActingUnitFrame() {
+    if (this.activeActingFrameNode?.isValid) {
+      this.activeActingFrameNode.destroy();
+    }
+    this.activeActingFrameNode = null;
+    this.activeActingFrameGraphics = null;
+  }
+
+  private ensureActiveActingUnitFrame(): Graphics | null {
+    if (!this.mapNode) return null;
+    if (this.activeActingFrameNode?.isValid && this.activeActingFrameGraphics) {
+      return this.activeActingFrameGraphics;
+    }
+    const n = new Node('ActiveActingUnitFrame');
+    n.layer = this.node.layer;
+    n.addComponent(UITransform).setContentSize(this.hexSize * 2.4, this.hexSize * 2.4);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    this.activeActingFrameNode = n;
+    this.activeActingFrameGraphics = g;
+    return g;
+  }
+
+  private syncActiveActingUnitFrame() {
+    if (!this.activeActingUnit || this.activeActingUnit.destroyed) {
+      this.destroyActiveActingUnitFrame();
+      return;
+    }
+    const g = this.ensureActiveActingUnitFrame();
+    const n = this.activeActingFrameNode;
+    if (!g || !n || !this.mapNode) return;
+    const unit = this.activeActingUnit;
+    const c = (this.anim && this.anim.unit === unit)
+      ? this.interpolatedPos(unit)
+      : this.project(unit.pos.q, unit.pos.r);
+    n.setPosition(c.x, c.y, 0);
+    n.setSiblingIndex(0);
+    g.clear();
+    const base = this.activeActingUnitFrameColor(unit);
+    const size = this.hexSize - 1;
+    g.strokeColor = new Color(base.r, base.g, base.b, 220);
+    g.lineWidth = 4;
+    if (this.activeActingUnitIsFoot(unit)) {
+      this.drawSegmentedHexOutlineOn(g, 0, 0, size, 0.22, 0.78);
+    } else {
+      this.drawHexOutlineOn(g, 0, 0, size);
+    }
+    g.strokeColor = new Color(0, 0, 0, 120);
+    g.lineWidth = 1.25;
+    if (this.activeActingUnitIsFoot(unit)) {
+      this.drawSegmentedHexOutlineOn(g, 0, 0, size - 3, 0.34, 0.66);
+    } else {
+      this.drawHexOutlineOn(g, 0, 0, size - 3);
+    }
+  }
+
   /** 命中概率分档配色：成功率越高越绿，越低越红 */
   private previewColor(prob: number): Color {
     if (prob >= 0.7)  return PREVIEW_COLOR_GREAT;
@@ -2073,38 +2224,45 @@ export class BattleScene extends Component {
     const prob = probability ?? HIT_PROB_GE[idx];
     const color = this.previewColor(prob);
 
-    const n = new Node('AttackPreview');
-    n.layer = this.node.layer;
-    const ut = n.addComponent(UITransform);
-    ut.setContentSize(80, 40);
-    ut.setAnchorPoint(0.5, 0.5);
+    let n = this.previewLabels[this.previewLabelNext++];
+    let l = n?.getComponent(Label) ?? null;
+    if (!n || !l) {
+      n = new Node('AttackPreview');
+      n.layer = this.node.layer;
+      const ut = n.addComponent(UITransform);
+      ut.setContentSize(86, 24);
+      ut.setAnchorPoint(0.5, 0.5);
 
-    const l = n.addComponent(Label);
-    l.fontSize = 18;
-    l.lineHeight = 20;
+      l = n.addComponent(Label);
+      l.lineHeight = 20;
+      l.horizontalAlign = HorizontalTextAlignment.CENTER;
+      l.verticalAlign = VerticalTextAlignment.CENTER;
+      l.enableOutline = true;
+      l.outlineColor = PREVIEW_OUTLINE;
+      l.outlineWidth = 2;
+      this.previewLabels[this.previewLabelNext - 1] = n;
+      this.mapNode.addChild(n);
+    } else if (n.parent !== this.mapNode) {
+      this.mapNode.addChild(n);
+    }
+
+    l.fontSize = 17;
     l.color = color;
-    l.horizontalAlign = HorizontalTextAlignment.CENTER;
-    l.verticalAlign = VerticalTextAlignment.CENTER;
     if (prob <= 0) {
       l.string = t('preview.impossible', { n: need });
-      l.fontSize = 14;
+      l.fontSize = 13;
     } else {
-      l.string = `≥${need}\n${Math.round(prob * 100)}%`;
+      l.string = `≥${need} ${Math.round(prob * 100)}%`;
     }
 
     // 加描边让字在任何底色上都清晰
-    l.enableOutline = true;
-    l.outlineColor = PREVIEW_OUTLINE;
-    l.outlineWidth = 2;
-
-    this.mapNode.addChild(n);
     n.setPosition(x, y, 0);
-    this.previewLabels.push(n);
+    n.active = true;
   }
 
   private clearPreviewLabels() {
-    for (const n of this.previewLabels) n.destroy();
-    this.previewLabels.length = 0;
+    this.previewLabelNext = 0;
+    for (const n of this.previewLabels) n.active = false;
   }
 
   // ---------- 单位状态常驻文字 ----------
@@ -2128,36 +2286,43 @@ export class BattleScene extends Component {
     const text = t('unit.status.destroyed');
     const color = STATUS_TEXT_DEAD;
 
-    const n = new Node('StatusLabel');
-    n.layer = this.node.layer;
-    const ut = n.addComponent(UITransform);
-    ut.setContentSize(80, 24);
-    ut.setAnchorPoint(0.5, 0.5);
+    let n = this.statusLabels[this.statusLabelNext++];
+    let l = n?.getComponent(Label) ?? null;
+    if (!n || !l) {
+      n = new Node('StatusLabel');
+      n.layer = this.node.layer;
+      const ut = n.addComponent(UITransform);
+      ut.setContentSize(80, 24);
+      ut.setAnchorPoint(0.5, 0.5);
 
-    const l = n.addComponent(Label);
-    l.fontSize = 18;
-    l.lineHeight = 20;
+      l = n.addComponent(Label);
+      l.fontSize = 18;
+      l.lineHeight = 20;
+      l.horizontalAlign = HorizontalTextAlignment.CENTER;
+      l.verticalAlign = VerticalTextAlignment.CENTER;
+      l.enableOutline = true;
+      l.outlineColor = STATUS_TEXT_OUT;
+      l.outlineWidth = 2;
+      this.statusLabels[this.statusLabelNext - 1] = n;
+      this.mapNode.addChild(n);
+    } else if (n.parent !== this.mapNode) {
+      this.mapNode.addChild(n);
+    }
+
     l.color = color;
-    l.horizontalAlign = HorizontalTextAlignment.CENTER;
-    l.verticalAlign = VerticalTextAlignment.CENTER;
     l.string = text;
-    l.enableOutline = true;
-    l.outlineColor = STATUS_TEXT_OUT;
-    l.outlineWidth = 2;
-
-    this.mapNode.addChild(n);
     n.setPosition(c.x, c.y - this.hexSize * 0.65, 0);
-    this.statusLabels.push(n);
+    n.active = true;
   }
 
   private clearStatusLabels() {
-    for (const n of this.statusLabels) n.destroy();
-    this.statusLabels.length = 0;
+    this.statusLabelNext = 0;
+    for (const n of this.statusLabels) n.active = false;
   }
 
   private clearStatusBadges() {
-    for (const n of this.statusBadgeNodes) n.destroy();
-    this.statusBadgeNodes.length = 0;
+    this.statusBadgeNext = 0;
+    for (const n of this.statusBadgeNodes) n.active = false;
   }
 
   /**
@@ -2193,22 +2358,31 @@ export class BattleScene extends Component {
     const gap = TANK_BADGE_GAP;
     const totalW = kinds.length * cell + (kinds.length - 1) * gap;
 
-    const n = new Node('TankStatusBadges');
-    n.layer = this.node.layer;
-    const ut = n.addComponent(UITransform);
+    let n = this.statusBadgeNodes[this.statusBadgeNext++];
+    let ut = n?.getComponent(UITransform) ?? null;
+    let g = n?.getComponent(Graphics) ?? null;
+    if (!n || !ut || !g) {
+      n = new Node('TankStatusBadges');
+      n.layer = this.node.layer;
+      ut = n.addComponent(UITransform);
+      g = n.addComponent(Graphics);
+      ut.setAnchorPoint(0.5, 0.5);
+      this.statusBadgeNodes[this.statusBadgeNext - 1] = n;
+      this.mapNode.addChild(n);
+    } else if (n.parent !== this.mapNode) {
+      this.mapNode.addChild(n);
+    }
     ut.setContentSize(totalW + 4, cell + 6);
-    ut.setAnchorPoint(0.5, 0.5);
     n.setPosition(c.x, rowY, 0);
 
-    const g = n.addComponent(Graphics);
+    g.clear();
     let x = -totalW / 2 + cell / 2;
     for (const kind of kinds) {
       this.drawTankStatusBadge(g, kind, x, 0, cell * 0.5);
       x += cell + gap;
     }
 
-    this.mapNode.addChild(n);
-    this.statusBadgeNodes.push(n);
+    n.active = true;
   }
 
   /** 单枚状态标：深色底框 + 中心符号 */
@@ -2320,31 +2494,37 @@ export class BattleScene extends Component {
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
 
-    const n = new Node('UnitNameLabel');
-    n.layer = this.node.layer;
-    const ut = n.addComponent(UITransform);
-    ut.setContentSize(96, 22);
-    ut.setAnchorPoint(0.5, 0.5);
+    let n = this.nameLabels[this.nameLabelNext++];
+    let l = n?.getComponent(Label) ?? null;
+    if (!n || !l) {
+      n = new Node('UnitNameLabel');
+      n.layer = this.node.layer;
+      const ut = n.addComponent(UITransform);
+      ut.setContentSize(96, 22);
+      ut.setAnchorPoint(0.5, 0.5);
 
-    const l = n.addComponent(Label);
-    l.fontSize = 16;
-    l.lineHeight = 18;
+      l = n.addComponent(Label);
+      l.fontSize = 16;
+      l.lineHeight = 18;
+      l.horizontalAlign = HorizontalTextAlignment.CENTER;
+      l.verticalAlign = VerticalTextAlignment.CENTER;
+      l.enableOutline = true;
+      l.outlineColor = UNIT_NAME_OUTLINE;
+      l.outlineWidth = 2;
+      this.nameLabels[this.nameLabelNext - 1] = n;
+      this.mapNode.addChild(n);
+    } else if (n.parent !== this.mapNode) {
+      this.mapNode.addChild(n);
+    }
     l.color = u.destroyed
       ? UNIT_NAME_TEXT_DEAD
       : u === this.mission?.sherman
         ? UNIT_NAME_TEXT_PLAYER
         : (u.faction === 'allied' ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
-    l.horizontalAlign = HorizontalTextAlignment.CENTER;
-    l.verticalAlign = VerticalTextAlignment.CENTER;
     l.string = t(`unit.name.${u.kind}`);
-    l.enableOutline = true;
-    l.outlineColor = UNIT_NAME_OUTLINE;
-    l.outlineWidth = 2;
-
-    this.mapNode.addChild(n);
     // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字（UNIT_NAME_OFFSET_HEX×hex）
     n.setPosition(c.x, c.y - this.hexSize * UNIT_NAME_OFFSET_HEX, 0);
-    this.nameLabels.push(n);
+    n.active = true;
   }
 
   private hasLiveUnitOnSameTile(u: Unit): boolean {
@@ -2359,8 +2539,8 @@ export class BattleScene extends Component {
   }
 
   private clearNameLabels() {
-    for (const n of this.nameLabels) n.destroy();
-    this.nameLabels.length = 0;
+    this.nameLabelNext = 0;
+    for (const n of this.nameLabels) n.active = false;
   }
 
   /** 单位若正在动画，返回插值像素位置；否则等价 project(u.pos)。给状态文字定位用。 */
@@ -2524,10 +2704,53 @@ export class BattleScene extends Component {
       if (precise) return precise;
     }
 
+    const cfg = tankVisualConfigOf(attacker.kind);
+    const precise = this.topSpriteMuzzlePosition(attacker, c, cfg, aim);
+    if (precise) return precise;
+
     const dist = this.hexSize * 0.72;
     return {
       x: c.x + aim.ux * dist,
       y: c.y + aim.uy * dist,
+      ux: aim.ux,
+      uy: aim.uy,
+    };
+  }
+
+  private topSpriteMuzzlePosition(
+    u: Unit,
+    c: { x: number; y: number },
+    cfg: TankVisualConfig,
+    aim: { ux: number; uy: number },
+  ): { x: number; y: number; ux: number; uy: number } | null {
+    if (cfg.muzzle.spriteX === 0 && cfg.muzzle.spriteY === 0) return null;
+    const meta = this.enemyTopMeta[u.kind as TankVisualKind];
+    if (!meta?.sf) return null;
+
+    const w = meta.dw > 0 ? meta.dw : meta.sf.width;
+    const h = meta.dh > 0 ? meta.dh : meta.sf.height;
+    if (w <= 0 || h <= 0) return null;
+
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
+    const maxDim = Math.max(w, h) || 1;
+    const tw0 = (w / maxDim) * fit;
+    const th0 = (h / maxDim) * fit;
+    const k = Math.sqrt(Math.max(1e-6, cfg.aspectRatioMul));
+    const scaleX = (tw0 * k) / w;
+    const scaleY = (th0 / k) / h;
+
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = cfg.offsetForward * offsetUnit;
+    const r = cfg.offsetRight * offsetUnit;
+    const right = { ux: aim.uy, uy: -aim.ux };
+    const baseX = c.x + f * aim.ux + r * right.ux;
+    const baseY = c.y + f * aim.uy + r * right.uy;
+
+    const localX = (cfg.muzzle.spriteX - w / 2) * scaleX;
+    const localY = (h / 2 - cfg.muzzle.spriteY) * scaleY;
+    return {
+      x: baseX + localX * (-aim.ux) + localY * right.ux,
+      y: baseY + localX * (-aim.uy) + localY * right.uy,
       ux: aim.ux,
       uy: aim.uy,
     };
@@ -2652,7 +2875,10 @@ export class BattleScene extends Component {
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
-    if (this.diceShow) this.advanceDiceShow(dt);
+    if (this.diceShow) {
+      this.advanceDiceShow(dt);
+      if (this.activeActingUnit) this.redraw();
+    }
 
     if (this.playerDiceRollAnim) this.advancePlayerDiceRollAnim(dt);
 
@@ -2702,20 +2928,20 @@ export class BattleScene extends Component {
       return;
     }
 
-    if (this.enemyNoActionHold && this.mission && this.enemyDiceTrayRoot) {
-      const hold = this.enemyNoActionHold;
+    if (this.enemyDiceResultHold && this.mission && this.enemyDiceTrayRoot) {
+      const hold = this.enemyDiceResultHold;
       hold.t += dt;
       if (hold.t < hold.dur) {
         this.refreshEnemyDiceTray();
         this.redraw();
         return;
       }
-      this.enemyDiceUsed[hold.dieIdx] = true;
       this.enemyDiceHighlightIdx = -1;
-      this.enemyNoActionHold = null;
+      this.enemyDiceResultHold = null;
       this.refreshEnemyDiceTray();
       this.redraw();
-      this.runNextEnemyStep();
+      this.enemyIndex++;
+      this.beginCurrentEnemyTurn();
       return;
     }
 
@@ -4003,7 +4229,10 @@ export class BattleScene extends Component {
 
   /** 仅描边的六边形（用于高亮） */
   private drawHexOutline(cx: number, cy: number, size: number) {
-    const g = this.g!;
+    this.drawHexOutlineOn(this.g!, cx, cy, size);
+  }
+
+  private drawHexOutlineOn(g: Graphics, cx: number, cy: number, size: number) {
     for (let i = 0; i < 6; i++) {
       const angle = (-30 + 60 * i) * Math.PI / 180;
       const x = cx + size * Math.cos(angle);
@@ -4012,6 +4241,33 @@ export class BattleScene extends Component {
     }
     g.close();
     g.stroke();
+  }
+
+  private drawSegmentedHexOutlineOn(g: Graphics, cx: number, cy: number, size: number, fromT: number, toT: number) {
+    const points: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (-30 + 60 * i) * Math.PI / 180;
+      points.push({
+        x: cx + size * Math.cos(angle),
+        y: cy + size * Math.sin(angle),
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % 6];
+      const x0 = a.x + (b.x - a.x) * fromT;
+      const y0 = a.y + (b.y - a.y) * fromT;
+      const x1 = a.x + (b.x - a.x) * toT;
+      const y1 = a.y + (b.y - a.y) * toT;
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+    }
+    g.stroke();
+  }
+
+  private drawSegmentedHexOutline(cx: number, cy: number, size: number, fromT: number, toT: number) {
+    const g = this.g!;
+    this.drawSegmentedHexOutlineOn(g, cx, cy, size, fromT, toT);
   }
 
   /** 每条六角边上的树篱树木数量：两个端点 + 中点；端点会跨相邻树篱去重共用。 */
@@ -5129,16 +5385,33 @@ export class BattleScene extends Component {
     labUT.setContentSize(sW - 4, 80);
     labN.setPosition(-(sW - 4) * 0.5, 0, 0);
     contentN.addChild(labN);
-    const lab = labN.addComponent(Label);
+    const lab = labN.addComponent(RichText);
     // 与标题「战斗记录」同档字号，避免正文过细；行高略大于字号保证正常长宽比
     lab.fontSize = BattleScene.COMBAT_LOG_BODY_FONT0;
     lab.lineHeight = BattleScene.COMBAT_LOG_BODY_LINE0;
     lab.color = new Color(230, 235, 242, 255);
     lab.horizontalAlign = HorizontalTextAlignment.LEFT;
-    lab.verticalAlign = VerticalTextAlignment.TOP;
-    lab.overflow = Label.Overflow.RESIZE_HEIGHT;
+    lab.maxWidth = sW - 4;
     lab.string = '';
+    lab.node.active = false;
     this.combatLogLabel = lab;
+
+    const plainN = new Node('PlainLabel');
+    plainN.layer = this.node.layer;
+    const plainUT = plainN.addComponent(UITransform);
+    plainUT.setAnchorPoint(0, 1);
+    plainUT.setContentSize(sW - 4, 80);
+    plainN.setPosition(-(sW - 4) * 0.5, 0, 0);
+    contentN.addChild(plainN);
+    const plain = plainN.addComponent(Label);
+    plain.fontSize = BattleScene.COMBAT_LOG_BODY_FONT0;
+    plain.lineHeight = BattleScene.COMBAT_LOG_BODY_LINE0;
+    plain.color = new Color(230, 235, 242, 255);
+    plain.horizontalAlign = HorizontalTextAlignment.LEFT;
+    plain.verticalAlign = VerticalTextAlignment.TOP;
+    plain.overflow = Label.Overflow.RESIZE_HEIGHT;
+    plain.string = '';
+    this.combatLogPlainLabel = plain;
     this.combatLogContent = contentN;
     sv.content = contentN;
     this.combatLogScroll = sv;
@@ -5185,23 +5458,43 @@ export class BattleScene extends Component {
 
   private setCombatLogLabelFrame(width: number) {
     const lab = this.combatLogLabel;
-    if (!lab) return;
-    const lut = lab.node.getComponent(UITransform);
-    if (!lut) return;
-    lut.setAnchorPoint(0, 1);
-    lut.setContentSize(width, Math.max(1, lut.contentSize.height));
-    lab.node.setPosition(-width * 0.5, 0, 0);
+    const plain = this.combatLogPlainLabel;
+    if (lab) {
+      const lut = lab.node.getComponent(UITransform);
+      if (lut) {
+        lut.setAnchorPoint(0, 1);
+        lut.setContentSize(width, Math.max(1, lut.contentSize.height));
+        lab.node.setPosition(-width * 0.5, 0, 0);
+        lab.maxWidth = width;
+      }
+    }
+    if (plain) {
+      const put = plain.node.getComponent(UITransform);
+      if (put) {
+        put.setAnchorPoint(0, 1);
+        put.setContentSize(width, Math.max(1, put.contentSize.height));
+        plain.node.setPosition(-width * 0.5, 0, 0);
+      }
+    }
   }
 
   private applyCombatLogTypography() {
     const lab = this.combatLogLabel;
-    if (!lab) return;
-    lab.fontSize = this.combatLogExpanded
+    const plain = this.combatLogPlainLabel;
+    const fontSize = this.combatLogExpanded
       ? BattleScene.COMBAT_LOG_BODY_FONT1
       : BattleScene.COMBAT_LOG_BODY_FONT0;
-    lab.lineHeight = this.combatLogExpanded
+    const lineHeight = this.combatLogExpanded
       ? BattleScene.COMBAT_LOG_BODY_LINE1
       : BattleScene.COMBAT_LOG_BODY_LINE0;
+    if (lab) {
+      lab.fontSize = fontSize;
+      lab.lineHeight = lineHeight;
+    }
+    if (plain) {
+      plain.fontSize = fontSize;
+      plain.lineHeight = lineHeight;
+    }
   }
 
   private combatLogText(entry: CombatLogEntry): string {
@@ -5314,6 +5607,80 @@ export class BattleScene extends Component {
     return t(entry.key, params);
   }
 
+  private combatLogEntryTone(entry: CombatLogEntry, text: string): CombatLogTone {
+    if (typeof entry !== 'string') {
+      const params = entry.params;
+      if (entry.key === 'battleLog.misc.fireSuppress') return 'good';
+      if (entry.key === 'battleLog.usCasualtyDefeat') return 'bad';
+      if (entry.key === 'battleLog.combatMg') {
+        return String(params?.resultKey ?? '').endsWith('.hit') ? 'good' : 'bad';
+      }
+      if (entry.key.startsWith('battleLog.combat.')) {
+        if (params?.actorKey === 'actor.player') return 'good';
+        if (params?.actorNameKey) return 'bad';
+      }
+    }
+    if (/^\[AI\]|\[Combat\].*Enemy|\[战斗\].*敌方/.test(text)) return 'bad';
+    if (/^\[玩家\]|\[Player\]|\[Combat\].*Player|\[战斗\].*玩家/.test(text)) return 'good';
+    return 'neutral';
+  }
+
+  private combatLogPhraseColor(phrase: string, tone: CombatLogTone): string {
+    if (COMBAT_LOG_ALWAYS_GOOD.includes(phrase)) return COMBAT_LOG_COLOR.good;
+    if (COMBAT_LOG_ALWAYS_BAD.includes(phrase)) return COMBAT_LOG_COLOR.bad;
+    if (COMBAT_LOG_FIRE_WORDS.includes(phrase)) return tone === 'good' ? COMBAT_LOG_COLOR.good : COMBAT_LOG_COLOR.fire;
+    if (COMBAT_LOG_DAMAGE_WORDS.includes(phrase)) return tone === 'good' ? COMBAT_LOG_COLOR.good : COMBAT_LOG_COLOR.damage;
+    if (COMBAT_LOG_MOBILITY_WORDS.includes(phrase)) return tone === 'good' ? COMBAT_LOG_COLOR.good : COMBAT_LOG_COLOR.mobility;
+    if (COMBAT_LOG_CONTEXTUAL_BAD.includes(phrase)) return tone === 'bad' ? COMBAT_LOG_COLOR.good : COMBAT_LOG_COLOR.bad;
+    if (COMBAT_LOG_CONTEXTUAL_GOOD.includes(phrase)) return tone === 'bad' ? COMBAT_LOG_COLOR.bad : COMBAT_LOG_COLOR.good;
+    return COMBAT_LOG_COLOR.neutral;
+  }
+
+  private escapeCombatLogRichText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  private colorCombatLogPhrase(phrase: string, tone: CombatLogTone): string {
+    const color = this.combatLogPhraseColor(phrase, tone);
+    return `<color=${color}>${this.escapeCombatLogRichText(phrase)}</color>`;
+  }
+
+  private isAsciiWordChar(ch: string | undefined): boolean {
+    return !!ch && /[A-Za-z0-9_]/.test(ch);
+  }
+
+  private combatLogPhraseAt(text: string, phrase: string, index: number): boolean {
+    if (!text.startsWith(phrase, index)) return false;
+    if (!/^[A-Za-z0-9_ ]+$/.test(phrase)) return true;
+    return !this.isAsciiWordChar(text[index - 1]) && !this.isAsciiWordChar(text[index + phrase.length]);
+  }
+
+  private combatLogRichLine(entry: CombatLogEntry): string {
+    const text = this.combatLogText(entry);
+    const tone = this.combatLogEntryTone(entry, text);
+    let out = '';
+    for (let i = 0; i < text.length;) {
+      const phrase = COMBAT_LOG_HIGHLIGHT_WORDS.find(w => this.combatLogPhraseAt(text, w, i));
+      if (phrase) {
+        out += this.colorCombatLogPhrase(phrase, tone);
+        i += phrase.length;
+      } else {
+        out += this.escapeCombatLogRichText(text[i]);
+        i += 1;
+      }
+    }
+    return out;
+  }
+
+  private activeCombatLogTextNode(): Node | null {
+    return this.combatLogExpanded
+      ? this.combatLogLabel?.node ?? null
+      : this.combatLogPlainLabel?.node ?? null;
+  }
+
   /** 写入战斗 UI 记录（并保留 console 便于开发器查看） */
   private battleLog(msg: string) {
     this.pushCombatLogEntry(msg);
@@ -5334,16 +5701,27 @@ export class BattleScene extends Component {
   }
 
   private refreshCombatLogText() {
-    if (!this.combatLogLabel) return;
+    if (!this.combatLogLabel || !this.combatLogPlainLabel) return;
     this.applyCombatLogTypography();
     this.setCombatLogLabelFrame(this.getCombatLogBodyWidth());
-    this.combatLogLabel.string = this.combatLogLines.map(e => this.combatLogText(e)).join('\n');
-    this.combatLogLabel.updateRenderData(true);
+    this.combatLogLabel.node.active = this.combatLogExpanded;
+    this.combatLogPlainLabel.node.active = !this.combatLogExpanded;
+    if (this.combatLogExpanded) {
+      this.combatLogPlainLabel.string = '';
+      this.combatLogLabel.string = this.combatLogLines.map(e => this.combatLogRichLine(e)).join('<br/>');
+      (this.combatLogLabel as any).updateRenderData?.(true);
+    } else {
+      this.combatLogLabel.string = '';
+      this.combatLogPlainLabel.string = this.combatLogLines.map(e => this.combatLogText(e)).join('\n');
+      this.combatLogPlainLabel.updateRenderData(true);
+    }
     const ut = this.combatLogContent?.getComponent(UITransform);
     if (ut && this.combatLogScroll) {
       const wBody = this.getCombatLogBodyWidth();
       this.setCombatLogLabelFrame(wBody);
-      const h = Math.max(40, this.combatLogLabel.node.getComponent(UITransform)!.contentSize.height + BattleScene.COMBAT_LOG_BOTTOM_PAD);
+      const activeNode = this.activeCombatLogTextNode();
+      const hText = activeNode?.getComponent(UITransform)?.contentSize.height ?? 40;
+      const h = Math.max(40, hText + BattleScene.COMBAT_LOG_BOTTOM_PAD);
       ut.setContentSize(wBody, h);
       this.scheduleOnce(() => this.syncCombatLogScrollAfterLayout(), 0);
     }
@@ -5358,13 +5736,17 @@ export class BattleScene extends Component {
     const viewN = this.combatLogViewN;
     const contentN = this.combatLogContent;
     const lab = this.combatLogLabel;
-    if (!sv?.isValid || !viewN || !contentN || !lab) return;
+    const plain = this.combatLogPlainLabel;
+    if (!sv?.isValid || !viewN || !contentN || !lab || !plain) return;
     const vh = viewN.getComponent(UITransform)!.contentSize.height;
     const cut = contentN.getComponent(UITransform)!;
     this.applyCombatLogTypography();
     this.setCombatLogLabelFrame(this.getCombatLogBodyWidth());
-    lab.updateRenderData(true);
-    const h = Math.max(40, lab.node.getComponent(UITransform)!.contentSize.height + BattleScene.COMBAT_LOG_BOTTOM_PAD);
+    if (this.combatLogExpanded) (lab as any).updateRenderData?.(true);
+    else plain.updateRenderData(true);
+    const activeNode = this.activeCombatLogTextNode();
+    const hText = activeNode?.getComponent(UITransform)?.contentSize.height ?? 40;
+    const h = Math.max(40, hText + BattleScene.COMBAT_LOG_BOTTOM_PAD);
     cut.setContentSize(this.getCombatLogBodyWidth(), h);
     const eps = 2;
     if (h > vh + eps) sv.scrollToBottom(0);
@@ -5375,12 +5757,14 @@ export class BattleScene extends Component {
     const p = this.combatLogPanel;
     const bg = this.combatLogPanelBg;
     const lab = this.combatLogLabel;
+    const plain = this.combatLogPlainLabel;
     const tl = this.combatLogTitleLab;
-    if (!p || !bg || !lab || !tl) return;
+    if (!p || !bg || !lab || !plain || !tl) return;
     // 放大后仍与折叠时相同的半透明深色底 + 浅色字（仅尺寸与字号在变）
     bg.fillColor = new Color(22, 24, 32, 245);
     bg.strokeColor = new Color(90, 96, 118, 255);
     lab.color = new Color(228, 233, 240, 255);
+    plain.color = new Color(228, 233, 240, 255);
     tl.color = new Color(190, 200, 215, 255);
     const utp = p.getComponent(UITransform)!;
     const w = utp.contentSize.width;
@@ -5432,11 +5816,15 @@ export class BattleScene extends Component {
     cut.setContentSize(sW - 4, cut.contentSize.height);
 
     this.applyCombatLogChrome(expanded);
+    this.refreshCombatLogText();
     if (this.combatLogLabel) {
       this.applyCombatLogTypography();
       this.setCombatLogLabelFrame(sW - 4);
-      this.combatLogLabel.updateRenderData(true);
-      const lh = Math.max(40, this.combatLogLabel.node.getComponent(UITransform)!.contentSize.height + BattleScene.COMBAT_LOG_BOTTOM_PAD);
+      if (this.combatLogExpanded) (this.combatLogLabel as any).updateRenderData?.(true);
+      else this.combatLogPlainLabel?.updateRenderData(true);
+      const activeNode = this.activeCombatLogTextNode();
+      const hText = activeNode?.getComponent(UITransform)?.contentSize.height ?? 40;
+      const lh = Math.max(40, hText + BattleScene.COMBAT_LOG_BOTTOM_PAD);
       cut.setContentSize(sW - 4, lh);
     }
     this.scheduleOnce(() => {
@@ -5858,7 +6246,9 @@ export class BattleScene extends Component {
     }
     // 胜利时回写菜单进度，下次主菜单会显示 ★ 并解锁下一关。
     // markCompleted 内部幂等，重复调用无副作用。
-    const completedLevel = findLevelByMissionId(this.missionId);
+    const completedLevel = this.missionSource.type === 'resource'
+      ? findLevelByMissionId(this.missionId)
+      : undefined;
     if (this.outcome === 'victory' && completedLevel) {
       MenuProgress.markCompleted(completedLevel.id, completedLevel.chapterId);
     }
@@ -5940,6 +6330,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     this.playerDiceRollAnim = null;
     this.playerDiceSortAnim = null;
@@ -7802,6 +8193,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     this.closeDiePopover();
     if (this.enemyOrder.length === 0) {
@@ -7833,6 +8225,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -7853,6 +8246,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     this.playerStep = 'choose';
     this.movementDone = false;
@@ -7924,6 +8318,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -7998,6 +8393,7 @@ export class BattleScene extends Component {
         this.redraw();
       },
     };
+    if (prep.allDice.length > 0) playDiceRoll();
   }
 
   /**
@@ -8161,7 +8557,6 @@ export class BattleScene extends Component {
     this.closeBattleExitModal();
     this.closeBattleModal();
     this.closeTileInspectModal();
-    this.destroyUsCasualtyEventUI();
     this.setCombatLogExpanded(false);
   }
 
@@ -9254,7 +9649,7 @@ export class BattleScene extends Component {
     this.closeBattleModal();
     const mid = this.missionId || this.mission?.data.id || '';
     const theater = this.mission?.data.theater;
-    const rows = turnEndEventsForMission(mid);
+    const rows = this.turnEndEventProvider.rows(mid);
     const panelW = 560;
     const panelH = 480;
     const { panel, contentY } = this.openBattleModal(t('battle.turnEndList.title'), panelW, panelH);
@@ -9724,6 +10119,7 @@ export class BattleScene extends Component {
       miscDone: this.miscDone,
       playerStep: this.playerStep as SavePlayerStep,
       phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+      missionSource: this.missionSource,
     });
     try {
       writeActiveSaveRaw(JSON.stringify(data));
@@ -9789,6 +10185,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     stopManeuverSound();
     this.anim = null;          // 若在动画中点读档，直接丢弃动画状态
@@ -9827,12 +10224,14 @@ export class BattleScene extends Component {
     while (this.enemyIndex < this.enemyOrder.length) {
       const e = this.enemyOrder[this.enemyIndex];
       if (!e || e.destroyed) {
+        this.clearActiveActingUnit(e);
         this.enemyIndex++;
         continue;
       }
       break;
     }
     if (this.enemyIndex >= this.enemyOrder.length) {
+      this.clearActiveActingUnit();
       this.destroyEnemyDiceTray();
       if (this.aiSide === 'ally') {
         this.beginGermanAIPhase();
@@ -9843,6 +10242,8 @@ export class BattleScene extends Component {
     }
 
     const enemy = this.enemyOrder[this.enemyIndex];
+    this.enemyDidActThisTurn = false;
+    this.setActiveActingUnit(enemy);
     const tile = this.mission.map.get(enemy.pos);
     const terrain = effectiveDiceTerrain(tile);
     this.enemyAICol = aiColumnFor(enemy, terrain);
@@ -9878,6 +10279,7 @@ export class BattleScene extends Component {
 
     const enemy = this.enemyOrder[this.enemyIndex];
     if (!enemy || enemy.destroyed) {
+      this.clearActiveActingUnit(enemy);
       this.enemyIndex++;
       this.beginCurrentEnemyTurn();
       return;
@@ -9888,8 +10290,12 @@ export class BattleScene extends Component {
       const dieIdx = this.enemyDiceExecOrder.find(i => !this.enemyDiceUsed[i]);
       if (dieIdx === undefined) {
         this.enemyDiceHighlightIdx = -1;
+        this.clearActiveActingUnit(enemy);
         this.refreshEnemyDiceTray();
-        // 本敌坦全部骰子用完：切下一个
+        if (!this.enemyDidActThisTurn) {
+          this.enemyDiceResultHold = { t: 0, dur: 1.0 };
+          return;
+        }
         this.enemyIndex++;
         this.beginCurrentEnemyTurn();
         return;
@@ -9909,15 +10315,21 @@ export class BattleScene extends Component {
       this.refreshEnemyDiceTray();
 
       if (!chosen) {
-        this.enemyNoActionHold = { t: 0, dur: 1.0, dieIdx };
-        return;
+        this.enemyDiceUsed[dieIdx] = true;
+        this.enemyDiceHighlightIdx = -1;
+        this.refreshEnemyDiceTray();
+        continue;
       }
 
       // 执行选中的动作；返回表明本次是否"挂起"（有动画在播）
       this.enemyDiceUsed[dieIdx] = true;
+      this.enemyDidActThisTurn = true;
       this.refreshEnemyDiceTray();
       const result = this.executeEnemyAction(enemy, chosen);
-      if (this.outcome !== 'ongoing') return; // 可能谢尔曼被击毁
+      if (this.outcome !== 'ongoing') {
+        this.clearActiveActingUnit(enemy);
+        return;
+      } // 可能谢尔曼被击毁
       if (result === 'animating') return;     // 等动画 / dice-show 回调再 runNextEnemyStep
       this.enemyDiceHighlightIdx = -1;
       this.refreshEnemyDiceTray();
@@ -10147,11 +10559,26 @@ export class BattleScene extends Component {
     if (!this.mission) return occ;
     for (const u of this.allUnits()) {
       if (u === self || u.destroyed) continue;
+      if (this.canJapaneseInfantryTankShareHex(self, u)) continue;
       // 坦克/卡车可与己方徒步单位叠格，但不能驶入敌对徒步单位所在格。
       if (!isFootUnit(self) && isFootUnit(u) && u.faction === self.faction) continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
     return occ;
+  }
+
+  private isJapaneseTankOrGun(u: Unit): boolean {
+    return u.faction === 'japanese'
+      && (u.kind === 'type95'
+        || u.kind === 'type97'
+        || u.kind === 'at_gun'
+        || u.kind === 'heavy_artillery');
+  }
+
+  private canJapaneseInfantryTankShareHex(a: Unit, b: Unit): boolean {
+    if (a.faction !== 'japanese' || b.faction !== 'japanese') return false;
+    return (a.kind === 'japanese_infantry' && this.isJapaneseTankOrGun(b))
+      || (b.kind === 'japanese_infantry' && this.isJapaneseTankOrGun(a));
   }
 
   private endEnemyPhase() {
@@ -10162,6 +10589,7 @@ export class BattleScene extends Component {
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
+    this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
     // 敌方阶段也可能击毁谢尔曼；重入玩家回合时复查胜负
     if (this.mission) {
@@ -10369,6 +10797,7 @@ export class BattleScene extends Component {
       applyAttack(target, report);
       if (target.destroyed) this.registerDestroyWreckVisual(target);
       this.presentAttackResult(enemyActor, report, enemy, target);
+      if (this.outcome !== 'ongoing') this.clearActiveActingUnit(enemy);
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
       if (this.outcome === 'ongoing' && this.phase === 'enemy') {
         // 重新浮出托盘（可能还剩骰子），再继续调度
@@ -10498,7 +10927,7 @@ export class BattleScene extends Component {
     const hasHitDoublesCommanderKill = !mg && report.hit && !!report.commanderKilledByHitDoubles;
     const PANEL_W = 560;
     // 机枪模式：只有标题 + 命中阈值 + 1d6 + 结果大字，用更矮的面板
-    const PANEL_H = mg ? 280 : needsCrewRow ? 560 : hasHitDoublesCommanderKill ? 520 : 440;
+    const PANEL_H = mg ? 240 : needsCrewRow ? 500 : 400;
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -10523,6 +10952,7 @@ export class BattleScene extends Component {
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(PANEL_W, PANEL_H);
+    panel.setPosition(0, 36, 0);
     const pg = panel.addComponent(Graphics);
     drawDicePopupPanel(pg, PANEL_W, PANEL_H, DICE_PANEL_BG, DICE_PANEL_BORDER);
     root.addChild(panel);
@@ -10532,24 +10962,20 @@ export class BattleScene extends Component {
       0, PANEL_H / 2 - 34, PANEL_W - 40, 34, 26, HUD_TEXT_COLOR);
 
     // 命中需求：机枪用单独文案（"机枪扫射 命中需 ≥N"），主炮走原来的命中阈值行
-    const hitNeedText = mg
-      ? t('dice.panel.mgHitNeed', { n: report.threshold })
-      : t('dice.panel.hitNeed', { n: report.threshold });
-    const hitNeed = this.makeCenteredLabel(panel, hitNeedText,
-      0, PANEL_H / 2 - 72, PANEL_W - 40, 28, 20, DICE_INFO_TEXT);
+    const hitNeedText = t('dice.panel.penNeed', { n: report.threshold });
 
     // 三/四行使用固定列：骰子列 / 数值或需求列 / 结果列，避免各行文字左右漂移。
-    const DIE_SIZE = 68, DIE_GAP = 24, ROW_GAP = 82;
-    const hitDiceY = PANEL_H / 2 - 148;
+    const DIE_SIZE = 68, DIE_GAP = 24, ROW_GAP = 74;
+    const hitDiceY = PANEL_H / 2 - 118;
     const penDiceY = hitDiceY - ROW_GAP;
     const dmgDiceY = penDiceY - ROW_GAP;
     const crewDiceY = dmgDiceY - ROW_GAP;
     const DIE_COL_1 = -126;
     const DIE_COL_2 = DIE_COL_1 + DIE_SIZE + DIE_GAP;
     const MID_COL_X = 52;
-    const RESULT_COL_X = 178;
-    const MID_COL_W = 120;
-    const RESULT_COL_W = 190;
+    const RESULT_COL_X = 208;
+    const MID_COL_W = 96;
+    const RESULT_COL_W = 150;
 
     const hitDiceCount = Math.max(1, Math.min(2, report.hitDiceCount ?? 2));
 
@@ -10562,15 +10988,18 @@ export class BattleScene extends Component {
     }
 
     // "= N"
-    const hitSum = this.makeCenteredLabel(panel, '= ?',
+    const hitSum = this.makeCenteredLabel(panel, '',
       MID_COL_X, hitDiceY, MID_COL_W, 40, 30, DICE_INFO_TEXT);
+    const hitNeed = this.makeCenteredLabel(panel, hitNeedText,
+      MID_COL_X, hitDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
 
     // 命中判定文字
+    const hitVerdictY = hasHitDoublesCommanderKill ? hitDiceY + 15 : hitDiceY;
     const hitVerdict = this.makeCenteredLabel(panel, '',
-      RESULT_COL_X, hitDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
+      RESULT_COL_X, hitVerdictY, RESULT_COL_W, 34, 28, DICE_OK_TEXT);
     const hitSpecial = hasHitDoublesCommanderKill
       ? this.makeCenteredLabel(panel, '',
-        0, -PANEL_H / 2 + 132, PANEL_W - 52, 30, 24, new Color(255, 90, 90, 255))
+        RESULT_COL_X, hitDiceY - 18, RESULT_COL_W, 30, 24, new Color(255, 90, 90, 255))
       : null;
     if (hitSpecial) hitSpecial.node.active = false;
 
@@ -10592,7 +11021,7 @@ export class BattleScene extends Component {
         penDice.push(this.makeDieSquare(panel, penStartX + i * (DIE_SIZE + DIE_GAP), penDiceY, DIE_SIZE));
       }
       penNeed = this.makeCenteredLabel(panel, '',
-        MID_COL_X, penDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
+        MID_COL_X, penDiceY, MID_COL_W, 40, 30, DICE_INFO_TEXT);
       penVerdict = this.makeCenteredLabel(panel, '',
         RESULT_COL_X, penDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
 
@@ -10621,7 +11050,8 @@ export class BattleScene extends Component {
     const outcome = this.makeCenteredLabel(panel, '',
       0, -PANEL_H / 2 + 86, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
     outcome.node.active = false;
-    const confirmButton = this.makeDiceShowConfirmButton(panel, 0, -PANEL_H / 2 + 52);
+    const confirmY = -PANEL_H / 2 + (needsCrewRow ? 76 : 62);
+    const confirmButton = this.makeDiceShowConfirmButton(panel, 0, confirmY);
     confirmButton.active = false;
 
     // title / hitNeed 仅作标题用，外部不再更新它们，但避免 TS 报"未使用"，
@@ -10747,7 +11177,6 @@ export class BattleScene extends Component {
     }
     this.setDieLabelFace(show.dmgDieLabel, ((frame * 11) % 6) + 1);
     this.setDieLabelFace(show.crewDieLabel, ((frame * 29) % 6) + 1);
-    if (show.penNeedLabel && show.penNeedLabel.string === '') show.penNeedLabel.string = '= ?';
     if (show.penVerdictLabel) show.penVerdictLabel.string = '';
     if (show.dmgEffectLabel) show.dmgEffectLabel.string = '';
     if (show.crewEffectLabel) show.crewEffectLabel.string = '';
@@ -10762,6 +11191,9 @@ export class BattleScene extends Component {
       }
       if (show.penNeedLabel && show.report.penThreshold !== undefined) {
         const thr = show.report.penThreshold;
+        show.penNeedLabel.fontSize = 18;
+        show.penNeedLabel.lineHeight = 22;
+        show.penNeedLabel.color = DICE_INFO_TEXT;
         show.penNeedLabel.string = thr <= 0
           ? t('dice.panel.penMustPen')
           : t('dice.panel.penNeed', { n: thr });
@@ -10779,6 +11211,8 @@ export class BattleScene extends Component {
       }
     } else {
       if (show.penNeedLabel) {
+        show.penNeedLabel.fontSize = 18;
+        show.penNeedLabel.lineHeight = 22;
         show.penNeedLabel.string = t('dice.panel.invalid');
         show.penNeedLabel.color = DICE_FAIL_TEXT;
       }
@@ -11003,6 +11437,7 @@ export class BattleScene extends Component {
     if (playSort) {
       this.enemyDiceSortAnim = { t: 0, dur: ENEMY_TRAY_SORT_DUR, fromSlot, toSlot };
       this.applyEnemyDiceSortLayout(0);
+      playDiceRoll();
     } else {
       this.enemyDiceSortAnim = null;
       for (let i = 0; i < count; i++) {
@@ -11091,7 +11526,8 @@ export class BattleScene extends Component {
   private destroyEnemyDiceTray() {
     this.lowerEnemyDiceTrayFromDiceShowIfNeeded();
     this.enemyDiceSortAnim = null;
-    this.enemyNoActionHold = null;
+    this.enemyDiceResultHold = null;
+    this.enemyDidActThisTurn = false;
     this.enemyTrayMetrics = null;
     this.enemyDiceTraySubject = null;
     this.enemyDiceTrayDieRoots = [];
@@ -11154,16 +11590,14 @@ export class BattleScene extends Component {
         const p2 = ((frame * 23) % 6) + 1;
         this.setDieLabelFace(show.hitDieLabels[0], p1);
         if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], p2);
-        show.hitSumLabel.string = '= ?';
+        show.hitSumLabel.string = '';
         if (!show.mg) this.spinMainGunDiceRows(show, frame);
         if (show.t >= DICE_HIT_ROLL_DUR) {
           show.stage = 'hit-show';
           show.t = 0;
           this.setDieLabelFace(show.hitDieLabels[0], show.report.dice[0]);
           if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], show.report.dice[1]);
-          show.hitSumLabel.string = show.report.hitBonus
-            ? `+${show.report.hitBonus} = ${show.report.roll}`
-            : `= ${show.report.roll}`;
+          show.hitSumLabel.string = '';
           if (show.report.hit) {
             show.hitVerdictLabel.string = t('dice.panel.hitYes');
             show.hitVerdictLabel.color = DICE_OK_TEXT;
@@ -11173,7 +11607,7 @@ export class BattleScene extends Component {
           }
           if (show.hitSpecialLabel && show.report.hit && show.report.commanderKilledByHitDoubles) {
             show.hitSpecialLabel.node.active = true;
-            show.hitSpecialLabel.string = t('dice.panel.hitDoublesCommanderKia');
+            show.hitSpecialLabel.string = t('dice.panel.hitDoublesCommanderKia').replace(/^.*[:：]\s*/, '');
           }
           if (!show.mg) {
             this.revealMainGunDiceRows(show);
@@ -11221,11 +11655,15 @@ export class BattleScene extends Component {
             show.stage = 'pen-roll';
             if (show.penNeedLabel && show.report.penThreshold !== undefined) {
               const thr = show.report.penThreshold;
+              show.penNeedLabel.fontSize = 18;
+              show.penNeedLabel.lineHeight = 22;
+              show.penNeedLabel.color = DICE_INFO_TEXT;
               show.penNeedLabel.string = thr <= 0
                 ? t('dice.panel.penMustPen')
                 : t('dice.panel.penNeed', { n: thr });
             }
             if (show.penVerdictLabel) show.penVerdictLabel.string = '';
+            playDiceRoll();
           }
         }
         break;
@@ -11285,6 +11723,7 @@ export class BattleScene extends Component {
               show.dmgEffectLabel.string = '';
             }
             if (show.dmgTitleLabel) show.dmgTitleLabel.node.active = true;
+            playDiceRoll();
           }
         }
         break;
@@ -11322,6 +11761,7 @@ export class BattleScene extends Component {
               show.crewEffectLabel.node.active = true;
               show.crewEffectLabel.string = '';
             }
+            playDiceRoll();
           } else {
             const out = damageOutcomeLabel(show.report.damageEffect);
             show.outcomeLabel.string = out.text;
@@ -11403,7 +11843,7 @@ export class BattleScene extends Component {
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null
       || this.enemyDiceSortAnim !== null
-      || this.enemyNoActionHold !== null
+      || this.enemyDiceResultHold !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null || this.usCasualtyEventUI !== null
       || this.tileInspectModalRoot !== null;
   }
@@ -11722,20 +12162,6 @@ export class BattleScene extends Component {
       ui.stage = 'hold';
       ui.t = 0;
       ui.resultLabel.string = t('usCasualty.result', { hits: ui.hits });
-      this.battleLogI18n('battleLog.usCasualtyCheck', {
-        dice: ui.dice.length > 0 ? ui.dice.join('+') : '-',
-        hits: ui.hits,
-        cur: this.mission?.usCasualties ?? 0,
-        limit: ui.limit,
-      });
-      this.refreshObjectiveHud();
-      this.outcome = this.mission ? checkOutcome(this.mission) : this.outcome;
-      if (this.outcome !== 'ongoing') {
-        this.battleLogI18n('battleLog.usCasualtyDefeat', {
-          cur: this.mission?.usCasualties ?? 0,
-          limit: ui.limit,
-        });
-      }
     }
     if (ui.stage === 'hold') {
       const hotOn = Math.floor(ui.t / 0.22) % 2 === 0;
@@ -11746,9 +12172,30 @@ export class BattleScene extends Component {
     }
   }
 
+  private applyUsCasualtyEventUI(ui: NonNullable<BattleScene['usCasualtyEventUI']>) {
+    if (!this.mission || ui.applied) return;
+    ui.applied = true;
+    this.mission.usCasualties = (this.mission.usCasualties ?? 0) + ui.hits;
+    this.battleLogI18n('battleLog.usCasualtyCheck', {
+      dice: ui.dice.length > 0 ? ui.dice.join('+') : '-',
+      hits: ui.hits,
+      cur: this.mission.usCasualties ?? 0,
+      limit: ui.limit,
+    });
+    this.refreshObjectiveHud();
+    this.outcome = checkOutcome(this.mission);
+    if (this.outcome !== 'ongoing') {
+      this.battleLogI18n('battleLog.usCasualtyDefeat', {
+        cur: this.mission.usCasualties ?? 0,
+        limit: ui.limit,
+      });
+    }
+  }
+
   private onUsCasualtyConfirmClick() {
     const ui = this.usCasualtyEventUI;
     if (!ui || ui.stage !== 'hold') return;
+    this.applyUsCasualtyEventUI(ui);
     this.destroyUsCasualtyEventUI();
     if (this.outcome !== 'ongoing') {
       this.refreshObjectiveHud();
@@ -11771,6 +12218,8 @@ export class BattleScene extends Component {
       this.endEnemyPhase();
       return;
     }
+    this.clearActiveActingUnit();
+    this.redraw();
     const mid = this.mission.data.id;
     /** 胜负态在 BattleScene.this.outcome；mission 对象无 outcome 字段，勿用 this.mission.outcome */
     if (this.outcome !== 'ongoing') {
@@ -11787,7 +12236,7 @@ export class BattleScene extends Component {
       return;
     }
     const mid = this.mission.data.id;
-    if (!hasTurnEndEvents(mid)) {
+    if (!this.turnEndEventProvider.has(mid)) {
       this.endEnemyPhase();
       return;
     }
@@ -11796,6 +12245,8 @@ export class BattleScene extends Component {
 
   private beginPacificUsCasualtyCheckOrContinue(): boolean {
     if (!this.mission) return false;
+    this.clearActiveActingUnit();
+    this.redraw();
     const limit = this.mission.data.usCasualtyLimit ?? 0;
     if (this.mission.data.theater !== 'pacific' || limit <= 0) return false;
 
@@ -11818,7 +12269,6 @@ export class BattleScene extends Component {
       dice: info.diceCount,
     }));
     const hits = dice.filter(d => d === 6).length;
-    this.mission.usCasualties = (this.mission.usCasualties ?? 0) + hits;
     this.destroyUsCasualtyEventUI();
     const refs = this.buildUsCasualtyEventPanel(dice.length, Math.max(1, providerLines.length));
     refs.providerLabel.string = providerLines.length > 0
@@ -11836,17 +12286,21 @@ export class BattleScene extends Component {
       resultLabel: refs.resultLabel,
       hits,
       limit,
+      applied: false,
     };
+    if (dice.length > 0) playDiceRoll();
     return true;
   }
 
   private startTurnEndEventFlow(missionId: string) {
     if (!this.mission) return;
-    const diceCount = turnEndDiceCountForMission(missionId);
+    this.clearActiveActingUnit();
+    this.redraw();
+    const diceCount = this.turnEndEventProvider.diceCount(missionId);
     const primaryDice: number[] = [];
     for (let i = 0; i < diceCount; i++) primaryDice.push(this.rng.d6());
     const sum = primaryDice.reduce((a, b) => a + b, 0);
-    const row = turnEndRowForSum(missionId, sum);
+    const row = this.turnEndEventProvider.rowForSum(missionId, sum);
     if (!row) {
       console.warn(`[TurnEnd] no row for mission=${missionId} sum=${sum}`);
       this.endEnemyPhase();
@@ -11891,6 +12345,7 @@ export class BattleScene extends Component {
       tankReinforceMove: prepared.tankReinforceMove,
       adjacentInfantryVolleys: adjacentVolleys.length > 0 ? adjacentVolleys : undefined,
     };
+    playDiceRoll();
   }
 
   private buildTurnEndEventPanel(primaryDice: number[], hasExtraDice: boolean): {
@@ -12061,7 +12516,7 @@ export class BattleScene extends Component {
 
     if (idx >= volleys.length) {
       ui.root.active = true;
-      ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+      ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
       return;
     }
 
@@ -12090,6 +12545,19 @@ export class BattleScene extends Component {
   }
 
   /** 进入当前 extraPhases[extraIdx] 的掷骰动画前：重置问号与可见骰数 */
+  private turnEndBodyText(bodyKey: string, bodyParams: Record<string, string | number>): string {
+    const params: Record<string, string | number> = { ...bodyParams };
+    const resultKey = params.resultKey;
+    if (typeof resultKey === 'string') {
+      if (resultKey === 'crew.death.kia' && typeof params.roleKey === 'string') {
+        params.result = t(resultKey, { role: t(params.roleKey) });
+      } else {
+        params.result = t(resultKey);
+      }
+    }
+    return t(bodyKey, params);
+  }
+
   private setupTurnEndExtraRoll(ui: {
     extraPhases: TurnEndExtraDicePhase[];
     extraIdx: number;
@@ -12109,6 +12577,7 @@ export class BattleScene extends Component {
     if (ui.extraCaptionLabel) {
       ui.extraCaptionLabel.string = t(phase.captionKey);
     }
+    if (n > 0) playDiceRoll();
   }
 
   private advanceTurnEndEventUI(dt: number) {
@@ -12135,13 +12604,13 @@ export class BattleScene extends Component {
       ui.bodyLabel.string = '';
       const hasAdjacentDice = (ui.adjacentInfantryVolleys?.length ?? 0) > 0;
       if (!ui.extraPhases.length && !hasAdjacentDice) {
-        ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+        ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
         ui.stage = 'hold';
         return;
       }
       // 相邻步兵集火：先完整展示回合结束表判定结果（正文），停顿后再逐发展示骰子动画
       if (hasAdjacentDice) {
-        ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+        ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
         ui.stage = 'pause_before_adjacent_dice';
         ui.t = 0;
         return;
@@ -12175,7 +12644,7 @@ export class BattleScene extends Component {
       ui.t += dt;
       const phase = ui.extraPhases[ui.extraIdx];
       if (!phase) {
-        ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+        ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
         ui.stage = 'hold';
         return;
       }
@@ -12207,7 +12676,7 @@ export class BattleScene extends Component {
         this.setupTurnEndExtraRoll(ui);
         return;
       }
-      ui.bodyLabel.string = t(ui.bodyKey, ui.bodyParams);
+      ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
       if (ui.extraCaptionLabel) ui.extraCaptionLabel.string = '';
       ui.stage = 'hold';
     }

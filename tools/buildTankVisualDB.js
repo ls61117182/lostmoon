@@ -206,6 +206,7 @@ function build() {
   lines.push('  offsetForward: number;');
   lines.push('  offsetRight: number;');
   lines.push('  aspectRatioMul: number;');
+  lines.push('  muzzle: { spriteX: number; spriteY: number };');
   lines.push('  destroyedOffsetForward: number;');
   lines.push('  destroyedOffsetRight: number;');
   lines.push('}');
@@ -233,6 +234,7 @@ function build() {
   lines.push('  offsetForward: 0,');
   lines.push('  offsetRight: 0,');
   lines.push('  aspectRatioMul: 1,');
+  lines.push('  muzzle: { spriteX: 0, spriteY: 0 },');
   lines.push('  destroyedOffsetForward: 0,');
   lines.push('  destroyedOffsetRight: 0,');
   lines.push('};');
@@ -247,7 +249,7 @@ function build() {
   lines.push('const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {');
   for (const kind of REQUIRED_KINDS) {
     const r = byKind.get(kind);
-    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)} },`);
+    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)} },`);
   }
   lines.push('};');
   lines.push('');

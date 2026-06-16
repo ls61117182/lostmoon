@@ -571,26 +571,20 @@ function sameHex(a: Axial, b: Axial): boolean {
   return a.q === b.q && a.r === b.r;
 }
 
-function isTankCoordinationUnit(unit: Unit): boolean {
-  return unit.kind === 'sherman'
-    || unit.kind === 'tiger'
-    || unit.kind === 'panzer4'
-    || unit.kind === 'panzer3'
-    || unit.kind === 'type95'
-    || unit.kind === 'type97';
+function tankCoordinationBonus(unit: Unit): number {
+  return Math.max(0, unit.stats.infantryTankCoordination ?? 0);
 }
 
 function mgTankCoordinationModifier(ctx: AttackContext): number {
   if (!isMGInfantryTarget(ctx.target)) return 0;
   const units = ctx.units;
   if (!units) return 0;
-  const hasTankInTargetHex = units.some(u =>
-    u !== ctx.target
-    && !u.destroyed
-    && isTankCoordinationUnit(u)
-    && sameHex(u.pos, ctx.target.pos)
-  );
-  return hasTankInTargetHex ? 2 : 0;
+  let bonus = 0;
+  for (const u of units) {
+    if (u === ctx.target || u.destroyed || !sameHex(u.pos, ctx.target.pos)) continue;
+    bonus = Math.max(bonus, tankCoordinationBonus(u));
+  }
+  return bonus;
 }
 
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {

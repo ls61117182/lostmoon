@@ -42,6 +42,43 @@ const TERRAIN_MAP = {
 
 let currentMissionTheater: MissionData['theater'] = 'europe';
 
+type StartOccupant = UnitKind | 'blocker';
+
+function cellKey(pos: Axial): string {
+  return `${pos.q},${pos.r}`;
+}
+
+function isJapaneseTankOrGunKind(kind: UnitKind): boolean {
+  return kind === 'type95'
+    || kind === 'type97'
+    || kind === 'at_gun'
+    || kind === 'heavy_artillery';
+}
+
+function canShareStartCell(existing: StartOccupant, incoming: UnitKind, theater: MissionData['theater']): boolean {
+  if (theater !== 'pacific') return false;
+  if (existing === 'blocker') return false;
+  return (existing === 'japanese_infantry' && isJapaneseTankOrGunKind(incoming))
+    || (incoming === 'japanese_infantry' && isJapaneseTankOrGunKind(existing));
+}
+
+function startCellBlocked(
+  occupied: Map<string, StartOccupant[]>,
+  pos: Axial,
+  incoming: UnitKind,
+  theater: MissionData['theater'],
+): boolean {
+  const occupants = occupied.get(cellKey(pos)) ?? [];
+  return occupants.some(existing => !canShareStartCell(existing, incoming, theater));
+}
+
+function addStartOccupant(occupied: Map<string, StartOccupant[]>, pos: Axial, occupant: StartOccupant): void {
+  const key = cellKey(pos);
+  const occupants = occupied.get(key);
+  if (occupants) occupants.push(occupant);
+  else occupied.set(key, [occupant]);
+}
+
 export interface LoadedMission {
   map: HexMap;
   sherman: Unit;
@@ -79,9 +116,11 @@ function buildCellsByEidFromMap(missionId: string, map: HexMap): Map<number, { p
 function pickEidDiceSlot(
   missionId: string,
   cellsByEid: Map<number, { pos: Axial; facing: Direction }>,
-  taken: Set<string>,
+  occupied: Map<string, StartOccupant[]>,
   rng: RNG,
   ctxLabel: string,
+  incomingKind: UnitKind,
+  theater: MissionData['theater'],
   maxEid: number = 6,
 ): { pos: Axial; facing: Direction } {
   const cap = Math.min(6, Math.max(1, Math.floor(maxEid)));
@@ -90,8 +129,7 @@ function pickEidDiceSlot(
     const slot = ((d - 1 + step) % cap) + 1;
     const cell = cellsByEid.get(slot);
     if (!cell) continue;
-    const key = `${cell.pos.q},${cell.pos.r}`;
-    if (taken.has(key)) continue;
+    if (startCellBlocked(occupied, cell.pos, incomingKind, theater)) continue;
     return cell;
   }
   throw new Error(
@@ -138,18 +176,19 @@ function normalizeStartRids(missionId: string, raw: UnitPlacement['startRids'], 
 function pickRestrictedNumberedSlot(
   missionId: string,
   cellsByNumber: Map<number, { pos: Axial; facing: Direction }>,
-  taken: Set<string>,
+  occupied: Map<string, StartOccupant[]>,
   rng: RNG,
   ctxLabel: string,
   allowedNumbers: number[],
   markerLabel: 'eid' | 'rid',
+  incomingKind: UnitKind,
+  theater: MissionData['theater'],
 ): { pos: Axial; facing: Direction } {
   const available: Array<{ n: number; cell: { pos: Axial; facing: Direction } }> = [];
   for (const n of allowedNumbers) {
     const cell = cellsByNumber.get(n);
     if (!cell) continue;
-    const key = `${cell.pos.q},${cell.pos.r}`;
-    if (taken.has(key)) continue;
+    if (startCellBlocked(occupied, cell.pos, incomingKind, theater)) continue;
     available.push({ n, cell });
   }
   if (available.length === 0) {
@@ -217,20 +256,20 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     rngResolved = new RNG(0x5EEDFACE);
   }
 
-  const takenBeforeSherman = new Set<string>();
+  const occupiedBeforeSherman = new Map<string, StartOccupant[]>();
   for (let i = 0; i < (data.allies ?? []).length; i++) {
     const p = data.allies![i];
     if (!p.at) {
       throw new Error(`任务 ${data.id}：友军单位 ${i} 缺少 at`);
     }
     const ax = offsetToAxial(p.at);
-    takenBeforeSherman.add(`${ax.q},${ax.r}`);
+    addStartOccupant(occupiedBeforeSherman, ax, 'blocker');
   }
   for (let i = 0; i < data.enemies.length; i++) {
     const p = data.enemies[i];
     if (p.at) {
       const ax = offsetToAxial(p.at);
-      takenBeforeSherman.add(`${ax.q},${ax.r}`);
+      addStartOccupant(occupiedBeforeSherman, ax, p.kind);
     }
   }
 
@@ -240,9 +279,11 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     const cell = pickEidDiceSlot(
       data.id,
       cellsByEid,
-      takenBeforeSherman,
+      occupiedBeforeSherman,
       rngResolved!,
       '谢尔曼',
+      'sherman',
+      data.theater,
       6,
     );
     shermanPlacement = {
@@ -403,15 +444,16 @@ function resolveEnemyDicePlacements(
     }
   }
 
-  const taken = new Set<string>([`${shermanPos.q},${shermanPos.r}`]);
+  const occupied = new Map<string, StartOccupant[]>();
+  addStartOccupant(occupied, shermanPos, 'blocker');
   for (const pos of alliedBlockedPositions) {
-    taken.add(`${pos.q},${pos.r}`);
+    addStartOccupant(occupied, pos, 'blocker');
   }
   for (let i = 0; i < data.enemies.length; i++) {
     const p = data.enemies[i];
     if (p.at) {
       const ax = offsetToAxial(p.at);
-      taken.add(`${ax.q},${ax.r}`);
+      addStartOccupant(occupied, ax, p.kind);
     }
   }
 
@@ -435,8 +477,8 @@ function resolveEnemyDicePlacements(
           `任务 ${data.id}：${ctxLabel} 配置了 startRids，但地图上没有 rid 编号格`,
         );
       }
-      const placed = pickRestrictedNumberedSlot(data.id, cellsByRid, taken, rng, ctxLabel, allowedRids, 'rid');
-      taken.add(`${placed.pos.q},${placed.pos.r}`);
+      const placed = pickRestrictedNumberedSlot(data.id, cellsByRid, occupied, rng, ctxLabel, allowedRids, 'rid', p.kind, data.theater);
+      addStartOccupant(occupied, placed.pos, p.kind);
       out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
       continue;
     }
@@ -451,16 +493,18 @@ function resolveEnemyDicePlacements(
       const eidCtxLabel = `${ctxLabel}（坦克 eid）`;
       const allowedEids = normalizeStartEids(data.id, p.startEids, eidCtxLabel);
       const placed = allowedEids
-        ? pickRestrictedNumberedSlot(data.id, cellsByEid, taken, rng, eidCtxLabel, allowedEids, 'eid')
+        ? pickRestrictedNumberedSlot(data.id, cellsByEid, occupied, rng, eidCtxLabel, allowedEids, 'eid', p.kind, data.theater)
         : pickEidDiceSlot(
           data.id,
           cellsByEid,
-          taken,
+          occupied,
           rng,
           eidCtxLabel,
+          p.kind,
+          data.theater,
           data.enemyDiceEidMax ?? 6,
         );
-      taken.add(`${placed.pos.q},${placed.pos.r}`);
+      addStartOccupant(occupied, placed.pos, p.kind);
       out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
       continue;
     }
@@ -473,8 +517,7 @@ function resolveEnemyDicePlacements(
       const slot = ((d - 1 + step) % 6) + 1;
       const cell = cellMap.get(slot);
       if (!cell) continue;
-      const key = `${cell.pos.q},${cell.pos.r}`;
-      if (taken.has(key)) continue;
+      if (startCellBlocked(occupied, cell.pos, p.kind, data.theater)) continue;
       placedRid = cell;
       break;
     }
@@ -483,7 +526,7 @@ function resolveEnemyDicePlacements(
         `任务 ${data.id}：第 ${ei + 1} 个无坐标敌方单位（步兵 rid）掷骰出生失败（1d6=${d}，链式 1..6 均无空位或缺格）`,
       );
     }
-    taken.add(`${placedRid.pos.q},${placedRid.pos.r}`);
+    addStartOccupant(occupied, placedRid.pos, p.kind);
     out.push({ at: axialToOffset(placedRid.pos), facing: placedRid.facing });
   }
   return out;

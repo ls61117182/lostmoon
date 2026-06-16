@@ -1,4 +1,5 @@
 import { LoadedMission } from './MissionLoader';
+import type { MissionSource } from './CustomMissionStore';
 import { Direction, ShermanCrew, UnitKind } from './types';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
@@ -36,6 +37,7 @@ interface UnitSnapshot {
 export interface SaveData {
   version: typeof SAVE_VERSION | 3 | 2;
   missionId: string;
+  missionSource?: MissionSource;
   turn: number;
   phase: 'player' | 'enemy';
   movesLeft: number;
@@ -59,6 +61,7 @@ export interface SaveData {
 
 export interface SnapshotParams {
   missionId: string;
+  missionSource?: MissionSource;
   mission: LoadedMission;
   turn: number;
   phase: 'player' | 'enemy';
@@ -78,6 +81,7 @@ export function captureSave(p: SnapshotParams): SaveData {
   return {
     version: SAVE_VERSION,
     missionId: p.missionId,
+    missionSource: p.missionSource,
     turn: p.turn,
     phase: p.phase,
     movesLeft: p.movesLeft,

@@ -24,6 +24,7 @@ export interface TankVisualConfig {
   offsetForward: number;
   offsetRight: number;
   aspectRatioMul: number;
+  muzzle: { spriteX: number; spriteY: number };
   destroyedOffsetForward: number;
   destroyedOffsetRight: number;
 }
@@ -51,6 +52,7 @@ const TANK_VISUAL_DEFAULT: TankVisualConfig = {
   offsetForward: 0,
   offsetRight: 0,
   aspectRatioMul: 1,
+  muzzle: { spriteX: 0, spriteY: 0 },
   destroyedOffsetForward: 0,
   destroyedOffsetRight: 0,
 };
@@ -67,14 +69,14 @@ const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = 
 };
 
 const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
-  sherman: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: -7.5, destroyedOffsetRight: 0 },
-  tiger: { fitScale: 0.9, offsetForward: 0.1, offsetRight: 0, aspectRatioMul: 1.1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  at_gun: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  heavy_artillery: { fitScale: 0.85, offsetForward: 0.15, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  truck: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  sherman: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 94, spriteY: 99 }, destroyedOffsetForward: -7.5, destroyedOffsetRight: 0 },
+  tiger: { fitScale: 0.9, offsetForward: 0.1, offsetRight: 0, aspectRatioMul: 1.1, muzzle: { spriteX: 0, spriteY: 243 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 222 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 296 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 205 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  at_gun: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 16, spriteY: 312 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  heavy_artillery: { fitScale: 0.85, offsetForward: 0.15, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 8, spriteY: 345 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  truck: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 0 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
 };
 
 const SPLIT_TANK_VISUAL_CONFIG: Record<SplitTankKind, SplitTankVisualConfig> = {

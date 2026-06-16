@@ -26,12 +26,12 @@ export interface ActionTableRow {
 
 /** 1..6 骰面 → 行动表行。0 下标不用；访问请用 pip 值直接索引。 */
 export const PLAYER_ACTION_BY_PIP: Record<1 | 2 | 3 | 4 | 5 | 6, ActionTableRow> = {
-  1: { move: 'reverse', attack: 'reload', misc: 'gunner_gun_or_reload' },
-  2: { move: 'turn', attack: 'reload', misc: 'codriver_mg' },
-  3: { move: 'turn', attack: 'mg', misc: 'driver_turn_or_drive' },
-  4: { move: 'turn', attack: 'mg', misc: 'repair' },
-  5: { move: 'drive', attack: 'gun', misc: 'smoke_or_repair' },
-  6: { move: 'drive', attack: 'gun', misc: 'fire_suppress' },
+  1: { move: 'reverse', attack: 'reload', misc: 'fire_suppress' },
+  2: { move: 'turn', attack: 'reload', misc: 'repair' },
+  3: { move: 'turn', attack: 'mg', misc: 'smoke_or_repair' },
+  4: { move: 'turn', attack: 'mg', misc: 'codriver_mg' },
+  5: { move: 'drive', attack: 'gun', misc: 'driver_turn_or_drive' },
+  6: { move: 'drive', attack: 'gun', misc: 'gunner_gun_or_reload' },
 };
 
 /** 对子（两颗同点）特殊行：MVP 不消费，仅保留给未来的对子合并玩法。 */

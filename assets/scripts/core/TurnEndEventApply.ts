@@ -7,6 +7,8 @@ import {
   applyAttack,
   AttackReport,
   canAttack,
+  CrewDeathResult,
+  DamageEffect,
   resolveCrewCheck,
   resolveDamageEffect,
   resolvePacificShermanDamageEffect,
@@ -71,6 +73,22 @@ export interface TurnEndPrepared {
   tankReinforceMove?: TurnEndTankReinforceMove;
   /** 相邻步兵集火：由 BattleScene 在主骰后串联完整攻击骰面板（命中→穿甲→伤害），确认后再 apply */
   adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
+}
+
+function turnEndDamageResultParams(
+  damageEffect: DamageEffect | undefined,
+  crewCheck?: CrewDeathResult,
+): Record<string, string | number> {
+  if (damageEffect === 'crewCheck') {
+    if (crewCheck && crewCheck.slot !== null) {
+      return { resultKey: 'crew.death.kia', roleKey: `crew.role.${crewCheck.slot}` };
+    }
+    return { resultKey: 'crew.death.falseAlarm' };
+  }
+  if (damageEffect) {
+    return { resultKey: `dmg.outcome.${damageEffect}` };
+  }
+  return { resultKey: 'turnEnd.result.noEffect' };
 }
 
 /** 下一步朝向：优先顺时针若步数更少 */
@@ -149,8 +167,34 @@ function unitAt(mission: LoadedMission, pos: { q: number; r: number }): Unit | n
   return null;
 }
 
+function unitsAt(mission: LoadedMission, pos: { q: number; r: number }): Unit[] {
+  const units: Unit[] = [];
+  if (!mission.sherman.destroyed && mission.sherman.pos.q === pos.q && mission.sherman.pos.r === pos.r) {
+    units.push(mission.sherman);
+  }
+  for (const a of mission.allies) {
+    if (!a.destroyed && a.pos.q === pos.q && a.pos.r === pos.r) units.push(a);
+  }
+  for (const e of mission.enemies) {
+    if (!e.destroyed && e.pos.q === pos.q && e.pos.r === pos.r) units.push(e);
+  }
+  return units;
+}
+
 function isTankUnitKind(k: UnitKind): boolean {
   return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck' || k === 'type95' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery';
+}
+
+function isJapaneseTankOrGunUnit(u: Unit): boolean {
+  return u.faction === 'japanese'
+    && (u.kind === 'type95'
+      || u.kind === 'type97'
+      || u.kind === 'at_gun'
+      || u.kind === 'heavy_artillery');
+}
+
+function blocksJapaneseInfantrySpawn(u: Unit): boolean {
+  return !isJapaneseTankOrGunUnit(u);
 }
 
 function directionPriorityAround(dir: Direction): Direction[] {
@@ -211,9 +255,9 @@ function prepareTankSpawnEvent(
     ? findTileByReinforceId(mission, spawnDie)
     : findTileByEnemyStartId(mission, spawnDie);
   const pos = tile?.pos;
-  const occ = pos ? unitAt(mission, pos) : null;
+  const occupants = pos ? unitsAt(mission, pos) : [];
   const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck', 'type95', 'type97', 'at_gun', 'heavy_artillery'];
-  const blocked = !!occ && tankKinds.includes(occ.kind);
+  const blocked = occupants.some(occ => tankKinds.includes(occ.kind));
   const invalidTerrain = kind === 'type97' && tile?.terrain === 'rocky';
   const placed = !!pos && !blocked && !invalidTerrain;
   const face = ((spawnPoint === 'rid'
@@ -244,9 +288,7 @@ function prepareTankSpawnEvent(
 }
 
 function cellHasTank(mission: LoadedMission, pos: { q: number; r: number }, selfTruck: Unit): boolean {
-  const u = unitAt(mission, pos);
-  if (!u || u.destroyed || u === selfTruck) return false;
-  return isTankUnitKind(u.kind);
+  return unitsAt(mission, pos).some(u => u !== selfTruck && isTankUnitKind(u.kind));
 }
 
 /** 深拷贝用于回合结束预结算（对齐 RNG 顺序，不改变真实 mission） */
@@ -478,9 +520,12 @@ export function prepareTurnEndEvent(
       const spawnDie = rng.d6();
       const tile = findTileByReinforceId(mission, spawnDie);
       const pos = tile?.pos;
-      const occ = pos ? unitAt(mission, pos) : null;
-      const placed = !!pos && !occ;
       const pacific = mission.data.theater === 'pacific';
+      const occupants = pos ? unitsAt(mission, pos) : [];
+      const blocked = pacific
+        ? occupants.some(blocksJapaneseInfantrySpawn)
+        : occupants.length > 0;
+      const placed = !!pos && !blocked;
       return {
         bodyKey: placed
           ? (pacific ? 'turnEnd.japaneseInfantry.placed' : 'turnEnd.infantry.placed')
@@ -547,6 +592,7 @@ export function prepareTurnEndEvent(
         bp.b2 = sim.bomb[1];
         bp.bsum = sim.bomb[0] + sim.bomb[1];
       }
+      if (sim.report) Object.assign(bp, turnEndDamageResultParams(sim.report.damageEffect, sim.report.crewCheck));
       let bodyKey = 'turnEnd.stuka.miss';
       if (sim.shotDown) bodyKey = 'turnEnd.stuka.shotDown';
       else if (sim.report) bodyKey = 'turnEnd.stuka.hit';
@@ -730,7 +776,7 @@ export function prepareTurnEndEvent(
       };
       return {
         bodyKey: 'turnEnd.mine.hit',
-        bodyParams: { ...baseParams, penDie, damageDie },
+        bodyParams: { ...baseParams, penDie, damageDie, ...turnEndDamageResultParams(damageEffect, crewCheck) },
         extraDicePhases: [
           { dice: [penDie], captionKey: 'turnEnd.extra.minePen' },
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
@@ -771,7 +817,7 @@ export function prepareTurnEndEvent(
       };
       return {
         bodyKey: 'turnEnd.clearMine.hit',
-        bodyParams: { ...baseParams, damageDie },
+        bodyParams: { ...baseParams, damageDie, ...turnEndDamageResultParams(damageEffect, crewCheck) },
         extraDicePhases: [{ dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' }],
         apply: () => applyAttack(sh, rep),
       };
@@ -821,7 +867,15 @@ export function prepareTurnEndEvent(
       };
       return {
         bodyKey: 'turnEnd.heavyMortar.hit',
-        bodyParams: { ...baseParams, pen1: penDice[0], pen2: penDice[1], penSum, penThreshold, damageDie },
+        bodyParams: {
+          ...baseParams,
+          pen1: penDice[0],
+          pen2: penDice[1],
+          penSum,
+          penThreshold,
+          damageDie,
+          ...turnEndDamageResultParams(damageEffect, crewCheck),
+        },
         extraDicePhases: [
           { dice: penDice, captionKey: 'turnEnd.extra.mortarPen' },
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
