@@ -257,6 +257,8 @@ level.pacific.11.title,贝里琉坦克冲锋,Peleliu - Japanese Tank Charge
 level.pacific.12.title,贝里琉 - 清理机场,Peleliu - Clear the Airfield
 chapter.test.title,测试关卡,Test Missions
 chapter.test.subtitle,调试与验证用任务,Debug and validation missions
+chapter.custom.title,我的关卡,My Missions
+chapter.custom.subtitle,关卡编辑器与本地自定义关卡（最多 10 个）,Level editor and local custom missions (up to 10)
 chapter.empty.title,战区待命,Theater Standby
 chapter.empty.body,本章节任务正在准备中，后续新增关卡会自动出现在这里。,Missions for this chapter are in preparation. New levels will appear here automatically.
 menu.selectMission,选 择 任 务,Select Mission
@@ -287,6 +289,27 @@ level.10.title,只是路过：城镇,Just Passing Through: Town
 level.11.title,钢铁角斗士,Steel Gladiator
 level.12.title,猎杀虎式Ⅱ,Hunt the Tiger II
 level.test.title,测试关卡,Test Mission
+level.custom.editor.title,关卡编辑器,Level Editor
+level.custom.mission.title,自定义关卡,Custom Mission
+levelEditor.placeholder.body,关卡编辑器入口已创建，编辑器功能正在接入中。当前不会再进入无响应的测试场景。下一步将实现地图、单位、目标和事件编辑界面。,"The level editor entry is ready, and the editor UI is being connected. It will no longer open the unresponsive test scene. Next up: map, unit, objective, and event editing."
+levelEditor.placeholder.back,返回我的关卡,Back to My Missions
+levelEditor.workspace.hint,选择左侧地形，然后点击六边形格子刷地形。,"Choose terrain on the left, then click hex cells to paint."
+levelEditor.workspace.terrain,地形,Terrain
+levelEditor.terrain.none,无,None
+levelEditor.workspace.current,当前编辑：{name},Editing: {name}
+levelEditor.workspace.newDraft,新关卡草稿,New Mission Draft
+levelEditor.workspace.new,新建关卡,New Mission
+levelEditor.workspace.newReady,已切换到新关卡草稿，保存后会创建一个新的本地关卡。,Switched to a new draft. Save it to create a new local mission.
+levelEditor.workspace.prev,上一关卡,Prev
+levelEditor.workspace.next,下一关卡,Next
+levelEditor.workspace.noSaved,还没有已保存的自定义关卡。,No saved custom missions yet.
+levelEditor.workspace.save,保存到我的关卡,Save to My Missions
+levelEditor.workspace.saved,已保存到当前关卡。关闭面板后可在“我的关卡”中试玩。,Saved to the current mission. Close this panel to play it from My Missions.
+levelEditor.workspace.savedNew,已创建新关卡。后续保存会覆盖这个关卡。,Created a new mission. Future saves will overwrite this mission.
+levelEditor.workspace.saveFull,保存失败：自定义关卡已达上限（最多 10 个）。,Save failed: custom mission limit reached (up to 10).
+levelEditor.workspace.delete,删除当前关卡,Delete Current
+levelEditor.workspace.deleted,当前关卡已删除，已切换到新关卡草稿。,Deleted the current mission and switched to a new draft.
+levelEditor.workspace.deleteUnsaved,当前是新草稿，尚未保存，无需删除。,"This is an unsaved draft, so there is nothing to delete."
 terrain.road,公路,Road
 terrain.field,田野,Field
 terrain.mud,泥地,Mud

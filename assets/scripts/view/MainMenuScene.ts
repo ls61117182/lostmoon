@@ -20,8 +20,8 @@
 
 import {
   _decorator, Canvas, Color, Component, EditBox, EventTouch, Graphics,
-  HorizontalTextAlignment, Label, Layers, Mask, Node, ScrollView, UITransform,
-  Vec3, VerticalTextAlignment, director,
+  HorizontalTextAlignment, Label, Layers, Mask, Node, ScrollView, Sprite, SpriteFrame, UITransform,
+  Vec3, VerticalTextAlignment, director, resources,
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
@@ -39,6 +39,7 @@ import {
 import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
+import type { MissionData, TileDef } from '../core/types';
 
 const { ccclass, property } = _decorator;
 
@@ -518,10 +519,10 @@ export class MainMenuScene extends Component {
         root, x, y, LEVEL_BTN_W, LEVEL_BTN_H,
         BTN_LEVEL_LOCKED, () => this.onClickLevel(meta),
       );
-      btn.node.name = `LevelBtn_${meta.id}`;
+      btn.node.name = `LevelBtn_${meta.entryKind ?? 'mission'}_${meta.id}`;
 
       // 左上角大编号
-      const idStr = meta.id > 0 ? String(meta.id).padStart(2, '0') : 'T';
+      const idStr = meta.badgeOverride ?? (meta.id > 0 ? String(meta.id).padStart(2, '0') : 'T');
       const idLabel = this.makeLabel(btn.node, idStr,
         -LEVEL_BTN_W / 2 + 32, LEVEL_BTN_H / 2 - 26, 60, 36, 30, TEXT_PRIMARY);
       idLabel.horizontalAlign = HorizontalTextAlignment.LEFT;
@@ -556,7 +557,7 @@ export class MainMenuScene extends Component {
       titleUt.setContentSize(titleW, 24);
       titleN.setPosition(0, -LEVEL_BTN_H / 2 + titleBottomInset, 0);
       const titleLabel = titleN.addComponent(Label);
-      titleLabel.string = t(meta.titleKey);
+      titleLabel.string = meta.titleOverride ?? t(meta.titleKey);
       titleLabel.fontSize = 16;
       titleLabel.lineHeight = 20;
       titleLabel.color = TEXT_PRIMARY;
@@ -592,6 +593,8 @@ export class MainMenuScene extends Component {
       const lock = btn.node.getChildByName('LockLabel');
       const idl  = btn.node.getChildByName('IdLabel');
       const tit  = btn.node.getChildByName('TitleLabel');
+      const titleLabel = tit?.getComponent(Label);
+      if (titleLabel) titleLabel.string = meta.titleOverride ?? t(meta.titleKey);
       if (star) star.active = completed;
       if (lock) lock.active = !unlocked;
       if (idl)  idl.active  = unlocked;   // 锁定关卡不显示数字，只显示 🔒
@@ -599,9 +602,31 @@ export class MainMenuScene extends Component {
     }
   }
 
+  private rebuildLevelGridBehindModal() {
+    this.buildLevelGrid();
+    this.refreshLevelButtons();
+    if (this.modalRoot && this.modalRoot.isValid) {
+      this.modalRoot.setSiblingIndex(this.node.children.length - 1);
+    }
+  }
+
   private onClickLevel(meta: LevelMeta) {
     if (!MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
       console.log('[Menu] 关卡未解锁:', meta.id);
+      return;
+    }
+    if (meta.entryKind === 'editor') {
+      this.loadLevelEditorScene();
+      return;
+    }
+    if (meta.entryKind === 'custom') {
+      if (!meta.customPackageId || !CustomMissionStore.load(meta.customPackageId)) {
+        console.warn('[Menu] custom mission missing:', meta.customPackageId);
+        this.rebuildLevelGridBehindModal();
+        return;
+      }
+      GameSession.selectCustomMission(meta.customPackageId);
+      this.loadBattleScene();
       return;
     }
     GameSession.selectMission(meta.id, meta.missionPath);
@@ -1217,6 +1242,613 @@ export class MainMenuScene extends Component {
     director.loadScene(this.battleSceneName, (err) => {
       if (err) console.error('[Menu] 加载战斗场景失败:', this.battleSceneName, err);
     });
+  }
+
+  private loadLevelEditorScene(packageId?: string) {
+    this.openLevelEditorWorkspace(packageId);
+  }
+
+  private openLevelEditorWorkspace(initialPackageId?: string) {
+    this.closeModal();
+    const panelW = 1160;
+    const panelH = 660;
+    const { panel, contentY } = this.openModal(t('level.custom.editor.title'), panelW, panelH);
+
+    type EditorTile = TileDef | null;
+    type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null };
+    type EditorCell = { redraw: (tile: EditorTile) => void };
+
+    const terrainTools: TerrainTool[] = [
+      { code: null, key: 'levelEditor.terrain.none', color: new Color(18, 24, 22, 120), spriteKey: null },
+      { code: 'f', key: 'terrain.field', color: new Color(91, 116, 62, 235), spriteKey: 'field' },
+      { code: 'r', key: 'terrain.road', color: new Color(108, 105, 96, 235), spriteKey: 'road' },
+      { code: 'm', key: 'terrain.mud', color: new Color(86, 70, 48, 235), spriteKey: 'mud' },
+      { code: 'F', key: 'terrain.forest', color: new Color(38, 92, 48, 235), spriteKey: 'forest' },
+      { code: 'w', key: 'terrain.water', color: new Color(42, 93, 126, 235), spriteKey: 'water' },
+      { code: 'c', key: 'terrain.clear', color: new Color(127, 130, 95, 235), spriteKey: 'clear' },
+      { code: 'a', key: 'terrain.airstrip', color: new Color(151, 141, 114, 235), spriteKey: 'clear' },
+      { code: 'T', key: 'terrain.trees', color: new Color(48, 112, 67, 235), spriteKey: 'trees' },
+      { code: 'B', key: 'terrain.beach', color: new Color(165, 143, 94, 235), spriteKey: 'beach' },
+      { code: 'H', key: 'terrain.rocky', color: new Color(120, 118, 112, 235), spriteKey: 'rocky' },
+      { code: 'dw', key: 'terrain.deep_water', color: new Color(56, 98, 118, 235), spriteKey: null },
+    ];
+    const terrainSpritePaths: Record<string, string> = {
+      road: 'textures/terrain/terrain_road/spriteFrame',
+      field: 'textures/terrain/terrain_field/spriteFrame',
+      mud: 'textures/terrain/terrain_mud/spriteFrame',
+      forest: 'textures/terrain/terrain_forest/spriteFrame',
+      water: 'textures/terrain/terrain_water/spriteFrame',
+      clear: 'textures/terrain/pacific_sand/spriteFrame',
+      trees: 'textures/terrain/pacific_trees/spriteFrame',
+      beach: 'textures/terrain/pacific_water/spriteFrame',
+      rocky: 'textures/terrain/pacific_rocks/spriteFrame',
+    };
+
+    const spriteFrames: Record<string, SpriteFrame | null> = {};
+    const cells: EditorCell[] = [];
+    const existingEntries = CustomMissionStore.list();
+    const requestedEntry = initialPackageId ? existingEntries.find(entry => entry.id === initialPackageId) : null;
+    let editingPackageId: string | null = requestedEntry?.id ?? existingEntries[0]?.id ?? null;
+    const existingPackage = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
+    let rows = existingPackage?.mission.rows ?? 6;
+    let cols = existingPackage?.mission.cols ?? 8;
+    let draftTiles: EditorTile[][] = this.cloneEditorTiles(existingPackage?.mission.tiles, rows, cols);
+    let selectedTool: TerrainTool | null = terrainTools[1]!;
+    let selectedRow = 0;
+    let selectedCol = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (draftTiles[row]?.[col]) {
+          selectedRow = row;
+          selectedCol = col;
+          row = rows;
+          break;
+        }
+      }
+    }
+
+    this.makeLabel(panel, t('levelEditor.workspace.hint'),
+      0, contentY - 8, panelW - 96, 34, 18, TEXT_SUBTITLE);
+    this.makeLabel(panel, t('levelEditor.workspace.terrain'),
+      -panelW / 2 + 140, contentY - 54, 180, 28, 20, TEXT_TITLE);
+    const selectedLabel = this.makeLabel(panel, t(selectedTool.key),
+      -panelW / 2 + 140, contentY - 304, 190, 26, 16, TEXT_TITLE);
+    const currentLabel = this.makeLabel(panel, '',
+      -panelW / 2 + 340, -panelH / 2 + 118, 440, 26, 16, TEXT_SUBTITLE);
+    const statusLabel = this.makeLabel(panel, '',
+      panelW / 2 - 186, -panelH / 2 + 118, 300, 42, 16, TEXT_SUBTITLE);
+    statusLabel.overflow = Label.Overflow.RESIZE_HEIGHT;
+    statusLabel.enableWrapText = true;
+
+    const refreshCurrentLabel = () => {
+      const pkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
+      currentLabel.string = t('levelEditor.workspace.current', {
+        name: pkg?.mission.name || t('levelEditor.workspace.newDraft'),
+      });
+    };
+
+    const toolButtons: ButtonRefs[] = [];
+    const refreshToolButtons = () => {
+      selectedLabel.string = selectedTool ? t(selectedTool.key) : '地形刷子: 无';
+      for (let j = 0; j < toolButtons.length; j++) {
+        toolButtons[j]!.redraw(terrainTools[j] === selectedTool ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, { border: true });
+      }
+    };
+    for (let i = 0; i < terrainTools.length; i++) {
+      const tool = terrainTools[i]!;
+      const toolCol = i % 2;
+      const toolRow = Math.floor(i / 2);
+      const btn = this.makeRectButton(
+        panel,
+        -panelW / 2 + 92 + toolCol * 96,
+        contentY - 88 - toolRow * 36,
+        88,
+        29,
+        tool === selectedTool ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
+        () => {
+          selectedTool = selectedTool === tool ? null : tool;
+          refreshToolButtons();
+        },
+      );
+      this.makeLabel(btn.node, t(tool.key), 0, 0, 80, 29, 14, TEXT_PRIMARY);
+      toolButtons.push(btn);
+    }
+
+    const colorForTile = (tile: EditorTile) =>
+      terrainTools.find(tool => tool.code === (tile?.t ?? null))?.color ?? terrainTools[1]!.color;
+    const spriteKeyForTile = (tile: EditorTile) =>
+      terrainTools.find(tool => tool.code === (tile?.t ?? null))?.spriteKey ?? null;
+    const normalizeFlags = (raw: string | undefined) =>
+      /^[01]{6}$/.test(raw ?? '') ? raw! : '000000';
+    const setFlag = (raw: string | undefined, index: number, value: boolean): string | undefined => {
+      const chars = normalizeFlags(raw).split('');
+      chars[index] = value ? '1' : '0';
+      const next = chars.join('');
+      return next === '000000' ? undefined : next;
+    };
+    const normalizeSelectedTile = () => {
+      const tile = draftTiles[selectedRow]?.[selectedCol];
+      if (!tile) return;
+      if (tile.bd !== 1 || ['w', 'dw', 'B'].includes(tile.t)) delete tile.bd;
+      if (tile.t === 'dw') delete tile.h;
+      if (tile.t !== 'c' && tile.t !== 'T') delete tile.bw;
+      if (tile.t !== 'w') delete tile.br;
+      if (tile.t !== 'r' && tile.t !== 'a') {
+        delete tile.rd;
+      }
+      if (tile.t === 'dw') {
+        delete tile.rid;
+        delete tile.rf;
+        delete tile.eid;
+        delete tile.ef;
+      }
+      if (!tile.rid) {
+        delete tile.rid;
+        delete tile.rf;
+      }
+      if (!tile.eid) {
+        delete tile.eid;
+        delete tile.ef;
+      }
+    };
+    const redrawAllCells = () => {
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          cells[row * cols + col]?.redraw(draftTiles[row]?.[col] ?? null);
+        }
+      }
+    };
+    const propRoot = new Node('EditorTileProps');
+    propRoot.layer = this.node.layer;
+    propRoot.addComponent(UITransform).setContentSize(286, 390);
+    propRoot.setPosition(panelW / 2 - 166, contentY - 242, 0);
+    panel.addChild(propRoot);
+    let refreshPropertyPanel = () => {};
+    const refreshSelection = () => {
+      normalizeSelectedTile();
+      redrawAllCells();
+      refreshPropertyPanel();
+    };
+    const toggleArrayDirection = (arr: [number, number] | undefined, dir: number): [number, number] | undefined => {
+      const current = Array.isArray(arr) ? arr.filter(v => Number.isInteger(v) && v >= 0 && v <= 5) : [];
+      if (current.length === 0) return [dir, (dir + 3) % 6];
+      const index = current.indexOf(dir);
+      if (index >= 0) current.splice(index, 1);
+      else if (current.length < 2) current.push(dir);
+      else current[0] = dir;
+      if (current.length === 1) current.push((current[0]! + 3) % 6);
+      return current.length === 2 ? [current[0]!, current[1]!] : undefined;
+    };
+    const cycleNumber = (value: number | undefined, max: number) => {
+      if (value === undefined || value === null) return 1;
+      return value >= max ? undefined : value + 1;
+    };
+    const cycleFacing = (value: number | undefined) => {
+      if (value === undefined || value === null) return 0;
+      return value >= 5 ? undefined : value + 1;
+    };
+    refreshPropertyPanel = () => {
+      propRoot.removeAllChildren();
+      const tile = draftTiles[selectedRow]?.[selectedCol] ?? null;
+      this.makeLabel(propRoot, `格子 ${selectedCol},${selectedRow}`, 0, 180, 250, 24, 18, TEXT_TITLE);
+      if (!tile) {
+        this.makeLabel(propRoot, '当前为“无”。选择左侧地形后点击格子创建地形。', 0, 142, 250, 54, 15, TEXT_SUBTITLE);
+        return;
+      }
+      const addBtn = (text: string, x: number, y: number, w: number, h: number, active: boolean, onClick: () => void) => {
+        const btn = this.makeRectButton(propRoot, x, y, w, h, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+          selectedTool = null;
+          refreshToolButtons();
+          onClick();
+          refreshSelection();
+        });
+        this.makeLabel(btn.node, text, 0, 0, w - 8, h, 14, TEXT_PRIMARY);
+      };
+      const addDirHexButtons = (
+        centerX: number,
+        centerY: number,
+        title: string,
+        activeFn: (dir: number) => boolean,
+        onClick: (dir: number) => void,
+      ) => {
+        this.makeLabel(propRoot, title, centerX, centerY, 54, 30, 14, TEXT_TITLE);
+        const dirs = ['E', 'SE', 'SW', 'W', 'NW', 'NE'];
+        const positions = [
+          { x: centerX + 52, y: centerY },
+          { x: centerX + 28, y: centerY - 42 },
+          { x: centerX - 28, y: centerY - 42 },
+          { x: centerX - 52, y: centerY },
+          { x: centerX - 28, y: centerY + 42 },
+          { x: centerX + 28, y: centerY + 42 },
+        ];
+        for (let i = 0; i < 6; i++) {
+          addBtn(dirs[i]!, positions[i]!.x, positions[i]!.y, 36, 22, activeFn(i), () => onClick(i));
+        }
+      };
+      const allowsBuilding = !['w', 'dw', 'B'].includes(tile.t);
+      const allowsHedge = tile.t !== 'dw';
+      const allowsRoadDirs = tile.t === 'r';
+      const allowsAirstripDirs = tile.t === 'a';
+      const allowsBridge = tile.t === 'w';
+      const allowsBreakwater = tile.t === 'c' || tile.t === 'T';
+      const allowsStarts = tile.t !== 'dw';
+
+      if (allowsBuilding) {
+        addBtn(tile.bd === 1 ? '建筑: 有' : '建筑: 无', -72, 146, 112, 28, tile.bd === 1, () => {
+          if (tile.bd === 1) delete tile.bd;
+          else tile.bd = 1;
+        });
+      }
+      addBtn('清空附加', allowsBuilding ? 72 : 0, 146, 112, 28, false, () => {
+        delete tile.bd; delete tile.h; delete tile.bw; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
+      });
+      const sectionY = 66;
+      if (allowsHedge) {
+        addDirHexButtons(-78, sectionY, '树篱\nh', (i) => normalizeFlags(tile.h)[i] === '1', (i) => {
+          tile.h = setFlag(tile.h, i, normalizeFlags(tile.h)[i] !== '1');
+        });
+      }
+      if (allowsRoadDirs || allowsAirstripDirs) {
+        const title = allowsAirstripDirs ? '机场\nrd' : '道路\nrd';
+        addDirHexButtons(78, sectionY, title, (i) => normalizeFlags(tile.rd)[i] === '1', (i) => {
+          tile.rd = setFlag(tile.rd, i, normalizeFlags(tile.rd)[i] !== '1');
+        });
+      }
+      if (allowsBridge) {
+        const bridgeX = allowsHedge ? 78 : 0;
+        addDirHexButtons(bridgeX, sectionY, '桥梁\nbr', (i) => !!tile.br?.includes(i), (i) => {
+          tile.br = toggleArrayDirection(tile.br, i);
+        });
+      }
+      if (allowsBreakwater) {
+        const bwX = allowsBridge || allowsHedge ? 0 : -78;
+        const bwY = allowsBridge || allowsHedge ? -34 : sectionY;
+        addDirHexButtons(bwX, bwY, '防波堤\nbw', (i) => normalizeFlags(tile.bw)[i] === '1', (i) => {
+          tile.bw = setFlag(tile.bw, i, normalizeFlags(tile.bw)[i] !== '1');
+        });
+      }
+      if (allowsStarts) {
+        addBtn(`eid ${tile.eid ?? '-'}`, -42, -116, 74, 26, tile.eid !== undefined, () => {
+          tile.eid = cycleNumber(tile.eid, 6);
+          if (!tile.eid) delete tile.ef;
+        });
+        addBtn(`ef ${tile.ef ?? '-'}`, 42, -116, 74, 26, tile.ef !== undefined, () => {
+          if (tile.eid) tile.ef = cycleFacing(tile.ef);
+        });
+        addBtn(`rid ${tile.rid ?? '-'}`, -42, -148, 74, 26, tile.rid !== undefined, () => {
+          tile.rid = cycleNumber(tile.rid, 6);
+          if (!tile.rid) delete tile.rf;
+        });
+        addBtn(`rf ${tile.rf ?? '-'}`, 42, -148, 74, 26, tile.rf !== undefined, () => {
+          if (tile.rid) tile.rf = cycleFacing(tile.rf);
+        });
+      }
+      const raw = JSON.stringify(tile);
+      const rawLabel = this.makeLabel(propRoot, raw, 0, -178, 250, 22, 10, TEXT_SUBTITLE);
+      rawLabel.overflow = Label.Overflow.SHRINK;
+    };
+    const makeCell = (row: number, col: number, x: number, y: number): EditorCell => {
+      const radius = 27;
+      const w = radius * Math.sqrt(3);
+      const h = radius * 2;
+      const node = new Node('EditorHexCell');
+      node.layer = this.node.layer;
+      node.addComponent(UITransform).setContentSize(w, h);
+      node.setPosition(x, y, 0);
+      const spriteNode = new Node('EditorHexTexture');
+      spriteNode.layer = this.node.layer;
+      spriteNode.addComponent(UITransform).setContentSize(w, h);
+      const sprite = spriteNode.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      node.addChild(spriteNode);
+      const outlineNode = new Node('EditorHexOutline');
+      outlineNode.layer = this.node.layer;
+      outlineNode.addComponent(UITransform).setContentSize(w, h);
+      const outlineGraphics = outlineNode.addComponent(Graphics);
+      node.addChild(outlineNode);
+      const graphics = node.addComponent(Graphics);
+      const label = this.makeLabel(node, `${col},${row}`, 0, -2, w - 6, 18, 11, TEXT_PRIMARY);
+      label.enableOutline = true;
+      label.outlineColor = TEXT_OUTLINE;
+      const drawHex = (fill: Color) => {
+        graphics.clear();
+        outlineGraphics.clear();
+        graphics.fillColor = fill;
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.PI / 180 * (60 * i - 30);
+          const px = Math.cos(angle) * radius;
+          const py = Math.sin(angle) * radius;
+          if (i === 0) graphics.moveTo(px, py);
+          else graphics.lineTo(px, py);
+        }
+        graphics.close();
+        graphics.fill();
+        outlineGraphics.strokeColor = BTN_LEVEL_BORDER;
+        outlineGraphics.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.PI / 180 * (60 * i - 30);
+          const px = Math.cos(angle) * radius;
+          const py = Math.sin(angle) * radius;
+          if (i === 0) outlineGraphics.moveTo(px, py);
+          else outlineGraphics.lineTo(px, py);
+        }
+        outlineGraphics.close();
+        outlineGraphics.stroke();
+      };
+      const pointForDirection = (dir: number, scale: number) => {
+        const angles = [0, -60, -120, 180, 120, 60];
+        const angle = Math.PI / 180 * angles[dir]!;
+        return { x: Math.cos(angle) * radius * scale, y: Math.sin(angle) * radius * scale };
+      };
+      const pointForAngle = (angleDeg: number) => {
+        const angle = Math.PI / 180 * angleDeg;
+        return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+      };
+      const drawTileOverlays = (tile: EditorTile) => {
+        if (!tile) return;
+        const rd = normalizeFlags(tile.rd);
+        outlineGraphics.strokeColor = new Color(238, 212, 154, 240);
+        outlineGraphics.lineWidth = 4;
+        for (let i = 0; i < 6; i++) {
+          if (rd[i] !== '1') continue;
+          const p = pointForDirection(i, 0.76);
+          outlineGraphics.moveTo(0, 0);
+          outlineGraphics.lineTo(p.x, p.y);
+          outlineGraphics.stroke();
+        }
+        if (tile.br?.length === 2) {
+          outlineGraphics.strokeColor = new Color(235, 245, 255, 245);
+          outlineGraphics.lineWidth = 5;
+          for (const dir of tile.br) {
+            const p = pointForDirection(dir, 0.82);
+            outlineGraphics.moveTo(0, 0);
+            outlineGraphics.lineTo(p.x, p.y);
+            outlineGraphics.stroke();
+          }
+        }
+        const hedge = normalizeFlags(tile.h);
+        outlineGraphics.strokeColor = new Color(73, 123, 53, 255);
+        outlineGraphics.lineWidth = 5;
+        for (let i = 0; i < 6; i++) {
+          if (hedge[i] !== '1') continue;
+          const angles = [0, -60, -120, 180, 120, 60];
+          const a = angles[i]!;
+          const p1 = pointForAngle(a - 30);
+          const p2 = pointForAngle(a + 30);
+          outlineGraphics.moveTo(p1.x, p1.y);
+          outlineGraphics.lineTo(p2.x, p2.y);
+          outlineGraphics.stroke();
+        }
+        const breakwater = normalizeFlags(tile.bw);
+        outlineGraphics.strokeColor = new Color(142, 136, 120, 255);
+        outlineGraphics.lineWidth = 6;
+        for (let i = 0; i < 6; i++) {
+          if (breakwater[i] !== '1') continue;
+          const angles = [0, -60, -120, 180, 120, 60];
+          const a = angles[i]!;
+          const p1 = pointForAngle(a - 30);
+          const p2 = pointForAngle(a + 30);
+          outlineGraphics.moveTo(p1.x * 0.94, p1.y * 0.94);
+          outlineGraphics.lineTo(p2.x * 0.94, p2.y * 0.94);
+          outlineGraphics.stroke();
+        }
+        if (tile.bd === 1) {
+          outlineGraphics.fillColor = new Color(92, 68, 44, 245);
+          outlineGraphics.rect(-8, -7, 16, 14);
+          outlineGraphics.fill();
+        }
+        if (tile.eid !== undefined || tile.rid !== undefined) {
+          outlineGraphics.fillColor = tile.eid !== undefined
+            ? new Color(60, 46, 42, 235)
+            : new Color(103, 48, 40, 235);
+          outlineGraphics.circle(0, 13, 6);
+          outlineGraphics.fill();
+        }
+      };
+      const redraw = (tile: EditorTile) => {
+        const spriteKey = spriteKeyForTile(tile);
+        sprite.spriteFrame = spriteKey ? (spriteFrames[spriteKey] ?? null) : null;
+        spriteNode.getComponent(UITransform)?.setContentSize(w, h);
+        spriteNode.active = !!sprite.spriteFrame;
+        drawHex(colorForTile(tile));
+        drawTileOverlays(tile);
+        if (row === selectedRow && col === selectedCol) {
+          outlineGraphics.strokeColor = TEXT_TITLE;
+          outlineGraphics.lineWidth = 4;
+          outlineGraphics.circle(0, 0, radius * 0.92);
+          outlineGraphics.stroke();
+        }
+      };
+      node.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+        playUiClick();
+        selectedRow = row;
+        selectedCol = col;
+        if (selectedTool) {
+          draftTiles[row]![col] = selectedTool.code === null
+            ? null
+            : { ...(draftTiles[row]![col] ?? {}), t: selectedTool.code };
+        }
+        refreshSelection();
+        ev.propagationStopped = true;
+      }, this);
+      panel.addChild(node);
+      redraw(draftTiles[row]![col] ?? null);
+      return { redraw };
+    };
+
+    const radius = 27;
+    const hexW = radius * Math.sqrt(3);
+    const hexStepX = hexW + 5;
+    const hexStepY = radius * 1.5 + 5;
+    const gridX0 = -((cols - 1) * hexStepX) / 2 + 4;
+    const gridY0 = contentY - 96;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const x = gridX0 + col * hexStepX + (row % 2 ? hexStepX / 2 : 0);
+        const y = gridY0 - row * hexStepY;
+        cells.push(makeCell(row, col, x, y));
+      }
+    }
+    for (const [key, path] of Object.entries(terrainSpritePaths)) {
+      resources.load(path, SpriteFrame, (err, sf) => {
+        if (err || !sf || !panel.isValid) return;
+        spriteFrames[key] = sf;
+        redrawAllCells();
+      });
+    }
+    propRoot.setSiblingIndex(panel.children.length - 1);
+    refreshCurrentLabel();
+    refreshPropertyPanel();
+
+    const newBtn = this.makeRectButton(panel, -panelW / 2 + 190, -panelH / 2 + 68, 150, 42, BTN_LEVEL_UNLOCKED, () => {
+      editingPackageId = null;
+      draftTiles = this.cloneEditorTiles(undefined, rows, cols);
+      refreshSelection();
+      refreshCurrentLabel();
+      statusLabel.string = t('levelEditor.workspace.newReady');
+    });
+    this.makeLabel(newBtn.node, t('levelEditor.workspace.new'), 0, 0, 150, 42, 17, TEXT_PRIMARY);
+
+    const switchMission = (delta: number) => {
+      const list = CustomMissionStore.list();
+      if (!list.length) {
+        statusLabel.string = t('levelEditor.workspace.noSaved');
+        return;
+      }
+      const currentIndex = editingPackageId ? list.findIndex(entry => entry.id === editingPackageId) : -1;
+      const nextIndex = currentIndex >= 0
+        ? (currentIndex + delta + list.length) % list.length
+        : 0;
+      this.openLevelEditorWorkspace(list[nextIndex]!.id);
+    };
+    const prevBtn = this.makeRectButton(panel, -panelW / 2 + 352, -panelH / 2 + 68, 92, 42, BTN_LEVEL_UNLOCKED, () => switchMission(-1));
+    this.makeLabel(prevBtn.node, t('levelEditor.workspace.prev'), 0, 0, 92, 42, 16, TEXT_PRIMARY);
+    const nextBtn = this.makeRectButton(panel, -panelW / 2 + 452, -panelH / 2 + 68, 92, 42, BTN_LEVEL_UNLOCKED, () => switchMission(1));
+    this.makeLabel(nextBtn.node, t('levelEditor.workspace.next'), 0, 0, 92, 42, 16, TEXT_PRIMARY);
+
+    const buildDraftMission = (id: string, oldPkg: ReturnType<typeof CustomMissionStore.load> | null, name: string): MissionData => ({
+      ...(oldPkg?.mission ?? {}),
+      id: oldPkg?.mission.id ?? id,
+      name,
+      description: oldPkg?.mission.description || name,
+      cols,
+      rows,
+      tiles: JSON.parse(JSON.stringify(draftTiles)) as MissionData['tiles'],
+      sherman: oldPkg?.mission.sherman ?? { kind: 'sherman', faction: 'allied', at: { col: 1, row: 5 }, facing: 0 },
+      enemies: oldPkg?.mission.enemies ?? [
+        { kind: 'panzer4', faction: 'german', at: { col: 6, row: 2 }, facing: 3 },
+      ],
+      objective: oldPkg?.mission.objective ?? { type: 'destroy_all_enemies' },
+      actionTableId: oldPkg?.mission.actionTableId ?? 'standard',
+      aiTableId: oldPkg?.mission.aiTableId ?? 'standard',
+      eventTableId: oldPkg?.mission.eventTableId ?? id,
+    });
+
+    const copyTextToClipboard = (text: string): boolean => {
+      const nav = (globalThis as any).navigator;
+      if (nav?.clipboard?.writeText) {
+        nav.clipboard.writeText(text).catch((err: unknown) => console.warn('[LevelEditor] clipboard write failed:', err));
+        return true;
+      }
+      const doc = (globalThis as any).document;
+      if (!doc?.createElement) return false;
+      const textarea = doc.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      doc.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      let ok = false;
+      try {
+        ok = !!doc.execCommand?.('copy');
+      } catch (err) {
+        console.warn('[LevelEditor] clipboard fallback failed:', err);
+      }
+      doc.body.removeChild(textarea);
+      return ok;
+    };
+
+    const exportBtn = this.makeRectButton(panel, panelW / 2 - 324, -panelH / 2 + 68, 120, 42, BTN_LEVEL_UNLOCKED, () => {
+      const list = CustomMissionStore.list();
+      const n = Math.min(list.length + 1, 10);
+      const id = editingPackageId ?? `custom_export_${Date.now()}`;
+      const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
+      const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
+      const mission = buildDraftMission(id, oldPkg, name);
+      const json = JSON.stringify(mission, null, 2);
+      console.log('[LevelEditor] exported mission JSON:\n' + json);
+      const copied = copyTextToClipboard(json);
+      statusLabel.string = copied ? '已复制关卡 JSON。' : '已在控制台输出关卡 JSON。';
+    });
+    this.makeLabel(exportBtn.node, '导出JSON', 0, 0, 120, 42, 16, TEXT_PRIMARY);
+
+    const saveBtn = this.makeRectButton(panel, panelW / 2 - 148, -panelH / 2 + 68, 210, 48, BTN_CONTINUE, () => {
+      try {
+        const list = CustomMissionStore.list();
+        const isNew = !editingPackageId;
+        const n = Math.min(list.length + 1, 10);
+        const id = editingPackageId ?? `custom_${Date.now()}`;
+        const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
+        const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
+        const mission = buildDraftMission(id, oldPkg, name);
+        editingPackageId = CustomMissionStore.save(id, {
+          schemaVersion: 1,
+          editorVersion: 'menu-editor-mvp',
+          savedAt: Date.now(),
+          source: oldPkg?.source ?? 'player',
+          mission,
+          turnEndEvents: oldPkg?.turnEndEvents ?? [],
+          editor: oldPkg?.editor,
+        });
+        statusLabel.string = t(isNew ? 'levelEditor.workspace.savedNew' : 'levelEditor.workspace.saved');
+        refreshCurrentLabel();
+        this.rebuildLevelGridBehindModal();
+      } catch (e) {
+        console.warn('[LevelEditor] save failed:', e);
+        statusLabel.string = t('levelEditor.workspace.saveFull');
+      }
+    });
+    this.makeLabel(saveBtn.node, t('levelEditor.workspace.save'), 0, 0, 210, 48, 18, TEXT_PRIMARY);
+
+    const deleteBtn = this.makeRectButton(panel, panelW / 2 - 459, -panelH / 2 + 68, 150, 42, MODAL_CLOSE_BG, () => {
+      if (!editingPackageId) {
+        statusLabel.string = t('levelEditor.workspace.deleteUnsaved');
+        return;
+      }
+      CustomMissionStore.remove(editingPackageId);
+      editingPackageId = null;
+      draftTiles = this.cloneEditorTiles(undefined, rows, cols);
+      refreshSelection();
+      refreshCurrentLabel();
+      statusLabel.string = t('levelEditor.workspace.deleted');
+      this.rebuildLevelGridBehindModal();
+    });
+    this.makeLabel(deleteBtn.node, t('levelEditor.workspace.delete'), 0, 0, 150, 42, 17, TEXT_PRIMARY);
+  }
+
+  private cloneEditorTiles(source: MissionData['tiles'] | undefined, rows: number, cols: number): Array<Array<TileDef | null>> {
+    return Array.from({ length: rows }, (_, row) =>
+      Array.from({ length: cols }, (_, col) => {
+        if (!source) {
+          return this.isDefaultEditorEmptyCell(row, col, rows, cols) ? null : { t: 'f' as TileDef['t'] };
+        }
+        const tile = source[row]?.[col] ?? null;
+        return tile ? { ...tile } : null;
+      }),
+    );
+  }
+
+  private isDefaultEditorEmptyCell(row: number, col: number, rows: number, cols: number): boolean {
+    if (rows !== 6 || cols !== 8) return false;
+    return (
+      (row === 0 && (col === 0 || col === 1 || col === 7))
+      || (row === 1 && (col === 0 || col === 7))
+      || (row === 2 && col === 0)
+      || (row === 3 && col === 7)
+      || (row === 4 && (col === 0 || col === 7))
+      || (row === 5 && (col === 0 || col === 6 || col === 7))
+    );
   }
 
   // ================================================================

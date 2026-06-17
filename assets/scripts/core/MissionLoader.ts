@@ -205,7 +205,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   const map = new HexMap(data.cols, data.rows);
   for (let row = 0; row < data.rows; row++) {
     for (let col = 0; col < data.cols; col++) {
-      const def: TileDef | undefined = data.tiles[row]?.[col];
+      const def: TileDef | null | undefined = data.tiles[row]?.[col];
       if (!def) continue;
       const { terrain, hasBuilding } = parseTileDefBase(def);
       const eid = def.eid;

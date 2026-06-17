@@ -238,8 +238,8 @@ export interface MissionData {
   /** 地图列数 / 行数（offset） */
   cols: number;
   rows: number;
-  /** 地形矩阵：tiles[row][col] */
-  tiles: TileDef[][];
+  /** 地形矩阵：tiles[row][col]；null 表示该 offset 位置没有地图格。 */
+  tiles: Array<Array<TileDef | null>>;
   /** 谢尔曼初始放置 */
   sherman: UnitPlacement;
   /** 玩家阵营 AI 队友；玩家不可直接控制 */

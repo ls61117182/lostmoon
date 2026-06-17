@@ -3,6 +3,7 @@ import type { TurnEndEventRow } from './TurnEndEventDB';
 
 export const CUSTOM_MISSION_INDEX_KEY = 'lone_sherman_custom_mission_index_v1';
 export const CUSTOM_MISSION_KEY_PREFIX = 'lone_sherman_custom_mission_';
+export const CUSTOM_MISSION_MAX_SLOTS = 10;
 
 export interface CustomMissionPackage {
   schemaVersion: 1;
@@ -95,7 +96,7 @@ function indexEntryFor(id: string, pkg: CustomMissionPackage): CustomMissionInde
 
 export const CustomMissionStore = {
   list(): CustomMissionIndexEntry[] {
-    return readIndex().sort((a, b) => b.savedAt - a.savedAt);
+    return readIndex().sort((a, b) => b.savedAt - a.savedAt).slice(0, CUSTOM_MISSION_MAX_SLOTS);
   },
 
   load(id: string): CustomMissionPackage | null {
@@ -125,8 +126,13 @@ export const CustomMissionStore = {
       turnEndEvents: Array.isArray(pkg.turnEndEvents) ? pkg.turnEndEvents : [],
     };
     if (hasLocalStorage()) {
+      const current = readIndex();
+      const isNew = !current.some(entry => entry.id === normalizedId);
+      if (isNew && current.length >= CUSTOM_MISSION_MAX_SLOTS) {
+        throw new Error(`Custom mission limit reached (${CUSTOM_MISSION_MAX_SLOTS})`);
+      }
       localStorage.setItem(packageKey(normalizedId), JSON.stringify(normalizedPkg));
-      const entries = readIndex().filter(entry => entry.id !== normalizedId);
+      const entries = current.filter(entry => entry.id !== normalizedId);
       entries.push(indexEntryFor(normalizedId, normalizedPkg));
       writeIndex(entries);
     }

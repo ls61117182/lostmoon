@@ -11,6 +11,7 @@
  */
 
 import { LangCode } from './Lang';
+import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionStore';
 
 export type ChapterId = string;
 
@@ -25,6 +26,10 @@ export interface LevelMeta {
   titleKey: string;
   /** MissionData.id 字段值；用于把战斗存档和关卡对应起来 */
   missionId: string;
+  entryKind?: 'mission' | 'editor' | 'custom';
+  customPackageId?: string;
+  titleOverride?: string;
+  badgeOverride?: string;
 }
 
 export interface ChapterMeta {
@@ -41,6 +46,8 @@ export interface ChapterMeta {
 }
 
 export const DEFAULT_CHAPTER_ID = 'europe';
+export const CUSTOM_CHAPTER_ID = 'custom';
+export const LEVEL_EDITOR_ENTRY_ID = 0;
 
 /**
  * 12 关卡配置。当前已实装到 mission_12（`assets/resources/missions/mission_12.json`）。
@@ -95,6 +102,23 @@ export const CHAPTERS: ChapterMeta[] = [
       { chapterId: 'test', id: 0, missionPath: 'missions/mission_test', titleKey: 'level.test.title', missionId: 'mission_test' },
     ],
   },
+  {
+    id: CUSTOM_CHAPTER_ID,
+    order: 100,
+    titleKey: 'chapter.custom.title',
+    subtitleKey: 'chapter.custom.subtitle',
+    levels: [
+      {
+        chapterId: CUSTOM_CHAPTER_ID,
+        id: LEVEL_EDITOR_ENTRY_ID,
+        missionPath: '',
+        titleKey: 'level.custom.editor.title',
+        missionId: 'level_editor',
+        entryKind: 'editor',
+        badgeOverride: 'ED',
+      },
+    ],
+  },
 ];
 
 export const LEVELS: LevelMeta[] = CHAPTERS
@@ -107,11 +131,33 @@ export function getChapter(id: ChapterId): ChapterMeta | undefined {
 }
 
 export function getChapterLevels(id: ChapterId): LevelMeta[] {
+  if (id === CUSTOM_CHAPTER_ID) return getCustomChapterLevels();
   return getChapter(id)?.levels ?? [];
 }
 
 export function findLevelByMissionId(missionId: string): LevelMeta | undefined {
   return LEVELS.find(l => l.missionId === missionId);
+}
+
+export function getCustomChapterLevels(): LevelMeta[] {
+  const chapter = getChapter(CUSTOM_CHAPTER_ID);
+  const editor = chapter?.levels[0];
+  const levels: LevelMeta[] = editor ? [{ ...editor }] : [];
+  const customEntries = CustomMissionStore.list().slice(0, CUSTOM_MISSION_MAX_SLOTS);
+  for (let i = 0; i < customEntries.length; i++) {
+    const entry = customEntries[i]!;
+    levels.push({
+      chapterId: CUSTOM_CHAPTER_ID,
+      id: i + 1,
+      missionPath: '',
+      titleKey: 'level.custom.mission.title',
+      missionId: entry.missionId,
+      entryKind: 'custom',
+      customPackageId: entry.id,
+      titleOverride: entry.name,
+    });
+  }
+  return levels;
 }
 
 // ---------- 菜单本地进度 ----------
@@ -285,17 +331,20 @@ export const MenuProgress = {
   },
 
   isUnlocked(levelId: number, chapterId: ChapterId = DEFAULT_CHAPTER_ID): boolean {
+    if (chapterId === CUSTOM_CHAPTER_ID) return true;
     const progress = this.load().chapterProgress[chapterId];
     return levelId <= (progress?.unlockedLevel ?? DEFAULT_STATE.unlockedLevel);
   },
 
   isCompleted(levelId: number, chapterId: ChapterId = DEFAULT_CHAPTER_ID): boolean {
+    if (chapterId === CUSTOM_CHAPTER_ID) return false;
     const progress = this.load().chapterProgress[chapterId];
     return (progress?.completedLevels ?? []).indexOf(levelId) >= 0;
   },
 
   /** 通关回调：战斗胜利后调用 */
   markCompleted(levelId: number, chapterId: ChapterId = DEFAULT_CHAPTER_ID): void {
+    if (chapterId === CUSTOM_CHAPTER_ID) return;
     const s = readState();
     const progress = s.chapterProgress[chapterId] ?? {
       unlockedLevel: maxLevelIdForChapter(chapterId),

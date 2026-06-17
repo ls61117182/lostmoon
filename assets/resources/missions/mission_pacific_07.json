@@ -7,81 +7,181 @@
   "cols": 8,
   "rows": 6,
   "enemyStartByDice": false,
-  "tiles": [
+    "tiles": [
     [
       null,
       null,
-      { "t": "dw" },
-      { "t": "dw" },
-      { "t": "c", "rid": 3, "rf": 1 },
-      { "t": "c", "rid": 2, "rf": 1 },
-      { "t": "c", "bd": 1 },
+      { "t": "dw"},
+      {
+        "t": "dw"
+      },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "T",
+        "bw": "000100",
+        "eid": 2,
+        "ef": 2,
+        "rid": 2
+      },
+      {
+        "t": "c"
+      },
       null
     ],
     [
       null,
-      { "t": "B" },
-      { "t": "B" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1 },
-      { "t": "T", "rid": 1, "rf": 3 }
-    ],
-    [
-      null,
-      { "t": "B" },
-      { "t": "B" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1 },
-      { "t": "T" },
-      { "t": "c" }
-    ],
-    [
-      { "t": "B" },
-      { "t": "B" },
-      { "t": "B" },
-      { "t": "T" },
-      { "t": "c", "bd": 1 },
-      { "t": "T" },
-      { "t": "T", "rid": 4, "rf": 3 }
-    ],
-    [
-      null,
-      { "t": "B" },
-      { "t": "B" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1 },
-      { "t": "T" },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "c",
+        "bd": 1,
+        "bw": "000110",
+        "eid": 3,
+        "ef": 2,
+        "rid": 1
+      },
+      {
+        "t": "c"
+      },
+      {
+        "t": "T",
+        "rid": 3
+      },
       null
     ],
     [
       null,
-      { "t": "B" },
-      { "t": "B" },
-      { "t": "c", "rid": 6, "rf": 4 },
-      { "t": "c" },
-      { "t": "c", "rid": 5, "rf": 5 },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "dw"
+      },
+      {
+        "t": "c",
+        "bw": "001110"
+      },
+      {
+        "t": "c"
+      },
+      {
+        "t": "c"
+      },
+      {
+        "t": "c",
+        "bd": 1,
+        "eid": 1,
+        "ef": 3
+      }
+    ],
+    [
+      {
+        "t": "B"
+      },
+      {
+        "t": "B"
+      },
+      {
+        "t": "B"
+      },
+      {
+        "t": "B"
+      },
+      {
+        "t": "c",
+        "bd": 1,
+        "bw": "001100",
+        "eid": 4,
+        "ef": 3
+      },
+      {
+        "t": "T"
+      },
+      {
+        "t": "T",
+        "rid": 4
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "B"
+      },
+      {
+        "t": "B"
+      },
+      {
+        "t": "B"
+      },
+      {
+        "t": "c"
+      },
+      {
+        "t": "c",
+        "bd": 1,
+        "rid": 6,
+        "eid": 5,
+        "ef": 3
+      },
+      {
+        "t": "T",
+        "rid": 5
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "B"
+      },
+      {
+        "t": "B"
+      },
+      {
+        "t": "c"
+      },
+      {
+        "t": "c",
+        "bd": 1,
+        "eid": 6,
+        "ef": 4
+      },
+      {
+        "t": "c"
+      },
+      null,
       null
     ]
   ],
   "sherman": {
     "kind": "sherman",
     "faction": "allied",
-    "at": { "col": 5, "row": 5 },
+    "at": { "col": 0, "row": 3 },
     "facing": 0
   },
   "enemies": [
-    { "kind": "heavy_artillery", "faction": "japanese", "at": { "col": 6, "row": 0 }, "facing": 1 },
-    { "kind": "at_gun", "faction": "japanese", "at": { "col": 6, "row": 3 }, "facing": 3 },
-    { "kind": "at_gun", "faction": "japanese", "at": { "col": 5, "row": 4 }, "facing": 5 },
-    { "kind": "at_gun", "faction": "japanese", "at": { "col": 3, "row": 5 }, "facing": 4 }
+    { "kind": "heavy_artillery", "faction": "japanese", "at": { "col": 7, "row": 2 }, "facing": 3 },
+    { "kind": "at_gun", "faction": "japanese", "at": { "col": 4, "row": 3 }, "facing": 3 },
+    { "kind": "at_gun", "faction": "japanese", "at": { "col": 5, "row": 4 }, "facing": 3 },
+    { "kind": "at_gun", "faction": "japanese", "at": { "col": 4, "row": 5 }, "facing": 4 }
   ],
   "objective": {
     "type": "destroy_kind_evac",
-    "evacAt": { "col": 2, "row": 0 },
-    "evacExitDir": 3
+    "evacAt": { "col": 6, "row": 0 },
+    "evacExitDir": 0
   },
   "actionTableId": "pacific_b4",
   "aiTableId": "pacific_b4",
