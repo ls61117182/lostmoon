@@ -1,88 +1,245 @@
-{
-  "id": "mission_pacific_06",
-  "name": "Saipan - Clearing Garapan",
-  "description": "Pacific Scenario B6. Clear the map of all Japanese units, including Heavy Artillery, at any point to win. Place the Japanese units on the red and blue numbered hexes per the scenario setup. The Sherman starts on the black outlined hex.",
-  "theater": "pacific",
-  "usCasualtyLimit": 10,
-  "cols": 8,
-  "rows": 6,
-  "enemyStartByDice": true,
-  "tiles": [
-    [
-      null,
-      null,
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 1, "ef": 3 },
-      { "t": "c", "bd": 1 },
-      null
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 2, "ef": 3 },
-      { "t": "c", "bd": 1, "eid": 4, "ef": 2 }
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "H" },
-      { "t": "T" },
-      { "t": "T", "rid": 5, "rf": 2 },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 3, "ef": 3 },
-      { "t": "c", "bd": 1, "rid": 1, "rf": 2 }
-    ],
-    [
-      { "t": "T" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "T" },
-      { "t": "H", "rid": 4, "rf": 2 },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 5, "ef": 3 }
-    ],
-    [
-      null,
-      { "t": "T" },
-      { "t": "T" },
-      { "t": "H", "rid": 6, "rf": 3 },
-      { "t": "T" },
-      { "t": "T" },
-      { "t": "T", "rid": 2, "rf": 3 },
-      null
-    ],
-    [
-      null,
-      { "t": "H" },
-      { "t": "T" },
-      { "t": "T" },
-      { "t": "c", "eid": 6, "ef": 4 },
-      { "t": "H", "rid": 3, "rf": 3 },
-      null
-    ]
-  ],
-  "sherman": {
-    "kind": "sherman",
-    "faction": "allied",
-    "at": { "col": 0, "row": 3 },
-    "facing": 0
-  },
-  "enemies": [
-    { "kind": "heavy_artillery", "faction": "japanese", "startEids": [1, 2, 3] },
-    { "kind": "type97", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "type97", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "type95", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "japanese_infantry", "faction": "japanese", "startRids": [1, 3, 4, 5, 6] }
-  ],
-  "objective": {
-    "type": "destroy_all_enemies"
-  },
-  "actionTableId": "pacific_b4",
-  "aiTableId": "pacific_b4",
-  "eventTableId": "mission_pacific_06"
+﻿{
+    "id":  "mission_pacific_06",
+    "name":  "Saipan - Clearing Garapan",
+    "description":  "Pacific Scenario B6. Clear the map of all Japanese units, including Heavy Artillery and reinforcements, at any point to win. Place the Japanese units on the red and blue numbered hexes per the scenario setup. The Sherman starts on the black outlined hex.",
+    "theater":  "pacific",
+    "usCasualtyLimit":  10,
+    "cols":  8,
+    "rows":  6,
+    "enemyStartByDice":  true,
+    "tiles":  [
+                  [
+                      null,
+                      null,
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  1,
+                          "ef":  3
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  2,
+                          "ef":  3
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  4,
+                          "ef":  2
+                      }
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "H"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  5,
+                          "rf":  2
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  3,
+                          "ef":  3
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "rid":  1,
+                          "rf":  2
+                      }
+                  ],
+                  [
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "H",
+                          "rid":  4,
+                          "rf":  2
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  5,
+                          "ef":  3
+                      }
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "H",
+                          "rid":  6,
+                          "rf":  3
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  2,
+                          "rf":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "H"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "c",
+                          "eid":  6,
+                          "ef":  4
+                      },
+                      {
+                          "t":  "H",
+                          "rid":  3,
+                          "rf":  3
+                      },
+                      null
+                  ]
+              ],
+    "sherman":  {
+                    "kind":  "sherman",
+                    "faction":  "allied",
+                    "at":  {
+                               "col":  0,
+                               "row":  3
+                           },
+                    "facing":  0
+                },
+    "enemies":  [
+                    {
+                        "kind":  "heavy_artillery",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3
+                                      ]
+                    },
+                    {
+                        "kind":  "type97",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "type97",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "type95",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "japanese_infantry",
+                        "faction":  "japanese",
+                        "startRids":  [
+                                          1,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    }
+                ],
+    "objective":  {
+                      "type":  "destroy_all_enemies"
+                  },
+    "actionTableId":  "pacific_b4",
+    "aiTableId":  "pacific_b4",
+    "eventTableId":  "mission_pacific_06"
 }

@@ -58,7 +58,9 @@ objective.prefix,任务目标{n}：,Objective {n}:
 objective.destroyProgress.tank,击毁{unit} {cur}/{total},Destroy {unit} {cur}/{total}
 objective.destroyProgress.officer,击杀{unit} {cur}/{total},Kill {unit} {cur}/{total}
 objective.destroyProgress.infantry,消灭{unit} {cur}/{total},Eliminate {unit} {cur}/{total}
-objective.destroyAllProgress,歼灭全部敌方 {cur}/{total},Eliminate all enemies {cur}/{total}
+objective.destroyAllProgress,击毁所有单位，剩余{remaining},"Destroy all units, remaining {remaining}"
+objective.destroyAllRemaining,击毁所有单位，剩余{remaining},"Destroy all units, remaining {remaining}"
+objective.destroyAllUnitsRemaining,击毁所有单位，剩余{remaining},"Destroy all units, remaining {remaining}"
 objective.destroyTruckProgress,击毁卡车 {cur}/{total},Destroy trucks {cur}/{total}
 objective.usCasualties,美军伤亡 {cur}/{limit},US casualties {cur}/{limit}
 objective.evacFromMark,从指定位置撤离,Evacuate from the marked hex
@@ -454,9 +456,6 @@ turnEnd.germanTruck.moved,德军卡车沿路前进（本次跨越 {stepCells} �
 turnEnd.extra.panzer4Start,IV 号起始格骰（1d6）,Panzer IV start tile (1d6)
 turnEnd.extra.tigerStart,虎式起始格骰（1d6）,Tiger start tile (1d6)
 turnEnd.extra.shermanStart,谢尔曼起始格骰（1d6）,Sherman start tile (1d6)
-battle.exit.title,退出关卡？,Exit this level?
-battle.exit.saveAndQuit,保存后退出,Save & Exit
-battle.exit.abandon,放弃关卡,Abandon
 battle.save.ok,已存档,Game saved
 battle.save.busy,忙碌中无法存档,Cannot save while busy
 battle.save.notOngoing,胜负已分无法存档,Cannot save after battle ends

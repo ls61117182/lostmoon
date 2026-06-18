@@ -126,6 +126,7 @@ function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: nu
 export type AttackDenyReason =
   | 'attack.reason.selfFire'
   | 'attack.reason.destroyedTarget'
+  | 'attack.reason.gunVsInfantry'
   | 'attack.reason.overlap'
   | 'attack.reason.notStraight'
   | 'attack.reason.fixedGunFacing'
@@ -140,9 +141,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
-  if (target.kind === 'japanese_infantry' && map.get(target.pos)?.terrain === 'rocky') {
-    return { ok: false, reason: 'attack.reason.blocked' };
-  }
+  if (isFootUnit(target)) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
@@ -229,7 +228,7 @@ function isTargetInFrontArc(attacker: Unit, target: Unit): boolean {
 }
 
 function isInfantryAttacker(attacker: Unit): boolean {
-  return isFootUnit(attacker) || attacker.kind === 'japanese_infantry';
+  return isFootUnit(attacker);
 }
 
 /** 2d6 ≥ N 的概率（N 在 [0..14] 内取值；越界自动夹到 1 或 0）。 */
@@ -563,10 +562,6 @@ export type MGDenyReason =
   | 'attack.reason.blocked'
   | 'attack.reason.notInfantry';
 
-function isMGInfantryTarget(target: Unit): boolean {
-  return isFootUnit(target) || target.kind === 'japanese_infantry';
-}
-
 function sameHex(a: Axial, b: Axial): boolean {
   return a.q === b.q && a.r === b.r;
 }
@@ -576,7 +571,7 @@ function tankCoordinationBonus(unit: Unit): number {
 }
 
 function mgTankCoordinationModifier(ctx: AttackContext): number {
-  if (!isMGInfantryTarget(ctx.target)) return 0;
+  if (!isFootUnit(ctx.target)) return 0;
   const units = ctx.units;
   if (!units) return 0;
   let bonus = 0;
@@ -591,7 +586,7 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
-  if (!isMGInfantryTarget(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
+  if (!isFootUnit(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
   const fireDir = directionTo(attacker.pos, target.pos);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };

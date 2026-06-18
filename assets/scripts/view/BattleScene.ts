@@ -88,6 +88,7 @@ import {
   DEFAULT_AI_TABLE,
   decideEnemyTurn,
   EnemyAction,
+  isAIActorUnit,
   rollAIDice,
   selectAIOrder,
 } from '../core/EnemyAI';
@@ -496,6 +497,7 @@ interface DiceShow {
   target: Unit | null;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
+  earlyDestroyedVisualApplied: boolean;
   // 视觉
   panelRoot: Node;
   hitDieLabels: Label[];     // 2 颗命中骰
@@ -1249,7 +1251,6 @@ export class BattleScene extends Component {
 
   /** 战斗内模态（设置）；退出确认单独一层叠在上面 */
   private battleModalRoot: Node | null = null;
-  private battleExitModalRoot: Node | null = null;
   /** 地图格子介绍（地形 / 骰子规则 / 单位状态） */
   private tileInspectModalRoot: Node | null = null;
   private tileInspectScroll: ScrollView | null = null;
@@ -2146,7 +2147,7 @@ export class BattleScene extends Component {
   }
 
   private activeActingUnitIsFoot(unit: Unit): boolean {
-    return isFootUnit(unit) || unit.kind === 'japanese_infantry';
+    return isFootUnit(unit);
   }
 
   private drawActiveActingUnitFrame() {
@@ -6173,8 +6174,10 @@ export class BattleScene extends Component {
         });
       case 'evacFromMark':
         return pfx + t('objective.evacFromMark');
-      case 'destroyAll':
-        return pfx + t('objective.destroyAllProgress', { cur: tpl.cur, total: tpl.total });
+      case 'destroyAllRemaining':
+        return pfx + t('objective.destroyAllRemaining', { remaining: tpl.remaining });
+      case 'destroyAllUnitsRemaining':
+        return pfx + t('objective.destroyAllUnitsRemaining', { remaining: tpl.remaining });
       case 'destroyTruck':
         return pfx + t('objective.destroyTruckProgress', { cur: tpl.cur, total: tpl.total });
       case 'usCasualties':
@@ -7815,7 +7818,7 @@ export class BattleScene extends Component {
         this.refreshStatusPanel();
         this.autoEndPhaseIfDone();
       },
-      { mg: true },
+      { mg: true, attacker: sherman, target },
     );
     // 立即刷一次 HUD，让 "点步兵扫射" 提示消失，避免玩家以为还能再点
     this.updateHUD();
@@ -8188,7 +8191,7 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
-    const aiCandidates = this.mission.allies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
+    const aiCandidates = this.mission.allies.filter(isAIActorUnit);
     this.enemyOrder = selectAIOrder(aiCandidates, this.mission.enemies, this.mission.sherman, this.rng);
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -8215,7 +8218,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     this.phase = 'enemy';
     this.aiSide = 'german';
-    const aiCandidates = this.mission.enemies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
+    const aiCandidates = this.mission.enemies.filter(isAIActorUnit);
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       [this.mission.sherman, ...this.mission.allies],
@@ -8308,7 +8311,7 @@ export class BattleScene extends Component {
       this.beginAllyPhase();
       return;
     }
-    const aiCandidates = this.mission.enemies.filter(e => !isFootUnit(e) && e.kind !== 'truck');
+    const aiCandidates = this.mission.enemies.filter(isAIActorUnit);
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       [this.mission.sherman, ...this.mission.allies],
@@ -8546,15 +8549,7 @@ export class BattleScene extends Component {
     this.battleSettingsRefs = null;
   }
 
-  private closeBattleExitModal() {
-    if (this.battleExitModalRoot && this.battleExitModalRoot.isValid) {
-      this.battleExitModalRoot.destroy();
-    }
-    this.battleExitModalRoot = null;
-  }
-
   private closeAllBattleModals() {
-    this.closeBattleExitModal();
     this.closeBattleModal();
     this.closeTileInspectModal();
     this.setCombatLogExpanded(false);
@@ -9645,7 +9640,6 @@ export class BattleScene extends Component {
   /** 查阅本关 `turn_end_events` 表：主骰点之和区间 → 效果类型（不参与掷骰） */
   private openTurnEndEventsReference() {
     this.closeTileInspectModal();
-    this.closeBattleExitModal();
     this.closeBattleModal();
     const mid = this.missionId || this.mission?.data.id || '';
     const theater = this.mission?.data.theater;
@@ -9688,7 +9682,6 @@ export class BattleScene extends Component {
   private openBattleSettings() {
     this.closeTileInspectModal();
     this.closeBattleModal();
-    this.closeBattleExitModal();
     const panelW = 480;
     const panelH = 520;
     const { panel, contentY } = this.openBattleModal(t('battle.settings.title'), panelW, panelH);
@@ -9744,100 +9737,15 @@ export class BattleScene extends Component {
     };
     this.refreshLangBattleButtons(curLang);
 
-    const saveRowY = contentY - 216;
-    const saveB = this.makeBattleRectButton(panel, -110, saveRowY, 140, 44, new Color(60, 120, 80, 230),
-      () => { this.onSave(); },
-    );
-    const saveLab = this.makeBattleModalLabel(saveB.node, t('btn.save'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(saveLab, () => { this.onSave(); });
-    const loadB = this.makeBattleRectButton(panel, 110, saveRowY, 140, 44, new Color(80, 60, 130, 230),
-      () => { this.onLoad_Save(); },
-    );
-    const loadLab = this.makeBattleModalLabel(loadB.node, t('btn.load'), 0, 0, 140, 44, 20, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(loadLab, () => { this.onLoad_Save(); });
-
-    const exitRowY = contentY - 280;
+    const exitRowY = contentY - 216;
     const exitB = this.makeBattleRectButton(panel, 0, exitRowY, 200, 44, BTN_EXIT_WARN,
-      () => this.openBattleExitConfirm(),
+      () => this.exitLevel(),
     );
     const exitSetLab = this.makeBattleModalLabel(exitB.node, t('battle.settings.exit'), 0, 0, 200, 44, 20, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(exitSetLab, () => this.openBattleExitConfirm());
+    this.mirrorBattleModalButtonLabel(exitSetLab, () => this.exitLevel());
   }
 
-  private openBattleExitConfirm() {
-    this.closeBattleExitModal();
-    this.setCombatLogExpanded(false);
-    const root = new Node('BattleExitModal');
-    root.layer = this.node.layer;
-    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    root.setPosition(0, 0, 0);
-    this.node.addChild(root);
-    root.setSiblingIndex(this.node.children.length - 1);
-
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = MODAL_BACKDROP;
-    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
-    bd.fill();
-    backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-      this.closeBattleExitModal();
-      e.propagationStopped = true;
-    }, this);
-    root.addChild(backdrop);
-
-    const panelW = 440;
-    const panelH = 220;
-    const panel = new Node('Panel');
-    panel.layer = this.node.layer;
-    panel.addComponent(UITransform).setContentSize(panelW, panelH);
-    const pg = panel.addComponent(Graphics);
-    pg.fillColor = MODAL_PANEL_BG;
-    pg.strokeColor = MODAL_PANEL_BORDER;
-    pg.lineWidth = 2;
-    pg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-    pg.fill();
-    pg.stroke();
-    panel.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; }, this);
-    panel.on(Node.EventType.TOUCH_START, (e: EventTouch) => { e.propagationStopped = true; }, this);
-    root.addChild(panel);
-
-    const titleLab = this.makeBattleModalLabel(panel, t('battle.exit.title'),
-      0, panelH / 2 - 40, panelW - 40, 36, 24, STATUS_TITLE_COLOR);
-    titleLab.enableOutline = true;
-    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
-    titleLab.outlineWidth = 2;
-
-    const closeBtn = this.makeBattleRectButton(
-      panel, panelW / 2 - 26, panelH / 2 - 26, 32, 32,
-      MODAL_CLOSE_BG, () => this.closeBattleExitModal(),
-    );
-    const exitCloseLab = this.makeBattleModalLabel(closeBtn.node, '✕', 0, 0, 32, 32, 18, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(exitCloseLab, () => this.closeBattleExitModal());
-
-    const yBtn = -panelH / 2 + 56;
-    const saveQuitB = this.makeBattleRectButton(panel, -105, yBtn, 190, 48, new Color(60, 120, 80, 230),
-      () => this.saveAndExitLevel(),
-    );
-    const saveQuitLab = this.makeBattleModalLabel(saveQuitB.node, t('battle.exit.saveAndQuit'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(saveQuitLab, () => this.saveAndExitLevel());
-    const abandonB = this.makeBattleRectButton(panel, 105, yBtn, 190, 48, BTN_EXIT_WARN,
-      () => this.abandonExitLevel(),
-    );
-    const abandonLab = this.makeBattleModalLabel(abandonB.node, t('battle.exit.abandon'), 0, 0, 190, 48, 18, HUD_TEXT_COLOR);
-    this.mirrorBattleModalButtonLabel(abandonLab, () => this.abandonExitLevel());
-
-    this.battleExitModalRoot = root;
-  }
-
-  private saveAndExitLevel() {
-    if (!this.onSave()) return;
-    this.closeAllBattleModals();
-    this.onBackToMenu();
-  }
-
-  private abandonExitLevel() {
+  private exitLevel() {
     this.closeAllBattleModals();
     this.onBackToMenu();
   }
@@ -10093,18 +10001,18 @@ export class BattleScene extends Component {
   }
 
   /** @returns 是否已成功写入 localStorage */
-  private onSave(): boolean {
+  private writeCurrentSave(opts: { silent?: boolean } = {}): boolean {
     if (!this.mission) return false;
     if (this.isBusy()) {
-      this.flashBattleSettingsHint(t('battle.save.busy'));
+      if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.busy'));
       return false;
     }
     if (this.outcome !== 'ongoing') {
-      this.flashBattleSettingsHint(t('battle.save.notOngoing'));
+      if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.notOngoing'));
       return false;
     }
     if (this.phase !== 'player') {
-      this.flashBattleSettingsHint(t('battle.save.playerOnly'));
+      if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.playerOnly'));
       return false;
     }
     const data = captureSave({
@@ -10124,11 +10032,11 @@ export class BattleScene extends Component {
     try {
       writeActiveSaveRaw(JSON.stringify(data));
       this.battleLog(`[Save] 已存档：回合 ${data.turn}`);
-      this.flashBattleSettingsHint(t('battle.save.ok'));
+      if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.ok'));
       return true;
     } catch (e) {
       console.error('[Save] 写入失败:', e);
-      this.flashBattleSettingsHint(t('battle.save.fail'));
+      if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.fail'));
       return false;
     }
   }
@@ -10597,6 +10505,7 @@ export class BattleScene extends Component {
       this.updateOutcomeOverlay();
     }
     this.beginPlayerPhaseForNewTurn();
+    this.writeCurrentSave({ silent: true });
   }
 
   // ---------- 交互 ----------
@@ -10854,6 +10763,7 @@ export class BattleScene extends Component {
       target: opts.target ?? null,
       onDone,
       finalized: false,
+      earlyDestroyedVisualApplied: false,
       panelRoot: panel.root,
       hitDieLabels: panel.hitDieLabels,
       hitSumLabel: panel.hitSumLabel,
@@ -11279,10 +11189,27 @@ export class BattleScene extends Component {
   }
 
   private enterDiceShowHold(show: DiceShow) {
+    this.applyDiceShowDestroyedVisual(show);
     show.stage = 'hold';
     show.t = 0;
     show.outcomeLabel.node.active = false;
     if (show.confirmButton) show.confirmButton.active = !show.mg;
+  }
+
+  private applyDiceShowDestroyedVisual(show: DiceShow) {
+    if (show.earlyDestroyedVisualApplied) return;
+    const target = show.target;
+    const destroysTarget = show.mg
+      ? show.report.hit || show.report.statusChange === 'destroyed'
+      : show.report.hit && (show.report.statusChange === 'destroyed' || show.report.damageEffect === 'destroyed');
+    if (!target || !destroysTarget) return;
+
+    show.earlyDestroyedVisualApplied = true;
+    if (!target.destroyed) target.destroyed = true;
+    this.registerDestroyWreckVisual(target);
+    this.updateHUD();
+    this.redraw();
+    this.refreshStatusPanel();
   }
 
   // ---------- 敌方 AI 骰子迷你托盘 ----------

@@ -105,6 +105,10 @@ export function isTankAITarget(u: Unit): boolean {
   return !u.destroyed && !isFootUnit(u) && u.kind !== 'truck';
 }
 
+export function isAIActorUnit(u: Unit): boolean {
+  return !u.destroyed && u.kind !== 'truck' && (!isFootUnit(u) || u.kind === 'japanese_infantry');
+}
+
 export function currentTargetFor(
   actor: Unit,
   candidates: Unit[],
@@ -136,7 +140,7 @@ export function selectAIOrder(
   playerUnit: Unit,
   rng: RNG,
 ): Unit[] {
-  const alive = actors.filter(e => !e.destroyed && !isFootUnit(e) && e.kind !== 'truck');
+  const alive = actors.filter(isAIActorUnit);
   const withKey = alive.map(e => ({
     e,
     target: currentTargetFor(e, potentialTargets, playerUnit, rng),

@@ -483,7 +483,7 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ### 目标
 
-- **歼灭全部敌军坦克**：`objective.type = "destroy_all_enemies"` —— 场上全部德军单位被摧毁后判胜（本关仅为坦克，无步兵）。
+- **击毁所有单位**：`objective.type = "destroy_all_enemies"` —— 当前存活敌军单位数为 0 时判胜；后续增援单位同样计入。
 
 ### 初始设置
 

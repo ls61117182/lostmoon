@@ -3,7 +3,7 @@
  * 文案在 BattleScene 里用 t() 展开。
  */
 
-import { allEnemiesOfKindDestroyed } from './Objective';
+import { allEnemiesOfKindDestroyed, liveEnemyCount } from './Objective';
 import { LoadedMission } from './MissionLoader';
 import { MissionObjective, UnitKind } from './types';
 
@@ -12,7 +12,8 @@ export type ObjHudState = 'locked' | 'active' | 'done';
 export type ObjHudTemplate =
   | { key: 'destroyProgress'; unitKind: UnitKind; cur: number; total: number }
   | { key: 'evacFromMark' }
-  | { key: 'destroyAll'; cur: number; total: number }
+  | { key: 'destroyAllRemaining'; remaining: number }
+  | { key: 'destroyAllUnitsRemaining'; remaining: number }
   | { key: 'destroyTruck'; cur: number; total: number }
   | { key: 'usCasualties'; cur: number; limit: number }
   | { key: 'exitEdge' }
@@ -35,12 +36,6 @@ function kindProgress(mission: LoadedMission, kind: UnitKind): { cur: number; to
   const group = mission.enemies.filter(e => e.kind === kind);
   const total = group.length;
   const cur = group.filter(e => e.destroyed).length;
-  return { cur, total };
-}
-
-function allEnemyProgress(mission: LoadedMission): { cur: number; total: number } {
-  const total = mission.enemies.length;
-  const cur = mission.enemies.filter(e => e.destroyed).length;
   return { cur, total };
 }
 
@@ -71,6 +66,22 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
   switch (obj.type) {
     case 'destroy_kind_evac': {
       const evacDone = !!mission.shermanEvacuated;
+      if (obj.destroyAllEnemiesBeforeEvac) {
+        const remaining = liveEnemyCount(mission);
+        const destroyDone = remaining === 0;
+        return withUsCasualties([
+          {
+            displayIndex: 1,
+            state: destroyDone ? 'done' : 'active',
+            template: { key: 'destroyAllRemaining', remaining },
+          },
+          {
+            displayIndex: 2,
+            state: !destroyDone ? 'locked' : evacDone ? 'done' : 'active',
+            template: { key: 'evacFromMark' },
+          },
+        ]);
+      }
       const kinds = obj.kinds && obj.kinds.length > 0 ? obj.kinds : null;
       if (kinds) {
         const lines: ObjHudLine[] = [];
@@ -127,12 +138,11 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
       }]);
     }
     case 'destroy_all_enemies': {
-      const { cur, total } = allEnemyProgress(mission);
-      const done = total > 0 && mission.enemies.every(e => e.destroyed);
+      const remaining = liveEnemyCount(mission);
       return withUsCasualties([{
         displayIndex: 1,
-        state: done ? 'done' : 'active',
-        template: { key: 'destroyAll', cur, total },
+        state: mission.enemies.length > 0 && remaining === 0 ? 'done' : 'active',
+        template: { key: 'destroyAllUnitsRemaining', remaining },
       }]);
     }
     case 'destroy_truck': {

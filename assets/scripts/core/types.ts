@@ -117,14 +117,14 @@ export type UnitKind =
   | 'officer';
 
 /**
- * 「徒步类」单位（步兵 / 军官）共享判定：
+ * 「徒步类」单位（德国步兵 / 日本步兵 / 军官）共享判定：
  * - 大多数地方原本写 `kind === 'infantry'`（机枪目标 / 相邻齐射 / 渲染分支 / AI 排除等），
  *   引入 `officer` 后这些判定都应改用本 helper，否则官官就会被坦克类逻辑误处理；
  * - **唯一例外**：`infantry_spawn` 事件 spawn 出来的单位 kind 始终为 `'infantry'`（不会复活军官），
  *   `Objective.allEnemiesOfKindDestroyed(mission, 'officer')` 等按 kind 精确判定的位置不应换成本 helper。
  */
 export function isFootKind(kind: UnitKind): boolean {
-  return kind === 'infantry' || kind === 'officer';
+  return kind === 'infantry' || kind === 'officer' || kind === 'japanese_infantry';
 }
 
 export function isFootUnit(u: { kind: UnitKind }): boolean {
@@ -180,7 +180,7 @@ export interface ShermanCrew {
 
 // ---------- 任务 ----------
 export type ObjectiveType =
-  | 'destroy_all_enemies'   // 摧毁所有德军单位
+  | 'destroy_all_enemies'   // 击毁所有当前存活敌军单位（含增援）
   | 'destroy_kind'          // 摧毁某种单位
   | 'destroy_kind_evac'     // 先歼指定种类（`kind` 或 `kinds`）再撤离；若二者皆省略则仅撤离（驶出地图即胜）
   | 'exit_from_edge'        // 从某方向移出地图
@@ -193,8 +193,10 @@ export interface MissionObjective {
   /**
    * destroy_kind_evac 专用：须将所列 **每一种** kind 的敌方单位全部击毁后，才允许撤离结算。
    * 与 `kind` 二选一——若 `kinds` 非空则优先用 `kinds`，忽略单独的 `kind`（典型：任务 9「歼灭全部德军坦克」= 虎式 + IV 号，步兵不计入）。
-   */
+  */
   kinds?: UnitKind[];
+  /** destroy_kind_evac: all currently alive enemies, including reinforcements, must be destroyed before evac. */
+  destroyAllEnemiesBeforeEvac?: boolean;
   /** exit_from_edge 用：箭头方向（Direction） */
   exitDirection?: Direction;
   /** destroy_kind_evac：撤离六角格（offset）；谢尔曼在此格且目标格无地形时，沿 evacExitDir 前进或反向后退离场 */

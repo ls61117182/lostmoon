@@ -1,6 +1,7 @@
-import { LoadedMission } from './MissionLoader';
+import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import { Direction, ShermanCrew, UnitKind } from './types';
+import type { Direction, Faction, ShermanCrew, Unit, UnitKind } from './types';
+import { getUnitStats } from './UnitDB';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = 'lone_sherman_save_v1';
@@ -17,7 +18,9 @@ const SAVE_VERSION = 4 as const;
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
 
 interface UnitSnapshot {
+  id?: string;
   kind: UnitKind;
+  faction?: Faction;
   q: number;
   r: number;
   facing: Direction | null;
@@ -72,6 +75,54 @@ export interface SnapshotParams {
   phaseDice: Array<{ pip: number; used: boolean }>;
 }
 
+function captureUnit(u: Unit): UnitSnapshot {
+  return {
+    id: u.id,
+    kind: u.kind,
+    faction: u.faction,
+    q: u.pos.q,
+    r: u.pos.r,
+    facing: u.facing,
+    damaged: u.damaged,
+    destroyed: u.destroyed,
+    fireLevel: u.fireLevel,
+    turretDamaged: u.turretDamaged,
+    paralyzed: u.paralyzed,
+    loaded: u.loaded,
+    hatchOpen: u.hatchOpen,
+    crew: u.crew ? { ...u.crew } : undefined,
+    smoked: u.smoked,
+  };
+}
+
+function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
+  live.pos = { q: s.q, r: s.r };
+  live.facing = s.facing;
+  live.damaged = s.damaged ?? false;
+  live.destroyed = s.destroyed ?? false;
+  if (s.smoked !== undefined) live.smoked = s.smoked;
+  if (s.fireLevel !== undefined) live.fireLevel = s.fireLevel;
+  if (s.turretDamaged !== undefined) live.turretDamaged = s.turretDamaged;
+  if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
+  if (s.loaded !== undefined) live.loaded = s.loaded;
+  if (s.hatchOpen !== undefined) live.hatchOpen = s.hatchOpen;
+  if (s.crew) live.crew = { ...s.crew };
+}
+
+function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMission['data']['theater']): Unit {
+  const stats = getUnitStats(s.kind, theater ?? 'europe');
+  const unit: Unit = {
+    id: s.id || idFallback,
+    kind: s.kind,
+    faction: s.faction ?? stats.faction,
+    pos: { q: s.q, r: s.r },
+    facing: s.facing,
+    stats,
+  };
+  applyUnitSnapshot(unit, s);
+  return unit;
+}
+
 /**
  * 将当前战局打包成纯数据。故意不引用任何 Cocos 类型，这样未来做
  * 单元测试或服务器战报回放时可以直接使用同一 JSON 格式。
@@ -90,44 +141,11 @@ export function captureSave(p: SnapshotParams): SaveData {
     playerStep: p.playerStep,
     phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
     sherman: {
-      kind: sh.kind,
-      q: sh.pos.q,
-      r: sh.pos.r,
-      facing: sh.facing,
+      ...captureUnit(sh),
       damaged: false,
-      destroyed: sh.destroyed,
-      fireLevel: sh.fireLevel,
-      turretDamaged: sh.turretDamaged,
-      paralyzed: sh.paralyzed,
-      loaded: sh.loaded,
-      hatchOpen: sh.hatchOpen,
-      crew: sh.crew ? { ...sh.crew } : undefined,
-      smoked: sh.smoked,
     },
-    allies: p.mission.allies.map(e => ({
-      kind: e.kind,
-      q: e.pos.q,
-      r: e.pos.r,
-      facing: e.facing,
-      damaged: e.damaged,
-      destroyed: e.destroyed,
-      fireLevel: e.fireLevel,
-      turretDamaged: e.turretDamaged,
-      paralyzed: e.paralyzed,
-      loaded: e.loaded,
-      hatchOpen: e.hatchOpen,
-      crew: e.crew ? { ...e.crew } : undefined,
-      smoked: e.smoked,
-    })),
-    enemies: p.mission.enemies.map(e => ({
-      kind: e.kind,
-      q: e.pos.q,
-      r: e.pos.r,
-      facing: e.facing,
-      damaged: e.damaged,
-      destroyed: e.destroyed,
-      smoked: e.smoked,
-    })),
+    allies: p.mission.allies.map(captureUnit),
+    enemies: p.mission.enemies.map(captureUnit),
     shermanEvacuated: p.mission.shermanEvacuated ?? false,
     truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
     usCasualties: p.mission.usCasualties ?? 0,
@@ -168,16 +186,20 @@ export function applySave(
   if (save.sherman.kind !== mission.sherman.kind) {
     return { ok: false, reason: `谢尔曼种类不匹配` };
   }
-  if (save.enemies.length !== mission.enemies.length) {
+  if (save.enemies.length < mission.enemies.length) {
     return {
       ok: false,
       reason: `敌人数不匹配 (${save.enemies.length} vs ${mission.enemies.length})`,
     };
   }
-  for (let i = 0; i < save.enemies.length; i++) {
+  for (let i = 0; i < mission.enemies.length; i++) {
     if (save.enemies[i].kind !== mission.enemies[i].kind) {
       return { ok: false, reason: `敌人 #${i} 种类不匹配` };
     }
+  }
+  const extraEnemies: Unit[] = [];
+  for (let i = mission.enemies.length; i < save.enemies.length; i++) {
+    extraEnemies.push(makeSavedUnit(save.enemies[i], `save_enemy_${i}`, mission.data.theater));
   }
   if (save.version >= 4) {
     const allies = save.allies ?? [];
@@ -196,6 +218,7 @@ export function applySave(
 
   // 校验通过，写入状态
   mission.sherman.pos = { q: save.sherman.q, r: save.sherman.r };
+  mission.enemies.push(...extraEnemies);
   mission.sherman.facing = save.sherman.facing;
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
   mission.sherman.damaged = false;
@@ -203,26 +226,13 @@ export function applySave(
   for (let i = 0; i < save.enemies.length; i++) {
     const s = save.enemies[i];
     const live = mission.enemies[i];
-    live.pos = { q: s.q, r: s.r };
-    live.facing = s.facing;
-    live.damaged = s.damaged ?? false;
-    live.destroyed = s.destroyed ?? false;
+    applyUnitSnapshot(live, s);
   }
   if (save.version >= 4 && save.allies) {
     for (let i = 0; i < save.allies.length; i++) {
       const s = save.allies[i];
       const live = mission.allies[i];
-      live.pos = { q: s.q, r: s.r };
-      live.facing = s.facing;
-      live.damaged = s.damaged ?? false;
-      live.destroyed = s.destroyed ?? false;
-      if (s.fireLevel !== undefined) live.fireLevel = s.fireLevel;
-      if (s.turretDamaged !== undefined) live.turretDamaged = s.turretDamaged;
-      if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
-      if (s.loaded !== undefined) live.loaded = s.loaded;
-      if (s.hatchOpen !== undefined) live.hatchOpen = s.hatchOpen;
-      if (s.crew) live.crew = { ...s.crew };
-      if (s.smoked !== undefined) live.smoked = s.smoked;
+      applyUnitSnapshot(live, s);
     }
   }
 
@@ -236,10 +246,6 @@ export function applySave(
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
     if (ss.crew) sh.crew = { ...ss.crew };
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
-    for (let i = 0; i < save.enemies.length; i++) {
-      const s = save.enemies[i];
-      if (s.smoked !== undefined) mission.enemies[i].smoked = s.smoked;
-    }
     mission.shermanEvacuated = save.shermanEvacuated ?? false;
     mission.truckEscapeDefeat = save.truckEscapeDefeat ?? false;
     mission.usCasualties = save.usCasualties ?? 0;

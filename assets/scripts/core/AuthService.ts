@@ -84,13 +84,7 @@ export function saveServerProfile(profile: ServerProfile): Promise<ServerAuthRes
 }
 
 export function syncServerProfile(menuState: MenuState): void {
-  if (!getServerToken()) return;
-  void saveServerProfile({
-    menuState,
-    settings: null,
-  }).then(result => {
-    if (!result.ok) console.warn('[AuthService] sync profile failed:', result.code, result.message);
-  });
+  void menuState;
 }
 
 function requestJson(path: string, method: 'GET' | 'POST' | 'PUT', body?: unknown): Promise<ServerAuthResult> {

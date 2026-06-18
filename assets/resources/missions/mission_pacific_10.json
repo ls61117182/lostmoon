@@ -8,68 +8,164 @@
   "rows": 6,
   "enemyStartByDice": true,
   "tiles": [
-    [
-      null,
-      null,
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 1, "ef": 3 },
-      null
+      [
+        null,
+        null,
+        {
+          "t": "c",
+          "bd": 1,
+          "eid": 6,
+          "ef": 2
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c",
+          "bd": 1,
+          "eid": 3,
+          "ef": 2
+        },
+        {
+          "t": "H",
+          "rid": 1
+        },
+        null
+      ],
+      [
+        null,
+        {
+          "t": "B"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "T"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c",
+          "bd": 1,
+          "eid": 1,
+          "ef": 3
+        },
+        null
+      ],
+      [
+        null,
+        {
+          "t": "B"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c",
+          "bd": 1
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "H"
+        },
+        {
+          "t": "T",
+          "rid": 4
+        },
+        {
+          "t": "T"
+        }
+      ],
+      [
+        {
+          "t": "B"
+        },
+        {
+          "t": "H"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c",
+          "bd": 1,
+          "eid": 2,
+          "ef": 3
+        },
+        {
+          "t": "T",
+          "rid": 2
+        },
+        null
+      ],
+      [
+        null,
+        {
+          "t": "B"
+        },
+        {
+          "t": "B"
+        },
+        {
+          "t": "H"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "T",
+          "rid": 5
+        },
+        {
+          "t": "T"
+        },
+        null
+      ],
+      [
+        null,
+        {
+          "t": "B"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c"
+        },
+        {
+          "t": "c",
+          "bd": 1,
+          "eid": 4,
+          "ef": 3
+        },
+        {
+          "t": "H",
+          "rid": 3
+        },
+        null,
+        null
+      ]
     ],
-    [
-      null,
-      { "t": "T" },
-      { "t": "H" },
-      { "t": "c" },
-      { "t": "T" },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 2, "ef": 3 }
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "T" },
-      { "t": "T" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 3, "ef": 3 }
-    ],
-    [
-      { "t": "T" },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "T" },
-      { "t": "H" },
-      { "t": "c" },
-      { "t": "T", "eid": 4, "ef": 3 }
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "T", "rid": 1, "rf": 3 },
-      { "t": "c" },
-      { "t": "T" },
-      { "t": "T" },
-      { "t": "T", "eid": 5, "ef": 3 },
-      null
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "c", "rid": 2, "rf": 3 },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "bd": 1, "eid": 6, "ef": 3 },
-      null
-    ]
-  ],
   "sherman": {
     "kind": "sherman",
     "faction": "allied",
-    "at": { "col": 4, "row": 5 },
+    "at": { "col": 0, "row": 3 },
     "facing": 0
   },
   "enemies": [
@@ -82,8 +178,8 @@
   ],
   "objective": {
     "type": "destroy_kind_evac",
-    "evacAt": { "col": 4, "row": 0 },
-    "evacExitDir": 5
+    "evacAt": { "col": 7, "row": 2 },
+    "evacExitDir": 0
   },
   "actionTableId": "pacific_b4",
   "aiTableId": "pacific_b4",

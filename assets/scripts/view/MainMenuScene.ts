@@ -39,7 +39,8 @@ import {
 import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
-import type { MissionData, TileDef } from '../core/types';
+import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement } from '../core/types';
+import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 
 const { ccclass, property } = _decorator;
 
@@ -1293,7 +1294,35 @@ export class MainMenuScene extends Component {
     let rows = existingPackage?.mission.rows ?? 6;
     let cols = existingPackage?.mission.cols ?? 8;
     let draftTiles: EditorTile[][] = this.cloneEditorTiles(existingPackage?.mission.tiles, rows, cols);
-    let selectedTool: TerrainTool | null = terrainTools[1]!;
+    const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+    const defaultSherman = (): UnitPlacement => ({
+      kind: 'sherman',
+      faction: 'allied',
+      at: { col: 1, row: 5 },
+      facing: 0,
+    });
+    const defaultEnemy = (): UnitPlacement => ({
+      kind: 'panzer4',
+      faction: 'german',
+      at: { col: 6, row: 2 },
+      facing: 3,
+    });
+    let draftName = existingPackage?.mission.name || (getLang() === 'en' ? 'Custom Mission' : '自定义关卡');
+    let draftDescription = existingPackage?.mission.description || draftName;
+    let draftObjective: MissionObjective = cloneJson(existingPackage?.mission.objective ?? { type: 'destroy_all_enemies' });
+    let draftSherman: UnitPlacement = cloneJson(existingPackage?.mission.sherman ?? defaultSherman());
+    let draftAllies: UnitPlacement[] = cloneJson(existingPackage?.mission.allies ?? []);
+    let draftEnemies: UnitPlacement[] = cloneJson(existingPackage?.mission.enemies ?? [defaultEnemy()]);
+    let draftTurnEndEvents: TurnEndEventRow[] = cloneJson(existingPackage?.turnEndEvents ?? []);
+    let draftEnemyStartByDice = !!existingPackage?.mission.enemyStartByDice;
+    let draftShermanStartByDice = !!existingPackage?.mission.shermanStartByDice;
+    let draftEnemyDiceEidMax = existingPackage?.mission.enemyDiceEidMax;
+    let editorTab: 'tile' | 'mission' | 'units' = 'tile';
+    let unitKindPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
+    let unitRandomPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
+    let titleInput: EditBox | null = null;
+    let descInput: EditBox | null = null;
+    let selectedTool: TerrainTool | null = null;
     let selectedRow = 0;
     let selectedCol = 0;
     for (let row = 0; row < rows; row++) {
@@ -1311,7 +1340,7 @@ export class MainMenuScene extends Component {
       0, contentY - 8, panelW - 96, 34, 18, TEXT_SUBTITLE);
     this.makeLabel(panel, t('levelEditor.workspace.terrain'),
       -panelW / 2 + 140, contentY - 54, 180, 28, 20, TEXT_TITLE);
-    const selectedLabel = this.makeLabel(panel, t(selectedTool.key),
+    const selectedLabel = this.makeLabel(panel, '地形刷子: 无',
       -panelW / 2 + 140, contentY - 304, 190, 26, 16, TEXT_TITLE);
     const currentLabel = this.makeLabel(panel, '',
       -panelW / 2 + 340, -panelH / 2 + 118, 440, 26, 16, TEXT_SUBTITLE);
@@ -1325,6 +1354,90 @@ export class MainMenuScene extends Component {
       currentLabel.string = t('levelEditor.workspace.current', {
         name: pkg?.mission.name || t('levelEditor.workspace.newDraft'),
       });
+    };
+    const captureMissionFields = () => {
+      if (titleInput) draftName = titleInput.string.trim() || draftName;
+      if (descInput) draftDescription = descInput.string.trim() || draftDescription;
+    };
+    const selectedOffset = () => ({ col: selectedCol, row: selectedRow });
+    const unitKindLabels: Record<UnitKind, string> = {
+      sherman: 'Sherman',
+      tiger: 'Tiger',
+      panzer4: 'Pz IV',
+      panzer3: 'Pz III',
+      truck: 'Truck',
+      infantry: 'Infantry',
+      type95: 'Type95',
+      type97: 'Type97',
+      at_gun: 'AT Gun',
+      japanese_infantry: 'JP Inf',
+      heavy_artillery: 'Artillery',
+      officer: 'Officer',
+    };
+    const allUnitKinds: UnitKind[] = ['sherman', 'panzer3', 'panzer4', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
+    const enemyKinds: UnitKind[] = ['panzer3', 'panzer4', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
+    const allyKinds: UnitKind[] = ['sherman'];
+    const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge', 'destroy_truck'];
+    const objectiveTypeLabels: Record<MissionObjective['type'], string> = {
+      destroy_all_enemies: '击毁所有单位',
+      destroy_kind: '歼灭指定单位',
+      destroy_kind_evac: '歼灭后撤离',
+      exit_from_edge: '从边缘撤离',
+      destroy_truck: '摧毁卡车',
+    };
+    const eventEffects: TurnEndEffectType[] = [
+      'none',
+      'sniper',
+      'commander_extra',
+      'infantry_spawn',
+      'adjacent_infantry_fire',
+      'mechanical_failure',
+      'stuka',
+      'panzer3_spawn',
+      'panzer4_spawn',
+      'tiger_spawn',
+      'sherman_spawn',
+      'road_mine',
+      'german_truck_move',
+      'clear_mine',
+      'type95_spawn',
+      'type97_spawn',
+      'heavy_mortar',
+    ];
+    const eventRanges = [
+      [2, 3], [4, 4], [5, 6], [7, 8], [9, 9], [10, 10], [11, 12],
+    ];
+    const cycleIn = <T,>(items: T[], current: T | undefined, fallback: T): T => {
+      const index = current === undefined ? -1 : items.indexOf(current);
+      return items[(index + 1 + items.length) % items.length] ?? fallback;
+    };
+    const toggleStartNumber = (values: number[] | undefined, n: number): number[] | undefined => {
+      const next = Array.isArray(values) ? values.filter(v => Number.isInteger(v) && v >= 1 && v <= 6) : [];
+      const index = next.indexOf(n);
+      if (index >= 0) next.splice(index, 1);
+      else next.push(n);
+      next.sort((a, b) => a - b);
+      return next.length ? next : undefined;
+    };
+    const unitSummary = (unit: UnitPlacement) => {
+      if (unit.startEids?.length) return `${unitKindLabels[unit.kind]} eid${unit.startEids.join(',')}`;
+      if (unit.startRids?.length) return `${unitKindLabels[unit.kind]} rid${unit.startRids.join(',')}`;
+      const at = unit.at ? `${unit.at.col},${unit.at.row}` : '骰子';
+      return `${unitKindLabels[unit.kind]} ${at} f${unit.facing ?? '-'}`;
+    };
+    const refreshDraftForNewMission = () => {
+      draftName = getLang() === 'en' ? 'Custom Mission' : '自定义关卡';
+      draftDescription = draftName;
+      draftObjective = { type: 'destroy_all_enemies' };
+      draftSherman = defaultSherman();
+      draftAllies = [];
+      draftEnemies = [defaultEnemy()];
+      draftTurnEndEvents = [];
+      draftEnemyStartByDice = false;
+      draftShermanStartByDice = false;
+      draftEnemyDiceEidMax = undefined;
+      titleInput = null;
+      descInput = null;
     };
 
     const toolButtons: ButtonRefs[] = [];
@@ -1428,6 +1541,367 @@ export class MainMenuScene extends Component {
       return value >= 5 ? undefined : value + 1;
     };
     refreshPropertyPanel = () => {
+      {
+        captureMissionFields();
+        propRoot.removeAllChildren();
+        titleInput = null;
+        descInput = null;
+        const addBtn = (text: string, x: number, y: number, w: number, h: number, active: boolean, onClick: () => void, fontSize = 14) => {
+          const btn = this.makeRectButton(propRoot, x, y, w, h, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+            captureMissionFields();
+            selectedTool = null;
+            refreshToolButtons();
+            onClick();
+            refreshSelection();
+          });
+          const lab = this.makeLabel(btn.node, text, 0, 0, w - 8, h, fontSize, TEXT_PRIMARY);
+          lab.overflow = Label.Overflow.SHRINK;
+          return btn;
+        };
+        const addPlainBtn = (text: string, x: number, y: number, w: number, h: number, active: boolean, onClick: () => void, fontSize = 14) => {
+          const btn = this.makeRectButton(propRoot, x, y, w, h, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+            captureMissionFields();
+            onClick();
+            refreshPropertyPanel();
+          });
+          const lab = this.makeLabel(btn.node, text, 0, 0, w - 8, h, fontSize, TEXT_PRIMARY);
+          lab.overflow = Label.Overflow.SHRINK;
+          return btn;
+        };
+        const tabs: Array<{ key: typeof editorTab; text: string; x: number }> = [
+          { key: 'tile', text: '格子', x: -86 },
+          { key: 'mission', text: '关卡', x: 0 },
+          { key: 'units', text: '单位', x: 86 },
+        ];
+        for (const tab of tabs) {
+          addPlainBtn(tab.text, tab.x, 188, 76, 28, editorTab === tab.key, () => {
+            editorTab = tab.key;
+            if (editorTab !== 'units') {
+              unitKindPickerTarget = null;
+              unitRandomPickerTarget = null;
+            }
+          }, 14);
+        }
+
+        if (editorTab === 'mission') {
+          this.makeLabel(propRoot, '标题', -102, 150, 54, 22, 14, TEXT_TITLE);
+          titleInput = this.makeInputField(propRoot, 44, 150, 196, 30, '关卡标题', false, draftName);
+          titleInput.maxLength = 40;
+          this.makeLabel(propRoot, '描述', -102, 112, 54, 22, 14, TEXT_TITLE);
+          descInput = this.makeInputField(propRoot, 44, 112, 196, 30, '关卡描述', false, draftDescription);
+          descInput.maxLength = 80;
+          addPlainBtn(objectiveTypeLabels[draftObjective.type], 0, 72, 220, 28, true, () => {
+            draftObjective = { type: cycleIn(objectiveTypes, draftObjective.type, 'destroy_all_enemies') };
+          }, 13);
+          if (draftObjective.type === 'destroy_kind' || draftObjective.type === 'destroy_kind_evac') {
+            addPlainBtn(`目标 ${unitKindLabels[draftObjective.kind ?? 'infantry']}`, -62, 36, 104, 26, true, () => {
+              draftObjective.kind = cycleIn(enemyKinds, draftObjective.kind, 'infantry');
+            }, 12);
+          }
+          if (draftObjective.type === 'exit_from_edge' || draftObjective.type === 'destroy_kind_evac') {
+            addPlainBtn(`方向 ${draftObjective.exitDirection ?? draftObjective.evacExitDir ?? '-'}`, 62, 36, 104, 26, true, () => {
+              const next = cycleFacing((draftObjective.exitDirection ?? draftObjective.evacExitDir) as number | undefined);
+              if (draftObjective.type === 'exit_from_edge') draftObjective.exitDirection = next as MissionObjective['exitDirection'];
+              else draftObjective.evacExitDir = next as MissionObjective['evacExitDir'];
+            }, 12);
+          }
+          if (draftObjective.type === 'destroy_kind_evac') {
+            addPlainBtn(`撤离格 ${draftObjective.evacAt ? `${draftObjective.evacAt.col},${draftObjective.evacAt.row}` : '-'}`, 0, 4, 156, 26, !!draftObjective.evacAt, () => {
+              draftObjective.evacAt = selectedOffset();
+            }, 12);
+          }
+          this.makeLabel(propRoot, '回合结束事件', 0, -28, 170, 22, 14, TEXT_TITLE);
+          addPlainBtn('新增事件', 0, -58, 100, 24, false, () => {
+            draftTurnEndEvents.push({ missionId: '', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'none' });
+          }, 12);
+          const rowsToShow = draftTurnEndEvents.slice(0, 4);
+          for (let i = 0; i < rowsToShow.length; i++) {
+            const ev = rowsToShow[i]!;
+            const y = -88 - i * 30;
+            addPlainBtn(`${ev.sumMin}-${ev.sumMax}`, -86, y, 54, 24, false, () => {
+              const index = eventRanges.findIndex(([a, b]) => a === ev.sumMin && b === ev.sumMax);
+              const next = eventRanges[(index + 1 + eventRanges.length) % eventRanges.length]!;
+              ev.sumMin = next[0]!;
+              ev.sumMax = next[1]!;
+            }, 11);
+            addPlainBtn(ev.effectType, 0, y, 104, 24, true, () => {
+              ev.effectType = cycleIn(eventEffects, ev.effectType, 'none');
+            }, 10);
+            addPlainBtn('删', 84, y, 44, 24, false, () => {
+              draftTurnEndEvents.splice(i, 1);
+            }, 12);
+          }
+          if (draftTurnEndEvents.length > rowsToShow.length) {
+            this.makeLabel(propRoot, `还有 ${draftTurnEndEvents.length - rowsToShow.length} 条，保存/导出会保留`, 0, -214, 230, 20, 11, TEXT_SUBTITLE);
+          }
+          return;
+        }
+
+        if (editorTab === 'units') {
+          this.makeLabel(propRoot, `当前格 ${selectedCol},${selectedRow}`, 0, 152, 190, 24, 16, TEXT_TITLE);
+          addPlainBtn(`谢尔曼 ${draftSherman.at ? `${draftSherman.at.col},${draftSherman.at.row}` : '骰子'}`, -60, 116, 128, 26, true, () => {
+            draftSherman.at = selectedOffset();
+            draftSherman.faction = 'allied';
+            draftSherman.kind = 'sherman';
+          }, 12);
+          addPlainBtn(`朝向 ${draftSherman.facing ?? '-'}`, 76, 116, 78, 26, draftSherman.facing !== undefined, () => {
+            draftSherman.facing = cycleFacing(draftSherman.facing) as UnitPlacement['facing'];
+          }, 12);
+          addPlainBtn(`敌方骰子 ${draftEnemyStartByDice ? '开' : '关'}`, -62, 82, 114, 24, draftEnemyStartByDice, () => {
+            draftEnemyStartByDice = !draftEnemyStartByDice;
+          }, 12);
+          addPlainBtn(`谢尔曼骰子 ${draftShermanStartByDice ? '开' : '关'}`, 62, 82, 114, 24, draftShermanStartByDice, () => {
+            draftShermanStartByDice = !draftShermanStartByDice;
+          }, 12);
+          addPlainBtn(`eid上限 ${draftEnemyDiceEidMax ?? '-'}`, 0, 50, 112, 24, draftEnemyDiceEidMax !== undefined, () => {
+            draftEnemyDiceEidMax = cycleNumber(draftEnemyDiceEidMax, 6);
+          }, 12);
+          this.makeLabel(propRoot, '敌军', -76, 18, 72, 20, 14, TEXT_TITLE);
+          addPlainBtn('新增敌军', 18, 18, 90, 24, false, () => {
+            draftEnemies.push({ ...defaultEnemy(), at: selectedOffset() });
+          }, 12);
+          addPlainBtn('新增友军', 104, 18, 82, 24, false, () => {
+            draftAllies.push({ kind: 'sherman', faction: 'allied', at: selectedOffset(), facing: 0 });
+          }, 12);
+          const units = [
+            ...draftEnemies.map((unit, index) => ({ unit, index, group: 'enemy' as const })),
+            ...draftAllies.map((unit, index) => ({ unit, index, group: 'ally' as const })),
+          ].slice(0, 6);
+          for (let i = 0; i < units.length; i++) {
+            const item = units[i]!;
+            const y = -14 - i * 30;
+            addPlainBtn(unitSummary(item.unit), -66, y, 112, 24, true, () => {
+              item.unit.at = selectedOffset();
+              delete item.unit.startEids;
+              delete item.unit.startRids;
+            }, 10);
+            addPlainBtn('类', 12, y, 32, 24, !!(unitKindPickerTarget && unitKindPickerTarget.group === item.group && unitKindPickerTarget.index === item.index), () => {
+              unitRandomPickerTarget = null;
+              unitKindPickerTarget = { group: item.group, index: item.index };
+            }, 12);
+            addPlainBtn(item.group === 'enemy' ? '随' : '-', 48, y, 32, 24, !!(unitRandomPickerTarget && unitRandomPickerTarget.group === item.group && unitRandomPickerTarget.index === item.index), () => {
+              if (item.group !== 'enemy') return;
+              unitKindPickerTarget = null;
+              unitRandomPickerTarget = { group: item.group, index: item.index };
+            }, 12);
+            addPlainBtn('向', 84, y, 32, 24, false, () => {
+              item.unit.facing = cycleFacing(item.unit.facing) as UnitPlacement['facing'];
+            }, 12);
+            addPlainBtn('删', 120, y, 32, 24, false, () => {
+              unitKindPickerTarget = null;
+              unitRandomPickerTarget = null;
+              if (item.group === 'ally') draftAllies.splice(item.index, 1);
+              else draftEnemies.splice(item.index, 1);
+            }, 12);
+          }
+          if (draftEnemies.length + draftAllies.length > units.length) {
+            this.makeLabel(propRoot, `还有 ${draftEnemies.length + draftAllies.length - units.length} 个单位未显示`, 0, -210, 220, 20, 11, TEXT_SUBTITLE);
+          }
+          if (unitKindPickerTarget) {
+            const targetUnits = unitKindPickerTarget.group === 'ally' ? draftAllies : draftEnemies;
+            const targetUnit = targetUnits[unitKindPickerTarget.index];
+            if (!targetUnit) {
+              unitKindPickerTarget = null;
+            } else {
+              const picker = new Node('UnitKindPicker');
+              picker.layer = this.node.layer;
+              picker.addComponent(UITransform).setContentSize(256, 250);
+              picker.setPosition(0, -58, 0);
+              const pickerBg = picker.addComponent(Graphics);
+              drawFieldPanel(pickerBg, 256, 250, new Color(28, 36, 28, 250), BTN_LEVEL_BORDER, TEXT_TITLE);
+              propRoot.addChild(picker);
+              this.makeLabel(picker, '选择单位类型', 0, 104, 180, 24, 15, TEXT_TITLE);
+              const closeBtn = this.makeRectButton(picker, 108, 104, 34, 24, MODAL_CLOSE_BG, () => {
+                unitKindPickerTarget = null;
+                refreshPropertyPanel();
+              });
+              this.makeLabel(closeBtn.node, 'X', 0, 0, 28, 22, 14, TEXT_PRIMARY);
+              for (let k = 0; k < allUnitKinds.length; k++) {
+                const kind = allUnitKinds[k]!;
+                const col = k % 2;
+                const row = Math.floor(k / 2);
+                const x = -58 + col * 116;
+                const y = 70 - row * 30;
+                const btn = this.makeRectButton(
+                  picker,
+                  x,
+                  y,
+                  104,
+                  24,
+                  kind === targetUnit.kind ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
+                  () => {
+                    targetUnit.kind = kind;
+                    targetUnit.faction = unitKindPickerTarget?.group === 'ally' ? 'allied' : 'german';
+                    unitKindPickerTarget = null;
+                    refreshPropertyPanel();
+                  },
+                );
+                const lab = this.makeLabel(btn.node, unitKindLabels[kind], 0, 0, 96, 24, 11, TEXT_PRIMARY);
+                lab.overflow = Label.Overflow.SHRINK;
+              }
+              picker.setSiblingIndex(propRoot.children.length - 1);
+            }
+          }
+          if (unitRandomPickerTarget) {
+            const targetUnits = unitRandomPickerTarget.group === 'ally' ? draftAllies : draftEnemies;
+            const targetUnit = targetUnits[unitRandomPickerTarget.index];
+            if (!targetUnit) {
+              unitRandomPickerTarget = null;
+            } else {
+              const picker = new Node('UnitRandomStartPicker');
+              picker.layer = this.node.layer;
+              picker.addComponent(UITransform).setContentSize(256, 206);
+              picker.setPosition(0, -62, 0);
+              const pickerBg = picker.addComponent(Graphics);
+              drawFieldPanel(pickerBg, 256, 206, new Color(28, 36, 28, 250), BTN_LEVEL_BORDER, TEXT_TITLE);
+              propRoot.addChild(picker);
+              this.makeLabel(picker, '随机初始位置', 0, 82, 180, 24, 15, TEXT_TITLE);
+              const closeBtn = this.makeRectButton(picker, 108, 82, 34, 24, MODAL_CLOSE_BG, () => {
+                unitRandomPickerTarget = null;
+                refreshPropertyPanel();
+              });
+              this.makeLabel(closeBtn.node, 'X', 0, 0, 28, 22, 14, TEXT_PRIMARY);
+              const clearBtn = this.makeRectButton(picker, -84, 82, 64, 24, BTN_LEVEL_UNLOCKED, () => {
+                delete targetUnit.startEids;
+                delete targetUnit.startRids;
+                targetUnit.at = selectedOffset();
+                targetUnit.facing = targetUnit.facing ?? 0;
+                unitRandomPickerTarget = null;
+                refreshPropertyPanel();
+              });
+              this.makeLabel(clearBtn.node, '清空', 0, 0, 56, 22, 12, TEXT_PRIMARY);
+              this.makeLabel(picker, 'eid', -104, 42, 40, 22, 13, TEXT_TITLE);
+              this.makeLabel(picker, 'rid', -104, -4, 40, 22, 13, TEXT_TITLE);
+              for (let n = 1; n <= 6; n++) {
+                const x = -64 + (n - 1) * 25;
+                const eidActive = !!targetUnit.startEids?.includes(n);
+                const eidBtn = this.makeRectButton(picker, x, 42, 23, 23, eidActive ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+                  targetUnit.startEids = toggleStartNumber(targetUnit.startEids, n);
+                  if (targetUnit.startEids?.length) {
+                    delete targetUnit.at;
+                    delete targetUnit.facing;
+                    draftEnemyStartByDice = true;
+                  } else if (!targetUnit.startRids?.length) {
+                    targetUnit.at = selectedOffset();
+                    targetUnit.facing = targetUnit.facing ?? 0;
+                  }
+                  refreshPropertyPanel();
+                });
+                this.makeLabel(eidBtn.node, String(n), 0, 0, 19, 21, 11, TEXT_PRIMARY);
+                const ridActive = !!targetUnit.startRids?.includes(n);
+                const ridBtn = this.makeRectButton(picker, x, -4, 23, 23, ridActive ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+                  targetUnit.startRids = toggleStartNumber(targetUnit.startRids, n);
+                  if (targetUnit.startRids?.length) {
+                    delete targetUnit.at;
+                    delete targetUnit.facing;
+                    draftEnemyStartByDice = true;
+                  } else if (!targetUnit.startEids?.length) {
+                    targetUnit.at = selectedOffset();
+                    targetUnit.facing = targetUnit.facing ?? 0;
+                  }
+                  refreshPropertyPanel();
+                });
+                this.makeLabel(ridBtn.node, String(n), 0, 0, 19, 21, 11, TEXT_PRIMARY);
+              }
+              const hint = this.makeLabel(picker, '勾选后该单位不使用固定格；敌方骰子会自动开启。', 0, -62, 224, 36, 11, TEXT_SUBTITLE);
+              hint.overflow = Label.Overflow.RESIZE_HEIGHT;
+              hint.enableWrapText = true;
+              picker.setSiblingIndex(propRoot.children.length - 1);
+            }
+          }
+          return;
+        }
+
+        const tile = draftTiles[selectedRow]?.[selectedCol] ?? null;
+        this.makeLabel(propRoot, `格子 ${selectedCol},${selectedRow}`, 0, 150, 250, 24, 18, TEXT_TITLE);
+        if (!tile) {
+          this.makeLabel(propRoot, '当前为“无”。选择左侧地形后点击格子可创建地形。', 0, 112, 250, 54, 15, TEXT_SUBTITLE);
+          return;
+        }
+        const addDirHexButtons = (
+          centerX: number,
+          centerY: number,
+          title: string,
+          activeFn: (dir: number) => boolean,
+          onClick: (dir: number) => void,
+        ) => {
+          this.makeLabel(propRoot, title, centerX, centerY, 54, 30, 14, TEXT_TITLE);
+          const dirs = ['E', 'SE', 'SW', 'W', 'NW', 'NE'];
+          const positions = [
+            { x: centerX + 52, y: centerY },
+            { x: centerX + 28, y: centerY - 42 },
+            { x: centerX - 28, y: centerY - 42 },
+            { x: centerX - 52, y: centerY },
+            { x: centerX - 28, y: centerY + 42 },
+            { x: centerX + 28, y: centerY + 42 },
+          ];
+          for (let i = 0; i < 6; i++) {
+            addBtn(dirs[i]!, positions[i]!.x, positions[i]!.y, 36, 22, activeFn(i), () => onClick(i));
+          }
+        };
+        const allowsBuilding = !['w', 'dw', 'B'].includes(tile.t);
+        const allowsHedge = tile.t !== 'dw';
+        const allowsRoadDirs = tile.t === 'r';
+        const allowsAirstripDirs = tile.t === 'a';
+        const allowsBridge = tile.t === 'w';
+        const allowsBreakwater = tile.t === 'c' || tile.t === 'T';
+        const allowsStarts = tile.t !== 'dw';
+
+        if (allowsBuilding) {
+          addBtn(tile.bd === 1 ? '建筑: 有' : '建筑: 无', -72, 114, 112, 28, tile.bd === 1, () => {
+            if (tile.bd === 1) delete tile.bd;
+            else tile.bd = 1;
+          });
+        }
+        addBtn('清空附加', allowsBuilding ? 72 : 0, 114, 112, 28, false, () => {
+          delete tile.bd; delete tile.h; delete tile.bw; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
+        });
+        const sectionY = 34;
+        if (allowsHedge) {
+          addDirHexButtons(-78, sectionY, '树篱\nh', (i) => normalizeFlags(tile.h)[i] === '1', (i) => {
+            tile.h = setFlag(tile.h, i, normalizeFlags(tile.h)[i] !== '1');
+          });
+        }
+        if (allowsRoadDirs || allowsAirstripDirs) {
+          const title = allowsAirstripDirs ? '机场\nrd' : '道路\nrd';
+          addDirHexButtons(78, sectionY, title, (i) => normalizeFlags(tile.rd)[i] === '1', (i) => {
+            tile.rd = setFlag(tile.rd, i, normalizeFlags(tile.rd)[i] !== '1');
+          });
+        }
+        if (allowsBridge) {
+          const bridgeX = allowsHedge ? 78 : 0;
+          addDirHexButtons(bridgeX, sectionY, '桥梁\nbr', (i) => !!tile.br?.includes(i), (i) => {
+            tile.br = toggleArrayDirection(tile.br, i);
+          });
+        }
+        if (allowsBreakwater) {
+          const bwX = allowsBridge || allowsHedge ? 0 : -78;
+          const bwY = allowsBridge || allowsHedge ? -66 : sectionY;
+          addDirHexButtons(bwX, bwY, '防波堤\nbw', (i) => normalizeFlags(tile.bw)[i] === '1', (i) => {
+            tile.bw = setFlag(tile.bw, i, normalizeFlags(tile.bw)[i] !== '1');
+          });
+        }
+        if (allowsStarts) {
+          addBtn(`eid ${tile.eid ?? '-'}`, -42, -140, 74, 26, tile.eid !== undefined, () => {
+            tile.eid = cycleNumber(tile.eid, 6);
+            if (!tile.eid) delete tile.ef;
+          });
+          addBtn(`ef ${tile.ef ?? '-'}`, 42, -140, 74, 26, tile.ef !== undefined, () => {
+            if (tile.eid) tile.ef = cycleFacing(tile.ef);
+          });
+          addBtn(`rid ${tile.rid ?? '-'}`, -42, -172, 74, 26, tile.rid !== undefined, () => {
+            tile.rid = cycleNumber(tile.rid, 6);
+            if (!tile.rid) delete tile.rf;
+          });
+          addBtn(`rf ${tile.rf ?? '-'}`, 42, -172, 74, 26, tile.rf !== undefined, () => {
+            if (tile.rid) tile.rf = cycleFacing(tile.rf);
+          });
+        }
+        const raw = JSON.stringify(tile);
+        const rawLabel = this.makeLabel(propRoot, raw, 0, -210, 250, 22, 10, TEXT_SUBTITLE);
+        rawLabel.overflow = Label.Overflow.SHRINK;
+        return;
+      }
       propRoot.removeAllChildren();
       const tile = draftTiles[selectedRow]?.[selectedCol] ?? null;
       this.makeLabel(propRoot, `格子 ${selectedCol},${selectedRow}`, 0, 180, 250, 24, 18, TEXT_TITLE);
@@ -1703,6 +2177,10 @@ export class MainMenuScene extends Component {
     const newBtn = this.makeRectButton(panel, -panelW / 2 + 190, -panelH / 2 + 68, 150, 42, BTN_LEVEL_UNLOCKED, () => {
       editingPackageId = null;
       draftTiles = this.cloneEditorTiles(undefined, rows, cols);
+      refreshDraftForNewMission();
+      editorTab = 'tile';
+      unitKindPickerTarget = null;
+      unitRandomPickerTarget = null;
       refreshSelection();
       refreshCurrentLabel();
       statusLabel.string = t('levelEditor.workspace.newReady');
@@ -1726,23 +2204,47 @@ export class MainMenuScene extends Component {
     const nextBtn = this.makeRectButton(panel, -panelW / 2 + 452, -panelH / 2 + 68, 92, 42, BTN_LEVEL_UNLOCKED, () => switchMission(1));
     this.makeLabel(nextBtn.node, t('levelEditor.workspace.next'), 0, 0, 92, 42, 16, TEXT_PRIMARY);
 
-    const buildDraftMission = (id: string, oldPkg: ReturnType<typeof CustomMissionStore.load> | null, name: string): MissionData => ({
-      ...(oldPkg?.mission ?? {}),
-      id: oldPkg?.mission.id ?? id,
-      name,
-      description: oldPkg?.mission.description || name,
-      cols,
-      rows,
-      tiles: JSON.parse(JSON.stringify(draftTiles)) as MissionData['tiles'],
-      sherman: oldPkg?.mission.sherman ?? { kind: 'sherman', faction: 'allied', at: { col: 1, row: 5 }, facing: 0 },
-      enemies: oldPkg?.mission.enemies ?? [
-        { kind: 'panzer4', faction: 'german', at: { col: 6, row: 2 }, facing: 3 },
-      ],
-      objective: oldPkg?.mission.objective ?? { type: 'destroy_all_enemies' },
-      actionTableId: oldPkg?.mission.actionTableId ?? 'standard',
-      aiTableId: oldPkg?.mission.aiTableId ?? 'standard',
-      eventTableId: oldPkg?.mission.eventTableId ?? id,
-    });
+    const buildTurnEndEvents = (missionId: string): TurnEndEventRow[] =>
+      draftTurnEndEvents.map(ev => ({
+        missionId,
+        sumMin: Math.max(2, Math.min(12, ev.sumMin)),
+        sumMax: Math.max(2, Math.min(12, ev.sumMax)),
+        diceCount: ev.diceCount || 2,
+        effectType: ev.effectType,
+      }));
+    const buildDraftMission = (id: string, oldPkg: ReturnType<typeof CustomMissionStore.load> | null, fallbackName: string): MissionData => {
+      captureMissionFields();
+      const missionId = oldPkg?.mission.id ?? id;
+      const sherman = cloneJson(draftSherman);
+      if (draftShermanStartByDice) {
+        delete sherman.at;
+        delete sherman.facing;
+      }
+      const mission: MissionData = {
+        ...(oldPkg?.mission ?? {}),
+        id: missionId,
+        name: draftName || fallbackName,
+        description: draftDescription || draftName || fallbackName,
+        cols,
+        rows,
+        tiles: cloneJson(draftTiles) as MissionData['tiles'],
+        sherman,
+        enemies: cloneJson(draftEnemies),
+        objective: cloneJson(draftObjective),
+        actionTableId: oldPkg?.mission.actionTableId ?? 'standard',
+        aiTableId: oldPkg?.mission.aiTableId ?? 'standard',
+        eventTableId: missionId,
+      };
+      if (draftAllies.length) mission.allies = cloneJson(draftAllies);
+      else delete mission.allies;
+      if (draftEnemyStartByDice) mission.enemyStartByDice = true;
+      else delete mission.enemyStartByDice;
+      if (draftShermanStartByDice) mission.shermanStartByDice = true;
+      else delete mission.shermanStartByDice;
+      if (draftEnemyDiceEidMax !== undefined) mission.enemyDiceEidMax = draftEnemyDiceEidMax;
+      else delete mission.enemyDiceEidMax;
+      return mission;
+    };
 
     const copyTextToClipboard = (text: string): boolean => {
       const nav = (globalThis as any).navigator;
@@ -1776,10 +2278,10 @@ export class MainMenuScene extends Component {
       const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
       const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
       const mission = buildDraftMission(id, oldPkg, name);
-      const json = JSON.stringify(mission, null, 2);
-      console.log('[LevelEditor] exported mission JSON:\n' + json);
+      const json = JSON.stringify({ mission, turnEndEvents: buildTurnEndEvents(mission.id) }, null, 2);
+      console.log('[LevelEditor] exported custom mission package JSON:\n' + json);
       const copied = copyTextToClipboard(json);
-      statusLabel.string = copied ? '已复制关卡 JSON。' : '已在控制台输出关卡 JSON。';
+      statusLabel.string = copied ? '已复制关卡包 JSON。' : '已在控制台输出关卡包 JSON。';
     });
     this.makeLabel(exportBtn.node, '导出JSON', 0, 0, 120, 42, 16, TEXT_PRIMARY);
 
@@ -1798,7 +2300,7 @@ export class MainMenuScene extends Component {
           savedAt: Date.now(),
           source: oldPkg?.source ?? 'player',
           mission,
-          turnEndEvents: oldPkg?.turnEndEvents ?? [],
+          turnEndEvents: buildTurnEndEvents(mission.id),
           editor: oldPkg?.editor,
         });
         statusLabel.string = t(isNew ? 'levelEditor.workspace.savedNew' : 'levelEditor.workspace.saved');
@@ -1819,6 +2321,10 @@ export class MainMenuScene extends Component {
       CustomMissionStore.remove(editingPackageId);
       editingPackageId = null;
       draftTiles = this.cloneEditorTiles(undefined, rows, cols);
+      refreshDraftForNewMission();
+      editorTab = 'tile';
+      unitKindPickerTarget = null;
+      unitRandomPickerTarget = null;
       refreshSelection();
       refreshCurrentLabel();
       statusLabel.string = t('levelEditor.workspace.deleted');
@@ -2120,16 +2626,13 @@ function saveAuthAccount(name: string, password: string): void {
 
 function buildCurrentServerProfile(): ServerProfile {
   return {
-    menuState: MenuProgress.load(),
+    menuState: null,
     settings: null,
   };
 }
 
 function applyServerProfile(profile?: ServerProfile): void {
-  if (!profile) return;
-  if (profile.menuState) {
-    MenuProgress.replace(profile.menuState);
-  }
+  void profile;
 }
 
 function serverAuthMessageKey(code?: string): string {
@@ -2185,9 +2688,9 @@ const AUTH_EXTRA_EN: Record<string, string> = {
 function authText(key: string, params?: Record<string, string | number>): string {
   const zh: Record<string, string> = {
     'auth.title': '选择游玩模式',
-    'auth.subtitle': '登录后可同步关卡进度、游戏存档和音量设置；离线模式保持当前本地玩法。',
+    'auth.subtitle': '进度、存档和设置均保存在本机；可登录账号或直接离线游玩。',
     'auth.login.title': '账号登录',
-    'auth.login.desc': '适合长期存档和跨设备同步。',
+    'auth.login.desc': '账号仅用于识别本机存档槽，进度不会上传服务器。',
     'auth.username': '账号',
     'auth.password': '密码',
     'auth.username.placeholder': '输入账号',
@@ -2197,7 +2700,7 @@ function authText(key: string, params?: Record<string, string | number>): string
     'auth.error.username': '请输入账号后再登录',
     'auth.error.chooseMode': '请选择登录或离线模式',
     'auth.offline.title': '离线作战',
-    'auth.offline.desc': '不连接服务器，直接进入游戏。进度、存档和设置继续保存在本机，行为与现在一致。',
+    'auth.offline.desc': '不连接服务器，直接进入游戏。进度、存档和设置继续保存在本机。',
     'auth.offline.button': '离线进入',
     'auth.offline.ok': '已进入离线模式',
     'auth.badge.none': '未选择模式',
@@ -2207,9 +2710,9 @@ function authText(key: string, params?: Record<string, string | number>): string
   };
   const en: Record<string, string> = {
     'auth.title': 'Choose Play Mode',
-    'auth.subtitle': 'Sign in to sync progress, saves, and volume settings. Offline keeps the current local flow.',
+    'auth.subtitle': 'Progress, saves, and settings stay on this device. Sign in or play offline.',
     'auth.login.title': 'Account Login',
-    'auth.login.desc': 'Best for long-term saves and cross-device sync.',
+    'auth.login.desc': 'Account mode only selects a local save slot. Progress is not uploaded.',
     'auth.username': 'Account',
     'auth.password': 'Password',
     'auth.username.placeholder': 'Enter account',
@@ -2219,7 +2722,7 @@ function authText(key: string, params?: Record<string, string | number>): string
     'auth.error.username': 'Enter an account first',
     'auth.error.chooseMode': 'Choose login or offline mode',
     'auth.offline.title': 'Offline',
-    'auth.offline.desc': 'No server connection. Progress, saves, and settings stay on this device, just like the current game.',
+    'auth.offline.desc': 'No server connection. Progress, saves, and settings stay on this device.',
     'auth.offline.button': 'Play Offline',
     'auth.offline.ok': 'Offline mode selected',
     'auth.badge.none': 'No mode selected',

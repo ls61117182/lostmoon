@@ -134,8 +134,8 @@ function buildStukaExtraDicePhases(sim: {
 function shermanLosToAnyInfantry(mission: LoadedMission): boolean {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
-    // 「徒步类」单位（步兵 / 军官）都纳入狙击手视线检查 —— 任务 8 起军官与步兵共享 LOS 触发条件。
-    if (e.destroyed || (!isFootUnit(e) && e.kind !== 'japanese_infantry')) continue;
+    // 「徒步类」单位都纳入狙击手视线检查。
+    if (e.destroyed || !isFootUnit(e)) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return true;
   }

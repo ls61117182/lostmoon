@@ -1,89 +1,262 @@
-{
-  "id": "mission_pacific_12",
-  "name": "Peleliu - Clear the Airfield",
-  "description": "Pacific Scenario D12. Clear the map of all Japanese units, including Heavy Artillery, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex, facing the small black triangle. Place 2 AT Guns and 2 Type 97 tanks on different red numbered hexes, facing the numbered edge. Place 1 Japanese Infantry unit on a blue numbered hex. The Sherman starts on the black outlined hex.",
-  "theater": "pacific",
-  "usCasualtyLimit": 10,
-  "cols": 8,
-  "rows": 6,
-  "enemyStartByDice": true,
-  "tiles": [
-    [
-      null,
-      null,
-      { "t": "T" },
-      { "t": "c" },
-      { "t": "c", "bd": 1 },
-      { "t": "a", "rd": "010010", "eid": 2, "ef": 3 },
-      { "t": "c" },
-      null
-    ],
-    [
-      null,
-      { "t": "c", "eid": 1, "ef": 2 },
-      { "t": "c" },
-      { "t": "a", "rd": "010010" },
-      { "t": "a", "rd": "010010" },
-      { "t": "c" },
-      { "t": "T", "rid": 3, "rf": 3 }
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "c", "eid": 5, "ef": 3 },
-      { "t": "c" },
-      { "t": "a", "rd": "010010" },
-      { "t": "T" },
-      { "t": "T", "rid": 1, "rf": 3 },
-      { "t": "H", "rid": 4, "rf": 3 }
-    ],
-    [
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "a", "rd": "100100" },
-      { "t": "a", "rd": "100100" },
-      { "t": "c" },
-      { "t": "T" },
-      { "t": "T", "eid": 3, "ef": 4 }
-    ],
-    [
-      null,
-      { "t": "c", "eid": 6, "ef": 3 },
-      { "t": "c" },
-      { "t": "H" },
-      { "t": "c" },
-      { "t": "T", "rid": 2, "rf": 4 },
-      { "t": "H", "rid": 6, "rf": 4 },
-      null
-    ],
-    [
-      null,
-      { "t": "c" },
-      { "t": "c", "rid": 5, "rf": 3 },
-      { "t": "c" },
-      { "t": "c" },
-      { "t": "c", "eid": 4, "ef": 3 },
-      null
-    ]
-  ],
-  "sherman": {
-    "kind": "sherman",
-    "faction": "allied",
-    "at": { "col": 4, "row": 5 },
-    "facing": 0
-  },
-  "enemies": [
-    { "kind": "heavy_artillery", "faction": "japanese", "at": { "col": 4, "row": 0 }, "facing": 3 },
-    { "kind": "at_gun", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "at_gun", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "type97", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "type97", "faction": "japanese", "startEids": [1, 2, 3, 4, 5, 6] },
-    { "kind": "japanese_infantry", "faction": "japanese", "startRids": [1, 2, 3, 4, 5, 6] }
-  ],
-  "objective": {
-    "type": "destroy_all_enemies"
-  },
-  "actionTableId": "pacific_b4",
-  "aiTableId": "pacific_b4",
-  "eventTableId": "mission_pacific_12"
+﻿{
+    "id":  "mission_pacific_12",
+    "name":  "Peleliu - Clear the Airfield",
+    "description":  "Pacific Scenario D12. Clear the map of all Japanese units, including Heavy Artillery, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex, facing the small black triangle. Place 2 AT Guns and 2 Type 97 tanks on different red numbered hexes, facing the numbered edge. Place 1 Japanese Infantry unit on a blue numbered hex. The Sherman starts on the black outlined hex.",
+    "theater":  "pacific",
+    "usCasualtyLimit":  10,
+    "cols":  8,
+    "rows":  6,
+    "enemyStartByDice":  true,
+    "tiles":  [
+                  [
+                      null,
+                      null,
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  6,
+                          "ef":  1
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  5,
+                          "ef":  2
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  1,
+                          "ef":  2
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "rid":  1
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "H"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1
+                      }
+                  ],
+                  [
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "100100"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "100100"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "100100"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "100100",
+                          "eid":  2,
+                          "ef":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  5
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "T",
+                          "eid":  3,
+                          "ef":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "H",
+                          "rid":  6
+                      },
+                      {
+                          "t":  "T",
+                          "eid":  4,
+                          "ef":  4
+                      },
+                      {
+                          "t":  "H",
+                          "rid":  4
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  3
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      null,
+                      null
+                  ]
+              ],
+    "sherman":  {
+                    "kind":  "sherman",
+                    "faction":  "allied",
+                    "at":  {
+                               "col":  0,
+                               "row":  3
+                           },
+                    "facing":  0
+                },
+    "enemies":  [
+                    {
+                        "kind":  "heavy_artillery",
+                        "faction":  "japanese",
+                        "at":  {
+                                   "col":  7,
+                                   "row":  2
+                               },
+                        "facing":  3
+                    },
+                    {
+                        "kind":  "at_gun",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "at_gun",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "type97",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "type97",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "japanese_infantry",
+                        "faction":  "japanese",
+                        "startRids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    }
+                ],
+    "objective":  {
+                      "type":  "destroy_all_enemies"
+                  },
+    "actionTableId":  "pacific_b4",
+    "aiTableId":  "pacific_b4",
+    "eventTableId":  "mission_pacific_12"
 }

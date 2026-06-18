@@ -5,6 +5,7 @@ import { Axial, Direction, MissionObjective, tileHasBridge, UnitKind } from './t
 /** `destroy_kind_evac`：歼敌前置是否已满足（纯撤离无 kind/kinds 时恒为 true） */
 export function destroyKindEvacPrereqMet(mission: LoadedMission, obj: MissionObjective): boolean {
   if (obj.type !== 'destroy_kind_evac') return false;
+  if (obj.destroyAllEnemiesBeforeEvac) return liveEnemyCount(mission) === 0;
   const kinds = obj.kinds;
   if (kinds && kinds.length > 0) {
     return kinds.every((k) => allEnemiesOfKindDestroyed(mission, k));
@@ -29,6 +30,10 @@ export function checkOutcome(mission: LoadedMission): MissionOutcome {
 export function allEnemiesOfKindDestroyed(mission: LoadedMission, kind: UnitKind): boolean {
   const group = mission.enemies.filter(e => e.kind === kind);
   return group.length > 0 && group.every(e => e.destroyed);
+}
+
+export function liveEnemyCount(mission: LoadedMission): number {
+  return mission.enemies.filter(e => !e.destroyed).length;
 }
 
 /**
@@ -62,7 +67,7 @@ export function isShermanEvacDrive(
 export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): boolean {
   switch (obj.type) {
     case 'destroy_all_enemies':
-      return mission.enemies.length > 0 && mission.enemies.every(e => e.destroyed);
+      return mission.enemies.length > 0 && liveEnemyCount(mission) === 0;
     case 'destroy_kind': {
       const group = mission.enemies.filter(e => e.kind === obj.kind);
       return group.length > 0 && group.every(e => e.destroyed);
