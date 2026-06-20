@@ -9,6 +9,7 @@
 import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
 import {
   Axial,
+  DEFAULT_VISION_RANGE,
   Direction,
   isFootKind,
   MissionData,
@@ -658,6 +659,9 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
     u.hatchOpen = !!p.hatchOpen;
+    u.visionRange = typeof p.visionRange === 'number' && Number.isFinite(p.visionRange)
+      ? Math.max(0, Math.floor(p.visionRange))
+      : DEFAULT_VISION_RANGE;
     if (p.turretDamaged) u.turretDamaged = true;
   }
   if (p.paralyzed) u.paralyzed = true;

@@ -198,7 +198,7 @@
     "missionPath": "missions/mission_01",
     "mainMenuSceneName": "main",
     "showReachable": true,
-    "moveDuration": 0.28,
+    "moveDuration": 0.4,
     "movesPerTurn": 2,
     "rngSeed": 0,
     "_id": "5akMBOeR1GgZJJPkXY7lET"

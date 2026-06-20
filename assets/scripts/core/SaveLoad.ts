@@ -2,6 +2,7 @@ import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
 import type { Direction, Faction, ShermanCrew, Unit, UnitKind } from './types';
 import { getUnitStats } from './UnitDB';
+import { GameMode } from './GameMode';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = 'lone_sherman_save_v1';
@@ -12,7 +13,7 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  *   2: 追加 attacksLeft + 每个单位的 damaged/destroyed 状态（战斗系统）
  *   3: 追加玩家子阶段 / 本阶段骰子 / 谢尔曼与敌军的战术字段（装填、舱盖、乘员、烟雾等）
  */
-const SAVE_VERSION = 4 as const;
+const SAVE_VERSION = 5 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -34,11 +35,14 @@ interface UnitSnapshot {
   paralyzed?: boolean;
   loaded?: boolean;
   hatchOpen?: boolean;
+  visionRange?: number;
   crew?: ShermanCrew;
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 3 | 2;
+  version: typeof SAVE_VERSION | 4 | 3 | 2;
+  /** v5: selected rule profile; older saves resume as classic. */
+  gameMode?: GameMode;
   missionId: string;
   missionSource?: MissionSource;
   turn: number;
@@ -63,6 +67,7 @@ export interface SaveData {
 }
 
 export interface SnapshotParams {
+  gameMode: GameMode;
   missionId: string;
   missionSource?: MissionSource;
   mission: LoadedMission;
@@ -90,6 +95,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     paralyzed: u.paralyzed,
     loaded: u.loaded,
     hatchOpen: u.hatchOpen,
+    visionRange: u.visionRange,
     crew: u.crew ? { ...u.crew } : undefined,
     smoked: u.smoked,
   };
@@ -106,6 +112,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
   if (s.loaded !== undefined) live.loaded = s.loaded;
   if (s.hatchOpen !== undefined) live.hatchOpen = s.hatchOpen;
+  if (s.visionRange !== undefined) live.visionRange = s.visionRange;
   if (s.crew) live.crew = { ...s.crew };
 }
 
@@ -131,6 +138,7 @@ export function captureSave(p: SnapshotParams): SaveData {
   const sh = p.mission.sherman;
   return {
     version: SAVE_VERSION,
+    gameMode: p.gameMode,
     missionId: p.missionId,
     missionSource: p.missionSource,
     turn: p.turn,
@@ -177,7 +185,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 3 && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 4 && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -244,6 +252,7 @@ export function applySave(
     if (ss.paralyzed !== undefined) sh.paralyzed = ss.paralyzed;
     if (ss.loaded !== undefined) sh.loaded = ss.loaded;
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
+    if (ss.visionRange !== undefined) sh.visionRange = ss.visionRange;
     if (ss.crew) sh.crew = { ...ss.crew };
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
     mission.shermanEvacuated = save.shermanEvacuated ?? false;

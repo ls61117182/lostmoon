@@ -98,11 +98,12 @@ export function selectEnemyOrder(
   sherman: Unit,
   rng: RNG,
 ): Unit[] {
-  return selectAIOrder(enemies, [sherman], sherman, rng);
+  return selectAIOrder(enemies, [sherman], [sherman], rng);
 }
 
-export function isTankAITarget(u: Unit): boolean {
-  return !u.destroyed && !isFootUnit(u) && u.kind !== 'truck';
+export function aiTargetPriority(u: Unit, missionTargets: readonly Unit[]): number {
+  if (missionTargets.includes(u)) return 0;
+  return isFootUnit(u) ? 2 : 1;
 }
 
 export function isAIActorUnit(u: Unit): boolean {
@@ -112,38 +113,43 @@ export function isAIActorUnit(u: Unit): boolean {
 export function currentTargetFor(
   actor: Unit,
   candidates: Unit[],
-  playerUnit: Unit,
+  missionTargets: readonly Unit[],
   rng: RNG,
 ): Unit | null {
-  const hostile = candidates.filter(u => u.faction !== actor.faction && isTankAITarget(u));
+  const hostile = candidates.filter(u =>
+    !u.destroyed
+    && u.faction !== actor.faction
+    && (u.kind !== 'truck' || missionTargets.includes(u)),
+  );
   if (hostile.length === 0) return null;
+  let bestPriority = Infinity;
   let bestDist = Infinity;
   const tied: Unit[] = [];
   for (const u of hostile) {
+    const priority = aiTargetPriority(u, missionTargets);
     const d = hexDistance(actor.pos, u.pos);
-    if (d < bestDist) {
+    if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
+      bestPriority = priority;
       bestDist = d;
       tied.length = 0;
       tied.push(u);
-    } else if (d === bestDist) {
+    } else if (priority === bestPriority && d === bestDist) {
       tied.push(u);
     }
   }
-  const playerTied = tied.find(u => u === playerUnit);
-  if (playerTied) return playerTied;
   return tied.length === 1 ? tied[0] : tied[rng.intRange(0, tied.length - 1)];
 }
 
 export function selectAIOrder(
   actors: Unit[],
   potentialTargets: Unit[],
-  playerUnit: Unit,
+  missionTargets: readonly Unit[],
   rng: RNG,
 ): Unit[] {
   const alive = actors.filter(isAIActorUnit);
   const withKey = alive.map(e => ({
     e,
-    target: currentTargetFor(e, potentialTargets, playerUnit, rng),
+    target: currentTargetFor(e, potentialTargets, missionTargets, rng),
     // 同距 tiebreak：RNG 抽一次
     tie: rng.d6() * 6 + rng.d6(),
   })).filter((x): x is { e: Unit; target: Unit; tie: number } => !!x.target);

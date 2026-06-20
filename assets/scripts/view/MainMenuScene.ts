@@ -25,6 +25,7 @@ import {
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
+import { GameMode } from '../core/GameMode';
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import {
@@ -103,6 +104,8 @@ const LANG_BTN_ACTIVE_BD  = new Color(240, 215, 150, 255);
 const CHAPTER_BTN_IDLE    = new Color( 58,  66,  56, 235);
 const CHAPTER_BTN_ACTIVE  = new Color(148,  96,  46, 245);
 const CHAPTER_EMPTY_BG    = new Color( 42,  48,  42, 222);
+const MODE_BTN_IDLE       = new Color( 55,  61,  53, 238);
+const MODE_BTN_ACTIVE     = new Color(145,  95,  44, 245);
 
 const AUTH_CARD_BG        = new Color( 44,  50,  42, 245);
 const AUTH_CARD_ACTIVE    = new Color( 77,  88,  57, 248);
@@ -137,6 +140,9 @@ export class MainMenuScene extends Component {
   private continueTitleLabel: Label | null = null;
   private continueSubLabel: Label | null = null;
   private continueEnabled: boolean = false;
+  private gameMode: GameMode = 'classic';
+  private classicModeBtn: ButtonRefs | null = null;
+  private hardcoreModeBtn: ButtonRefs | null = null;
 
   // 关卡按钮池（1..12，对应 LEVELS）
   private levelBtns: ButtonRefs[] = [];
@@ -196,10 +202,13 @@ export class MainMenuScene extends Component {
     const menuState = MenuProgress.load();
     setLang(menuState.lang);
     this.selectedChapterId = getChapter(menuState.selectedChapterId) ? menuState.selectedChapterId : DEFAULT_CHAPTER_ID;
+    this.gameMode = menuState.gameMode;
+    GameSession.setGameMode(this.gameMode);
 
     this.buildBackground();
     this.buildTitle();
     this.buildContinueButton();
+    this.buildGameModeSwitch();
     this.buildChapterTabs();
     this.buildLevelGrid();
     this.buildTopIcons();
@@ -335,6 +344,42 @@ export class MainMenuScene extends Component {
       0, -13, 400, 20, 15, TEXT_PRIMARY);
   }
 
+  private buildGameModeSwitch() {
+    const x = 390;
+    this.makeLabel(this.node, t('menu.mode.title'), x, 158, 280, 22, 16, TEXT_SUBTITLE);
+    this.classicModeBtn = this.makeRectButton(
+      this.node, x - 70, 126, 130, 38, MODE_BTN_IDLE,
+      () => this.selectGameMode('classic'),
+    );
+    this.classicModeBtn.label = this.makeLabel(
+      this.classicModeBtn.node, t('menu.mode.classic'), 0, 0, 120, 26, 18, TEXT_PRIMARY,
+    );
+    this.hardcoreModeBtn = this.makeRectButton(
+      this.node, x + 70, 126, 130, 38, MODE_BTN_IDLE,
+      () => this.selectGameMode('hardcore'),
+    );
+    this.hardcoreModeBtn.label = this.makeLabel(
+      this.hardcoreModeBtn.node, t('menu.mode.hardcore'), 0, 0, 120, 26, 18, TEXT_PRIMARY,
+    );
+    this.refreshGameModeSwitch();
+  }
+
+  private selectGameMode(mode: GameMode) {
+    if (mode === this.gameMode) return;
+    this.gameMode = mode;
+    GameSession.setGameMode(mode);
+    MenuProgress.setGameMode(mode);
+    this.refreshGameModeSwitch();
+  }
+
+  private refreshGameModeSwitch() {
+    const classic = this.gameMode === 'classic';
+    this.classicModeBtn?.redraw(classic ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: classic });
+    this.hardcoreModeBtn?.redraw(classic ? MODE_BTN_IDLE : MODE_BTN_ACTIVE, { border: !classic });
+    if (this.classicModeBtn?.label) this.classicModeBtn.label.color = classic ? TEXT_TITLE : TEXT_PRIMARY;
+    if (this.hardcoreModeBtn?.label) this.hardcoreModeBtn.label.color = classic ? TEXT_PRIMARY : TEXT_TITLE;
+  }
+
   private refreshContinueButton() {
     if (!this.continueBtn) return;
     const save = readSaveSafe();
@@ -378,6 +423,10 @@ export class MainMenuScene extends Component {
     if (!this.continueEnabled) return;
     const save = readSaveSafe();
     if (!save) return;
+    const savedMode: GameMode = save.gameMode === 'hardcore' ? 'hardcore' : 'classic';
+    this.gameMode = savedMode;
+    GameSession.setGameMode(savedMode);
+    MenuProgress.setGameMode(savedMode);
     if (save.missionSource?.type === 'custom') {
       const pkg = CustomMissionStore.load(save.missionSource.packageId);
       if (pkg) {
@@ -1073,6 +1122,8 @@ export class MainMenuScene extends Component {
     this.continueBtn = null;
     this.continueTitleLabel = null;
     this.continueSubLabel = null;
+    this.classicModeBtn = null;
+    this.hardcoreModeBtn = null;
     this.authNameLabel = null;
     this.authStatusLabel = null;
     this.modalRoot = null;
@@ -1239,6 +1290,7 @@ export class MainMenuScene extends Component {
     console.log('[Menu] load battle scene:', this.battleSceneName,
       '  mission =', GameSession.selectedMissionPath,
       '  source =', GameSession.selectedMissionSource,
+      '  mode =', GameSession.gameMode,
       '  resume =', GameSession.resumeFromSave);
     director.loadScene(this.battleSceneName, (err) => {
       if (err) console.error('[Menu] 加载战斗场景失败:', this.battleSceneName, err);

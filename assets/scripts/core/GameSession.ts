@@ -1,4 +1,5 @@
 import type { MissionSource } from './CustomMissionStore';
+import { DEFAULT_GAME_MODE, GameMode } from './GameMode';
 
 export interface GameSessionState {
   /** Resource path under assets/resources, without extension. */
@@ -9,6 +10,8 @@ export interface GameSessionState {
   selectedLevelId: number;
   /** BattleScene should apply the active save after the mission data loads. */
   resumeFromSave: boolean;
+  /** Rule profile selected on the main menu for this battle. */
+  gameMode: GameMode;
 }
 
 const DEFAULT_MISSION_PATH = 'missions/mission_01';
@@ -18,6 +21,7 @@ const DEFAULT_STATE: GameSessionState = {
   selectedMissionSource: { type: 'resource', missionPath: DEFAULT_MISSION_PATH },
   selectedLevelId: -1,
   resumeFromSave: false,
+  gameMode: DEFAULT_GAME_MODE,
 };
 
 const state: GameSessionState = { ...DEFAULT_STATE };
@@ -27,6 +31,11 @@ export const GameSession = {
   get selectedMissionSource() { return state.selectedMissionSource; },
   get selectedLevelId() { return state.selectedLevelId; },
   get resumeFromSave() { return state.resumeFromSave; },
+  get gameMode() { return state.gameMode; },
+
+  setGameMode(mode: GameMode) {
+    state.gameMode = mode;
+  },
 
   selectMission(levelId: number, missionPath: string) {
     state.selectedLevelId = levelId;
@@ -65,5 +74,6 @@ export const GameSession = {
     state.selectedMissionSource = { ...DEFAULT_STATE.selectedMissionSource };
     state.selectedLevelId = DEFAULT_STATE.selectedLevelId;
     state.resumeFromSave = DEFAULT_STATE.resumeFromSave;
+    state.gameMode = DEFAULT_STATE.gameMode;
   },
 };

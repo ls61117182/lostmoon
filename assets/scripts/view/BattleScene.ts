@@ -79,6 +79,7 @@ import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
   actionFor,
+  aiTargetPriority,
   AI_DICE_COUNT,
   aiColumnFor,
   AIActionEntry,
@@ -93,6 +94,7 @@ import {
   selectAIOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
+import { computePlayerVisibleHexes, fogOfWarEnabled } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
@@ -141,6 +143,7 @@ function turnEndListEffectKey(effectType: TurnEndEffectType, theater?: string): 
 }
 import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
+import { getGameModeConfig } from '../core/GameMode';
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import type { MissionSource } from '../core/CustomMissionStore';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
@@ -172,7 +175,7 @@ import {
   stopManeuverSound,
   playUiClick,
 } from '../audio/GameAudio';
-import { Direction, effectiveDiceTerrain, isFootUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, isFootUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -590,6 +593,14 @@ interface MuzzleFlash {
   dur: number;
 }
 
+interface UnitEffectVisual {
+  unit: Unit;
+  seed: number;
+  fireAlpha: number;
+  smokeAlpha: number;
+  smokeAge: number;
+}
+
 const TERRAIN_COLORS: Record<TerrainType, Color> = {
   road:     new Color(200, 178, 142, 255), // 公路格：偏棕黄沙土地基，drawRoadHexOverlay 再叠颗粒
   field:    new Color(196, 220, 130, 255),
@@ -608,6 +619,8 @@ const FOREST_TREE_DARK  = new Color( 28,  88,  30, 255);
 const FOREST_TREE_MID   = new Color( 45, 118,  42, 255);
 const FOREST_TREE_LIGHT = new Color( 70, 148,  58, 255);
 const FOREST_SHADE      = new Color(  0,   0,   0,  50);
+const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
+const FOG_ATTACK_REVEAL_DURATION = 0.9;
 /**
  * 通用 hex 纹理叠加调色板（用于"沙土 / 路面"等需要颗粒感的格子，参见 `drawHexNoiseOverlay`）：
  * 每个调色板由"软斑 ×2 + 颗粒 ×3"5 色组成。alpha 较低 → 既保留基底主色，又有"无数小颗粒"近距细节。
@@ -777,9 +790,12 @@ const BATTLE_MODAL_LEVEL_BORDER = new Color(204, 190, 142, 230);
 const PHASE_BTN_MOVE      = new Color( 80, 112,  68, 240);
 const PHASE_BTN_ATTACK    = new Color(145,  64,  50, 240);
 const PHASE_BTN_MISC      = new Color(105,  96,  70, 240);
+/** Matching-dice actions use one accent distinct from every single-die action. */
+const DIE_ACTION_DOUBLES  = new Color( 72,  88, 126, 240);
 /** 选择阶段条「舱盖」与杂项同紫系，便于与移动/攻击区分 */
 const PHASE_BTN_HATCH     = new Color(105,  96,  70, 240);
 const PHASE_BTN_DISABLED  = new Color( 68,  68,  63, 210);
+const DIE_ACTION_UNAVAILABLE = new Color(170, 170, 164, 235);
 
 // 骰子托盘配色：未使用统一亮底 + 亮色提示；已使用统一灰底 + 灰色提示。
 const DIE_FACE_FILL      = new Color(245, 245, 235, 255);
@@ -849,18 +865,16 @@ const DICE_HOLD_DUR       = 0.7;
 /** 掷骰阶段内每颗骰子面切换频率 */
 const DICE_CYCLE_INTERVAL = 0.06;
 
-// 战斗视觉：起火（被命中 1 次）= 鲜橙底 + 亮黄边 + 双层火焰环；摧毁 = 暗灰 + 红 X
-const ONFIRE_FILL      = new Color(255, 110,  30, 255);
-const ONFIRE_BORDER    = new Color(255, 230,  60, 255);
-const ONFIRE_RING_OUT  = new Color(255, 160,  40, 200);
+// 战斗视觉：起火 / 受损由炮塔黑烟表达；摧毁 = 暗灰 + 红 X
+const TANK_CONCEALED_ALPHA = 153; // 隐蔽时保留 60% 不透明度（增加 40% 透明度）
 const DESTROYED_FILL   = new Color( 60,  60,  60, 220);
 const DESTROYED_BORDER = new Color(220,  40,  40, 255);
 // 当回合击毁残骸旁短标签（仅「已毁」；起火等改由格子下矢量状态图标；下回合起不再绘制）
 const STATUS_TEXT_DEAD = new Color(220,  60,  60, 255);
 const STATUS_TEXT_OUT  = new Color(  0,   0,   0, 220);
 
-/** 坦克格子下方状态图标（顺序：受损→烟雾→隐蔽→着火→瘫痪→炮塔） */
-type TankStatusBadgeKind = 'damaged' | 'smoke' | 'hidden' | 'fire' | 'paralyzed' | 'turret';
+/** 坦克格子下方状态图标（受损、烟雾、隐蔽、着火均由车体视觉独立表达） */
+type TankStatusBadgeKind = 'paralyzed' | 'turret';
 
 const TANK_BADGE_CELL = 17;
 const TANK_BADGE_GAP = 4;
@@ -941,7 +955,7 @@ export class BattleScene extends Component {
   showReachable: boolean = true;
 
   @property({ tooltip: '坦克移动一格 / 转向 60° 的过程动画时长（秒），敌我共用' })
-  moveDuration: number = 0.5;
+  moveDuration: number = 0.4;
 
   @property({ tooltip: '【已废弃】敌方旧版贪心移动预算；GDD §3.7 骰子驱动 AI 已接管，保留仅为场景资源兼容' })
   movesPerTurn: number = 2;
@@ -952,6 +966,14 @@ export class BattleScene extends Component {
   private g: Graphics | null = null;
   private terrainLayerNode: Node | null = null;
   private mapNode: Node | null = null;
+  private fogNode: Node | null = null;
+  private fogGraphics: Graphics | null = null;
+  private unitEffectNode: Node | null = null;
+  private unitEffectGraphics: Graphics | null = null;
+  private unitEffectVisuals = new Map<string, UnitEffectVisual>();
+  private unitEffectTime = 0;
+  private visibleHexKeys = new Set<string>();
+  private transientFogRevealKeys = new Set<string>();
   private terrainSpriteFrames: Record<TerrainType, SpriteFrame | null> = {
     road: null,
     field: null,
@@ -1463,6 +1485,13 @@ export class BattleScene extends Component {
     this.node.addChild(gNode);
     this.mapNode = gNode;
 
+    const fogNode = new Node('FogOfWar');
+    fogNode.layer = this.node.layer;
+    fogNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.fogGraphics = fogNode.addComponent(Graphics);
+    this.fogNode = fogNode;
+    gNode.addChild(fogNode);
+
     for (let i = 0; i < BattleScene.FOLIAGE_SPRITE_POOL; i++) {
       const h = new Node(`Foliage_${i}`);
       h.layer = this.node.layer;
@@ -1527,6 +1556,15 @@ export class BattleScene extends Component {
       this.officerTopSpritePool.push({ node: ofN, sprite: ofS });
       gNode.addChild(ofN);
     }
+
+    // 独立状态特效层：位于单位贴图之上、状态文字和战争迷雾之下。
+    // Graphics 自行按帧更新，避免烟雾循环迫使整张地图 redraw。
+    const effectNode = new Node('UnitEffects');
+    effectNode.layer = this.node.layer;
+    effectNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.unitEffectGraphics = effectNode.addComponent(Graphics);
+    this.unitEffectNode = effectNode;
+    gNode.addChild(effectNode);
 
     this.loadTankVisualSprites();
 
@@ -1690,6 +1728,7 @@ export class BattleScene extends Component {
     this.phaseDice = [];
     this.clearGunSelection();
     this.outcome = 'ongoing';
+    this.transientFogRevealKeys.clear();
     this.clearFloaters();
     this.clearMuzzleFlashes();
     this.clearDestroyWreckVisuals();
@@ -1725,6 +1764,7 @@ export class BattleScene extends Component {
 
   private redraw() {
     if (!this.g || !this.mission) return;
+    this.refreshPlayerVisibility();
     const g = this.g;
     g.clear();
     this.terrainSpritePoolNext = 0;
@@ -1907,6 +1947,9 @@ export class BattleScene extends Component {
     for (const u of units) {
       if (!u.destroyed) this.drawUnitMaybeAnim(u);
     }
+    this.placeUnitEffectLayerAboveUnits();
+    this.syncUnitEffects(0);
+    this.drawUnitEffects();
 
     // 6. 单位状态：本回合击毁的「已毁」短标签 + 坦克矢量状态图标条
     this.clearStatusLabels();
@@ -1929,6 +1972,48 @@ export class BattleScene extends Component {
 
     // 8. 任务目标进度（击毁计数等）随地图状态变，与 redraw 同步以免 HUD 漏刷
     this.refreshObjectiveHud();
+
+    // 9. 战争迷雾是地图内最后一层，覆盖所有无视野格。
+    this.redrawFogOverlay();
+  }
+
+  private refreshPlayerVisibility() {
+    this.visibleHexKeys.clear();
+    if (!this.mission) return;
+    if (!fogOfWarEnabled(GameSession.gameMode)) {
+      for (const tile of this.mission.map.all()) {
+        this.visibleHexKeys.add(HexMap.keyOf(tile.pos));
+      }
+      return;
+    }
+    this.visibleHexKeys = computePlayerVisibleHexes(this.mission.map, this.mission.sherman);
+  }
+
+  private isHexVisible(pos: Axial): boolean {
+    if (!this.mission || !fogOfWarEnabled(GameSession.gameMode)) return true;
+    const key = HexMap.keyOf(pos);
+    return this.visibleHexKeys.has(key) || this.transientFogRevealKeys.has(key);
+  }
+
+  private isUnitVisible(unit: Unit): boolean {
+    return unit === this.mission?.sherman || this.isHexVisible(unit.pos);
+  }
+
+  private redrawFogOverlay() {
+    const fog = this.fogGraphics;
+    const fogNode = this.fogNode;
+    if (!fog || !fogNode || !this.mission || !this.mapNode) return;
+    fog.clear();
+    fogNode.active = fogOfWarEnabled(GameSession.gameMode);
+    if (!fogNode.active) return;
+    fog.fillColor = FOG_OVERLAY_COLOR;
+    for (const tile of this.mission.map.all()) {
+      if (this.isHexVisible(tile.pos)) continue;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPathOn(fog, c.x, c.y, this.hexSize);
+      fog.fill();
+    }
+    fogNode.setSiblingIndex(this.mapNode.children.length - 1);
   }
 
   private drawAttackableHighlights() {
@@ -1936,6 +2021,7 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     for (const e of enemies) {
       if (e.destroyed) continue;
+      if (!this.isUnitVisible(e)) continue;
       // 主炮不瞄徒步类（步兵 / 军官）：徒步单位专属机枪（§3.1.2 / §3.6），避免大红圈误导
       if (isFootUnit(e)) continue;
       const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater };
@@ -1963,6 +2049,7 @@ export class BattleScene extends Component {
     const units = this.allUnits();
     for (const e of enemies) {
       if (e.destroyed) continue;
+      if (!this.isUnitVisible(e)) continue;
       const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units };
       if (!canMGAttack(ctx).ok) continue;
 
@@ -2120,6 +2207,7 @@ export class BattleScene extends Component {
     let drewAny = false;
     for (const u of enemies) {
       if (u.kind !== 'officer' || u.destroyed) continue;
+      if (!this.isUnitVisible(u)) continue;
       const c = this.project(u.pos.q, u.pos.r);
       g.strokeColor = OFFICER_TILE_STROKE;
       g.lineWidth = 3;
@@ -2178,7 +2266,7 @@ export class BattleScene extends Component {
   }
 
   private syncActiveActingUnitFrame() {
-    if (!this.activeActingUnit || this.activeActingUnit.destroyed) {
+    if (!this.activeActingUnit || this.activeActingUnit.destroyed || !this.isUnitVisible(this.activeActingUnit)) {
       this.destroyActiveActingUnitFrame();
       return;
     }
@@ -2268,17 +2356,15 @@ export class BattleScene extends Component {
 
   // ---------- 单位状态常驻文字 ----------
 
-  /**
-   * 判定单位的"起火外观"是否应当点亮：只由明确的 fireLevel 驱动。
-   * 德军 damaged 仍保留规则语义，但视觉上使用与谢尔曼受损状态同系的裂损 badge。
-   */
-  private isOnFire(u: Unit): boolean {
-    return (u.fireLevel ?? 0) > 0;
+  /** 实际烟雾等级：普通着火取 fireLevel；非主角坦克受损固定等同着火 2 级。 */
+  private damageSmokeLevel(u: Unit): number {
+    return Math.max(u.fireLevel ?? 0, u.damaged ? 2 : 0);
   }
 
   /** 给本回合刚毁的单位在格子下方挂「已毁」短文字；下回合起不再生成。 */
   private spawnStatusLabelIfAny(u: Unit) {
     if (!this.mapNode) return;
+    if (!this.isUnitVisible(u)) return;
     if (!this.shouldShowDestroyWreckVisual(u)) return;
     if (!isFootUnit(u) && isDestroyedTopKind(u.kind)) return;
     const c = (this.anim && this.anim.unit === u)
@@ -2326,20 +2412,11 @@ export class BattleScene extends Component {
     for (const n of this.statusBadgeNodes) n.active = false;
   }
 
-  /**
-   * 收集当前应显示的坦克状态图标（固定顺序）。
-   * 德军 damaged 显示裂损 badge，和谢尔曼的炮塔 / 瘫痪等受损状态保持同一套小标识风格。
-   */
+  /** 收集仍需独立图标表达的坦克状态（固定顺序）。 */
   private collectTankStatusBadgeKinds(u: Unit): TankStatusBadgeKind[] {
     // 徒步类（步兵 / 军官）没有装甲 / 装填等坦克状态，跳过坦克 badge 列。
     if (isFootUnit(u) || u.destroyed) return [];
     const out: TankStatusBadgeKind[] = [];
-    if (u !== this.mission?.sherman && u.damaged) {
-      out.push('damaged');
-    }
-    if (u.smoked) out.push('smoke');
-    if (u.hidden) out.push('hidden');
-    if (this.isOnFire(u)) out.push('fire');
     if (u.paralyzed) out.push('paralyzed');
     if (u.turretDamaged) out.push('turret');
     return out;
@@ -2348,6 +2425,7 @@ export class BattleScene extends Component {
   /** 在格心略下方绘制一排小方标（矢量），不遮挡俯视车体 */
   private spawnStatusBadgesIfAny(u: Unit) {
     if (!this.mapNode) return;
+    if (!this.isUnitVisible(u)) return;
     const kinds = this.collectTankStatusBadgeKinds(u);
     if (kinds.length === 0) return;
 
@@ -2399,59 +2477,6 @@ export class BattleScene extends Component {
     const r = h * 0.55;
     g.lineWidth = 1.5;
     switch (kind) {
-      case 'damaged': {
-        // 裂损：斜向折线
-        g.strokeColor = new Color(255, 200, 80, 255);
-        g.moveTo(cx - h * 0.55, cy - h * 0.35);
-        g.lineTo(cx - h * 0.1, cy + h * 0.05);
-        g.lineTo(cx + h * 0.15, cy - h * 0.45);
-        g.lineTo(cx + h * 0.55, cy + h * 0.35);
-        g.stroke();
-        break;
-      }
-      case 'smoke': {
-        g.fillColor = new Color(140, 160, 190, 200);
-        g.circle(cx - 2.5, cy + 0.5, r * 0.85);
-        g.fill();
-        g.fillColor = new Color(170, 185, 205, 160);
-        g.circle(cx + 3, cy - 1, r * 0.65);
-        g.fill();
-        g.fillColor = new Color(120, 140, 165, 180);
-        g.circle(cx + 1, cy + 2.5, r * 0.5);
-        g.fill();
-        break;
-      }
-      case 'hidden': {
-        g.fillColor = new Color(45, 85, 48, 255);
-        g.rect(cx - h * 0.65, cy - h * 0.35, h * 1.3, h * 0.7);
-        g.fill();
-        g.strokeColor = new Color(190, 175, 120, 255);
-        g.lineWidth = 1.2;
-        for (let i = -1; i <= 1; i++) {
-          const ox = i * 2.2;
-          g.moveTo(cx - h * 0.55 + ox, cy - h * 0.35);
-          g.lineTo(cx + h * 0.55 + ox, cy + h * 0.35);
-          g.stroke();
-        }
-        break;
-      }
-      case 'fire': {
-        g.fillColor = ONFIRE_FILL;
-        g.strokeColor = ONFIRE_BORDER;
-        g.lineWidth = 1.2;
-        g.moveTo(cx, cy + h * 0.55);
-        g.lineTo(cx - h * 0.45, cy - h * 0.15);
-        g.lineTo(cx - h * 0.12, cy - h * 0.35);
-        g.lineTo(cx + h * 0.12, cy - h * 0.35);
-        g.lineTo(cx + h * 0.45, cy - h * 0.15);
-        g.close();
-        g.fill();
-        g.stroke();
-        g.fillColor = new Color(255, 240, 120, 255);
-        g.circle(cx, cy - h * 0.15, r * 0.35);
-        g.fill();
-        break;
-      }
       case 'paralyzed': {
         g.fillColor = new Color(160, 110, 220, 255);
         g.circle(cx, cy, r * 0.75);
@@ -2489,6 +2514,7 @@ export class BattleScene extends Component {
    */
   private spawnUnitNameLabel(u: Unit) {
     if (!this.mapNode) return;
+    if (!this.isUnitVisible(u)) return;
     if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return;
     if (u.destroyed && this.hasLiveUnitOnSameTile(u)) return;
     const c = (this.anim && this.anim.unit === u)
@@ -2554,6 +2580,199 @@ export class BattleScene extends Component {
     return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k };
   }
 
+  private advanceUnitEffects(dt: number) {
+    this.unitEffectTime += dt;
+    this.syncUnitEffects(dt);
+    this.drawUnitEffects();
+  }
+
+  private syncUnitEffects(dt: number) {
+    if (!this.mission) {
+      this.unitEffectVisuals.clear();
+      this.unitEffectGraphics?.clear();
+      return;
+    }
+
+    const liveIds = new Set<string>();
+    for (const unit of this.allUnits()) {
+      liveIds.add(unit.id);
+      const fireTarget = !unit.destroyed && this.damageSmokeLevel(unit) > 0 ? 1 : 0;
+      const smokeTarget = !unit.destroyed && unit.smoked ? 1 : 0;
+      let v = this.unitEffectVisuals.get(unit.id);
+      if (!v && (fireTarget > 0 || smokeTarget > 0)) {
+        v = {
+          unit,
+          seed: this.hashStringToSeed(unit.id),
+          fireAlpha: 0,
+          smokeAlpha: 0,
+          smokeAge: 0,
+        };
+        this.unitEffectVisuals.set(unit.id, v);
+      }
+      if (!v) continue;
+      v.unit = unit;
+      if (smokeTarget > 0) v.smokeAge += dt;
+      v.fireAlpha = this.approachEffectAlpha(v.fireAlpha, fireTarget, dt / (fireTarget ? 0.35 : 0.25));
+      v.smokeAlpha = this.approachEffectAlpha(v.smokeAlpha, smokeTarget, dt / (smokeTarget ? 0.55 : 0.70));
+    }
+
+    for (const [id, v] of this.unitEffectVisuals) {
+      if (!liveIds.has(id)) {
+        this.unitEffectVisuals.delete(id);
+        continue;
+      }
+      if (v.fireAlpha <= 0 && v.smokeAlpha <= 0
+          && this.damageSmokeLevel(v.unit) <= 0 && !v.unit.smoked) {
+        this.unitEffectVisuals.delete(id);
+      }
+    }
+  }
+
+  private approachEffectAlpha(value: number, target: number, step: number): number {
+    if (value < target) return Math.min(target, value + step);
+    if (value > target) return Math.max(target, value - step);
+    return value;
+  }
+
+  private drawUnitEffects() {
+    const g = this.unitEffectGraphics;
+    if (!g) return;
+    g.clear();
+    for (const v of this.unitEffectVisuals.values()) {
+      if (!this.isUnitVisible(v.unit)) continue;
+      const c = this.interpolatedPos(v.unit);
+      if (v.fireAlpha > 0) this.drawFireEffect(g, c.x, c.y, v);
+      if (v.smokeAlpha > 0) this.drawSmokeScreenEffect(g, c.x, c.y, v);
+    }
+  }
+
+  /** 锁定特效层在全部单位贴图之上；名称、浮字和战争迷雾仍可继续排在其上。 */
+  private placeUnitEffectLayerAboveUnits() {
+    const effectNode = this.unitEffectNode;
+    const mapNode = this.mapNode;
+    if (!effectNode || !mapNode || effectNode.parent !== mapNode) return;
+    const unitNodes: Node[] = [
+      ...this.enemyTopSpritePool.map(slot => slot.node),
+      ...this.infantryTopSpritePool.map(slot => slot.node),
+      ...this.officerTopSpritePool.map(slot => slot.node),
+    ];
+    if (this.shermanSpriteNode) unitNodes.push(this.shermanSpriteNode);
+    if (this.shermanTurretSpriteNode) unitNodes.push(this.shermanTurretSpriteNode);
+    let highestUnitIndex = -1;
+    for (const node of unitNodes) {
+      if (node.parent === mapNode) highestUnitIndex = Math.max(highestUnitIndex, node.getSiblingIndex());
+    }
+    effectNode.setSiblingIndex(highestUnitIndex + 1);
+  }
+
+  private drawFireEffect(g: Graphics, cx: number, cy: number, v: UnitEffectVisual) {
+    const u = v.unit;
+    const level = Math.max(1, this.damageSmokeLevel(u));
+    const visualLevel = Math.min(6, level);
+    const bodyFacingLerp: DirectionLerp | null = this.anim?.unit === u && this.anim.kind === 'turn'
+      ? { from: this.anim.turnFrom!, to: this.anim.turnTo!, t: this.anim.t }
+      : null;
+    const origin = this.tankTurretPivotPosition(u, { x: cx, y: cy }, bodyFacingLerp);
+    const count = Math.min(24, 6 + visualLevel * 3);
+    const width = this.hexSize * Math.min(0.30, 0.10 + visualLevel * 0.035);
+    const height = this.hexSize * Math.min(0.92, 0.54 + visualLevel * 0.065);
+    const bodyOpacity = Math.min(224, 128 + visualLevel * 18);
+    const highlightOpacity = Math.min(112, 58 + visualLevel * 9);
+
+    for (let i = 0; i < count; i++) {
+      const phase = (this.unitEffectTime * (0.26 + (i % 3) * 0.018)
+        + i / count + (v.seed % 37) * 0.013) % 1;
+      const curl = Math.sin(phase * Math.PI * 2 + i * 1.43);
+      const x = origin.x + curl * width * (0.25 + phase * 0.75)
+        + Math.sin(this.unitEffectTime * 0.43 + i) * 1.2;
+      const y = origin.y + phase * height;
+      const wobble = 0.92 + Math.sin(this.unitEffectTime * 1.08 + i * 0.77) * 0.10;
+      const r = this.hexSize * (0.075 + phase * 0.085 + (i % 3) * 0.009) * wobble;
+      const lifeAlpha = Math.sin(Math.PI * Math.min(1, phase * 1.08));
+      const density = Math.pow(Math.max(0, lifeAlpha), 0.70);
+      const shade = Math.max(20, 62 - visualLevel * 7) + (i % 3) * 7;
+
+      g.fillColor = new Color(shade, shade + 2, shade + 3,
+        Math.round(v.fireAlpha * density * bodyOpacity));
+      g.circle(x, y, r);
+      g.fill();
+      g.fillColor = new Color(88, 91, 92,
+        Math.round(v.fireAlpha * density * highlightOpacity));
+      g.circle(x - r * 0.20, y + r * 0.24, r * 0.56);
+      g.fill();
+    }
+  }
+
+  /** 返回车体贴图上的炮塔转轴位置；分体坦克使用生成表里的裁切与 pivot 数据。 */
+  private tankTurretPivotPosition(
+    u: Unit,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+  ): { x: number; y: number } {
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    if (isSplitTankKind(u.kind)) {
+      const cfg = splitTankVisualConfigOf(u.kind);
+      const geometry = splitTankGeometryConfigOf(u.kind);
+      const scale = this.hexSize * 1.8 * cfg.hullFitScale
+        / (Math.max(geometry.topTrim.w, geometry.topTrim.h) || 1);
+      const baseX = c.x + cfg.hullOffsetForward * offsetUnit * body.ux
+        + cfg.hullOffsetRight * offsetUnit * body.uy;
+      const baseY = c.y + cfg.hullOffsetForward * offsetUnit * body.uy
+        + cfg.hullOffsetRight * offsetUnit * (-body.ux);
+      const localX = (geometry.pivot.bodyX - (geometry.topTrim.x + geometry.topTrim.w / 2)) * scale;
+      const localY = ((geometry.topTrim.y + geometry.topTrim.h / 2) - geometry.pivot.bodyY) * scale;
+      const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+      const cos = Math.cos(bodyAngle);
+      const sin = Math.sin(bodyAngle);
+      return {
+        x: baseX + localX * cos - localY * sin,
+        y: baseY + localX * sin + localY * cos,
+      };
+    }
+
+    const cfg = tankVisualConfigOf(u.kind);
+    return {
+      x: c.x + cfg.offsetForward * offsetUnit * body.ux + cfg.offsetRight * offsetUnit * body.uy,
+      y: c.y + cfg.offsetForward * offsetUnit * body.uy + cfg.offsetRight * offsetUnit * (-body.ux),
+    };
+  }
+
+  /** 烟雾弹保持低矮、横向铺开，与着火产生的竖向深烟柱明确区分。 */
+  private drawSmokeScreenEffect(g: Graphics, cx: number, cy: number, v: UnitEffectVisual) {
+    const alpha = v.smokeAlpha;
+    const deploy = Math.min(1, v.smokeAge / 0.60);
+    const seedPhase = (v.seed % 521) / 521 * Math.PI * 2;
+    const count = 18;
+    for (let i = 0; i < count; i++) {
+      const cycle = (this.unitEffectTime * (0.20 + (i % 4) * 0.018) + i / count) % 1;
+      const side = Math.floor(i / 3);
+      const sideT = (i % 3 + 0.5) / 3
+        + Math.sin(this.unitEffectTime * 0.36 + seedPhase + i * 1.17) * 0.065;
+      const a0 = (-30 + side * 60) * Math.PI / 180;
+      const a1 = (-30 + (side + 1) * 60) * Math.PI / 180;
+      const ringScale = 0.76 + cycle * 0.08;
+      const edgeX = Math.cos(a0) + (Math.cos(a1) - Math.cos(a0)) * sideT;
+      const edgeY = Math.sin(a0) + (Math.sin(a1) - Math.sin(a0)) * sideT;
+      const x = cx + edgeX * this.hexSize * ringScale
+        + Math.sin(this.unitEffectTime * 0.62 + i * 1.31) * 1.8;
+      const y = cy + edgeY * this.hexSize * ringScale
+        + Math.cos(this.unitEffectTime * 0.48 + i * 0.91) * 1.5;
+      const wobble = 0.92 + Math.sin(this.unitEffectTime * 1.25 + i * 0.83) * 0.10;
+      const r = this.hexSize * (0.105 + (i % 4) * 0.014 + cycle * 0.035) * wobble;
+      const lifeAlpha = 0.72 + Math.sin(cycle * Math.PI) * 0.28;
+
+      // 白色主体明确表达烟雾弹；烟团只沿六角格内缘成环，中央车体区域保持清晰。
+      const shade = 210 + (i % 3) * 8;
+      g.fillColor = new Color(shade, shade + 2, shade + 5, Math.round(alpha * lifeAlpha * deploy * 166));
+      g.circle(x, y, r);
+      g.fill();
+      g.fillColor = new Color(248, 250, 252, Math.round(alpha * lifeAlpha * deploy * 104));
+      g.circle(x - r * 0.22, y + r * 0.25, r * 0.58);
+      g.fill();
+    }
+  }
+
   /** 是否绘制本回合击毁残骸（灰圆+红叉）及「已毁」标签（与 `destroyWreckVisualIds` 同步）。 */
   private shouldShowDestroyWreckVisual(u: Unit): boolean {
     if (isFootUnit(u)) return false;
@@ -2602,6 +2821,7 @@ export class BattleScene extends Component {
     opts?: { size?: number; dur?: number; rise?: number },
   ) {
     if (!this.mapNode) return;
+    if (!this.isHexVisible({ q: atQ, r: atR })) return;
     const pixel = this.project(atQ, atR);
     const startY = pixel.y + this.hexSize * 0.55;
 
@@ -2664,6 +2884,7 @@ export class BattleScene extends Component {
   /** 同一接口画任意单位：若该单位正是当前动画对象，使用插值位置 / 插值朝向 */
   private spawnMuzzleFlash(attacker: Unit | null, target: Unit | null) {
     if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
+    if (!this.isUnitVisible(attacker)) return;
     const pos = this.muzzleFlashPosition(attacker, target);
     if (!pos) return;
 
@@ -2851,6 +3072,7 @@ export class BattleScene extends Component {
   }
 
   private drawUnitMaybeAnim(u: Unit) {
+    if (!this.isUnitVisible(u)) return;
     if (this.anim && this.anim.unit === u) {
       if (this.anim.kind === 'turn') {
         const c = this.project(u.pos.q, u.pos.r);
@@ -2874,6 +3096,7 @@ export class BattleScene extends Component {
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
     if (this.floaters.length > 0) this.advanceFloaters(dt);
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
+    this.advanceUnitEffects(dt);
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) {
@@ -3069,7 +3292,10 @@ export class BattleScene extends Component {
 
   /** 六边形路径（moveTo 首顶点 + close） */
   private traceHexPath(cx: number, cy: number, size: number) {
-    const g = this.g!;
+    this.traceHexPathOn(this.g!, cx, cy, size);
+  }
+
+  private traceHexPathOn(g: Graphics, cx: number, cy: number, size: number) {
     for (let i = 0; i < 6; i++) {
       const angle = (-30 + 60 * i) * Math.PI / 180;
       const x = cx + size * Math.cos(angle);
@@ -4420,6 +4646,7 @@ export class BattleScene extends Component {
     const w = displayW > 0 ? displayW : sf.width;
     const h = displayH > 0 ? displayH : sf.height;
     sp.spriteFrame = sf;
+    this.applyTankConcealmentOpacity(sp, u);
     const ut = node.getComponent(UITransform)!;
 
     // 取本车视觉配置（大小 + 自身朝向局部偏移）
@@ -4558,6 +4785,7 @@ export class BattleScene extends Component {
 
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    sp.color = new Color(255, 255, 255, 255);
     const ut = node.getComponent(UITransform)!;
     ut.setContentSize(size.w, size.h);
     ut.setAnchorPoint(0.5, 0.5);
@@ -4626,6 +4854,7 @@ export class BattleScene extends Component {
 
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyTankConcealmentOpacity(sp, u);
     ut.setContentSize(
       BattleScene.SHERMAN_TURRET_TRIM_W * scaleX * cfg.turretScale,
       BattleScene.SHERMAN_TURRET_TRIM_H * scaleY * cfg.turretScale,
@@ -4668,6 +4897,7 @@ export class BattleScene extends Component {
 
     sp.spriteFrame = assets.hull;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyTankConcealmentOpacity(sp, u);
     ut.setContentSize(geometry.topTrim.w * scale, geometry.topTrim.h * scale);
     ut.setAnchorPoint(0.5, 0.5);
     node.setScale(1, 1, 1);
@@ -4721,6 +4951,7 @@ export class BattleScene extends Component {
 
     sp.spriteFrame = assets.turret;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyTankConcealmentOpacity(sp, u);
     ut.setContentSize(turretTrim.w * turretScale, turretTrim.h * turretScale);
     const anchorX = (pivot.spriteX - turretTrim.x) / turretTrim.w;
     const anchorY = 1 - ((pivot.spriteY - turretTrim.y) / turretTrim.h);
@@ -4736,6 +4967,15 @@ export class BattleScene extends Component {
     );
     node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
     node.active = true;
+  }
+
+  private applyTankConcealmentOpacity(sp: Sprite, u: Unit) {
+    sp.color = new Color(255, 255, 255, u.hidden ? TANK_CONCEALED_ALPHA : 255);
+  }
+
+  private tankVisualColor(color: Color, u: Unit): Color {
+    if (!u.hidden) return color;
+    return new Color(color.r, color.g, color.b, Math.round(color.a * TANK_CONCEALED_ALPHA / 255));
   }
 
   private topDownForwardVec(
@@ -5028,28 +5268,13 @@ export class BattleScene extends Component {
       }
     }
 
-    // 起火：鲜橙填充 + 亮黄边 + 外层橙红环；只由 fireLevel 触发，普通 damaged 不再套用火焰外观。
-    if (this.isOnFire(u)) {
-      g.fillColor = ONFIRE_FILL;
-      g.strokeColor = ONFIRE_BORDER;
-      g.lineWidth = 3;
-      g.circle(c.x, c.y, r);
-      g.fill();
-      g.stroke();
-      // 外层橙红环（半透明），制造"火苗外沿"感
-      g.strokeColor = ONFIRE_RING_OUT;
-      g.lineWidth = 4;
-      g.circle(c.x, c.y, r + 5);
-      g.stroke();
-      g.lineWidth = 2;
-    } else {
-      g.fillColor = FACTION_COLORS[u.faction];
-      g.strokeColor = UNIT_BORDER;
-      g.lineWidth = 2;
-      g.circle(c.x, c.y, r);
-      g.fill();
-      g.stroke();
-    }
+    // 起火和受损统一由炮塔黑烟表达；矢量回退车体保持原阵营配色。
+    g.fillColor = this.tankVisualColor(FACTION_COLORS[u.faction], u);
+    g.strokeColor = this.tankVisualColor(UNIT_BORDER, u);
+    g.lineWidth = 2;
+    g.circle(c.x, c.y, r);
+    g.fill();
+    g.stroke();
 
     // PNG 车辆通过炮管/炮塔表达朝向；fallback 矢量车体不再额外画长朝向线，避免出现多余细边线。
   }
@@ -5569,8 +5794,9 @@ export class BattleScene extends Component {
         count: params.count,
       });
     }
-    if (entry.key === 'battleLog.combatMg' && params) {
+    if ((entry.key === 'battleLog.combatMg' || entry.key === 'battleLog.combatMgAI') && params) {
       return t(entry.key, {
+        actor: params.actor,
         diceExpr: params.diceExpr,
         need: params.need,
         result: t(String(params.resultKey)),
@@ -7035,6 +7261,91 @@ export class BattleScene extends Component {
 
   // ---------- 骰子点击菜单 ----------
 
+  private crewActionUnavailable(slot: 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver'): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const crew = this.mission.sherman.crew;
+    if (!crew || crew[slot]) return null;
+    const roleKey = {
+      commander: 'crew.role.1',
+      loader: 'crew.role.2',
+      gunner: 'crew.role.3',
+      driver: 'crew.role.4',
+      coDriver: 'crew.role.5',
+    }[slot];
+    return t('floater.roleUnavailable', { role: t(roleKey) });
+  }
+
+  private turnActionUnavailable(crewSlot?: 'driver' | 'coDriver'): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
+    if (crewReason) return crewReason;
+    return this.mission.sherman.paralyzed ? t('floater.paralyzedBlocked') : null;
+  }
+
+  private driveActionUnavailable(dirSign: 1 | -1, crewSlot?: 'driver'): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
+    if (crewReason) return crewReason;
+    const { map, sherman } = this.mission;
+    if (sherman.paralyzed) return t('floater.paralyzedBlocked');
+    if (sherman.facing === null) return t('floater.noFacing');
+    const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
+    const to = neighbor(sherman.pos, driveDir as Direction);
+    if (isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) return null;
+    const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
+    if (!map.get(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
+      return t('floater.blockedTerrain');
+    }
+    const blocker = this.allUnits().find(e => e !== sherman && !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    return blocker ? t('floater.enemyBlock') : null;
+  }
+
+  private reloadActionUnavailable(crewSlot?: 'loader'): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
+    if (crewReason) return crewReason;
+    return this.mission.sherman.loaded ? t('floater.alreadyLoaded') : null;
+  }
+
+  private gunActionUnavailable(crewSlot?: 'gunner'): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const s = this.mission.sherman;
+    if (s.turretDamaged) return t('attack.reason.turretDamaged');
+    const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
+    if (crewReason) return crewReason;
+    if (!s.loaded) return t('hud.unloaded');
+    const hasTarget = this.mission.enemies.some(e => !e.destroyed && canAttack({
+      attacker: s,
+      target: e,
+      map: this.mission!.map,
+    }).ok);
+    return hasTarget ? null : t('floater.noGunTarget');
+  }
+
+  private mgActionUnavailable(crewSlot?: 'coDriver'): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
+    if (crewReason) return crewReason;
+    const { map, sherman } = this.mission;
+    const units = this.allUnits();
+    const hasTarget = this.mission.enemies.some(e => !e.destroyed && canMGAttack({
+      attacker: sherman,
+      target: e,
+      map,
+      theater: this.mission!.data.theater,
+      units,
+    }).ok);
+    return hasTarget ? null : t('floater.noInfantry');
+  }
+
+  private showDieActionUnavailable(reason: string) {
+    if (!this.mission) return;
+    const s = this.mission.sherman;
+    this.closeDiePopover();
+    this.spawnFloater(s.pos.q, s.pos.r, reason,
+      new Color(255, 200, 120, 255), { size: 22, dur: 1.0, rise: 24 });
+  }
+
   private onClickDie(idx: number) {
     playUiClick();
     if (this.isBusy()) return;
@@ -7054,19 +7365,19 @@ export class BattleScene extends Component {
     const hasDoubles = this.findDoublesPartner(idx) >= 0;
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
-      if (a === 'drive' && !hasDoubles) {
+      if (a === 'drive' && !hasDoubles && !this.driveActionUnavailable(+1)) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, +1);
         return;
       }
-      if (a === 'reverse' && !hasDoubles) {
+      if (a === 'reverse' && !hasDoubles && !this.driveActionUnavailable(-1)) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, -1);
         return;
       }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
-      if (a === 'reload' && !hasDoubles) {
+      if (a === 'reload' && !hasDoubles && !this.reloadActionUnavailable()) {
         this.closeDiePopover();
         this.tryReload(idx);
         return;
@@ -7075,7 +7386,7 @@ export class BattleScene extends Component {
       // 杂项阶段 6 点 = 灭火，无分支 → 直接执行。
       // 但若有同点搭档（= 可走"隐蔽"对子动作），则改走 popover 让玩家选择。
       const m = classifyMiscDie(slot.pip);
-      if (m === 'fire_suppress' && !hasDoubles) {
+      if (m === 'fire_suppress' && !hasDoubles && (this.mission?.sherman.fireLevel ?? 0) > 0) {
         this.closeDiePopover();
         this.tryFireSuppress(idx);
         return;
@@ -7105,59 +7416,59 @@ export class BattleScene extends Component {
     // 构造动作项
     type Item = { text: string; color: Color; onClick: () => void };
     const items: Item[] = [];
+    const addItem = (text: string, color: Color, onClick: () => void, unavailableReason: string | null = null) => {
+      items.push({
+        text,
+        color: unavailableReason ? DIE_ACTION_UNAVAILABLE : color,
+        onClick: unavailableReason ? () => this.showDieActionUnavailable(unavailableReason) : onClick,
+      });
+    };
 
     const hasDoublesPartner = this.findDoublesPartner(idx) >= 0;
 
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
       if (a === 'turn') {
-        items.push({ text: t('action.turnCW'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryTurnSherman(idx, +1) });
-        items.push({ text: t('action.turnCCW'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryTurnSherman(idx, -1) });
+        addItem(t('action.turnCW'), PHASE_BTN_MOVE,
+          () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable());
+        addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
+          () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable());
       } else if (a === 'drive') {
         // GDD §3.6：点数 5 / 6 只能前进，不再提供后退选项
-        items.push({ text: t('action.advance'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryDriveSherman(idx, +1) });
+        addItem(t('action.advance'), PHASE_BTN_MOVE,
+          () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
       } else if (a === 'reverse') {
         // GDD §3.6：点数 1 → 后退 1 格
-        items.push({ text: t('action.reverse'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryDriveSherman(idx, -1) });
-      } else {
-        // 'start' / 'none'：没有有效动作，提供"放弃"
-        items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
-          onClick: () => this.discardDie(idx) });
+        addItem(t('action.reverse'), PHASE_BTN_MOVE,
+          () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1));
       }
       // §3.6 A 列对子：驾驶员前进 / 副驾驶 ↻ 60° / 副驾驶 ↺ 60°
       if (hasDoublesPartner) {
-        items.push({ text: t('action.doublesDriverAdvance'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryDoublesDriverAdvance(idx) });
-        items.push({ text: t('action.doublesCoDriverTurnCW'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryDoublesCoDriverTurn(idx, +1) });
-        items.push({ text: t('action.doublesCoDriverTurnCCW'), color: PHASE_BTN_MOVE,
-          onClick: () => this.tryDoublesCoDriverTurn(idx, -1) });
+        addItem(t('action.doublesDriverAdvance'), DIE_ACTION_DOUBLES,
+          () => this.tryDoublesDriverAdvance(idx), this.driveActionUnavailable(+1, 'driver'));
+        addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
+          () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'));
+        addItem(t('action.doublesCoDriverTurnCCW'), DIE_ACTION_DOUBLES,
+          () => this.tryDoublesCoDriverTurn(idx, -1), this.turnActionUnavailable('coDriver'));
       }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
       if (a === 'reload') {
-        items.push({ text: t('action.reload'), color: PHASE_BTN_ATTACK,
-          onClick: () => this.tryReload(idx) });
+        addItem(t('action.reload'), PHASE_BTN_ATTACK,
+          () => this.tryReload(idx), this.reloadActionUnavailable());
       } else if (a === 'gun') {
-        items.push({ text: t('action.fire'), color: PHASE_BTN_ATTACK,
-          onClick: () => this.selectGunDie(idx) });
+        addItem(t('action.fire'), PHASE_BTN_ATTACK,
+          () => this.selectGunDie(idx), this.gunActionUnavailable());
       } else if (a === 'mg') {
-        items.push({ text: t('action.fireMG'), color: PHASE_BTN_ATTACK,
-          onClick: () => this.selectMGDie(idx) });
-      } else {
-        items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
-          onClick: () => this.discardDie(idx) });
+        addItem(t('action.fireMG'), PHASE_BTN_ATTACK,
+          () => this.selectMGDie(idx), this.mgActionUnavailable());
       }
       // §3.6 B 列对子：装填手装填（+同点骰）/ 炮手主炮射击（+同点骰）
       if (hasDoublesPartner) {
-        items.push({ text: t('action.doublesLoaderReload'), color: PHASE_BTN_ATTACK,
-          onClick: () => this.tryDoublesLoaderReload(idx) });
-        items.push({ text: t('action.doublesGunnerFire'), color: PHASE_BTN_ATTACK,
-          onClick: () => this.selectGunDieDoubles(idx) });
+        addItem(t('action.doublesLoaderReload'), DIE_ACTION_DOUBLES,
+          () => this.tryDoublesLoaderReload(idx), this.reloadActionUnavailable('loader'));
+        addItem(t('action.doublesGunnerFire'), DIE_ACTION_DOUBLES,
+          () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'));
       }
     } else if (this.playerStep === 'misc') {
       const m = classifyMiscDie(slot.pip);
@@ -7165,72 +7476,77 @@ export class BattleScene extends Component {
       switch (m) {
         case 'gunner_gun_or_reload':
           // 1 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
-          items.push({ text: t('action.reload'), color: PHASE_BTN_ATTACK,
-            onClick: () => this.tryReload(idx) });
-          items.push({ text: t('action.fire'), color: PHASE_BTN_ATTACK,
-            onClick: () => this.selectGunDie(idx) });
+          addItem(t('action.reload'), PHASE_BTN_ATTACK,
+            () => this.tryReload(idx), this.reloadActionUnavailable('loader'));
+          addItem(t('action.fire'), PHASE_BTN_ATTACK,
+            () => this.selectGunDie(idx), this.gunActionUnavailable('gunner'));
           break;
         case 'codriver_mg':
           // 2 点 C 列：副驾驶机枪射击步兵
-          items.push({ text: t('action.fireMGCoDriver'), color: PHASE_BTN_ATTACK,
-            onClick: () => this.selectMGDie(idx) });
+          addItem(t('action.fireMGCoDriver'), PHASE_BTN_ATTACK,
+            () => this.selectMGDie(idx), this.mgActionUnavailable('coDriver'));
           break;
         case 'driver_turn_or_drive':
           // 3 点 C 列：驾驶员转向 / 前进
-          items.push({ text: t('action.turnCW'),  color: PHASE_BTN_MOVE,
-            onClick: () => this.tryTurnSherman(idx, +1) });
-          items.push({ text: t('action.turnCCW'), color: PHASE_BTN_MOVE,
-            onClick: () => this.tryTurnSherman(idx, -1) });
-          items.push({ text: t('action.advance'), color: PHASE_BTN_MOVE,
-            onClick: () => this.tryDriveSherman(idx, +1) });
+          addItem(t('action.turnCW'), PHASE_BTN_MOVE,
+            () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable('driver'));
+          addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
+            () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable('driver'));
+          addItem(t('action.advance'), PHASE_BTN_MOVE,
+            () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1, 'driver'));
           break;
         case 'repair':
-          // 4 点 C 列：修复炮塔 或 瘫痪；无损则只给"放弃"
-          if (sherman && tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos))) {
-            items.push({ text: t('action.repairTurret'), color: PHASE_BTN_MISC,
-              onClick: () => this.tryRepair(idx, 'turret') });
-            items.push({ text: t('action.repairMobility'), color: PHASE_BTN_MISC,
-              onClick: () => this.tryRepair(idx, 'mobility') });
-          } else if (sherman && sherman.turretDamaged) {
-            items.push({ text: t('action.repairTurret'), color: PHASE_BTN_MISC,
-              onClick: () => this.tryRepair(idx, 'turret') });
-          }
-          if (sherman && sherman.paralyzed) {
-            items.push({ text: t('action.repairMobility'), color: PHASE_BTN_MISC,
-              onClick: () => this.tryRepair(idx, 'mobility') });
-          }
-          if (items.length === 0) {
-            items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
-              onClick: () => { this.discardDie(idx); this.spawnNoRepairFloater(); } });
+          // 4 点 C 列：修复炮塔或瘫痪；无可修复内容时保留浅灰提示项。
+          if (sherman) {
+            const repairBlocked = tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos))
+              ? t('floater.beachNoRepair') : null;
+            if (sherman.turretDamaged) {
+              addItem(t('action.repairTurret'), PHASE_BTN_MISC,
+                () => this.tryRepair(idx, 'turret'), repairBlocked);
+            }
+            if (sherman.paralyzed) {
+              addItem(t('action.repairMobility'), PHASE_BTN_MISC,
+                () => this.tryRepair(idx, 'mobility'), repairBlocked);
+            }
+            if (!sherman.turretDamaged && !sherman.paralyzed) {
+              addItem(t('action.repair'), PHASE_BTN_MISC, () => {}, t('floater.noRepair'));
+            }
           }
           break;
         case 'smoke_or_repair':
           // 5 点 C 列：烟雾 / 修复（炮塔 / 瘫痪）
-          items.push({ text: t('action.smoke'), color: PHASE_BTN_MISC,
-            onClick: () => this.trySmoke(idx) });
+          const smokeBlocked = !sherman ? t('attack.reason.unknown')
+            : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoSmoke')
+              : sherman.smoked ? t('floater.alreadySmoked') : null;
+          addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), smokeBlocked);
           if (sherman && sherman.turretDamaged) {
-            items.push({ text: t('action.repairTurret'), color: PHASE_BTN_MISC,
-              onClick: () => this.tryRepair(idx, 'turret') });
+            addItem(t('action.repairTurret'), PHASE_BTN_MISC, () => this.tryRepair(idx, 'turret'),
+              tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoRepair') : null);
           }
           if (sherman && sherman.paralyzed) {
-            items.push({ text: t('action.repairMobility'), color: PHASE_BTN_MISC,
-              onClick: () => this.tryRepair(idx, 'mobility') });
+            addItem(t('action.repairMobility'), PHASE_BTN_MISC, () => this.tryRepair(idx, 'mobility'),
+              tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoRepair') : null);
+          }
+          if (sherman && !sherman.turretDamaged && !sherman.paralyzed) {
+            addItem(t('action.repair'), PHASE_BTN_MISC, () => {}, t('floater.noRepair'));
           }
           break;
         case 'fire_suppress':
           // 6 点 C 列：灭火（着火程度 -1）—— 正常走 onClickDie 直接执行；
           // 若 popover 被触发（比如玩家通过其他途径），这里兜底给一个按钮
-          items.push({ text: t('action.fireSuppress'), color: PHASE_BTN_MISC,
-            onClick: () => this.tryFireSuppress(idx) });
+          addItem(t('action.fireSuppress'), PHASE_BTN_MISC, () => this.tryFireSuppress(idx),
+            (sherman?.fireLevel ?? 0) > 0 ? null : t('floater.noFire'));
           break;
         default:
-          items.push({ text: t('action.skip'), color: PHASE_BTN_DISABLED,
-            onClick: () => this.discardDie(idx) });
+          break;
       }
       // §3.6 对子 C 列：只要存在同点搭档，就追加"隐蔽（+同点骰）"
       if (hasDoublesPartner) {
-        items.push({ text: t('action.concealPair'), color: PHASE_BTN_MISC,
-          onClick: () => this.tryConcealment(idx) });
+        const concealReason = !sherman ? t('attack.reason.unknown')
+          : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoConceal')
+            : sherman.hidden ? t('floater.alreadyConcealed') : null;
+        addItem(t('action.concealPair'), DIE_ACTION_DOUBLES,
+          () => this.tryConcealment(idx), concealReason);
       }
     }
 
@@ -7301,9 +7617,10 @@ export class BattleScene extends Component {
     } else {
       return;
     }
+    if (this.playerStep === 'misc' && !this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
 
     const sherman = this.mission.sherman;
-    // §3.5 瘫痪：不可转向 / 前进 / 后退；骰子保留不消耗，玩家可用来走修复或放弃
+    // §3.5 瘫痪：不可转向 / 前进 / 后退；骰子保留不消耗。
     if (sherman.paralyzed) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.paralyzedBlocked'),
         new Color(255, 160, 160, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -7365,6 +7682,7 @@ export class BattleScene extends Component {
     } else {
       return;
     }
+    if (this.playerStep === 'misc' && !this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
 
     const { map, sherman } = this.mission;
     // §3.5 瘫痪：不可前进 / 后退；骰子保留不消耗
@@ -7447,17 +7765,6 @@ export class BattleScene extends Component {
     // 见 update() 里的 this.phase === 'player' 分支。
   }
 
-  /** 放弃一颗无效骰（如 1 / 2 / 机枪等 MVP 未实装的动作）。 */
-  private discardDie(dieIdx: number) {
-    const slot = this.phaseDice[dieIdx];
-    if (!slot || slot.used) return;
-    slot.used = true;
-    this.closeDiePopover();
-    this.refreshPhaseUI();
-    this.updateHUD();
-    this.autoEndPhaseIfDone();
-  }
-
   // ---------- 攻击阶段动作 ----------
 
   /**
@@ -7477,6 +7784,7 @@ export class BattleScene extends Component {
     } else {
       return;
     }
+    if (this.playerStep === 'misc' && !this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
     const sherman = this.mission.sherman;
     if (sherman.loaded) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.loaded'),
@@ -7511,6 +7819,7 @@ export class BattleScene extends Component {
     } else {
       return;
     }
+    if (this.playerStep === 'misc' && !this.checkCrewAlive('gunner')) { this.closeDiePopover(); return; }
     // 再次点同一颗 → 取消选择
     if (this.selectedGunDieIdx === dieIdx) {
       this.clearGunSelection();
@@ -7676,7 +7985,7 @@ export class BattleScene extends Component {
     this.autoEndPhaseIfDone();
   }
 
-  /** 灭火：消耗 die=6 骰，若 fireLevel > 0 则 -1；否则弹浮字并放弃。 */
+  /** 灭火：消耗对应骰并令 fireLevel -1；无火时只提示且不消耗骰子。 */
   private tryFireSuppress(dieIdx: number) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
@@ -7688,8 +7997,7 @@ export class BattleScene extends Component {
     if (lvl <= 0) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.noFire'),
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
-      // 无火可灭 → 视为放弃本骰（不白费点击）
-      this.discardDie(dieIdx);
+      this.closeDiePopover();
       return;
     }
     sherman.fireLevel = lvl - 1;
@@ -7703,14 +8011,6 @@ export class BattleScene extends Component {
     this.redraw();
     this.refreshStatusPanel();
     this.autoEndPhaseIfDone();
-  }
-
-  /** 修复动作在无可修项时顺便飘一条提示。 */
-  private spawnNoRepairFloater() {
-    if (!this.mission) return;
-    const s = this.mission.sherman;
-    this.spawnFloater(s.pos.q, s.pos.r, t('floater.noRepair'),
-      new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
   }
 
   /**
@@ -7842,6 +8142,10 @@ export class BattleScene extends Component {
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
+    if (s.smoked) {
+      this.showDieActionUnavailable(t('floater.alreadySmoked'));
+      return;
+    }
     s.smoked = true;
     slot.used = true;
     this.closeDiePopover();
@@ -7874,6 +8178,10 @@ export class BattleScene extends Component {
       this.closeDiePopover();
       this.spawnFloater(s.pos.q, s.pos.r, t('floater.beachNoConceal'),
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      return;
+    }
+    if (s.hidden) {
+      this.showDieActionUnavailable(t('floater.alreadyConcealed'));
       return;
     }
     if (partnerIdx < 0) {
@@ -8150,14 +8458,33 @@ export class BattleScene extends Component {
       : this.mission.enemies;
   }
 
+  private aiMissionTargetsFor(actor: Unit): Unit[] {
+    if (!this.mission) return [];
+    if (actor.faction !== 'allied') return [this.mission.sherman];
+    const candidates = this.mission.enemies;
+    const objective = this.mission.data.objective;
+    if (objective.type === 'destroy_all_enemies' || objective.destroyAllEnemiesBeforeEvac) {
+      return candidates;
+    }
+    if (objective.type === 'destroy_truck') {
+      return candidates.filter(u => u.kind === 'truck');
+    }
+    const kinds = objective.kinds?.length
+      ? objective.kinds
+      : (objective.kind ? [objective.kind] : []);
+    return candidates.filter(u => kinds.includes(u.kind));
+  }
+
   private currentAITarget(actor: Unit): Unit | null {
     if (!this.mission) return null;
-    return currentTargetFor(actor, this.aiTargetsFor(actor), this.mission.sherman, this.rng);
+    return currentTargetFor(actor, this.aiTargetsFor(actor), this.aiMissionTargetsFor(actor), this.rng);
   }
 
   private selectAIShootTarget(actor: Unit, randomizeTies: boolean, adjacentOnly = false): Unit | null {
     if (!this.mission) return null;
     const { map } = this.mission;
+    const missionTargets = this.aiMissionTargetsFor(actor);
+    let bestPriority = Infinity;
     let bestDist = Infinity;
     const tied: Unit[] = [];
     for (const target of this.aiTargetsFor(actor)) {
@@ -8165,18 +8492,54 @@ export class BattleScene extends Component {
       if (isFootUnit(target) || target.kind === 'truck') continue;
       if (adjacentOnly && hexDistance(actor.pos, target.pos) !== 1) continue;
       if (!canAttack({ attacker: actor, target, map }).ok) continue;
+      const priority = aiTargetPriority(target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
-      if (d < bestDist) {
+      if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
+        bestPriority = priority;
         bestDist = d;
         tied.length = 0;
         tied.push(target);
-      } else if (d === bestDist) {
+      } else if (priority === bestPriority && d === bestDist) {
         tied.push(target);
       }
     }
     if (tied.length === 0) return null;
     if (tied.length === 1 || !randomizeTies) return tied[0];
     return tied[this.rng.intRange(0, tied.length - 1)];
+  }
+
+  /** Hardcore tank shoot fallback: select infantry by the same legality rules as the player MG. */
+  private selectAIMGTarget(actor: Unit, randomizeTies: boolean): Unit | null {
+    if (!this.mission || !isSplitTankKind(actor.kind)) return null;
+    const { map } = this.mission;
+    const units = this.allUnits();
+    const missionTargets = this.aiMissionTargetsFor(actor);
+    let bestPriority = Infinity;
+    let bestDist = Infinity;
+    const tied: Unit[] = [];
+    for (const target of this.aiTargetsFor(actor)) {
+      if (target.faction === actor.faction) continue;
+      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units }).ok) continue;
+      const priority = aiTargetPriority(target, missionTargets);
+      const d = hexDistance(actor.pos, target.pos);
+      if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
+        bestPriority = priority;
+        bestDist = d;
+        tied.length = 0;
+        tied.push(target);
+      } else if (priority === bestPriority && d === bestDist) {
+        tied.push(target);
+      }
+    }
+    if (tied.length === 0) return null;
+    if (tied.length === 1 || !randomizeTies) return tied[0];
+    return tied[this.rng.intRange(0, tied.length - 1)];
+  }
+
+  private canAIExecuteShoot(actor: Unit): boolean {
+    if (this.selectAIShootTarget(actor, false)) return true;
+    return getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG
+      && !!this.selectAIMGTarget(actor, false);
   }
 
   private beginAllyPhase() {
@@ -8192,7 +8555,12 @@ export class BattleScene extends Component {
       return;
     }
     const aiCandidates = this.mission.allies.filter(isAIActorUnit);
-    this.enemyOrder = selectAIOrder(aiCandidates, this.mission.enemies, this.mission.sherman, this.rng);
+    this.enemyOrder = selectAIOrder(
+      aiCandidates,
+      this.mission.enemies,
+      aiCandidates.length > 0 ? this.aiMissionTargetsFor(aiCandidates[0]) : [],
+      this.rng,
+    );
     this.enemyIndex = 0;
     this.enemyDice = [];
     this.enemyDiceUsed = [];
@@ -8222,7 +8590,7 @@ export class BattleScene extends Component {
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       [this.mission.sherman, ...this.mission.allies],
-      this.mission.sherman,
+      [this.mission.sherman],
       this.rng,
     );
     this.enemyIndex = 0;
@@ -8315,7 +8683,7 @@ export class BattleScene extends Component {
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       [this.mission.sherman, ...this.mission.allies],
-      this.mission.sherman,
+      [this.mission.sherman],
       this.rng,
     );
     this.enemyIndex = 0;
@@ -8608,7 +8976,7 @@ export class BattleScene extends Component {
   private collectUnitInspectStatusLines(u: Unit): string[] {
     const parts: string[] = [];
     const tankLike = !isFootUnit(u);
-    if (u.kind === 'sherman') {
+    if (u === this.mission?.sherman) {
       if ((u.fireLevel ?? 0) > 0) {
         parts.push(t('tileInspect.status.shermanFire', { n: u.fireLevel ?? 0 }));
       }
@@ -8804,6 +9172,11 @@ export class BattleScene extends Component {
       y = y - padDiv - 2;
     }
     // 单位区
+    if (!this.isHexVisible(tile.pos)) {
+      const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.unitUnknown'), 16);
+      mark(y, h);
+      return { totalH: -low + 16, lowest: low };
+    }
     const units = this.unitsOnTileAxial(tile.pos);
     if (units.length === 0) {
       const { h } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.noUnit'), 16);
@@ -10016,6 +10389,7 @@ export class BattleScene extends Component {
       return false;
     }
     const data = captureSave({
+      gameMode: GameSession.gameMode,
       missionId: this.missionId,
       mission: this.mission,
       turn: this.turn,
@@ -10106,6 +10480,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.transientFogRevealKeys.clear();
     this.clearDestroyWreckVisuals();
     // 胜负状态也要随读档重新判定
     this.outcome = checkOutcome(this.mission);
@@ -10261,7 +10636,7 @@ export class BattleScene extends Component {
     // shoot 的真正可行性必须由 canAttack 决定，这里先做再说
     const tryOne = (a: EnemyAction): boolean => {
       if (a === 'shoot') {
-        return !!this.selectAIShootTarget(enemy, false);
+        return this.canAIExecuteShoot(enemy);
       }
       if (a === 'shoot_adjacent') {
         return !!this.selectAIShootTarget(enemy, false, true);
@@ -10524,10 +10899,11 @@ export class BattleScene extends Component {
 
     const target = this.pickTileAtScreenUi(event);
     if (!target) return;
+    const targetVisible = this.isHexVisible(target.pos);
 
-    const enemiesOnTile = this.mission.enemies.filter(
+    const enemiesOnTile = targetVisible ? this.mission.enemies.filter(
       e => !e.destroyed && e.pos.q === target.pos.q && e.pos.r === target.pos.r,
-    );
+    ) : [];
     const attackOrMisc = this.playerStep === 'attack' || this.playerStep === 'misc';
     const gunSel = this.selectedGunDieIdx >= 0;
     const mgSel = this.selectedMGDieIdx >= 0;
@@ -10681,7 +11057,12 @@ export class BattleScene extends Component {
     if (this.outcome !== 'ongoing') return false; // 谢尔曼已死，无需再补刀
     const { map } = this.mission;
     const target = this.selectAIShootTarget(enemy, true, !!opts.adjacentOnly);
-    if (!target) return false;
+    if (!target) {
+      if (!opts.adjacentOnly && getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG) {
+        return this.tryAIMGAttack(enemy);
+      }
+      return false;
+    }
 
     const splitTurretReady = this.enemySupportsSplitTurret(enemy);
     if (splitTurretReady) {
@@ -10718,7 +11099,14 @@ export class BattleScene extends Component {
       }
     }, { attackSound: enemy.stats.attackSound, attacker: enemy, target });
     if (splitTurretReady) {
-      this.startEnemyTurretAim(enemy, target, showDice);
+      if (this.isUnitVisible(enemy)) {
+        this.startEnemyTurretAim(enemy, target, showDice);
+      } else {
+        const fireDirection = (directionTo(enemy.pos, target.pos)
+          ?? approximateDirection(enemy.pos, target.pos)) as Direction;
+        this.enemyTurretFacing.set(enemy.id, fireDirection);
+        showDice();
+      }
     } else {
       showDice();
     }
@@ -10749,6 +11137,22 @@ export class BattleScene extends Component {
     this.closeDiePopover();
 
     const mg = !!opts.mg;
+    if (opts.attacker && !this.isUnitVisible(opts.attacker)) {
+      const revealKey = HexMap.keyOf(opts.attacker.pos);
+      this.transientFogRevealKeys.add(revealKey);
+      this.redraw();
+      if (mg) playMgFire();
+      else {
+        this.spawnMuzzleFlash(opts.attacker, opts.target ?? null);
+        playConfiguredAttackSound(opts.attackSound ?? '');
+      }
+      this.scheduleOnce(() => {
+        this.transientFogRevealKeys.delete(revealKey);
+        this.redraw();
+        onDone();
+      }, FOG_ATTACK_REVEAL_DURATION);
+      return;
+    }
     const panel = this.buildDiceShowPanel(report, attackerLabel, targetLabel, mg);
     this.liftEnemyDiceTrayIntoDiceShowIfNeeded(panel.root);
     this.diceShow = {
@@ -12216,6 +12620,109 @@ export class BattleScene extends Component {
       applied: false,
     };
     if (dice.length > 0) playDiceRoll();
+    return true;
+  }
+
+  /** Execute the hardcore shoot-action MG fallback after main-gun targeting failed. */
+  private tryAIMGAttack(actor: Unit): boolean {
+    if (!this.mission || actor.destroyed || this.outcome !== 'ongoing') return false;
+    const target = this.selectAIMGTarget(actor, true);
+    if (!target) return false;
+
+    const { map } = this.mission;
+    const ctx = {
+      attacker: actor,
+      target,
+      map,
+      theater: this.mission.data.theater,
+      units: this.allUnits(),
+    };
+    const maxRoll = maxMGHitRoll(ctx);
+    const threshold = mgHitThreshold(ctx);
+    const impossible = maxRoll < threshold;
+    const report = impossible
+      ? {
+          dice: [0, 0] as [number, number],
+          hitDiceCount: 1,
+          hitBonus: 0,
+          roll: maxRoll,
+          threshold,
+          hit: false,
+        }
+      : rollMGAttack(ctx, this.rng);
+    const actorLabel = actor.faction !== 'allied'
+      ? t('actor.enemyPrefix', { name: unitDisplayName(actor.kind) })
+      : t('actor.allyPrefix', { name: unitDisplayName(actor.kind) });
+    const targetLabel = target === this.mission.sherman
+      ? t('actor.sherman')
+      : target.faction !== 'allied'
+        ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
+        : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
+
+    this.battleLogI18n('battleLog.combatMgAI', {
+      actor: actorLabel,
+      diceExpr: impossible ? `max ${maxRoll}` : this.mgDiceExpr(report),
+      need: report.threshold,
+      resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
+    });
+
+    const finish = () => {
+      if (!this.mission) return;
+      applyMGAttack(target, report);
+      if (target.destroyed) this.registerDestroyWreckVisual(target);
+      if (this.isUnitVisible(target)) {
+        this.spawnFloater(
+          target.pos.q,
+          target.pos.r,
+          report.hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss'),
+          report.hit ? new Color(255, 120, 120, 255) : new Color(220, 220, 220, 255),
+          { size: 32, dur: report.hit ? 1.0 : 0.9, rise: report.hit ? 48 : 44 },
+        );
+      }
+      this.outcome = checkOutcome(this.mission);
+      if (this.outcome !== 'ongoing') {
+        this.updateOutcomeOverlay();
+        this.clearActiveActingUnit(actor);
+      }
+      this.updateHUD();
+      this.redraw();
+      this.refreshStatusPanel();
+      if (this.outcome === 'ongoing' && this.phase === 'enemy') {
+        if (this.enemyDiceUsed.some(used => !used)) {
+          const current = this.enemyOrder[this.enemyIndex];
+          if (current && !current.destroyed) this.buildEnemyDiceTray(current, { playSort: false });
+        }
+        this.runNextEnemyStep();
+      }
+    };
+
+    if (impossible) {
+      const revealKey = HexMap.keyOf(actor.pos);
+      const hiddenActor = !this.isUnitVisible(actor);
+      if (hiddenActor) this.transientFogRevealKeys.add(revealKey);
+      this.redraw();
+      playMgFire();
+      this.scheduleOnce(() => {
+        if (hiddenActor) this.transientFogRevealKeys.delete(revealKey);
+        finish();
+      }, hiddenActor ? FOG_ATTACK_REVEAL_DURATION : 0);
+      return true;
+    }
+
+    const panelReport: AttackReport = {
+      dice: report.dice,
+      hitDiceCount: report.hitDiceCount,
+      hitBonus: report.hitBonus,
+      roll: report.roll,
+      threshold: report.threshold,
+      hit: report.hit,
+      statusChange: report.hit ? 'destroyed' : 'none',
+    };
+    this.startDiceShow(panelReport, actorLabel, targetLabel, finish, {
+      mg: true,
+      attacker: actor,
+      target,
+    });
     return true;
   }
 

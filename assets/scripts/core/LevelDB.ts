@@ -12,6 +12,7 @@
 
 import { LangCode } from './Lang';
 import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionStore';
+import { DEFAULT_GAME_MODE, GameMode, isGameMode } from './GameMode';
 
 export type ChapterId = string;
 
@@ -189,6 +190,8 @@ export interface MenuState {
   lang: LangCode;
   /** Main menu chapter selection. */
   selectedChapterId: ChapterId;
+  /** Rule profile selected before starting a mission. */
+  gameMode: GameMode;
 }
 
 const DEFAULT_STATE: MenuState = {
@@ -199,6 +202,7 @@ const DEFAULT_STATE: MenuState = {
   sfxVolume: 70,
   lang: 'zh',
   selectedChapterId: DEFAULT_CHAPTER_ID,
+  gameMode: DEFAULT_GAME_MODE,
 };
 
 function maxLevelIdForChapter(chapterId: ChapterId): number {
@@ -290,6 +294,7 @@ function readState(): MenuState {
       sfxVolume: clamp(parsed.sfxVolume ?? legacyVol ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,
       selectedChapterId: getChapter(parsed.selectedChapterId ?? '') ? parsed.selectedChapterId! : DEFAULT_CHAPTER_ID,
+      gameMode: isGameMode(parsed.gameMode) ? parsed.gameMode : DEFAULT_GAME_MODE,
     };
   } catch (e) {
     console.warn('[LevelDB] 解析菜单存档失败，重置', e);
@@ -327,6 +332,7 @@ export const MenuProgress = {
       sfxVolume: clamp(state.sfxVolume ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (state.lang === 'en' || state.lang === 'zh') ? state.lang : DEFAULT_STATE.lang,
       selectedChapterId: getChapter(state.selectedChapterId ?? '') ? state.selectedChapterId : DEFAULT_CHAPTER_ID,
+      gameMode: isGameMode(state.gameMode) ? state.gameMode : DEFAULT_GAME_MODE,
     });
   },
 
@@ -386,6 +392,12 @@ export const MenuProgress = {
     if (!getChapter(chapterId)) return;
     const s = readState();
     s.selectedChapterId = chapterId;
+    writeState(s);
+  },
+
+  setGameMode(gameMode: GameMode): void {
+    const s = readState();
+    s.gameMode = gameMode;
     writeState(s);
   },
 

@@ -145,6 +145,9 @@ export interface UnitStats {
   infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
 }
 
+/** 玩家车辆默认当前视野范围；后续天气等系统可修改 Unit.visionRange。 */
+export const DEFAULT_VISION_RANGE = 4;
+
 export interface Unit {
   id: string;
   kind: UnitKind;
@@ -154,7 +157,7 @@ export interface Unit {
   facing: Direction | null;
   stats: UnitStats;
   // 状态
-  damaged?: boolean;        // 德军坦克 MVP：首次受伤 / 起火中；谢尔曼不用此位（着火见 fireLevel）
+  damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
   fireLevel?: number;       // 着火程度（仅谢尔曼）
   turretDamaged?: boolean;  // 炮塔受损
@@ -163,6 +166,7 @@ export interface Unit {
   smoked?: boolean;         // 有烟雾掩护
   loaded?: boolean;         // 主炮已装填
   hatchOpen?: boolean;      // 车长打开舱盖
+  visionRange?: number;     // 当前视野范围（六角距离）；玩家车辆初始 4，可受天气等效果修改
   crew?: ShermanCrew;       // 仅谢尔曼
 }
 
@@ -228,6 +232,8 @@ export interface UnitPlacement {
   turretDamaged?: boolean;
   /** 谢尔曼专用：舱盖开启 */
   hatchOpen?: boolean;
+  /** 谢尔曼专用：初始视野范围；缺省为 DEFAULT_VISION_RANGE (4) */
+  visionRange?: number;
   /** 谢尔曼专用：主炮是否已装填；缺省 false（未装填） */
   loaded?: boolean;
 }

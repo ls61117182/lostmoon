@@ -23,8 +23,10 @@ import {
   offsetToAxial,
   rotateDirection,
 } from '../assets/scripts/core/HexGrid';
-import { Direction, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
+import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
+import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight } from '../assets/scripts/core/FogOfWar';
+import { getGameModeConfig } from '../assets/scripts/core/GameMode';
 
 describe('HexGrid 基础运算', () => {
   test('距离：原点到自身 = 0', () => {
@@ -161,6 +163,115 @@ describe('HexMap 视线 / 树篱', () => {
       hedges: [false, false, false, true, false, false],
     });
     expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(0);
+  });
+});
+
+describe('战争迷雾玩家视野', () => {
+  test('经典与硬核模式启用各自规则差异', () => {
+    expect(fogOfWarEnabled('classic')).toBe(false);
+    expect(fogOfWarEnabled('hardcore')).toBe(true);
+    expect(getGameModeConfig('classic').aiMainGunFallbackToMG).toBe(false);
+    expect(getGameModeConfig('hardcore').aiMainGunFallbackToMG).toBe(true);
+  });
+
+  const addRect = (map: HexMap, cols: number, rows: number) => {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        map.set({ pos: offsetToAxial({ col, row }), terrain: 'field' });
+      }
+    }
+  };
+
+  const shermanAt = (col: number, row: number, facing: Direction, hatchOpen: boolean): Unit => ({
+    id: 'sherman',
+    kind: 'sherman',
+    faction: 'allied',
+    pos: offsetToAxial({ col, row }),
+    facing,
+    stats: {} as Unit['stats'],
+    hatchOpen,
+    visionRange: 4,
+    crew: { commander: true, loader: true, gunner: true, driver: true, coDriver: true },
+  });
+
+  test('关舱：相邻一格与正前方射线可见，阻挡格自身可见并截断后方', () => {
+    const map = new HexMap(7, 7);
+    addRect(map, 7, 7);
+    const sherman = shermanAt(2, 3, 0, false);
+    const blocker = neighbor(sherman.pos, 0);
+    const behind = neighbor(blocker, 0);
+    map.set({ pos: blocker, terrain: 'forest' });
+
+    const visible = computePlayerVisibleHexes(map, sherman);
+    expect(visible.has(HexMap.keyOf(blocker))).toBe(true);
+    expect(visible.has(HexMap.keyOf(behind))).toBe(false);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 1)))).toBe(true);
+  });
+
+  test('开舱：半径四格无遮挡目标可见，五格非正前方目标不可见', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const sherman = shermanAt(4, 4, 0, true);
+    const visible = computePlayerVisibleHexes(map, sherman);
+    const radius4 = { q: sherman.pos.q + 2, r: sherman.pos.r + 2 };
+    const radius5 = { q: sherman.pos.q + 2, r: sherman.pos.r + 3 };
+    expect(hexDistance(sherman.pos, radius4)).toBe(4);
+    expect(hexDistance(sherman.pos, radius5)).toBe(5);
+    expect(visible.has(HexMap.keyOf(radius4))).toBe(true);
+    expect(visible.has(HexMap.keyOf(radius5))).toBe(false);
+  });
+
+  test('当前视野属性同时限制开舱半径与正前方直线', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const sherman = shermanAt(3, 4, 0, true);
+    sherman.visionRange = 2;
+    const forward2 = neighbor(neighbor(sherman.pos, 0), 0);
+    const forward3 = neighbor(forward2, 0);
+    const offAxis3 = { q: sherman.pos.q, r: sherman.pos.r + 3 };
+    const visible = computePlayerVisibleHexes(map, sherman);
+
+    expect(currentVisionRange(sherman)).toBe(2);
+    expect(visible.has(HexMap.keyOf(forward2))).toBe(true);
+    expect(visible.has(HexMap.keyOf(forward3))).toBe(false);
+    expect(visible.has(HexMap.keyOf(offAxis3))).toBe(false);
+  });
+
+  test('关舱时正前方视野同样不得超过当前视野属性', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const sherman = shermanAt(3, 4, 0, false);
+    sherman.visionRange = 2;
+    const forward2 = neighbor(neighbor(sherman.pos, 0), 0);
+    const forward3 = neighbor(forward2, 0);
+    const visible = computePlayerVisibleHexes(map, sherman);
+
+    expect(visible.has(HexMap.keyOf(forward2))).toBe(true);
+    expect(visible.has(HexMap.keyOf(forward3))).toBe(false);
+  });
+
+  test('中心点几何连线：{4,1} 建筑遮挡 {2,3} 到 {5,0}/{6,0}', () => {
+    const map = new HexMap(8, 6);
+    addRect(map, 8, 6);
+    const from = offsetToAxial({ col: 2, row: 3 });
+    const building = offsetToAxial({ col: 4, row: 1 });
+    const targetA = offsetToAxial({ col: 5, row: 0 });
+    const targetB = offsetToAxial({ col: 6, row: 0 });
+    map.set({ pos: building, terrain: 'field', hasBuilding: true });
+
+    expect(hasFogLineOfSight(map, from, building)).toBe(true);
+    expect(hasFogLineOfSight(map, from, targetA)).toBe(false);
+    expect(hasFogLineOfSight(map, from, targetB)).toBe(false);
+  });
+
+  test('车长阵亡时即使 hatchOpen=true 也按关舱视野计算', () => {
+    const map = new HexMap(7, 7);
+    addRect(map, 7, 7);
+    const sherman = shermanAt(3, 3, 0, true);
+    sherman.crew!.commander = false;
+    const offAxisDistance2 = { q: sherman.pos.q, r: sherman.pos.r + 2 };
+    const visible = computePlayerVisibleHexes(map, sherman);
+    expect(visible.has(HexMap.keyOf(offAxisDistance2))).toBe(false);
   });
 });
 

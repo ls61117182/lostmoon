@@ -68,6 +68,7 @@
   "sherman": {
     "kind": "sherman",
     "faction": "allied",
+    "visionRange": 4,
     "at": { "col": 1, "row": 5 },
     "facing": 5
   },
