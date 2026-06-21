@@ -29,6 +29,7 @@ hud.playerChoose,回合 {n} | 玩家 | 选择阶段 · {tags},Turn {n} | Player 
 hud.movePhase,回合 {n} | 移动阶段 | 骰子 {dice},Turn {n} | Move phase | Dice {dice}
 hud.attackPhase,回合 {n} | 攻击阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack phase | {loaded} | Dice {dice}{sel}
 hud.attackSelectHint,点敌人开火,Click enemy to fire
+hud.precisionAttackSelectHint,精确射击：点敌人开火,Precision fire: click enemy
 hud.mgSelectHint,点步兵扫射,Click infantry
 hud.loaded,已装填,Loaded
 hud.unloaded,未装填,Unloaded
@@ -101,6 +102,8 @@ die.hint.reverse,后退,Reverse
 die.hint.start,启动,Start
 floater.hatchLocked,本回合舱盖已锁定,Hatch locked this turn
 floater.hatchCommanderDead,车长已阵亡，操作无效,Commander is dead; action invalid
+floater.hatchAlreadyClosed,舱盖已经关闭,Hatch is already closed
+floater.hatchClosedByDice,舱盖已关闭,Hatch closed
 die.hint.reload,装填,Reload
 die.hint.gun,主炮,Gun
 die.hint.mg,机枪,MG
@@ -164,6 +167,8 @@ action.doublesCoDriverTurnCW, ↻ 60°（+同点骰）,Co-driver ↻ 60° (+pair
 action.doublesCoDriverTurnCCW, ↺ 60°（+同点骰）,Co-driver ↺ 60° (+pair)
 action.doublesLoaderReload,装填（+同点骰）,Loader Reload (+pair)
 action.doublesGunnerFire,主炮射击（+同点骰）,Gunner Fire (+pair)
+action.precisionFire,精确射击（命中所需 -2）,Precision Fire (hit need -2)
+action.closeHatchPair,关闭舱盖（+同点骰）,Close Hatch (+pair)
 attack.reason.selfFire,不能攻击自己,Cannot Target Self
 attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
 attack.reason.overlap,目标重叠,Overlap
@@ -334,7 +339,9 @@ tileInspect.markerRid,援军标记 rid={n},Reinforcement marker rid={n}
 tileInspect.markerEid,敌军出生点标记 eid={n},Enemy start marker eid={n}
 tileInspect.diceIntro,掷骰规则：各地形在移动 / 攻击 / 杂项子阶段的基础颗数见下；再叠加乘员与舱盖修正后，总颗数限制在 {capMin}～{capMax}。,Dice: per-terrain base counts for movement / attack / misc below; crew and hatch modifiers apply; total dice are clamped to {capMin}–{capMax}.
 tileInspect.diceRow.move,移动阶段：基础骰子 {n} 颗，驾驶员存活 +{md}、副驾驶存活 +{mc}、车长开舱 +{mh}。,"Movement: base {n} dice; driver alive +{md}, co-driver alive +{mc}, commander hatch open +{mh}."
+tileInspect.diceRow.moveHardcore,移动阶段：基础骰子 {n} 颗，驾驶员存活 +{md}、副驾驶存活 +{mc}、车长存活 +{mh}。,"Movement: base {n} dice; driver alive +{md}, co-driver alive +{mc}, commander alive +{mh}."
 tileInspect.diceRow.attack,攻击阶段：基础骰子 {n} 颗，炮手存活 +{ag}、装填手存活 +{al}、车长开舱 +{ah}。,"Attack: base {n} dice; gunner alive +{ag}, loader alive +{al}, commander hatch open +{ah}."
+tileInspect.diceRow.attackHardcore,攻击阶段：基础骰子 {n} 颗，炮手存活 +{ag}、装填手存活 +{al}、车长存活 +{ah}。,"Attack: base {n} dice; gunner alive +{ag}, loader alive +{al}, commander alive +{ah}."
 tileInspect.diceRow.misc,杂项阶段：基础骰子 {n} 颗，车长开舱 +{xc}。,Misc: base {n} dice; commander hatch open +{xc}.
 tileInspect.unitBlock,{name}\n状态：{status},{name}\nStatus: {status}
 tileInspect.currentUnit,当前单位：{name},Current unit: {name}
@@ -345,6 +352,8 @@ tileInspect.colFrontSide,前侧装甲,Front side
 tileInspect.colRearSide,后侧装甲,Rear side
 tileInspect.colRear,后装甲,Rear
 tileInspect.colPen,穿甲值,Pen.
+tileInspect.colEffectiveRange,有效射程,Eff. range
+tileInspect.effectiveRange,有效射程：{n},Effective range: {n}
 tileInspect.statusNone,无额外状态,No extra status
 tileInspect.noUnit,当前格上无单位。,No unit on this tile.
 tileInspect.unitUnknown,当前格单位状态未知,Unit status on this tile is currently unknown.
@@ -386,6 +395,8 @@ battleLog.move.doublesTurn,[移动] 对子：副驾驶转向 {dir} -> 朝向={fa
 battleLog.attack.reload,[攻击] 装填完成,[Attack] Reload complete
 battleLog.attack.doublesReload,[攻击] 对子：装填手装填完成（消耗两颗骰）,[Attack] Pair: loader reload complete (spend two dice)
 battleLog.attack.doublesGunReady,[攻击] 对子：炮手主炮射击已备（主骰 {dieIdx} + 搭档 {partnerIdx}，点数 {pip}）,"[Attack] Pair: gunner main-gun shot ready (die {dieIdx} + partner {partnerIdx}, pip {pip})"
+battleLog.attack.precisionReady,[攻击] 精确射击已备（同点骰 {pip}，命中所需 -2）,"[Attack] Precision fire ready (matching pip {pip}, hit need -2)"
+battleLog.attack.precisionAI,[AI] {actor}消耗同点骰 {pip} 执行精确射击，修正后命中所需 ≥{need},[AI] {actor} consumes matching pip {pip} for precision fire; modified hit need ≥{need}
 battleLog.misc.repairTurret,[杂项] 修复炮塔,[Misc] Turret repaired
 battleLog.misc.repairMobility,[杂项] 修复瘫痪,[Misc] Mobility repaired
 battleLog.misc.fireSuppress,[杂项] 灭火 -> 着火层数 {from} -> {to},[Misc] Fire suppression -> fire level {from} -> {to}

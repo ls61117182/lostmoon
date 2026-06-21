@@ -24,14 +24,15 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
-import { TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
+import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, isFootUnit, Offset, Unit, UnitKind } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, isFootUnit, Offset, Unit, UnitKind } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
   rng: RNG;
   nextEnemyId: () => string;
+  effectiveRangePenetration?: boolean;
 }
 
 /** 主骰播完后依次展示的额外掷骰（点数已预掷，仅用于动画与说明节奏） */
@@ -197,6 +198,23 @@ function blocksJapaneseInfantrySpawn(u: Unit): boolean {
   return !isJapaneseTankOrGunUnit(u);
 }
 
+function reinforcementFaction(mission: LoadedMission, side: ReinforcementSide): Faction {
+  if (side === 'friendly') return 'allied';
+  return mission.data.theater === 'pacific' ? 'japanese' : 'german';
+}
+
+function requireReinforcementSide(row: TurnEndEventRow): ReinforcementSide {
+  if (row.reinforcementSide === 'friendly' || row.reinforcementSide === 'enemy') {
+    return row.reinforcementSide;
+  }
+  throw new Error(`[TurnEnd] ${row.effectType} requires reinforcementSide=friendly|enemy`);
+}
+
+function addReinforcement(mission: LoadedMission, unit: Unit, side: ReinforcementSide): void {
+  unit.faction = reinforcementFaction(mission, side);
+  (side === 'friendly' ? mission.allies : mission.enemies).push(unit);
+}
+
 function directionPriorityAround(dir: Direction): Direction[] {
   return [
     dir,
@@ -248,7 +266,8 @@ function prepareTankSpawnEvent(
   nextEnemyId: () => string,
   sh: Unit,
   baseParams: Record<string, string | number>,
-  spawnPoint: 'eid' | 'rid' = 'eid',
+  spawnPoint: 'eid' | 'rid',
+  side: ReinforcementSide,
 ): TurnEndPrepared {
   const spawnDie = rng.d6();
   const tile = spawnPoint === 'rid'
@@ -275,14 +294,14 @@ function prepareTankSpawnEvent(
     apply: () => {
       if (!placed || !pos) return;
       const stats = getUnitStats(kind, mission.data.theater ?? 'europe');
-      mission.enemies.push({
+      addReinforcement(mission, {
         id: unitId,
         kind,
-        faction: stats.faction,
+        faction: reinforcementFaction(mission, side),
         pos: entry ? { ...entry.from } : { ...pos },
         facing: entry ? entry.facing : face,
         stats,
-      });
+      }, side);
     },
   };
 }
@@ -310,7 +329,11 @@ function hasInfantryAdjacentToSherman(mission: LoadedMission): boolean {
   );
 }
 
-function simulateAdjacentInfantryVolleysForTurnEnd(mission: LoadedMission, rng: RNG): {
+function simulateAdjacentInfantryVolleysForTurnEnd(
+  mission: LoadedMission,
+  rng: RNG,
+  effectiveRangePenetration = false,
+): {
   volleys: AdjacentInfantryVolleyPreview[];
 } {
   const sh = mission.sherman;
@@ -328,7 +351,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(mission: LoadedMission, rng: 
 
   for (const inf of infs) {
     if (simTarget.destroyed) break;
-    const ctx = { attacker: inf, target: simTarget, map: mission.map };
+    const ctx = { attacker: inf, target: simTarget, map: mission.map, effectiveRangePenetration };
     if (canAttack(ctx).ok) {
       const rep = rollAttack(ctx, rng);
       volleys.push({ report: rep, attackerKind: inf.kind });
@@ -517,6 +540,7 @@ export function prepareTurnEndEvent(
       };
     }
     case 'infantry_spawn': {
+      const side = requireReinforcementSide(row);
       const spawnDie = rng.d6();
       const tile = findTileByReinforceId(mission, spawnDie);
       const pos = tile?.pos;
@@ -537,19 +561,21 @@ export function prepareTurnEndEvent(
           const facing = (tile?.reinforceFacing ?? approximateDirection(pos, sh.pos)) as Direction;
           const kind: UnitKind = mission.data.theater === 'pacific' ? 'japanese_infantry' : 'infantry';
           const stats = getUnitStats(kind, mission.data.theater ?? 'europe');
-          mission.enemies.push({
+          addReinforcement(mission, {
             id: nextEnemyId(),
             kind,
-            faction: stats.faction,
+            faction: reinforcementFaction(mission, side),
             pos: { ...pos },
             facing,
             stats,
-          });
+          }, side);
         },
       };
     }
     case 'adjacent_infantry_fire': {
-      const { volleys } = simulateAdjacentInfantryVolleysForTurnEnd(mission, rng);
+      const { volleys } = simulateAdjacentInfantryVolleysForTurnEnd(
+        mission, rng, ctx.effectiveRangePenetration,
+      );
       const reports = volleys.map(v => v.report);
       const bodyKey =
         !sh.destroyed && !hasInfantryAdjacentToSherman(mission)
@@ -610,22 +636,22 @@ export function prepareTurnEndEvent(
       };
     }
     case 'panzer3_spawn': {
-      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams);
+      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
     }
     case 'type97_spawn': {
-      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, 'rid');
+      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, 'rid', requireReinforcementSide(row));
     }
     case 'type95_spawn': {
-      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, 'rid');
+      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, 'rid', requireReinforcementSide(row));
     }
     case 'panzer4_spawn': {
-      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams);
+      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
     }
     case 'tiger_spawn': {
-      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams);
+      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
     }
     case 'sherman_spawn': {
-      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams);
+      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
     }
     case 'german_truck_move': {
       const path = ctx.mission.data.truckPath;

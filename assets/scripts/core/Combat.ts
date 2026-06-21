@@ -95,6 +95,17 @@ export interface AttackContext {
   units?: readonly Unit[];
   /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
   protagonist?: Unit;
+  /** Action-specific modifier applied to the final hit threshold; precision fire uses -2. */
+  hitThresholdModifier?: number;
+  /** Hardcore rule: penetration decays beyond the attacker's configured effective range. */
+  effectiveRangePenetration?: boolean;
+}
+
+/** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
+export function effectivePenetration(attacker: Unit, target: Unit, enabled = false): number {
+  if (!enabled) return attacker.stats.penetration;
+  const rangePenalty = Math.max(0, hexDistance(attacker.pos, target.pos) - attacker.stats.effectiveRange);
+  return Math.max(0, attacker.stats.penetration - rangePenalty);
 }
 
 const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set([
@@ -180,9 +191,10 @@ export interface HitBreakdown {
   building: number;     // 0 或 1
   smoke: number;        // 0 或 1 —— 目标处于烟雾掩护中（§3.5）
   concealed: number;    // 0 或 2 —— 目标隐蔽（§3.5）
-  threshold: number;    // = size + distance + hedges + building + smoke + concealed
+  threshold: number;    // base modifiers + theater/arc modifiers + actionModifier
   trees?: number;
   rearArc?: number;
+  actionModifier?: number;
 }
 
 export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
@@ -199,9 +211,11 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const includeRearArc = opts.includeRearArc ?? true;
   const rearArc = includeRearArc && pacific && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
   const frontArcModifier = opts.frontArcModifier ?? 0;
+  const actionModifier = ctx.hitThresholdModifier ?? 0;
   return {
-    size, distance, hedges, building, smoke, concealed, trees, rearArc,
-    threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc + frontArcModifier,
+    size, distance, hedges, building, smoke, concealed, trees, rearArc, actionModifier,
+    threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc
+      + frontArcModifier + actionModifier,
   };
 }
 
@@ -301,7 +315,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
   const face = armorFaceFrom(target, attacker.pos);
   const armor = armorValue(target, face);
-  const pen = attacker.stats.penetration;
+  const pen = effectivePenetration(attacker, target, ctx.effectiveRangePenetration);
 
   // 第二段：穿甲检定。Europe / Pacific 统一使用 2d6。
   const penDice = [rng.d6(), rng.d6()];
@@ -652,7 +666,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
 
   const face = armorFaceFrom(ctx.target, ctx.attacker.pos);
   const armor = armorValue(ctx.target, face);
-  const pen = ctx.attacker.stats.penetration;
+  const pen = effectivePenetration(ctx.attacker, ctx.target, ctx.effectiveRangePenetration);
   const penThreshold = armor - pen;
   const penProb = probHit2d6(penThreshold);
 

@@ -105,8 +105,10 @@ export interface ActionDicePoolOpts {
   subPhase: ActionDiceSubPhase;
   /** 谢尔曼当前所在格的地形 */
   terrain: TerrainType;
-  /** 车长舱盖是否打开（移动 / 攻击 / 杂项子阶段均可参与加骰） */
+  /** 车长舱盖是否打开（杂项始终依赖；移动 / 攻击可由模式规则放宽） */
   hatchOpen: boolean;
+  /** 移动 / 攻击阶段是否允许车长存活但关舱时仍获得车长加骰 */
+  commanderBonusWithoutOpenHatch?: boolean;
   /** 五名乘员存活标记；缺省按全 false 处理 */
   crew: ShermanCrew;
 }
@@ -122,15 +124,17 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
 
   /** 舱盖加骰仅在车长存活时成立（车长阵亡后 `hatchOpen` 可能未及时清位） */
   const hatchOpenForDice = !!opts.hatchOpen && !!opts.crew.commander;
+  const commanderBonusForMoveAttack = !!opts.crew.commander
+    && (!!opts.hatchOpen || !!opts.commanderBonusWithoutOpenHatch);
 
   if (opts.subPhase === 'movement') {
     if (opts.crew.driver) n += cfg.moveMods.driver;
     if (opts.crew.coDriver) n += cfg.moveMods.codriver;
-    if (hatchOpenForDice) n += cfg.moveMods.hatch;
+    if (commanderBonusForMoveAttack) n += cfg.moveMods.hatch;
   } else if (opts.subPhase === 'attack') {
     if (opts.crew.gunner) n += cfg.attackMods.gunner;
     if (opts.crew.loader) n += cfg.attackMods.loader;
-    if (hatchOpenForDice) n += cfg.attackMods.hatch;
+    if (commanderBonusForMoveAttack) n += cfg.attackMods.hatch;
   } else {
     if (hatchOpenForDice) n += cfg.miscMods.hatch;
   }

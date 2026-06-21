@@ -24,7 +24,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'turn_end_events.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TurnEndEventDB.ts');
 
-const HEADERS = ['mission_id', 'sum_min', 'sum_max', 'dice_count', 'effect_type', 'notes'];
+const HEADERS = ['mission_id', 'sum_min', 'sum_max', 'dice_count', 'effect_type', 'notes', 'reinforcement_side'];
 
 const EFFECT_TYPES = [
   'none',
@@ -45,6 +45,17 @@ const EFFECT_TYPES = [
   'type97_spawn',
   'heavy_mortar',
 ];
+
+const REINFORCEMENT_EFFECT_TYPES = new Set([
+  'infantry_spawn',
+  'panzer3_spawn',
+  'panzer4_spawn',
+  'tiger_spawn',
+  'sherman_spawn',
+  'type95_spawn',
+  'type97_spawn',
+]);
+const REINFORCEMENT_SIDES = ['friendly', 'enemy'];
 
 function decodeTable(filePath) {
   const buf = fs.readFileSync(filePath);
@@ -195,14 +206,26 @@ function validateRecords(records) {
     const sumMax = intOrThrow(r.sum_max, `row ${r.__row} sum_max`);
     const diceCount = intOrThrow(r.dice_count, `row ${r.__row} dice_count`);
     const effectType = r.effect_type;
+    const reinforcementSide = r.reinforcement_side;
 
     if (!EFFECT_TYPES.includes(effectType)) {
       throw new Error(`turn_end_events.csv row ${r.__row}: unknown effect_type="${effectType}"`);
     }
     if (sumMin > sumMax) throw new Error(`row ${r.__row}: sum_min > sum_max`);
     if (diceCount < 1 || diceCount > 6) throw new Error(`row ${r.__row}: dice_count must be 1..6`);
+    if (REINFORCEMENT_EFFECT_TYPES.has(effectType)) {
+      if (!REINFORCEMENT_SIDES.includes(reinforcementSide)) {
+        throw new Error(
+          `turn_end_events.csv row ${r.__row}: ${effectType} requires reinforcement_side=friendly|enemy`,
+        );
+      }
+    } else if (reinforcementSide) {
+      throw new Error(
+        `turn_end_events.csv row ${r.__row}: reinforcement_side is only valid for reinforcement events`,
+      );
+    }
 
-    rows.push({ missionId, sumMin, sumMax, diceCount, effectType });
+    rows.push({ missionId, sumMin, sumMax, diceCount, effectType, reinforcementSide });
   }
 
   return rows;
@@ -217,6 +240,7 @@ function buildTs(rows) {
   lines.push(' */');
   lines.push('');
   lines.push(`export type TurnEndEffectType = ${EFFECT_TYPES.map(e => `'${e}'`).join(' | ')};`);
+  lines.push(`export type ReinforcementSide = ${REINFORCEMENT_SIDES.map(e => `'${e}'`).join(' | ')};`);
   lines.push('');
   lines.push('export interface TurnEndEventRow {');
   lines.push('  missionId: string;');
@@ -224,13 +248,15 @@ function buildTs(rows) {
   lines.push('  sumMax: number;');
   lines.push('  diceCount: number;');
   lines.push('  effectType: TurnEndEffectType;');
+  lines.push('  reinforcementSide?: ReinforcementSide;');
   lines.push('}');
   lines.push('');
   lines.push('export const TURN_END_EVENTS: TurnEndEventRow[] = [');
   for (const row of rows) {
     lines.push(
       `  { missionId: '${row.missionId}', sumMin: ${row.sumMin}, `
-      + `sumMax: ${row.sumMax}, diceCount: ${row.diceCount}, effectType: '${row.effectType}' },`,
+      + `sumMax: ${row.sumMax}, diceCount: ${row.diceCount}, effectType: '${row.effectType}'`
+      + `${row.reinforcementSide ? `, reinforcementSide: '${row.reinforcementSide}'` : ''} },`,
     );
   }
   lines.push('];');

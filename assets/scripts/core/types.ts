@@ -139,6 +139,7 @@ export interface UnitStats {
   armorRearSide: number;   // 后侧装甲
   armorRear: number;       // 后装甲
   penetration: number;     // 穿甲值
+  effectiveRange: number;  // 有效射程；超出后每格使本次攻击穿甲值 -1
   usCasualtyDice: number;
   moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放

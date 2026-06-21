@@ -74,7 +74,7 @@ import {
   rollActionDice,
 } from '../core/ActionDice';
 import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, maxMGHitRoll, mgHitThreshold, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
+import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, maxMGHitRoll, mgHitThreshold, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
@@ -295,8 +295,8 @@ function easeInOutCubic(t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-/** 掷骰展示后、按点排序到槽位的动画时长（秒） */
-const ENEMY_TRAY_SORT_DUR = 1.0;
+/** 所有骰子转动阶段共用的动画时长（秒）。 */
+const DICE_ROLL_DUR = 0.5;
 
 /** 把 AIActionEntry 转成控制台日志里的 "射击>转向" 这种紧凑表达 */
 function describeEntry(entry: AIActionEntry): string {
@@ -496,6 +496,8 @@ interface DiceShow {
   */
   mg: boolean;
   attackSound: string;
+  /** Precision fire already played cannon audio/muzzle flash after its aim hold. */
+  fireEffectPlayed: boolean;
   attacker: Unit | null;
   target: Unit | null;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
@@ -621,6 +623,7 @@ const FOREST_TREE_LIGHT = new Color( 70, 148,  58, 255);
 const FOREST_SHADE      = new Color(  0,   0,   0,  50);
 const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
 const FOG_ATTACK_REVEAL_DURATION = 0.9;
+const PRECISION_AIM_HOLD_DURATION = 0.5;
 /**
  * 通用 hex 纹理叠加调色板（用于"沙土 / 路面"等需要颗粒感的格子，参见 `drawHexNoiseOverlay`）：
  * 每个调色板由"软斑 ×2 + 颗粒 ×3"5 色组成。alpha 较低 → 既保留基底主色，又有"无数小颗粒"近距细节。
@@ -852,14 +855,10 @@ const STATUS_VALUE_FIRE   = new Color(255, 120,  40, 255);
 const STATUS_VALUE_DOWN   = new Color(130, 130, 130, 255);
 const STATUS_VALUE_DEAD   = new Color(240,  90,  90, 255);
 
-// 掷骰动画时序（秒）：数值可调。命中+击穿+伤害最长约 3.7s；未命中 / 跳弹会提前结束。
-const DICE_HIT_ROLL_DUR   = 0.9;
+// 掷骰结果展示时序（秒）；骰面转动统一使用 DICE_ROLL_DUR。
 const DICE_HIT_SHOW_DUR   = 0.6;
-const DICE_PEN_ROLL_DUR   = 0.9;
 const DICE_PEN_SHOW_DUR   = 0.6;
-const DICE_DMG_ROLL_DUR   = 0.9;
 const DICE_DMG_SHOW_DUR   = 0.6;
-const DICE_CREW_ROLL_DUR  = 0.9;
 const DICE_CREW_SHOW_DUR  = 0.7;
 const DICE_HOLD_DUR       = 0.7;
 /** 掷骰阶段内每颗骰子面切换频率 */
@@ -1078,6 +1077,9 @@ export class BattleScene extends Component {
    * 开火结算时连带这颗也标记 used；-1 = 普通单骰主炮选择。
    */
   private selectedGunDoublesIdx: number = -1;
+  /** Precision fire applies -2 to the final hit threshold while the selected gun dice are active. */
+  private selectedGunHitThresholdModifier: number = 0;
+  private precisionAimHoldCallback: (() => void) | null = null;
   /**
    * 攻击 mg（3/4）/ 杂项 codriver_mg（2）时玩家点中的机枪骰下标。-1 = 未选。
    * 机枪选中与主炮选中 *互斥* —— 任一进入选中态都会把另一方清零，避免玩家困惑"这颗骰到底选哪一发"。
@@ -1695,6 +1697,7 @@ export class BattleScene extends Component {
   }
 
   private loadAndDraw(data: MissionData) {
+    this.cancelPrecisionAimHold();
     this.missionId = data.id;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
@@ -1999,6 +2002,12 @@ export class BattleScene extends Component {
     return unit === this.mission?.sherman || this.isHexVisible(unit.pos);
   }
 
+  /** Natural player vision only; transient firing reveals must not unlock detailed combat UI. */
+  private isUnitOutsideFog(unit: Unit): boolean {
+    if (unit === this.mission?.sherman || !fogOfWarEnabled(GameSession.gameMode)) return true;
+    return this.visibleHexKeys.has(HexMap.keyOf(unit.pos));
+  }
+
   private redrawFogOverlay() {
     const fog = this.fogGraphics;
     const fogNode = this.fogNode;
@@ -2024,7 +2033,13 @@ export class BattleScene extends Component {
       if (!this.isUnitVisible(e)) continue;
       // 主炮不瞄徒步类（步兵 / 军官）：徒步单位专属机枪（§3.1.2 / §3.6），避免大红圈误导
       if (isFootUnit(e)) continue;
-      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater };
+      const ctx = {
+        attacker: sherman,
+        target: e,
+        map,
+        theater: this.mission.data.theater,
+        hitThresholdModifier: this.selectedGunHitThresholdModifier,
+      };
       if (!canAttack(ctx).ok) continue;
 
       const c = this.project(e.pos.q, e.pos.r);
@@ -2911,6 +2926,20 @@ export class BattleScene extends Component {
     };
     this.drawMuzzleFlash(flash, 0);
     this.muzzleFlashes.push(flash);
+  }
+
+  private playAttackFireCue(
+    attacker: Unit | null,
+    target: Unit | null,
+    mg: boolean,
+    attackSound: string,
+  ) {
+    if (mg) {
+      playMgFire();
+      return;
+    }
+    this.spawnMuzzleFlash(attacker, target);
+    playConfiguredAttackSound(attackSound);
   }
 
   private muzzleFlashPosition(attacker: Unit, target: Unit): { x: number; y: number; ux: number; uy: number } | null {
@@ -6369,7 +6398,11 @@ export class BattleScene extends Component {
         const loaded = sherman?.loaded ? t('hud.loaded') : t('hud.unloaded');
         // 选中主炮 → "点敌人开火"；选中机枪 → "点步兵扫射"；两者互斥
         let sel = '';
-        if (this.selectedGunDieIdx >= 0) sel = ` | ${t('hud.attackSelectHint')}`;
+        if (this.selectedGunDieIdx >= 0) {
+          sel = ` | ${t(this.selectedGunHitThresholdModifier < 0
+            ? 'hud.precisionAttackSelectHint'
+            : 'hud.attackSelectHint')}`;
+        }
         else if (this.selectedMGDieIdx >= 0) sel = ` | ${t('hud.mgSelectHint')}`;
         this.hudLabel.string = t('hud.attackPhase', {
           n: this.turn,
@@ -7158,11 +7191,13 @@ export class BattleScene extends Component {
     };
     const subPhase = which === 'movement' ? 'movement' : which === 'attack' ? 'attack' : 'misc';
     const hatchOpenRaw = !!sherman.hatchOpen;
+    const modeConfig = getGameModeConfig(GameSession.gameMode);
     const count = actionDicePool({
       subPhase,
       terrain,
       hatchOpen: hatchOpenRaw,
       crew,
+      commanderBonusWithoutOpenHatch: modeConfig.commanderBonusWithoutOpenHatch,
     });
     const pips = rollActionDice(this.rng, count);
     this.phaseDice = pips.map((_, i) => ({ pip: ((i * 2) % 6) + 1, used: false }));
@@ -7175,7 +7210,7 @@ export class BattleScene extends Component {
     const hatchForLog = hatchOpenRaw && !!crew.commander;
     this.playerDiceRollAnim = {
       t: 0,
-      dur: 0.65,
+      dur: DICE_ROLL_DUR,
       finalPips: pips,
       logEntry: {
         key: 'battleLog.diceRoll',
@@ -7469,6 +7504,10 @@ export class BattleScene extends Component {
           () => this.tryDoublesLoaderReload(idx), this.reloadActionUnavailable('loader'));
         addItem(t('action.doublesGunnerFire'), DIE_ACTION_DOUBLES,
           () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'));
+        if (a === 'gun' && getGameModeConfig(GameSession.gameMode).precisionFire) {
+          addItem(t('action.precisionFire'), DIE_ACTION_DOUBLES,
+            () => this.selectPrecisionGunDie(idx), this.gunActionUnavailable('gunner'));
+        }
       }
     } else if (this.playerStep === 'misc') {
       const m = classifyMiscDie(slot.pip);
@@ -7547,6 +7586,13 @@ export class BattleScene extends Component {
             : sherman.hidden ? t('floater.alreadyConcealed') : null;
         addItem(t('action.concealPair'), DIE_ACTION_DOUBLES,
           () => this.tryConcealment(idx), concealReason);
+        if (getGameModeConfig(GameSession.gameMode).miscCloseHatchWithDoubles) {
+          const closeHatchReason = !sherman ? t('attack.reason.unknown')
+            : sherman.crew && !sherman.crew.commander ? t('floater.hatchCommanderDead')
+              : !sherman.hatchOpen ? t('floater.hatchAlreadyClosed') : null;
+          addItem(t('action.closeHatchPair'), DIE_ACTION_DOUBLES,
+            () => this.tryCloseHatchWithDoubles(idx), closeHatchReason);
+        }
       }
     }
 
@@ -7827,6 +7873,7 @@ export class BattleScene extends Component {
       this.selectedGunDieIdx = dieIdx;
       // 普通单骰主炮选择：不连带对子 partner
       this.selectedGunDoublesIdx = -1;
+      this.selectedGunHitThresholdModifier = 0;
       // 主炮与机枪选中互斥
       this.selectedMGDieIdx = -1;
     }
@@ -7854,6 +7901,7 @@ export class BattleScene extends Component {
     if (!this.checkCrewAlive('gunner')) return;
     this.selectedGunDieIdx = dieIdx;
     this.selectedGunDoublesIdx = partnerIdx;
+    this.selectedGunHitThresholdModifier = 0;
     this.selectedMGDieIdx = -1;
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -7866,6 +7914,33 @@ export class BattleScene extends Component {
     });
   }
 
+  /** Hardcore precision fire consumes two matching gun dice and applies -2 to hit threshold. */
+  private selectPrecisionGunDie(dieIdx: number) {
+    if (!this.mission || !getGameModeConfig(GameSession.gameMode).precisionFire) return;
+    if (this.playerStep !== 'attack') return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || classifyAttackDie(slot.pip) !== 'gun') return;
+    const partnerIdx = this.findDoublesPartner(dieIdx);
+    const partner = partnerIdx >= 0 ? this.phaseDice[partnerIdx] : null;
+    if (!partner || partner.used || classifyAttackDie(partner.pip) !== 'gun') {
+      const s = this.mission.sherman;
+      this.spawnFloater(s.pos.q, s.pos.r, t('floater.needPair'),
+        new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      this.closeDiePopover();
+      return;
+    }
+    if (!this.checkCrewAlive('gunner')) return;
+    this.selectedGunDieIdx = dieIdx;
+    this.selectedGunDoublesIdx = partnerIdx;
+    this.selectedGunHitThresholdModifier = -2;
+    this.selectedMGDieIdx = -1;
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.battleLogI18n('battleLog.attack.precisionReady', { pip: slot.pip });
+  }
+
   /**
    * 统一清理主炮 / 机枪的选中态（包括 doubles partner）。
    *
@@ -7876,6 +7951,7 @@ export class BattleScene extends Component {
   private clearGunSelection() {
     this.selectedGunDieIdx = -1;
     this.selectedGunDoublesIdx = -1;
+    this.selectedGunHitThresholdModifier = 0;
     this.selectedMGDieIdx = -1;
   }
 
@@ -8202,6 +8278,32 @@ export class BattleScene extends Component {
     this.updateHUD();
     this.redraw();
     this.refreshStatusPanel();
+    this.autoEndPhaseIfDone();
+  }
+
+  /** Hardcore misc pair action: consume two matching dice to close an open commander hatch. */
+  private tryCloseHatchWithDoubles(dieIdx: number) {
+    if (!this.mission || this.playerStep !== 'misc') return;
+    if (!getGameModeConfig(GameSession.gameMode).miscCloseHatchWithDoubles) return;
+    const s = this.mission.sherman;
+    if (!this.checkCrewAlive('commander')) {
+      this.closeDiePopover();
+      return;
+    }
+    if (!s.hatchOpen) {
+      this.showDieActionUnavailable(t('floater.hatchAlreadyClosed'));
+      return;
+    }
+    if (!this.consumeDoubles(dieIdx)) return;
+    s.hatchOpen = false;
+    this.closeDiePopover();
+    this.battleLogI18n('battleLog.hatch', { stateKey: 'status.val.hatchClosed' });
+    this.spawnFloater(s.pos.q, s.pos.r, t('floater.hatchClosedByDice'),
+      new Color(200, 220, 240, 255), { size: 22, dur: 0.9, rise: 24 });
+    this.refreshStatusPanel();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
     this.autoEndPhaseIfDone();
   }
 
@@ -9037,13 +9139,18 @@ export class BattleScene extends Component {
     const mv = b.movement[eff];
     const at = b.attack[eff];
     const ms = b.misc[eff];
-    blocks.push(t('tileInspect.diceRow.move', {
+    const commanderBonusWithoutHatch = getGameModeConfig(GameSession.gameMode).commanderBonusWithoutOpenHatch;
+    blocks.push(t(commanderBonusWithoutHatch
+      ? 'tileInspect.diceRow.moveHardcore'
+      : 'tileInspect.diceRow.move', {
       n: mv,
       md: pool.moveMods.driver,
       mc: pool.moveMods.codriver,
       mh: pool.moveMods.hatch,
     }));
-    blocks.push(t('tileInspect.diceRow.attack', {
+    blocks.push(t(commanderBonusWithoutHatch
+      ? 'tileInspect.diceRow.attackHardcore'
+      : 'tileInspect.diceRow.attack', {
       n: at,
       ag: pool.attackMods.gunner,
       al: pool.attackMods.loader,
@@ -9185,6 +9292,7 @@ export class BattleScene extends Component {
     }
     for (let i = 0; i < units.length; i++) {
       const u = units[i];
+      const showEffectiveRange = getGameModeConfig(GameSession.gameMode).effectiveRangePenetration;
       const unitTopY = y;
       this.addTileInspectUnitPreview(content, u, imageCX, unitTopY, 34);
       const title = t('tileInspect.currentUnit', { name: t(`unit.name.${u.kind}`) });
@@ -9195,18 +9303,27 @@ export class BattleScene extends Component {
         // 徒步类（步兵 / 军官）：无装甲 / 穿甲数据表，仅显示提示
         const { h: footH } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.infantryNoTable'), 15);
         y = y - footH - gapL;
+        if (showEffectiveRange) {
+          const { h: rangeH } = this.makeTileScrollText(
+            content, x0, y, textW, t('tileInspect.effectiveRange', { n: u.stats.effectiveRange }), 15,
+          );
+          y = y - rangeH - gapL;
+        }
       } else {
         const st = u.stats;
-        const cols = 5;
+        const cols = showEffectiveRange ? 6 : 5;
         const gap = 4;
         const colW = (textW - (cols - 1) * gap) / cols;
         const heads = [t('tileInspect.colFront'), t('tileInspect.colFrontSide'), t('tileInspect.colRearSide'),
           t('tileInspect.colRear'), t('tileInspect.colPen')];
+        const values = [st.armorFront, st.armorFrontSide, st.armorRearSide, st.armorRear, st.penetration];
+        if (showEffectiveRange) {
+          heads.push(t('tileInspect.colEffectiveRange'));
+          values.push(st.effectiveRange);
+        }
         const th = this.makeTileScrollSmallCaptions(content, x0, y, colW, heads, 12, gap).h;
         y = y - th - 6;
-        const { h: vh } = this.makeTileScrollValueRow(content, x0, y, colW, [
-          st.armorFront, st.armorFrontSide, st.armorRearSide, st.armorRear, st.penetration,
-        ], 17, gap);
+        const { h: vh } = this.makeTileScrollValueRow(content, x0, y, colW, values, 17, gap);
         y = y - vh - gapL;
       }
 
@@ -10979,6 +11096,36 @@ export class BattleScene extends Component {
     this.redraw();
   }
 
+  private cancelPrecisionAimHold() {
+    const callback = this.precisionAimHoldCallback;
+    if (!callback) return;
+    this.unschedule(callback);
+    this.precisionAimHoldCallback = null;
+  }
+
+  /** Hold an aligned turret for 0.5s, then play the precision-shot firing cue. */
+  private beginPrecisionAimHold(
+    attacker: Unit,
+    target: Unit,
+    attackSound: string,
+    onReady: (fireEffectPlayed: boolean) => void,
+  ) {
+    this.cancelPrecisionAimHold();
+    const callback = () => {
+      if (this.precisionAimHoldCallback !== callback) return;
+      this.precisionAimHoldCallback = null;
+      if (this.isUnitVisible(attacker)) {
+        this.playAttackFireCue(attacker, target, false, attackSound);
+        onReady(true);
+      } else {
+        // startDiceShow handles fog reveal plus firing cues for hidden attackers.
+        onReady(false);
+      }
+    };
+    this.precisionAimHoldCallback = callback;
+    this.scheduleOnce(callback, PRECISION_AIM_HOLD_DURATION);
+  }
+
   private tryAttack(target: Unit) {
     if (!this.mission) return;
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
@@ -11016,12 +11163,22 @@ export class BattleScene extends Component {
     // 先掷骰拿到确定结果，再让面板按这个结果播 2d6→1d6 两段动画；
     // 真正 applyAttack / 消耗骰子 / 推进胜负判定全部放到 onDone 里执行，
     // 这样动画过程中玩家看到的状态（骰子托盘 / 敌人图示）不会提前变。
-    const report = rollAttack({ attacker: sherman, target, map, protagonist: sherman }, this.rng);
+    const report = rollAttack({
+      attacker: sherman,
+      target,
+      map,
+      protagonist: sherman,
+      theater: this.mission.data.theater,
+      units: this.allUnits(),
+      hitThresholdModifier: this.selectedGunHitThresholdModifier,
+      effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+    }, this.rng);
     // 骰子先标"用掉了"不行 —— 动画期间得看出主炮骰仍在选中态。
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
     // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，onDone 时一并消耗。
     const doublesPartnerIdx = this.selectedGunDoublesIdx;
-    this.startShermanTurretAim(target, () => {
+    const precisionFire = this.selectedGunHitThresholdModifier < 0;
+    const showDice = (fireEffectPlayed = false) => {
       this.startDiceShow(report, t('actor.player'), unitDisplayName(target.kind), () => {
         if (!this.mission) return;
         applyAttack(target, report);
@@ -11037,7 +11194,14 @@ export class BattleScene extends Component {
         this.refreshPhaseUI();
         this.updateHUD();
         this.autoEndPhaseIfDone();
-      }, { attackSound: sherman.stats.attackSound, attacker: sherman, target });
+      }, { attackSound: sherman.stats.attackSound, attacker: sherman, target, fireEffectPlayed });
+    };
+    this.startShermanTurretAim(target, () => {
+      if (precisionFire) {
+        this.beginPrecisionAimHold(sherman, target, sherman.stats.attackSound, showDice);
+      } else {
+        showDice();
+      }
     });
     // 立即刷新一次 HUD，让"点敌人开火"提示消失
     this.updateHUD();
@@ -11073,7 +11237,30 @@ export class BattleScene extends Component {
 
     // 保留本车 AI 行动骰托盘；掷骰面板打开时会挂到 DiceShow 遮罩之上（见 liftEnemyDiceTrayIntoDiceShowIfNeeded）
 
-    const report = rollAttack({ attacker: enemy, target, map, protagonist: this.mission.sherman }, this.rng);
+    const attackCtx = {
+      attacker: enemy,
+      target,
+      map,
+      protagonist: this.mission.sherman,
+      theater: this.mission.data.theater,
+      units: this.allUnits(),
+      effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+    };
+    const precisionPartnerIdx = !opts.adjacentOnly
+      && isSplitTankKind(enemy.kind)
+      && getGameModeConfig(GameSession.gameMode).precisionFire
+      && probHit2d6(hitThreshold(attackCtx)) < 0.5
+      ? this.findUnusedMatchingEnemyDie(this.enemyDiceHighlightIdx)
+      : -1;
+    const precisionFire = precisionPartnerIdx >= 0;
+    if (precisionFire) {
+      this.enemyDiceUsed[precisionPartnerIdx] = true;
+      this.refreshEnemyDiceTray();
+    }
+    const report = rollAttack({
+      ...attackCtx,
+      hitThresholdModifier: precisionFire ? -2 : 0,
+    }, this.rng);
     const enemyActor = enemy.faction !== 'allied'
       ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
@@ -11082,7 +11269,14 @@ export class BattleScene extends Component {
       : target.faction !== 'allied'
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
-    const showDice = () => this.startDiceShow(report, enemyActor, targetLabel, () => {
+    if (precisionFire) {
+      this.battleLogI18n('battleLog.attack.precisionAI', {
+        actor: enemyActor,
+        pip: this.enemyDice[this.enemyDiceHighlightIdx],
+        need: report.threshold,
+      });
+    }
+    const showDice = (fireEffectPlayed = false) => this.startDiceShow(report, enemyActor, targetLabel, () => {
       if (!this.mission) return;
       applyAttack(target, report);
       if (target.destroyed) this.registerDestroyWreckVisual(target);
@@ -11097,18 +11291,19 @@ export class BattleScene extends Component {
         }
         this.runNextEnemyStep();
       }
-    }, { attackSound: enemy.stats.attackSound, attacker: enemy, target });
-    if (splitTurretReady) {
-      if (this.isUnitVisible(enemy)) {
-        this.startEnemyTurretAim(enemy, target, showDice);
+    }, { attackSound: enemy.stats.attackSound, attacker: enemy, target, fireEffectPlayed });
+    const afterTurretAim = () => {
+      if (precisionFire) {
+        this.beginPrecisionAimHold(enemy, target, enemy.stats.attackSound, showDice);
       } else {
-        const fireDirection = (directionTo(enemy.pos, target.pos)
-          ?? approximateDirection(enemy.pos, target.pos)) as Direction;
-        this.enemyTurretFacing.set(enemy.id, fireDirection);
         showDice();
       }
+    };
+    if (splitTurretReady) {
+      // Fog hides the turret animation, but the attack still uses the same timing path.
+      this.startEnemyTurretAim(enemy, target, afterTurretAim);
     } else {
-      showDice();
+      afterTurretAim();
     }
     return true;
   }
@@ -11128,7 +11323,7 @@ export class BattleScene extends Component {
     attackerLabel: string,
     targetLabel: string,
     onDone: () => void,
-    opts: { mg?: boolean; keepTurnEndPanel?: boolean; attackSound?: string; attacker?: Unit | null; target?: Unit | null } = {},
+    opts: { mg?: boolean; keepTurnEndPanel?: boolean; attackSound?: string; attacker?: Unit | null; target?: Unit | null; fireEffectPlayed?: boolean } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
@@ -11137,18 +11332,24 @@ export class BattleScene extends Component {
     this.closeDiePopover();
 
     const mg = !!opts.mg;
-    if (opts.attacker && !this.isUnitVisible(opts.attacker)) {
-      const revealKey = HexMap.keyOf(opts.attacker.pos);
-      this.transientFogRevealKeys.add(revealKey);
-      this.redraw();
-      if (mg) playMgFire();
-      else {
-        this.spawnMuzzleFlash(opts.attacker, opts.target ?? null);
-        playConfiguredAttackSound(opts.attackSound ?? '');
+    const attackerVisible = !opts.attacker || this.isUnitOutsideFog(opts.attacker);
+    const targetVisible = !opts.target || this.isUnitOutsideFog(opts.target);
+    if (!attackerVisible || !targetVisible) {
+      const revealKey = opts.attacker && !attackerVisible
+        ? HexMap.keyOf(opts.attacker.pos)
+        : null;
+      if (revealKey) {
+        this.transientFogRevealKeys.add(revealKey);
+        this.redraw();
+      }
+      if (!opts.fireEffectPlayed) {
+        this.playAttackFireCue(opts.attacker, opts.target ?? null, mg, opts.attackSound ?? '');
       }
       this.scheduleOnce(() => {
-        this.transientFogRevealKeys.delete(revealKey);
-        this.redraw();
+        if (revealKey) {
+          this.transientFogRevealKeys.delete(revealKey);
+          this.redraw();
+        }
         onDone();
       }, FOG_ATTACK_REVEAL_DURATION);
       return;
@@ -11163,6 +11364,7 @@ export class BattleScene extends Component {
       targetLabel,
       mg,
       attackSound: opts.attackSound ?? '',
+      fireEffectPlayed: opts.fireEffectPlayed === true,
       attacker: opts.attacker ?? null,
       target: opts.target ?? null,
       onDone,
@@ -11631,6 +11833,16 @@ export class BattleScene extends Component {
     return idx;
   }
 
+  private findUnusedMatchingEnemyDie(dieIdx: number): number {
+    if (dieIdx < 0 || dieIdx >= this.enemyDice.length) return -1;
+    const pip = this.enemyDice[dieIdx];
+    for (let i = 0; i < this.enemyDice.length; i++) {
+      if (i === dieIdx || this.enemyDiceUsed[i]) continue;
+      if (this.enemyDice[i] === pip) return i;
+    }
+    return -1;
+  }
+
   /** 托盘下方短标签：当前规则下该骰将执行的具体动作（无可行则空转） */
   private enemyDieActionSubtitle(enemy: Unit, dieIdx: number): string {
     const pip = this.enemyDice[dieIdx];
@@ -11766,7 +11978,7 @@ export class BattleScene extends Component {
 
     this.enemyDiceTrayRoot = root;
     if (playSort) {
-      this.enemyDiceSortAnim = { t: 0, dur: ENEMY_TRAY_SORT_DUR, fromSlot, toSlot };
+      this.enemyDiceSortAnim = { t: 0, dur: DICE_ROLL_DUR, fromSlot, toSlot };
       this.applyEnemyDiceSortLayout(0);
       playDiceRoll();
     } else {
@@ -11897,13 +12109,13 @@ export class BattleScene extends Component {
    * 每帧推进掷骰面板（§3.4 三段式）。
    *
    * 状态机：
-   *   hit-roll (滚动 DICE_HIT_ROLL_DUR)
+   *   hit-roll（滚动 DICE_ROLL_DUR）
    *     → hit-show (揭示 2d6 真值 + 命中/未命中，停 DICE_HIT_SHOW_DUR)
    *   若未命中：hit-show → hold（骰子不再动，底部大字 MISS，停 DICE_HOLD_DUR）→ done
-   *   若命中：hit-show → pen-roll (DICE_PEN_ROLL_DUR)
+   *   若命中：hit-show → pen-roll（滚动 DICE_ROLL_DUR）
    *     → pen-show (揭示 1d6 + 击穿/跳弹，DICE_PEN_SHOW_DUR)
    *   若跳弹：pen-show → hold（底部出 跳弹）→ done
-   *   若击穿且有伤害骰：pen-show → dmg-roll (DICE_DMG_ROLL_DUR) → dmg-show (揭示 1d6 + 伤害效果)
+   *   若击穿且有伤害骰：pen-show → dmg-roll（滚动 DICE_ROLL_DUR）→ dmg-show（揭示 1d6 + 伤害效果）
    *   若击穿即摧毁（如 Pacific 日军单位）：pen-show → hold
    *     → hold（底部出 起火 / 击毁 / 炮塔 / 痛痪 / 阵亡检定 / 受损）→ done
    */
@@ -11923,7 +12135,7 @@ export class BattleScene extends Component {
         if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], p2);
         show.hitSumLabel.string = '';
         if (!show.mg) this.spinMainGunDiceRows(show, frame);
-        if (show.t >= DICE_HIT_ROLL_DUR) {
+        if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'hit-show';
           show.t = 0;
           this.setDieLabelFace(show.hitDieLabels[0], show.report.dice[0]);
@@ -11946,10 +12158,8 @@ export class BattleScene extends Component {
             this.enterDiceShowHold(show);
           }
           // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
-          if (show.mg) playMgFire();
-          else {
-            this.spawnMuzzleFlash(show.attacker, show.target);
-            playConfiguredAttackSound(show.attackSound);
+          if (!show.fireEffectPlayed) {
+            this.playAttackFireCue(show.attacker, show.target, show.mg, show.attackSound);
           }
         }
         break;
@@ -12005,7 +12215,7 @@ export class BattleScene extends Component {
         for (let i = 0; i < show.penDieLabels.length; i++) {
           this.setDieLabelFace(show.penDieLabels[i], ((frame * (13 + i * 4)) % 6) + 1);
         }
-        if (show.t >= DICE_PEN_ROLL_DUR) {
+        if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'pen-show';
           show.t = 0;
           if (show.report.penDice?.length) {
@@ -12063,7 +12273,7 @@ export class BattleScene extends Component {
         const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
         const p = ((frame * 11) % 6) + 1;
         this.setDieLabelFace(show.dmgDieLabel, p);
-        if (show.t >= DICE_DMG_ROLL_DUR) {
+        if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'dmg-show';
           show.t = 0;
           if (show.dmgDieLabel && show.report.damageDie !== undefined) {
@@ -12106,7 +12316,7 @@ export class BattleScene extends Component {
         const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
         const p = ((frame * 29) % 6) + 1;
         this.setDieLabelFace(show.crewDieLabel, p);
-        if (show.t >= DICE_CREW_ROLL_DUR) {
+        if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'crew-show';
           show.t = 0;
           const cc = show.report.stagedCrewCheck;
@@ -12173,6 +12383,7 @@ export class BattleScene extends Component {
     return this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null
+      || this.precisionAimHoldCallback !== null
       || this.enemyDiceSortAnim !== null
       || this.enemyDiceResultHold !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null || this.usCasualtyEventUI !== null
@@ -12306,8 +12517,7 @@ export class BattleScene extends Component {
     const ui = this.fireCheckEventUI;
     if (!ui || ui.stage !== 'roll') return;
     ui.t += dt;
-    const DUR = 0.55;
-    if (ui.t < DUR) {
+    if (ui.t < DICE_ROLL_DUR) {
       const tick = Math.floor(ui.t / 0.08) % 6;
       for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
       return;
@@ -12484,8 +12694,7 @@ export class BattleScene extends Component {
     if (!ui) return;
     ui.t += dt;
     if (ui.stage === 'roll') {
-      const DUR = 0.55;
-      if (ui.t < DUR) {
+      if (ui.t < DICE_ROLL_DUR) {
         const tick = Math.floor(ui.t / 0.08) % 6;
         for (const lab of ui.dieLabels) this.setUsCasualtyDieFace(lab, (tick % 6) + 1, false);
         return;
@@ -12658,7 +12867,6 @@ export class BattleScene extends Component {
       : target.faction !== 'allied'
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
-
     this.battleLogI18n('battleLog.combatMgAI', {
       actor: actorLabel,
       diceExpr: impossible ? `max ${maxRoll}` : this.mgDiceExpr(report),
@@ -12747,6 +12955,7 @@ export class BattleScene extends Component {
         this.turnEndUnitSeq += 1;
         return `turnend_${this.turnEndUnitSeq}`;
       },
+      effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
     const extraPhases = prepared.extraDicePhases ?? [];
@@ -13017,14 +13226,13 @@ export class BattleScene extends Component {
   private advanceTurnEndEventUI(dt: number) {
     const ui = this.turnEndEventUI;
     if (!ui || ui.stage === 'hold') return;
-    const DUR = 0.55;
     const PAUSE_AFTER_PRIMARY = 0.2;
     const PAUSE_BEFORE_ADJACENT_DICE = 1.0;
     const PAUSE_AFTER_EXTRA = 0.35;
 
     if (ui.stage === 'roll_primary') {
       ui.t += dt;
-      if (ui.t < DUR) {
+      if (ui.t < DICE_ROLL_DUR) {
         const tick = Math.floor(ui.t / 0.08) % 6;
         for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
         return;
@@ -13083,7 +13291,7 @@ export class BattleScene extends Component {
         return;
       }
       const n = phase.dice.length;
-      if (ui.t < DUR) {
+      if (ui.t < DICE_ROLL_DUR) {
         const tick = Math.floor(ui.t / 0.08) % 6;
         for (let i = 0; i < n; i++) {
           const lab = ui.extraDieLabels[i];
@@ -13167,7 +13375,8 @@ export class BattleScene extends Component {
         console.error('[TurnEnd] apply failed', e);
       }
       this.registerNewlyDestroyedSince(destroyedSnap);
-      const unit = this.mission.enemies.find(e => e.id === tankReinforceMove.unitId);
+      const unit = [...this.mission.allies, ...this.mission.enemies]
+        .find(candidate => candidate.id === tankReinforceMove.unitId);
       if (unit) {
         this.pendingAfterAnimChain = () => {
           this.refreshStatusPanel();

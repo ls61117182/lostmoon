@@ -34,10 +34,10 @@ misc_rocky,0,Pacific 杂项阶段·岩石高地（坦克不可入占位）
 misc_airstrip,1,Pacific 杂项阶段·机场跑道
 mod_move_driver,1,移动：驾驶员存活则加骰
 mod_move_codriver,1,移动：副驾驶存活则加骰
-mod_move_hatch,1,移动：车长开舱则加骰
+mod_move_hatch,1,移动：经典模式车长开舱则加骰；硬核模式车长存活即加骰
 mod_attack_gunner,1,攻击：炮手存活则加骰
 mod_attack_loader,1,攻击：装填手存活则加骰
-mod_attack_hatch,1,攻击：车长开舱则加骰
+mod_attack_hatch,1,攻击：经典模式车长开舱则加骰；硬核模式车长存活即加骰
 mod_misc_hatch,1,杂项：车长开舱则加骰
 cap_min,1,掷骰数下限
 cap_max,5,掷骰数上限

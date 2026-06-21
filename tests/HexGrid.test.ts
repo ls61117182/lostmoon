@@ -27,6 +27,9 @@ import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
 import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
+import { effectivePenetration, hitThreshold, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
+import { actionDicePool } from '../assets/scripts/core/ActionDice';
+import { RNG } from '../assets/scripts/core/Dice';
 
 describe('HexGrid 基础运算', () => {
   test('距离：原点到自身 = 0', () => {
@@ -166,12 +169,89 @@ describe('HexMap 视线 / 树篱', () => {
   });
 });
 
+describe('Effective range penetration', () => {
+  const unitAt = (id: string, q: number, penetration: number, effectiveRange: number): Unit => ({
+    id,
+    kind: 'panzer4',
+    faction: id === 'attacker' ? 'allied' : 'german',
+    pos: { q, r: 0 },
+    facing: 0,
+    stats: {
+      faction: id === 'attacker' ? 'allied' : 'german',
+      size: 4,
+      armorFront: 10,
+      armorFrontSide: 9,
+      armorRearSide: 8,
+      armorRear: 7,
+      penetration,
+      effectiveRange,
+      usCasualtyDice: 0,
+      moveSound: '',
+      attackSound: '',
+      infantryTankCoordination: 0,
+    },
+  });
+
+  test('does not decay within range, then loses one per extra hex down to zero', () => {
+    const attacker = unitAt('attacker', 0, 3, 4);
+    expect(effectivePenetration(attacker, unitAt('target', 4, 0, 4), true)).toBe(3);
+    expect(effectivePenetration(attacker, unitAt('target', 5, 0, 4), true)).toBe(2);
+    expect(effectivePenetration(attacker, unitAt('target', 9, 0, 4), true)).toBe(0);
+    expect(attacker.stats.penetration).toBe(3);
+  });
+
+  test('classic mode keeps base penetration beyond effective range', () => {
+    const attacker = unitAt('attacker', 0, 3, 4);
+    expect(effectivePenetration(attacker, unitAt('target', 9, 0, 4), false)).toBe(3);
+  });
+
+  test('attack preview uses the temporary decayed value', () => {
+    const attacker = unitAt('attacker', 0, 3, 4);
+    const target = unitAt('target', 5, 0, 4);
+    const map = new HexMap(6, 1);
+    for (let q = 0; q <= 5; q++) map.set({ pos: { q, r: 0 }, terrain: 'field' });
+    expect(previewAttack({ attacker, target, map, effectiveRangePenetration: true }).pen.penetration).toBe(2);
+    expect(attacker.stats.penetration).toBe(3);
+  });
+
+  test('attack report uses the temporary value without mutating base penetration', () => {
+    const attacker = unitAt('attacker', 0, 3, 4);
+    const target = unitAt('target', 5, 0, 4);
+    const map = new HexMap(6, 1);
+    for (let q = 0; q <= 5; q++) map.set({ pos: { q, r: 0 }, terrain: 'field' });
+    const report = rollAttack({ attacker, target, map, effectiveRangePenetration: true }, new RNG(12345));
+    expect(report.penetration).toBe(2);
+    expect(attacker.stats.penetration).toBe(3);
+  });
+});
+
 describe('战争迷雾玩家视野', () => {
   test('经典与硬核模式启用各自规则差异', () => {
     expect(fogOfWarEnabled('classic')).toBe(false);
     expect(fogOfWarEnabled('hardcore')).toBe(true);
     expect(getGameModeConfig('classic').aiMainGunFallbackToMG).toBe(false);
     expect(getGameModeConfig('hardcore').aiMainGunFallbackToMG).toBe(true);
+    expect(getGameModeConfig('classic').precisionFire).toBe(false);
+    expect(getGameModeConfig('hardcore').precisionFire).toBe(true);
+    expect(getGameModeConfig('classic').commanderBonusWithoutOpenHatch).toBe(false);
+    expect(getGameModeConfig('hardcore').commanderBonusWithoutOpenHatch).toBe(true);
+    expect(getGameModeConfig('classic').miscCloseHatchWithDoubles).toBe(false);
+    expect(getGameModeConfig('hardcore').miscCloseHatchWithDoubles).toBe(true);
+    expect(getGameModeConfig('classic').effectiveRangePenetration).toBe(false);
+    expect(getGameModeConfig('hardcore').effectiveRangePenetration).toBe(true);
+  });
+
+  test('硬核车长关舱时仅为移动和攻击阶段提供额外骰', () => {
+    const crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
+    const hardcoreBonus = getGameModeConfig('hardcore').commanderBonusWithoutOpenHatch;
+    expect(actionDicePool({ subPhase: 'movement', terrain: 'road', hatchOpen: false, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(5);
+    expect(actionDicePool({ subPhase: 'attack', terrain: 'road', hatchOpen: false, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(5);
+    expect(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: false, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(1);
+    expect(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: true, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(2);
   });
 
   const addRect = (map: HexMap, cols: number, rows: number) => {
@@ -194,18 +274,40 @@ describe('战争迷雾玩家视野', () => {
     crew: { commander: true, loader: true, gunner: true, driver: true, coDriver: true },
   });
 
-  test('关舱：相邻一格与正前方射线可见，阻挡格自身可见并截断后方', () => {
+  test('精确射击只在最终命中阈值上应用 -2', () => {
+    const map = new HexMap(5, 5);
+    addRect(map, 5, 5);
+    const attacker = shermanAt(2, 2, 0, false);
+    const target: Unit = {
+      ...shermanAt(2, 1, 3, false),
+      id: 'target',
+      kind: 'panzer4',
+      faction: 'german',
+      stats: { size: 4 } as Unit['stats'],
+    };
+    const normal = hitThreshold({ attacker, target, map });
+    const precision = hitThreshold({ attacker, target, map, hitThresholdModifier: -2 });
+    expect(precision).toBe(normal - 2);
+  });
+
+  test('关舱：仅正前与左右前侧三条射线可见，后方三个相邻格不可见', () => {
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(2, 3, 0, false);
     const blocker = neighbor(sherman.pos, 0);
     const behind = neighbor(blocker, 0);
+    const leftFront2 = neighbor(neighbor(sherman.pos, 5), 5);
+    const rightFront2 = neighbor(neighbor(sherman.pos, 1), 1);
     map.set({ pos: blocker, terrain: 'forest' });
 
     const visible = computePlayerVisibleHexes(map, sherman);
     expect(visible.has(HexMap.keyOf(blocker))).toBe(true);
     expect(visible.has(HexMap.keyOf(behind))).toBe(false);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 1)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(leftFront2))).toBe(true);
+    expect(visible.has(HexMap.keyOf(rightFront2))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 2)))).toBe(false);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 3)))).toBe(false);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 4)))).toBe(false);
   });
 
   test('开舱：半径四格无遮挡目标可见，五格非正前方目标不可见', () => {
@@ -237,17 +339,21 @@ describe('战争迷雾玩家视野', () => {
     expect(visible.has(HexMap.keyOf(offAxis3))).toBe(false);
   });
 
-  test('关舱时正前方视野同样不得超过当前视野属性', () => {
+  test('关舱时三条前向视野均不得超过当前视野属性', () => {
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(3, 4, 0, false);
     sherman.visionRange = 2;
     const forward2 = neighbor(neighbor(sherman.pos, 0), 0);
     const forward3 = neighbor(forward2, 0);
+    const side2 = neighbor(neighbor(sherman.pos, 1), 1);
+    const side3 = neighbor(side2, 1);
     const visible = computePlayerVisibleHexes(map, sherman);
 
     expect(visible.has(HexMap.keyOf(forward2))).toBe(true);
     expect(visible.has(HexMap.keyOf(forward3))).toBe(false);
+    expect(visible.has(HexMap.keyOf(side2))).toBe(true);
+    expect(visible.has(HexMap.keyOf(side3))).toBe(false);
   });
 
   test('中心点几何连线：{4,1} 建筑遮挡 {2,3} 到 {5,0}/{6,0}', () => {
@@ -269,9 +375,9 @@ describe('战争迷雾玩家视野', () => {
     addRect(map, 7, 7);
     const sherman = shermanAt(3, 3, 0, true);
     sherman.crew!.commander = false;
-    const offAxisDistance2 = { q: sherman.pos.q, r: sherman.pos.r + 2 };
+    const rearDistance2 = neighbor(neighbor(sherman.pos, 2), 2);
     const visible = computePlayerVisibleHexes(map, sherman);
-    expect(visible.has(HexMap.keyOf(offAxisDistance2))).toBe(false);
+    expect(visible.has(HexMap.keyOf(rearDistance2))).toBe(false);
   });
 });
 

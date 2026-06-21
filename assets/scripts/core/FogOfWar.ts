@@ -1,4 +1,4 @@
-import { HexMap, axialEquals, axialToPixel, hexDistance, neighbor } from './HexGrid';
+import { HexMap, axialEquals, axialToPixel, hexDistance, neighbor, rotateDirection } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
 import { Axial, DEFAULT_VISION_RANGE, Unit } from './types';
 
@@ -40,22 +40,28 @@ export function computePlayerVisibleHexes(map: HexMap, sherman: Unit): Set<strin
       if (hexDistance(sherman.pos, tile.pos) > visionRange) continue;
       if (hasFogLineOfSight(map, sherman.pos, tile.pos)) add(tile.pos);
     }
-  } else {
-    for (const tile of map.all()) {
-      if (hexDistance(sherman.pos, tile.pos) <= 1) add(tile.pos);
-    }
   }
 
-  // The hull's exact forward ray uses the same current range in either hatch state.
+  // Closed hatch: only the three front armor directions are visible.
+  // Open hatch already has radial visibility, but keeps the exact forward ray rule explicitly.
   if (sherman.facing !== null) {
-    let p = neighbor(sherman.pos, sherman.facing);
-    let distance = 1;
-    while (distance <= visionRange && map.has(p)) {
-      add(p);
-      const tile = map.get(p)!;
-      if (map.lineOfSightBlockedByTile(tile)) break;
-      p = neighbor(p, sherman.facing);
-      distance++;
+    const rayDirections = openHatch
+      ? [sherman.facing]
+      : [
+          rotateDirection(sherman.facing, -1),
+          sherman.facing,
+          rotateDirection(sherman.facing, 1),
+        ];
+    for (const direction of rayDirections) {
+      let p = neighbor(sherman.pos, direction);
+      let distance = 1;
+      while (distance <= visionRange && map.has(p)) {
+        add(p);
+        const tile = map.get(p)!;
+        if (map.lineOfSightBlockedByTile(tile)) break;
+        p = neighbor(p, direction);
+        distance++;
+      }
     }
   }
 

@@ -16,7 +16,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'units.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 
-const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'usCasualtyDice'];
+const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice'];
 const STRING_FIELDS = ['moveSound', 'attackSound'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
 const FACTIONS = ['allied', 'german', 'japanese'];
@@ -194,6 +194,7 @@ function build() {
       `armorRearSide: ${r.armorRearSide}, ` +
       `armorRear: ${r.armorRear}, ` +
       `penetration: ${r.penetration}, ` +
+      `effectiveRange: ${r.effectiveRange}, ` +
       `usCasualtyDice: ${r.usCasualtyDice},`
     );
     for (const f of STRING_FIELDS) {
