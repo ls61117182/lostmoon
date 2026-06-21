@@ -290,7 +290,7 @@ describe('战争迷雾玩家视野', () => {
     expect(precision).toBe(normal - 2);
   });
 
-  test('关舱：仅正前与左右前侧三条射线可见，后方三个相邻格不可见', () => {
+  test('关舱：正前与左右前侧为射线，后方三个方向仅相邻格可见', () => {
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(2, 3, 0, false);
@@ -305,9 +305,10 @@ describe('战争迷雾玩家视野', () => {
     expect(visible.has(HexMap.keyOf(behind))).toBe(false);
     expect(visible.has(HexMap.keyOf(leftFront2))).toBe(true);
     expect(visible.has(HexMap.keyOf(rightFront2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 2)))).toBe(false);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 3)))).toBe(false);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 4)))).toBe(false);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 2)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 3)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 4)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(neighbor(sherman.pos, 3), 3)))).toBe(false);
   });
 
   test('开舱：半径四格无遮挡目标可见，五格非正前方目标不可见', () => {
@@ -375,8 +376,10 @@ describe('战争迷雾玩家视野', () => {
     addRect(map, 7, 7);
     const sherman = shermanAt(3, 3, 0, true);
     sherman.crew!.commander = false;
+    const rearAdjacent = neighbor(sherman.pos, 2);
     const rearDistance2 = neighbor(neighbor(sherman.pos, 2), 2);
     const visible = computePlayerVisibleHexes(map, sherman);
+    expect(visible.has(HexMap.keyOf(rearAdjacent))).toBe(true);
     expect(visible.has(HexMap.keyOf(rearDistance2))).toBe(false);
   });
 });

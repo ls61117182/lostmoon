@@ -3,7 +3,7 @@
  * 攻击阶段"双子阶段、敌方贪心 AI 与存读档。
  *
  * 玩法（按说明书 3.6 行动表拆分为两个独立阶段）：
- *   - 回合开始时底部弹出阶段选择条：「打开舱盖/关闭舱盖」+「移动阶段 / 攻击阶段」；选择子阶段前可多次切换舱盖，车长阵亡则舱盖钮灰显为「车长阵亡」；两子阶段可任意顺序进入
+ *   - 回合开始时底部弹出阶段选择条：「打开舱盖/关闭舱盖」+「移动阶段 / 攻击阶段」；舱盖每回合最多切换一次，点击后立即灰显并刷新视野，车长阵亡则舱盖钮灰显为「车长阵亡」；两子阶段可任意顺序进入
  *   - 进入某阶段时，按谢尔曼当前格地形 + 舱盖状态摇 3~5 颗骰子，落在屏幕底部骰子托盘
  *     - 移动阶段：1=无 / 2=启动（未实装，可跳过）/ 3,4=转向 60° / 5,6=前进或后退 1 格
  *     - 攻击阶段：1,2=装填 / 3,4=机枪（暂无步兵，置灰）/ 5,6=主炮射击（需已装填）
@@ -621,6 +621,16 @@ const FOREST_TREE_DARK  = new Color( 28,  88,  30, 255);
 const FOREST_TREE_MID   = new Color( 45, 118,  42, 255);
 const FOREST_TREE_LIGHT = new Color( 70, 148,  58, 255);
 const FOREST_SHADE      = new Color(  0,   0,   0,  50);
+const FOREST_CANOPY_LAYOUT: ReadonlyArray<{ ox: number; oy: number; scale: number }> = [
+  { ox: -0.38, oy:  0.25, scale: 0.64 },
+  { ox:  0.00, oy:  0.38, scale: 0.70 },
+  { ox:  0.38, oy:  0.25, scale: 0.64 },
+  { ox: -0.30, oy: -0.05, scale: 0.68 },
+  { ox:  0.08, oy:  0.02, scale: 0.74 },
+  { ox:  0.38, oy: -0.12, scale: 0.62 },
+  { ox: -0.25, oy: -0.39, scale: 0.58 },
+  { ox:  0.22, oy: -0.38, scale: 0.64 },
+];
 const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
 const FOG_ATTACK_REVEAL_DURATION = 0.9;
 const PRECISION_AIM_HOLD_DURATION = 0.5;
@@ -967,6 +977,9 @@ export class BattleScene extends Component {
   private mapNode: Node | null = null;
   private fogNode: Node | null = null;
   private fogGraphics: Graphics | null = null;
+  private unitVisibilityMaskNode: Node | null = null;
+  private unitVisibilityMaskGraphics: Graphics | null = null;
+  private unitGraphics: Graphics | null = null;
   private unitEffectNode: Node | null = null;
   private unitEffectGraphics: Graphics | null = null;
   private unitEffectVisuals = new Map<string, UnitEffectVisual>();
@@ -1056,6 +1069,7 @@ export class BattleScene extends Component {
   private movementDone: boolean = false;
   private attackDone: boolean = false;
   private miscDone: boolean = false;
+  private hatchChangedThisTurn: boolean = false;
   /** 当前子阶段（movement/attack）手上的骰子；回到 choose 时清空 */
   private phaseDice: DieSlot[] = [];
   private playerDiceRollAnim: {
@@ -1181,6 +1195,7 @@ export class BattleScene extends Component {
   private chooseHatchLabel: Label | null = null;
   private chooseMoveBtn: Node | null = null;
   private chooseAttackBtn: Node | null = null;
+  private disabledPhaseButtons = new Set<Node>();
   /** 底部骰子托盘：movement/attack 子步骤时显示 */
   private diceTrayRoot: Node | null = null;
   private diceVisuals: DieVisual[] = [];
@@ -1325,7 +1340,7 @@ export class BattleScene extends Component {
   private static readonly EN_LABEL_SAFE_PAD = 8;
   private static readonly PLAYER_DICE_SORT_DUR = 0.5;
   private static readonly TERRAIN_SPRITE_POOL = 384;
-  private static readonly FOLIAGE_SPRITE_POOL = 256;
+  private static readonly FOLIAGE_SPRITE_POOL = 384;
   private static readonly SHERMAN_TURRET_PIVOT_X = SHERMAN_SPLIT_GEOMETRY_CONFIG.pivot.bodyX;
   private static readonly SHERMAN_TURRET_PIVOT_Y = SHERMAN_SPLIT_GEOMETRY_CONFIG.pivot.bodyY;
   private static readonly SHERMAN_TURRET_OFFSET_FORWARD = SHERMAN_SPLIT_VISUAL_CONFIG.turretLocalOffsetForward;
@@ -1506,6 +1521,23 @@ export class BattleScene extends Component {
     }
 
     // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上。
+    // Units are always rendered, then clipped to the union of currently visible hexes.
+    // This lets a moving tank emerge continuously without making terrain fog opaque.
+    const unitMaskNode = new Node('VisibleUnitMask');
+    unitMaskNode.layer = this.node.layer;
+    unitMaskNode.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(unitMaskNode);
+    const unitMask = unitMaskNode.addComponent(Mask);
+    unitMask.type = Mask.Type.GRAPHICS_STENCIL;
+    this.unitVisibilityMaskNode = unitMaskNode;
+    this.unitVisibilityMaskGraphics = unitMask.subComp as Graphics;
+
+    const unitContentNode = new Node('UnitContent');
+    unitContentNode.layer = this.node.layer;
+    unitContentNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.unitGraphics = unitContentNode.addComponent(Graphics);
+    unitMaskNode.addChild(unitContentNode);
+
     const shNode = new Node('ShermanTopSprite');
     shNode.layer = this.node.layer;
     shNode.addComponent(UITransform).setContentSize(1280, 720);
@@ -1515,7 +1547,7 @@ export class BattleScene extends Component {
     this.shermanSpriteNode = shNode;
     shNode.active = false;
 
-    gNode.addChild(shNode);
+    unitContentNode.addChild(shNode);
 
     const shTurretNode = new Node('ShermanTurretTopSprite');
     shTurretNode.layer = this.node.layer;
@@ -1524,7 +1556,7 @@ export class BattleScene extends Component {
     this.shermanTurretTopSprite.sizeMode = Sprite.SizeMode.CUSTOM;
     this.shermanTurretSpriteNode = shTurretNode;
     shTurretNode.active = false;
-    gNode.addChild(shTurretNode);
+    unitContentNode.addChild(shTurretNode);
 
     for (let i = 0; i < BattleScene.ENEMY_TOP_SPRITE_POOL; i++) {
       const pz = new Node(`EnemyTop_${i}`);
@@ -1534,7 +1566,7 @@ export class BattleScene extends Component {
       spz.sizeMode = Sprite.SizeMode.CUSTOM;
       pz.active = false;
       this.enemyTopSpritePool.push({ node: pz, sprite: spz });
-      gNode.addChild(pz);
+      unitContentNode.addChild(pz);
     }
     // 步兵 3 人小队：每帧 redraw 时按需占用，单位摧毁 / 不存在时关闭即可
     for (let i = 0; i < BattleScene.INFANTRY_TOP_SPRITE_POOL; i++) {
@@ -1545,7 +1577,7 @@ export class BattleScene extends Component {
       spi.sizeMode = Sprite.SizeMode.CUSTOM;
       inf.active = false;
       this.infantryTopSpritePool.push({ node: inf, sprite: spi });
-      gNode.addChild(inf);
+      unitContentNode.addChild(inf);
     }
     // 军官单兵棋子（独立池，与 3 人小队互斥；同一格不会同时出现两类徒步单位）
     for (let i = 0; i < BattleScene.OFFICER_TOP_SPRITE_POOL; i++) {
@@ -1556,7 +1588,7 @@ export class BattleScene extends Component {
       ofS.sizeMode = Sprite.SizeMode.CUSTOM;
       ofN.active = false;
       this.officerTopSpritePool.push({ node: ofN, sprite: ofS });
-      gNode.addChild(ofN);
+      unitContentNode.addChild(ofN);
     }
 
     // 独立状态特效层：位于单位贴图之上、状态文字和战争迷雾之下。
@@ -1726,6 +1758,7 @@ export class BattleScene extends Component {
     this.movementDone = false;
     this.attackDone = false;
     this.miscDone = false;
+    this.hatchChangedThisTurn = false;
     this.playerDiceRollAnim = null;
     this.playerDiceSortAnim = null;
     this.phaseDice = [];
@@ -1766,10 +1799,12 @@ export class BattleScene extends Component {
   // ---------- 绘制 ----------
 
   private redraw() {
-    if (!this.g || !this.mission) return;
+    if (!this.g || !this.unitGraphics || !this.mission) return;
     this.refreshPlayerVisibility();
+    this.redrawUnitVisibilityMask();
     const g = this.g;
     g.clear();
+    this.unitGraphics.clear();
     this.terrainSpritePoolNext = 0;
     for (const { node } of this.terrainSpritePool) node.active = false;
     this.foliageSpritePoolNext = 0;
@@ -1944,12 +1979,14 @@ export class BattleScene extends Component {
 
     // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
     const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
+    this.g = this.unitGraphics;
     for (const u of units) {
       if (u.destroyed) this.drawUnitMaybeAnim(u);
     }
     for (const u of units) {
       if (!u.destroyed) this.drawUnitMaybeAnim(u);
     }
+    this.g = g;
     this.placeUnitEffectLayerAboveUnits();
     this.syncUnitEffects(0);
     this.drawUnitEffects();
@@ -2006,6 +2043,19 @@ export class BattleScene extends Component {
   private isUnitOutsideFog(unit: Unit): boolean {
     if (unit === this.mission?.sherman || !fogOfWarEnabled(GameSession.gameMode)) return true;
     return this.visibleHexKeys.has(HexMap.keyOf(unit.pos));
+  }
+
+  private redrawUnitVisibilityMask() {
+    const mask = this.unitVisibilityMaskGraphics;
+    if (!mask || !this.mission) return;
+    mask.clear();
+    mask.fillColor = new Color(255, 255, 255, 0);
+    for (const tile of this.mission.map.all()) {
+      if (!this.isHexVisible(tile.pos)) continue;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
+      mask.fill();
+    }
   }
 
   private redrawFogOverlay() {
@@ -2666,6 +2716,11 @@ export class BattleScene extends Component {
     const effectNode = this.unitEffectNode;
     const mapNode = this.mapNode;
     if (!effectNode || !mapNode || effectNode.parent !== mapNode) return;
+    const unitMaskNode = this.unitVisibilityMaskNode;
+    if (unitMaskNode?.parent === mapNode) {
+      effectNode.setSiblingIndex(unitMaskNode.getSiblingIndex() + 1);
+      return;
+    }
     const unitNodes: Node[] = [
       ...this.enemyTopSpritePool.map(slot => slot.node),
       ...this.infantryTopSpritePool.map(slot => slot.node),
@@ -3101,7 +3156,6 @@ export class BattleScene extends Component {
   }
 
   private drawUnitMaybeAnim(u: Unit) {
-    if (!this.isUnitVisible(u)) return;
     if (this.anim && this.anim.unit === u) {
       if (this.anim.kind === 'turn') {
         const c = this.project(u.pos.q, u.pos.r);
@@ -3592,19 +3646,10 @@ export class BattleScene extends Component {
       ((t.pos.q | 0) * 92811 + (t.pos.r | 0) * 6899 + 0x4f2a91) >>> 0;
     const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
     const s = size;
-    const trees: Array<{ ox: number; oy: number; scale: number }> = [
-      { ox: -0.22, oy: 0.22, scale: 0.60 },
-      { ox: 0.20, oy: 0.26, scale: 0.66 },
-      { ox: -0.04, oy: -0.02, scale: 0.52 },
-      { ox: -0.26, oy: -0.25, scale: 0.48 },
-      { ox: 0.24, oy: -0.22, scale: 0.58 },
-    ];
-    if (rng.next() < 0.55) trees.push({ ox: 0.02, oy: 0.43, scale: 0.44 });
-
-    for (let i = 0; i < trees.length; i++) {
-      const p = trees[i];
-      const x = cx + (p.ox + (rng.next() - 0.5) * 0.07) * s;
-      const y = cy + (p.oy + (rng.next() - 0.5) * 0.07) * s;
+    for (let i = 0; i < FOREST_CANOPY_LAYOUT.length; i++) {
+      const p = FOREST_CANOPY_LAYOUT[i];
+      const x = cx + (p.ox + (rng.next() - 0.5) * 0.05) * s;
+      const y = cy + (p.oy + (rng.next() - 0.5) * 0.05) * s;
       const scale = p.scale * (0.92 + rng.next() * 0.18);
       if (!this.drawTreeSprite(x, y, s, seedRaw + i * 101, scale)) {
         this.drawOneTreeClump(x, y, s * scale * 0.34);
@@ -6656,6 +6701,7 @@ export class BattleScene extends Component {
       tx.string = this.fitEnglishText(text, W, tx.fontSize);
       b.addChild(txtNode);
       b.on(Node.EventType.TOUCH_END, () => {
+        if (this.disabledPhaseButtons.has(b)) return;
         playUiClick();
         onClick();
       }, this);
@@ -6697,7 +6743,7 @@ export class BattleScene extends Component {
     } else {
       const hatchText = s.hatchOpen ? t('btn.hatchClose') : t('btn.hatchOpen');
       this.chooseHatchLabel.string = this.fitTextForLabel(this.chooseHatchLabel, hatchText, 200);
-      this.setPhaseBtnEnabled(this.chooseHatchBtn, true, PHASE_BTN_HATCH);
+      this.setPhaseBtnEnabled(this.chooseHatchBtn, !this.hatchChangedThisTurn, PHASE_BTN_HATCH);
     }
   }
 
@@ -6835,6 +6881,8 @@ export class BattleScene extends Component {
   }
 
   private setPhaseBtnEnabled(btn: Node, enabled: boolean, baseColor: Color) {
+    if (enabled) this.disabledPhaseButtons.delete(btn);
+    else this.disabledPhaseButtons.add(btn);
     const g = btn.getComponent(Graphics);
     if (!g) return;
     const ut = btn.getComponent(UITransform);
@@ -7134,6 +7182,7 @@ export class BattleScene extends Component {
     // 会误报"本回合已锁定"，让玩家困惑到底是哪种原因。
     if (s.crew && !s.crew.commander) return 'floater.hatchCommanderDead';
     if (this.phase !== 'player' || this.outcome !== 'ongoing') return 'floater.hatchLocked';
+    if (this.hatchChangedThisTurn) return 'floater.hatchLocked';
     if (this.playerStep !== 'choose' || this.movementDone || this.attackDone) {
       return 'floater.hatchLocked';
     }
@@ -7152,11 +7201,14 @@ export class BattleScene extends Component {
       return;
     }
     s.hatchOpen = !s.hatchOpen;
+    this.hatchChangedThisTurn = true;
     this.battleLogI18n('battleLog.hatch', {
       stateKey: s.hatchOpen ? 'status.val.hatchOpen' : 'status.val.hatchClosed',
     });
     this.refreshStatusPanel();
-    this.refreshChooseHatchButton();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
   }
 
   /** 若仍在选择阶段则进入指定子阶段（供自动链与载档补调用）。 */
@@ -8725,6 +8777,7 @@ export class BattleScene extends Component {
     this.movementDone = false;
     this.attackDone = false;
     this.miscDone = false;
+    this.hatchChangedThisTurn = false;
     this.playerDiceRollAnim = null;
     this.playerDiceSortAnim = null;
     this.phaseDice = [];
@@ -9429,19 +9482,10 @@ export class BattleScene extends Component {
     const seedRaw =
       ((tile.pos.q | 0) * 92811 + (tile.pos.r | 0) * 6899 + 0x4f2a91) >>> 0;
     const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
-    const trees: Array<{ ox: number; oy: number; scale: number }> = [
-      { ox: -0.22, oy: 0.22, scale: 0.60 },
-      { ox: 0.20, oy: 0.26, scale: 0.66 },
-      { ox: -0.04, oy: -0.02, scale: 0.52 },
-      { ox: -0.26, oy: -0.25, scale: 0.48 },
-      { ox: 0.24, oy: -0.22, scale: 0.58 },
-    ];
-    if (rng.next() < 0.55) trees.push({ ox: 0.02, oy: 0.43, scale: 0.44 });
-
-    for (let i = 0; i < trees.length; i++) {
-      const p = trees[i];
-      const x = cx + (p.ox + (rng.next() - 0.5) * 0.07) * size;
-      const y = cy + (p.oy + (rng.next() - 0.5) * 0.07) * size;
+    for (let i = 0; i < FOREST_CANOPY_LAYOUT.length; i++) {
+      const p = FOREST_CANOPY_LAYOUT[i];
+      const x = cx + (p.ox + (rng.next() - 0.5) * 0.05) * size;
+      const y = cy + (p.oy + (rng.next() - 0.5) * 0.05) * size;
       const scale = p.scale * (0.92 + rng.next() * 0.18);
       this.addTileInspectTreeSprite(parent, x, y, size, seedRaw + i * 101, scale);
     }
@@ -10517,6 +10561,7 @@ export class BattleScene extends Component {
       attacksLeft: this.attackDone ? 0 : 1,
       miscDone: this.miscDone,
       playerStep: this.playerStep as SavePlayerStep,
+      hatchChangedThisTurn: this.hatchChangedThisTurn,
       phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
       missionSource: this.missionSource,
     });
@@ -10568,6 +10613,7 @@ export class BattleScene extends Component {
     this.movementDone = (result.movesLeft ?? 2) === 0;
     this.attackDone   = (result.attacksLeft ?? 1) === 0;
     this.miscDone = result.miscDone ?? false;
+    this.hatchChangedThisTurn = result.hatchChangedThisTurn ?? false;
     if (this.phase === 'player') {
       this.playerStep = (result.playerStep ?? 'choose') as PlayerStep;
       this.playerDiceRollAnim = null;

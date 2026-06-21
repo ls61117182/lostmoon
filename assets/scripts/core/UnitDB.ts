@@ -66,7 +66,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   type97: { // 九七式中战车 - Pacific: Type 97 Chi-Ha
     faction: "japanese",
-    size: 4, armorFront: 9, armorFrontSide: 8, armorRearSide: 8, armorRear: 7, penetration: 1, effectiveRange: 2, usCasualtyDice: 2,
+    size: 4, armorFront: 9, armorFrontSide: 8, armorRearSide: 8, armorRear: 7, penetration: 1, effectiveRange: 2, usCasualtyDice: 1,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     infantryTankCoordination: 1,

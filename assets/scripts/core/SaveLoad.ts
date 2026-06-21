@@ -56,6 +56,8 @@ export interface SaveData {
   miscDone?: boolean;
   /** v3：玩家回合子状态 */
   playerStep?: SavePlayerStep;
+  /** Whether the phase-choice hatch button has already been used this player turn. */
+  hatchChangedThisTurn?: boolean;
   /** v3：当前子阶段骰子槽（与 BattleScene.phaseDice 同构） */
   phaseDice?: Array<{ pip: number; used: boolean }>;
   /** 谢尔曼是否已完成 destroy_kind_evac 离场移动 */
@@ -77,6 +79,7 @@ export interface SnapshotParams {
   attacksLeft: number;
   miscDone: boolean;
   playerStep: SavePlayerStep;
+  hatchChangedThisTurn: boolean;
   phaseDice: Array<{ pip: number; used: boolean }>;
 }
 
@@ -147,6 +150,7 @@ export function captureSave(p: SnapshotParams): SaveData {
     attacksLeft: p.attacksLeft,
     miscDone: p.miscDone,
     playerStep: p.playerStep,
+    hatchChangedThisTurn: p.hatchChangedThisTurn,
     phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
     sherman: {
       ...captureUnit(sh),
@@ -169,6 +173,7 @@ export interface ApplyResult {
   attacksLeft?: number;
   miscDone?: boolean;
   playerStep?: SavePlayerStep;
+  hatchChangedThisTurn?: boolean;
   phaseDice?: Array<{ pip: number; used: boolean }>;
   reason?: string;
 }
@@ -270,11 +275,13 @@ export function applySave(
       ? {
         miscDone: save.miscDone ?? false,
         playerStep: save.playerStep ?? 'choose',
+        hatchChangedThisTurn: save.hatchChangedThisTurn ?? false,
         phaseDice: save.phaseDice ?? [],
       }
       : {
         miscDone: false,
         playerStep: 'choose' as SavePlayerStep,
+        hatchChangedThisTurn: false,
         phaseDice: [] as Array<{ pip: number; used: boolean }>,
       }),
   };

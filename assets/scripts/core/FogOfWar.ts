@@ -42,9 +42,14 @@ export function computePlayerVisibleHexes(map: HexMap, sherman: Unit): Set<strin
     }
   }
 
-  // Closed hatch: only the three front armor directions are visible.
+  // Closed hatch: three front rays plus one adjacent hex in each rear direction.
   // Open hatch already has radial visibility, but keeps the exact forward ray rule explicitly.
   if (sherman.facing !== null) {
+    if (!openHatch) {
+      add(neighbor(sherman.pos, rotateDirection(sherman.facing, 2)));
+      add(neighbor(sherman.pos, rotateDirection(sherman.facing, 3)));
+      add(neighbor(sherman.pos, rotateDirection(sherman.facing, 4)));
+    }
     const rayDirections = openHatch
       ? [sherman.facing]
       : [
