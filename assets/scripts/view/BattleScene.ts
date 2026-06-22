@@ -6,12 +6,12 @@
  *   - 回合开始时底部弹出阶段选择条：「打开舱盖/关闭舱盖」+「移动阶段 / 攻击阶段」；舱盖每回合最多切换一次，点击后立即灰显并刷新视野，车长阵亡则舱盖钮灰显为「车长阵亡」；两子阶段可任意顺序进入
  *   - 进入某阶段时，按谢尔曼当前格地形 + 舱盖状态摇 3~5 颗骰子，落在屏幕底部骰子托盘
  *     - 移动阶段：1=无 / 2=启动（未实装，可跳过）/ 3,4=转向 60° / 5,6=前进或后退 1 格
- *     - 攻击阶段：1,2=装填 / 3,4=机枪（暂无步兵，置灰）/ 5,6=主炮射击（需已装填）
+ *     - 攻击阶段：1,2=装填 / 3,4=机枪 / 5,6=主炮射击（硬核关舱时也可用于旋转炮塔侦察）
  *     - 机枪：攻击阶段 3/4 点不受乘员阵亡影响；杂项阶段「副驾驶机枪」需副驾驶存活
  *   - 点击骰子弹出动作菜单，选择具体执行方式（↻顺时针 / ↺逆时针 / ▲前进 / ▼后退…）
  *   - 前进 / 后退沿谢尔曼当前朝向 ±1 格移动；若目标格地形或敌方占据无法进入，
  *     该次移动无效、骰子不消耗、只弹警告浮字
- *   - 主炮骰点击进入"选择目标"态；点击视线内敌人 → 掷骰结算并消耗骰，之后 loaded 归 false
+ *   - 主炮骰点击进入"选择目标"态；已装填时点击视线内敌人可开炮，硬核关舱时点击眼睛标记迷雾格可只旋转炮塔
  *   - 玩家回合点击地图格：若处于攻击/杂项且格上有敌且已选机枪或主炮骰，则优先尝试机枪/主炮开火；否则打开格子介绍（地形、骰子规则、格上单位状态）
  *   - 右下角按钮："下一阶段"用于在子阶段内提前结束（仍有骰子未用时）；移动/攻击子阶段在骰子用尽或
  *     点「下一阶段」后会自动进入另一翼或自动进入杂项；杂项结束后进入敌方阶段。
@@ -94,7 +94,7 @@ import {
   selectAIOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { computePlayerVisibleHexes, fogOfWarEnabled } from '../core/FogOfWar';
+import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
@@ -632,6 +632,7 @@ const FOREST_CANOPY_LAYOUT: ReadonlyArray<{ ox: number; oy: number; scale: numbe
   { ox:  0.22, oy: -0.38, scale: 0.64 },
 ];
 const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
+const FOG_TURRET_AIM_HINT_COLOR = new Color(220, 235, 190, 245);
 const FOG_ATTACK_REVEAL_DURATION = 0.9;
 const PRECISION_AIM_HOLD_DURATION = 0.5;
 /**
@@ -1050,6 +1051,23 @@ export class BattleScene extends Component {
   private turretAimAnim: TurretAimAnim | null = null;
   private shermanTurretFacing: Direction | null = null;
   private enemyTurretFacing = new Map<string, Direction>();
+
+  private resetTurretFacingState() {
+    this.turretAimAnim = null;
+    this.enemyTurretFacing.clear();
+    if (!this.mission) {
+      this.shermanTurretFacing = null;
+      return;
+    }
+
+    const { sherman, allies, enemies } = this.mission;
+    this.shermanTurretFacing = sherman.turretFacing ?? sherman.facing;
+    for (const unit of [...allies, ...enemies]) {
+      if (!isSplitTankKind(unit.kind)) continue;
+      const facing = unit.turretFacing ?? unit.facing;
+      if (facing !== null) this.enemyTurretFacing.set(unit.id, facing);
+    }
+  }
   /** 多段移动/转向衔接（如回合结束德军卡车沿路推进） */
   private animQueue: MoveAnim[] = [];
   /** 当前 animQueue 播完后执行（避免敌方阶段误进 runNextEnemyStep） */
@@ -1734,6 +1752,7 @@ export class BattleScene extends Component {
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
     const { sherman: sh0 } = this.mission;
+    this.resetTurretFacingState();
     this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
     this.shermanSpawnFacing = sh0.facing;
     const tiles = this.mission.map.all();
@@ -2039,6 +2058,23 @@ export class BattleScene extends Component {
     return unit === this.mission?.sherman || this.isHexVisible(unit.pos);
   }
 
+  private isCommanderHatchOpen(): boolean {
+    const sherman = this.mission?.sherman;
+    return !!sherman && sherman.crew?.commander !== false && sherman.hatchOpen === true;
+  }
+
+  private fogTurretAimDirection(pos: Axial): Direction | null {
+    if (!this.mission || !fogOfWarEnabled(GameSession.gameMode) || this.isCommanderHatchOpen()) return null;
+    if (this.isHexVisible(pos)) return null;
+    const sherman = this.mission.sherman;
+    if (hexDistance(sherman.pos, pos) > currentVisionRange(sherman)) return null;
+    return directionTo(sherman.pos, pos);
+  }
+
+  private hasTurretReconGunSelection(): boolean {
+    return this.selectedGunDieIdx >= 0 && this.selectedGunHitThresholdModifier >= 0;
+  }
+
   /** Natural player vision only; transient firing reveals must not unlock detailed combat UI. */
   private isUnitOutsideFog(unit: Unit): boolean {
     if (unit === this.mission?.sherman || !fogOfWarEnabled(GameSession.gameMode)) return true;
@@ -2072,7 +2108,30 @@ export class BattleScene extends Component {
       this.traceHexPathOn(fog, c.x, c.y, this.hexSize);
       fog.fill();
     }
+    if (this.hasTurretReconGunSelection() && !this.turretAimAnim) {
+      for (const tile of this.mission.map.all()) {
+        if (this.fogTurretAimDirection(tile.pos) === null) continue;
+        const c = this.project(tile.pos.q, tile.pos.r);
+        this.drawFogTurretAimEye(fog, c.x, c.y);
+      }
+    }
     fogNode.setSiblingIndex(this.mapNode.children.length - 1);
+  }
+
+  private drawFogTurretAimEye(g: Graphics, cx: number, cy: number) {
+    const w = this.hexSize * 0.24;
+    const h = this.hexSize * 0.13;
+    g.strokeColor = FOG_TURRET_AIM_HINT_COLOR;
+    g.fillColor = FOG_TURRET_AIM_HINT_COLOR;
+    g.lineWidth = 3;
+    g.moveTo(cx - w, cy);
+    g.bezierCurveTo(cx - w * 0.50, cy + h, cx + w * 0.50, cy + h, cx + w, cy);
+    g.bezierCurveTo(cx + w * 0.50, cy - h, cx - w * 0.50, cy - h, cx - w, cy);
+    g.close();
+    g.stroke();
+    g.circle(cx, cy, this.hexSize * 0.055);
+    g.fill();
+    g.lineWidth = 2;
   }
 
   private drawAttackableHighlights() {
@@ -3209,6 +3268,7 @@ export class BattleScene extends Component {
       }
       if (a.unit === this.mission?.sherman) {
         this.shermanTurretFacing = a.to;
+        a.unit.turretFacing = a.to;
       } else if (this.enemySupportsSplitTurret(a.unit)) {
         this.enemyTurretFacing.set(a.unit.id, a.to);
       }
@@ -3298,6 +3358,7 @@ export class BattleScene extends Component {
     }
     if (finishedUnit === this.mission?.sherman && finishedUnit.facing !== null) {
       this.shermanTurretFacing = finishedUnit.facing;
+      finishedUnit.turretFacing = finishedUnit.facing;
     } else if (this.enemySupportsSplitTurret(finishedUnit) && finishedUnit.facing !== null) {
       this.enemyTurretFacing.set(finishedUnit.id, finishedUnit.facing);
     }
@@ -5128,7 +5189,7 @@ export class BattleScene extends Component {
     }
 
     if (u === this.mission?.sherman && this.anim?.unit === u && u.facing !== null) {
-      const from = (this.shermanTurretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
+      const from = (this.shermanTurretFacing ?? u.turretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
       const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as Direction;
       if (from === to) return null;
       if (this.anim.kind === 'turn' && from === this.anim.turnFrom) {
@@ -5146,10 +5207,11 @@ export class BattleScene extends Component {
       };
     }
 
-    if (this.shermanTurretFacing === null) return null;
+    const facing = this.shermanTurretFacing ?? u.turretFacing;
+    if (facing == null) return null;
     return {
-      from: this.shermanTurretFacing,
-      to: this.shermanTurretFacing,
+      from: facing,
+      to: facing,
       t: 1,
     };
   }
@@ -7400,13 +7462,16 @@ export class BattleScene extends Component {
     if (s.turretDamaged) return t('attack.reason.turretDamaged');
     const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
     if (crewReason) return crewReason;
-    if (!s.loaded) return t('hud.unloaded');
-    const hasTarget = this.mission.enemies.some(e => !e.destroyed && canAttack({
-      attacker: s,
-      target: e,
-      map: this.mission!.map,
-    }).ok);
-    return hasTarget ? null : t('floater.noGunTarget');
+    if (!fogOfWarEnabled(GameSession.gameMode)) {
+      if (!s.loaded) return t('hud.unloaded');
+      const hasTarget = this.mission.enemies.some(e => !e.destroyed && canAttack({
+        attacker: s,
+        target: e,
+        map: this.mission!.map,
+      }).ok);
+      return hasTarget ? null : t('floater.noGunTarget');
+    }
+    return null;
   }
 
   private mgActionUnavailable(crewSlot?: 'coDriver'): string | null {
@@ -7442,6 +7507,15 @@ export class BattleScene extends Component {
       && this.playerStep !== 'attack'
       && this.playerStep !== 'misc') return;
     const slot = this.phaseDice[idx];
+    if (slot && this.selectedGunDieIdx >= 0 && this.selectedGunDieIdx !== idx) {
+      const selectedSlot = this.phaseDice[this.selectedGunDieIdx];
+      if (selectedSlot && !selectedSlot.used) {
+        this.clearGunSelection();
+        this.refreshPhaseUI();
+        this.updateHUD();
+        this.redraw();
+      }
+    }
     if (!slot || slot.used) {
       this.closeDiePopover();
       return;
@@ -7512,6 +7586,7 @@ export class BattleScene extends Component {
     };
 
     const hasDoublesPartner = this.findDoublesPartner(idx) >= 0;
+    const fireActionKey = GameSession.gameMode === 'hardcore' ? 'action.fireHardcore' : 'action.fire';
 
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
@@ -7544,7 +7619,7 @@ export class BattleScene extends Component {
         addItem(t('action.reload'), PHASE_BTN_ATTACK,
           () => this.tryReload(idx), this.reloadActionUnavailable());
       } else if (a === 'gun') {
-        addItem(t('action.fire'), PHASE_BTN_ATTACK,
+        addItem(t(fireActionKey), PHASE_BTN_ATTACK,
           () => this.selectGunDie(idx), this.gunActionUnavailable());
       } else if (a === 'mg') {
         addItem(t('action.fireMG'), PHASE_BTN_ATTACK,
@@ -7569,7 +7644,7 @@ export class BattleScene extends Component {
           // 1 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
           addItem(t('action.reload'), PHASE_BTN_ATTACK,
             () => this.tryReload(idx), this.reloadActionUnavailable('loader'));
-          addItem(t('action.fire'), PHASE_BTN_ATTACK,
+          addItem(t(fireActionKey), PHASE_BTN_ATTACK,
             () => this.selectGunDie(idx), this.gunActionUnavailable('gunner'));
           break;
         case 'codriver_mg':
@@ -10610,6 +10685,7 @@ export class BattleScene extends Component {
     // 写回场景状态；中断任何敌方阶段调度 / 骰子态 / 动画
     this.turn = result.turn!;
     this.phase = result.phase!;
+    this.resetTurretFacingState();
     this.movementDone = (result.movesLeft ?? 2) === 0;
     this.attackDone   = (result.attacksLeft ?? 1) === 0;
     this.miscDone = result.miscDone ?? false;
@@ -11071,6 +11147,23 @@ export class BattleScene extends Component {
     const gunSel = this.selectedGunDieIdx >= 0;
     const mgSel = this.selectedMGDieIdx >= 0;
 
+    if (attackOrMisc && gunSel && this.hasTurretReconGunSelection() && !this.isCommanderHatchOpen()) {
+      const direction = directionTo(this.mission.sherman.pos, target.pos);
+      if (direction === null) {
+        this.showGunAimWarning('attack.reason.cannotTurnDirection');
+        return;
+      }
+      if (!targetVisible) {
+        const aimDirection = this.fogTurretAimDirection(target.pos);
+        if (aimDirection === null) {
+          this.showGunAimWarning('attack.reason.turretAimRange');
+          return;
+        }
+        this.tryAimShermanTurretAtFogTile(aimDirection);
+        return;
+      }
+    }
+
     if (attackOrMisc && enemiesOnTile.length > 0) {
       // 叠格场景：机枪挑 canMGAttack 认可的步兵目标；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
       if (mgSel) {
@@ -11089,19 +11182,65 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 玩家开火：必须已选中主炮骰 + 已装填 + canAttack 通过。
-   * 结算后消耗那颗骰子 + 清空 loaded（手册：一炮一装）。
+   * 玩家主炮：可对可见合法目标开火，或在硬核迷雾中消耗行动骰旋转炮塔获得新视野。
+   * 只有实际开炮要求并清空 loaded；单纯旋转炮塔不消耗炮弹。
    */
+  private showGunAimWarning(key: 'attack.reason.cannotTurnDirection' | 'attack.reason.turretAimRange') {
+    if (!this.mission) return;
+    const s = this.mission.sherman;
+    this.spawnFloater(s.pos.q, s.pos.r, t(key),
+      new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+  }
+
+  private tryAimShermanTurretAtFogTile(direction: Direction) {
+    if (!this.mission || this.selectedGunDieIdx < 0) return;
+    const slot = this.phaseDice[this.selectedGunDieIdx];
+    if (!slot || slot.used) return;
+    const doublesPartnerIdx = this.selectedGunDoublesIdx;
+    const sherman = this.mission.sherman;
+    this.startShermanTurretAimDirection(direction, () => {
+      slot.used = true;
+      if (doublesPartnerIdx >= 0) {
+        const partner = this.phaseDice[doublesPartnerIdx];
+        if (partner) partner.used = true;
+      }
+      this.clearGunSelection();
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      this.autoEndPhaseIfDone();
+    });
+    this.updateHUD();
+    this.redraw();
+  }
+
   private startShermanTurretAim(target: Unit, onDone: () => void) {
-    if (!this.mission || !this.shermanTurretSpriteFrame || !this.shermanHullSpriteFrame) {
+    if (!this.mission) {
       onDone();
       return;
     }
     const sherman = this.mission.sherman;
     const to = (directionTo(sherman.pos, target.pos) ?? approximateDirection(sherman.pos, target.pos)) as Direction;
-    const from = (this.shermanTurretFacing ?? sherman.facing ?? to) as Direction;
+    this.startShermanTurretAimDirection(to, onDone);
+  }
+
+  private startShermanTurretAimDirection(to: Direction, onDone: () => void) {
+    if (!this.mission) {
+      onDone();
+      return;
+    }
+    const sherman = this.mission.sherman;
+    const from = (this.shermanTurretFacing ?? sherman.turretFacing ?? sherman.facing ?? to) as Direction;
     if (from === to) {
       this.shermanTurretFacing = to;
+      sherman.turretFacing = to;
+      this.redraw();
+      onDone();
+      return;
+    }
+    if (!this.shermanTurretSpriteFrame || !this.shermanHullSpriteFrame) {
+      this.shermanTurretFacing = to;
+      sherman.turretFacing = to;
       this.redraw();
       onDone();
       return;

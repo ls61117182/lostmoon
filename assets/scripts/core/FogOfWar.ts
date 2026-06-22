@@ -1,6 +1,6 @@
-import { HexMap, axialEquals, axialToPixel, hexDistance, neighbor, rotateDirection } from './HexGrid';
+import { HexMap, axialEquals, axialToPixel, hexDistance, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_VISION_RANGE, Unit } from './types';
+import { Axial, DEFAULT_VISION_RANGE, Direction, Unit } from './types';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
@@ -42,21 +42,16 @@ export function computePlayerVisibleHexes(map: HexMap, sherman: Unit): Set<strin
     }
   }
 
-  // Closed hatch: three front rays plus one adjacent hex in each rear direction.
-  // Open hatch already has radial visibility, but keeps the exact forward ray rule explicitly.
-  if (sherman.facing !== null) {
+  // Closed hatch: all six adjacent hexes plus one ray along the current turret direction.
+  // Open hatch already has radial visibility, but keeps the turret ray rule explicitly.
+  const turretFacing = sherman.turretFacing ?? sherman.facing;
+  if (turretFacing !== null) {
     if (!openHatch) {
-      add(neighbor(sherman.pos, rotateDirection(sherman.facing, 2)));
-      add(neighbor(sherman.pos, rotateDirection(sherman.facing, 3)));
-      add(neighbor(sherman.pos, rotateDirection(sherman.facing, 4)));
+      for (let direction = 0; direction < 6; direction++) {
+        add(neighbor(sherman.pos, direction as Direction));
+      }
     }
-    const rayDirections = openHatch
-      ? [sherman.facing]
-      : [
-          rotateDirection(sherman.facing, -1),
-          sherman.facing,
-          rotateDirection(sherman.facing, 1),
-        ];
+    const rayDirections = [turretFacing];
     for (const direction of rayDirections) {
       let p = neighbor(sherman.pos, direction);
       let distance = 1;

@@ -122,7 +122,8 @@ action.advance,▲ 前进 1 格,▲ Advance 1
 action.reverse,▼ 后退 1 格,▼ Reverse 1
 action.reload,装填主炮,Reload Gun
 action.repair,修复,Repair
-action.fire,选定主炮开火,Fire Gun
+action.fire,炮击,Fire
+action.fireHardcore,炮击/旋转,Fire/Rotate
 action.repairTurret,修复炮塔,Repair Turret
 action.repairMobility,修复瘫痪,Repair Mobility
 action.fireSuppress,灭火 -1,Reduce Fire -1
@@ -174,6 +175,8 @@ attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
 attack.reason.overlap,目标重叠,Overlap
 attack.reason.notStraight,非六向直线,Not on Hex Axis
 attack.reason.notStraightHint,需在六向直线上,Must be on hex axis
+attack.reason.cannotTurnDirection,不能转向该方向,Cannot turn in that direction
+attack.reason.turretAimRange,超出当前视野范围,Beyond current vision range
 attack.reason.fixedGunFacing,固定炮只能沿当前朝向开火,Fixed gun can only fire forward
 attack.reason.blocked,无视线,No LOS
 attack.reason.turretDamaged,炮塔受损不能开火,Turret Damaged: Cannot Fire

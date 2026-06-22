@@ -659,6 +659,7 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
     u.hatchOpen = !!p.hatchOpen;
+    if (u.facing !== null) u.turretFacing = p.turretFacing ?? u.facing;
     u.visionRange = typeof p.visionRange === 'number' && Number.isFinite(p.visionRange)
       ? Math.max(0, Math.floor(p.visionRange))
       : DEFAULT_VISION_RANGE;

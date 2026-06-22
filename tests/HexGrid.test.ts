@@ -290,25 +290,23 @@ describe('战争迷雾玩家视野', () => {
     expect(precision).toBe(normal - 2);
   });
 
-  test('关舱：正前与左右前侧为射线，后方三个方向仅相邻格可见', () => {
+  test('关舱：六个相邻格可见，远处仅沿炮塔方向形成射线', () => {
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(2, 3, 0, false);
-    const blocker = neighbor(sherman.pos, 0);
-    const behind = neighbor(blocker, 0);
-    const leftFront2 = neighbor(neighbor(sherman.pos, 5), 5);
-    const rightFront2 = neighbor(neighbor(sherman.pos, 1), 1);
+    sherman.turretFacing = 1;
+    const blocker = neighbor(sherman.pos, 1);
+    const behind = neighbor(blocker, 1);
+    const bodyForward2 = neighbor(neighbor(sherman.pos, 0), 0);
     map.set({ pos: blocker, terrain: 'forest' });
 
     const visible = computePlayerVisibleHexes(map, sherman);
     expect(visible.has(HexMap.keyOf(blocker))).toBe(true);
     expect(visible.has(HexMap.keyOf(behind))).toBe(false);
-    expect(visible.has(HexMap.keyOf(leftFront2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(rightFront2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 2)))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 3)))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, 4)))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(neighbor(sherman.pos, 3), 3)))).toBe(false);
+    expect(visible.has(HexMap.keyOf(bodyForward2))).toBe(false);
+    for (let direction = 0; direction < 6; direction++) {
+      expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, direction as Direction)))).toBe(true);
+    }
   });
 
   test('开舱：半径四格无遮挡目标可见，五格非正前方目标不可见', () => {
@@ -340,21 +338,20 @@ describe('战争迷雾玩家视野', () => {
     expect(visible.has(HexMap.keyOf(offAxis3))).toBe(false);
   });
 
-  test('关舱时三条前向视野均不得超过当前视野属性', () => {
+  test('关舱时炮塔方向视野不得超过当前视野属性', () => {
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(3, 4, 0, false);
+    sherman.turretFacing = 1;
     sherman.visionRange = 2;
-    const forward2 = neighbor(neighbor(sherman.pos, 0), 0);
-    const forward3 = neighbor(forward2, 0);
-    const side2 = neighbor(neighbor(sherman.pos, 1), 1);
-    const side3 = neighbor(side2, 1);
+    const turret2 = neighbor(neighbor(sherman.pos, 1), 1);
+    const turret3 = neighbor(turret2, 1);
+    const bodyForward2 = neighbor(neighbor(sherman.pos, 0), 0);
     const visible = computePlayerVisibleHexes(map, sherman);
 
-    expect(visible.has(HexMap.keyOf(forward2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(forward3))).toBe(false);
-    expect(visible.has(HexMap.keyOf(side2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(side3))).toBe(false);
+    expect(visible.has(HexMap.keyOf(turret2))).toBe(true);
+    expect(visible.has(HexMap.keyOf(turret3))).toBe(false);
+    expect(visible.has(HexMap.keyOf(bodyForward2))).toBe(false);
   });
 
   test('中心点几何连线：{4,1} 建筑遮挡 {2,3} 到 {5,0}/{6,0}', () => {

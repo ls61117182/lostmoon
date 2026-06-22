@@ -25,6 +25,7 @@ interface UnitSnapshot {
   q: number;
   r: number;
   facing: Direction | null;
+  turretFacing?: Direction;
   damaged?: boolean;
   destroyed?: boolean;
   /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
@@ -91,6 +92,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     q: u.pos.q,
     r: u.pos.r,
     facing: u.facing,
+    turretFacing: u.turretFacing,
     damaged: u.damaged,
     destroyed: u.destroyed,
     fireLevel: u.fireLevel,
@@ -107,6 +109,7 @@ function captureUnit(u: Unit): UnitSnapshot {
 function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   live.pos = { q: s.q, r: s.r };
   live.facing = s.facing;
+  live.turretFacing = s.turretFacing ?? (s.facing ?? undefined);
   live.damaged = s.damaged ?? false;
   live.destroyed = s.destroyed ?? false;
   if (s.smoked !== undefined) live.smoked = s.smoked;
@@ -233,6 +236,7 @@ export function applySave(
   mission.sherman.pos = { q: save.sherman.q, r: save.sherman.r };
   mission.enemies.push(...extraEnemies);
   mission.sherman.facing = save.sherman.facing;
+  mission.sherman.turretFacing = save.sherman.turretFacing ?? (save.sherman.facing ?? undefined);
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
   mission.sherman.damaged = false;
   mission.sherman.destroyed = save.sherman.destroyed ?? false;

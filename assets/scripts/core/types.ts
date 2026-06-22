@@ -156,6 +156,8 @@ export interface Unit {
   pos: Axial;
   /** 步兵无朝向时为 null */
   facing: Direction | null;
+  /** Independent turret direction; defaults to facing for turreted vehicles. */
+  turretFacing?: Direction;
   stats: UnitStats;
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
@@ -217,6 +219,8 @@ export interface UnitPlacement {
   at?: Offset;
   /** 与 `at` 同：谢尔曼在 `shermanStartByDice` 时由格上 `ef` 写入 */
   facing?: Direction;
+  /** Optional initial turret direction; defaults to facing. */
+  turretFacing?: Direction;
   /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `rid`（步兵）/ `eid`（坦克等） */
   startId?: number;
   /** enemyStartByDice 下非步兵单位可选：只从这些 eid 黑格中随机开局。 */
