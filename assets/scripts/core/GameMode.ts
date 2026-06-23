@@ -12,6 +12,8 @@ export interface GameModeConfig {
   miscCloseHatchWithDoubles: boolean;
   /** Applies distance-based penetration decay beyond each unit's effective range. */
   effectiveRangePenetration: boolean;
+  /** Turrets/main guns may use the six between-axis firing rays. */
+  expandedTurretDirections: boolean;
   /** Reserved profile ids for mode-specific rule data added later. */
   crewBonusProfile: 'standard';
   enemyActionTableProfile: 'standard';
@@ -27,6 +29,7 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     commanderBonusWithoutOpenHatch: false,
     miscCloseHatchWithDoubles: false,
     effectiveRangePenetration: false,
+    expandedTurretDirections: false,
     crewBonusProfile: 'standard',
     enemyActionTableProfile: 'standard',
   },
@@ -37,6 +40,7 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     commanderBonusWithoutOpenHatch: true,
     miscCloseHatchWithDoubles: true,
     effectiveRangePenetration: true,
+    expandedTurretDirections: true,
     crewBonusProfile: 'standard',
     enemyActionTableProfile: 'standard',
   },

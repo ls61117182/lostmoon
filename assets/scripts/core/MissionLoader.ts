@@ -202,6 +202,7 @@ function pickRestrictedNumberedSlot(
 
 export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   currentMissionTheater = data.theater ?? 'europe';
+  const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
   // 1. 构建 HexMap
   const map = new HexMap(data.cols, data.rows);
   for (let row = 0; row < data.rows; row++) {
@@ -222,7 +223,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       const bridgeEnds = parseBridgeEnds(data.id, { col, row }, terrain, def.br);
       const roads = parseRoadFlags(data.id, { col, row }, terrain, !!bridgeEnds, def.rd);
       const tile: Tile = {
-        pos: offsetToAxial({ col, row }),
+        pos: offsetToAxial({ col, row }, rowParityOffset),
         terrain,
         ...(hasBuilding ? { hasBuilding: true } : {}),
         hedges: hedgeFlagsFromMapJson(def.h),
@@ -263,13 +264,13 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     if (!p.at) {
       throw new Error(`任务 ${data.id}：友军单位 ${i} 缺少 at`);
     }
-    const ax = offsetToAxial(p.at);
+    const ax = offsetToAxial(p.at, rowParityOffset);
     addStartOccupant(occupiedBeforeSherman, ax, 'blocker');
   }
   for (let i = 0; i < data.enemies.length; i++) {
     const p = data.enemies[i];
     if (p.at) {
-      const ax = offsetToAxial(p.at);
+      const ax = offsetToAxial(p.at, rowParityOffset);
       addStartOccupant(occupiedBeforeSherman, ax, p.kind);
     }
   }
@@ -289,14 +290,14 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     );
     shermanPlacement = {
       ...data.sherman,
-      at: axialToOffset(cell.pos),
+      at: axialToOffset(cell.pos, rowParityOffset),
       facing: cell.facing,
     };
   } else {
     shermanPlacement = data.sherman as UnitPlacement;
   }
-  const sherman = makeUnit('sherman_player', shermanPlacement);
-  const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p));
+  const sherman = makeUnit('sherman_player', shermanPlacement, rowParityOffset);
+  const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p, rowParityOffset));
 
   // 3. 德军：可选掷骰出生
   // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位掷 1d6 链式占位——
@@ -310,7 +311,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   const enemies = data.enemies.map((p, i) => {
     if (useDice) {
       if (p.at) {
-        return makeUnit(`enemy_${i}`, p);
+        return makeUnit(`enemy_${i}`, p, rowParityOffset);
       }
       if (!diceList || di >= diceList.length) {
         throw new Error(`任务 ${data.id}： enemyStartByDice 时缺少第 ${i} 个单位的掷骰格`);
@@ -324,12 +325,12 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         // 保留 placement 上其它「与位置无关」的状态位，避免因 dice 模式丢失
         paralyzed: p.paralyzed,
       };
-      return makeUnit(`enemy_${i}`, merged);
+      return makeUnit(`enemy_${i}`, merged, rowParityOffset);
     }
     if (!p.at) {
       throw new Error(`任务 ${data.id}：敌方单位 ${i} 缺少 at（非 enemyStartByDice 模式）`);
     }
-    return makeUnit(`enemy_${i}`, p);
+    return makeUnit(`enemy_${i}`, p, rowParityOffset);
   });
   if (diceList && di !== diceList.length) {
     throw new Error(
@@ -354,8 +355,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   if (data.truckPath && data.truckPath.length >= 2) {
     const truckU = enemies.find(e => e.kind === 'truck' && !e.destroyed);
     if (truckU) {
-      const a0 = offsetToAxial(data.truckPath[0]!);
-      const a1 = offsetToAxial(data.truckPath[1]!);
+      const a0 = offsetToAxial(data.truckPath[0]!, rowParityOffset);
+      const a1 = offsetToAxial(data.truckPath[1]!, rowParityOffset);
       const face = directionTo(a0, a1) ?? (0 as Direction);
       truckU.facing = face;
     }
@@ -367,7 +368,7 @@ function validateTruckPath(data: MissionData, map: HexMap) {
   const p = data.truckPath!;
   for (let i = 0; i < p.length; i++) {
     const o = p[i]!;
-    const t = map.get(offsetToAxial(o));
+    const t = map.get(offsetToAxial(o, data.rowParityOffset === 1 ? 1 : 0));
     if (!t) throw new Error(`任务 ${data.id}：truckPath[${i}] 不在地图内 ${JSON.stringify(o)}`);
     // 公路格 / 水域+桥梁格皆视为「卡车可走的路网」（GDD §3.2：桥梁等效公路）；其余抛错。
     const isRoad = t.terrain === 'road';
@@ -396,8 +397,9 @@ function validateTruckPath(data: MissionData, map: HexMap) {
     }
   }
   for (let i = 0; i < p.length - 1; i++) {
-    const a = offsetToAxial(p[i]!);
-    const b = offsetToAxial(p[i + 1]!);
+    const parity = data.rowParityOffset === 1 ? 1 : 0;
+    const a = offsetToAxial(p[i]!, parity);
+    const b = offsetToAxial(p[i + 1]!, parity);
     if (hexDistance(a, b) !== 1) {
       throw new Error(
         `任务 ${data.id}：truckPath[${i}] 与 [${i + 1}] 不相邻：${JSON.stringify(p[i])} / ${JSON.stringify(p[i + 1])}`,
@@ -453,7 +455,7 @@ function resolveEnemyDicePlacements(
   for (let i = 0; i < data.enemies.length; i++) {
     const p = data.enemies[i];
     if (p.at) {
-      const ax = offsetToAxial(p.at);
+      const ax = offsetToAxial(p.at, data.rowParityOffset === 1 ? 1 : 0);
       addStartOccupant(occupied, ax, p.kind);
     }
   }
@@ -480,7 +482,7 @@ function resolveEnemyDicePlacements(
       }
       const placed = pickRestrictedNumberedSlot(data.id, cellsByRid, occupied, rng, ctxLabel, allowedRids, 'rid', p.kind, data.theater);
       addStartOccupant(occupied, placed.pos, p.kind);
-      out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
+      out.push({ at: axialToOffset(placed.pos, data.rowParityOffset === 1 ? 1 : 0), facing: placed.facing });
       continue;
     }
     const useRid = isFootKind(p.kind);
@@ -506,7 +508,7 @@ function resolveEnemyDicePlacements(
           data.enemyDiceEidMax ?? 6,
         );
       addStartOccupant(occupied, placed.pos, p.kind);
-      out.push({ at: axialToOffset(placed.pos), facing: placed.facing });
+      out.push({ at: axialToOffset(placed.pos, data.rowParityOffset === 1 ? 1 : 0), facing: placed.facing });
       continue;
     }
     if (p.startEids) {
@@ -528,7 +530,7 @@ function resolveEnemyDicePlacements(
       );
     }
     addStartOccupant(occupied, placedRid.pos, p.kind);
-    out.push({ at: axialToOffset(placedRid.pos), facing: placedRid.facing });
+    out.push({ at: axialToOffset(placedRid.pos, data.rowParityOffset === 1 ? 1 : 0), facing: placedRid.facing });
   }
   return out;
 }
@@ -616,7 +618,7 @@ function parseRoadFlags(
   return flags;
 }
 
-function makeUnit(id: string, p: UnitPlacement): Unit {
+function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
   if (!p.at) {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }
@@ -631,10 +633,18 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
     id,
     kind: p.kind,
     faction: p.faction ?? stats.faction,
-    pos: offsetToAxial(p.at),
+    pos: offsetToAxial(p.at, rowParityOffset),
     facing: facingNorm,
     stats,
+    hatchOpen: false,
+    visionRange: stats.visionRange,
   };
+  if (stats.visionType === 'turreted' && u.facing !== null) {
+    const rawTurretFacing = Number(p.turretFacing ?? u.facing);
+    u.turretFacing = (Number.isInteger(rawTurretFacing) && rawTurretFacing >= 0 && rawTurretFacing <= 11
+      ? rawTurretFacing
+      : u.facing) as Unit['turretFacing'];
+  }
   if (p.kind === 'sherman') {
     u.crew = {
       commander: true,
@@ -659,10 +669,9 @@ function makeUnit(id: string, p: UnitPlacement): Unit {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
     u.hatchOpen = !!p.hatchOpen;
-    if (u.facing !== null) u.turretFacing = p.turretFacing ?? u.facing;
     u.visionRange = typeof p.visionRange === 'number' && Number.isFinite(p.visionRange)
       ? Math.max(0, Math.floor(p.visionRange))
-      : DEFAULT_VISION_RANGE;
+      : stats.visionRange ?? DEFAULT_VISION_RANGE;
     if (p.turretDamaged) u.turretDamaged = true;
   }
   if (p.paralyzed) u.paralyzed = true;

@@ -54,7 +54,7 @@ export function isShermanEvacDrive(
   if (obj.type !== 'destroy_kind_evac') return false;
   if (!obj.evacAt || obj.evacExitDir === undefined) return false;
   if (!destroyKindEvacPrereqMet(mission, obj)) return false;
-  const ev = offsetToAxial(obj.evacAt);
+  const ev = offsetToAxial(obj.evacAt, mission.data.rowParityOffset === 1 ? 1 : 0);
   if (from.q !== ev.q || from.r !== ev.r) return false;
   const driveDir = (dirSign === 1 ? facing : rotateDirection(facing, 3)) as number;
   if (driveDir !== obj.evacExitDir) return false;

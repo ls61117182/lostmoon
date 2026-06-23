@@ -12,7 +12,7 @@
  *           SW(2)  SE(1)
  */
 
-import { Axial, Direction, Offset, Tile, tileHasBridge } from './types';
+import { Axial, Direction, FireDirection, Offset, Tile, tileHasBridge } from './types';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -24,6 +24,25 @@ export const HEX_DIRECTIONS: ReadonlyArray<Axial> = [
   { q:  0, r: -1 }, // 4 NW
   { q: +1, r: -1 }, // 5 NE
 ];
+
+/** Six additional center-to-center rays between adjacent hex-axis directions. */
+export const HEX_DIAGONAL_DIRECTIONS: ReadonlyArray<Axial> = HEX_DIRECTIONS.map((a, i) => {
+  const b = HEX_DIRECTIONS[(i + 1) % 6];
+  return { q: a.q + b.q, r: a.r + b.r };
+});
+
+export function isDiagonalFireDirection(direction: FireDirection): boolean {
+  return direction >= 6;
+}
+
+/** Convert the compatibility encoding (0..5 axes, 6..11 diagonals) to 12 clock steps. */
+export function fireDirectionStep(direction: FireDirection): number {
+  return direction < 6 ? direction * 2 : (direction - 6) * 2 + 1;
+}
+
+export function fireDirectionVector(direction: FireDirection): Axial {
+  return direction < 6 ? HEX_DIRECTIONS[direction] : HEX_DIAGONAL_DIRECTIONS[direction - 6];
+}
 
 /** 与方向索引 0..5 一一对应，仅作文案；与 `HEX_DIRECTIONS`、`TileDef.h` / `ef` 同序 */
 export const HEX_DIRECTION_NAMES: readonly [string, string, string, string, string, string] = [
@@ -175,15 +194,56 @@ export function directionTo(from: Axial, to: Axial): Direction | null {
 }
 
 // ---------- Offset ↔ Axial（odd-r 偏移，pointy-top 标准） ----------
-export function offsetToAxial(o: Offset): Axial {
+export function offsetToAxial(o: Offset, rowParityOffset: 0 | 1 = 0): Axial {
   // odd-r：奇数行向右偏移 0.5 格
-  const q = o.col - ((o.row - (o.row & 1)) >> 1);
+  const parityRow = o.row + rowParityOffset;
+  const q = o.col - ((parityRow - (parityRow & 1)) >> 1);
   const r = o.row;
   return { q, r };
 }
 
-export function axialToOffset(a: Axial): Offset {
-  const col = a.q + ((a.r - (a.r & 1)) >> 1);
+/** Like directionTo, but also recognizes the six halfway rays used by hardcore turrets. */
+export function fireDirectionTo(from: Axial, to: Axial): FireDirection | null {
+  const axis = directionTo(from, to);
+  if (axis !== null) return axis;
+  if (axialEquals(from, to)) return null;
+  const d = axialSub(to, from);
+  for (let i = 0; i < 6; i++) {
+    const u = HEX_DIAGONAL_DIRECTIONS[i];
+    if (d.q * u.r === d.r * u.q
+      && (u.q === 0 || Math.sign(d.q) === Math.sign(u.q))
+      && (u.r === 0 || Math.sign(d.r) === Math.sign(u.r))) {
+      return (i + 6) as FireDirection;
+    }
+  }
+  return null;
+}
+
+/** Closest of the twelve turret directions, used only as a visual/AI fallback. */
+export function approximateFireDirection(from: Axial, to: Axial): FireDirection {
+  const exact = fireDirectionTo(from, to);
+  if (exact !== null) return exact;
+  const a = axialToPixel(from, 1);
+  const b = axialToPixel(to, 1);
+  const angle = Math.atan2(b.y - a.y, b.x - a.x);
+  let best: FireDirection = 0;
+  let bestDelta = Infinity;
+  for (let direction = 0; direction < 12; direction++) {
+    const fireDirection = direction as FireDirection;
+    const v = axialToPixel(fireDirectionVector(fireDirection), 1);
+    const candidate = Math.atan2(v.y, v.x);
+    const delta = Math.abs(Math.atan2(Math.sin(angle - candidate), Math.cos(angle - candidate)));
+    if (delta < bestDelta) {
+      best = fireDirection;
+      bestDelta = delta;
+    }
+  }
+  return best;
+}
+
+export function axialToOffset(a: Axial, rowParityOffset: 0 | 1 = 0): Offset {
+  const parityRow = a.r + rowParityOffset;
+  const col = a.q + ((parityRow - (parityRow & 1)) >> 1);
   const row = a.r;
   return { col, row };
 }
@@ -361,6 +421,10 @@ export class HexMap {
    * 起止格本身不计：循环上界为 `path.length - 1`，目标格 `path[length-1]` 不会作为起点被检查。
    */
   countHedgesAlong(from: Axial, to: Axial): number {
+    const fireDirection = fireDirectionTo(from, to);
+    if (fireDirection !== null && isDiagonalFireDirection(fireDirection)) {
+      return this.countHedgesAlongDiagonal(from, to, fireDirection);
+    }
     const path = hexLine(from, to);
     let count = 0;
     // 从 i=1 开始 → 跳过 path[0]→path[1] 这条紧挨攻击者的边
@@ -381,5 +445,36 @@ export class HexMap {
       if (tileB?.hedges?.[dirBA]) count++;
     }
     return count;
+  }
+
+  /**
+   * A halfway ray runs through hex vertices. Count hedges on both alternating
+   * shortest paths bordering that ray, then halve and round down. As with the
+   * six old rays, both first edges adjacent to the attacker are ignored.
+   */
+  private countHedgesAlongDiagonal(from: Axial, to: Axial, fireDirection: FireDirection): number {
+    const diagonalIndex = fireDirection - 6;
+    const a = diagonalIndex as Direction;
+    const b = ((diagonalIndex + 1) % 6) as Direction;
+    const distance = hexDistance(from, to);
+    const countPath = (first: Direction, second: Direction): number => {
+      let current = from;
+      let count = 0;
+      for (let step = 0; step < distance; step++) {
+        const direction = step % 2 === 0 ? first : second;
+        const next = neighbor(current, direction);
+        if (step > 0 && this.hasHedgeBetween(current, next)) count++;
+        current = next;
+      }
+      return count;
+    };
+    return Math.floor((countPath(a, b) + countPath(b, a)) / 2);
+  }
+
+  private hasHedgeBetween(a: Axial, b: Axial): boolean {
+    const dirAB = directionTo(a, b);
+    const dirBA = directionTo(b, a);
+    return (dirAB !== null && !!this.get(a)?.hedges?.[dirAB])
+      || (dirBA !== null && !!this.get(b)?.hedges?.[dirBA]);
   }
 }

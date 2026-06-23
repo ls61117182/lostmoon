@@ -16,10 +16,11 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'units.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 
-const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice'];
-const STRING_FIELDS = ['moveSound', 'attackSound'];
+const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice', 'visionRange'];
+const STRING_FIELDS = ['moveSound', 'attackSound', 'visionType'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
 const FACTIONS = ['allied', 'german', 'japanese'];
+const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
 const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, 'notes'];
 const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck', 'infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
 
@@ -160,6 +161,9 @@ function build() {
     if (!FACTIONS.includes(rec.faction)) {
       throw new Error(`row ${rec.__row} ${rec.unitKind}: faction="${rec.faction}" must be ${FACTIONS.join(' / ')}`);
     }
+    if (!VISION_TYPES.includes(rec.visionType)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind}: visionType="${rec.visionType}" must be ${VISION_TYPES.join(' / ')}`);
+    }
   }
   for (const k of REQUIRED_KINDS) {
     if (!seen.has(k)) throw new Error(`CSV missing unitKind="${k}"`);
@@ -195,7 +199,8 @@ function build() {
       `armorRear: ${r.armorRear}, ` +
       `penetration: ${r.penetration}, ` +
       `effectiveRange: ${r.effectiveRange}, ` +
-      `usCasualtyDice: ${r.usCasualtyDice},`
+      `usCasualtyDice: ${r.usCasualtyDice}, ` +
+      `visionRange: ${r.visionRange},`
     );
     for (const f of STRING_FIELDS) {
       lines.push(`    ${f}: ${jsString(r[f])},`);

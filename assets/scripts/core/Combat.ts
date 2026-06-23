@@ -16,7 +16,17 @@
  */
 
 import { RNG } from './Dice';
-import { HexMap, approximateDirection, directionTo, hexDistance, hexLine, rotateDirection } from './HexGrid';
+import {
+  approximateDirection,
+  approximateFireDirection,
+  directionTo,
+  fireDirectionStep,
+  fireDirectionTo,
+  HexMap,
+  hexDistance,
+  hexLine,
+  rotateDirection,
+} from './HexGrid';
 import { Axial, CrewSlot, isFootUnit, ShermanCrew, Theater, Unit, UnitKind } from './types';
 
 export type ArmorFace = 'front' | 'frontSide' | 'rearSide' | 'rear';
@@ -99,6 +109,8 @@ export interface AttackContext {
   hitThresholdModifier?: number;
   /** Hardcore rule: penetration decays beyond the attacker's configured effective range. */
   effectiveRangePenetration?: boolean;
+  /** Hardcore rule: turreted main guns may use the six halfway firing rays. */
+  expandedTurretDirections?: boolean;
 }
 
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
@@ -156,9 +168,10 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
-  // 射角限制：只能朝 6 条轴向直线射击。directionTo 只在 from→to 落在某条六向射线上才返回
-  // 方向编号，否则返回 null——非 null 即表示"同线"。
-  const fireDir = directionTo(attacker.pos, target.pos);
+  // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
+  const fireDir = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
+    ? fireDirectionTo(attacker.pos, target.pos)
+    : directionTo(attacker.pos, target.pos);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
   if (isForwardOnlyGun(attacker) && attacker.facing !== fireDir) {
     return { ok: false, reason: 'attack.reason.fixedGunFacing' };
@@ -278,13 +291,13 @@ function isProtagonistTarget(ctx: AttackContext): boolean {
  */
 export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
   if (target.facing === null) return 'front'; // 无朝向单位按正面吃伤
-  const bearing =
-    directionTo(target.pos, attackerPos)
-    ?? approximateDirection(target.pos, attackerPos);
-  const diff = rotateDirection(bearing, -target.facing);
-  if (diff === 0) return 'front';
-  if (diff === 1 || diff === 5) return 'frontSide';
-  if (diff === 2 || diff === 4) return 'rearSide';
+  const bearing = fireDirectionTo(target.pos, attackerPos)
+    ?? approximateFireDirection(target.pos, attackerPos);
+  const facingStep = target.facing * 2;
+  const diff = (fireDirectionStep(bearing) - facingStep + 12) % 12;
+  if (diff === 0 || diff === 1 || diff === 11) return 'front';
+  if (diff === 2 || diff === 3 || diff === 9 || diff === 10) return 'frontSide';
+  if (diff === 4 || diff === 5 || diff === 7 || diff === 8) return 'rearSide';
   return 'rear';
 }
 

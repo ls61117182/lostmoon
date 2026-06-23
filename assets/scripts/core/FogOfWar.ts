@@ -1,6 +1,6 @@
-import { HexMap, axialEquals, axialToPixel, hexDistance, neighbor } from './HexGrid';
+import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_VISION_RANGE, Direction, Unit } from './types';
+import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, Unit } from './types';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
@@ -17,55 +17,81 @@ export function fogOfWarEnabled(mode: GameMode): boolean {
 
 /** Grid ranges are non-negative integers; old missions/units default to 4. */
 export function currentVisionRange(unit: Unit): number {
-  const raw = unit.visionRange;
+  const raw = unit.visionRange ?? unit.stats.visionRange;
   return typeof raw === 'number' && Number.isFinite(raw)
     ? Math.max(0, Math.floor(raw))
     : DEFAULT_VISION_RANGE;
 }
 
-/** Runtime source of truth for whether a map coordinate is visible to the player. */
-export function computePlayerVisibleHexes(map: HexMap, sherman: Unit): Set<string> {
+/** Runtime source of truth for the map coordinates visible to one unit. */
+export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
   const visible = new Set<string>();
   const add = (p: Axial) => {
     if (map.has(p)) visible.add(HexMap.keyOf(p));
   };
 
-  add(sherman.pos);
-  const commanderAlive = sherman.crew?.commander !== false;
-  const openHatch = commanderAlive && sherman.hatchOpen === true;
-  const visionRange = currentVisionRange(sherman);
+  add(unit.pos);
+  // Old tests/saves predate the config field; vehicle behavior remains turreted by default.
+  const visionType = unit.stats.visionType ?? 'turreted';
+  const commanderAlive = unit.crew?.commander !== false;
+  const openHatch = commanderAlive && unit.hatchOpen === true;
+  const visionRange = currentVisionRange(unit);
 
   if (openHatch) {
     for (const tile of map.all()) {
-      if (hexDistance(sherman.pos, tile.pos) > visionRange) continue;
-      if (hasFogLineOfSight(map, sherman.pos, tile.pos)) add(tile.pos);
+      if (hexDistance(unit.pos, tile.pos) > visionRange) continue;
+      if (hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
     }
   }
 
-  // Closed hatch: all six adjacent hexes plus one ray along the current turret direction.
-  // Open hatch already has radial visibility, but keeps the turret ray rule explicitly.
-  const turretFacing = sherman.turretFacing ?? sherman.facing;
-  if (turretFacing !== null) {
-    if (!openHatch) {
+  if (visionType === 'infantry') {
+    for (const tile of map.all()) {
+      if (hexDistance(unit.pos, tile.pos) <= 2 && hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+    }
+    return visible;
+  }
+
+  // Turreted vehicles see all adjacent hexes plus a ray along the turret.
+  // Fixed guns only see the ray along the unit's hull facing.
+  const sightFacing = visionType === 'turreted'
+    ? (unit.turretFacing ?? unit.facing)
+    : unit.facing;
+  if (sightFacing !== null) {
+    if (!openHatch && visionType === 'turreted') {
       for (let direction = 0; direction < 6; direction++) {
-        add(neighbor(sherman.pos, direction as Direction));
+        add(neighbor(unit.pos, direction as Direction));
       }
     }
-    const rayDirections = [turretFacing];
-    for (const direction of rayDirections) {
-      let p = neighbor(sherman.pos, direction);
-      let distance = 1;
-      while (distance <= visionRange && map.has(p)) {
-        add(p);
-        const tile = map.get(p)!;
-        if (map.lineOfSightBlockedByTile(tile)) break;
-        p = neighbor(p, direction);
-        distance++;
-      }
+    const rayVector = fireDirectionVector(sightFacing as FireDirection);
+    const diagonalRay = isDiagonalFireDirection(sightFacing as FireDirection);
+    let p = axialAdd(unit.pos, rayVector);
+    while (hexDistance(unit.pos, p) <= visionRange && map.has(p)) {
+      if (diagonalRay && !hasFogLineOfSight(map, unit.pos, p)) break;
+      add(p);
+      const tile = map.get(p)!;
+      if (map.lineOfSightBlockedByTile(tile)) break;
+      p = axialAdd(p, rayVector);
     }
   }
 
   return visible;
+}
+
+/** Player vision includes each living ally's occupied hex, but never the ally's own vision area. */
+export function computePlayerVisibleHexes(
+  map: HexMap,
+  sherman: Unit,
+  allies: readonly Unit[] = [],
+): Set<string> {
+  const visible = computeUnitVisibleHexes(map, sherman);
+  for (const ally of allies) {
+    if (!ally.destroyed && map.has(ally.pos)) visible.add(HexMap.keyOf(ally.pos));
+  }
+  return visible;
+}
+
+export function isUnitInVision(map: HexMap, observer: Unit, target: Unit): boolean {
+  return computeUnitVisibleHexes(map, observer).has(HexMap.keyOf(target.pos));
 }
 
 /**

@@ -663,7 +663,7 @@ export function prepareTurnEndEvent(
         return { bodyKey: 'turnEnd.germanTruck.dead', bodyParams: baseParams, apply: () => {} };
       }
       const startIdx = path.findIndex(o => {
-        const a = offsetToAxial(o);
+        const a = offsetToAxial(o, ctx.mission.data.rowParityOffset === 1 ? 1 : 0);
         return a.q === truck.pos.q && a.r === truck.pos.r;
       });
 
@@ -681,12 +681,12 @@ export function prepareTurnEndEvent(
         // 当前格 = 末格且配了 exitDir → 沿 exitDir 强制驶出；
         // 否则（已离开路径 / 末格未配 exitDir）沿当前朝向 simFace 走一格
         const idxNow = path.findIndex(o => {
-          const a = offsetToAxial(o);
+          const a = offsetToAxial(o, ctx.mission.data.rowParityOffset === 1 ? 1 : 0);
           return a.q === cursor.q && a.r === cursor.r;
         });
         let targetCell: Axial;
         if (idxNow >= 0 && idxNow < path.length - 1) {
-          targetCell = offsetToAxial(path[idxNow + 1]!);
+          targetCell = offsetToAxial(path[idxNow + 1]!, ctx.mission.data.rowParityOffset === 1 ? 1 : 0);
         } else if (idxNow === path.length - 1 && path[idxNow]!.exitDir !== undefined) {
           targetCell = neighbor(cursor, path[idxNow]!.exitDir as Direction);
         } else {
@@ -730,7 +730,7 @@ export function prepareTurnEndEvent(
 
       // 落点在地图内：apply 推进 truck.pos / facing；按是否仍在 truckPath 选择 bodyKey
       const landIdx = path.findIndex(o => {
-        const a = offsetToAxial(o);
+        const a = offsetToAxial(o, ctx.mission.data.rowParityOffset === 1 ? 1 : 0);
         return a.q === landCell.q && a.r === landCell.r;
       });
       if (landIdx >= 0) {

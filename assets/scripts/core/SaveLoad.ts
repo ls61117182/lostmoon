@@ -1,6 +1,6 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import type { Direction, Faction, ShermanCrew, Unit, UnitKind } from './types';
+import type { Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind } from './types';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
 
@@ -25,7 +25,7 @@ interface UnitSnapshot {
   q: number;
   r: number;
   facing: Direction | null;
-  turretFacing?: Direction;
+  turretFacing?: FireDirection;
   damaged?: boolean;
   destroyed?: boolean;
   /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
@@ -106,10 +106,16 @@ function captureUnit(u: Unit): UnitSnapshot {
   };
 }
 
+function savedTurretFacing(value: unknown, fallback: Direction | null): FireDirection | undefined {
+  const n = Number(value);
+  if (Number.isInteger(n) && n >= 0 && n <= 11) return n as FireDirection;
+  return fallback ?? undefined;
+}
+
 function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   live.pos = { q: s.q, r: s.r };
   live.facing = s.facing;
-  live.turretFacing = s.turretFacing ?? (s.facing ?? undefined);
+  live.turretFacing = savedTurretFacing(s.turretFacing, s.facing);
   live.damaged = s.damaged ?? false;
   live.destroyed = s.destroyed ?? false;
   if (s.smoked !== undefined) live.smoked = s.smoked;
@@ -117,7 +123,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   if (s.turretDamaged !== undefined) live.turretDamaged = s.turretDamaged;
   if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
   if (s.loaded !== undefined) live.loaded = s.loaded;
-  if (s.hatchOpen !== undefined) live.hatchOpen = s.hatchOpen;
+  live.hatchOpen = live.kind === 'sherman' && s.hatchOpen === true;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
   if (s.crew) live.crew = { ...s.crew };
 }
@@ -236,7 +242,7 @@ export function applySave(
   mission.sherman.pos = { q: save.sherman.q, r: save.sherman.r };
   mission.enemies.push(...extraEnemies);
   mission.sherman.facing = save.sherman.facing;
-  mission.sherman.turretFacing = save.sherman.turretFacing ?? (save.sherman.facing ?? undefined);
+  mission.sherman.turretFacing = savedTurretFacing(save.sherman.turretFacing, save.sherman.facing);
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
   mission.sherman.damaged = false;
   mission.sherman.destroyed = save.sherman.destroyed ?? false;

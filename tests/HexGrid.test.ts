@@ -17,6 +17,7 @@ import {
   axialEquals,
   axialToOffset,
   directionTo,
+  fireDirectionTo,
   hexDistance,
   hexLine,
   neighbor,
@@ -25,9 +26,9 @@ import {
 } from '../assets/scripts/core/HexGrid';
 import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
-import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight } from '../assets/scripts/core/FogOfWar';
+import { computePlayerVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
-import { effectivePenetration, hitThreshold, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
+import { armorFaceFrom, canAttack, effectivePenetration, hitThreshold, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
 import { RNG } from '../assets/scripts/core/Dice';
 
@@ -189,7 +190,26 @@ describe('Effective range penetration', () => {
       moveSound: '',
       attackSound: '',
       infantryTankCoordination: 0,
+      visionType: 'turreted',
+      visionRange: 4,
     },
+  });
+
+  test('顶部扩一行并切换 odd-r 基准后，旧格子保持统一平移', () => {
+    for (const oldParity of [0, 1] as const) {
+      const newParity = (oldParity === 0 ? 1 : 0) as 0 | 1;
+      const originBefore = offsetToAxial({ col: 0, row: 0 }, oldParity);
+      const originAfter = offsetToAxial({ col: 0, row: 1 }, newParity);
+      const delta = { q: originAfter.q - originBefore.q, r: originAfter.r - originBefore.r };
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 12; col++) {
+          const before = offsetToAxial({ col, row }, oldParity);
+          const after = offsetToAxial({ col, row: row + 1 }, newParity);
+          expect(after).toEqual({ q: before.q + delta.q, r: before.r + delta.r });
+          expect(axialToOffset(after, newParity)).toEqual({ col, row: row + 1 });
+        }
+      }
+    }
   });
 
   test('does not decay within range, then loses one per extra hex down to zero', () => {
@@ -222,6 +242,99 @@ describe('Effective range penetration', () => {
     const report = rollAttack({ attacker, target, map, effectiveRangePenetration: true }, new RNG(12345));
     expect(report.penetration).toBe(2);
     expect(attacker.stats.penetration).toBe(3);
+  });
+});
+
+describe('Hardcore twelve-direction turret fire', () => {
+  const tankAt = (id: string, q: number, r: number, facing: Direction = 0): Unit => ({
+    id,
+    kind: 'panzer4',
+    faction: id === 'attacker' ? 'allied' : 'german',
+    pos: { q, r },
+    facing,
+    stats: {
+      faction: id === 'attacker' ? 'allied' : 'german',
+      size: 4,
+      armorFront: 10,
+      armorFrontSide: 9,
+      armorRearSide: 8,
+      armorRear: 7,
+      penetration: 3,
+      effectiveRange: 4,
+      usCasualtyDice: 0,
+      moveSound: '',
+      attackSound: '',
+      infantryTankCoordination: 0,
+      visionType: 'turreted',
+      visionRange: 6,
+    },
+  });
+
+  const fieldMap = (min: number, max: number): HexMap => {
+    const map = new HexMap(max - min + 1, max - min + 1);
+    for (let q = min; q <= max; q++) {
+      for (let r = min; r <= max; r++) map.set({ pos: { q, r }, terrain: 'field' });
+    }
+    return map;
+  };
+
+  test('recognizes all six halfway rays and keeps shortest hex distance', () => {
+    const targets = [
+      { q: 2, r: 2 }, { q: -2, r: 4 }, { q: -4, r: 2 },
+      { q: -2, r: -2 }, { q: 2, r: -4 }, { q: 4, r: -2 },
+    ];
+    targets.forEach((target, i) => {
+      expect(fireDirectionTo({ q: 0, r: 0 }, target)).toBe(6 + i);
+      expect(hexDistance({ q: 0, r: 0 }, target)).toBe(4);
+    });
+  });
+
+  test('halfway target is legal only with the hardcore expansion', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 1, 1);
+    const map = fieldMap(0, 1);
+    expect(canAttack({ attacker, target, map }).ok).toBe(false);
+    expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
+    attacker.stats = { ...attacker.stats, visionType: 'fixed' };
+    expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(false);
+  });
+
+  test('30, 90 and 150 degree incoming fire selects front, front-side and rear-side armor', () => {
+    const target = tankAt('target', 0, 0, 0);
+    expect(armorFaceFrom(target, { q: 1, r: 1 })).toBe('front');
+    expect(armorFaceFrom(target, { q: -1, r: 2 })).toBe('frontSide');
+    expect(armorFaceFrom(target, { q: -2, r: 1 })).toBe('rearSide');
+    expect(armorFaceFrom(target, { q: 2, r: -1 })).toBe('front');
+    expect(armorFaceFrom(target, { q: 1, r: -2 })).toBe('frontSide');
+    expect(armorFaceFrom(target, { q: -1, r: -1 })).toBe('rearSide');
+  });
+
+  test('halfway ray counts both bordering hedge paths, divides by two and floors', () => {
+    const map = fieldMap(0, 3);
+    const hedgeEdges: Array<[{ q: number; r: number }, Direction]> = [
+      [{ q: 1, r: 0 }, 1],
+      [{ q: 1, r: 1 }, 0],
+      [{ q: 2, r: 1 }, 1],
+      [{ q: 2, r: 2 }, 0],
+      [{ q: 0, r: 1 }, 0],
+    ];
+    for (const [pos, direction] of hedgeEdges) {
+      const tile = map.get(pos)!;
+      tile.hedges = [false, false, false, false, false, false];
+      tile.hedges[direction] = true;
+    }
+    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 3 })).toBe(2);
+  });
+
+  test('closed turret vision follows a selected halfway ray', () => {
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.visionRange = 4;
+    const map = fieldMap(-1, 3);
+    const visible = computeUnitVisibleHexes(map, unit);
+    expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(true);
+    expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(true);
+    expect(visible.has(HexMap.keyOf({ q: 3, r: 3 }))).toBe(false);
   });
 });
 
@@ -378,6 +491,58 @@ describe('战争迷雾玩家视野', () => {
     const visible = computePlayerVisibleHexes(map, sherman);
     expect(visible.has(HexMap.keyOf(rearAdjacent))).toBe(true);
     expect(visible.has(HexMap.keyOf(rearDistance2))).toBe(false);
+  });
+
+  test('有炮塔单位：周围一格可见，远处只沿炮塔方向看到配置距离', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const unit = shermanAt(4, 4, 0, false);
+    unit.stats = { ...unit.stats, visionType: 'turreted', visionRange: 4 };
+    unit.turretFacing = 1;
+    unit.visionRange = undefined;
+    const visible = computeUnitVisibleHexes(map, unit);
+    expect(visible.has(HexMap.keyOf(neighbor(unit.pos, 2)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 2), 2)))).toBe(false);
+    expect(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 1), 1)))).toBe(true);
+  });
+
+  test('无炮塔单位：只沿车体朝向看到配置距离', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const unit = shermanAt(4, 4, 0, false);
+    unit.stats = { ...unit.stats, visionType: 'fixed', visionRange: 4 };
+    unit.visionRange = undefined;
+    const visible = computeUnitVisibleHexes(map, unit);
+    expect(visible.has(HexMap.keyOf(neighbor(unit.pos, 0)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(unit.pos, 1)))).toBe(false);
+  });
+
+  test('步兵单位：不依赖朝向，视野固定为周围两格', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const unit = shermanAt(4, 4, 0, false);
+    unit.facing = null;
+    unit.stats = { ...unit.stats, visionType: 'infantry', visionRange: 4 };
+    const visible = computeUnitVisibleHexes(map, unit);
+    expect(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 2), 2)))).toBe(true);
+    expect(visible.has(HexMap.keyOf(neighbor(neighbor(neighbor(unit.pos, 2), 2), 2)))).toBe(false);
+  });
+
+  test('玩家只获得存活队友所在格，不获得队友周围或朝向视野', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const sherman = shermanAt(1, 4, 0, false);
+    sherman.visionRange = 1;
+    const ally = shermanAt(6, 4, 1, false);
+    ally.id = 'ally';
+    ally.turretFacing = 1;
+    const allyForward = neighbor(ally.pos, 1);
+    const visible = computePlayerVisibleHexes(map, sherman, [ally]);
+
+    expect(visible.has(HexMap.keyOf(ally.pos))).toBe(true);
+    expect(visible.has(HexMap.keyOf(allyForward))).toBe(false);
+    ally.destroyed = true;
+    expect(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(ally.pos))).toBe(false);
   });
 });
 

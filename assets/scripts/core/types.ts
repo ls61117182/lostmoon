@@ -21,6 +21,13 @@ export interface Offset {
 
 export type Direction = 0 | 1 | 2 | 3 | 4 | 5;
 
+/**
+ * Turret/main-gun direction. Values 0..5 keep the historical six hex-axis
+ * directions; 6..11 are the six rays halfway between direction n and n+1.
+ * Hull facing deliberately remains Direction.
+ */
+export type FireDirection = Direction | 6 | 7 | 8 | 9 | 10 | 11;
+
 // ---------- 地形 ----------
 export type TerrainType =
   | 'road'
@@ -131,6 +138,8 @@ export function isFootUnit(u: { kind: UnitKind }): boolean {
   return isFootKind(u.kind);
 }
 
+export type VisionType = 'turreted' | 'fixed' | 'infantry';
+
 export interface UnitStats {
   faction: Faction;          // 阵营
   size: number;            // 体型
@@ -144,6 +153,8 @@ export interface UnitStats {
   moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
   infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
+  visionType: VisionType;   // 炮塔视野 / 车体正面视野 / 步兵环形视野
+  visionRange: number;      // 六角格距离；步兵类型固定使用周围 2 格
 }
 
 /** 玩家车辆默认当前视野范围；后续天气等系统可修改 Unit.visionRange。 */
@@ -157,7 +168,7 @@ export interface Unit {
   /** 步兵无朝向时为 null */
   facing: Direction | null;
   /** Independent turret direction; defaults to facing for turreted vehicles. */
-  turretFacing?: Direction;
+  turretFacing?: FireDirection;
   stats: UnitStats;
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
@@ -220,7 +231,7 @@ export interface UnitPlacement {
   /** 与 `at` 同：谢尔曼在 `shermanStartByDice` 时由格上 `ef` 写入 */
   facing?: Direction;
   /** Optional initial turret direction; defaults to facing. */
-  turretFacing?: Direction;
+  turretFacing?: FireDirection;
   /** 已废弃：掷骰出生见关卡 `enemyStartByDice` 与格上 `rid`（步兵）/ `eid`（坦克等） */
   startId?: number;
   /** enemyStartByDice 下非步兵单位可选：只从这些 eid 黑格中随机开局。 */
@@ -253,6 +264,10 @@ export interface MissionData {
   rows: number;
   /** 地形矩阵：tiles[row][col]；null 表示该 offset 位置没有地图格。 */
   tiles: Array<Array<TileDef | null>>;
+  /** odd-r 首行奇偶基准；编辑器向地图上方扩展时切换，确保旧格子的几何关系不变。 */
+  rowParityOffset?: 0 | 1;
+  /** 允许玩家在战斗中拖动地图，以查看超出初始显示范围的格子。 */
+  allowMapPan?: boolean;
   /** 谢尔曼初始放置 */
   sherman: UnitPlacement;
   /** 玩家阵营 AI 队友；玩家不可直接控制 */

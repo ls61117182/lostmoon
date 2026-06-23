@@ -58,8 +58,11 @@ import {
   HEDGE_DRAW_EDGE_BY_AXIAL,
   HexMap,
   axialToPixel,
-  approximateDirection,
+  axialAdd,
+  approximateFireDirection,
   directionTo,
+  fireDirectionTo,
+  fireDirectionVector,
   hexDistance,
   neighbor,
   neighbors,
@@ -94,7 +97,7 @@ import {
   selectAIOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled } from '../core/FogOfWar';
+import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, isUnitInVision } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
@@ -175,7 +178,7 @@ import {
   stopManeuverSound,
   playUiClick,
 } from '../audio/GameAudio';
-import { Axial, Direction, effectiveDiceTerrain, isFootUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, FireDirection, isFootUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -422,14 +425,14 @@ interface MoveAnim {
 
 interface TurretAimAnim {
   unit: Unit;
-  from: Direction;
-  to: Direction;
+  from: FireDirection;
+  to: FireDirection;
   t: number;
   dur: number;
   onDone: () => void;
 }
 
-type DirectionLerp = { from: number; to: number; t: number; angular?: boolean };
+type DirectionLerp = { from: FireDirection; to: FireDirection; t: number; angular?: boolean };
 
 type Phase = 'player' | 'enemy';
 
@@ -1047,10 +1050,17 @@ export class BattleScene extends Component {
   private mission: LoadedMission | null = null;
   private offsetX = 0;
   private offsetY = 0;
+  private mapPanEnabled = false;
+  private mapPanMoved = false;
+  private mapPanDistance = 0;
+  private mapPanMinX = 0;
+  private mapPanMaxX = 0;
+  private mapPanMinY = 0;
+  private mapPanMaxY = 0;
   private anim: MoveAnim | null = null;
   private turretAimAnim: TurretAimAnim | null = null;
-  private shermanTurretFacing: Direction | null = null;
-  private enemyTurretFacing = new Map<string, Direction>();
+  private shermanTurretFacing: FireDirection | null = null;
+  private enemyTurretFacing = new Map<string, FireDirection>();
 
   private resetTurretFacingState() {
     this.turretAimAnim = null;
@@ -1694,7 +1704,9 @@ export class BattleScene extends Component {
       });
     });
 
-    // 注册触摸事件（点击地图任意位置）
+    // 注册地图点击与关卡可选的拖动浏览。
+    gNode.on(Node.EventType.TOUCH_START, this.onMapPanStart, this);
+    gNode.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
     gNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
 
     // HUD：回合数 + 阶段信息 + 下一阶段按钮
@@ -1751,6 +1763,9 @@ export class BattleScene extends Component {
     this.missionId = data.id;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
+    this.mapPanEnabled = data.allowMapPan === true || data.cols > 8 || data.rows > 6;
+    this.mapPanMoved = false;
+    this.mapPanDistance = 0;
     const { sherman: sh0 } = this.mission;
     this.resetTurretFacingState();
     this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
@@ -1769,6 +1784,8 @@ export class BattleScene extends Component {
     this.offsetX = -(minX + maxX) / 2;
     // Cocos Y 朝上，但我们希望 row 0 在屏幕顶部 → Y 取负
     this.offsetY = (minY + maxY) / 2 + BOARD_CENTER_OFFSET_Y;
+    this.updateMapPanBounds(data);
+    this.applyMapViewPosition(0, 0);
 
     // 初始化回合状态
     this.turn = 1;
@@ -2036,6 +2053,74 @@ export class BattleScene extends Component {
     this.redrawFogOverlay();
   }
 
+  private updateMapPanBounds(data: MissionData) {
+    this.mapNode?.getComponent(UITransform)?.setContentSize(CANVAS_W, CANVAS_H);
+    if (!this.mapPanEnabled || data.cols <= 0 || data.rows <= 0) {
+      this.mapPanMinX = this.mapPanMaxX = 0;
+      this.mapPanMinY = this.mapPanMaxY = 0;
+      return;
+    }
+
+    const halfHexW = this.hexSize * Math.sqrt(3) / 2;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
+    // null 格不进入 HexMap，但仍是编辑器画布的一部分，用来控制游戏内可拖动边界。
+    for (let row = 0; row < data.rows; row++) {
+      for (let col = 0; col < data.cols; col++) {
+        const pos = offsetToAxial({ col, row }, rowParityOffset);
+        const center = this.project(pos.q, pos.r);
+        minX = Math.min(minX, center.x - halfHexW);
+        maxX = Math.max(maxX, center.x + halfHexW);
+        minY = Math.min(minY, center.y - this.hexSize);
+        maxY = Math.max(maxY, center.y + this.hexSize);
+      }
+    }
+
+    const mapCenterX = (minX + maxX) / 2;
+    const mapCenterY = (minY + maxY) / 2;
+    this.mapNode?.getComponent(UITransform)?.setContentSize(
+      Math.max(CANVAS_W, maxX - minX + Math.abs(mapCenterX) * 2),
+      Math.max(CANVAS_H, maxY - minY + Math.abs(mapCenterY) * 2),
+    );
+
+    if (maxX - minX > CANVAS_W) {
+      this.mapPanMinX = Math.min(0, CANVAS_W / 2 - maxX);
+      this.mapPanMaxX = Math.max(0, -CANVAS_W / 2 - minX);
+    } else {
+      this.mapPanMinX = this.mapPanMaxX = 0;
+    }
+    if (maxY - minY > CANVAS_H) {
+      this.mapPanMinY = Math.min(0, CANVAS_H / 2 - maxY);
+      this.mapPanMaxY = Math.max(0, -CANVAS_H / 2 - minY);
+    } else {
+      this.mapPanMinY = this.mapPanMaxY = 0;
+    }
+  }
+
+  private applyMapViewPosition(x: number, y: number) {
+    const clampedX = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, x));
+    const clampedY = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, y));
+    this.mapNode?.setPosition(clampedX, clampedY, 0);
+    this.terrainLayerNode?.setPosition(clampedX, clampedY, 0);
+  }
+
+  private onMapPanStart() {
+    if (!this.mapPanEnabled) return;
+    this.mapPanMoved = false;
+    this.mapPanDistance = 0;
+  }
+
+  private onMapPanMove(event: EventTouch) {
+    if (!this.mapPanEnabled || !this.mapNode) return;
+    const delta = event.getDelta();
+    const x = this.mapNode.position.x + delta.x;
+    const y = this.mapNode.position.y + delta.y;
+    this.applyMapViewPosition(x, y);
+    this.mapPanDistance += Math.hypot(delta.x, delta.y);
+    this.mapPanMoved = this.mapPanDistance > 6;
+    event.propagationStopped = true;
+  }
+
   private refreshPlayerVisibility() {
     this.visibleHexKeys.clear();
     if (!this.mission) return;
@@ -2045,7 +2130,11 @@ export class BattleScene extends Component {
       }
       return;
     }
-    this.visibleHexKeys = computePlayerVisibleHexes(this.mission.map, this.mission.sherman);
+    this.visibleHexKeys = computePlayerVisibleHexes(
+      this.mission.map,
+      this.mission.sherman,
+      this.mission.allies,
+    );
   }
 
   private isHexVisible(pos: Axial): boolean {
@@ -2063,12 +2152,12 @@ export class BattleScene extends Component {
     return !!sherman && sherman.crew?.commander !== false && sherman.hatchOpen === true;
   }
 
-  private fogTurretAimDirection(pos: Axial): Direction | null {
+  private fogTurretAimDirection(pos: Axial): FireDirection | null {
     if (!this.mission || !fogOfWarEnabled(GameSession.gameMode) || this.isCommanderHatchOpen()) return null;
     if (this.isHexVisible(pos)) return null;
     const sherman = this.mission.sherman;
     if (hexDistance(sherman.pos, pos) > currentVisionRange(sherman)) return null;
-    return directionTo(sherman.pos, pos);
+    return fireDirectionTo(sherman.pos, pos);
   }
 
   private hasTurretReconGunSelection(): boolean {
@@ -2148,6 +2237,7 @@ export class BattleScene extends Component {
         map,
         theater: this.mission.data.theater,
         hitThresholdModifier: this.selectedGunHitThresholdModifier,
+        expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       };
       if (!canAttack(ctx).ok) continue;
 
@@ -2262,7 +2352,7 @@ export class BattleScene extends Component {
     if (obj.type !== 'destroy_kind_evac' || !obj.evacAt || obj.evacExitDir === undefined) return;
 
     const g = this.g;
-    const evac = offsetToAxial(obj.evacAt);
+    const evac = offsetToAxial(obj.evacAt, this.mission.data.rowParityOffset === 1 ? 1 : 0);
     const exitDir = obj.evacExitDir as Direction;
     const c = this.project(evac.q, evac.r);
     const nb = neighbor(evac, exitDir);
@@ -3057,7 +3147,7 @@ export class BattleScene extends Component {
   }
 
   private muzzleFlashPosition(attacker: Unit, target: Unit): { x: number; y: number; ux: number; uy: number } | null {
-    const dir = (directionTo(attacker.pos, target.pos) ?? approximateDirection(attacker.pos, target.pos)) as Direction;
+    const dir = fireDirectionTo(attacker.pos, target.pos) ?? approximateFireDirection(attacker.pos, target.pos);
     const c = this.project(attacker.pos.q, attacker.pos.r);
     const aimAngle = this.directionScreenAngle(attacker.pos, c, dir);
     const aim = { ux: Math.cos(aimAngle), uy: Math.sin(aimAngle) };
@@ -3271,6 +3361,7 @@ export class BattleScene extends Component {
         a.unit.turretFacing = a.to;
       } else if (this.enemySupportsSplitTurret(a.unit)) {
         this.enemyTurretFacing.set(a.unit.id, a.to);
+        a.unit.turretFacing = a.to;
       }
       this.turretAimAnim = null;
       this.redraw();
@@ -5140,9 +5231,10 @@ export class BattleScene extends Component {
   private directionScreenAngle(
     pos: { q: number; r: number },
     c: { x: number; y: number },
-    dir: Direction,
+    dir: FireDirection,
   ): number {
-    const np = this.project(neighbor(pos, dir).q, neighbor(pos, dir).r);
+    const aimed = axialAdd(pos, fireDirectionVector(dir));
+    const np = this.project(aimed.q, aimed.r);
     return Math.atan2(np.y - c.y, np.x - c.x);
   }
 
@@ -5189,8 +5281,8 @@ export class BattleScene extends Component {
     }
 
     if (u === this.mission?.sherman && this.anim?.unit === u && u.facing !== null) {
-      const from = (this.shermanTurretFacing ?? u.turretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
-      const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as Direction;
+      const from = (this.shermanTurretFacing ?? u.turretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as FireDirection;
+      const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as FireDirection;
       if (from === to) return null;
       if (this.anim.kind === 'turn' && from === this.anim.turnFrom) {
         return {
@@ -5213,6 +5305,7 @@ export class BattleScene extends Component {
       from: facing,
       to: facing,
       t: 1,
+      angular: true,
     };
   }
 
@@ -5228,8 +5321,8 @@ export class BattleScene extends Component {
 
     if (this.anim?.unit === u && u.facing !== null) {
       const stored = this.enemyTurretFacing.get(u.id);
-      const from = (stored ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as Direction;
-      const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as Direction;
+      const from = (stored ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as FireDirection;
+      const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as FireDirection;
       if (from === to) return null;
       if (this.anim.kind === 'turn' && from === this.anim.turnFrom) {
         return {
@@ -5248,7 +5341,7 @@ export class BattleScene extends Component {
 
     const facing = this.enemyTurretFacing.get(u.id);
     if (facing === undefined) return null;
-    return { from: facing, to: facing, t: 1 };
+    return { from: facing, to: facing, t: 1, angular: true };
   }
 
   private enemySupportsSplitTurret(u: Unit): boolean {
@@ -7468,6 +7561,7 @@ export class BattleScene extends Component {
         attacker: s,
         target: e,
         map: this.mission!.map,
+        expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       }).ok);
       return hasTarget ? null : t('floater.noGunTarget');
     }
@@ -8719,10 +8813,16 @@ export class BattleScene extends Component {
     for (const target of this.aiTargetsFor(actor)) {
       if (target.faction === actor.faction) continue;
       if (isFootUnit(target) || target.kind === 'truck') continue;
-      if (adjacentOnly && hexDistance(actor.pos, target.pos) !== 1) continue;
-      if (!canAttack({ attacker: actor, target, map }).ok) continue;
-      const priority = aiTargetPriority(target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
+      if (d > currentVisionRange(actor)) continue;
+      if (adjacentOnly && d !== 1) continue;
+      if (!canAttack({
+        attacker: actor,
+        target,
+        map,
+        expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
+      }).ok) continue;
+      const priority = aiTargetPriority(target, missionTargets);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
         bestPriority = priority;
         bestDist = d;
@@ -8748,6 +8848,8 @@ export class BattleScene extends Component {
     const tied: Unit[] = [];
     for (const target of this.aiTargetsFor(actor)) {
       if (target.faction === actor.faction) continue;
+      if (hexDistance(actor.pos, target.pos) > currentVisionRange(actor)) continue;
+      if (!isUnitInVision(map, actor, target)) continue;
       if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units }).ok) continue;
       const priority = aiTargetPriority(target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
@@ -11130,6 +11232,11 @@ export class BattleScene extends Component {
    */
   private onTouchMap(event: EventTouch) {
     if (!this.mission || !this.mapNode) return;
+    if (this.mapPanEnabled && this.mapPanMoved) {
+      this.mapPanMoved = false;
+      event.propagationStopped = true;
+      return;
+    }
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
@@ -11148,7 +11255,7 @@ export class BattleScene extends Component {
     const mgSel = this.selectedMGDieIdx >= 0;
 
     if (attackOrMisc && gunSel && this.hasTurretReconGunSelection() && !this.isCommanderHatchOpen()) {
-      const direction = directionTo(this.mission.sherman.pos, target.pos);
+      const direction = fireDirectionTo(this.mission.sherman.pos, target.pos);
       if (direction === null) {
         this.showGunAimWarning('attack.reason.cannotTurnDirection');
         return;
@@ -11192,7 +11299,7 @@ export class BattleScene extends Component {
       new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
   }
 
-  private tryAimShermanTurretAtFogTile(direction: Direction) {
+  private tryAimShermanTurretAtFogTile(direction: FireDirection) {
     if (!this.mission || this.selectedGunDieIdx < 0) return;
     const slot = this.phaseDice[this.selectedGunDieIdx];
     if (!slot || slot.used) return;
@@ -11220,17 +11327,17 @@ export class BattleScene extends Component {
       return;
     }
     const sherman = this.mission.sherman;
-    const to = (directionTo(sherman.pos, target.pos) ?? approximateDirection(sherman.pos, target.pos)) as Direction;
+    const to = fireDirectionTo(sherman.pos, target.pos) ?? approximateFireDirection(sherman.pos, target.pos);
     this.startShermanTurretAimDirection(to, onDone);
   }
 
-  private startShermanTurretAimDirection(to: Direction, onDone: () => void) {
+  private startShermanTurretAimDirection(to: FireDirection, onDone: () => void) {
     if (!this.mission) {
       onDone();
       return;
     }
     const sherman = this.mission.sherman;
-    const from = (this.shermanTurretFacing ?? sherman.turretFacing ?? sherman.facing ?? to) as Direction;
+    const from = (this.shermanTurretFacing ?? sherman.turretFacing ?? sherman.facing ?? to) as FireDirection;
     if (from === to) {
       this.shermanTurretFacing = to;
       sherman.turretFacing = to;
@@ -11257,15 +11364,22 @@ export class BattleScene extends Component {
   }
 
   private startEnemyTurretAim(enemy: Unit, target: Unit, onDone: () => void) {
-    const splitReady = this.enemySupportsSplitTurret(enemy);
-    if (!splitReady) {
+    if (enemy.stats.visionType !== 'turreted') {
       onDone();
       return;
     }
-    const to = (directionTo(enemy.pos, target.pos) ?? approximateDirection(enemy.pos, target.pos)) as Direction;
-    const from = (this.enemyTurretFacing.get(enemy.id) ?? enemy.facing ?? to) as Direction;
+    const to = fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
+    const from = (this.enemyTurretFacing.get(enemy.id) ?? enemy.turretFacing ?? enemy.facing ?? to) as FireDirection;
     if (from === to) {
       this.enemyTurretFacing.set(enemy.id, to);
+      enemy.turretFacing = to;
+      this.redraw();
+      onDone();
+      return;
+    }
+    if (!this.enemySupportsSplitTurret(enemy)) {
+      this.enemyTurretFacing.set(enemy.id, to);
+      enemy.turretFacing = to;
       this.redraw();
       onDone();
       return;
@@ -11329,7 +11443,8 @@ export class BattleScene extends Component {
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
-    const check = canAttack({ attacker: sherman, target, map });
+    const expandedTurretDirections = getGameModeConfig(GameSession.gameMode).expandedTurretDirections;
+    const check = canAttack({ attacker: sherman, target, map, expandedTurretDirections });
     if (!check.ok) {
       this.battleLogI18n('battleLog.combat.cannotAttack', {
         reasonKey: check.reason ?? 'attack.reason.unknown',
@@ -11357,6 +11472,7 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       hitThresholdModifier: this.selectedGunHitThresholdModifier,
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+      expandedTurretDirections,
     }, this.rng);
     // 骰子先标"用掉了"不行 —— 动画期间得看出主炮骰仍在选中态。
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
@@ -11413,6 +11529,16 @@ export class BattleScene extends Component {
       return false;
     }
 
+    if (!isUnitInVision(map, enemy, target)) {
+      if (enemy.stats.visionType !== 'turreted') return false;
+      const targetDirection = fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
+      this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 主炮目标不在视野内，炮塔转向 ${targetDirection}`);
+      this.startEnemyTurretAim(enemy, target, () => {
+        if (this.outcome === 'ongoing' && this.phase === 'enemy') this.runNextEnemyStep();
+      });
+      return true;
+    }
+
     const splitTurretReady = this.enemySupportsSplitTurret(enemy);
     if (splitTurretReady) {
       if (!this.enemyTurretFacing.has(enemy.id) && enemy.facing !== null) {
@@ -11430,6 +11556,7 @@ export class BattleScene extends Component {
       theater: this.mission.data.theater,
       units: this.allUnits(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+      expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
     };
     const precisionPartnerIdx = !opts.adjacentOnly
       && isSplitTankKind(enemy.kind)
