@@ -299,6 +299,28 @@ describe('Hardcore twelve-direction turret fire', () => {
     expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(false);
   });
 
+  test('hardcore halfway main gun fire ignores a single flanking LoS blocker', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 1, 1);
+    const map = fieldMap(0, 1);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+
+    expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
+  });
+
+  test('hardcore halfway main gun fire is blocked by both flanking LoS blockers', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 1, 1);
+    const map = fieldMap(0, 1);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+    map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
+
+    expect(canAttack({ attacker, target, map, expandedTurretDirections: true })).toEqual({
+      ok: false,
+      reason: 'attack.reason.blocked',
+    });
+  });
+
   test('30, 90 and 150 degree incoming fire selects front, front-side and rear-side armor', () => {
     const target = tankAt('target', 0, 0, 0);
     expect(armorFaceFrom(target, { q: 1, r: 1 })).toBe('front');
@@ -335,6 +357,31 @@ describe('Hardcore twelve-direction turret fire', () => {
     expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(true);
     expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(true);
     expect(visible.has(HexMap.keyOf({ q: 3, r: 3 }))).toBe(false);
+  });
+
+  test('closed turret halfway fog ignores a single flanking blocker', () => {
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.visionRange = 4;
+    const map = fieldMap(-1, 3);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+
+    const visible = computeUnitVisibleHexes(map, unit);
+    expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(true);
+    expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(true);
+  });
+
+  test('closed turret halfway fog requires both flanking blockers to stop vision', () => {
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.visionRange = 4;
+    const map = fieldMap(-1, 3);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+    map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
+
+    const visible = computeUnitVisibleHexes(map, unit);
+    expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(false);
+    expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(false);
   });
 });
 
@@ -433,6 +480,32 @@ describe('战争迷雾玩家视野', () => {
     expect(hexDistance(sherman.pos, radius5)).toBe(5);
     expect(visible.has(HexMap.keyOf(radius4))).toBe(true);
     expect(visible.has(HexMap.keyOf(radius5))).toBe(false);
+  });
+
+  test('开舱：夹角方向半径视野忽略单侧阻挡格', () => {
+    const map = new HexMap(7, 7);
+    addRect(map, 7, 7);
+    const sherman = shermanAt(2, 2, 0, true);
+    const blocker = { q: sherman.pos.q + 1, r: sherman.pos.r };
+    const target = { q: sherman.pos.q + 1, r: sherman.pos.r + 1 };
+    map.set({ pos: blocker, terrain: 'forest' });
+
+    const visible = computePlayerVisibleHexes(map, sherman);
+    expect(visible.has(HexMap.keyOf(target))).toBe(true);
+  });
+
+  test('开舱：夹角方向半径视野需要两侧阻挡格同时存在才遮挡', () => {
+    const map = new HexMap(7, 7);
+    addRect(map, 7, 7);
+    const sherman = shermanAt(2, 2, 0, true);
+    const blockerA = { q: sherman.pos.q + 1, r: sherman.pos.r };
+    const blockerB = { q: sherman.pos.q, r: sherman.pos.r + 1 };
+    const target = { q: sherman.pos.q + 1, r: sherman.pos.r + 1 };
+    map.set({ pos: blockerA, terrain: 'forest' });
+    map.set({ pos: blockerB, terrain: 'forest' });
+
+    const visible = computePlayerVisibleHexes(map, sherman);
+    expect(visible.has(HexMap.keyOf(target))).toBe(false);
   });
 
   test('当前视野属性同时限制开舱半径与正前方直线', () => {

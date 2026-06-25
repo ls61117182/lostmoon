@@ -25,6 +25,7 @@ import {
   HexMap,
   hexDistance,
   hexLine,
+  isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
 import { Axial, CrewSlot, isFootUnit, ShermanCrew, Theater, Unit, UnitKind } from './types';
@@ -176,7 +177,12 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (isForwardOnlyGun(attacker) && attacker.facing !== fireDir) {
     return { ok: false, reason: 'attack.reason.fixedGunFacing' };
   }
-  if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
+  const hasSight = ctx.expandedTurretDirections
+    && attacker.stats.visionType === 'turreted'
+    && isDiagonalFireDirection(fireDir)
+    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir)
+    : map.hasLineOfSight(attacker.pos, target.pos);
+  if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
 

@@ -406,6 +406,35 @@ export class HexMap {
   }
 
   /**
+   * Hardcore halfway rays pass between two adjacent hexes. For each such pair,
+   * both flanking hexes must block LoS before the ray is considered blocked.
+   */
+  hasDiagonalLineOfSight(from: Axial, to: Axial, fireDirection: FireDirection): boolean {
+    const diagonalIndex = fireDirection - 6;
+    const a = diagonalIndex as Direction;
+    const b = ((diagonalIndex + 1) % 6) as Direction;
+    const rayVector = fireDirectionVector(fireDirection);
+    const steps = hexDistance(from, to) / 2;
+    let current = from;
+
+    for (let step = 0; step < steps; step++) {
+      const left = this.get(neighbor(current, a));
+      const right = this.get(neighbor(current, b));
+      if (left && right && this.lineOfSightBlockedByTile(left) && this.lineOfSightBlockedByTile(right)) {
+        return false;
+      }
+
+      current = axialAdd(current, rayVector);
+      if (step < steps - 1) {
+        const centerTile = this.get(current);
+        if (!centerTile || this.lineOfSightBlockedByTile(centerTile)) return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * 计算射击路径上穿过的树篱数量（用于 §3.4 Step 1 命中所需点数中的"树篱数"修正项）。
    *
    * **GDD §3.4 规则**：若路径上的树篱"紧挨攻击者"，则**不计入**。"紧挨攻击者"指：

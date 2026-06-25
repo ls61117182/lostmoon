@@ -1,4 +1,4 @@
-import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
+import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
 import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, Unit } from './types';
 
@@ -40,7 +40,7 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
   if (openHatch) {
     for (const tile of map.all()) {
       if (hexDistance(unit.pos, tile.pos) > visionRange) continue;
-      if (hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+      if (hasDirectionalFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
     }
   }
 
@@ -63,10 +63,13 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
       }
     }
     const rayVector = fireDirectionVector(sightFacing as FireDirection);
-    const diagonalRay = isDiagonalFireDirection(sightFacing as FireDirection);
+    const fireDirection = sightFacing as FireDirection;
+    const diagonalRay = isDiagonalFireDirection(fireDirection);
     let p = axialAdd(unit.pos, rayVector);
     while (hexDistance(unit.pos, p) <= visionRange && map.has(p)) {
-      if (diagonalRay && !hasFogLineOfSight(map, unit.pos, p)) break;
+      if (diagonalRay) {
+        if (!map.hasDiagonalLineOfSight(unit.pos, p, fireDirection)) break;
+      }
       add(p);
       const tile = map.get(p)!;
       if (map.lineOfSightBlockedByTile(tile)) break;
@@ -110,6 +113,14 @@ export function hasFogLineOfSight(map: HexMap, from: Axial, to: Axial): boolean 
     if (segmentIntersectsPointyHex(a, b, center, GEOMETRY_HEX_SIZE)) return false;
   }
   return true;
+}
+
+function hasDirectionalFogLineOfSight(map: HexMap, from: Axial, to: Axial): boolean {
+  const fireDirection = fireDirectionTo(from, to);
+  if (fireDirection !== null && isDiagonalFireDirection(fireDirection)) {
+    return map.hasDiagonalLineOfSight(from, to, fireDirection);
+  }
+  return hasFogLineOfSight(map, from, to);
 }
 
 function segmentIntersectsPointyHex(a: Point, b: Point, center: Point, size: number): boolean {
