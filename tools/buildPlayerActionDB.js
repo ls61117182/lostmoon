@@ -5,7 +5,7 @@
  *
  * 对应 GDD §3.6：
  *   - 行动表：骰面 1..6 / doubles → A 移动 / B 攻击 / C 杂项 三列动作
- *   - 骰池 §3.6.1：子阶段 × 地形基础 + 按阶段乘员 / 舱盖修正 + 上下限
+ *   - 骰池 §3.6.1：子阶段 × 地形基础 + 按阶段乘员 / 舱盖修正 + 下限 / 可选上限
  *
  * 数值策划工作流：
  *   1. Excel 打开 data/player_action_table.csv 或 data/player_dice_pool.csv 改数值
@@ -153,6 +153,11 @@ function intOrThrow(raw, labelForError) {
   return n;
 }
 
+function optionalIntOrNull(raw, labelForError) {
+  if (raw === '' || raw === undefined) return null;
+  return intOrThrow(raw, labelForError);
+}
+
 function enumOrThrow(raw, allowed, labelForError) {
   if (raw === '' || raw === undefined) return 'none';
   if (!allowed.includes(raw)) {
@@ -206,12 +211,14 @@ function parsePoolTable() {
       throw new Error(`player_dice_pool.csv 第 ${r.__row} 行：未知 modifier="${mod}"`);
     }
     seen.add(mod);
-    map[mod] = intOrThrow(r.value, `player_dice_pool.csv 第 ${r.__row} 行 ${mod}`);
+    map[mod] = mod === 'cap_max'
+      ? optionalIntOrNull(r.value, `player_dice_pool.csv 第 ${r.__row} 行 ${mod}`)
+      : intOrThrow(r.value, `player_dice_pool.csv 第 ${r.__row} 行 ${mod}`);
   }
   for (const k of REQUIRED_POOL_KEYS) {
     if (!seen.has(k)) throw new Error(`player_dice_pool.csv 缺少 modifier="${k}" 这一行`);
   }
-  if (map.cap_min > map.cap_max) {
+  if (map.cap_max !== null && map.cap_min > map.cap_max) {
     throw new Error(`player_dice_pool.csv: cap_min (${map.cap_min}) 不能大于 cap_max (${map.cap_max})`);
   }
   return map;
@@ -271,7 +278,7 @@ function build() {
   lines.push(`  misc: '${action.doubles.misc}',`);
   lines.push('};');
   lines.push('');
-  lines.push('/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 上下限。由 actionDicePool() 消费。 */');
+  lines.push('/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 下限 / 可选上限。由 actionDicePool() 消费。 */');
   lines.push("export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';");
   lines.push('');
   lines.push('export interface PlayerDicePoolConfig {');
@@ -284,7 +291,7 @@ function build() {
   lines.push('  /** 杂项阶段：车长开舱 */');
   lines.push('  miscMods: { hatch: number };');
   lines.push('  capMin: number;');
-  lines.push('  capMax: number;');
+  lines.push('  capMax: number | null;');
   lines.push('}');
   lines.push('');
   lines.push('export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {');
@@ -311,7 +318,7 @@ function build() {
   lines.push(`    hatch: ${pool.mod_misc_hatch},`);
   lines.push('  },');
   lines.push(`  capMin: ${pool.cap_min},`);
-  lines.push(`  capMax: ${pool.cap_max},`);
+  lines.push(`  capMax: ${pool.cap_max === null ? 'null' : pool.cap_max},`);
   lines.push('};');
   lines.push('');
 

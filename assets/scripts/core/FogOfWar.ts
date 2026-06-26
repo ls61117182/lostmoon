@@ -1,6 +1,6 @@
 import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, Unit } from './types';
+import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, isTankUnit, Unit } from './types';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
@@ -80,21 +80,57 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
   return visible;
 }
 
+export function hasRadioReceive(unit: Unit): boolean {
+  if (unit.destroyed || unit.stats.hasRadio === false || unit.radioDamaged === true) return false;
+  return isTankUnit(unit) ? unit.crew?.coDriver !== false : true;
+}
+
+export function hasRadioTransmit(unit: Unit): boolean {
+  if (unit.destroyed || unit.stats.hasRadio === false || unit.radioDamaged === true) return false;
+  return isTankUnit(unit) ? unit.crew?.commander !== false : true;
+}
+
+export function computeRadioSharedVisibleHexes(
+  map: HexMap,
+  receiver: Unit,
+  friendlies: readonly Unit[] = [],
+): Set<string> {
+  const visible = computeUnitVisibleHexes(map, receiver);
+  if (!hasRadioReceive(receiver)) return visible;
+  for (const friendly of friendlies) {
+    if (friendly === receiver || friendly.faction !== receiver.faction || !hasRadioTransmit(friendly)) continue;
+    for (const key of computeUnitVisibleHexes(map, friendly)) visible.add(key);
+  }
+  return visible;
+}
+
 /** Player vision includes each living ally's occupied hex, but never the ally's own vision area. */
 export function computePlayerVisibleHexes(
   map: HexMap,
   sherman: Unit,
   allies: readonly Unit[] = [],
+  radioVisionSharing = false,
 ): Set<string> {
-  const visible = computeUnitVisibleHexes(map, sherman);
+  const visible = radioVisionSharing
+    ? computeRadioSharedVisibleHexes(map, sherman, allies)
+    : computeUnitVisibleHexes(map, sherman);
   for (const ally of allies) {
     if (!ally.destroyed && map.has(ally.pos)) visible.add(HexMap.keyOf(ally.pos));
   }
   return visible;
 }
 
-export function isUnitInVision(map: HexMap, observer: Unit, target: Unit): boolean {
-  return computeUnitVisibleHexes(map, observer).has(HexMap.keyOf(target.pos));
+export function isUnitInVision(
+  map: HexMap,
+  observer: Unit,
+  target: Unit,
+  friendlies: readonly Unit[] = [],
+  radioVisionSharing = false,
+): boolean {
+  const visible = radioVisionSharing
+    ? computeRadioSharedVisibleHexes(map, observer, friendlies)
+    : computeUnitVisibleHexes(map, observer);
+  return visible.has(HexMap.keyOf(target.pos));
 }
 
 /**

@@ -351,7 +351,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
 
   for (const inf of infs) {
     if (simTarget.destroyed) break;
-    const ctx = { attacker: inf, target: simTarget, map: mission.map, effectiveRangePenetration };
+    const ctx = { attacker: inf, target: simTarget, map: mission.map, smokeHexes: mission.smokeHexes, effectiveRangePenetration };
     if (canAttack(ctx).ok) {
       const rep = rollAttack(ctx, rng);
       volleys.push({ report: rep, attackerKind: inf.kind });

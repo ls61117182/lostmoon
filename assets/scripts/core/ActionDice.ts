@@ -2,7 +2,7 @@
  * 行动阶段骰子逻辑 —— 纯 TypeScript，不依赖 Cocos。
  *
  * GDD §3.6.1：掷骰数 = **当前子阶段（移动 / 攻击 / 杂项）× 谢尔曼当前格地形** 的基础值，
- * 再叠加该阶段适用的乘员存活 / 舱盖修正，最后经配置的上下限钳制。
+ * 再叠加该阶段适用的乘员存活 / 舱盖修正，最后经配置的下限与可选上限钳制。
  * 玩家进入某一子阶段时重摇该数量的骰，再按骰面拖入对应行动槽。
  *
  * 本文件只负责薄薄一层业务胶水：
@@ -139,7 +139,8 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
     if (hatchOpenForDice) n += cfg.miscMods.hatch;
   }
 
-  return Math.max(cfg.capMin, Math.min(cfg.capMax, n));
+  const capped = cfg.capMax == null ? n : Math.min(cfg.capMax, n);
+  return Math.max(cfg.capMin, capped);
 }
 
 /** 用给定 RNG 掷 count 颗 d6，返回长度为 count 的点数数组。 */

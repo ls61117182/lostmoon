@@ -16,6 +16,10 @@
  */
 
 import { RNG } from './Dice';
+import { ATTACK_DIRECTION_RULES } from './AttackDirectionDB';
+import type { ArmorFace, AttackDirectionRule, DamageCheckType } from './AttackDirectionDB';
+import { DAMAGE_TABLE } from './DamageTableDB';
+import type { DamageTableCrewRole, DamageTableEffect, DamageTargetClass } from './DamageTableDB';
 import {
   approximateDirection,
   approximateFireDirection,
@@ -28,9 +32,9 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { Axial, CrewSlot, isFootUnit, ShermanCrew, Theater, Unit, UnitKind } from './types';
+import { Axial, CrewSlot, isFootUnit, isTankUnit, ShermanCrew, Theater, Unit, UnitKind } from './types';
 
-export type ArmorFace = 'front' | 'frontSide' | 'rearSide' | 'rear';
+export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
 
 /** 本次攻击对目标状态的粗粒度改动：无变化 / 受损系列 / 直接摧毁。
  *  保留给存档和旧 UI 分支；精细效果见 AttackReport.damageEffect。 */
@@ -51,7 +55,14 @@ export type DamageEffect =
   | 'fire'
   | 'turret'
   | 'paralyzed'
+  | 'radio'
   | 'crewCheck';
+
+export interface DamageEffectStep {
+  effect: DamageEffect;
+  crewPriority?: CrewSlot[];
+  crewSlot?: CrewSlot | null;
+}
 
 /**
  * §3.2 注释 + §3.4 Step 3 注释的"阵亡检定"结果。
@@ -85,9 +96,13 @@ export interface AttackReport {
   /** 伤害检定分段：仅在 hit && penetrated 时有值 */
   damageDie?: number;       // 1d6 伤害表掷骰
   damageEffect?: DamageEffect;
+  /** Direction-specific damage table selected by the incoming-fire angle. */
+  damageCheckType?: DamageCheckType;
+  damageEffects?: DamageEffectStep[];
   /** 展示用预掷伤害骰：只有本攻击类型可能需要伤害检定时有值；前置判定失败时仍显示为无效。 */
   stagedDamageDie?: number;
   stagedDamageEffect?: DamageEffect;
+  stagedDamageEffects?: DamageEffectStep[];
   stagedCrewCheck?: CrewDeathResult;
   /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（只会在主角受伤表中发生） */
   crewCheck?: CrewDeathResult;
@@ -104,6 +119,8 @@ export interface AttackContext {
   map: HexMap;
   theater?: Theater;
   units?: readonly Unit[];
+  /** HexMap.keyOf(pos) entries containing active smoke screens. */
+  smokeHexes?: ReadonlySet<string>;
   /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
   protagonist?: Unit;
   /** Action-specific modifier applied to the final hit threshold; precision fire uses -2. */
@@ -112,6 +129,8 @@ export interface AttackContext {
   effectiveRangePenetration?: boolean;
   /** Hardcore rule: turreted main guns may use the six halfway firing rays. */
   expandedTurretDirections?: boolean;
+  /** Hardcore rule: Step 3 damage-table selection may depend on incoming-fire direction. */
+  directionalDamageCheck?: boolean;
 }
 
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
@@ -121,7 +140,7 @@ export function effectivePenetration(attacker: Unit, target: Unit, enabled = fal
   return Math.max(0, attacker.stats.penetration - rangePenalty);
 }
 
-const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set([
+const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
   'type95',
   'type97',
   'at_gun',
@@ -223,7 +242,7 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const targetTile = map.get(target.pos);
   const building = targetTile?.hasBuilding ? 1 : 0;
   const size = target.stats.size;
-  const smoke = target.smoked ? 1 : 0;
+  const smoke = ctx.smokeHexes?.has(HexMap.keyOf(target.pos)) || target.smoked ? 1 : 0;
   const concealed = target.hidden && !isInfantryAttacker(attacker) ? 2 : 0;
   const pacific = isPacificCombat(ctx);
   const trees = pacific ? countPacificTreesAlong(ctx) : 0;
@@ -295,16 +314,27 @@ function isProtagonistTarget(ctx: AttackContext): boolean {
  *  的共线判定一致：同射线时优先 `directionTo`，避免仅用 `approximateDirection` 与真实轴线
  *  在个别格对上出现偏差。
  */
-export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
-  if (target.facing === null) return 'front'; // 无朝向单位按正面吃伤
+export function incomingAngleFrom(target: Unit, attackerPos: Axial): number {
+  if (target.facing === null) return 0;
   const bearing = fireDirectionTo(target.pos, attackerPos)
     ?? approximateFireDirection(target.pos, attackerPos);
   const facingStep = target.facing * 2;
   const diff = (fireDirectionStep(bearing) - facingStep + 12) % 12;
-  if (diff === 0 || diff === 1 || diff === 11) return 'front';
-  if (diff === 2 || diff === 3 || diff === 9 || diff === 10) return 'frontSide';
-  if (diff === 4 || diff === 5 || diff === 7 || diff === 8) return 'rearSide';
-  return 'rear';
+  const clockwiseAngle = diff * 30;
+  return clockwiseAngle <= 180 ? clockwiseAngle : clockwiseAngle - 360;
+}
+
+export function attackDirectionRuleFrom(target: Unit, attackerPos: Axial): AttackDirectionRule {
+  const angle = incomingAngleFrom(target, attackerPos);
+  return ATTACK_DIRECTION_RULES[angle] ?? ATTACK_DIRECTION_RULES[0];
+}
+
+export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
+  return attackDirectionRuleFrom(target, attackerPos).armorFace;
+}
+
+export function damageCheckTypeFrom(target: Unit, attackerPos: Axial): DamageCheckType {
+  return attackDirectionRuleFrom(target, attackerPos).damageCheckType;
 }
 
 export function armorValue(target: Unit, face: ArmorFace): number {
@@ -314,6 +344,72 @@ export function armorValue(target: Unit, face: ArmorFace): number {
     case 'rearSide':  return target.stats.armorRearSide;
     case 'rear':      return target.stats.armorRear;
   }
+}
+
+function damageTargetClassFor(target: Unit, protagonistTarget: boolean): DamageTargetClass | null {
+  if (protagonistTarget) return 'protagonist';
+  if (!isTankUnit(target)) return null;
+  return target.faction === 'allied' ? 'us_tank' : 'german_tank';
+}
+
+function crewRoleSlot(role: DamageTableCrewRole): CrewSlot {
+  switch (role) {
+    case 'commander': return 1;
+    case 'loader': return 2;
+    case 'gunner': return 3;
+    case 'driver': return 4;
+    case 'coDriver': return 5;
+  }
+}
+
+function isEffectApplicable(target: Unit, effect: DamageTableEffect): boolean {
+  switch (effect.kind) {
+    case 'destroyed':
+    case 'fire':
+      return true;
+    case 'turret':
+      return !target.turretDamaged;
+    case 'paralyzed':
+      return !target.paralyzed;
+    case 'radio':
+      return target.stats.hasRadio !== false && target.radioDamaged !== true;
+    case 'crew':
+      return !!effect.crew?.some(role => !target.crew || isCrewAlive(target.crew, crewRoleSlot(role)));
+  }
+}
+
+function damageEffectStepFrom(target: Unit, effect: DamageTableEffect): DamageEffectStep {
+  return {
+    effect: effect.kind === 'crew' ? 'crewCheck' : effect.kind,
+    ...(effect.kind === 'crew'
+      ? (() => {
+        const crewPriority = (effect.crew ?? []).map(crewRoleSlot);
+        return { crewPriority, crewSlot: firstAliveCrewSlot(target, crewPriority) };
+      })()
+      : {}),
+  };
+}
+
+function resolveDamageTableEffects(
+  target: Unit,
+  targetClass: DamageTargetClass,
+  damageCheckType: DamageCheckType,
+  die: number,
+): DamageEffectStep[] {
+  const entry = DAMAGE_TABLE[targetClass][damageCheckType][die];
+  for (const group of entry.groups) {
+    const applicable = group.filter(effect => isEffectApplicable(target, effect));
+    if (applicable.length > 0) return applicable.map(effect => damageEffectStepFrom(target, effect));
+  }
+  return [];
+}
+
+function primaryDamageEffect(effects: readonly DamageEffectStep[]): DamageEffect | undefined {
+  const priority: DamageEffect[] = ['destroyed', 'crewCheck', 'turret', 'paralyzed', 'radio', 'fire', 'damaged'];
+  for (const effect of priority) {
+    if (effects.some(step => step.effect === effect)) return effect;
+  }
+  return effects[0]?.effect;
 }
 
 /**
@@ -332,7 +428,11 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const hit = roll >= threshold;
   const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
-  const face = armorFaceFrom(target, attacker.pos);
+  const directionRule = attackDirectionRuleFrom(target, attacker.pos);
+  const face = directionRule.armorFace;
+  const damageCheckType = ctx.directionalDamageCheck ? directionRule.damageCheckType : undefined;
+  const damageTable = damageCheckType ?? 'front';
+  const targetClass = damageCheckType ? damageTargetClassFor(target, protagonistTarget) : null;
   const armor = armorValue(target, face);
   const pen = effectivePenetration(attacker, target, ctx.effectiveRangePenetration);
 
@@ -341,13 +441,22 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const penDie = penDice.reduce((a, b) => a + b, 0);
   const penThreshold = armor - pen;
   const penetrated = penDie >= penThreshold;
-  const damagePossible = !(pacific && !protagonistTarget);
+  const directDestroyOnBurningTank = !!damageCheckType
+    && !!targetClass
+    && !protagonistTarget
+    && (target.fireLevel ?? 0) > 0;
+  const damagePossible = !directDestroyOnBurningTank && (!!targetClass || !(pacific && !protagonistTarget));
   const stagedDamageDie = damagePossible ? rng.d6() : undefined;
-  const stagedDamageEffect = stagedDamageDie !== undefined
-    ? (pacific && protagonistTarget
-      ? resolvePacificShermanDamageEffect(stagedDamageDie)
-      : resolveDamageEffect(target, stagedDamageDie, protagonistTarget))
+  const stagedDamageEffects = stagedDamageDie !== undefined && targetClass
+    ? resolveDamageTableEffects(target, targetClass, damageTable, stagedDamageDie)
     : undefined;
+  const stagedDamageEffect = stagedDamageEffects
+    ? primaryDamageEffect(stagedDamageEffects)
+    : (stagedDamageDie !== undefined
+      ? (pacific && protagonistTarget
+        ? resolvePacificShermanDamageEffect(stagedDamageDie, damageTable)
+        : resolveDamageEffect(target, stagedDamageDie, protagonistTarget, damageTable))
+      : undefined);
   let stagedCrewCheck: CrewDeathResult | undefined;
   if (protagonistTarget && damagePossible) {
     const crewTarget = commanderKilledByHitDoubles && target.crew
@@ -360,8 +469,9 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hit: false,
       armorFace: face, armor, penetration: pen,
+      damageCheckType,
       penDie, penDice, penThreshold, penetrated,
-      stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
+      stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles: false,
       protagonistTarget,
       statusChange: 'none',
@@ -373,22 +483,25 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       dice: [d1, d2], roll, threshold,
       hit: true,
       armorFace: face, armor, penetration: pen,
+      damageCheckType,
       penDie, penDice, penThreshold, penetrated,
-      stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
+      stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
       protagonistTarget,
       statusChange: 'none',
     };
   }
 
-  if (pacific && !protagonistTarget) {
+  if (directDestroyOnBurningTank || (pacific && !protagonistTarget && !targetClass)) {
     return {
       dice: [d1, d2], roll, threshold,
       hit: true,
       armorFace: face, armor, penetration: pen,
+      damageCheckType,
       penDie, penDice, penThreshold, penetrated,
       damageEffect: 'destroyed',
-      stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
+      damageEffects: [{ effect: 'destroyed' }],
+      stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
       protagonistTarget,
       statusChange: 'destroyed',
@@ -398,6 +511,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   // 第三段：伤害检定（§3.4 Step 3；Pacific 主角使用 M4 Damage 表）
   const damageDie = stagedDamageDie!;
   const damageEffect = stagedDamageEffect!;
+  const damageEffects = stagedDamageEffects ?? [{ effect: damageEffect }];
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
   // 阵亡检定：只对主角（crewCheck）再掷一次，决定哪位乘员死
@@ -407,9 +521,10 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     dice: [d1, d2], roll, threshold,
     hit: true,
     armorFace: face, armor, penetration: pen,
+    damageCheckType,
     penDie, penDice, penThreshold, penetrated,
-    damageDie, damageEffect,
-    stagedDamageDie, stagedDamageEffect, stagedCrewCheck,
+    damageDie, damageEffect, damageEffects,
+    stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
     crewCheck,
     commanderKilledByHitDoubles,
     protagonistTarget,
@@ -417,7 +532,53 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   };
 }
 
-export function resolvePacificShermanDamageEffect(die: number): DamageEffect {
+export function resolvePacificShermanDamageEffect(die: number, damageCheckType: DamageCheckType = 'front'): DamageEffect {
+  switch (damageCheckType) {
+    case 'front':
+    case 'right':
+    case 'left':
+    case 'rear':
+      return resolvePacificShermanDamageEffectByDie(die);
+  }
+}
+
+/**
+ * §3.4 Step 3 伤害结果表。两条路线（主角 / 其他坦克）；
+ * 步兵等单位按"其他坦克"路线处理（MVP 下不会成为被击穿的目标）。
+ */
+export function resolveDamageEffect(
+  target: Unit,
+  die: number,
+  protagonistTarget = target.kind === 'sherman',
+  damageCheckType: DamageCheckType = 'front',
+): DamageEffect {
+  if (protagonistTarget) {
+    switch (damageCheckType) {
+      case 'front':
+      case 'right':
+      case 'left':
+      case 'rear':
+        return resolveShermanDamageEffectByDie(die);
+    }
+  }
+  // 其他坦克：5/6 直接摧毁；1-4 受损，已受损则升级为摧毁
+  if (die >= 5) return 'destroyed';
+  return target.damaged ? 'destroyed' : 'damaged';
+}
+
+function resolveShermanDamageEffectByDie(die: number): DamageEffect {
+  switch (die) {
+    case 1: return 'destroyed';
+    case 2: return 'crewCheck';
+    case 3:
+    case 4: return 'fire';
+    case 5: return 'turret';
+    case 6:
+    default: return 'paralyzed';
+  }
+}
+
+function resolvePacificShermanDamageEffectByDie(die: number): DamageEffect {
   switch (die) {
     case 1: return 'crewCheck';
     case 2:
@@ -426,27 +587,6 @@ export function resolvePacificShermanDamageEffect(die: number): DamageEffect {
     case 5: return 'turret';
     default: return 'paralyzed';
   }
-}
-
-/**
- * §3.4 Step 3 伤害结果表。两条路线（主角 / 其他坦克）；
- * 步兵等单位按"其他坦克"路线处理（MVP 下不会成为被击穿的目标）。
- */
-export function resolveDamageEffect(target: Unit, die: number, protagonistTarget = target.kind === 'sherman'): DamageEffect {
-  if (protagonistTarget) {
-    switch (die) {
-      case 1: return 'destroyed';
-      case 2: return 'crewCheck';
-      case 3:
-      case 4: return 'fire';
-      case 5: return 'turret';
-      case 6:
-      default: return 'paralyzed';
-    }
-  }
-  // 其他坦克：5/6 直接摧毁；1-4 受损，已受损则升级为摧毁
-  if (die >= 5) return 'destroyed';
-  return target.damaged ? 'destroyed' : 'damaged';
 }
 
 /**
@@ -509,6 +649,47 @@ export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
   }
 }
 
+function firstAliveCrewSlot(target: Unit, priority: readonly CrewSlot[] | undefined): CrewSlot | null {
+  if (!priority || priority.length === 0) return null;
+  for (const slot of priority) {
+    if (!target.crew || isCrewAlive(target.crew, slot)) return slot;
+  }
+  return null;
+}
+
+function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonistTarget: boolean): void {
+  switch (step.effect) {
+    case 'destroyed':
+      target.destroyed = true;
+      break;
+    case 'damaged':
+      if (!protagonistTarget) target.damaged = true;
+      break;
+    case 'fire':
+      target.fireLevel = (target.fireLevel ?? 0) + 1;
+      break;
+    case 'turret':
+      target.turretDamaged = true;
+      break;
+    case 'paralyzed':
+      target.paralyzed = true;
+      break;
+    case 'radio':
+      target.radioDamaged = true;
+      break;
+    case 'crewCheck': {
+      if (step.crewPriority?.length) {
+        const slot = step.crewSlot ?? firstAliveCrewSlot(target, step.crewPriority);
+        if (slot !== null && target.crew) {
+          killCrewSlot(target.crew, slot);
+          if (slot === 1 && protagonistTarget) target.hatchOpen = false;
+        }
+      }
+      break;
+    }
+  }
+}
+
 /**
  * 把 rollAttack 得出的 report 真正写入 target。
  * 未命中 / 未击穿 → 不改任何字段（跳弹）。
@@ -527,6 +708,19 @@ export function applyAttack(target: Unit, report: AttackReport): void {
   const effect = report.damageEffect;
   const protagonistTarget = report.protagonistTarget ?? target.kind === 'sherman';
   const markHullDamaged = !protagonistTarget;
+  if (report.damageEffects?.length) {
+    for (const step of report.damageEffects) {
+      if (step.effect === 'crewCheck' && !step.crewPriority?.length) {
+        if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
+          killCrewSlot(target.crew, report.crewCheck.slot);
+          if (report.crewCheck.slot === 1 && protagonistTarget) target.hatchOpen = false;
+        }
+        continue;
+      }
+      applyDamageEffectStep(target, step, protagonistTarget);
+    }
+    return;
+  }
   // 历史分支（未带 damageEffect 的旧 report）：按 statusChange 走二段式
   if (!effect) {
     if (report.statusChange === 'destroyed') target.destroyed = true;
@@ -683,7 +877,8 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const hb = hitBreakdown(ctx);
   const hitProb = probHit2d6(hb.threshold);
 
-  const face = armorFaceFrom(ctx.target, ctx.attacker.pos);
+  const directionRule = attackDirectionRuleFrom(ctx.target, ctx.attacker.pos);
+  const face = directionRule.armorFace;
   const armor = armorValue(ctx.target, face);
   const pen = effectivePenetration(ctx.attacker, ctx.target, ctx.effectiveRangePenetration);
   const penThreshold = armor - pen;

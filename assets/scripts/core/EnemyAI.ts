@@ -64,7 +64,7 @@ export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
     case 'japanese_infantry': return 'japanese_infantry';
     case 'heavy_artillery': return 'heavy_artillery';
   }
-  if (enemy.damaged) return 'damaged';
+  if (enemy.damaged || (enemy.fireLevel ?? 0) > 0) return 'damaged';
   switch (terrain) {
     case 'road': return 'road';
     case 'mud':  return 'mud';
@@ -263,15 +263,20 @@ export function canExecuteAction(
   sherman: Unit,
   map: HexMap,
   occupied: Set<string>,
+  smokeHexes?: ReadonlySet<string>,
 ): boolean {
   if (enemy.destroyed) return false;
   const currentTile = map.get(enemy.pos);
   switch (action) {
     case 'none':   return false;
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
-    case 'turn':   return true;
-    case 'smoke':  return !enemy.smoked && !tileForbidsSmokeOrConcealment(currentTile);
-    case 'repair': return !!enemy.damaged;
+    case 'turn':   return !enemy.paralyzed;
+    case 'smoke':  return !enemy.smoked && !smokeHexes?.has(HexMap.keyOf(enemy.pos)) && !tileForbidsSmokeOrConcealment(currentTile);
+    case 'repair': return !!enemy.damaged
+      || !!enemy.paralyzed
+      || !!enemy.turretDamaged
+      || !!enemy.radioDamaged
+      || (enemy.fireLevel ?? 0) > 0;
     case 'conceal': return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
     case 'shoot_adjacent': return enemy.facing !== null && hexDistance(enemy.pos, sherman.pos) === 1;
     case 'infantry_move':

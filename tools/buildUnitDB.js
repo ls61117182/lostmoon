@@ -17,11 +17,12 @@ const CSV_PATH = path.join(ROOT, 'data', 'units.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 
 const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice', 'visionRange'];
+const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'visionType'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
 const FACTIONS = ['allied', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
-const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, 'notes'];
+const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, 'notes'];
 const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck', 'infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
 
 function readCsvSmart(filePath) {
@@ -141,6 +142,13 @@ function jsString(s) {
   return JSON.stringify(s ?? '');
 }
 
+function boolOrThrow(rec, field) {
+  const raw = String(rec[field] ?? '').trim().toLowerCase();
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'y') return true;
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'n') return false;
+  throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: field ${field}="${rec[field]}" is not a boolean`);
+}
+
 function build() {
   const rows = readCsvRowsSmart(CSV_PATH, {
     toolName: 'buildUnitDB',
@@ -202,6 +210,9 @@ function build() {
       `usCasualtyDice: ${r.usCasualtyDice}, ` +
       `visionRange: ${r.visionRange},`
     );
+    for (const f of BOOL_FIELDS) {
+      lines.push(`    ${f}: ${boolOrThrow(r, f)},`);
+    }
     for (const f of STRING_FIELDS) {
       lines.push(`    ${f}: ${jsString(r[f])},`);
     }

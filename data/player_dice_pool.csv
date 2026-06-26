@@ -40,4 +40,4 @@ mod_attack_loader,1,攻击：装填手存活则加骰
 mod_attack_hatch,1,攻击：经典模式车长开舱则加骰；硬核模式车长存活即加骰
 mod_misc_hatch,1,杂项：车长开舱则加骰
 cap_min,1,掷骰数下限
-cap_max,5,掷骰数上限
+cap_max,,掷骰数上限（留空表示无限制）

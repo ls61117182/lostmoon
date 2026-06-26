@@ -1,8 +1,10 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
 import type { Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind } from './types';
+import { isTankKind } from './types';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
+import { HexMap } from './HexGrid';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = 'lone_sherman_save_v1';
@@ -37,6 +39,7 @@ interface UnitSnapshot {
   loaded?: boolean;
   hatchOpen?: boolean;
   visionRange?: number;
+  radioDamaged?: boolean;
   crew?: ShermanCrew;
 }
 
@@ -53,6 +56,10 @@ export interface SaveData {
   sherman: UnitSnapshot;
   allies?: UnitSnapshot[];
   enemies: UnitSnapshot[];
+  /** v5: active smoke screen hexes, stored as HexMap.keyOf(pos). */
+  smokeHexes?: string[];
+  /** v5: side that deployed each active smoke hex, for phase-based clearing. */
+  smokeHexOwners?: Record<string, 'friendly' | 'enemy'>;
   /** v3：杂项阶段是否已结束 */
   miscDone?: boolean;
   /** v3：玩家回合子状态 */
@@ -101,9 +108,16 @@ function captureUnit(u: Unit): UnitSnapshot {
     loaded: u.loaded,
     hatchOpen: u.hatchOpen,
     visionRange: u.visionRange,
+    radioDamaged: u.radioDamaged,
     crew: u.crew ? { ...u.crew } : undefined,
     smoked: u.smoked,
   };
+}
+
+function captureSmokeHexOwners(mission: LoadedMission): Record<string, 'friendly' | 'enemy'> {
+  const owners: Record<string, 'friendly' | 'enemy'> = {};
+  for (const [key, owner] of mission.smokeHexOwners) owners[key] = owner;
+  return owners;
 }
 
 function savedTurretFacing(value: unknown, fallback: Direction | null): FireDirection | undefined {
@@ -125,6 +139,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   if (s.loaded !== undefined) live.loaded = s.loaded;
   live.hatchOpen = live.kind === 'sherman' && s.hatchOpen === true;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
+  if (s.radioDamaged !== undefined) live.radioDamaged = s.radioDamaged;
   if (s.crew) live.crew = { ...s.crew };
 }
 
@@ -138,6 +153,15 @@ function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMissi
     facing: s.facing,
     stats,
   };
+  if (isTankKind(s.kind)) {
+    unit.crew = {
+      commander: true,
+      loader: true,
+      gunner: true,
+      driver: true,
+      coDriver: true,
+    };
+  }
   applyUnitSnapshot(unit, s);
   return unit;
 }
@@ -167,6 +191,8 @@ export function captureSave(p: SnapshotParams): SaveData {
     },
     allies: p.mission.allies.map(captureUnit),
     enemies: p.mission.enemies.map(captureUnit),
+    smokeHexes: Array.from(p.mission.smokeHexes ?? []),
+    smokeHexOwners: captureSmokeHexOwners(p.mission),
     shermanEvacuated: p.mission.shermanEvacuated ?? false,
     truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
     usCasualties: p.mission.usCasualties ?? 0,
@@ -273,6 +299,32 @@ export function applySave(
     mission.shermanEvacuated = save.shermanEvacuated ?? false;
     mission.truckEscapeDefeat = save.truckEscapeDefeat ?? false;
     mission.usCasualties = save.usCasualties ?? 0;
+  }
+
+  mission.smokeHexes.clear();
+  mission.smokeHexOwners.clear();
+  for (const key of save.smokeHexes ?? []) {
+    mission.smokeHexes.add(key);
+    mission.smokeHexOwners.set(key, save.smokeHexOwners?.[key] ?? 'friendly');
+  }
+  if (!save.smokeHexes) {
+    for (const u of [mission.sherman, ...mission.allies]) {
+      if (u.smoked) {
+        const key = HexMap.keyOf(u.pos);
+        mission.smokeHexes.add(key);
+        mission.smokeHexOwners.set(key, 'friendly');
+      }
+    }
+    for (const u of mission.enemies) {
+      if (u.smoked) {
+        const key = HexMap.keyOf(u.pos);
+        mission.smokeHexes.add(key);
+        mission.smokeHexOwners.set(key, 'enemy');
+      }
+    }
+  }
+  for (const u of [mission.sherman, ...mission.allies, ...mission.enemies]) {
+    u.smoked = false;
   }
 
   return {

@@ -14,6 +14,12 @@ export interface GameModeConfig {
   effectiveRangePenetration: boolean;
   /** Turrets/main guns may use the six between-axis firing rays. */
   expandedTurretDirections: boolean;
+  /** Damage table selection may depend on incoming-fire direction. */
+  directionalDamageCheck: boolean;
+  /** Units with intact radios may receive vision from friendly radio transmitters. */
+  radioVisionSharing: boolean;
+  /** AI tanks skip immediate opposite hull movement within the same action sequence. */
+  aiReverseMoveFilter: boolean;
   /** Reserved profile ids for mode-specific rule data added later. */
   crewBonusProfile: 'standard';
   enemyActionTableProfile: 'standard';
@@ -30,6 +36,9 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     miscCloseHatchWithDoubles: false,
     effectiveRangePenetration: false,
     expandedTurretDirections: false,
+    directionalDamageCheck: false,
+    radioVisionSharing: false,
+    aiReverseMoveFilter: false,
     crewBonusProfile: 'standard',
     enemyActionTableProfile: 'standard',
   },
@@ -41,6 +50,9 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     miscCloseHatchWithDoubles: true,
     effectiveRangePenetration: true,
     expandedTurretDirections: true,
+    directionalDamageCheck: true,
+    radioVisionSharing: true,
+    aiReverseMoveFilter: true,
     crewBonusProfile: 'standard',
     enemyActionTableProfile: 'standard',
   },

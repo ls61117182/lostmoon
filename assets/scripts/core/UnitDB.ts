@@ -11,6 +11,7 @@ const DB: Record<UnitKind, UnitStats> = {
   sherman: { // 谢尔曼 M4 - 玩家方坦克；Pacific profile 由 UnitDB 覆盖为 4/11/10/9/8/AP2
     faction: "allied",
     size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 2, effectiveRange: 2, usCasualtyDice: 0, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
@@ -19,6 +20,7 @@ const DB: Record<UnitKind, UnitStats> = {
   tiger: { // 虎式 - 重型敌方坦克
     faction: "german",
     size: 3, armorFront: 12, armorFrontSide: 11, armorRearSide: 10, armorRear: 9, penetration: 3, effectiveRange: 4, usCasualtyDice: 0, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
@@ -27,6 +29,7 @@ const DB: Record<UnitKind, UnitStats> = {
   panzer4: { // 四号坦克 - 中坚敌方坦克
     faction: "german",
     size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 2, effectiveRange: 2, usCasualtyDice: 0, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
@@ -35,6 +38,7 @@ const DB: Record<UnitKind, UnitStats> = {
   panzer3: { // 三号坦克 - 次级敌方坦克
     faction: "german",
     size: 5, armorFront: 10, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, penetration: 1, effectiveRange: 2, usCasualtyDice: 0, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
@@ -43,6 +47,7 @@ const DB: Record<UnitKind, UnitStats> = {
   truck: { // 卡车 - 占位 - 后续按特殊规则结算
     faction: "german",
     size: 3, armorFront: 2, armorFrontSide: 2, armorRearSide: 2, armorRear: 2, penetration: 0, effectiveRange: 0, usCasualtyDice: 0, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "",
     visionType: "fixed",
@@ -51,6 +56,7 @@ const DB: Record<UnitKind, UnitStats> = {
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
     size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 0, visionRange: 2,
+    hasRadio: true,
     moveSound: "",
     attackSound: "",
     visionType: "infantry",
@@ -59,6 +65,7 @@ const DB: Record<UnitKind, UnitStats> = {
   officer: { // 军官 - 任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
     faction: "german",
     size: 0, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 1, effectiveRange: 2, usCasualtyDice: 0, visionRange: 2,
+    hasRadio: true,
     moveSound: "",
     attackSound: "",
     visionType: "infantry",
@@ -67,6 +74,7 @@ const DB: Record<UnitKind, UnitStats> = {
   type95: { // 九五式轻战车 - Pacific D11: Type 95 Ha-Go
     faction: "japanese",
     size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 0, effectiveRange: 2, usCasualtyDice: 1, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
@@ -75,6 +83,7 @@ const DB: Record<UnitKind, UnitStats> = {
   type97: { // 九七式中战车 - Pacific: Type 97 Chi-Ha
     faction: "japanese",
     size: 4, armorFront: 9, armorFrontSide: 8, armorRearSide: 8, armorRear: 7, penetration: 1, effectiveRange: 2, usCasualtyDice: 1, visionRange: 4,
+    hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
@@ -83,6 +92,7 @@ const DB: Record<UnitKind, UnitStats> = {
   at_gun: { // 反坦克炮 - Pacific: AT Gun
     faction: "japanese",
     size: 5, armorFront: 8, armorFrontSide: 8, armorRearSide: 7, armorRear: 6, penetration: 2, effectiveRange: 2, usCasualtyDice: 1, visionRange: 4,
+    hasRadio: true,
     moveSound: "",
     attackSound: "audio/cannon_fire",
     visionType: "fixed",
@@ -91,6 +101,7 @@ const DB: Record<UnitKind, UnitStats> = {
   japanese_infantry: { // 日本步兵 - Pacific: Japanese Infantry
     faction: "japanese",
     size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 1, visionRange: 2,
+    hasRadio: true,
     moveSound: "",
     attackSound: "",
     visionType: "infantry",
@@ -99,6 +110,7 @@ const DB: Record<UnitKind, UnitStats> = {
   heavy_artillery: { // 重炮 - Pacific: Heavy Artillery
     faction: "japanese",
     size: 4, armorFront: 10, armorFrontSide: 9, armorRearSide: 7, armorRear: 6, penetration: 4, effectiveRange: 4, usCasualtyDice: 2, visionRange: 4,
+    hasRadio: true,
     moveSound: "",
     attackSound: "audio/cannon_fire",
     visionType: "fixed",

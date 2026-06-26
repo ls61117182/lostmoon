@@ -138,6 +138,19 @@ export function isFootUnit(u: { kind: UnitKind }): boolean {
   return isFootKind(u.kind);
 }
 
+export function isTankKind(kind: UnitKind): boolean {
+  return kind === 'sherman'
+    || kind === 'tiger'
+    || kind === 'panzer4'
+    || kind === 'panzer3'
+    || kind === 'type95'
+    || kind === 'type97';
+}
+
+export function isTankUnit(u: { kind: UnitKind }): boolean {
+  return isTankKind(u.kind);
+}
+
 export type VisionType = 'turreted' | 'fixed' | 'infantry';
 
 export interface UnitStats {
@@ -155,6 +168,7 @@ export interface UnitStats {
   infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
   visionType: VisionType;   // 炮塔视野 / 车体正面视野 / 步兵环形视野
   visionRange: number;      // 六角格距离；步兵类型固定使用周围 2 格
+  hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
 }
 
 /** 玩家车辆默认当前视野范围；后续天气等系统可修改 Unit.visionRange。 */
@@ -181,7 +195,8 @@ export interface Unit {
   loaded?: boolean;         // 主炮已装填
   hatchOpen?: boolean;      // 车长打开舱盖
   visionRange?: number;     // 当前视野范围（六角距离）；玩家车辆初始 4，可受天气等效果修改
-  crew?: ShermanCrew;       // 仅谢尔曼
+  radioDamaged?: boolean;   // 无线电损坏；缺省 false 即完好
+  crew?: ShermanCrew;       // 坦克单位五乘员；非坦克无乘员
 }
 
 // ---------- 谢尔曼乘员 ----------

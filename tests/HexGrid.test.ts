@@ -26,11 +26,16 @@ import {
 } from '../assets/scripts/core/HexGrid';
 import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
-import { computePlayerVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight } from '../assets/scripts/core/FogOfWar';
+import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
-import { armorFaceFrom, canAttack, effectivePenetration, hitThreshold, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
+import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, effectivePenetration, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
 import { RNG } from '../assets/scripts/core/Dice';
+
+const rngFrom = (...values) => {
+  const queue = [...values];
+  return { d6: () => queue.shift() ?? 1 };
+};
 
 describe('HexGrid 基础运算', () => {
   test('距离：原点到自身 = 0', () => {
@@ -192,6 +197,7 @@ describe('Effective range penetration', () => {
       infantryTankCoordination: 0,
       visionType: 'turreted',
       visionRange: 4,
+      hasRadio: true,
     },
   });
 
@@ -267,6 +273,7 @@ describe('Hardcore twelve-direction turret fire', () => {
       infantryTankCoordination: 0,
       visionType: 'turreted',
       visionRange: 6,
+      hasRadio: true,
     },
   });
 
@@ -321,14 +328,119 @@ describe('Hardcore twelve-direction turret fire', () => {
     });
   });
 
-  test('30, 90 and 150 degree incoming fire selects front, front-side and rear-side armor', () => {
+  test('incoming-fire angles use the CSV armor and damage-check direction table', () => {
     const target = tankAt('target', 0, 0, 0);
-    expect(armorFaceFrom(target, { q: 1, r: 1 })).toBe('front');
-    expect(armorFaceFrom(target, { q: -1, r: 2 })).toBe('frontSide');
-    expect(armorFaceFrom(target, { q: -2, r: 1 })).toBe('rearSide');
-    expect(armorFaceFrom(target, { q: 2, r: -1 })).toBe('front');
-    expect(armorFaceFrom(target, { q: 1, r: -2 })).toBe('frontSide');
-    expect(armorFaceFrom(target, { q: -1, r: -1 })).toBe('rearSide');
+    const cases = [
+      { pos: { q: 1, r: 0 }, angle: 0, armor: 'front', damage: 'front' },
+      { pos: { q: 1, r: 1 }, angle: 30, armor: 'front', damage: 'front' },
+      { pos: { q: 2, r: -1 }, angle: -30, armor: 'front', damage: 'front' },
+      { pos: { q: 0, r: 1 }, angle: 60, armor: 'frontSide', damage: 'right' },
+      { pos: { q: 1, r: -1 }, angle: -60, armor: 'frontSide', damage: 'left' },
+      { pos: { q: -1, r: 2 }, angle: 90, armor: 'frontSide', damage: 'right' },
+      { pos: { q: 1, r: -2 }, angle: -90, armor: 'rearSide', damage: 'left' },
+      { pos: { q: -1, r: 1 }, angle: 120, armor: 'rearSide', damage: 'left' },
+      { pos: { q: 0, r: -1 }, angle: -120, armor: 'rearSide', damage: 'right' },
+      { pos: { q: -2, r: 1 }, angle: 150, armor: 'rear', damage: 'rear' },
+      { pos: { q: -1, r: -1 }, angle: -150, armor: 'rear', damage: 'rear' },
+      { pos: { q: -1, r: 0 }, angle: 180, armor: 'rear', damage: 'rear' },
+    ] as const;
+    for (const c of cases) {
+      expect(incomingAngleFrom(target, c.pos)).toBe(c.angle);
+      const rule = attackDirectionRuleFrom(target, c.pos);
+      expect(rule.armorFace).toBe(c.armor);
+      expect(rule.damageCheckType).toBe(c.damage);
+      expect(armorFaceFrom(target, c.pos)).toBe(c.armor);
+    }
+  });
+
+  test('attack reports use direction-specific damage tables only when hardcore enables them', () => {
+    const attacker = tankAt('attacker', 0, 1);
+    const target = tankAt('target', 0, 0, 0);
+    const map = fieldMap(0, 1);
+    const classicReport = rollAttack({ attacker, target, map, expandedTurretDirections: true }, new RNG(12345));
+    expect(classicReport.damageCheckType).toBeUndefined();
+    const hardcoreReport = rollAttack({
+      attacker,
+      target,
+      map,
+      expandedTurretDirections: true,
+      directionalDamageCheck: true,
+    }, new RNG(12345));
+    expect(hardcoreReport.damageCheckType).toBe('right');
+  });
+
+  test('hardcore table applies combined fire and crew effects to non-protagonist tanks', () => {
+    const attacker = tankAt('attacker', 1, -1);
+    const target = tankAt('target', 0, 0, 0);
+    target.crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
+    const map = fieldMap(-1, 1);
+    const rng = rngFrom(6, 6, 6, 6, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      expandedTurretDirections: true,
+      protagonist: attacker,
+    }, rng);
+    applyAttack(target, report);
+
+    expect(report.damageCheckType).toBe('left');
+    expect(report.damageEffects?.map(e => e.effect)).toEqual(['fire', 'crewCheck']);
+    expect(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot).toBe(3);
+    expect(target.fireLevel).toBe(1);
+    expect(target.crew!.gunner).toBe(false);
+    expect(target.damaged).toBeFalsy();
+  });
+
+  test('hardcore burning non-protagonist tank is destroyed by the next penetration', () => {
+    const attacker = tankAt('attacker', 0, -1);
+    const target = tankAt('target', 0, 0, 0);
+    target.fireLevel = 1;
+    const map = fieldMap(-1, 1);
+    const rng = { d6: () => 6 } as unknown as RNG;
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      expandedTurretDirections: true,
+      protagonist: attacker,
+    }, rng);
+    applyAttack(target, report);
+
+    expect(report.damageEffect).toBe('destroyed');
+    expect(report.damageDie).toBeUndefined();
+    expect(target.destroyed).toBe(true);
+  });
+
+  test('hardcore protagonist rear damage prioritizes radio before immobilization and fire', () => {
+    const attacker = tankAt('attacker', -1, 0);
+    const target = tankAt('target', 0, 0, 0);
+    target.kind = 'sherman';
+    target.faction = 'allied';
+    target.crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
+    const map = fieldMap(-1, 1);
+    const ctx = {
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      expandedTurretDirections: true,
+      protagonist: target,
+    };
+
+    const reportRadio = rollAttack(ctx, rngFrom(6, 6, 6, 6, 4));
+    applyAttack(target, reportRadio);
+    expect(reportRadio.damageCheckType).toBe('rear');
+    expect(target.radioDamaged).toBe(true);
+    expect(target.paralyzed).toBeFalsy();
+    expect(target.fireLevel ?? 0).toBe(0);
+
+    const reportParalyzed = rollAttack(ctx, rngFrom(6, 6, 6, 6, 4));
+    applyAttack(target, reportParalyzed);
+    expect(target.paralyzed).toBe(true);
+    expect(target.fireLevel ?? 0).toBe(0);
   });
 
   test('halfway ray counts both bordering hedge paths, divides by two and floors', () => {
@@ -399,6 +511,10 @@ describe('战争迷雾玩家视野', () => {
     expect(getGameModeConfig('hardcore').miscCloseHatchWithDoubles).toBe(true);
     expect(getGameModeConfig('classic').effectiveRangePenetration).toBe(false);
     expect(getGameModeConfig('hardcore').effectiveRangePenetration).toBe(true);
+    expect(getGameModeConfig('classic').directionalDamageCheck).toBe(false);
+    expect(getGameModeConfig('hardcore').directionalDamageCheck).toBe(true);
+    expect(getGameModeConfig('classic').radioVisionSharing).toBe(false);
+    expect(getGameModeConfig('hardcore').radioVisionSharing).toBe(true);
   });
 
   test('硬核车长关舱时仅为移动和攻击阶段提供额外骰', () => {
@@ -616,6 +732,57 @@ describe('战争迷雾玩家视野', () => {
     expect(visible.has(HexMap.keyOf(allyForward))).toBe(false);
     ally.destroyed = true;
     expect(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(ally.pos))).toBe(false);
+  });
+
+  test('hardcore radio shares friendly transmitter vision', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const sherman = shermanAt(1, 4, 0, false);
+    sherman.visionRange = 1;
+    const ally = shermanAt(6, 4, 1, false);
+    ally.id = 'ally';
+    ally.turretFacing = 1;
+    const allyForward = neighbor(ally.pos, 1);
+
+    expect(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(allyForward))).toBe(false);
+    expect(computePlayerVisibleHexes(map, sherman, [ally], true).has(HexMap.keyOf(allyForward))).toBe(true);
+  });
+
+  test('tank radio transmit requires commander and receive requires co-driver', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const receiver = shermanAt(1, 4, 0, false);
+    const sender = shermanAt(6, 4, 1, false);
+    sender.id = 'sender';
+    sender.turretFacing = 1;
+    const senderForward = neighbor(sender.pos, 1);
+
+    expect(hasRadioReceive(receiver)).toBe(true);
+    expect(hasRadioTransmit(sender)).toBe(true);
+    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(true);
+
+    receiver.crew!.coDriver = false;
+    expect(hasRadioReceive(receiver)).toBe(false);
+    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(false);
+
+    receiver.crew!.coDriver = true;
+    sender.crew!.commander = false;
+    expect(hasRadioTransmit(sender)).toBe(false);
+    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(false);
+  });
+
+  test('non-tank intact radio can both receive and transmit', () => {
+    const infantry = shermanAt(4, 4, 0, false);
+    infantry.kind = 'infantry';
+    infantry.facing = null;
+    infantry.crew = undefined;
+    infantry.stats = { ...infantry.stats, visionType: 'infantry', visionRange: 2 };
+
+    expect(hasRadioReceive(infantry)).toBe(true);
+    expect(hasRadioTransmit(infantry)).toBe(true);
+    infantry.radioDamaged = true;
+    expect(hasRadioReceive(infantry)).toBe(false);
+    expect(hasRadioTransmit(infantry)).toBe(false);
   });
 });
 

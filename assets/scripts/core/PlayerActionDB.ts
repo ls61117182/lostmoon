@@ -41,7 +41,7 @@ export const PLAYER_ACTION_DOUBLES: ActionTableRow = {
   misc: 'concealment',
 };
 
-/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 上下限。由 actionDicePool() 消费。 */
+/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 下限 / 可选上限。由 actionDicePool() 消费。 */
 export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';
 
 export interface PlayerDicePoolConfig {
@@ -54,7 +54,7 @@ export interface PlayerDicePoolConfig {
   /** 杂项阶段：车长开舱 */
   miscMods: { hatch: number };
   capMin: number;
-  capMax: number;
+  capMax: number | null;
 }
 
 export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {
@@ -113,5 +113,5 @@ export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {
     hatch: 1,
   },
   capMin: 1,
-  capMax: 5,
+  capMax: null,
 };

@@ -1,0 +1,13 @@
+﻿position,incomingAngle,armor,damageCheckType,notes
+正前,0,front,front,正前
+正前,30,front,front,右前30度
+正前,-30,front,front,左前30度
+右前,60,frontSide,right,右前侧
+左前,-60,frontSide,left,左前侧
+正右,90,frontSide,right,正右
+正左,-90,rearSide,left,正左
+右后,120,rearSide,left,右后
+左后,-120,rearSide,right,左后
+正后,150,rear,rear,右后30度
+正后,-150,rear,rear,左后30度
+正后,180,rear,rear,正后

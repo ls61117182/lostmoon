@@ -12,6 +12,7 @@ import {
   DEFAULT_VISION_RANGE,
   Direction,
   isFootKind,
+  isTankKind,
   MissionData,
   Offset,
   TerrainType,
@@ -85,6 +86,8 @@ export interface LoadedMission {
   sherman: Unit;
   allies: Unit[];
   enemies: Unit[];
+  smokeHexes: Set<string>;
+  smokeHexOwners: Map<string, 'friendly' | 'enemy'>;
   data: MissionData;
   /** destroy_kind_evac：谢尔曼已成功执行离场移动（驶出地图） */
   shermanEvacuated?: boolean;
@@ -347,6 +350,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     sherman,
     allies,
     enemies,
+    smokeHexes: new Set<string>(),
+    smokeHexOwners: new Map<string, 'friendly' | 'enemy'>(),
     data,
     shermanEvacuated: false,
     truckEscapeDefeat: false,
@@ -645,7 +650,7 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
       ? rawTurretFacing
       : u.facing) as Unit['turretFacing'];
   }
-  if (p.kind === 'sherman') {
+  if (isTankKind(p.kind)) {
     u.crew = {
       commander: true,
       loader: true,
@@ -666,9 +671,11 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
         if (v === false || v === true) u.crew![slot] = v;
       }
     }
+    u.hatchOpen = !!p.hatchOpen;
+  }
+  if (p.kind === 'sherman') {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
-    u.hatchOpen = !!p.hatchOpen;
     u.visionRange = typeof p.visionRange === 'number' && Number.isFinite(p.visionRange)
       ? Math.max(0, Math.floor(p.visionRange))
       : stats.visionRange ?? DEFAULT_VISION_RANGE;
