@@ -26,6 +26,15 @@ import {
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
 import { GameMode } from '../core/GameMode';
+import {
+  PVP_DEFAULT_MISSION_PATH,
+  PVP_FACTIONS,
+  pvpFactionOf,
+  pvpOpponentFactionFor,
+  pvpParityLabel,
+} from '../core/PvpConfig';
+import type { PvpFactionConfig, PvpFactionId, PvpMatchMode, PvpSessionConfig } from '../core/PvpConfig';
+import { PvpService, PvpServerEvent, PvpServerPlayer } from '../core/PvpService';
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import {
@@ -169,6 +178,7 @@ export class MainMenuScene extends Component {
   private gameMode: GameMode = 'classic';
   private classicModeBtn: ButtonRefs | null = null;
   private hardcoreModeBtn: ButtonRefs | null = null;
+  private pvpEntryBtn: ButtonRefs | null = null;
 
   // 关卡按钮池（1..12，对应 LEVELS）
   private levelBtns: ButtonRefs[] = [];
@@ -179,6 +189,7 @@ export class MainMenuScene extends Component {
 
   // 当前打开的模态；非 null 时主菜单点击被遮罩吞掉
   private modalRoot: Node | null = null;
+  private pvpUnlisten: (() => void) | null = null;
 
   private authNameLabel: Label | null = null;
   private authStatusLabel: Label | null = null;
@@ -235,6 +246,7 @@ export class MainMenuScene extends Component {
     this.buildTitle();
     this.buildContinueButton();
     this.buildGameModeSwitch();
+    this.buildPvpEntryButton();
     this.buildChapterTabs();
     this.buildLevelGrid();
     this.buildTopIcons();
@@ -404,6 +416,461 @@ export class MainMenuScene extends Component {
     this.hardcoreModeBtn?.redraw(classic ? MODE_BTN_IDLE : MODE_BTN_ACTIVE, { border: !classic });
     if (this.classicModeBtn?.label) this.classicModeBtn.label.color = classic ? TEXT_TITLE : TEXT_PRIMARY;
     if (this.hardcoreModeBtn?.label) this.hardcoreModeBtn.label.color = classic ? TEXT_PRIMARY : TEXT_TITLE;
+  }
+
+  private buildPvpEntryButton() {
+    const btn = this.makeRectButton(
+      this.node, -390, 126, 220, 58, new Color(82, 96, 72, 245),
+      () => this.openPvpHome(),
+    );
+    btn.node.name = 'PvpEntryButton';
+    this.pvpEntryBtn = btn;
+
+    const title = this.makeLabel(btn.node, 'PVP 对战', 0, 10, 200, 28, 24, TEXT_PRIMARY);
+    title.enableOutline = true;
+    title.outlineColor = TEXT_OUTLINE;
+    title.outlineWidth = 2;
+    const sub = this.makeLabel(btn.node, '硬核 1V1', 0, -14, 200, 20, 15, TEXT_SUBTITLE);
+    sub.enableOutline = true;
+    sub.outlineColor = TEXT_OUTLINE;
+    sub.outlineWidth = 1;
+  }
+
+  private openPvpHome() {
+    this.clearPvpListener();
+    this.closeModal(true);
+    const { panel } = this.openModal('PVP 对战', 900, 560);
+    if (this.modalRoot) this.modalRoot.name = 'PvpHome';
+
+    this.makeLabel(panel, '硬核模式 1V1 · 击毁对方主角坦克获胜',
+      0, 184, 760, 28, 20, TEXT_SUBTITLE);
+
+    this.makePvpLargeButton(panel, -260, 54, '自动匹配', '选择阵营后进入匹配队列',
+      () => this.openPvpFactionSelect('matchmaking'));
+    this.makePvpLargeButton(panel, 0, 54, '创建房间', '房主为单数玩家',
+      () => this.openPvpFactionSelect('room'));
+    this.makePvpLargeButton(panel, 260, 54, '加入房间', '输入房间号加入对局',
+      () => this.openPvpJoinRoom());
+
+    this.makeLabel(panel, '选择匹配方式', 0, -164, 760, 26, 18, TEXT_DISABLED);
+  }
+
+  private clearPvpListener() {
+    if (this.pvpUnlisten) this.pvpUnlisten();
+    this.pvpUnlisten = null;
+  }
+
+  private listenPvp(statusLabel: Label | null, onMatchStarted?: (session: PvpSessionConfig) => void) {
+    this.clearPvpListener();
+    this.pvpUnlisten = PvpService.addListener((event: PvpServerEvent) => {
+      switch (event.type) {
+        case 'connected':
+          if (statusLabel) statusLabel.string = `已连接服务器：${event.username}`;
+          break;
+        case 'waiting':
+          if (statusLabel) statusLabel.string = `正在匹配，对局中你将作为 ${pvpParityLabel(event.parity)}`;
+          break;
+        case 'roomCreated':
+          if (statusLabel) statusLabel.string = `房间号：${event.roomCode}，等待对手加入`;
+          break;
+        case 'matchStarted':
+          this.clearPvpListener();
+          onMatchStarted?.(event.session);
+          GameSession.startPvpBattle(event.session);
+          this.gameMode = 'hardcore';
+          MenuProgress.setGameMode('hardcore');
+          this.loadBattleScene();
+          break;
+        case 'closed':
+          if (statusLabel) statusLabel.string = `连接已关闭：${event.reason}`;
+          break;
+        case 'error':
+          if (statusLabel) statusLabel.string = `PVP 错误：${event.message}`;
+          break;
+        default:
+          break;
+      }
+    });
+  }
+
+  private makePvpLargeButton(parent: Node, x: number, y: number, title: string, subtitle: string, onClick: () => void) {
+    const btn = this.makeRectButton(parent, x, y, 220, 150, BTN_LEVEL_UNLOCKED, onClick);
+    const titleLab = this.makeLabel(btn.node, title, 0, 30, 188, 34, 26, TEXT_TITLE);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+    const subLab = this.makeLabel(btn.node, subtitle, 0, -24, 178, 54, 17, TEXT_SUBTITLE);
+    subLab.enableWrapText = true;
+    subLab.overflow = Label.Overflow.RESIZE_HEIGHT;
+    subLab.lineHeight = 22;
+    return btn;
+  }
+
+  private openPvpFactionSelect(matchMode: PvpMatchMode) {
+    this.closeModal(true);
+    const { panel } = this.openModal(matchMode === 'matchmaking' ? '选择阵营 · 自动匹配' : '选择阵营 · 创建房间', 980, 620);
+    if (this.modalRoot) this.modalRoot.name = 'PvpFactionSelect';
+
+    let selected: PvpFactionId = 'usa';
+    const detailRoot = new Node('PvpFactionDetail');
+    detailRoot.layer = this.node.layer;
+    detailRoot.addComponent(UITransform).setContentSize(450, 390);
+    detailRoot.setPosition(210, 8, 0);
+    panel.addChild(detailRoot);
+
+    const factionBtns: ButtonRefs[] = [];
+    const refresh = () => {
+      for (let i = 0; i < factionBtns.length; i++) {
+        const f = PVP_FACTIONS[i];
+        const active = f.id === selected;
+        const btn = factionBtns[i];
+        btn.redraw(!f.available ? BTN_LEVEL_LOCKED : active ? MODE_BTN_ACTIVE : BTN_LEVEL_UNLOCKED, { border: active });
+        if (btn.label) {
+          btn.label.string = f.available ? f.name : `${f.name}\n未来加入`;
+          btn.label.color = f.available ? (active ? TEXT_TITLE : TEXT_PRIMARY) : TEXT_DISABLED;
+        }
+      }
+      this.renderPvpFactionDetail(detailRoot, pvpFactionOf(selected));
+    };
+
+    for (let i = 0; i < PVP_FACTIONS.length; i++) {
+      const f = PVP_FACTIONS[i];
+      const btn = this.makeRectButton(
+        panel, -295, 150 - i * 88, 260, 64,
+        f.available ? BTN_LEVEL_UNLOCKED : BTN_LEVEL_LOCKED,
+        () => {
+          if (!f.available) return;
+          selected = f.id;
+          refresh();
+        },
+      );
+      btn.label = this.makeLabel(btn.node, f.name, 0, 0, 230, 44, 23, f.available ? TEXT_PRIMARY : TEXT_DISABLED);
+      btn.label.enableWrapText = true;
+      btn.label.lineHeight = 24;
+      factionBtns.push(btn);
+    }
+
+    const backBtn = this.makeRectButton(panel, -360, -238, 150, 44, ICON_BTN_BG, () => this.openPvpHome());
+    this.makeLabel(backBtn.node, '返回', 0, 0, 120, 28, 20, TEXT_PRIMARY);
+    const nextBtn = this.makeRectButton(panel, 322, -238, 190, 48, BTN_CONTINUE, () => {
+      if (matchMode === 'matchmaking') this.openPvpMatchmakingWait(selected);
+      else this.openPvpRoomLobby(selected);
+    });
+    this.makeLabel(nextBtn.node, matchMode === 'matchmaking' ? '开始匹配' : '创建房间', 0, 0, 160, 30, 21, TEXT_PRIMARY);
+
+    refresh();
+  }
+
+  private renderPvpFactionDetail(root: Node, faction: PvpFactionConfig) {
+    root.removeAllChildren();
+    const g = root.getComponent(Graphics) ?? root.addComponent(Graphics);
+    g.clear();
+    drawFieldPanel(g, 450, 390, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, TEXT_TITLE);
+    const title = this.makeLabel(root, faction.name, 0, 150, 390, 42, 34, TEXT_TITLE);
+    title.enableOutline = true;
+    title.outlineColor = TEXT_OUTLINE;
+    title.outlineWidth = 2;
+
+    this.makeLabel(root, `主角坦克：${faction.protagonistName}`, 0, 88, 380, 30, 22, TEXT_PRIMARY);
+    this.makeLabel(root, `AI 支援：${faction.supportSummary}`, 0, 44, 380, 28, 20, TEXT_SUBTITLE);
+    this.makeLabel(root, `风格：${faction.styleTags.join(' / ')}`, 0, 2, 380, 28, 19, TEXT_SUBTITLE);
+
+    const note = faction.available
+      ? '玩家仅控制主角坦克，其他单位按硬核 AI 自动行动。'
+      : '该阵营在后续版本开放。';
+    const noteLab = this.makeLabel(root, note, 0, -92, 360, 70, 18, faction.available ? TEXT_DIVIDER : TEXT_DISABLED);
+    noteLab.enableWrapText = true;
+    noteLab.overflow = Label.Overflow.RESIZE_HEIGHT;
+    noteLab.lineHeight = 24;
+  }
+
+  private openPvpMatchmakingWait(localFactionId: PvpFactionId) {
+    this.closeModal(true);
+    const { panel } = this.openModal('自动匹配', 700, 440);
+    if (this.modalRoot) this.modalRoot.name = 'PvpMatchmakingWait';
+
+    this.makeLabel(panel, `阵营：${pvpFactionOf(localFactionId).name}`, 0, 96, 460, 32, 24, TEXT_TITLE);
+    const status = this.makeLabel(panel, '正在连接 PVP 服务器...', 0, 28, 520, 34, 22, TEXT_SUBTITLE);
+    const cancelBtn = this.makeRectButton(panel, 0, -134, 170, 46, MODAL_CLOSE_BG, () => {
+      PvpService.cancelMatchmaking();
+      this.clearPvpListener();
+      this.openPvpHome();
+    });
+    this.makeLabel(cancelBtn.node, '取消匹配', 0, 0, 140, 28, 20, TEXT_PRIMARY);
+
+    this.listenPvp(status);
+    void PvpService.joinMatchmaking(localFactionId);
+  }
+
+  private openPvpMatchFound(localFactionId: PvpFactionId) {
+    this.closeModal(true);
+    const opponentFactionId = pvpOpponentFactionFor(localFactionId);
+    const { panel } = this.openModal('匹配成功', 760, 500);
+    if (this.modalRoot) this.modalRoot.name = 'PvpMatchFound';
+
+    const local = pvpFactionOf(localFactionId);
+    const opponent = pvpFactionOf(opponentFactionId);
+    this.makeLabel(panel, `你：${local.name}`, -190, 96, 300, 36, 26, TEXT_TITLE);
+    this.makeLabel(panel, `对手：${opponent.name}`, 190, 96, 300, 36, 26, TEXT_PRIMARY);
+    this.makeLabel(panel, `你是：${pvpParityLabel('odd')}`, -190, 42, 300, 28, 20, TEXT_SUBTITLE);
+    this.makeLabel(panel, `对手是：${pvpParityLabel('even')}`, 190, 42, 300, 28, 20, TEXT_SUBTITLE);
+    this.makeLabel(panel, '即将进入开局骰判定', 0, -54, 520, 30, 22, TEXT_DIVIDER);
+
+    const nextBtn = this.makeRectButton(panel, 0, -170, 200, 48, BTN_CONTINUE,
+      () => this.openPvpOpeningRoll('matchmaking', localFactionId, opponentFactionId, undefined));
+    this.makeLabel(nextBtn.node, '继续', 0, 0, 160, 30, 22, TEXT_PRIMARY);
+  }
+
+  private openPvpRoomLobby(localFactionId: PvpFactionId) {
+    this.closeModal(true);
+    const { panel } = this.openModal('房间大厅', 860, 560);
+    if (this.modalRoot) this.modalRoot.name = 'PvpRoomLobby';
+
+    const title = this.makeLabel(panel, '正在创建房间...', 0, 176, 560, 34, 26, TEXT_TITLE);
+    const ownerSlot = this.drawPvpRoomSlot(panel, -210, 34, '玩家 1 / 房主 / 单数玩家', '你', pvpFactionOf(localFactionId), true);
+    const guestSlot = this.drawPvpRoomSlot(panel, 210, 34, '玩家 2 / 双数玩家', '等待对手', pvpFactionOf('usa'), false);
+    const status = this.makeLabel(panel, '正在连接 PVP 服务器...', 0, -128, 680, 26, 20, TEXT_SUBTITLE);
+
+    const backBtn = this.makeRectButton(panel, -190, -206, 150, 44, ICON_BTN_BG, () => {
+      PvpService.leaveRoom();
+      this.clearPvpListener();
+      this.openPvpFactionSelect('room');
+    });
+    this.makeLabel(backBtn.node, '返回', 0, 0, 120, 28, 20, TEXT_PRIMARY);
+    let canStartRoom = false;
+    const startBtn = this.makeRectButton(panel, 190, -206, 170, 46, BTN_CONTINUE_DISABLE, () => {
+      if (!startBtn.node.active || !canStartRoom) return;
+      const roomCode = title.string.replace('房间号：', '').trim();
+      if (!roomCode || roomCode === '正在创建房间...') return;
+      PvpService.startRoom(roomCode);
+      status.string = '正在开始游戏...';
+    });
+    this.makeLabel(startBtn.node, '开始游戏', 0, 0, 140, 28, 20, TEXT_PRIMARY);
+    startBtn.node.active = false;
+
+    this.listenPvp(status);
+    const unlisten = PvpService.addListener((event: PvpServerEvent) => {
+      if (event.type === 'roomCreated') {
+        title.string = `房间号：${event.roomCode}`;
+      } else if (event.type === 'roomUpdate') {
+        title.string = `房间号：${event.roomCode}`;
+        this.updatePvpRoomSlot(ownerSlot, event.owner);
+        this.updatePvpRoomSlot(guestSlot, event.guest, '等待对手');
+        canStartRoom = event.canStart;
+        startBtn.node.active = event.you === 'owner' && !!event.guest;
+        startBtn.redraw(event.canStart ? BTN_CONTINUE : BTN_CONTINUE_DISABLE, { border: event.canStart });
+        status.string = event.canStart ? '对手已准备，可以开始游戏' : event.guest ? '等待对手准备' : '等待对手加入';
+      }
+    });
+    const oldClear = this.pvpUnlisten;
+    this.pvpUnlisten = () => {
+      oldClear?.();
+      unlisten();
+    };
+    void PvpService.createRoom(localFactionId);
+  }
+
+  private drawPvpRoomSlot(parent: Node, x: number, y: number, header: string, playerName: string, faction: PvpFactionConfig, ready: boolean): {
+    nameLabel: Label;
+    factionLabel: Label;
+    readyLabel: Label;
+  } {
+    const slot = new Node('PvpRoomSlot');
+    slot.layer = this.node.layer;
+    slot.addComponent(UITransform).setContentSize(330, 190);
+    slot.setPosition(x, y, 0);
+    const g = slot.addComponent(Graphics);
+    drawFieldPanel(g, 330, 190, new Color(33, 40, 34, 242), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    parent.addChild(slot);
+    this.makeLabel(slot, header, 0, 62, 280, 26, 18, TEXT_SUBTITLE);
+    const nameLabel = this.makeLabel(slot, playerName, 0, 18, 280, 34, 28, TEXT_TITLE);
+    const factionLabel = this.makeLabel(slot, `阵营：${faction.name}`, 0, -28, 280, 28, 20, TEXT_PRIMARY);
+    const readyLabel = this.makeLabel(slot, ready ? '已准备' : '未准备', 0, -66, 220, 26, 18, ready ? new Color(120, 230, 120, 255) : TEXT_DISABLED);
+    return { nameLabel, factionLabel, readyLabel };
+  }
+
+  private updatePvpRoomSlot(
+    slot: { nameLabel: Label; factionLabel: Label; readyLabel: Label },
+    player: PvpServerPlayer | null,
+    emptyName = '等待对手',
+  ) {
+    if (!player) {
+      slot.nameLabel.string = emptyName;
+      slot.factionLabel.string = '阵营：-';
+      slot.readyLabel.string = '未准备';
+      slot.readyLabel.color = TEXT_DISABLED;
+      return;
+    }
+    slot.nameLabel.string = player.name || player.clientId;
+    slot.factionLabel.string = `阵营：${pvpFactionOf(player.factionId).name}`;
+    slot.readyLabel.string = player.ready ? '已准备' : '未准备';
+    slot.readyLabel.color = player.ready ? new Color(120, 230, 120, 255) : TEXT_DISABLED;
+  }
+
+  private openPvpJoinRoom() {
+    this.closeModal(true);
+    const { panel } = this.openModal('加入房间', 760, 520);
+    if (this.modalRoot) this.modalRoot.name = 'PvpJoinRoom';
+    let selected: PvpFactionId = 'usa';
+    this.makeLabel(panel, '房间号', -220, 120, 120, 28, 21, TEXT_SUBTITLE);
+    const codeInput = this.makeInputField(panel, 40, 120, 260, 42, '输入 6 位房间号', false);
+    codeInput.maxLength = 12;
+    this.makeLabel(panel, '阵营', -220, 52, 120, 28, 21, TEXT_SUBTITLE);
+    const factionBtns: ButtonRefs[] = [];
+    const refresh = () => {
+      for (let i = 0; i < factionBtns.length; i++) {
+        const f = PVP_FACTIONS.filter(x => x.available)[i];
+        if (!f) continue;
+        const active = f.id === selected;
+        factionBtns[i].redraw(active ? MODE_BTN_ACTIVE : BTN_LEVEL_UNLOCKED, { border: active });
+        if (factionBtns[i].label) factionBtns[i].label.color = active ? TEXT_TITLE : TEXT_PRIMARY;
+      }
+    };
+    const available = PVP_FACTIONS.filter(f => f.available);
+    for (let i = 0; i < available.length; i++) {
+      const f = available[i];
+      const btn = this.makeRectButton(panel, -60 + i * 125, 52, 110, 42, BTN_LEVEL_UNLOCKED, () => {
+        selected = f.id;
+        refresh();
+      });
+      btn.label = this.makeLabel(btn.node, f.name, 0, 0, 96, 26, 18, TEXT_PRIMARY);
+      factionBtns.push(btn);
+    }
+    const status = this.makeLabel(panel, '', 0, -30, 560, 30, 20, TEXT_SUBTITLE);
+    const joinBtn = this.makeRectButton(panel, 112, -150, 170, 46, BTN_CONTINUE, () => {
+      const roomCode = codeInput.string.trim();
+      if (!roomCode) {
+        status.string = '请输入房间号';
+        return;
+      }
+      status.string = '正在加入房间...';
+      this.listenPvp(status);
+      const unlisten = PvpService.addListener((event: PvpServerEvent) => {
+        if (event.type !== 'roomUpdate' || event.you !== 'guest') return;
+        unlisten();
+        this.openPvpGuestRoomLobby(event.roomCode, selected, event.owner, event.guest);
+      });
+      void PvpService.joinRoom(roomCode, selected);
+    });
+    this.makeLabel(joinBtn.node, '加入房间', 0, 0, 150, 28, 20, TEXT_PRIMARY);
+    const backBtn = this.makeRectButton(panel, -112, -150, 150, 46, ICON_BTN_BG, () => this.openPvpHome());
+    this.makeLabel(backBtn.node, '返回', 0, 0, 120, 28, 20, TEXT_PRIMARY);
+    refresh();
+  }
+
+  private openPvpGuestRoomLobby(
+    roomCode: string,
+    localFactionId: PvpFactionId,
+    initialOwner: PvpServerPlayer | null,
+    initialGuest: PvpServerPlayer | null,
+  ) {
+    this.closeModal(true);
+    const { panel } = this.openModal('房间大厅', 860, 560);
+    if (this.modalRoot) this.modalRoot.name = 'PvpGuestRoomLobby';
+    this.makeLabel(panel, `房间号：${roomCode}`, 0, 176, 500, 34, 26, TEXT_TITLE);
+    const ownerSlot = this.drawPvpRoomSlot(panel, -210, 34, '玩家 1 / 房主 / 单数玩家', '房主', pvpFactionOf('usa'), true);
+    const guestSlot = this.drawPvpRoomSlot(panel, 210, 34, '玩家 2 / 双数玩家', '你', pvpFactionOf(localFactionId), false);
+    const status = this.makeLabel(panel, '等待准备', 0, -128, 680, 26, 20, TEXT_SUBTITLE);
+    this.updatePvpRoomSlot(ownerSlot, initialOwner, '房主');
+    this.updatePvpRoomSlot(guestSlot, initialGuest, '你');
+
+    let ready = !!initialGuest?.ready;
+    const backBtn = this.makeRectButton(panel, -190, -206, 150, 44, ICON_BTN_BG, () => {
+      PvpService.leaveRoom();
+      this.clearPvpListener();
+      this.openPvpHome();
+    });
+    this.makeLabel(backBtn.node, '返回', 0, 0, 120, 28, 20, TEXT_PRIMARY);
+
+    const readyBtn = this.makeRectButton(panel, 190, -206, 170, 46, BTN_CONTINUE, () => {
+      ready = !ready;
+      PvpService.setRoomReady(roomCode, ready);
+      status.string = ready ? '已准备，等待房主开始游戏' : '未准备';
+    });
+    const readyLabel = this.makeLabel(readyBtn.node, ready ? '取消准备' : '准备', 0, 0, 140, 28, 20, TEXT_PRIMARY);
+
+    const unlisten = PvpService.addListener((event: PvpServerEvent) => {
+      if (event.type !== 'roomUpdate' || event.roomCode !== roomCode) return;
+      this.updatePvpRoomSlot(ownerSlot, event.owner, '房主');
+      this.updatePvpRoomSlot(guestSlot, event.guest, '你');
+      ready = !!event.guest?.ready;
+      readyLabel.string = ready ? '取消准备' : '准备';
+      status.string = ready ? '已准备，等待房主开始游戏' : '请点击准备';
+    });
+    const oldClear = this.pvpUnlisten;
+    this.pvpUnlisten = () => {
+      oldClear?.();
+      unlisten();
+    };
+  }
+
+  private openPvpOpeningRoll(
+    matchMode: PvpMatchMode,
+    localFactionId: PvpFactionId,
+    opponentFactionId: PvpFactionId,
+    roomCode?: string,
+  ) {
+    this.closeModal(true);
+    const die = 1 + Math.floor(Math.random() * 6);
+    const firstParity = die % 2 === 1 ? 'odd' : 'even';
+    const firstPlayerName = firstParity === 'odd' ? '你' : '对手';
+    const { panel } = this.openModal('开局判定', 780, 540);
+    if (this.modalRoot) this.modalRoot.name = 'PvpOpeningRoll';
+
+    this.makeLabel(panel, `单数玩家：你 / ${pvpFactionOf(localFactionId).name}`, -180, 112, 330, 30, 21, TEXT_PRIMARY);
+    this.makeLabel(panel, `双数玩家：对手 / ${pvpFactionOf(opponentFactionId).name}`, 180, 112, 330, 30, 21, TEXT_PRIMARY);
+    const dieLab = this.makeLabel(panel, String(die), 0, 8, 120, 110, 86, TEXT_TITLE);
+    dieLab.enableOutline = true;
+    dieLab.outlineColor = TEXT_OUTLINE;
+    dieLab.outlineWidth = 3;
+    this.makeLabel(panel, `结果：${die}，${pvpParityLabel(firstParity)}先手`, 0, -78, 520, 34, 25, TEXT_DIVIDER);
+    this.makeLabel(panel, `${firstPlayerName}先行动`, 0, -118, 360, 30, 22, TEXT_SUBTITLE);
+
+    const enterBtn = this.makeRectButton(panel, 0, -206, 190, 48, BTN_CONTINUE, () => {
+      GameSession.startPvpBattle({
+        active: true,
+        matchMode,
+        roomCode,
+        localPlayer: { name: '你', factionId: localFactionId, parity: 'odd', isLocal: true },
+        opponentPlayer: { name: '对手', factionId: opponentFactionId, parity: 'even', isLocal: false },
+        openingDie: die,
+        firstParity,
+        firstPlayerName,
+        missionPath: PVP_DEFAULT_MISSION_PATH,
+      });
+      this.gameMode = 'hardcore';
+      MenuProgress.setGameMode('hardcore');
+      this.loadBattleScene();
+    });
+    this.makeLabel(enterBtn.node, '进入战场', 0, 0, 150, 30, 22, TEXT_PRIMARY);
+  }
+
+  private openPvpOpeningRollFromSession(session: PvpSessionConfig) {
+    this.closeModal(true);
+    const { panel } = this.openModal('开局判定', 780, 540);
+    if (this.modalRoot) this.modalRoot.name = 'PvpOpeningRoll';
+
+    const localFaction = pvpFactionOf(session.localPlayer.factionId).name;
+    const opponentFaction = pvpFactionOf(session.opponentPlayer.factionId).name;
+    this.makeLabel(panel, `${pvpParityLabel(session.localPlayer.parity)}：${session.localPlayer.name} / ${localFaction}`,
+      -180, 112, 330, 30, 21, TEXT_PRIMARY);
+    this.makeLabel(panel, `${pvpParityLabel(session.opponentPlayer.parity)}：${session.opponentPlayer.name} / ${opponentFaction}`,
+      180, 112, 330, 30, 21, TEXT_PRIMARY);
+    const dieLab = this.makeLabel(panel, String(session.openingDie), 0, 8, 120, 110, 86, TEXT_TITLE);
+    dieLab.enableOutline = true;
+    dieLab.outlineColor = TEXT_OUTLINE;
+    dieLab.outlineWidth = 3;
+    this.makeLabel(panel, `结果：${session.openingDie}，${pvpParityLabel(session.firstParity)}先手`,
+      0, -78, 520, 34, 25, TEXT_DIVIDER);
+    this.makeLabel(panel, `${session.firstPlayerName}先行动`, 0, -118, 360, 30, 22, TEXT_SUBTITLE);
+
+    const enterBtn = this.makeRectButton(panel, 0, -206, 190, 48, BTN_CONTINUE, () => {
+      GameSession.startPvpBattle(session);
+      this.gameMode = 'hardcore';
+      MenuProgress.setGameMode('hardcore');
+      this.loadBattleScene();
+    });
+    this.makeLabel(enterBtn.node, '进入战场', 0, 0, 150, 30, 22, TEXT_PRIMARY);
   }
 
   private refreshContinueButton() {

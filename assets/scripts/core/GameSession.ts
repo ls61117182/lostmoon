@@ -1,5 +1,6 @@
 import type { MissionSource } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode } from './GameMode';
+import type { PvpSessionConfig } from './PvpConfig';
 
 export interface GameSessionState {
   /** Resource path under assets/resources, without extension. */
@@ -12,6 +13,8 @@ export interface GameSessionState {
   resumeFromSave: boolean;
   /** Rule profile selected on the main menu for this battle. */
   gameMode: GameMode;
+  /** Local frontend PVP session state; server-backed data can replace this later. */
+  pvpSession: PvpSessionConfig | null;
 }
 
 const DEFAULT_MISSION_PATH = 'missions/mission_01';
@@ -22,6 +25,7 @@ const DEFAULT_STATE: GameSessionState = {
   selectedLevelId: -1,
   resumeFromSave: false,
   gameMode: DEFAULT_GAME_MODE,
+  pvpSession: null,
 };
 
 const state: GameSessionState = { ...DEFAULT_STATE };
@@ -32,12 +36,28 @@ export const GameSession = {
   get selectedLevelId() { return state.selectedLevelId; },
   get resumeFromSave() { return state.resumeFromSave; },
   get gameMode() { return state.gameMode; },
+  get pvpSession() { return state.pvpSession; },
+  get isPvp() { return !!state.pvpSession?.active; },
 
   setGameMode(mode: GameMode) {
     state.gameMode = mode;
   },
 
+  startPvpBattle(session: PvpSessionConfig) {
+    state.pvpSession = { ...session, active: true };
+    state.gameMode = 'hardcore';
+    state.selectedLevelId = -1;
+    state.selectedMissionPath = session.missionPath;
+    state.selectedMissionSource = { type: 'resource', missionPath: session.missionPath };
+    state.resumeFromSave = false;
+  },
+
+  clearPvpBattle() {
+    state.pvpSession = null;
+  },
+
   selectMission(levelId: number, missionPath: string) {
+    state.pvpSession = null;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = missionPath;
     state.selectedMissionSource = { type: 'resource', missionPath };
@@ -45,6 +65,7 @@ export const GameSession = {
   },
 
   selectCustomMission(packageId: string) {
+    state.pvpSession = null;
     state.selectedLevelId = -1;
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'custom', packageId };
@@ -52,6 +73,7 @@ export const GameSession = {
   },
 
   resumeMission(levelId: number, missionPath: string) {
+    state.pvpSession = null;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = missionPath;
     state.selectedMissionSource = { type: 'resource', missionPath };
@@ -59,6 +81,7 @@ export const GameSession = {
   },
 
   resumeCustomMission(packageId: string) {
+    state.pvpSession = null;
     state.selectedLevelId = -1;
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'custom', packageId };
@@ -75,5 +98,6 @@ export const GameSession = {
     state.selectedLevelId = DEFAULT_STATE.selectedLevelId;
     state.resumeFromSave = DEFAULT_STATE.resumeFromSave;
     state.gameMode = DEFAULT_STATE.gameMode;
+    state.pvpSession = DEFAULT_STATE.pvpSession;
   },
 };
