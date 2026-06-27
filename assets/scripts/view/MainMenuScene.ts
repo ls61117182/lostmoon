@@ -42,6 +42,16 @@ import { loginServer, registerServer, ServerProfile, syncServerProfile } from '.
 import { readActiveSaveRaw } from '../core/SaveSlot';
 import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
+import {
+  SPLIT_TANK_KINDS,
+  TANK_VISUAL_KINDS,
+  SplitTankKind,
+  TankVisualKind,
+  splitTankGeometryConfigOf,
+  splitTankVisualConfigOf,
+  tankVisualAssetConfigOf,
+  tankVisualConfigOf,
+} from '../core/TankVisualDB';
 
 const { ccclass, property } = _decorator;
 
@@ -116,6 +126,22 @@ const AUTH_OFFLINE        = new Color( 68,  82,  92, 245);
 const AUTH_HINT           = new Color(202, 196, 174, 235);
 
 type LoginMode = 'online' | 'offline';
+type TankVisualDebugKey =
+  | 'fitScale'
+  | 'offsetForward'
+  | 'offsetRight'
+  | 'aspectRatioMul'
+  | 'hullFitScale'
+  | 'turretScale'
+  | 'hullOffsetForward'
+  | 'hullOffsetRight'
+  | 'turretOffsetForward'
+  | 'turretOffsetRight'
+  | 'turretPivotX'
+  | 'turretPivotY'
+  | 'muzzleSpriteX'
+  | 'muzzleSpriteY';
+type TankVisualDebugDraft = Record<TankVisualDebugKey, number>;
 
 // ---------- 工具类型 ----------
 interface ButtonRefs {
@@ -687,6 +713,13 @@ export class MainMenuScene extends Component {
   // 右上角 icon 按钮（⚙ 设置、? 说明）
   // ================================================================
   private buildTopIcons() {
+    const debugBtn = this.makeRectButton(this.node, -500, 320, 180, 38, ICON_BTN_BG, () => this.openTankVisualDebugger());
+    debugBtn.node.name = 'TankVisualDebugButton';
+    const debugLabel = this.makeLabel(debugBtn.node, '坦克图片调试', 0, 0, 160, 28, 17, TEXT_PRIMARY);
+    debugLabel.overflow = Label.Overflow.SHRINK;
+    debugLabel.enableOutline = true;
+    debugLabel.outlineColor = TEXT_OUTLINE;
+    debugLabel.outlineWidth = 2;
     const settings = this.makeCircleButton(this.node, 580, 320, 24, '⚙', () => this.openSettings());
     settings.node.name = 'SettingsIcon';
 
@@ -724,6 +757,500 @@ export class MainMenuScene extends Component {
     const label = this.makeLabel(this.node, t('menu.version', { b: '2026' }),
       500, -340, 260, 20, 14, TEXT_DISABLED);
     label.horizontalAlign = HorizontalTextAlignment.RIGHT;
+  }
+
+  private openTankVisualDebugger() {
+    this.closeModal();
+    const panelW = CANVAS_W;
+    const panelH = CANVAS_H;
+    const { panel } = this.openModal('坦克图片调试', panelW, panelH);
+    if (this.modalRoot) this.modalRoot.name = 'TankVisualDebugger';
+
+    const splitKindSet = new Set<string>(SPLIT_TANK_KINDS as readonly string[]);
+    const frames: Record<string, {
+      top: SpriteFrame | null;
+      topW: number;
+      topH: number;
+      hull: SpriteFrame | null;
+      turret: SpriteFrame | null;
+    }> = {};
+    const drafts: Record<string, TankVisualDebugDraft> = {};
+    const hexR = 185;
+    let selectedKind: TankVisualKind = TANK_VISUAL_KINDS[0]!;
+    let bodyAngleDeg = 0;
+    let turretAngleDeg = 0;
+    let dragMode: 'body' | 'turret' | null = null;
+    let lastPivot = { x: 0, y: 0 };
+    let showMuzzleFlash = false;
+    const tankButtons: ButtonRefs[] = [];
+
+    const makeDraft = (kind: TankVisualKind): TankVisualDebugDraft => {
+      const top = tankVisualConfigOf(kind);
+      const split = splitKindSet.has(kind) ? splitTankVisualConfigOf(kind as SplitTankKind) : null;
+      const geometry = splitKindSet.has(kind) ? splitTankGeometryConfigOf(kind as SplitTankKind) : null;
+      return {
+        fitScale: top.fitScale,
+        offsetForward: top.offsetForward,
+        offsetRight: top.offsetRight,
+        aspectRatioMul: top.aspectRatioMul,
+        hullFitScale: split?.hullFitScale ?? 0,
+        turretScale: split?.turretScale ?? 1,
+        hullOffsetForward: split?.hullOffsetForward ?? 0,
+        hullOffsetRight: split?.hullOffsetRight ?? 0,
+        turretOffsetForward: split?.turretOffsetForward ?? 0,
+        turretOffsetRight: split?.turretOffsetRight ?? 0,
+        turretPivotX: geometry?.pivot.bodyX ?? 0,
+        turretPivotY: geometry?.pivot.bodyY ?? 0,
+        muzzleSpriteX: geometry?.muzzle.spriteX ?? top.muzzle.spriteX,
+        muzzleSpriteY: geometry?.muzzle.spriteY ?? top.muzzle.spriteY,
+      };
+    };
+
+    for (const kind of TANK_VISUAL_KINDS) {
+      drafts[kind] = makeDraft(kind);
+      frames[kind] = { top: null, topW: 0, topH: 0, hull: null, turret: null };
+      const assets = tankVisualAssetConfigOf(kind);
+      if (assets.topSpritePath) {
+        resources.load(assets.topSpritePath, SpriteFrame, (err, sf) => {
+          if (!err && sf) {
+            frames[kind]!.top = sf;
+            frames[kind]!.topW = sf.rect.width > 0 ? sf.rect.width : sf.width;
+            frames[kind]!.topH = sf.rect.height > 0 ? sf.rect.height : sf.height;
+          }
+          if (kind === selectedKind) refreshPreview();
+        });
+      }
+      if (assets.hullSpritePath) {
+        resources.load(assets.hullSpritePath, SpriteFrame, (err, sf) => {
+          if (!err && sf) frames[kind]!.hull = sf;
+          if (kind === selectedKind) refreshPreview();
+        });
+      }
+      if (assets.turretSpritePath) {
+        resources.load(assets.turretSpritePath, SpriteFrame, (err, sf) => {
+          if (!err && sf) frames[kind]!.turret = sf;
+          if (kind === selectedKind) refreshPreview();
+        });
+      }
+    }
+
+    const stage = new Node('TankVisualDebugStage');
+    stage.layer = this.node.layer;
+    stage.addComponent(UITransform).setContentSize(660, 604);
+    stage.setPosition(-292.5, -30, 0);
+    const stageG = stage.addComponent(Graphics);
+    drawFieldPanel(stageG, 660, 604, new Color(26, 32, 28, 238), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    panel.addChild(stage);
+
+    const previewRoot = new Node('TankVisualPreview');
+    previewRoot.layer = this.node.layer;
+    previewRoot.addComponent(UITransform).setContentSize(520, 520);
+    previewRoot.setPosition(0, -4, 0);
+    stage.addChild(previewRoot);
+
+    const statusLabel = this.makeLabel(stage, '', 0, -280, 580, 24, 15, TEXT_SUBTITLE);
+    statusLabel.overflow = Label.Overflow.SHRINK;
+    const selectedLabel = this.makeLabel(stage, '', 0, 278, 500, 28, 20, TEXT_TITLE);
+    selectedLabel.enableOutline = true;
+    selectedLabel.outlineColor = TEXT_OUTLINE;
+    selectedLabel.outlineWidth = 2;
+    const bodyAngleLabel = this.makeLabel(stage, '', -205, -252, 210, 24, 15, TEXT_SUBTITLE);
+    bodyAngleLabel.horizontalAlign = HorizontalTextAlignment.LEFT;
+    const turretAngleLabel = this.makeLabel(stage, '', 205, -252, 210, 24, 15, TEXT_SUBTITLE);
+    turretAngleLabel.horizontalAlign = HorizontalTextAlignment.RIGHT;
+
+    const flashBtn = this.makeRectButton(stage, 240, 248, 150, 30, MODE_BTN_IDLE, () => {
+      showMuzzleFlash = !showMuzzleFlash;
+      refreshFlashButton();
+      refreshPreview();
+    });
+    flashBtn.label = this.makeLabel(flashBtn.node, '炮口火焰', 0, 0, 126, 22, 15, TEXT_PRIMARY);
+
+    const listPanel = new Node('TankVisualKindList');
+    listPanel.layer = this.node.layer;
+    listPanel.addComponent(UITransform).setContentSize(255, 280);
+    listPanel.setPosition(495, 132, 0);
+    const listG = listPanel.addComponent(Graphics);
+    drawFieldPanel(listG, 255, 280, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    panel.addChild(listPanel);
+    this.makeLabel(listPanel, '坦克列表', 0, 112, 180, 28, 20, TEXT_TITLE);
+
+    for (let i = 0; i < TANK_VISUAL_KINDS.length; i++) {
+      const kind = TANK_VISUAL_KINDS[i]!;
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const x = -58 + col * 116;
+      const y = 70 - row * 52;
+      const btn = this.makeRectButton(listPanel, x, y, 104, 38, BTN_LEVEL_UNLOCKED, () => {
+        selectedKind = kind;
+        bodyAngleDeg = 0;
+        turretAngleDeg = 0;
+        refreshKindButtons();
+        refreshFlashButton();
+        rebuildInputs();
+        refreshPreview();
+      });
+      btn.label = this.makeLabel(btn.node, tankVisualAssetName(kind), 0, 0, 94, 28, 14, TEXT_PRIMARY);
+      btn.label.overflow = Label.Overflow.SHRINK;
+      tankButtons.push(btn);
+    }
+
+    const propsPanel = new Node('TankVisualParams');
+    propsPanel.layer = this.node.layer;
+    propsPanel.addComponent(UITransform).setContentSize(305, 604);
+    propsPanel.setPosition(210, -30, 0);
+    const propsG = propsPanel.addComponent(Graphics);
+    drawFieldPanel(propsG, 305, 604, new Color(28, 34, 29, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    panel.addChild(propsPanel);
+
+    const fieldDefs: Array<{ key: TankVisualDebugKey; label: string }> = [
+      { key: 'fitScale', label: '完整图缩放' },
+      { key: 'offsetForward', label: '完整图前后' },
+      { key: 'offsetRight', label: '完整图右侧' },
+      { key: 'aspectRatioMul', label: '宽高比倍率' },
+      { key: 'hullFitScale', label: '车身缩放' },
+      { key: 'turretScale', label: '炮塔缩放' },
+      { key: 'hullOffsetForward', label: '车身前后' },
+      { key: 'hullOffsetRight', label: '车身右侧' },
+      { key: 'turretOffsetForward', label: '炮塔整体前后' },
+      { key: 'turretOffsetRight', label: '炮塔整体右侧' },
+      { key: 'turretPivotX', label: '车身转轴X' },
+      { key: 'turretPivotY', label: '车身转轴Y' },
+      { key: 'muzzleSpriteX', label: '炮塔图炮口X' },
+      { key: 'muzzleSpriteY', label: '炮塔图炮口Y' },
+    ];
+
+    const inputRoot = new Node('TankVisualParamInputs');
+    inputRoot.layer = this.node.layer;
+    inputRoot.addComponent(UITransform).setContentSize(280, 570);
+    inputRoot.setPosition(0, -18, 0);
+    propsPanel.addChild(inputRoot);
+
+    const rebuildInputs = () => {
+      inputRoot.removeAllChildren();
+      const draft = drafts[selectedKind]!;
+      for (let i = 0; i < fieldDefs.length; i++) {
+        const def = fieldDefs[i]!;
+        const x = 0;
+        const y = 258 - i * 38;
+        const lab = this.makeLabel(inputRoot, def.label, -78, y, 118, 28, 13, TEXT_SUBTITLE);
+        lab.overflow = Label.Overflow.SHRINK;
+        lab.horizontalAlign = HorizontalTextAlignment.RIGHT;
+        const input = this.makeInputField(inputRoot, 58, y, 116, 30, '0', false, formatTankDebugNumber(draft[def.key]));
+        input.maxLength = 12;
+        const applyValue = (resetInvalid: boolean) => {
+          const n = Number(input.string.trim());
+          if (!Number.isFinite(n)) {
+            if (resetInvalid) input.string = formatTankDebugNumber(draft[def.key]);
+            return;
+          }
+          draft[def.key] = n;
+          refreshPreview();
+        };
+        input.node.on('editing-did-ended', () => applyValue(true), this);
+        input.node.on('text-changed', () => applyValue(false), this);
+      }
+    };
+
+    function refreshKindButtons() {
+      for (let i = 0; i < tankButtons.length; i++) {
+        const kind = TANK_VISUAL_KINDS[i];
+        const active = kind === selectedKind;
+        tankButtons[i]?.redraw(active ? CHAPTER_BTN_ACTIVE : BTN_LEVEL_UNLOCKED, { border: active });
+        if (tankButtons[i]?.label) tankButtons[i]!.label!.color = active ? TEXT_TITLE : TEXT_PRIMARY;
+      }
+    }
+
+    function refreshFlashButton() {
+      flashBtn.redraw(showMuzzleFlash ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: showMuzzleFlash });
+      if (flashBtn.label) flashBtn.label.color = showMuzzleFlash ? TEXT_TITLE : TEXT_PRIMARY;
+    }
+
+    const normalizeAngleDeg = (deg: number) => {
+      const n = deg % 360;
+      return n < 0 ? n + 360 : n;
+    };
+    const angleVec = (deg: number) => {
+      const rad = (deg * Math.PI) / 180;
+      const ux = Math.cos(rad);
+      const uy = Math.sin(rad);
+      const len = Math.hypot(ux, uy) || 1;
+      return {
+        ux: ux / len,
+        uy: uy / len,
+        deg: normalizeAngleDeg(deg),
+      };
+    };
+    const pointerLocal = (ev: EventTouch | EventMouse) => {
+      const uiPos = ev.getUILocation();
+      const ut = previewRoot.getComponent(UITransform)!;
+      return ut.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
+    };
+    const updateDragAngle = (ev: EventTouch | EventMouse) => {
+      if (!dragMode) return;
+      const p = pointerLocal(ev);
+      const ox = dragMode === 'turret' ? lastPivot.x : 0;
+      const oy = dragMode === 'turret' ? lastPivot.y : 0;
+      const dx = p.x - ox;
+      const dy = p.y - oy;
+      if (Math.hypot(dx, dy) < 6) return;
+      const deg = normalizeAngleDeg((Math.atan2(dy, dx) * 180) / Math.PI);
+      if (dragMode === 'turret') turretAngleDeg = deg;
+      else bodyAngleDeg = deg;
+      refreshPreview();
+    };
+    const beginDrag = (mode: 'body' | 'turret', ev: EventTouch | EventMouse) => {
+      dragMode = mode;
+      ev.propagationStopped = true;
+      updateDragAngle(ev);
+    };
+    previewRoot.on(Node.EventType.TOUCH_MOVE, (ev: EventTouch) => {
+      if (!dragMode) return;
+      ev.propagationStopped = true;
+      updateDragAngle(ev);
+    }, this);
+    const endDrag = (ev: EventTouch) => {
+      if (!dragMode) return;
+      ev.propagationStopped = true;
+      dragMode = null;
+    };
+    previewRoot.on(Node.EventType.TOUCH_END, endDrag, this);
+    previewRoot.on(Node.EventType.TOUCH_CANCEL, endDrag, this);
+    previewRoot.on(Node.EventType.MOUSE_MOVE, (ev: EventMouse) => {
+      if (!dragMode) return;
+      ev.propagationStopped = true;
+      updateDragAngle(ev);
+    }, this);
+    const endMouseDrag = (ev: EventMouse) => {
+      if (!dragMode) return;
+      ev.propagationStopped = true;
+      dragMode = null;
+    };
+    previewRoot.on(Node.EventType.MOUSE_UP, endMouseDrag, this);
+    previewRoot.on(Node.EventType.MOUSE_LEAVE, endMouseDrag, this);
+    const drawHex = (parent: Node) => {
+      const n = new Node('DebugHex');
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(hexR * 2.2, hexR * 2.2);
+      const g = n.addComponent(Graphics);
+      g.fillColor = new Color(117, 130, 91, 185);
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.PI / 180 * (60 * i - 30);
+        const px = Math.cos(angle) * hexR;
+        const py = Math.sin(angle) * hexR;
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.close();
+      g.fill();
+      g.strokeColor = new Color(228, 216, 158, 235);
+      g.lineWidth = 2;
+      g.stroke();
+      parent.addChild(n);
+    };
+    const addSprite = (
+      parent: Node,
+      sf: SpriteFrame,
+      w: number,
+      h: number,
+      x: number,
+      y: number,
+      angle: number,
+      anchorX = 0.5,
+      anchorY = 0.5,
+      dragKind: 'body' | 'turret' | null = null,
+    ) => {
+      const n = new Node('DebugSprite');
+      n.layer = this.node.layer;
+      const ut = n.addComponent(UITransform);
+      ut.setContentSize(w, h);
+      ut.setAnchorPoint(anchorX, anchorY);
+      n.setPosition(x, y, 0);
+      n.angle = angle;
+      const sp = n.addComponent(Sprite);
+      sp.sizeMode = Sprite.SizeMode.CUSTOM;
+      sp.spriteFrame = sf;
+      ut.setContentSize(w, h);
+      if (dragKind) {
+        n.on(Node.EventType.TOUCH_START, (ev: EventTouch) => beginDrag(dragKind, ev), this);
+        n.on(Node.EventType.MOUSE_DOWN, (ev: EventMouse) => beginDrag(dragKind, ev), this);
+      }
+      parent.addChild(n);
+    };
+    const addPivotDot = (parent: Node, x: number, y: number) => {
+      const n = new Node('TurretPivotDot');
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(18, 18);
+      n.setPosition(x, y, 0);
+      const g = n.addComponent(Graphics);
+      g.fillColor = new Color(255, 64, 210, 255);
+      g.strokeColor = new Color(60, 0, 48, 255);
+      g.lineWidth = 1;
+      g.circle(0, 0, 2);
+      g.fill();
+      g.stroke();
+      n.on(Node.EventType.TOUCH_START, (ev: EventTouch) => beginDrag('turret', ev), this);
+      n.on(Node.EventType.MOUSE_DOWN, (ev: EventMouse) => beginDrag('turret', ev), this);
+      parent.addChild(n);
+    };
+    const addMuzzleFlash = (parent: Node, x: number, y: number, aim: { ux: number; uy: number }) => {
+      const n = new Node('DebugMuzzleFlash');
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(hexR * 1.1, hexR * 1.1);
+      n.setPosition(x, y, 0);
+      const g = n.addComponent(Graphics);
+      const p = 0.45;
+      const alpha = Math.max(0, Math.min(255, Math.round((1 - p) * 255)));
+      const s = hexR * 0.18 * (1 + p * 0.85);
+      const ux = aim.ux;
+      const uy = aim.uy;
+      const rx = uy;
+      const ry = -ux;
+
+      g.fillColor = new Color(255, 130, 36, Math.round(alpha * 0.68));
+      g.moveTo(ux * s * 1.35, uy * s * 1.35);
+      g.lineTo(-ux * s * 0.38 + rx * s * 0.48, -uy * s * 0.38 + ry * s * 0.48);
+      g.lineTo(-ux * s * 0.16, -uy * s * 0.16);
+      g.lineTo(-ux * s * 0.38 - rx * s * 0.48, -uy * s * 0.38 - ry * s * 0.48);
+      g.close();
+      g.fill();
+
+      g.fillColor = new Color(255, 226, 90, Math.round(alpha * 0.86));
+      g.moveTo(ux * s * 0.94, uy * s * 0.94);
+      g.lineTo(-ux * s * 0.20 + rx * s * 0.28, -uy * s * 0.20 + ry * s * 0.28);
+      g.lineTo(-ux * s * 0.20 - rx * s * 0.28, -uy * s * 0.20 - ry * s * 0.28);
+      g.close();
+      g.fill();
+
+      g.fillColor = new Color(255, 255, 232, alpha);
+      g.circle(ux * s * 0.16, uy * s * 0.16, s * 0.24);
+      g.fill();
+      parent.addChild(n);
+    };
+
+    function refreshPreview() {
+      if (!previewRoot.isValid) return;
+      previewRoot.removeAllChildren();
+      drawHex(previewRoot);
+      const draft = drafts[selectedKind]!;
+      const loaded = frames[selectedKind]!;
+      const body = angleVec(bodyAngleDeg);
+      const turret = angleVec(turretAngleDeg);
+      const offsetUnit = hexR * Math.sqrt(3);
+      selectedLabel.string = `${tankVisualAssetName(selectedKind)} / ${selectedKind}`;
+      bodyAngleLabel.string = `车身 ${Math.round(normalizeAngleDeg(bodyAngleDeg))}°`;
+      turretAngleLabel.string = `炮塔 ${Math.round(normalizeAngleDeg(turretAngleDeg))}°`;
+      lastPivot = { x: 0, y: 0 };
+
+      if (splitKindSet.has(selectedKind) && loaded.hull && loaded.turret) {
+        const kind = selectedKind as SplitTankKind;
+        const geometry = splitTankGeometryConfigOf(kind);
+        const topTrim = geometry.topTrim;
+        const turretTrim = geometry.turretTrim;
+        const pivot = geometry.pivot;
+        const fit = hexR * 1.8 * Math.max(0.001, draft.hullFitScale);
+        const scale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
+        const hullF = draft.hullOffsetForward * offsetUnit;
+        const hullR = draft.hullOffsetRight * offsetUnit;
+        const baseX = hullF * body.ux + hullR * body.uy;
+        const baseY = hullF * body.uy + hullR * (-body.ux);
+        const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+        const cos = Math.cos(bodyAngle);
+        const sin = Math.sin(bodyAngle);
+        const pivotLocalX = (draft.turretPivotX - (topTrim.x + topTrim.w / 2)) * scale;
+        const pivotLocalY = ((topTrim.y + topTrim.h / 2) - draft.turretPivotY) * scale;
+        const pivotX = baseX + pivotLocalX * cos - pivotLocalY * sin;
+        const pivotY = baseY + pivotLocalX * sin + pivotLocalY * cos;
+        const turretScale = scale * Math.max(0.001, draft.turretScale);
+        const turretF = draft.turretOffsetForward * offsetUnit;
+        const turretR = draft.turretOffsetRight * offsetUnit;
+        const anchorX = (pivot.spriteX - turretTrim.x) / turretTrim.w
+          + turretF / (turretTrim.w * turretScale);
+        const anchorY = 1 - ((pivot.spriteY - turretTrim.y) / turretTrim.h)
+          - turretR / (turretTrim.h * turretScale);
+        lastPivot = { x: pivotX, y: pivotY };
+
+        addSprite(previewRoot, loaded.hull, topTrim.w * scale, topTrim.h * scale, baseX, baseY, body.deg + 180, 0.5, 0.5, 'body');
+        addSprite(
+          previewRoot,
+          loaded.turret,
+          turretTrim.w * turretScale,
+          turretTrim.h * turretScale,
+          pivotX,
+          pivotY,
+          turret.deg + 180,
+          anchorX,
+          anchorY,
+          'turret',
+        );
+        if (showMuzzleFlash) {
+          const localX = (draft.muzzleSpriteX - pivot.spriteX) * turretScale - turretF;
+          const localY = (pivot.spriteY - draft.muzzleSpriteY) * turretScale + turretR;
+          const right = { ux: turret.uy, uy: -turret.ux };
+          addMuzzleFlash(
+            previewRoot,
+            pivotX + localX * (-turret.ux) + localY * right.ux,
+            pivotY + localX * (-turret.uy) + localY * right.uy,
+            turret,
+          );
+        }
+        addPivotDot(previewRoot, pivotX, pivotY);
+        statusLabel.string = '拆分车身/炮塔预览；粉色圆点为炮塔转轴。';
+        return;
+      }
+
+      if (loaded.top) {
+        const sf = loaded.top;
+        const displayW = loaded.topW > 0 ? loaded.topW : sf.width;
+        const displayH = loaded.topH > 0 ? loaded.topH : sf.height;
+        const fit = hexR * 1.8 * Math.max(0.001, draft.fitScale);
+        const maxDim = Math.max(displayW, displayH) || 1;
+        const tw0 = (displayW / maxDim) * fit;
+        const th0 = (displayH / maxDim) * fit;
+        const k = Math.sqrt(Math.max(0.001, draft.aspectRatioMul));
+        const f = draft.offsetForward * offsetUnit;
+        const r = draft.offsetRight * offsetUnit;
+        const baseX = f * body.ux + r * body.uy;
+        const baseY = f * body.uy + r * (-body.ux);
+        addSprite(
+          previewRoot,
+          sf,
+          tw0 * k,
+          th0 / k,
+          baseX,
+          baseY,
+          body.deg + 180,
+          0.5,
+          0.5,
+          'body',
+        );
+        if (showMuzzleFlash) {
+          if (draft.muzzleSpriteX !== 0 || draft.muzzleSpriteY !== 0) {
+            const scaleX = (tw0 * k) / (displayW || 1);
+            const scaleY = (th0 / k) / (displayH || 1);
+            const right = { ux: body.uy, uy: -body.ux };
+            const localX = (draft.muzzleSpriteX - displayW / 2) * scaleX;
+            const localY = (displayH / 2 - draft.muzzleSpriteY) * scaleY;
+            addMuzzleFlash(
+              previewRoot,
+              baseX + localX * (-body.ux) + localY * right.ux,
+              baseY + localX * (-body.uy) + localY * right.uy,
+              body,
+            );
+          }
+        }
+        addPivotDot(previewRoot, 0, 0);
+        statusLabel.string = '完整俯视图预览；该单位没有可旋转炮塔资源。';
+        return;
+      }
+
+      statusLabel.string = '资源加载中...';
+    }
+
+    refreshKindButtons();
+    refreshFlashButton();
+    rebuildInputs();
+    refreshPreview();
   }
 
   private openLoginGate() {
@@ -2775,6 +3302,25 @@ function readSaveSafe(): SaveData | null {
     console.warn('[Menu] 存档读取失败', e);
     return null;
   }
+}
+
+function tankVisualAssetName(kind: TankVisualKind): string {
+  switch (kind) {
+    case 'sherman': return 'Sherman';
+    case 'tiger': return 'Tiger';
+    case 'panzer4': return 'Panzer IV';
+    case 'panzer3': return 'Panzer III';
+    case 'type97': return 'Type 97';
+    case 'at_gun': return 'AT Gun';
+    case 'heavy_artillery': return 'Artillery';
+    case 'truck': return 'Truck';
+    default: return kind;
+  }
+}
+
+function formatTankDebugNumber(value: number): string {
+  if (!Number.isFinite(value)) return '0';
+  return String(Math.round(value * 10000) / 10000);
 }
 
 interface AuthSession {

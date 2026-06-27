@@ -277,11 +277,9 @@ interface SplitTankSpriteAssets {
   hullDisplayH: number;
 }
 
-const SHERMAN_SPLIT_VISUAL_CONFIG = splitTankVisualConfigOf('sherman');
 const TIGER_SPLIT_VISUAL_CONFIG = splitTankVisualConfigOf('tiger');
 const PANZER4_SPLIT_VISUAL_CONFIG = splitTankVisualConfigOf('panzer4');
 const PANZER3_SPLIT_VISUAL_CONFIG = splitTankVisualConfigOf('panzer3');
-const SHERMAN_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('sherman');
 const TIGER_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('tiger');
 const PANZER4_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('panzer4');
 const PANZER3_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('panzer3');
@@ -1081,14 +1079,10 @@ export class BattleScene extends Component {
   private shermanTopSpriteFrame: SpriteFrame | null = null;
   private shermanTurretSpriteNode: Node | null = null;
   private shermanTurretTopSprite: Sprite | null = null;
-  private shermanHullSpriteFrame: SpriteFrame | null = null;
-  private shermanTurretSpriteFrame: SpriteFrame | null = null;
   private splitTankSprites: Partial<Record<SplitTankKind, SplitTankSpriteAssets>> = {};
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
   private shermanSpriteDisplayH = 0;
-  private shermanHullSpriteDisplayW = 0;
-  private shermanHullSpriteDisplayH = 0;
   /** 德军俯视图（四号/三号/虎/卡）：多单位共用节点池；每帧 redraw 开头清零再按绘制顺序占用 */
   private enemyTopMeta: Partial<Record<EnemyTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private destroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
@@ -1444,20 +1438,6 @@ export class BattleScene extends Component {
   private static readonly PLAYER_DICE_SORT_DUR = 0.5;
   private static readonly TERRAIN_SPRITE_POOL = 384;
   private static readonly FOLIAGE_SPRITE_POOL = 384;
-  private static readonly SHERMAN_TURRET_PIVOT_X = SHERMAN_SPLIT_GEOMETRY_CONFIG.pivot.bodyX;
-  private static readonly SHERMAN_TURRET_PIVOT_Y = SHERMAN_SPLIT_GEOMETRY_CONFIG.pivot.bodyY;
-  private static readonly SHERMAN_TURRET_OFFSET_FORWARD = SHERMAN_SPLIT_VISUAL_CONFIG.turretLocalOffsetForward;
-  private static readonly SHERMAN_TURRET_OFFSET_RIGHT = SHERMAN_SPLIT_VISUAL_CONFIG.turretLocalOffsetRight;
-  private static readonly SHERMAN_TOP_TRIM_X = SHERMAN_SPLIT_GEOMETRY_CONFIG.topTrim.x;
-  private static readonly SHERMAN_TOP_TRIM_Y = SHERMAN_SPLIT_GEOMETRY_CONFIG.topTrim.y;
-  private static readonly SHERMAN_TOP_TRIM_W = SHERMAN_SPLIT_GEOMETRY_CONFIG.topTrim.w;
-  private static readonly SHERMAN_TOP_TRIM_H = SHERMAN_SPLIT_GEOMETRY_CONFIG.topTrim.h;
-  private static readonly SHERMAN_TURRET_SPRITE_PIVOT_X = SHERMAN_SPLIT_GEOMETRY_CONFIG.pivot.spriteX;
-  private static readonly SHERMAN_TURRET_SPRITE_PIVOT_Y = SHERMAN_SPLIT_GEOMETRY_CONFIG.pivot.spriteY;
-  private static readonly SHERMAN_TURRET_TRIM_X = SHERMAN_SPLIT_GEOMETRY_CONFIG.turretTrim.x;
-  private static readonly SHERMAN_TURRET_TRIM_Y = SHERMAN_SPLIT_GEOMETRY_CONFIG.turretTrim.y;
-  private static readonly SHERMAN_TURRET_TRIM_W = SHERMAN_SPLIT_GEOMETRY_CONFIG.turretTrim.w;
-  private static readonly SHERMAN_TURRET_TRIM_H = SHERMAN_SPLIT_GEOMETRY_CONFIG.turretTrim.h;
   private static readonly TIGER_TURRET_PIVOT_X = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.bodyX;
   private static readonly TIGER_TURRET_PIVOT_Y = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.bodyY;
   private static readonly TIGER_TURRET_SPRITE_PIVOT_X = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.spriteX;
@@ -1551,11 +1531,6 @@ export class BattleScene extends Component {
           split.hull = sf;
           split.hullDisplayW = dw;
           split.hullDisplayH = dh;
-          if (kind === 'sherman') {
-            this.shermanHullSpriteFrame = sf;
-            this.shermanHullSpriteDisplayW = dw;
-            this.shermanHullSpriteDisplayH = dh;
-          }
         },
       );
       this.loadSpriteFrame(
@@ -1563,10 +1538,6 @@ export class BattleScene extends Component {
         `[BattleScene] ${kind} turret split sprite load failed; fallback to top sprite:`,
         (sf) => {
           split.turret = sf;
-          if (kind === 'sherman') {
-            this.shermanTurretSpriteFrame = sf;
-            if (this.shermanTurretTopSprite) this.shermanTurretTopSprite.spriteFrame = sf;
-          }
         },
       );
     });
@@ -2648,9 +2619,11 @@ export class BattleScene extends Component {
 
   // ---------- 单位状态常驻文字 ----------
 
-  /** 实际烟雾等级：普通着火取 fireLevel；非主角坦克受损固定等同着火 2 级。 */
+  /** Visual-only smoke level: real fire uses fireLevel; damaged enemy tanks show level-2 black smoke. */
   private damageSmokeLevel(u: Unit): number {
-    return Math.max(u.fireLevel ?? 0, 0);
+    const fireLevel = Math.max(u.fireLevel ?? 0, 0);
+    const damagedEnemyTankLevel = u.faction === 'enemy' && isTankUnit(u) && u.damaged ? 2 : 0;
+    return Math.max(fireLevel, damagedEnemyTankLevel);
   }
 
   /** 给本回合刚毁的单位在格子下方挂「已毁」短文字；下回合起不再生成。 */
@@ -5382,11 +5355,11 @@ export class BattleScene extends Component {
     switch (kind) {
       case 'sherman':
         return {
-          trimW: BattleScene.SHERMAN_TOP_TRIM_W,
-          trimH: BattleScene.SHERMAN_TOP_TRIM_H,
-          fitScale: SHERMAN_SPLIT_VISUAL_CONFIG.hullFitScale,
-          offsetForward: SHERMAN_SPLIT_VISUAL_CONFIG.hullOffsetForward,
-          offsetRight: SHERMAN_SPLIT_VISUAL_CONFIG.hullOffsetRight,
+          trimW: splitTankGeometryConfigOf('sherman').topTrim.w,
+          trimH: splitTankGeometryConfigOf('sherman').topTrim.h,
+          fitScale: splitTankVisualConfigOf('sherman').hullFitScale,
+          offsetForward: splitTankVisualConfigOf('sherman').hullOffsetForward,
+          offsetRight: splitTankVisualConfigOf('sherman').hullOffsetRight,
         };
       case 'tiger':
         return {
@@ -5474,85 +5447,6 @@ export class BattleScene extends Component {
     node.setScale(1, 1, 1);
     node.setPosition(c.x + f * body.ux + r * body.uy, c.y + f * body.uy + r * (-body.ux), 0);
     node.angle = (Math.atan2(body.uy, body.ux) * 180) / Math.PI + 180;
-  }
-
-  private applyShermanTurretSprite(
-    u: Unit,
-    c: { x: number; y: number },
-    bodyFacingLerp?: DirectionLerp | null,
-    turretFacingLerp?: DirectionLerp | null,
-  ) {
-    if (!this.shermanTurretSpriteNode || !this.shermanTurretTopSprite || !this.shermanTurretSpriteFrame) return;
-    this.applyShermanTurretSpriteTo(
-      { node: this.shermanTurretSpriteNode, sprite: this.shermanTurretTopSprite },
-      u,
-      c,
-      bodyFacingLerp,
-      turretFacingLerp,
-    );
-  }
-
-  private applyShermanTurretSpriteTo(
-    slot: { node: Node; sprite: Sprite },
-    u: Unit,
-    c: { x: number; y: number },
-    bodyFacingLerp?: DirectionLerp | null,
-    turretFacingLerp?: DirectionLerp | null,
-  ) {
-    if (!this.shermanTurretSpriteFrame) return;
-    const sf = this.shermanTurretSpriteFrame;
-    const node = slot.node;
-    const sp = slot.sprite;
-    const ut = node.getComponent(UITransform)!;
-    const cfg = SHERMAN_SPLIT_VISUAL_CONFIG;
-    const srcW = BattleScene.SHERMAN_TOP_TRIM_W;
-    const srcH = BattleScene.SHERMAN_TOP_TRIM_H;
-    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
-    const maxDim = Math.max(srcW, srcH) || 1;
-    const tw0 = (srcW / maxDim) * fit;
-    const th0 = (srcH / maxDim) * fit;
-    const topW = tw0;
-    const topH = th0;
-    const scaleX = topW / srcW;
-    const scaleY = topH / srcH;
-
-    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
-    const turret = this.topDownForwardVec(u, c, turretFacingLerp);
-    const offsetUnit = this.hexSize * Math.sqrt(3);
-    const f = cfg.hullOffsetForward * offsetUnit;
-    const r = cfg.hullOffsetRight * offsetUnit;
-    const baseX = c.x + f * body.ux + r * body.uy;
-    const baseY = c.y + f * body.uy + r * (-body.ux);
-    const turretOffsetF = BattleScene.SHERMAN_TURRET_OFFSET_FORWARD * scaleX;
-    const turretOffsetR = BattleScene.SHERMAN_TURRET_OFFSET_RIGHT * scaleY;
-
-    const pivotLocalX = (BattleScene.SHERMAN_TURRET_PIVOT_X
-      - (BattleScene.SHERMAN_TOP_TRIM_X + BattleScene.SHERMAN_TOP_TRIM_W / 2)) * scaleX;
-    const pivotLocalY = ((BattleScene.SHERMAN_TOP_TRIM_Y + BattleScene.SHERMAN_TOP_TRIM_H / 2)
-      - BattleScene.SHERMAN_TURRET_PIVOT_Y) * scaleY;
-    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
-    const cos = Math.cos(bodyAngle);
-    const sin = Math.sin(bodyAngle);
-
-    sp.spriteFrame = sf;
-    sp.sizeMode = Sprite.SizeMode.CUSTOM;
-    this.applyTankConcealmentOpacity(sp, u);
-    ut.setContentSize(
-      BattleScene.SHERMAN_TURRET_TRIM_W * scaleX * cfg.turretScale,
-      BattleScene.SHERMAN_TURRET_TRIM_H * scaleY * cfg.turretScale,
-    );
-    ut.setAnchorPoint(
-      (BattleScene.SHERMAN_TURRET_SPRITE_PIVOT_X - BattleScene.SHERMAN_TURRET_TRIM_X) / BattleScene.SHERMAN_TURRET_TRIM_W,
-      1 - ((BattleScene.SHERMAN_TURRET_SPRITE_PIVOT_Y - BattleScene.SHERMAN_TURRET_TRIM_Y) / BattleScene.SHERMAN_TURRET_TRIM_H),
-    );
-    node.setScale(1, 1, 1);
-    node.setPosition(
-      baseX + (pivotLocalX + turretOffsetF) * cos - (pivotLocalY + turretOffsetR) * sin,
-      baseY + (pivotLocalX + turretOffsetF) * sin + (pivotLocalY + turretOffsetR) * cos,
-      0,
-    );
-    node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
-    node.active = true;
   }
 
   private applySplitTankHullSprite(
@@ -5700,23 +5594,37 @@ export class BattleScene extends Component {
     facingLerp?: DirectionLerp | null,
   ) {
     const splitReady =
-      this.shermanHullSpriteFrame &&
-      this.shermanTurretSpriteFrame &&
+      this.enemySupportsSplitTurret(u) &&
       this.shermanTurretSpriteNode &&
       this.shermanTurretTopSprite;
 
-    this.applyTopDownTankSprite(
-      this.shermanSpriteNode!,
-      this.shermanTopSprite!,
-      splitReady ? this.shermanHullSpriteFrame! : this.shermanTopSpriteFrame!,
-      splitReady ? this.shermanHullSpriteDisplayW : this.shermanSpriteDisplayW,
-      splitReady ? this.shermanHullSpriteDisplayH : this.shermanSpriteDisplayH,
-      u,
-      c,
-      facingLerp,
-    );
     if (splitReady) {
-      this.applyShermanTurretSprite(u, c, facingLerp, this.currentShermanTurretLerp(u) ?? facingLerp);
+      this.applySplitTankHullSprite(
+        { node: this.shermanSpriteNode!, sprite: this.shermanTopSprite! },
+        u,
+        'sherman',
+        c,
+        facingLerp,
+      );
+      this.applySplitTankTurretSprite(
+        { node: this.shermanTurretSpriteNode!, sprite: this.shermanTurretTopSprite! },
+        u,
+        'sherman',
+        c,
+        facingLerp,
+        this.currentShermanTurretLerp(u) ?? facingLerp,
+      );
+    } else {
+      this.applyTopDownTankSprite(
+        this.shermanSpriteNode!,
+        this.shermanTopSprite!,
+        this.shermanTopSpriteFrame!,
+        this.shermanSpriteDisplayW,
+        this.shermanSpriteDisplayH,
+        u,
+        c,
+        facingLerp,
+      );
     }
     if (!u.destroyed && this.mapNode) {
       this.shermanSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
@@ -5907,27 +5815,7 @@ export class BattleScene extends Component {
     // 德军俯视图：四号 / 三号 / 虎 / 卡（多辆用池；与谢尔曼同一套缩放/朝向/裁切缓存）
     if (isEnemyTopKind(u.kind)
         && this.enemyTopPoolNext < this.enemyTopSpritePool.length) {
-      if (u.kind === 'sherman'
-          && this.shermanHullSpriteFrame
-          && this.shermanTurretSpriteFrame
-          && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
-        const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
-        this.applyTopDownTankSprite(
-          hullSlot.node,
-          hullSlot.sprite,
-          this.shermanHullSpriteFrame,
-          this.shermanHullSpriteDisplayW,
-          this.shermanHullSpriteDisplayH,
-          u,
-          c,
-          facingLerp,
-        );
-        const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
-        this.applyShermanTurretSpriteTo(turretSlot, u, c, facingLerp, this.currentEnemyTurretLerp(u) ?? facingLerp);
-        return;
-      }
       if (isSplitTankKind(u.kind)
-          && u.kind !== 'sherman'
           && this.enemySupportsSplitTurret(u)
           && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
         const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
@@ -10413,54 +10301,6 @@ export class BattleScene extends Component {
     );
   }
 
-  private addTileInspectShermanSplit(parent: Node, u: Unit, hexR: number): boolean {
-    const hull = this.shermanHullSpriteFrame;
-    const turret = this.shermanTurretSpriteFrame;
-    if (!hull || !turret) return false;
-    const cfg = SHERMAN_SPLIT_VISUAL_CONFIG;
-    const srcW = BattleScene.SHERMAN_TOP_TRIM_W;
-    const srcH = BattleScene.SHERMAN_TOP_TRIM_H;
-    const fit = hexR * 1.8 * cfg.hullFitScale;
-    const maxDim = Math.max(srcW, srcH) || 1;
-    const tw0 = (srcW / maxDim) * fit;
-    const th0 = (srcH / maxDim) * fit;
-    const topW = tw0;
-    const topH = th0;
-    const scaleX = topW / srcW;
-    const scaleY = topH / srcH;
-    const body = this.tileInspectForwardVec(u);
-    const offsetUnit = hexR * Math.sqrt(3);
-    const f = cfg.hullOffsetForward * offsetUnit;
-    const r = cfg.hullOffsetRight * offsetUnit;
-    const baseX = f * body.ux + r * body.uy;
-    const baseY = f * body.uy + r * (-body.ux);
-    const turretOffsetF = BattleScene.SHERMAN_TURRET_OFFSET_FORWARD * scaleX;
-    const turretOffsetR = BattleScene.SHERMAN_TURRET_OFFSET_RIGHT * scaleY;
-    const angle = this.tileInspectFacingAngle(u);
-
-    this.addTileInspectCustomSprite(parent, hull, topW, topH, baseX, baseY, angle);
-
-    const pivotLocalX = (BattleScene.SHERMAN_TURRET_PIVOT_X
-      - (BattleScene.SHERMAN_TOP_TRIM_X + BattleScene.SHERMAN_TOP_TRIM_W / 2)) * scaleX;
-    const pivotLocalY = ((BattleScene.SHERMAN_TOP_TRIM_Y + BattleScene.SHERMAN_TOP_TRIM_H / 2)
-      - BattleScene.SHERMAN_TURRET_PIVOT_Y) * scaleY;
-    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
-    const cos = Math.cos(bodyAngle);
-    const sin = Math.sin(bodyAngle);
-    this.addTileInspectCustomSprite(
-      parent,
-      turret,
-      BattleScene.SHERMAN_TURRET_TRIM_W * scaleX * cfg.turretScale,
-      BattleScene.SHERMAN_TURRET_TRIM_H * scaleY * cfg.turretScale,
-      baseX + (pivotLocalX + turretOffsetF) * cos - (pivotLocalY + turretOffsetR) * sin,
-      baseY + (pivotLocalX + turretOffsetF) * sin + (pivotLocalY + turretOffsetR) * cos,
-      angle,
-      (BattleScene.SHERMAN_TURRET_SPRITE_PIVOT_X - BattleScene.SHERMAN_TURRET_TRIM_X) / BattleScene.SHERMAN_TURRET_TRIM_W,
-      1 - ((BattleScene.SHERMAN_TURRET_SPRITE_PIVOT_Y - BattleScene.SHERMAN_TURRET_TRIM_Y) / BattleScene.SHERMAN_TURRET_TRIM_H),
-    );
-    return true;
-  }
-
   private addTileInspectSplitTank(
     parent: Node,
     u: Unit,
@@ -10570,17 +10410,8 @@ export class BattleScene extends Component {
       this.g = oldG;
       return;
     }
-    if (u.kind === 'sherman' && this.shermanTopSpriteFrame) {
-      if (this.addTileInspectShermanSplit(parent, u, hexR)) {
-        this.g = oldG;
-        return;
-      }
-      this.addTileInspectTopDownTankSprite(parent, u, this.shermanTopSpriteFrame, this.shermanSpriteDisplayW, this.shermanSpriteDisplayH, hexR);
-      this.g = oldG;
-      return;
-    }
     if (isEnemyTopKind(u.kind)) {
-      if (isSplitTankKind(u.kind) && u.kind !== 'sherman') {
+      if (isSplitTankKind(u.kind)) {
         const assets = this.splitTankSprites[u.kind];
         if (this.addTileInspectSplitTank(
           parent,
@@ -10596,6 +10427,11 @@ export class BattleScene extends Component {
           this.g = oldG;
           return;
         }
+      }
+      if (u.kind === 'sherman' && this.shermanTopSpriteFrame) {
+        this.addTileInspectTopDownTankSprite(parent, u, this.shermanTopSpriteFrame, this.shermanSpriteDisplayW, this.shermanSpriteDisplayH, hexR);
+        this.g = oldG;
+        return;
       }
       const meta = this.enemyTopMeta[u.kind];
       if (meta?.sf) {
@@ -11959,7 +11795,7 @@ export class BattleScene extends Component {
       onDone();
       return;
     }
-    if (!this.shermanTurretSpriteFrame || !this.shermanHullSpriteFrame) {
+    if (!this.enemySupportsSplitTurret(sherman)) {
       this.shermanTurretFacing = to;
       sherman.turretFacing = to;
       this.redraw();

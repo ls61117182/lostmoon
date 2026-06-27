@@ -29,8 +29,6 @@ const NUM_FIELDS = [
   'hullOffsetRight',
   'turretOffsetForward',
   'turretOffsetRight',
-  'turretLocalOffsetForward',
-  'turretLocalOffsetRight',
   'topTrimX',
   'topTrimY',
   'topTrimW',
@@ -218,8 +216,6 @@ function build() {
   lines.push('  hullOffsetRight: number;');
   lines.push('  turretOffsetForward: number;');
   lines.push('  turretOffsetRight: number;');
-  lines.push('  turretLocalOffsetForward: number;');
-  lines.push('  turretLocalOffsetRight: number;');
   lines.push('}');
   lines.push('');
   lines.push('export interface SplitTankGeometryConfig {');
@@ -256,7 +252,7 @@ function build() {
   lines.push('const SPLIT_TANK_VISUAL_CONFIG: Record<SplitTankKind, SplitTankVisualConfig> = {');
   for (const kind of SPLIT_KINDS) {
     const r = byKind.get(kind);
-    lines.push(`  ${kind}: { hullFitScale: ${emitNum(r.hullFitScale)}, turretScale: ${emitNum(r.turretScale)}, hullOffsetForward: ${emitNum(r.hullOffsetForward)}, hullOffsetRight: ${emitNum(r.hullOffsetRight)}, turretOffsetForward: ${emitNum(r.turretOffsetForward)}, turretOffsetRight: ${emitNum(r.turretOffsetRight)}, turretLocalOffsetForward: ${emitNum(r.turretLocalOffsetForward)}, turretLocalOffsetRight: ${emitNum(r.turretLocalOffsetRight)} },`);
+    lines.push(`  ${kind}: { hullFitScale: ${emitNum(r.hullFitScale)}, turretScale: ${emitNum(r.turretScale)}, hullOffsetForward: ${emitNum(r.hullOffsetForward)}, hullOffsetRight: ${emitNum(r.hullOffsetRight)}, turretOffsetForward: ${emitNum(r.turretOffsetForward)}, turretOffsetRight: ${emitNum(r.turretOffsetRight)} },`);
   }
   lines.push('};');
   lines.push('');

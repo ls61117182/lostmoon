@@ -36,8 +36,6 @@ export interface SplitTankVisualConfig {
   hullOffsetRight: number;
   turretOffsetForward: number;
   turretOffsetRight: number;
-  turretLocalOffsetForward: number;
-  turretLocalOffsetRight: number;
 }
 
 export interface SplitTankGeometryConfig {
@@ -74,30 +72,30 @@ const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
   panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 222 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 296 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 205 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  at_gun: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 16, spriteY: 312 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  heavy_artillery: { fitScale: 0.85, offsetForward: 0.15, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 8, spriteY: 345 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  at_gun: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 16, spriteY: 305 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  heavy_artillery: { fitScale: 0.85, offsetForward: 0.15, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 8, spriteY: 335 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   truck: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 0 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
 };
 
 const SPLIT_TANK_VISUAL_CONFIG: Record<SplitTankKind, SplitTankVisualConfig> = {
-  sherman: { hullFitScale: 0.76, turretScale: 3, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, turretLocalOffsetForward: 0, turretLocalOffsetRight: 0 },
-  tiger: { hullFitScale: 0.6755, turretScale: 0.8, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.08, turretOffsetRight: 0, turretLocalOffsetForward: 0, turretLocalOffsetRight: 0 },
-  panzer4: { hullFitScale: 0.7, turretScale: 0.88, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, turretLocalOffsetForward: 0, turretLocalOffsetRight: 0 },
-  panzer3: { hullFitScale: 0.84, turretScale: 0.63, hullOffsetForward: -0.1, hullOffsetRight: 0, turretOffsetForward: 0.05, turretOffsetRight: 0, turretLocalOffsetForward: 0, turretLocalOffsetRight: 0 },
-  type97: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, turretLocalOffsetForward: 0, turretLocalOffsetRight: 0 },
+  sherman: { hullFitScale: 0.76, turretScale: 3, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.015, turretOffsetRight: 0 },
+  tiger: { hullFitScale: 0.6755, turretScale: 0.75, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.05, turretOffsetRight: 0 },
+  panzer4: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0 },
+  panzer3: { hullFitScale: 0.84, turretScale: 0.63, hullOffsetForward: -0.1, hullOffsetRight: 0, turretOffsetForward: 0.05, turretOffsetRight: 0 },
+  type97: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.015, turretOffsetRight: 0 },
 };
 
 const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig> = {
   sherman: {
     topTrim: { x: 259, y: 12, w: 1310, h: 576 },
     turretTrim: { x: 94, y: 24, w: 286, h: 157 },
-    pivot: { bodyX: 927, bodyY: 296, spriteX: 309, spriteY: 99 },
+    pivot: { bodyX: 915, bodyY: 296, spriteX: 309, spriteY: 99 },
     muzzle: { spriteX: 94, spriteY: 99 },
   },
   tiger: {
     topTrim: { x: 0, y: 0, w: 901, h: 592 },
     turretTrim: { x: 0, y: 0, w: 1341, h: 500 },
-    pivot: { bodyX: 454, bodyY: 292, spriteX: 875, spriteY: 243 },
+    pivot: { bodyX: 430, bodyY: 292, spriteX: 875, spriteY: 243 },
     muzzle: { spriteX: 0, spriteY: 243 },
   },
   panzer4: {
@@ -115,7 +113,7 @@ const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig>
   type97: {
     topTrim: { x: 0, y: 0, w: 1509, h: 632 },
     turretTrim: { x: 0, y: 0, w: 959, h: 410 },
-    pivot: { bodyX: 737, bodyY: 281, spriteX: 687, spriteY: 205 },
+    pivot: { bodyX: 660, bodyY: 270, spriteX: 687, spriteY: 205 },
     muzzle: { spriteX: 0, spriteY: 205 },
   },
 };
