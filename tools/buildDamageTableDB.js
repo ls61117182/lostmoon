@@ -16,7 +16,6 @@ const CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'DamageTableDB.ts');
 
 const REQUIRED_HEADERS = ['targetClass', 'damageCheckType', 'die', 'effects', 'notes'];
-const TARGET_CLASSES = ['german_tank', 'us_tank', 'protagonist'];
 const DAMAGE_CHECK_TYPES = ['front', 'right', 'left', 'rear'];
 const EFFECTS = ['destroyed', 'fire', 'turret', 'paralyzed', 'radio'];
 const CREW_ROLES = ['commander', 'loader', 'gunner', 'driver', 'coDriver'];
@@ -80,11 +79,13 @@ function build() {
     requiredHeaders: REQUIRED_HEADERS,
   });
   const records = toRecords(rows);
+  const targetClasses = Array.from(new Set(records.map(rec => rec.targetClass))).sort();
+  if (!targetClasses.length) throw new Error('CSV has no targetClass rows');
   const byKey = new Map();
 
   for (const rec of records) {
-    if (!TARGET_CLASSES.includes(rec.targetClass)) {
-      throw new Error(`row ${rec.__row}: targetClass="${rec.targetClass}" must be ${TARGET_CLASSES.join(' / ')}`);
+    if (!rec.targetClass) {
+      throw new Error(`row ${rec.__row}: targetClass is empty`);
     }
     if (!DAMAGE_CHECK_TYPES.includes(rec.damageCheckType)) {
       throw new Error(`row ${rec.__row}: damageCheckType="${rec.damageCheckType}" must be ${DAMAGE_CHECK_TYPES.join(' / ')}`);
@@ -95,7 +96,7 @@ function build() {
     byKey.set(key, { ...rec, die, groups: parseEffects(rec) });
   }
 
-  for (const targetClass of TARGET_CLASSES) {
+  for (const targetClass of targetClasses) {
     for (const damageCheckType of DAMAGE_CHECK_TYPES) {
       for (let die = 1; die <= 6; die++) {
         const key = `${targetClass}|${damageCheckType}|${die}`;
@@ -114,7 +115,7 @@ function build() {
   lines.push('');
   lines.push("import type { DamageCheckType } from './AttackDirectionDB';");
   lines.push('');
-  lines.push("export type DamageTargetClass = 'german_tank' | 'us_tank' | 'protagonist';");
+  lines.push(`export type DamageTargetClass = ${targetClasses.map(c => js(c)).join(' | ')};`);
   lines.push("export type DamageTableEffectKind = 'destroyed' | 'fire' | 'turret' | 'paralyzed' | 'radio' | 'crew';");
   lines.push("export type DamageTableCrewRole = 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver';");
   lines.push('');
@@ -132,7 +133,7 @@ function build() {
   lines.push('}');
   lines.push('');
   lines.push('export const DAMAGE_TABLE: Record<DamageTargetClass, Record<DamageCheckType, Record<number, DamageTableEntry>>> = {');
-  for (const targetClass of TARGET_CLASSES) {
+  for (const targetClass of targetClasses) {
     lines.push(`  ${targetClass}: {`);
     for (const damageCheckType of DAMAGE_CHECK_TYPES) {
       lines.push(`    ${damageCheckType}: {`);

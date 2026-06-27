@@ -1,15 +1,4 @@
 #!/usr/bin/env node
-/**
- * data/enemy_ai_table.csv + data/enemy_ai_dice.csv
- *   → assets/scripts/core/EnemyAIDB.ts
- *
- * 对应 GDD §3.7：
- *   - 骰数表：起始格地形 / 受损 → 掷骰数（road 4 / field 4 / mud 3 / damaged 2）
- *   - 行动表：列 × 骰面 1..6 → 主行动 primary + 可选降级 fallback
- *
- * 零依赖 Node 18+。策划改完 CSV 后跑一下 `node tools/buildEnemyAIDB.js` 即可。
- */
-
 'use strict';
 
 const fs = require('fs');
@@ -19,9 +8,13 @@ const { readCsvRowsSmart } = require('./csvSmart');
 const ROOT = path.resolve(__dirname, '..');
 const TABLE_CSV = path.join(ROOT, 'data', 'enemy_ai_table.csv');
 const DICE_CSV = path.join(ROOT, 'data', 'enemy_ai_dice.csv');
+const HARDCORE_TANK_ACTION_CSV = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
+const HARDCORE_TANK_DICE_CSV = path.join(ROOT, 'data', 'enemy_hardcore_tank_dice.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'EnemyAIDB.ts');
 
 const AI_COLUMNS = ['road', 'field', 'mud', 'damaged', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
+const HARDCORE_TANK_DIE_TYPES = ['attack', 'move'];
+const HARDCORE_TANK_TERRAINS = ['road', 'field', 'mud', 'clear', 'trees', 'beach', 'airstrip'];
 const AI_ACTIONS = [
   'shoot',
   'turn',
@@ -37,66 +30,9 @@ const AI_ACTIONS = [
   'none',
 ];
 
-function readCsvSmart(filePath) {
-  const buf = fs.readFileSync(filePath);
-  const hasBOM = buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF;
-
-  let text;
-  let label;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
-    label = hasBOM ? 'UTF-8 (with BOM)' : 'UTF-8 (no BOM)';
-  } catch (_) {
-    text = new TextDecoder('gbk').decode(buf);
-    label = 'GBK (Windows 中文 Excel 默认)';
-  }
-  if (!hasBOM || label.startsWith('GBK')) {
-    const fixed = Buffer.concat([
-      Buffer.from([0xEF, 0xBB, 0xBF]),
-      Buffer.from(text, 'utf8'),
-    ]);
-    fs.writeFileSync(filePath, fixed);
-    console.warn(`[buildEnemyAIDB] 注意：${path.basename(filePath)} 原编码 ${label}，已转为 UTF-8 + BOM`);
-  }
-  return text;
-}
-
-function parseCSV(text) {
-  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-  const rows = [];
-  let row = [];
-  let cur = '';
-  let inQuote = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuote) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { cur += '"'; i++; }
-        else inQuote = false;
-      } else cur += c;
-    } else if (c === '"' && cur === '') {
-      inQuote = true;
-    } else if (c === ',') {
-      row.push(cur); cur = '';
-    } else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(cur); cur = '';
-      if (row.length > 1 || row[0] !== '') rows.push(row);
-      row = [];
-    } else {
-      cur += c;
-    }
-  }
-  if (cur !== '' || row.length) {
-    row.push(cur);
-    if (row.length > 1 || row[0] !== '') rows.push(row);
-  }
-  return rows;
-}
-
 function toRecords(rows, csvPath) {
-  if (rows.length === 0) throw new Error(`${path.basename(csvPath)} 是空的`);
-  const headers = rows[0].map(h => h.trim());
+  if (rows.length === 0) throw new Error(`${path.basename(csvPath)} is empty`);
+  const headers = rows[0].map(h => h.trim().replace(/^\uFEFF/, ''));
   return rows.slice(1).map((r, idx) => {
     const obj = { __row: idx + 2 };
     headers.forEach((h, i) => { obj[h] = (r[i] ?? '').trim(); });
@@ -104,12 +40,29 @@ function toRecords(rows, csvPath) {
   });
 }
 
+function parseActionEntry(row, csvName, rowNo) {
+  const primary = row.primary || 'none';
+  if (!AI_ACTIONS.includes(primary)) {
+    throw new Error(`${csvName} row ${rowNo}: primary="${primary}" is invalid`);
+  }
+  let fallback = row.fallback;
+  if (fallback === '' || fallback === undefined) fallback = undefined;
+  else if (!AI_ACTIONS.includes(fallback)) {
+    throw new Error(`${csvName} row ${rowNo}: fallback="${fallback}" is invalid`);
+  }
+  let fallback2 = row.fallback2;
+  if (fallback2 === '' || fallback2 === undefined) fallback2 = undefined;
+  else if (!AI_ACTIONS.includes(fallback2)) {
+    throw new Error(`${csvName} row ${rowNo}: fallback2="${fallback2}" is invalid`);
+  }
+  return { primary, fallback, fallback2 };
+}
+
 function parseAITable() {
   const recs = toRecords(readCsvRowsSmart(TABLE_CSV, {
     toolName: 'buildEnemyAIDB',
     requiredHeaders: ['column', 'die', 'primary'],
   }), TABLE_CSV);
-  // table[col][pip] = { primary, fallback? }
   const table = {};
   for (const c of AI_COLUMNS) table[c] = {};
   const seen = new Set();
@@ -117,35 +70,19 @@ function parseAITable() {
     const col = r.column;
     const die = Number(r.die);
     if (!AI_COLUMNS.includes(col)) {
-      throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：未知 column="${col}"，必须是 ${AI_COLUMNS.join(' / ')}`);
+      throw new Error(`enemy_ai_table.csv row ${r.__row}: unknown column="${col}"`);
     }
     if (!Number.isInteger(die) || die < 1 || die > 6) {
-      throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：die="${r.die}" 不是 1..6 的整数`);
+      throw new Error(`enemy_ai_table.csv row ${r.__row}: die="${r.die}" is not 1..6`);
     }
     const key = `${col}:${die}`;
-    if (seen.has(key)) throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：(${col}, ${die}) 重复`);
+    if (seen.has(key)) throw new Error(`enemy_ai_table.csv row ${r.__row}: duplicate (${col}, ${die})`);
     seen.add(key);
-
-    const primary = r.primary || 'none';
-    if (!AI_ACTIONS.includes(primary)) {
-      throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：primary="${primary}" 不在 {${AI_ACTIONS.join(' / ')}}`);
-    }
-    let fallback = r.fallback;
-    if (fallback === '' || fallback === undefined) fallback = undefined;
-    else if (!AI_ACTIONS.includes(fallback)) {
-      throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：fallback="${fallback}" 不在 {${AI_ACTIONS.join(' / ')}}`);
-    }
-    let fallback2 = r.fallback2;
-    if (fallback2 === '' || fallback2 === undefined) fallback2 = undefined;
-    else if (!AI_ACTIONS.includes(fallback2)) {
-      throw new Error(`enemy_ai_table.csv 第 ${r.__row} 行：fallback2="${fallback2}" 不在 {${AI_ACTIONS.join(' / ')}}`);
-    }
-    table[col][die] = { primary, fallback, fallback2 };
+    table[col][die] = parseActionEntry(r, 'enemy_ai_table.csv', r.__row);
   }
-  // 必须每列都有 1..6 全覆盖
   for (const c of AI_COLUMNS) {
     for (let p = 1; p <= 6; p++) {
-      if (!table[c][p]) throw new Error(`enemy_ai_table.csv 缺少 (column=${c}, die=${p}) 这一行`);
+      if (!table[c][p]) throw new Error(`enemy_ai_table.csv missing column=${c}, die=${p}`);
     }
   }
   return table;
@@ -162,72 +99,149 @@ function parseAIDice() {
     const col = r.column;
     const dice = Number(r.dice);
     if (!AI_COLUMNS.includes(col)) {
-      throw new Error(`enemy_ai_dice.csv 第 ${r.__row} 行：未知 column="${col}"`);
+      throw new Error(`enemy_ai_dice.csv row ${r.__row}: unknown column="${col}"`);
     }
-    if (seen.has(col)) {
-      throw new Error(`enemy_ai_dice.csv 第 ${r.__row} 行：column="${col}" 重复`);
-    }
+    if (seen.has(col)) throw new Error(`enemy_ai_dice.csv row ${r.__row}: duplicate column="${col}"`);
     if (!Number.isInteger(dice) || dice <= 0) {
-      throw new Error(`enemy_ai_dice.csv 第 ${r.__row} 行：dice="${r.dice}" 必须是正整数`);
+      throw new Error(`enemy_ai_dice.csv row ${r.__row}: dice="${r.dice}" must be a positive integer`);
     }
     seen.add(col);
     map[col] = dice;
   }
   for (const c of AI_COLUMNS) {
-    if (!(c in map)) throw new Error(`enemy_ai_dice.csv 缺少 column="${c}" 这一行`);
+    if (!(c in map)) throw new Error(`enemy_ai_dice.csv missing column="${c}"`);
   }
   return map;
+}
+
+function parseHardcoreTankActionTable() {
+  const recs = toRecords(readCsvRowsSmart(HARDCORE_TANK_ACTION_CSV, {
+    toolName: 'buildEnemyAIDB',
+    requiredHeaders: ['die_type', 'die', 'primary'],
+  }), HARDCORE_TANK_ACTION_CSV);
+  const table = {};
+  for (const type of HARDCORE_TANK_DIE_TYPES) table[type] = {};
+  const seen = new Set();
+  for (const r of recs) {
+    const type = r.die_type;
+    const die = Number(r.die);
+    if (!HARDCORE_TANK_DIE_TYPES.includes(type)) {
+      throw new Error(`enemy_hardcore_tank_action_table.csv row ${r.__row}: unknown die_type="${type}"`);
+    }
+    if (!Number.isInteger(die) || die < 1 || die > 6) {
+      throw new Error(`enemy_hardcore_tank_action_table.csv row ${r.__row}: die="${r.die}" is not 1..6`);
+    }
+    const key = `${type}:${die}`;
+    if (seen.has(key)) throw new Error(`enemy_hardcore_tank_action_table.csv row ${r.__row}: duplicate (${type}, ${die})`);
+    seen.add(key);
+    table[type][die] = parseActionEntry(r, 'enemy_hardcore_tank_action_table.csv', r.__row);
+  }
+  for (const type of HARDCORE_TANK_DIE_TYPES) {
+    for (let p = 1; p <= 6; p++) {
+      if (!table[type][p]) throw new Error(`enemy_hardcore_tank_action_table.csv missing die_type=${type}, die=${p}`);
+    }
+  }
+  return table;
+}
+
+function parseHardcoreTankDice() {
+  const recs = toRecords(readCsvRowsSmart(HARDCORE_TANK_DICE_CSV, {
+    toolName: 'buildEnemyAIDB',
+    requiredHeaders: ['terrain', 'attack_dice', 'move_dice'],
+  }), HARDCORE_TANK_DICE_CSV);
+  const map = {};
+  const seen = new Set();
+  for (const r of recs) {
+    const terrain = r.terrain;
+    if (!HARDCORE_TANK_TERRAINS.includes(terrain)) {
+      throw new Error(`enemy_hardcore_tank_dice.csv row ${r.__row}: unknown terrain="${terrain}"`);
+    }
+    if (seen.has(terrain)) throw new Error(`enemy_hardcore_tank_dice.csv row ${r.__row}: duplicate terrain="${terrain}"`);
+    const attack = Number(r.attack_dice);
+    const move = Number(r.move_dice);
+    if (!Number.isInteger(attack)) {
+      throw new Error(`enemy_hardcore_tank_dice.csv row ${r.__row}: attack_dice="${r.attack_dice}" must be an integer`);
+    }
+    if (!Number.isInteger(move)) {
+      throw new Error(`enemy_hardcore_tank_dice.csv row ${r.__row}: move_dice="${r.move_dice}" must be an integer`);
+    }
+    seen.add(terrain);
+    map[terrain] = { attack, move };
+  }
+  for (const terrain of HARDCORE_TANK_TERRAINS) {
+    if (!map[terrain]) throw new Error(`enemy_hardcore_tank_dice.csv missing terrain="${terrain}"`);
+  }
+  return map;
+}
+
+function emitEntry(e) {
+  const fb = e.fallback ? `, fallback: '${e.fallback}'` : '';
+  const fb2 = e.fallback2 ? `, fallback2: '${e.fallback2}'` : '';
+  return `{ primary: '${e.primary}'${fb}${fb2} }`;
 }
 
 function build() {
   const table = parseAITable();
   const dice = parseAIDice();
+  const hardcoreTankTable = parseHardcoreTankActionTable();
+  const hardcoreTankDice = parseHardcoreTankDice();
 
   const lines = [];
   lines.push('/**');
-  lines.push(' * 德军坦克 AI 行动表与骰数 —— 自动生成，请勿手改本文件。');
+  lines.push(' * Enemy AI action tables and dice counts. Auto-generated; do not edit by hand.');
   lines.push(' *');
-  lines.push(' * 数据源：data/enemy_ai_table.csv + data/enemy_ai_dice.csv');
-  lines.push(' * 重新生成：node tools/buildEnemyAIDB.js');
-  lines.push(' * 对应 GDD §3.7 行动表 + 掷骰数。');
+  lines.push(' * Sources: data/enemy_ai_table.csv, data/enemy_ai_dice.csv,');
+  lines.push(' * data/enemy_hardcore_tank_action_table.csv, data/enemy_hardcore_tank_dice.csv');
+  lines.push(' * Regenerate: node tools/buildEnemyAIDB.js');
   lines.push(' */');
   lines.push('');
-  lines.push('/** 敌方 AI 单颗骰能产出的具体行动 */');
   lines.push('export type EnemyAction =');
   for (let i = 0; i < AI_ACTIONS.length; i++) {
-    const a = AI_ACTIONS[i];
     const pipe = i === AI_ACTIONS.length - 1 ? ';' : '';
-    lines.push(`  | '${a}'${pipe}`);
+    lines.push(`  | '${AI_ACTIONS[i]}'${pipe}`);
   }
   lines.push('');
-  lines.push('/** 一颗骰的 A>B 条目；无 fallback 则只执行 primary */');
   lines.push('export interface AIActionEntry {');
   lines.push('  primary: EnemyAction;');
   lines.push('  fallback?: EnemyAction;');
   lines.push('  fallback2?: EnemyAction;');
   lines.push('}');
   lines.push('');
-  lines.push('/** AI 表的列键：地形或"受损"（受损优先于地形） */');
   lines.push(`export type AIColumn = ${AI_COLUMNS.map(c => `'${c}'`).join(' | ')};`);
+  lines.push(`export type EnemyTankDieType = ${HARDCORE_TANK_DIE_TYPES.map(c => `'${c}'`).join(' | ')};`);
+  lines.push(`export type HardcoreTankDiceTerrain = ${HARDCORE_TANK_TERRAINS.map(c => `'${c}'`).join(' | ')};`);
   lines.push('');
-  lines.push('/** 列 → (1..6) → 行动条目 */');
+  lines.push('export interface HardcoreTankDiceCount {');
+  lines.push('  attack: number;');
+  lines.push('  move: number;');
+  lines.push('}');
+  lines.push('');
   lines.push('export type AIActionTable = Record<AIColumn, Record<number, AIActionEntry>>;');
+  lines.push('export type HardcoreTankActionTable = Record<EnemyTankDieType, Record<number, AIActionEntry>>;');
   lines.push('');
-  lines.push('/** 每列掷多少颗骰（GDD §3.7 骰数表） */');
   lines.push('export const AI_DICE_COUNT: Record<AIColumn, number> = {');
   for (const c of AI_COLUMNS) lines.push(`  ${c}: ${dice[c]},`);
   lines.push('};');
   lines.push('');
-  lines.push('/** 默认 AI 行动表（数据源 enemy_ai_table.csv；各关可按需覆盖） */');
   lines.push('export const DEFAULT_AI_TABLE: AIActionTable = {');
   for (const c of AI_COLUMNS) {
     lines.push(`  ${c}: {`);
-    for (let p = 1; p <= 6; p++) {
-      const e = table[c][p];
-      const fb = e.fallback ? `, fallback: '${e.fallback}'` : '';
-      const fb2 = e.fallback2 ? `, fallback2: '${e.fallback2}'` : '';
-      lines.push(`    ${p}: { primary: '${e.primary}'${fb}${fb2} },`);
-    }
+    for (let p = 1; p <= 6; p++) lines.push(`    ${p}: ${emitEntry(table[c][p])},`);
+    lines.push('  },');
+  }
+  lines.push('};');
+  lines.push('');
+  lines.push('export const HARDCORE_TANK_AI_DICE_COUNT: Record<HardcoreTankDiceTerrain, HardcoreTankDiceCount> = {');
+  for (const terrain of HARDCORE_TANK_TERRAINS) {
+    const row = hardcoreTankDice[terrain];
+    lines.push(`  ${terrain}: { attack: ${row.attack}, move: ${row.move} },`);
+  }
+  lines.push('};');
+  lines.push('');
+  lines.push('export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {');
+  for (const type of HARDCORE_TANK_DIE_TYPES) {
+    lines.push(`  ${type}: {`);
+    for (let p = 1; p <= 6; p++) lines.push(`    ${p}: ${emitEntry(hardcoreTankTable[type][p])},`);
     lines.push('  },');
   }
   lines.push('};');
@@ -235,14 +249,14 @@ function build() {
 
   fs.writeFileSync(OUT_PATH, lines.join('\n'), 'utf8');
   console.log(
-    `[buildEnemyAIDB] OK  ${AI_COLUMNS.length}×6 rows + ${AI_COLUMNS.length} dice rows `
-    + `→ ${path.relative(ROOT, OUT_PATH)}`
+    `[buildEnemyAIDB] OK ${AI_COLUMNS.length}x6 legacy rows, `
+    + `${HARDCORE_TANK_DIE_TYPES.length}x6 hardcore tank rows -> ${path.relative(ROOT, OUT_PATH)}`,
   );
 }
 
 try {
   build();
 } catch (e) {
-  console.error('[buildEnemyAIDB] 失败：', e.message);
+  console.error('[buildEnemyAIDB] failed:', e.message);
   process.exit(1);
 }

@@ -16,10 +16,14 @@ export interface GameModeConfig {
   expandedTurretDirections: boolean;
   /** Damage table selection may depend on incoming-fire direction. */
   directionalDamageCheck: boolean;
+  /** Unit damage target class comes from units.csv instead of hard-coded faction routing. */
+  unitDamageTargetClass: boolean;
   /** Units with intact radios may receive vision from friendly radio transmitters. */
   radioVisionSharing: boolean;
   /** AI tanks skip immediate opposite hull movement within the same action sequence. */
   aiReverseMoveFilter: boolean;
+  /** Non-player tank AI rolls mixed attack/move dice from the hardcore tank terrain table. */
+  aiHardcoreTankDice: boolean;
   /** Reserved profile ids for mode-specific rule data added later. */
   crewBonusProfile: 'standard';
   enemyActionTableProfile: 'standard';
@@ -37,8 +41,10 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     effectiveRangePenetration: false,
     expandedTurretDirections: false,
     directionalDamageCheck: false,
+    unitDamageTargetClass: false,
     radioVisionSharing: false,
     aiReverseMoveFilter: false,
+    aiHardcoreTankDice: false,
     crewBonusProfile: 'standard',
     enemyActionTableProfile: 'standard',
   },
@@ -51,8 +57,10 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     effectiveRangePenetration: true,
     expandedTurretDirections: true,
     directionalDamageCheck: true,
+    unitDamageTargetClass: true,
     radioVisionSharing: true,
     aiReverseMoveFilter: true,
+    aiHardcoreTankDice: true,
     crewBonusProfile: 'standard',
     enemyActionTableProfile: 'standard',
   },

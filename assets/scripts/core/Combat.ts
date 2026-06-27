@@ -7,11 +7,10 @@
  *       ① 2d6 命中检定（阈值 = 体型 + 距离 + 树篱 + 建筑 + …）
  *       ② 命中后再掷 2d6 穿甲检定（2d6 ≥ 装甲 - 穿甲 才击穿；未击穿 = 跳弹，命中无效）
  *       ③ 击穿后再掷 1d6 伤害检定（§3.4 Step 3 的伤害结果表）：
- *            主角： 1=摧毁 / 2=阵亡检定 / 3,4=着火 +1 / 5=炮塔受损 / 6=痛痪
+ *            主角： 1=摧毁 / 2,3,4=着火 +1 / 5=炮塔受损 / 6=痛痪
  *            其他坦克： 1–4=受损（已受损→摧毁） / 5,6=摧毁
  *          → 对应效果写回 target 的 destroyed/damaged/fireLevel/turretDamaged/paralyzed
- *   - "阵亡检定"（d6=2，主角）会再掷 1d6 决定乘员
- *   - 命中成功且命中判定对子会处理开舱主角车长阵亡风险
+ *   - 主角伤害检定不产生"阵亡检定"结果；命中成功且命中判定对子会处理开舱主角车长阵亡风险
  *   - 不校验乘员存活（假设炮手总是可用）
  */
 
@@ -47,7 +46,7 @@ export type HitStatusChange = 'none' | 'damaged' | 'destroyed';
  *   - 'fire'        着火 / 着火程度 +1（主角 3,4）
  *   - 'turret'      炮塔受损：不能用主炮射击（主角 5）
  *   - 'paralyzed'   痛痪：不能前进/后退/转向（主角 6）
- *   - 'crewCheck'   阵亡检定：再掷 1d6 映射乘员 1-5（主角 2）
+ *   - 'crewCheck'   阵亡检定：再掷 1d6 映射乘员 1-5（仅数据表显式配置的乘员伤害）
  */
 export type DamageEffect =
   | 'destroyed'
@@ -104,7 +103,7 @@ export interface AttackReport {
   stagedDamageEffect?: DamageEffect;
   stagedDamageEffects?: DamageEffectStep[];
   stagedCrewCheck?: CrewDeathResult;
-  /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值（只会在主角受伤表中发生） */
+  /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值。 */
   crewCheck?: CrewDeathResult;
   /** Enemy hit-roll doubles kill an open-hatch protagonist commander on a successful hit. */
   commanderKilledByHitDoubles?: boolean;
@@ -131,6 +130,8 @@ export interface AttackContext {
   expandedTurretDirections?: boolean;
   /** Hardcore rule: Step 3 damage-table selection may depend on incoming-fire direction. */
   directionalDamageCheck?: boolean;
+  /** Hardcore rule: Step 3 target class may come from units.csv. */
+  unitDamageTargetClass?: boolean;
 }
 
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
@@ -346,8 +347,9 @@ export function armorValue(target: Unit, face: ArmorFace): number {
   }
 }
 
-function damageTargetClassFor(target: Unit, protagonistTarget: boolean): DamageTargetClass | null {
+function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfiguredClass = false): DamageTargetClass | null {
   if (protagonistTarget) return 'protagonist';
+  if (useConfiguredClass && target.stats.damageTargetClass) return target.stats.damageTargetClass as DamageTargetClass;
   if (!isTankUnit(target)) return null;
   return target.faction === 'allied' ? 'us_tank' : 'german_tank';
 }
@@ -432,7 +434,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const face = directionRule.armorFace;
   const damageCheckType = ctx.directionalDamageCheck ? directionRule.damageCheckType : undefined;
   const damageTable = damageCheckType ?? 'front';
-  const targetClass = damageCheckType ? damageTargetClassFor(target, protagonistTarget) : null;
+  const targetClass = damageCheckType ? damageTargetClassFor(target, protagonistTarget, ctx.unitDamageTargetClass) : null;
   const armor = armorValue(target, face);
   const pen = effectivePenetration(attacker, target, ctx.effectiveRangePenetration);
 
@@ -445,7 +447,10 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     && !!targetClass
     && !protagonistTarget
     && (target.fireLevel ?? 0) > 0;
-  const damagePossible = !directDestroyOnBurningTank && (!!targetClass || !(pacific && !protagonistTarget));
+  const directDestroyByTargetClass = targetClass === 'destroyed';
+  const damagePossible = !directDestroyByTargetClass
+    && !directDestroyOnBurningTank
+    && (!!targetClass || !(pacific && !protagonistTarget));
   const stagedDamageDie = damagePossible ? rng.d6() : undefined;
   const stagedDamageEffects = stagedDamageDie !== undefined && targetClass
     ? resolveDamageTableEffects(target, targetClass, damageTable, stagedDamageDie)
@@ -457,8 +462,10 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
         ? resolvePacificShermanDamageEffect(stagedDamageDie, damageTable)
         : resolveDamageEffect(target, stagedDamageDie, protagonistTarget, damageTable))
       : undefined);
+  const tableCrewCheck = stagedDamageEffects?.some(step => step.effect === 'crewCheck' && !!step.crewPriority?.length) ?? false;
+  const legacyCrewCheck = protagonistTarget && damagePossible && stagedDamageEffect === 'crewCheck' && !tableCrewCheck;
   let stagedCrewCheck: CrewDeathResult | undefined;
-  if (protagonistTarget && damagePossible) {
+  if (legacyCrewCheck) {
     const crewTarget = commanderKilledByHitDoubles && target.crew
       ? { ...target, hatchOpen: false, crew: { ...target.crew, commander: false } }
       : target;
@@ -492,7 +499,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     };
   }
 
-  if (directDestroyOnBurningTank || (pacific && !protagonistTarget && !targetClass)) {
+  if (directDestroyByTargetClass || directDestroyOnBurningTank || (pacific && !protagonistTarget && !targetClass)) {
     return {
       dice: [d1, d2], roll, threshold,
       hit: true,
@@ -514,7 +521,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const damageEffects = stagedDamageEffects ?? [{ effect: damageEffect }];
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
-  // 阵亡检定：只对主角（crewCheck）再掷一次，决定哪位乘员死
+  // 兼容旧式 crewCheck：需要时才携带乘员检定结果。
   const crewCheck = damageEffect === 'crewCheck' ? stagedCrewCheck : undefined;
 
   return {
@@ -569,7 +576,7 @@ export function resolveDamageEffect(
 function resolveShermanDamageEffectByDie(die: number): DamageEffect {
   switch (die) {
     case 1: return 'destroyed';
-    case 2: return 'crewCheck';
+    case 2: return 'fire';
     case 3:
     case 4: return 'fire';
     case 5: return 'turret';
@@ -580,7 +587,7 @@ function resolveShermanDamageEffectByDie(die: number): DamageEffect {
 
 function resolvePacificShermanDamageEffectByDie(die: number): DamageEffect {
   switch (die) {
-    case 1: return 'crewCheck';
+    case 1: return 'fire';
     case 2:
     case 3:
     case 4: return 'fire';
@@ -590,7 +597,7 @@ function resolvePacificShermanDamageEffectByDie(die: number): DamageEffect {
 }
 
 /**
- * §3.2 + §3.4 的"主角阵亡检定"。
+ * §3.2 + §3.4 的"乘员阵亡检定"。
  *
  * 规则：
  *   - 1d6 = 1..5 → 直接映射到 1=车长 / 2=装填手 / 3=炮手 / 4=驾驶员 / 5=副驾驶

@@ -152,7 +152,6 @@ export function isTankUnit(u: { kind: UnitKind }): boolean {
 }
 
 export type VisionType = 'turreted' | 'fixed' | 'infantry';
-
 export interface UnitStats {
   faction: Faction;          // 阵营
   size: number;            // 体型
@@ -167,6 +166,7 @@ export interface UnitStats {
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
   infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
   visionType: VisionType;   // 炮塔视野 / 车体正面视野 / 步兵环形视野
+  damageTargetClass?: string; // 受击目标类别；硬核模式下直接读取 damage_table.csv 的 targetClass
   visionRange: number;      // 六角格距离；步兵类型固定使用周围 2 格
   hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
 }

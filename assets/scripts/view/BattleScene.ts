@@ -82,6 +82,7 @@ import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
   actionFor,
+  actionForHardcoreTankDie,
   aiTargetPriority,
   AI_DICE_COUNT,
   aiColumnFor,
@@ -92,12 +93,16 @@ import {
   DEFAULT_AI_TABLE,
   decideEnemyTurn,
   EnemyAction,
+  EnemyTankDieType,
+  hardcoreTankAIDiceCount,
+  hardcoreTankDiceTerrain,
   isAIActorUnit,
   rollAIDice,
+  rollHardcoreTankAIDice,
   selectAIOrder,
 } from '../core/EnemyAI';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, isUnitInVision } from '../core/FogOfWar';
+import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, isUnitInVision, isWithinOwnVisionRange } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
@@ -174,11 +179,13 @@ import {
   playConfiguredAttackSound,
   playDiceRoll,
   playMgFire,
+  playTankHitPenetration,
+  playTankHitRicochet,
   startManeuverSound,
   stopManeuverSound,
   playUiClick,
 } from '../audio/GameAudio';
-import { Axial, Direction, effectiveDiceTerrain, FireDirection, isFootUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -626,6 +633,29 @@ interface MuzzleFlash {
   dur: number;
 }
 
+type ProjectileTraceMode = 'miss' | 'ricochet' | 'penetration';
+type ProjectileTracePhase = 'flight' | 'ricochet' | 'impact';
+
+interface ProjectileTrace {
+  node: Node;
+  g: Graphics;
+  mode: ProjectileTraceMode;
+  phase: ProjectileTracePhase;
+  startX: number;
+  startY: number;
+  impactX: number;
+  impactY: number;
+  endX: number;
+  endY: number;
+  ux: number;
+  uy: number;
+  bounceUx: number;
+  bounceUy: number;
+  t: number;
+  dur: number;
+  seed: number;
+}
+
 interface UnitEffectVisual {
   unit: Unit;
   seed: number;
@@ -874,6 +904,8 @@ const DICE_BACKDROP    = new Color(  0,   0,   0, 180);
 const DICE_PANEL_BG    = DICE_EVENT_PANEL_BG;
 const DICE_PANEL_BORDER= DICE_EVENT_PANEL_BORDER;
 const DICE_DIE_FILL    = new Color(245, 245, 235, 255);
+const AI_ATTACK_DIE_FILL = new Color(255, 210, 210, 255);
+const AI_MOVE_DIE_FILL   = new Color(214, 246, 214, 255);
 const DICE_DIE_BORDER  = new Color( 30,  30,  30, 255);
 const DICE_DIE_TEXT    = new Color( 20,  20,  20, 255);
 const DICE_OK_TEXT     = new Color(120, 230, 120, 255); // 命中 / 击穿
@@ -1172,8 +1204,10 @@ export class BattleScene extends Component {
   private aiSide: 'ally' | 'german' = 'german';
   /** 当前敌坦本回合掷出的一串 d6 点数 */
   private enemyDice: number[] = [];
+  private enemyDiceTypes: (EnemyTankDieType | null)[] = [];
   /** 与 enemyDice 同长度：每颗是否已消耗 */
   private enemyDiceUsed: boolean[] = [];
+  private enemyDiceResolvedActions: (EnemyAction | null | undefined)[] = [];
   /** 当前敌坦使用的 AI 列（road / field / mud / damaged），用于查表 */
   private enemyAICol: AIColumn = 'field';
   /** 迷你骰子托盘 UI 根节点；跟随当前敌坦位置，动画期间临时隐藏 */
@@ -1228,6 +1262,8 @@ export class BattleScene extends Component {
   // 战报浮字池：挂在 mapNode 下，随 update() 上浮 + 渐隐自毁
   private floaters: Floater[] = [];
   private muzzleFlashes: MuzzleFlash[] = [];
+  private projectileTraces: ProjectileTrace[] = [];
+  private firedAttackCueReports = new WeakSet<AttackReport>();
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
   private previewLabelNext = 0;
@@ -1842,6 +1878,7 @@ export class BattleScene extends Component {
     this.transientFogRevealKeys.clear();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.clearProjectileTraces();
     this.clearDestroyWreckVisuals();
     this.closeDiePopover();
     this.finalizeDiceShow(true);
@@ -3258,13 +3295,70 @@ export class BattleScene extends Component {
     target: Unit | null,
     mg: boolean,
     attackSound: string,
+    report?: AttackReport,
   ) {
     if (mg) {
       playMgFire();
       return;
     }
+    if (report) {
+      if (this.firedAttackCueReports.has(report)) return;
+      this.firedAttackCueReports.add(report);
+    }
     this.spawnMuzzleFlash(attacker, target);
+    this.spawnProjectileTrace(attacker, target, report);
     playConfiguredAttackSound(attackSound);
+  }
+
+  private spawnProjectileTrace(attacker: Unit | null, target: Unit | null, report?: AttackReport) {
+    if (!this.mapNode || !attacker || !target || attacker.destroyed || !report) return;
+    if (!this.isUnitVisible(attacker)) return;
+    const muzzle = this.muzzleFlashPosition(attacker, target);
+    if (!muzzle) return;
+
+    const mode: ProjectileTraceMode = !report.hit
+      ? 'miss'
+      : report.penetrated
+        ? 'penetration'
+        : 'ricochet';
+    const impact = this.projectileImpactPoint(target, muzzle.ux, muzzle.uy);
+    const end = mode === 'miss'
+      ? this.projectileMapExitPoint(muzzle.x, muzzle.y, muzzle.ux, muzzle.uy)
+      : impact;
+    const bounce = this.projectileBounceVector(attacker, target, muzzle.ux, muzzle.uy, report);
+    const dist = Math.hypot(end.x - muzzle.x, end.y - muzzle.y);
+
+    const n = new Node('ProjectileTrace');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(1, 1);
+    ut.setAnchorPoint(0.5, 0.5);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    n.setPosition(0, 0, 0);
+    this.placeProjectileTraceNode(n);
+
+    const trace: ProjectileTrace = {
+      node: n,
+      g,
+      mode,
+      phase: 'flight',
+      startX: muzzle.x,
+      startY: muzzle.y,
+      impactX: impact.x,
+      impactY: impact.y,
+      endX: end.x,
+      endY: end.y,
+      ux: muzzle.ux,
+      uy: muzzle.uy,
+      bounceUx: bounce.ux,
+      bounceUy: bounce.uy,
+      t: 0,
+      dur: Math.max(0.14, Math.min(0.34, dist / Math.max(1, this.hexSize * 17))),
+      seed: this.projectileSeed(attacker, target, report),
+    };
+    this.drawProjectileTrace(trace, 0);
+    this.projectileTraces.push(trace);
   }
 
   private muzzleFlashPosition(attacker: Unit, target: Unit): { x: number; y: number; ux: number; uy: number } | null {
@@ -3291,6 +3385,96 @@ export class BattleScene extends Component {
       ux: aim.ux,
       uy: aim.uy,
     };
+  }
+
+  private projectileImpactPoint(target: Unit, ux: number, uy: number): { x: number; y: number } {
+    const c = this.project(target.pos.q, target.pos.r);
+    const side = Math.max(10, this.hexSize * (isFootUnit(target) ? 0.2 : 0.36));
+    return { x: c.x - ux * side, y: c.y - uy * side };
+  }
+
+  private projectileMapExitPoint(x: number, y: number, ux: number, uy: number): { x: number; y: number } {
+    if (!this.mission) return { x: x + ux * this.hexSize * 14, y: y + uy * this.hexSize * 14 };
+    const sampled = this.projectileFirstInvalidMapPoint(x, y, ux, uy);
+    if (sampled) return sampled;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const tile of this.mission.map.all()) {
+      const c = this.project(tile.pos.q, tile.pos.r);
+      minX = Math.min(minX, c.x - this.hexSize);
+      minY = Math.min(minY, c.y - this.hexSize);
+      maxX = Math.max(maxX, c.x + this.hexSize);
+      maxY = Math.max(maxY, c.y + this.hexSize);
+    }
+    if (!Number.isFinite(minX)) return { x: x + ux * this.hexSize * 14, y: y + uy * this.hexSize * 14 };
+    const margin = this.hexSize * 2.2;
+    minX -= margin; minY -= margin; maxX += margin; maxY += margin;
+    const candidates: number[] = [];
+    if (Math.abs(ux) > 1e-4) {
+      candidates.push(((ux > 0 ? maxX : minX) - x) / ux);
+    }
+    if (Math.abs(uy) > 1e-4) {
+      candidates.push(((uy > 0 ? maxY : minY) - y) / uy);
+    }
+    const dist = Math.max(
+      this.hexSize * 6,
+      ...candidates.filter(v => v > this.hexSize * 0.5 && Number.isFinite(v)),
+    );
+    return { x: x + ux * dist, y: y + uy * dist };
+  }
+
+  private projectileFirstInvalidMapPoint(x: number, y: number, ux: number, uy: number): { x: number; y: number } | null {
+    if (!this.mission) return null;
+    const step = Math.max(3, this.hexSize * 0.08);
+    const maxDist = this.hexSize * Math.max(this.mission.data.cols, this.mission.data.rows, 8) * 3;
+    let lastInside = { x, y };
+    let hasInside = false;
+    for (let d = 0; d <= maxDist; d += step) {
+      const px = x + ux * d;
+      const py = y + uy * d;
+      const axial = this.pixelToNearestAxial(px, py);
+      if (!this.mission.map.get(axial)) {
+        if (!hasInside && d <= this.hexSize * 1.15) continue;
+        return hasInside ? lastInside : { x: px, y: py };
+      }
+      hasInside = true;
+      lastInside = { x: px, y: py };
+    }
+    return null;
+  }
+
+  private pixelToNearestAxial(x: number, y: number): Axial {
+    const localX = x - this.offsetX;
+    const localY = -(y - this.offsetY);
+    const qf = (Math.sqrt(3) / 3 * localX - localY / 3) / this.hexSize;
+    const rf = (2 / 3 * localY) / this.hexSize;
+    const sf = -qf - rf;
+    let q = Math.round(qf);
+    let r = Math.round(rf);
+    let s = Math.round(sf);
+    const dq = Math.abs(q - qf);
+    const dr = Math.abs(r - rf);
+    const ds = Math.abs(s - sf);
+    if (dq > dr && dq > ds) q = -r - s;
+    else if (dr > ds) r = -q - s;
+    return { q, r };
+  }
+
+  private projectileBounceVector(
+    attacker: Unit,
+    target: Unit,
+    ux: number,
+    uy: number,
+    report: AttackReport,
+  ): { ux: number; uy: number } {
+    const seed = this.projectileSeed(attacker, target, report);
+    const sign = seed % 2 === 0 ? 1 : -1;
+    const angle = Math.atan2(uy, ux) + sign * (0.62 + ((seed >>> 3) % 17) / 100);
+    return { ux: Math.cos(angle), uy: Math.sin(angle) };
+  }
+
+  private projectileSeed(attacker: Unit, target: Unit, report: AttackReport): number {
+    const src = `${attacker.id}:${target.id}:${report.roll}:${report.penDie ?? 0}:${report.damageDie ?? 0}`;
+    return this.hashStringToSeed(src);
   }
 
   private topSpriteMuzzlePosition(
@@ -3425,6 +3609,156 @@ export class BattleScene extends Component {
     this.muzzleFlashes.length = 0;
   }
 
+  private advanceProjectileTraces(dt: number) {
+    for (let i = this.projectileTraces.length - 1; i >= 0; i--) {
+      const tr = this.projectileTraces[i];
+      tr.t += dt;
+      const p = Math.min(tr.t / tr.dur, 1);
+      if (p >= 1) {
+        if (tr.phase === 'flight' && tr.mode === 'ricochet') {
+          playTankHitRicochet();
+          tr.phase = 'ricochet';
+          tr.startX = tr.impactX;
+          tr.startY = tr.impactY;
+          const ricochetEnd = this.projectileFirstInvalidMapPoint(tr.impactX, tr.impactY, tr.bounceUx, tr.bounceUy)
+            ?? { x: tr.impactX + tr.bounceUx * this.hexSize * 1.45, y: tr.impactY + tr.bounceUy * this.hexSize * 1.45 };
+          tr.endX = ricochetEnd.x;
+          tr.endY = ricochetEnd.y;
+          tr.t = 0;
+          const ricochetDist = Math.hypot(tr.endX - tr.startX, tr.endY - tr.startY);
+          tr.dur = Math.max(0.08, Math.min(0.34, ricochetDist / Math.max(1, this.hexSize * 6)));
+          this.drawProjectileTrace(tr, 0);
+          continue;
+        }
+        if (tr.phase === 'flight' && tr.mode === 'penetration') {
+          playTankHitPenetration();
+          tr.phase = 'impact';
+          tr.startX = tr.impactX;
+          tr.startY = tr.impactY;
+          tr.t = 0;
+          tr.dur = 0.26;
+          this.drawProjectileTrace(tr, 0);
+          continue;
+        }
+        tr.node.destroy();
+        this.projectileTraces.splice(i, 1);
+        continue;
+      }
+      this.drawProjectileTrace(tr, p);
+    }
+  }
+
+  private drawProjectileTrace(tr: ProjectileTrace, p: number) {
+    const g = tr.g;
+    this.placeProjectileTraceNode(tr.node);
+    g.clear();
+    if (tr.phase === 'impact') {
+      this.drawProjectilePenetration(g, tr, p);
+      return;
+    }
+
+    const x = tr.startX + (tr.endX - tr.startX) * p;
+    const y = tr.startY + (tr.endY - tr.startY) * p;
+    const ux = tr.phase === 'ricochet' ? tr.bounceUx : tr.ux;
+    const uy = tr.phase === 'ricochet' ? tr.bounceUy : tr.uy;
+    const tail = this.hexSize * (tr.phase === 'ricochet' ? 0.52 : 0.72);
+    const alpha = tr.phase === 'ricochet'
+      ? Math.round(235 * (1 - p))
+      : tr.mode === 'miss'
+        ? Math.round(240 * (1 - Math.max(0, p - 0.7) / 0.3))
+        : 245;
+    const rx = uy;
+    const ry = -ux;
+
+    g.lineWidth = Math.max(2, this.hexSize * 0.045);
+    g.strokeColor = new Color(255, 202, 58, Math.max(0, alpha));
+    g.moveTo(x - ux * tail, y - uy * tail);
+    g.lineTo(x, y);
+    g.stroke();
+
+    g.lineWidth = Math.max(1, this.hexSize * 0.02);
+    g.strokeColor = new Color(255, 248, 170, Math.max(0, Math.round(alpha * 0.95)));
+    g.moveTo(x - ux * tail * 0.52, y - uy * tail * 0.52);
+    g.lineTo(x + ux * this.hexSize * 0.08, y + uy * this.hexSize * 0.08);
+    g.stroke();
+
+    g.fillColor = new Color(255, 250, 190, Math.max(0, alpha));
+    g.circle(x, y, Math.max(2, this.hexSize * 0.045));
+    g.fill();
+
+    if (tr.phase === 'ricochet') {
+      this.drawProjectileSpark(g, tr.impactX, tr.impactY, tr, p);
+      g.strokeColor = new Color(255, 226, 120, Math.max(0, Math.round(150 * (1 - p))));
+      g.lineWidth = Math.max(1, this.hexSize * 0.018);
+      g.moveTo(tr.impactX + rx * this.hexSize * 0.08, tr.impactY + ry * this.hexSize * 0.08);
+      g.lineTo(tr.impactX - rx * this.hexSize * 0.08, tr.impactY - ry * this.hexSize * 0.08);
+      g.stroke();
+    }
+  }
+
+  private drawProjectileSpark(g: Graphics, x: number, y: number, tr: ProjectileTrace, p: number) {
+    const alpha = Math.max(0, Math.round(255 * (1 - Math.min(1, p * 2.5))));
+    if (alpha <= 0) return;
+    const rays = 7;
+    const base = this.hexSize * 0.28 * (1 + p * 0.5);
+    for (let i = 0; i < rays; i++) {
+      const a = ((tr.seed + i * 53) % 360) * Math.PI / 180;
+      const len = base * (0.35 + ((tr.seed >>> (i % 8)) & 7) / 10);
+      g.strokeColor = i % 2 === 0
+        ? new Color(255, 238, 150, alpha)
+        : new Color(255, 126, 36, Math.round(alpha * 0.78));
+      g.lineWidth = Math.max(1, this.hexSize * 0.014);
+      g.moveTo(x, y);
+      g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+      g.stroke();
+    }
+    g.fillColor = new Color(255, 248, 190, alpha);
+    g.circle(x, y, Math.max(2, this.hexSize * 0.055));
+    g.fill();
+  }
+
+  private drawProjectilePenetration(g: Graphics, tr: ProjectileTrace, p: number) {
+    const alpha = Math.max(0, Math.round(255 * (1 - p)));
+    const s = this.hexSize * (0.22 + p * 0.34);
+    const x = tr.impactX;
+    const y = tr.impactY;
+    const ux = tr.ux;
+    const uy = tr.uy;
+    const rx = uy;
+    const ry = -ux;
+
+    g.fillColor = new Color(255, 225, 90, Math.round(alpha * 0.5));
+    g.circle(x, y, s);
+    g.fill();
+
+    g.fillColor = new Color(255, 92, 30, Math.round(alpha * 0.72));
+    g.moveTo(x + ux * s * 1.15, y + uy * s * 1.15);
+    g.lineTo(x - ux * s * 0.34 + rx * s * 0.62, y - uy * s * 0.34 + ry * s * 0.62);
+    g.lineTo(x - ux * s * 0.16, y - uy * s * 0.16);
+    g.lineTo(x - ux * s * 0.34 - rx * s * 0.62, y - uy * s * 0.34 - ry * s * 0.62);
+    g.close();
+    g.fill();
+
+    g.fillColor = new Color(255, 252, 204, alpha);
+    g.circle(x + ux * s * 0.2, y + uy * s * 0.2, Math.max(2, s * 0.22));
+    g.fill();
+  }
+
+  private clearProjectileTraces() {
+    for (const tr of this.projectileTraces) tr.node.destroy();
+    this.projectileTraces.length = 0;
+  }
+
+  private placeProjectileTraceNode(node: Node) {
+    const mapNode = this.mapNode;
+    if (!mapNode || node.parent !== mapNode) return;
+    if (this.fogNode?.parent === mapNode) {
+      node.setSiblingIndex(Math.max(0, this.fogNode.getSiblingIndex()));
+      return;
+    }
+    node.setSiblingIndex(mapNode.children.length - 1);
+  }
+
   private drawUnitMaybeAnim(u: Unit) {
     if (this.anim && this.anim.unit === u) {
       if (this.anim.kind === 'turn') {
@@ -3449,6 +3783,7 @@ export class BattleScene extends Component {
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
     if (this.floaters.length > 0) this.advanceFloaters(dt);
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
+    if (this.projectileTraces.length > 0) this.advanceProjectileTraces(dt);
     this.advanceUnitEffects(dt);
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
@@ -6912,7 +7247,9 @@ export class BattleScene extends Component {
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -6927,6 +7264,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.clearProjectileTraces();
     // 隐藏胜负覆盖层与按钮（loadAndDraw 内部 updateOutcomeOverlay 也会再做一次保险）
     if (this.outcomeLabel) this.outcomeLabel.node.active = false;
     if (this.restartBtn) this.restartBtn.active = false;
@@ -8998,9 +9336,17 @@ export class BattleScene extends Component {
   }
 
   private canAIExecuteShoot(actor: Unit): boolean {
-    if (this.selectAIShootTarget(actor, false)) return true;
+    const mainGunTarget = this.selectAIShootTarget(actor, false);
+    if (mainGunTarget && this.canAIMainGunResolveSelectedTarget(actor, mainGunTarget)) return true;
     return getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG
       && !!this.selectAIMGTarget(actor, false);
+  }
+
+  private canAIMainGunResolveSelectedTarget(actor: Unit, target: Unit): boolean {
+    if (!this.mission) return false;
+    const radioVisionSharing = getGameModeConfig(GameSession.gameMode).radioVisionSharing;
+    if (isUnitInVision(this.mission.map, actor, target, this.aiFriendliesFor(actor), radioVisionSharing)) return true;
+    return actor.stats.visionType === 'turreted' && isWithinOwnVisionRange(actor, target);
   }
 
   private beginAllyPhase() {
@@ -9024,7 +9370,9 @@ export class BattleScene extends Component {
     );
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -9057,7 +9405,9 @@ export class BattleScene extends Component {
     );
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -9079,7 +9429,9 @@ export class BattleScene extends Component {
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -9149,7 +9501,9 @@ export class BattleScene extends Component {
     );
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -10949,7 +11303,9 @@ export class BattleScene extends Component {
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -10964,6 +11320,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.clearProjectileTraces();
     this.transientFogRevealKeys.clear();
     this.clearDestroyWreckVisuals();
     // 胜负状态也要随读档重新判定
@@ -11017,13 +11374,21 @@ export class BattleScene extends Component {
     const tile = this.mission.map.get(enemy.pos);
     const terrain = effectiveDiceTerrain(tile);
     this.enemyAICol = aiColumnFor(enemy, terrain);
-    const count = AI_DICE_COUNT[this.enemyAICol];
-    this.enemyDice = rollAIDice(this.rng, count);
+    if (this.usesHardcoreTankDice(enemy)) {
+      const dice = rollHardcoreTankAIDice(this.rng, enemy, terrain);
+      this.enemyDice = dice.map(d => d.pip);
+      this.enemyDiceTypes = dice.map(d => d.type);
+    } else {
+      const count = AI_DICE_COUNT[this.enemyAICol];
+      this.enemyDice = rollAIDice(this.rng, count);
+      this.enemyDiceTypes = this.enemyDice.map(() => null);
+    }
     this.enemyDiceUsed = this.enemyDice.map(() => false);
+    this.enemyDiceResolvedActions = this.enemyDice.map(() => undefined);
     this.enemyDiceExecOrder = this.computeEnemyDiceExecOrder();
 
     this.battleLog(
-      `[AI] ${unitDisplayName(enemy.kind)}@(${enemy.pos.q},${enemy.pos.r}) 列=${aiColumnDisplayName(this.enemyAICol)} 掷 ${count} 骰 → [${this.enemyDice.join(',')}] 执行序=${this.enemyDiceExecOrder.map(i => this.enemyDice[i]).join(',')}`
+      `[AI] ${unitDisplayName(enemy.kind)}@(${enemy.pos.q},${enemy.pos.r}) ${this.describeEnemyDicePool(terrain)} -> [${this.describeEnemyDiceRolls()}] order=${this.enemyDiceExecOrder.map(i => this.describeEnemyDie(i)).join(',')}`
     );
 
     this.buildEnemyDiceTray(enemy, { playSort: true });
@@ -11074,7 +11439,7 @@ export class BattleScene extends Component {
       }
 
       const pip = this.enemyDice[dieIdx];
-      const entry = actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
+      const entry = this.enemyDieActionEntry(dieIdx);
       const chosen = this.chooseActionForEntry(enemy, entry, { commitMoveState: true });
       const entryLabel = describeEntry(entry);
       this.battleLog(
@@ -11087,6 +11452,7 @@ export class BattleScene extends Component {
       this.refreshEnemyDiceTray();
 
       if (!chosen) {
+        this.enemyDiceResolvedActions[dieIdx] = null;
         this.enemyDiceUsed[dieIdx] = true;
         this.enemyDiceHighlightIdx = -1;
         this.refreshEnemyDiceTray();
@@ -11094,6 +11460,7 @@ export class BattleScene extends Component {
       }
 
       // 执行选中的动作；返回表明本次是否"挂起"（有动画在播）
+      this.enemyDiceResolvedActions[dieIdx] = chosen;
       this.enemyDiceUsed[dieIdx] = true;
       this.enemyDidActThisTurn = true;
       this.refreshEnemyDiceTray();
@@ -11456,7 +11823,9 @@ export class BattleScene extends Component {
     this.enemyOrder = [];
     this.enemyIndex = 0;
     this.enemyDice = [];
+    this.enemyDiceTypes = [];
     this.enemyDiceUsed = [];
+    this.enemyDiceResolvedActions = [];
     this.clearAIMoveState();
     this.clearActiveActingUnit();
     this.destroyEnemyDiceTray();
@@ -11652,6 +12021,7 @@ export class BattleScene extends Component {
     attacker: Unit,
     target: Unit,
     attackSound: string,
+    report: AttackReport,
     onReady: (fireEffectPlayed: boolean) => void,
   ) {
     this.cancelPrecisionAimHold();
@@ -11659,7 +12029,7 @@ export class BattleScene extends Component {
       if (this.precisionAimHoldCallback !== callback) return;
       this.precisionAimHoldCallback = null;
       if (this.isUnitVisible(attacker)) {
-        this.playAttackFireCue(attacker, target, false, attackSound);
+        this.playAttackFireCue(attacker, target, false, attackSound, report);
         onReady(true);
       } else {
         // startDiceShow handles fog reveal plus firing cues for hidden attackers.
@@ -11720,6 +12090,7 @@ export class BattleScene extends Component {
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
+      unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
     }, this.rng);
     // 骰子先标"用掉了"不行 —— 动画期间得看出主炮骰仍在选中态。
     // 直接把它本局引用在外层闭包，onDone 里再 used = true。
@@ -11746,7 +12117,7 @@ export class BattleScene extends Component {
     };
     this.startShermanTurretAim(target, () => {
       if (precisionFire) {
-        this.beginPrecisionAimHold(sherman, target, sherman.stats.attackSound, showDice);
+        this.beginPrecisionAimHold(sherman, target, sherman.stats.attackSound, report, showDice);
       } else {
         showDice();
       }
@@ -11778,6 +12149,12 @@ export class BattleScene extends Component {
 
     if (!isUnitInVision(map, enemy, target, this.aiFriendliesFor(enemy), getGameModeConfig(GameSession.gameMode).radioVisionSharing)) {
       if (enemy.stats.visionType !== 'turreted') return false;
+      if (!isWithinOwnVisionRange(enemy, target)) {
+        if (!opts.adjacentOnly && getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG) {
+          return this.tryAIMGAttack(enemy);
+        }
+        return false;
+      }
       const targetDirection = fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
       this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 主炮目标不在视野内，炮塔转向 ${targetDirection}`);
       this.startEnemyTurretAim(enemy, target, () => {
@@ -11806,6 +12183,7 @@ export class BattleScene extends Component {
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
+      unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
     };
     const precisionPartnerIdx = !opts.adjacentOnly
       && isSplitTankKind(enemy.kind)
@@ -11815,6 +12193,7 @@ export class BattleScene extends Component {
       : -1;
     const precisionFire = precisionPartnerIdx >= 0;
     if (precisionFire) {
+      this.enemyDiceResolvedActions[precisionPartnerIdx] = 'shoot';
       this.enemyDiceUsed[precisionPartnerIdx] = true;
       this.refreshEnemyDiceTray();
     }
@@ -11855,7 +12234,7 @@ export class BattleScene extends Component {
     }, { attackSound: enemy.stats.attackSound, attacker: enemy, target, fireEffectPlayed });
     const afterTurretAim = () => {
       if (precisionFire) {
-        this.beginPrecisionAimHold(enemy, target, enemy.stats.attackSound, showDice);
+        this.beginPrecisionAimHold(enemy, target, enemy.stats.attackSound, report, showDice);
       } else {
         showDice();
       }
@@ -11904,7 +12283,7 @@ export class BattleScene extends Component {
         this.redraw();
       }
       if (!opts.fireEffectPlayed) {
-        this.playAttackFireCue(opts.attacker, opts.target ?? null, mg, opts.attackSound ?? '');
+        this.playAttackFireCue(opts.attacker, opts.target ?? null, mg, opts.attackSound ?? '', report);
       }
       this.scheduleOnce(() => {
         if (revealKey) {
@@ -12385,6 +12764,61 @@ export class BattleScene extends Component {
   // ---------- 敌方 AI 骰子迷你托盘 ----------
 
   /** 按点数升序排骰下标，同点保留原数组顺序（稳定排序） */
+  private usesHardcoreTankDice(unit: Unit): boolean {
+    return !!this.mission
+      && unit !== this.mission.sherman
+      && isTankUnit(unit)
+      && getGameModeConfig(GameSession.gameMode).aiHardcoreTankDice;
+  }
+
+  private enemyDieActionEntry(dieIdx: number): AIActionEntry {
+    const pip = this.enemyDice[dieIdx];
+    const type = this.enemyDiceTypes[dieIdx];
+    return type ? actionForHardcoreTankDie(type, pip) : actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
+  }
+
+  private enemyDieTypeSortValue(dieIdx: number): number {
+    return this.enemyDiceTypes[dieIdx] === 'move' ? 0 : 1;
+  }
+
+  private enemyDieFillColor(dieIdx: number): Color {
+    const type = this.enemyDiceTypes[dieIdx];
+    if (type === 'attack') return AI_ATTACK_DIE_FILL;
+    if (type === 'move') return AI_MOVE_DIE_FILL;
+    return DICE_DIE_FILL;
+  }
+
+  private describeEnemyDie(dieIdx: number): string {
+    const type = this.enemyDiceTypes[dieIdx];
+    return type ? `${type}:${this.enemyDice[dieIdx]}` : `${this.enemyDice[dieIdx]}`;
+  }
+
+  private describeEnemyDiceRolls(): string {
+    return this.enemyDice.map((_, i) => this.describeEnemyDie(i)).join(',');
+  }
+
+  private describeEnemyDicePool(terrain: TerrainType): string {
+    const hasTypedDice = this.enemyDiceTypes.some(t => !!t);
+    if (!hasTypedDice) return `${aiColumnDisplayName(this.enemyAICol)} ${this.enemyDice.length}d`;
+    const key = hardcoreTankDiceTerrain(terrain);
+    const subject = this.enemyOrder[this.enemyIndex];
+    const count = subject
+      ? hardcoreTankAIDiceCount(subject, terrain)
+      : {
+        attack: this.enemyDiceTypes.filter(type => type === 'attack').length,
+        move: this.enemyDiceTypes.filter(type => type === 'move').length,
+      };
+    return `${t(`dice.aiTerrain.${key}`)} A${count.attack}/M${count.move}`;
+  }
+
+  private enemyHardcoreTankTerrainLabel(): string {
+    const subject = this.enemyDiceTraySubject;
+    const tileTerrain = subject && this.mission
+      ? hardcoreTankDiceTerrain(effectiveDiceTerrain(this.mission.map.get(subject.pos)))
+      : 'field';
+    return t(`dice.aiTerrain.${tileTerrain}`);
+  }
+
   private computeEnemyDiceExecOrder(): number[] {
     const n = this.enemyDice.length;
     const idx = Array.from({ length: n }, (_, i) => i);
@@ -12392,6 +12826,9 @@ export class BattleScene extends Component {
       const va = this.enemyDice[a];
       const vb = this.enemyDice[b];
       if (va !== vb) return va - vb;
+      const ta = this.enemyDieTypeSortValue(a);
+      const tb = this.enemyDieTypeSortValue(b);
+      if (ta !== tb) return ta - tb;
       return a - b;
     });
     return idx;
@@ -12409,8 +12846,12 @@ export class BattleScene extends Component {
 
   /** 托盘下方短标签：当前规则下该骰将执行的具体动作（无可行则空转） */
   private enemyDieActionSubtitle(enemy: Unit, dieIdx: number): string {
-    const pip = this.enemyDice[dieIdx];
-    const entry = actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
+    const resolved = this.enemyDiceResolvedActions[dieIdx];
+    if (resolved !== undefined) {
+      if (!resolved || resolved === 'none') return t('dice.aiEnemy.waste');
+      return t(`dice.aiEnemy.${resolved}`);
+    }
+    const entry = this.enemyDieActionEntry(dieIdx);
     const chosen = this.chooseActionForEntry(enemy, entry);
     if (!chosen || chosen === 'none') return t('dice.aiEnemy.waste');
     return t(`dice.aiEnemy.${chosen}`);
@@ -12463,6 +12904,7 @@ export class BattleScene extends Component {
     this.placeEnemyDiceTrayRoot(root);
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
+    this.enemyDiceTraySubject = enemy;
 
     const header = new Node('AICol');
     header.layer = this.node.layer;
@@ -12474,13 +12916,24 @@ export class BattleScene extends Component {
     hl.color = new Color(230, 230, 200, 255);
     hl.horizontalAlign = HorizontalTextAlignment.CENTER;
     hl.verticalAlign = VerticalTextAlignment.CENTER;
-    hl.string = t('dice.aiHeader', { col: aiColumnDisplayName(this.enemyAICol), n: count });
+    const typedCount = this.enemyDiceTypes.some(type => !!type)
+      ? {
+        attack: this.enemyDiceTypes.filter(type => type === 'attack').length,
+        move: this.enemyDiceTypes.filter(type => type === 'move').length,
+      }
+      : null;
+    hl.string = typedCount
+      ? t('dice.aiHeader.hardcoreTank', {
+        terrain: this.enemyHardcoreTankTerrainLabel(),
+        attack: typedCount.attack,
+        move: typedCount.move,
+      })
+      : t('dice.aiHeader', { col: aiColumnDisplayName(this.enemyAICol), n: count });
     hl.enableOutline = true;
     hl.outlineColor = new Color(0, 0, 0, 220);
     hl.outlineWidth = 2;
     root.addChild(header);
 
-    this.enemyDiceTraySubject = enemy;
     this.enemyDiceTrayLabels = [];
     this.enemyDiceTrayTileGraphics = [];
     this.enemyDiceTrayDieRoots = [];
@@ -12503,7 +12956,7 @@ export class BattleScene extends Component {
       tile.setPosition(0, 0, 0);
       const g = tile.addComponent(Graphics);
       this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
-        fill: DICE_DIE_FILL,
+        fill: this.enemyDieFillColor(i),
         border: DICE_DIE_BORDER,
         lineWidth: 2,
         shadow: true,
@@ -12583,7 +13036,7 @@ export class BattleScene extends Component {
       if (!g) continue;
       g.clear();
       this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
-        fill: DICE_DIE_FILL,
+        fill: this.enemyDieFillColor(i),
         border: hi
           ? new Color(255, 200, 80, 255)
           : DICE_DIE_BORDER,
@@ -12723,7 +13176,7 @@ export class BattleScene extends Component {
           }
           // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
           if (!show.fireEffectPlayed) {
-            this.playAttackFireCue(show.attacker, show.target, show.mg, show.attackSound);
+            this.playAttackFireCue(show.attacker, show.target, show.mg, show.attackSound, show.report);
           }
         }
         break;

@@ -7,7 +7,7 @@
 
 import type { DamageCheckType } from './AttackDirectionDB';
 
-export type DamageTargetClass = 'german_tank' | 'us_tank' | 'protagonist';
+export type DamageTargetClass = "destroyed" | "german_tank" | "protagonist" | "us_tank";
 export type DamageTableEffectKind = 'destroyed' | 'fire' | 'turret' | 'paralyzed' | 'radio' | 'crew';
 export type DamageTableCrewRole = 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver';
 
@@ -25,6 +25,40 @@ export interface DamageTableEntry {
 }
 
 export const DAMAGE_TABLE: Record<DamageTargetClass, Record<DamageCheckType, Record<number, DamageTableEntry>>> = {
+  destroyed: {
+    front: {
+      1: { targetClass: 'destroyed', damageCheckType: 'front', die: 1, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      2: { targetClass: 'destroyed', damageCheckType: 'front', die: 2, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      3: { targetClass: 'destroyed', damageCheckType: 'front', die: 3, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      4: { targetClass: 'destroyed', damageCheckType: 'front', die: 4, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      5: { targetClass: 'destroyed', damageCheckType: 'front', die: 5, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      6: { targetClass: 'destroyed', damageCheckType: 'front', die: 6, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+    },
+    right: {
+      1: { targetClass: 'destroyed', damageCheckType: 'right', die: 1, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      2: { targetClass: 'destroyed', damageCheckType: 'right', die: 2, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      3: { targetClass: 'destroyed', damageCheckType: 'right', die: 3, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      4: { targetClass: 'destroyed', damageCheckType: 'right', die: 4, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      5: { targetClass: 'destroyed', damageCheckType: 'right', die: 5, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      6: { targetClass: 'destroyed', damageCheckType: 'right', die: 6, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+    },
+    left: {
+      1: { targetClass: 'destroyed', damageCheckType: 'left', die: 1, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      2: { targetClass: 'destroyed', damageCheckType: 'left', die: 2, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      3: { targetClass: 'destroyed', damageCheckType: 'left', die: 3, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      4: { targetClass: 'destroyed', damageCheckType: 'left', die: 4, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      5: { targetClass: 'destroyed', damageCheckType: 'left', die: 5, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      6: { targetClass: 'destroyed', damageCheckType: 'left', die: 6, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+    },
+    rear: {
+      1: { targetClass: 'destroyed', damageCheckType: 'rear', die: 1, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      2: { targetClass: 'destroyed', damageCheckType: 'rear', die: 2, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      3: { targetClass: 'destroyed', damageCheckType: 'rear', die: 3, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      4: { targetClass: 'destroyed', damageCheckType: 'rear', die: 4, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      5: { targetClass: 'destroyed', damageCheckType: 'rear', die: 5, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+      6: { targetClass: 'destroyed', damageCheckType: 'rear', die: 6, groups: [[{"kind":"destroyed"}]], notes: "direct_destroy_on_penetration" },
+    },
+  },
   german_tank: {
     front: {
       1: { targetClass: 'german_tank', damageCheckType: 'front', die: 1, groups: [[{"kind":"fire"}]], notes: "" },
@@ -59,6 +93,40 @@ export const DAMAGE_TABLE: Record<DamageTargetClass, Record<DamageCheckType, Rec
       6: { targetClass: 'german_tank', damageCheckType: 'rear', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
     },
   },
+  protagonist: {
+    front: {
+      1: { targetClass: 'protagonist', damageCheckType: 'front', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
+      2: { targetClass: 'protagonist', damageCheckType: 'front', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'protagonist', damageCheckType: 'front', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'protagonist', damageCheckType: 'front', die: 4, groups: [[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'protagonist', damageCheckType: 'front', die: 5, groups: [[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
+      6: { targetClass: 'protagonist', damageCheckType: 'front', die: 6, groups: [[{"kind":"fire"}]], notes: "" },
+    },
+    right: {
+      1: { targetClass: 'protagonist', damageCheckType: 'right', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
+      2: { targetClass: 'protagonist', damageCheckType: 'right', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'protagonist', damageCheckType: 'right', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'protagonist', damageCheckType: 'right', die: 4, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"radio"}],[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'protagonist', damageCheckType: 'right', die: 5, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"radio"}],[{"kind":"fire"}]], notes: "" },
+      6: { targetClass: 'protagonist', damageCheckType: 'right', die: 6, groups: [[{"kind":"fire"}]], notes: "" },
+    },
+    left: {
+      1: { targetClass: 'protagonist', damageCheckType: 'left', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
+      2: { targetClass: 'protagonist', damageCheckType: 'left', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'protagonist', damageCheckType: 'left', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'protagonist', damageCheckType: 'left', die: 4, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"radio"}],[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'protagonist', damageCheckType: 'left', die: 5, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"radio"}],[{"kind":"fire"}]], notes: "" },
+      6: { targetClass: 'protagonist', damageCheckType: 'left', die: 6, groups: [[{"kind":"fire"}]], notes: "" },
+    },
+    rear: {
+      1: { targetClass: 'protagonist', damageCheckType: 'rear', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
+      2: { targetClass: 'protagonist', damageCheckType: 'rear', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'protagonist', damageCheckType: 'rear', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'protagonist', damageCheckType: 'rear', die: 4, groups: [[{"kind":"radio"}],[{"kind":"paralyzed"}],[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'protagonist', damageCheckType: 'rear', die: 5, groups: [[{"kind":"paralyzed"}],[{"kind":"radio"}],[{"kind":"fire"}]], notes: "" },
+      6: { targetClass: 'protagonist', damageCheckType: 'rear', die: 6, groups: [[{"kind":"fire"}]], notes: "" },
+    },
+  },
   us_tank: {
     front: {
       1: { targetClass: 'us_tank', damageCheckType: 'front', die: 1, groups: [[{"kind":"fire"}]], notes: "" },
@@ -91,40 +159,6 @@ export const DAMAGE_TABLE: Record<DamageTargetClass, Record<DamageCheckType, Rec
       4: { targetClass: 'us_tank', damageCheckType: 'rear', die: 4, groups: [[{"kind":"fire"},{"kind":"paralyzed"}]], notes: "" },
       5: { targetClass: 'us_tank', damageCheckType: 'rear', die: 5, groups: [[{"kind":"destroyed"}]], notes: "" },
       6: { targetClass: 'us_tank', damageCheckType: 'rear', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
-    },
-  },
-  protagonist: {
-    front: {
-      1: { targetClass: 'protagonist', damageCheckType: 'front', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
-      2: { targetClass: 'protagonist', damageCheckType: 'front', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
-      3: { targetClass: 'protagonist', damageCheckType: 'front', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
-      4: { targetClass: 'protagonist', damageCheckType: 'front', die: 4, groups: [[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
-      5: { targetClass: 'protagonist', damageCheckType: 'front', die: 5, groups: [[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
-      6: { targetClass: 'protagonist', damageCheckType: 'front', die: 6, groups: [[{"kind":"crew","crew":["coDriver","driver"]}],[{"kind":"fire"}]], notes: "" },
-    },
-    right: {
-      1: { targetClass: 'protagonist', damageCheckType: 'right', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
-      2: { targetClass: 'protagonist', damageCheckType: 'right', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
-      3: { targetClass: 'protagonist', damageCheckType: 'right', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
-      4: { targetClass: 'protagonist', damageCheckType: 'right', die: 4, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
-      5: { targetClass: 'protagonist', damageCheckType: 'right', die: 5, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
-      6: { targetClass: 'protagonist', damageCheckType: 'right', die: 6, groups: [[{"kind":"crew","crew":["gunner","driver","commander"]}],[{"kind":"fire"}]], notes: "" },
-    },
-    left: {
-      1: { targetClass: 'protagonist', damageCheckType: 'left', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
-      2: { targetClass: 'protagonist', damageCheckType: 'left', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
-      3: { targetClass: 'protagonist', damageCheckType: 'left', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
-      4: { targetClass: 'protagonist', damageCheckType: 'left', die: 4, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
-      5: { targetClass: 'protagonist', damageCheckType: 'left', die: 5, groups: [[{"kind":"paralyzed"}],[{"kind":"turret"}],[{"kind":"fire"}]], notes: "" },
-      6: { targetClass: 'protagonist', damageCheckType: 'left', die: 6, groups: [[{"kind":"crew","crew":["loader","coDriver","commander"]}],[{"kind":"fire"}]], notes: "" },
-    },
-    rear: {
-      1: { targetClass: 'protagonist', damageCheckType: 'rear', die: 1, groups: [[{"kind":"destroyed"}]], notes: "" },
-      2: { targetClass: 'protagonist', damageCheckType: 'rear', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
-      3: { targetClass: 'protagonist', damageCheckType: 'rear', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
-      4: { targetClass: 'protagonist', damageCheckType: 'rear', die: 4, groups: [[{"kind":"radio"}],[{"kind":"paralyzed"}],[{"kind":"fire"}]], notes: "" },
-      5: { targetClass: 'protagonist', damageCheckType: 'rear', die: 5, groups: [[{"kind":"paralyzed"}],[{"kind":"radio"}],[{"kind":"fire"}]], notes: "" },
-      6: { targetClass: 'protagonist', damageCheckType: 'rear', die: 6, groups: [[{"kind":"crew","crew":["commander"]}],[{"kind":"fire"}]], notes: "" },
     },
   },
 };

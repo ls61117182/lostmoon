@@ -25,6 +25,10 @@ import {
   AIColumn,
   DEFAULT_AI_TABLE,
   EnemyAction,
+  EnemyTankDieType,
+  HARDCORE_TANK_AI_DICE_COUNT,
+  HARDCORE_TANK_AI_TABLE,
+  HardcoreTankDiceTerrain,
 } from './EnemyAIDB';
 import {
   HexMap,
@@ -46,7 +50,8 @@ import { Axial, Direction, isFootUnit, TerrainType, tileForbidsSmokeOrConcealmen
  * 生成。本文件不再写任何骰面→动作的硬编码。
  */
 export { AI_DICE_COUNT, DEFAULT_AI_TABLE };
-export type { AIActionEntry, AIActionTable, AIColumn, EnemyAction };
+export { HARDCORE_TANK_AI_DICE_COUNT, HARDCORE_TANK_AI_TABLE };
+export type { AIActionEntry, AIActionTable, AIColumn, EnemyAction, EnemyTankDieType, HardcoreTankDiceTerrain };
 
 // ---------- 列 & 骰子 ----------
 
@@ -80,10 +85,61 @@ export function rollAIDice(rng: RNG, count: number): number[] {
   return out;
 }
 
+export interface EnemyAIDie {
+  type: EnemyTankDieType;
+  pip: number;
+}
+
+export function hardcoreTankDiceTerrain(terrain: TerrainType): HardcoreTankDiceTerrain {
+  switch (terrain) {
+    case 'road':
+    case 'mud':
+    case 'clear':
+    case 'trees':
+    case 'beach':
+    case 'airstrip':
+      return terrain;
+    default:
+      return 'field';
+  }
+}
+
+function crewAlive(unit: Unit, slot: 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver'): boolean {
+  return unit.crew?.[slot] !== false;
+}
+
+export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number } {
+  const key = hardcoreTankDiceTerrain(terrain);
+  const base = HARDCORE_TANK_AI_DICE_COUNT[key];
+  const attackCrew =
+    (crewAlive(unit, 'commander') ? 1 : 0)
+    + (crewAlive(unit, 'gunner') ? 1 : 0)
+    + (crewAlive(unit, 'loader') ? 1 : 0);
+  const moveCrew =
+    (crewAlive(unit, 'driver') ? 1 : 0)
+    + (crewAlive(unit, 'coDriver') ? 1 : 0);
+  return {
+    attack: Math.max(0, base.attack + attackCrew),
+    move: Math.max(0, base.move + moveCrew),
+  };
+}
+
+export function rollHardcoreTankAIDice(rng: RNG, unit: Unit, terrain: TerrainType): EnemyAIDie[] {
+  const count = hardcoreTankAIDiceCount(unit, terrain);
+  const out: EnemyAIDie[] = [];
+  for (let i = 0; i < count.attack; i++) out.push({ type: 'attack', pip: rng.d6() });
+  for (let i = 0; i < count.move; i++) out.push({ type: 'move', pip: rng.d6() });
+  return out;
+}
+
 /** 查表：骰面 → 行动条目 */
 export function actionFor(table: AIActionTable, col: AIColumn, pip: number): AIActionEntry {
   const row = table[col];
   return row?.[pip] ?? { primary: 'none' };
+}
+
+export function actionForHardcoreTankDie(type: EnemyTankDieType, pip: number): AIActionEntry {
+  return HARDCORE_TANK_AI_TABLE[type]?.[pip] ?? { primary: 'none' };
 }
 
 // ---------- 排序：最近 → 最远 ----------
@@ -272,11 +328,13 @@ export function canExecuteAction(
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
     case 'turn':   return !enemy.paralyzed;
     case 'smoke':  return !enemy.smoked && !smokeHexes?.has(HexMap.keyOf(enemy.pos)) && !tileForbidsSmokeOrConcealment(currentTile);
-    case 'repair': return !!enemy.damaged
+    case 'repair': return crewAlive(enemy, 'commander') && (
+      !!enemy.damaged
       || !!enemy.paralyzed
       || !!enemy.turretDamaged
       || !!enemy.radioDamaged
-      || (enemy.fireLevel ?? 0) > 0;
+      || (enemy.fireLevel ?? 0) > 0
+    );
     case 'conceal': return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
     case 'shoot_adjacent': return enemy.facing !== null && hexDistance(enemy.pos, sherman.pos) === 1;
     case 'infantry_move':

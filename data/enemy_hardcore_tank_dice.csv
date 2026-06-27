@@ -1,0 +1,8 @@
+﻿terrain,attack_dice,move_dice,notes
+road,-1,0,公路
+field,0,-1,田地
+mud,-1,-1,泥地
+clear,0,-1,沙地
+trees,0,-1,树木
+beach,-2,-2,海滩
+airstrip,-1,0,机场

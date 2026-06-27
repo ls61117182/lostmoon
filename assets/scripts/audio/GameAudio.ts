@@ -17,6 +17,8 @@ export const AudioKeys = {
   tankManeuver: 'audio/tank_move',
   cannonFire: 'audio/cannon_fire',
   mgFire: 'audio/mg_fire',
+  tankHitRicochet: 'audio/tank_hit_ricochet',
+  tankHitPenetration: 'audio/tank_hit_penetration',
   /** 主炮装填完成（玩家消耗装填骰 / 对子装填手） */
   cannonReload: 'audio/cannon_reload',
 } as const;
@@ -235,6 +237,14 @@ export function playCannonFire(): void {
 
 export function playMgFire(): void {
   playSfxKey(AudioKeys.mgFire);
+}
+
+export function playTankHitRicochet(): void {
+  playSfxKey(AudioKeys.tankHitRicochet, 2.0, 2.0);
+}
+
+export function playTankHitPenetration(): void {
+  playSfxKey(AudioKeys.tankHitPenetration, 3.0, 3.0);
 }
 
 /** 装填：相对默认 SFX 约 +150%（2.5×），上限同步放宽 */

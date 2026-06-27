@@ -15,6 +15,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
+    damageTargetClass: "us_tank",
     infantryTankCoordination: 1,
   },
   tiger: { // 虎式 - 重型敌方坦克
@@ -24,6 +25,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
+    damageTargetClass: "german_tank",
     infantryTankCoordination: 1,
   },
   panzer4: { // 四号坦克 - 中坚敌方坦克
@@ -33,6 +35,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
+    damageTargetClass: "german_tank",
     infantryTankCoordination: 1,
   },
   panzer3: { // 三号坦克 - 次级敌方坦克
@@ -42,6 +45,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
+    damageTargetClass: "german_tank",
     infantryTankCoordination: 1,
   },
   truck: { // 卡车 - 占位 - 后续按特殊规则结算
@@ -51,6 +55,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "",
     visionType: "fixed",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
@@ -60,6 +65,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "",
     attackSound: "",
     visionType: "infantry",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
   },
   officer: { // 军官 - 任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
@@ -69,6 +75,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "",
     attackSound: "",
     visionType: "infantry",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
   },
   type95: { // 九五式轻战车 - Pacific D11: Type 95 Ha-Go
@@ -78,6 +85,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 1,
   },
   type97: { // 九七式中战车 - Pacific: Type 97 Chi-Ha
@@ -87,6 +95,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
     visionType: "turreted",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 1,
   },
   at_gun: { // 反坦克炮 - Pacific: AT Gun
@@ -96,6 +105,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "",
     attackSound: "audio/cannon_fire",
     visionType: "fixed",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
   },
   japanese_infantry: { // 日本步兵 - Pacific: Japanese Infantry
@@ -105,6 +115,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "",
     attackSound: "",
     visionType: "infantry",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
   },
   heavy_artillery: { // 重炮 - Pacific: Heavy Artillery
@@ -114,6 +125,7 @@ const DB: Record<UnitKind, UnitStats> = {
     moveSound: "",
     attackSound: "audio/cannon_fire",
     visionType: "fixed",
+    damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
   },
 };

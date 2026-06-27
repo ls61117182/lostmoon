@@ -1,0 +1,13 @@
+﻿die_type,die,primary,fallback,fallback2,notes
+move,1,turn,,,转向
+move,2,advance,turn,,前进>转向
+move,3,shoot,advance,,射击>前进
+move,4,advance,turn,,前进>转向
+move,5,advance,reverse,,前进>后退
+move,6,shoot,smoke,,射击>烟雾
+attack,1,repair,shoot,turn,修复并灭火（需要车长存活）>射击>转向
+attack,2,advance,shoot,,前进>射击
+attack,3,shoot,advance,,射击>前进
+attack,4,shoot,turn,,射击>转向
+attack,5,advance,reverse,,前进>后退
+attack,6,shoot,conceal,,射击>隐蔽

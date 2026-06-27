@@ -1,12 +1,11 @@
 /**
- * 德军坦克 AI 行动表与骰数 —— 自动生成，请勿手改本文件。
+ * Enemy AI action tables and dice counts. Auto-generated; do not edit by hand.
  *
- * 数据源：data/enemy_ai_table.csv + data/enemy_ai_dice.csv
- * 重新生成：node tools/buildEnemyAIDB.js
- * 对应 GDD §3.7 行动表 + 掷骰数。
+ * Sources: data/enemy_ai_table.csv, data/enemy_ai_dice.csv,
+ * data/enemy_hardcore_tank_action_table.csv, data/enemy_hardcore_tank_dice.csv
+ * Regenerate: node tools/buildEnemyAIDB.js
  */
 
-/** 敌方 AI 单颗骰能产出的具体行动 */
 export type EnemyAction =
   | 'shoot'
   | 'turn'
@@ -21,20 +20,24 @@ export type EnemyAction =
   | 'hull_down'
   | 'none';
 
-/** 一颗骰的 A>B 条目；无 fallback 则只执行 primary */
 export interface AIActionEntry {
   primary: EnemyAction;
   fallback?: EnemyAction;
   fallback2?: EnemyAction;
 }
 
-/** AI 表的列键：地形或"受损"（受损优先于地形） */
 export type AIColumn = 'road' | 'field' | 'mud' | 'damaged' | 'type95' | 'type97' | 'at_gun' | 'japanese_infantry' | 'heavy_artillery';
+export type EnemyTankDieType = 'attack' | 'move';
+export type HardcoreTankDiceTerrain = 'road' | 'field' | 'mud' | 'clear' | 'trees' | 'beach' | 'airstrip';
 
-/** 列 → (1..6) → 行动条目 */
+export interface HardcoreTankDiceCount {
+  attack: number;
+  move: number;
+}
+
 export type AIActionTable = Record<AIColumn, Record<number, AIActionEntry>>;
+export type HardcoreTankActionTable = Record<EnemyTankDieType, Record<number, AIActionEntry>>;
 
-/** 每列掷多少颗骰（GDD §3.7 骰数表） */
 export const AI_DICE_COUNT: Record<AIColumn, number> = {
   road: 4,
   field: 4,
@@ -47,7 +50,6 @@ export const AI_DICE_COUNT: Record<AIColumn, number> = {
   heavy_artillery: 1,
 };
 
-/** 默认 AI 行动表（数据源 enemy_ai_table.csv；各关可按需覆盖） */
 export const DEFAULT_AI_TABLE: AIActionTable = {
   road: {
     1: { primary: 'shoot', fallback: 'turn' },
@@ -120,5 +122,34 @@ export const DEFAULT_AI_TABLE: AIActionTable = {
     4: { primary: 'shoot' },
     5: { primary: 'shoot' },
     6: { primary: 'shoot' },
+  },
+};
+
+export const HARDCORE_TANK_AI_DICE_COUNT: Record<HardcoreTankDiceTerrain, HardcoreTankDiceCount> = {
+  road: { attack: -1, move: 0 },
+  field: { attack: 0, move: -1 },
+  mud: { attack: -1, move: -1 },
+  clear: { attack: 0, move: -1 },
+  trees: { attack: 0, move: -1 },
+  beach: { attack: -2, move: -2 },
+  airstrip: { attack: -1, move: 0 },
+};
+
+export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {
+  attack: {
+    1: { primary: 'repair', fallback: 'shoot', fallback2: 'turn' },
+    2: { primary: 'advance', fallback: 'shoot' },
+    3: { primary: 'shoot', fallback: 'advance' },
+    4: { primary: 'shoot', fallback: 'turn' },
+    5: { primary: 'advance', fallback: 'reverse' },
+    6: { primary: 'shoot', fallback: 'conceal' },
+  },
+  move: {
+    1: { primary: 'turn' },
+    2: { primary: 'advance', fallback: 'turn' },
+    3: { primary: 'shoot', fallback: 'advance' },
+    4: { primary: 'advance', fallback: 'turn' },
+    5: { primary: 'advance', fallback: 'reverse' },
+    6: { primary: 'shoot', fallback: 'smoke' },
   },
 };

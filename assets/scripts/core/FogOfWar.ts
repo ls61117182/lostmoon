@@ -23,6 +23,11 @@ export function currentVisionRange(unit: Unit): number {
     : DEFAULT_VISION_RANGE;
 }
 
+/** Whether the target is within the observer's own configured vision range. */
+export function isWithinOwnVisionRange(observer: Unit, target: Unit): boolean {
+  return hexDistance(observer.pos, target.pos) <= currentVisionRange(observer);
+}
+
 /** Runtime source of truth for the map coordinates visible to one unit. */
 export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
   const visible = new Set<string>();

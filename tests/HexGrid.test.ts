@@ -26,15 +26,15 @@ import {
 } from '../assets/scripts/core/HexGrid';
 import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
-import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit } from '../assets/scripts/core/FogOfWar';
+import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit, isWithinOwnVisionRange } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
 import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, effectivePenetration, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
 import { RNG } from '../assets/scripts/core/Dice';
 
-const rngFrom = (...values) => {
+const rngFrom = (...values): RNG => {
   const queue = [...values];
-  return { d6: () => queue.shift() ?? 1 };
+  return { d6: () => queue.shift() ?? 1 } as unknown as RNG;
 };
 
 describe('HexGrid 基础运算', () => {
@@ -414,6 +414,79 @@ describe('Hardcore twelve-direction turret fire', () => {
     expect(target.destroyed).toBe(true);
   });
 
+  test('hardcore destroyed damage target class skips damage dice after penetration', () => {
+    const attacker = tankAt('attacker', 1, 0);
+    const target = tankAt('target', 0, 0, 0);
+    target.kind = 'type97';
+    target.faction = 'japanese';
+    target.stats = { ...target.stats, faction: 'japanese', damageTargetClass: 'destroyed' };
+    const map = fieldMap(0, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      expandedTurretDirections: true,
+      unitDamageTargetClass: true,
+      protagonist: attacker,
+    }, rngFrom(6, 6, 6, 6, 1));
+    applyAttack(target, report);
+
+    expect(report.damageEffect).toBe('destroyed');
+    expect(report.damageDie).toBeUndefined();
+    expect(report.stagedDamageDie).toBeUndefined();
+    expect(target.destroyed).toBe(true);
+  });
+
+  test('configured damage target class is ignored when the hardcore mode flag is off', () => {
+    const attacker = tankAt('attacker', 1, 0);
+    const target = tankAt('target', 0, 0, 0);
+    target.kind = 'type97';
+    target.faction = 'japanese';
+    target.stats = { ...target.stats, faction: 'japanese', damageTargetClass: 'destroyed' };
+    const map = fieldMap(0, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      expandedTurretDirections: true,
+      unitDamageTargetClass: false,
+      protagonist: attacker,
+    }, rngFrom(6, 6, 6, 6, 1));
+    applyAttack(target, report);
+
+    expect(report.damageDie).toBe(1);
+    expect(report.damageEffect).toBe('fire');
+    expect(target.destroyed).toBeFalsy();
+    expect(target.fireLevel).toBe(1);
+  });
+
+  test('hardcore protagonist right-side crew priority skips dead gunner before commander', () => {
+    const attacker = tankAt('attacker', 0, 1);
+    const target = tankAt('target', 0, 0, 0);
+    target.kind = 'sherman';
+    target.faction = 'allied';
+    target.crew = { commander: true, loader: true, gunner: false, driver: true, coDriver: true };
+    const map = fieldMap(-1, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      expandedTurretDirections: true,
+      protagonist: target,
+    }, rngFrom(6, 6, 6, 6, 6));
+    applyAttack(target, report);
+
+    expect(report.damageCheckType).toBe('right');
+    expect(report.stagedCrewCheck).toBeUndefined();
+    expect(report.crewCheck).toBeUndefined();
+    expect(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot).toBe(4);
+    expect(target.crew!.driver).toBe(false);
+    expect(target.crew!.commander).toBe(true);
+  });
+
   test('hardcore protagonist rear damage prioritizes radio before immobilization and fire', () => {
     const attacker = tankAt('attacker', -1, 0);
     const target = tankAt('target', 0, 0, 0);
@@ -513,6 +586,8 @@ describe('战争迷雾玩家视野', () => {
     expect(getGameModeConfig('hardcore').effectiveRangePenetration).toBe(true);
     expect(getGameModeConfig('classic').directionalDamageCheck).toBe(false);
     expect(getGameModeConfig('hardcore').directionalDamageCheck).toBe(true);
+    expect(getGameModeConfig('classic').unitDamageTargetClass).toBe(false);
+    expect(getGameModeConfig('hardcore').unitDamageTargetClass).toBe(true);
     expect(getGameModeConfig('classic').radioVisionSharing).toBe(false);
     expect(getGameModeConfig('hardcore').radioVisionSharing).toBe(true);
   });
@@ -654,6 +729,17 @@ describe('战争迷雾玩家视野', () => {
     expect(visible.has(HexMap.keyOf(turret2))).toBe(true);
     expect(visible.has(HexMap.keyOf(turret3))).toBe(false);
     expect(visible.has(HexMap.keyOf(bodyForward2))).toBe(false);
+  });
+
+  test('own vision range blocks turret vision turn beyond configured distance', () => {
+    const unit = shermanAt(0, 0, 0, false);
+    unit.stats = { ...unit.stats, visionType: 'turreted', visionRange: 4 };
+    unit.visionRange = undefined;
+    const inRange = shermanAt(4, 0, 3, false);
+    const outOfRange = shermanAt(5, 0, 3, false);
+
+    expect(isWithinOwnVisionRange(unit, inRange)).toBe(true);
+    expect(isWithinOwnVisionRange(unit, outOfRange)).toBe(false);
   });
 
   test('中心点几何连线：{4,1} 建筑遮挡 {2,3} 到 {5,0}/{6,0}', () => {

@@ -15,10 +15,11 @@ const { readCsvRowsSmart } = require('./csvSmart');
 const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'units.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
+const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 
 const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
-const STRING_FIELDS = ['moveSound', 'attackSound', 'visionType'];
+const STRING_FIELDS = ['moveSound', 'attackSound', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
 const FACTIONS = ['allied', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
@@ -149,12 +150,23 @@ function boolOrThrow(rec, field) {
   throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: field ${field}="${rec[field]}" is not a boolean`);
 }
 
+function readDamageTargetClasses() {
+  const rows = readCsvRowsSmart(DAMAGE_CSV_PATH, {
+    toolName: 'buildUnitDB',
+    requiredHeaders: ['targetClass', 'damageCheckType', 'die', 'effects', 'notes'],
+  });
+  const headers = rows[0].map(h => h.trim().replace(/^\uFEFF/, ''));
+  const targetClassIdx = headers.indexOf('targetClass');
+  return new Set(rows.slice(1).map(row => (row[targetClassIdx] ?? '').trim()).filter(Boolean));
+}
+
 function build() {
   const rows = readCsvRowsSmart(CSV_PATH, {
     toolName: 'buildUnitDB',
     requiredHeaders: REQUIRED_HEADERS,
   });
   const records = toRecords(rows);
+  const damageTargetClasses = readDamageTargetClasses();
 
   const seen = new Set();
   for (const rec of records) {
@@ -171,6 +183,9 @@ function build() {
     }
     if (!VISION_TYPES.includes(rec.visionType)) {
       throw new Error(`row ${rec.__row} ${rec.unitKind}: visionType="${rec.visionType}" must be ${VISION_TYPES.join(' / ')}`);
+    }
+    if (!damageTargetClasses.has(rec.damageTargetClass)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind}: damageTargetClass="${rec.damageTargetClass}" must be one of data/damage_table.csv targetClass values`);
     }
   }
   for (const k of REQUIRED_KINDS) {
