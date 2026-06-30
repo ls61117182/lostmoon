@@ -656,6 +656,21 @@ interface ProjectileTrace {
   seed: number;
 }
 
+interface MachineGunBurst {
+  node: Node;
+  g: Graphics;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  ux: number;
+  uy: number;
+  t: number;
+  dur: number;
+  seed: number;
+  hit: boolean;
+}
+
 interface UnitEffectVisual {
   unit: Unit;
   seed: number;
@@ -1259,6 +1274,7 @@ export class BattleScene extends Component {
   private floaters: Floater[] = [];
   private muzzleFlashes: MuzzleFlash[] = [];
   private projectileTraces: ProjectileTrace[] = [];
+  private machineGunBursts: MachineGunBurst[] = [];
   private firedAttackCueReports = new WeakSet<AttackReport>();
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
@@ -2053,6 +2069,7 @@ export class BattleScene extends Component {
     this.clearFloaters();
     this.clearMuzzleFlashes();
     this.clearProjectileTraces();
+    this.clearMachineGunBursts();
     this.clearDestroyWreckVisuals();
     this.closeDiePopover();
     this.finalizeDiceShow(true);
@@ -3399,7 +3416,7 @@ export class BattleScene extends Component {
     const n = new Node('Floater');
     n.layer = this.node.layer;
     const ut = n.addComponent(UITransform);
-    const size = opts?.size ?? 34;
+    const size = 20;
     ut.setContentSize(160, size + 6);
     ut.setAnchorPoint(0.5, 0.5);
 
@@ -3492,6 +3509,7 @@ export class BattleScene extends Component {
     report?: AttackReport,
   ) {
     if (mg) {
+      this.spawnMachineGunBurst(attacker, target, report?.hit === true);
       playMgFire();
       return;
     }
@@ -3502,6 +3520,56 @@ export class BattleScene extends Component {
     this.spawnMuzzleFlash(attacker, target);
     this.spawnProjectileTrace(attacker, target, report);
     playConfiguredAttackSound(attackSound);
+  }
+
+  private spawnMachineGunBurst(attacker: Unit | null, target: Unit | null, hit: boolean) {
+    if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
+    if (!this.isUnitVisible(attacker)) return;
+    const a = this.project(attacker.pos.q, attacker.pos.r);
+    const b = this.project(target.pos.q, target.pos.r);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len <= 1) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    const start = this.machineGunStartPoint(a, ux, uy);
+    const targetInset = Math.max(8, this.hexSize * 0.16);
+
+    const n = new Node('MachineGunBurst');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(1, 1);
+    ut.setAnchorPoint(0.5, 0.5);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    n.setPosition(0, 0, 0);
+    this.placeProjectileTraceNode(n);
+
+    const burst: MachineGunBurst = {
+      node: n,
+      g,
+      startX: start.x,
+      startY: start.y,
+      targetX: b.x - ux * targetInset,
+      targetY: b.y - uy * targetInset,
+      ux,
+      uy,
+      t: 0,
+      dur: 0.62,
+      seed: this.hashStringToSeed(`mg:${attacker.id}:${target.id}:${hit ? 1 : 0}`),
+      hit,
+    };
+    this.drawMachineGunBurst(burst, 0);
+    this.machineGunBursts.push(burst);
+  }
+
+  private machineGunStartPoint(c: { x: number; y: number }, ux: number, uy: number): { x: number; y: number } {
+    const dist = Math.max(12, this.hexSize * 0.46);
+    return {
+      x: c.x + ux * dist,
+      y: c.y + uy * dist,
+    };
   }
 
   private spawnProjectileTrace(attacker: Unit | null, target: Unit | null, report?: AttackReport) {
@@ -3943,6 +4011,109 @@ export class BattleScene extends Component {
     this.projectileTraces.length = 0;
   }
 
+  private advanceMachineGunBursts(dt: number) {
+    for (let i = this.machineGunBursts.length - 1; i >= 0; i--) {
+      const b = this.machineGunBursts[i];
+      b.t += dt;
+      const p = Math.min(b.t / b.dur, 1);
+      if (p >= 1) {
+        b.node.destroy();
+        this.machineGunBursts.splice(i, 1);
+        continue;
+      }
+      this.drawMachineGunBurst(b, p);
+    }
+  }
+
+  private drawMachineGunBurst(b: MachineGunBurst, p: number) {
+    const g = b.g;
+    this.placeProjectileTraceNode(b.node);
+    g.clear();
+
+    const dist = Math.hypot(b.targetX - b.startX, b.targetY - b.startY);
+    if (dist <= 1) return;
+    const nx = -b.uy;
+    const ny = b.ux;
+    const shots = 15;
+
+    for (let i = 0; i < shots; i++) {
+      const shotStart = i * 0.035;
+      const shotP = (p - shotStart) / 0.36;
+      if (shotP < 0 || shotP > 1) continue;
+
+      const r0 = this.seededUnit(b.seed, i * 4 + 0);
+      const r1 = this.seededUnit(b.seed, i * 4 + 1);
+      const r2 = this.seededUnit(b.seed, i * 4 + 2);
+      const r3 = this.seededUnit(b.seed, i * 4 + 3);
+      const maxScatterAngle = 7 * Math.PI / 180;
+      const maxPerpByAngle = Math.tan(maxScatterAngle) * dist;
+      const maxPerp = Math.min(this.hexSize * 0.42, maxPerpByAngle);
+      const endPerp = (r0 - 0.5) * 2 * maxPerp;
+      const endForward = (r3 - 0.5) * this.hexSize * 0.18;
+      const endX = b.targetX + b.ux * endForward + nx * endPerp;
+      const endY = b.targetY + b.uy * endForward + ny * endPerp;
+      const shotDx = endX - b.startX;
+      const shotDy = endY - b.startY;
+      const shotLen = Math.hypot(shotDx, shotDy) || 1;
+      const shotUx = shotDx / shotLen;
+      const shotUy = shotDy / shotLen;
+      const travel = Math.min(1, shotP * 2.25);
+      const headX = b.startX + shotDx * travel;
+      const headY = b.startY + shotDy * travel;
+      const tail = this.hexSize * (0.54 + r1 * 0.36);
+      const fade = Math.max(0, Math.min(1, (1 - shotP) / 0.55));
+      const alpha = Math.round(255 * Math.min(1, shotP * 7) * fade);
+      if (alpha <= 0) continue;
+
+      g.lineWidth = Math.max(2.2, this.hexSize * 0.038);
+      g.strokeColor = new Color(255, 186, 44, Math.round(alpha * 0.72));
+      g.moveTo(headX - shotUx * tail * 1.08, headY - shotUy * tail * 1.08);
+      g.lineTo(headX + shotUx * this.hexSize * 0.04, headY + shotUy * this.hexSize * 0.04);
+      g.stroke();
+
+      g.lineWidth = Math.max(1.4, this.hexSize * 0.022);
+      g.strokeColor = new Color(255, 244, 150, alpha);
+      g.moveTo(headX - shotUx * tail, headY - shotUy * tail);
+      g.lineTo(headX, headY);
+      g.stroke();
+
+      if (travel > 0.9) {
+        const dustP = Math.min(1, (travel - 0.9) / 0.1);
+        const dustAlpha = Math.round((b.hit ? 210 : 165) * (1 - dustP) * fade);
+        if (dustAlpha > 0) {
+          const impactJitter = (r2 - 0.5) * this.hexSize * 0.08;
+          const dustX = endX + nx * impactJitter + shotUx * this.hexSize * 0.08 * dustP;
+          const dustY = endY + ny * impactJitter + shotUy * this.hexSize * 0.08 * dustP;
+          g.fillColor = new Color(164, 136, 88, dustAlpha);
+          g.circle(dustX, dustY, this.hexSize * (0.075 + dustP * 0.07));
+          g.fill();
+
+          g.strokeColor = new Color(255, 224, 120, Math.round(dustAlpha * 0.86));
+          g.lineWidth = Math.max(1.2, this.hexSize * 0.014);
+          const sparkLen = this.hexSize * (0.10 + r3 * 0.08) * (1 - dustP);
+          g.moveTo(dustX - nx * sparkLen, dustY - ny * sparkLen);
+          g.lineTo(dustX + nx * sparkLen, dustY + ny * sparkLen);
+          g.stroke();
+        }
+      }
+    }
+  }
+
+  private clearMachineGunBursts() {
+    for (const b of this.machineGunBursts) b.node.destroy();
+    this.machineGunBursts.length = 0;
+  }
+
+  private seededUnit(seed: number, index: number): number {
+    let x = (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0;
+    x ^= x >>> 16;
+    x = Math.imul(x, 0x7feb352d) >>> 0;
+    x ^= x >>> 15;
+    x = Math.imul(x, 0x846ca68b) >>> 0;
+    x ^= x >>> 16;
+    return (x >>> 0) / 0xffffffff;
+  }
+
   private placeProjectileTraceNode(node: Node) {
     const mapNode = this.mapNode;
     if (!mapNode || node.parent !== mapNode) return;
@@ -3978,6 +4149,7 @@ export class BattleScene extends Component {
     if (this.floaters.length > 0) this.advanceFloaters(dt);
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
     if (this.projectileTraces.length > 0) this.advanceProjectileTraces(dt);
+    if (this.machineGunBursts.length > 0) this.advanceMachineGunBursts(dt);
     this.advanceUnitEffects(dt);
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
@@ -4097,11 +4269,12 @@ export class BattleScene extends Component {
         facing: finishedUnit.facing,
       });
     }
-    if (finishedUnit === this.mission?.sherman && finishedUnit.facing !== null) {
+    if (anim.kind === 'turn' && finishedUnit === this.mission?.sherman && finishedUnit.facing !== null) {
       this.shermanTurretFacing = finishedUnit.facing;
       finishedUnit.turretFacing = finishedUnit.facing;
-    } else if (this.enemySupportsSplitTurret(finishedUnit) && finishedUnit.facing !== null) {
+    } else if (anim.kind === 'turn' && this.enemySupportsSplitTurret(finishedUnit) && finishedUnit.facing !== null) {
       this.enemyTurretFacing.set(finishedUnit.id, finishedUnit.facing);
+      finishedUnit.turretFacing = finishedUnit.facing;
     }
     if (maneuverSound) stopManeuverSound();
     this.anim = null;
@@ -5801,12 +5974,13 @@ export class BattleScene extends Component {
 
   private directionScreenAngle(
     pos: { q: number; r: number },
-    c: { x: number; y: number },
+    _c: { x: number; y: number },
     dir: FireDirection,
   ): number {
+    const origin = this.project(pos.q, pos.r);
     const aimed = axialAdd(pos, fireDirectionVector(dir));
     const np = this.project(aimed.q, aimed.r);
-    return Math.atan2(np.y - c.y, np.x - c.x);
+    return Math.atan2(np.y - origin.y, np.x - origin.x);
   }
 
   private updateShermanTopSprite(
@@ -5866,6 +6040,15 @@ export class BattleScene extends Component {
     }
 
     if (u === this.mission?.sherman && this.anim?.unit === u && u.facing !== null) {
+      if (this.anim.kind === 'move') {
+        const facing = this.shermanTurretFacing ?? u.turretFacing ?? u.facing;
+        return {
+          from: facing as FireDirection,
+          to: facing as FireDirection,
+          t: 1,
+          angular: true,
+        };
+      }
       const from = (this.shermanTurretFacing ?? u.turretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as FireDirection;
       const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as FireDirection;
       if (from === to) return null;
@@ -5905,6 +6088,15 @@ export class BattleScene extends Component {
     }
 
     if (this.anim?.unit === u && u.facing !== null) {
+      if (this.anim.kind === 'move') {
+        const facing = (this.enemyTurretFacing.get(u.id) ?? u.turretFacing ?? u.facing) as FireDirection;
+        return {
+          from: facing,
+          to: facing,
+          t: 1,
+          angular: true,
+        };
+      }
       const stored = this.enemyTurretFacing.get(u.id);
       const from = (stored ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as FireDirection;
       const to = (this.anim.kind === 'turn' ? this.anim.turnTo! : u.facing) as FireDirection;
@@ -5924,7 +6116,7 @@ export class BattleScene extends Component {
       };
     }
 
-    const facing = this.enemyTurretFacing.get(u.id);
+    const facing = this.enemyTurretFacing.get(u.id) ?? u.turretFacing;
     if (facing === undefined) return null;
     return { from: facing, to: facing, t: 1, angular: true };
   }
@@ -9041,6 +9233,7 @@ export class BattleScene extends Component {
     });
 
     if (impossible) {
+      this.spawnMachineGunBurst(sherman, target, false);
       playMgFire();
       slot.used = true;
       this.selectedMGDieIdx = -1;
@@ -11346,7 +11539,7 @@ export class BattleScene extends Component {
 
     const lab = this.makeBattleModalLabel(
       root, msg,
-      0, 0, 560, 72, 30,
+      0, 0, 560, 72, 20,
       new Color(255, 245, 210, 255),
     );
     lab.enableOutline = true;
@@ -12335,7 +12528,7 @@ export class BattleScene extends Component {
     const splitTurretReady = this.enemySupportsSplitTurret(enemy);
     if (splitTurretReady) {
       if (!this.enemyTurretFacing.has(enemy.id) && enemy.facing !== null) {
-        this.enemyTurretFacing.set(enemy.id, enemy.facing);
+        this.enemyTurretFacing.set(enemy.id, (enemy.turretFacing ?? enemy.facing) as FireDirection);
       }
     }
 
@@ -14100,6 +14293,7 @@ export class BattleScene extends Component {
       const hiddenActor = !this.isUnitVisible(actor);
       if (hiddenActor) this.transientFogRevealKeys.add(revealKey);
       this.redraw();
+      this.spawnMachineGunBurst(actor, target, false);
       playMgFire();
       this.scheduleOnce(() => {
         if (hiddenActor) this.transientFogRevealKeys.delete(revealKey);

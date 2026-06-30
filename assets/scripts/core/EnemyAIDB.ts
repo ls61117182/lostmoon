@@ -141,15 +141,15 @@ export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {
     2: { primary: 'advance', fallback: 'shoot' },
     3: { primary: 'shoot', fallback: 'advance' },
     4: { primary: 'shoot', fallback: 'turn' },
-    5: { primary: 'advance', fallback: 'reverse' },
+    5: { primary: 'shoot', fallback: 'advance' },
     6: { primary: 'shoot', fallback: 'conceal' },
   },
   move: {
     1: { primary: 'turn' },
     2: { primary: 'advance', fallback: 'turn' },
-    3: { primary: 'shoot', fallback: 'advance' },
+    3: { primary: 'advance', fallback: 'reverse' },
     4: { primary: 'advance', fallback: 'turn' },
     5: { primary: 'advance', fallback: 'reverse' },
-    6: { primary: 'shoot', fallback: 'smoke' },
+    6: { primary: 'advance', fallback: 'smoke' },
   },
 };
