@@ -311,6 +311,10 @@ function pvpUnit(id, ownerParity, ownerFactionId, role, kind, q, r, facing) {
     fireLevel: 0,
     turretDamaged: false,
     paralyzed: false,
+    hidden: false,
+    smoked: false,
+    radioDamaged: false,
+    visionRange: undefined,
     crew: role === "protagonist"
       ? { commander: true, loader: true, gunner: true, driver: true, coDriver: true }
       : undefined,
@@ -326,6 +330,7 @@ function createInitialPvpBattleState(match) {
     version: 1,
     turn: 1,
     currentParity: match.firstParity,
+    actionPhase: "player",
     firstParity: match.firstParity,
     openingDie: match.openingDie,
     units: [
@@ -336,9 +341,34 @@ function createInitialPvpBattleState(match) {
       pvpUnit("pvp_even_support_1", "even", even.factionId, "support", evenSupport, 5, 1, 3),
       pvpUnit("pvp_even_support_2", "even", even.factionId, "support", evenSupport, 4, 0, 3),
     ],
+    smokeHexes: [],
+    smokeHexOwners: {},
     winnerParity: null,
     updatedAt: Date.now(),
   };
+}
+
+function sanitizePvpSmokeHexes(raw) {
+  if (!Array.isArray(raw)) return [];
+  const result = [];
+  const seen = new Set();
+  for (const value of raw) {
+    const key = String(value || "");
+    if (!/^-?\d+,-?\d+$/.test(key) || seen.has(key)) continue;
+    seen.add(key);
+    result.push(key);
+  }
+  return result;
+}
+
+function sanitizePvpSmokeHexOwners(rawOwners, smokeHexes, fallbackOwners = {}) {
+  const src = rawOwners && typeof rawOwners === "object" ? rawOwners : {};
+  const owners = {};
+  for (const key of smokeHexes) {
+    const owner = src[key] || fallbackOwners[key];
+    owners[key] = owner === "even" ? "even" : "odd";
+  }
+  return owners;
 }
 
 function sanitizePvpBattleUnit(raw, fallback) {
@@ -363,6 +393,12 @@ function sanitizePvpBattleUnit(raw, fallback) {
     fireLevel: Math.max(0, n(src.fireLevel, 0)),
     turretDamaged: !!src.turretDamaged,
     paralyzed: !!src.paralyzed,
+    hidden: !!src.hidden,
+    smoked: !!src.smoked,
+    radioDamaged: !!src.radioDamaged,
+    visionRange: src.visionRange === undefined || src.visionRange === null
+      ? base.visionRange
+      : Math.max(0, n(src.visionRange, base.visionRange ?? 0)),
     crew: src.crew && typeof src.crew === "object"
       ? {
         commander: src.crew.commander !== false,
@@ -375,12 +411,22 @@ function sanitizePvpBattleUnit(raw, fallback) {
   };
 }
 
-function updatePvpBattleUnits(match, rawUnits) {
+function updatePvpBattleFromEvent(match, event) {
+  const rawUnits = event?.units;
   if (!Array.isArray(rawUnits)) return;
   const byId = new Map(rawUnits.map(unit => [String(unit?.id || ""), unit]));
   match.battleState.units = match.battleState.units.map(unit => (
     byId.has(unit.id) ? sanitizePvpBattleUnit(byId.get(unit.id), unit) : unit
   ));
+  if (Array.isArray(event.smokeHexes)) {
+    const smokeHexes = sanitizePvpSmokeHexes(event.smokeHexes);
+    match.battleState.smokeHexes = smokeHexes;
+    match.battleState.smokeHexOwners = sanitizePvpSmokeHexOwners(
+      event.smokeHexOwners,
+      smokeHexes,
+      match.battleState.smokeHexOwners,
+    );
+  }
 }
 
 function updatePvpWinner(match) {
@@ -395,6 +441,8 @@ function publicPvpBattleState(match) {
   return {
     ...match.battleState,
     units: match.battleState.units.map(unit => ({ ...unit, pos: { ...unit.pos }, crew: unit.crew ? { ...unit.crew } : undefined })),
+    smokeHexes: Array.isArray(match.battleState.smokeHexes) ? [...match.battleState.smokeHexes] : [],
+    smokeHexOwners: { ...(match.battleState.smokeHexOwners || {}) },
   };
 }
 
@@ -411,6 +459,117 @@ function sendPvpBattleSnapshot(match, reason) {
       now: Date.now(),
     });
   }
+}
+
+function sendPvpBattleAction(match, action, reason = "action", excludeClientId = null) {
+  if (!match.battleState) return;
+  updatePvpWinner(match);
+  match.battleState.updatedAt = Date.now();
+  for (const player of match.players) {
+    if (excludeClientId && player.clientId === excludeClientId) continue;
+    safeSend(clients.get(player.clientId), {
+      type: "pvp_battle_event",
+      matchId: match.id,
+      from: null,
+      event: {
+        kind: "pvp_action_result",
+        reason,
+        action,
+        state: publicPvpBattleState(match),
+      },
+      seq: null,
+      now: Date.now(),
+    });
+  }
+}
+
+function pvpHexDistance(a, b) {
+  const dq = a.q - b.q;
+  const dr = a.r - b.r;
+  return (Math.abs(dq) + Math.abs(dr) + Math.abs(dq + dr)) / 2;
+}
+
+const PVP_DIRECTIONS = [
+  { q: 1, r: 0 },
+  { q: 0, r: 1 },
+  { q: -1, r: 1 },
+  { q: -1, r: 0 },
+  { q: 0, r: -1 },
+  { q: 1, r: -1 },
+];
+
+function pvpStepToward(from, to, occupiedKeys) {
+  let best = null;
+  let bestDist = Infinity;
+  for (let i = 0; i < PVP_DIRECTIONS.length; i++) {
+    const d = PVP_DIRECTIONS[i];
+    const next = { q: from.q + d.q, r: from.r + d.r };
+    const key = `${next.q},${next.r}`;
+    if (occupiedKeys.has(key)) continue;
+    const dist = pvpHexDistance(next, to);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { pos: next, facing: i };
+    }
+  }
+  return best;
+}
+
+function pvpAiAttackEffect(match, actor, target) {
+  const seed = `${match.id}:${match.battleState.turn}:${actor.id}`;
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
+  const roll = Math.abs(h % 6) + 1;
+  if (roll >= 5) {
+    target.destroyed = true;
+    return { hit: true, roll, effect: "destroyed" };
+  }
+  if (roll >= 3) {
+    target.damaged = true;
+    return { hit: true, roll, effect: "damaged" };
+  }
+  return { hit: false, roll, effect: "miss" };
+}
+
+function runPvpSupportAi(match, ownerParity) {
+  if (!match.battleState || match.battleState.winnerParity) return;
+  match.battleState.actionPhase = "ai";
+  const units = match.battleState.units;
+  const targetParity = ownerParity === "odd" ? "even" : "odd";
+  const target = units.find(unit => unit.ownerParity === targetParity && unit.role === "protagonist" && !unit.destroyed);
+  if (!target) return;
+  const actors = units.filter(unit => unit.ownerParity === ownerParity && unit.role === "support" && !unit.destroyed);
+  for (const actor of actors) {
+    if (match.battleState.winnerParity) break;
+    if (pvpHexDistance(actor.pos, target.pos) <= 1) {
+      const effect = pvpAiAttackEffect(match, actor, target);
+      sendPvpBattleAction(match, {
+        type: "ai_attack",
+        actorId: actor.id,
+        targetId: target.id,
+        effect,
+      }, "ai_attack");
+      updatePvpWinner(match);
+      continue;
+    }
+    const occupied = new Set(units.filter(unit => !unit.destroyed && unit.id !== actor.id).map(unit => `${unit.pos.q},${unit.pos.r}`));
+    const step = pvpStepToward(actor.pos, target.pos, occupied);
+    if (!step) continue;
+    const from = { ...actor.pos };
+    const facingFrom = actor.facing;
+    actor.pos = step.pos;
+    actor.facing = step.facing;
+    actor.turretFacing = step.facing;
+    sendPvpBattleAction(match, {
+      type: "ai_move",
+      actorId: actor.id,
+      from,
+      to: { ...actor.pos },
+      facingFrom,
+      facingTo: actor.facing,
+    }, "ai_move");
+  }
+  match.battleState.actionPhase = "player";
 }
 
 function makeRoomCode() {
@@ -650,14 +809,35 @@ function handlePvpMessage(ws, clientId, msg) {
           safeSend(ws, { type: "pvp_error", code: "NOT_YOUR_TURN", message: "It is not your turn", now: Date.now() });
           return true;
         }
-        updatePvpBattleUnits(match, event.units);
+        updatePvpBattleFromEvent(match, event);
         updatePvpWinner(match);
+        if (!match.battleState.winnerParity) {
+          runPvpSupportAi(match, sender.parity);
+        }
         if (!match.battleState.winnerParity) {
           match.battleState.currentParity = sender.parity === "odd" ? "even" : "odd";
           match.battleState.turn += 1;
         }
         match.currentParity = match.battleState.currentParity;
         sendPvpBattleSnapshot(match, "turn_end");
+        return true;
+      }
+      if (event && event.kind === "pvp_action_result") {
+        if (!match.battleStarted || !match.battleState) {
+          safeSend(ws, { type: "pvp_error", code: "BATTLE_NOT_STARTED", message: "Battle has not started", now: Date.now() });
+          return true;
+        }
+        if (sender.parity !== match.battleState.currentParity) {
+          safeSend(ws, { type: "pvp_error", code: "NOT_YOUR_TURN", message: "It is not your turn", now: Date.now() });
+          return true;
+        }
+        updatePvpBattleFromEvent(match, event);
+        sendPvpBattleAction(match, {
+          type: "player_action",
+          actorParity: sender.parity,
+          label: String(event.label || "action"),
+          details: event.action || null,
+        }, "player_action", clientId);
         return true;
       }
       for (const player of match.players) {

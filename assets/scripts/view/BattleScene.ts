@@ -153,6 +153,7 @@ import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLo
 import { GameSession } from '../core/GameSession';
 import { getGameModeConfig } from '../core/GameMode';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
+import type { PvpFactionId } from '../core/PvpConfig';
 import { PvpBattleSnapshot, PvpBattleUnitSnapshot, PvpService } from '../core/PvpService';
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import type { MissionSource } from '../core/CustomMissionStore';
@@ -539,7 +540,9 @@ interface DiceShow {
   attacker: Unit | null;
   target: Unit | null;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
+  onHold: (() => void) | null;
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
+  holdNotified: boolean;
   earlyDestroyedVisualApplied: boolean;
   // 视觉
   panelRoot: Node;
@@ -1303,6 +1306,9 @@ export class BattleScene extends Component {
   private pvpOutcomeSent = false;
   private pvpCurrentParity: 'odd' | 'even' | null = null;
   private pvpLastSnapshotTurn = 0;
+  private pvpApplyingRemoteState = false;
+  private pvpLastSentUnitHash = '';
+  private pvpPendingRemoteSnapshots: Array<{ snapshot: PvpBattleSnapshot; animate: boolean; action?: unknown }> = [];
   private hudLabel: Label | null = null;
   /** 回合数下方：多行任务目标（与 `OBJECTIVE_HUD_MAX` 同序） */
   private objectiveHudLabels: Label[] = [];
@@ -1801,10 +1807,15 @@ export class BattleScene extends Component {
         return;
       }
       if (event.type === 'battleSnapshot') {
-        this.applyPvpBattleSnapshot(event.state);
+        this.receivePvpBattleSnapshot(event.state, false);
         return;
       }
       if (event.type === 'battleEvent') {
+        const payload = event.event as any;
+        if (payload?.kind === 'pvp_action_result' && payload.state) {
+          this.receivePvpBattleSnapshot(payload.state as PvpBattleSnapshot, true, payload.action);
+          return;
+        }
         this.battleLog(`[PVP] received battle event: ${JSON.stringify(event.event)}`);
       }
     });
@@ -1819,11 +1830,164 @@ export class BattleScene extends Component {
     this.enterPvpWaitingForSnapshot();
   }
 
+  private pvpProtagonistKind(factionId: PvpFactionId): UnitKind {
+    if (factionId === 'germany') return 'panzer4';
+    if (factionId === 'japan') return 'type97';
+    return 'sherman';
+  }
+
+  private pvpSupportKind(factionId: PvpFactionId): UnitKind {
+    return factionId === 'japan' ? 'japanese_infantry' : 'infantry';
+  }
+
+  private pvpInitialUnit(
+    id: string,
+    ownerParity: 'odd' | 'even',
+    ownerFactionId: PvpFactionId,
+    role: 'protagonist' | 'support',
+    kind: UnitKind,
+    q: number,
+    r: number,
+    facing: Direction,
+  ): PvpBattleUnitSnapshot {
+    return {
+      id,
+      ownerParity,
+      ownerFactionId,
+      role,
+      kind,
+      pos: { q, r },
+      facing,
+      turretFacing: facing,
+      destroyed: false,
+      damaged: false,
+      loaded: role === 'protagonist' ? false : undefined,
+      hatchOpen: role === 'protagonist' ? false : undefined,
+      fireLevel: 0,
+      turretDamaged: false,
+      paralyzed: false,
+      hidden: false,
+      smoked: false,
+      radioDamaged: false,
+      crew: role === 'protagonist'
+        ? { commander: true, loader: true, gunner: true, driver: true, coDriver: true }
+        : undefined,
+    };
+  }
+
+  private buildLocalPvpInitialSnapshot(): PvpBattleSnapshot | null {
+    const pvp = GameSession.pvpSession;
+    if (!pvp?.active) return null;
+    const odd = pvp.localPlayer.parity === 'odd' ? pvp.localPlayer : pvp.opponentPlayer;
+    const even = pvp.localPlayer.parity === 'even' ? pvp.localPlayer : pvp.opponentPlayer;
+    const oddSupport = this.pvpSupportKind(odd.factionId);
+    const evenSupport = this.pvpSupportKind(even.factionId);
+    return {
+      version: 1,
+      turn: 1,
+      currentParity: pvp.firstParity,
+      actionPhase: 'player',
+      firstParity: pvp.firstParity,
+      openingDie: pvp.openingDie,
+      smokeHexes: [],
+      smokeHexOwners: {},
+      units: [
+        this.pvpInitialUnit('pvp_odd_protagonist', 'odd', odd.factionId, 'protagonist', this.pvpProtagonistKind(odd.factionId), -1, 5, 5),
+        this.pvpInitialUnit('pvp_odd_support_1', 'odd', odd.factionId, 'support', oddSupport, 0, 4, 5),
+        this.pvpInitialUnit('pvp_odd_support_2', 'odd', odd.factionId, 'support', oddSupport, 1, 5, 5),
+        this.pvpInitialUnit('pvp_even_protagonist', 'even', even.factionId, 'protagonist', this.pvpProtagonistKind(even.factionId), 6, 2, 3),
+        this.pvpInitialUnit('pvp_even_support_1', 'even', even.factionId, 'support', evenSupport, 5, 1, 3),
+        this.pvpInitialUnit('pvp_even_support_2', 'even', even.factionId, 'support', evenSupport, 4, 0, 3),
+      ],
+      winnerParity: null,
+      updatedAt: Date.now(),
+    };
+  }
+
+  private prepareLocalPvpInitialView() {
+    const pvp = GameSession.pvpSession;
+    const snapshot = this.buildLocalPvpInitialSnapshot();
+    if (!pvp?.active || !snapshot || !this.mission) return;
+    const localParity = pvp.localPlayer.parity;
+    const localMain = snapshot.units.find(u => u.ownerParity === localParity && u.role === 'protagonist');
+    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'allied');
+    this.mission.allies = snapshot.units
+      .filter(u => u.ownerParity === localParity && u.role !== 'protagonist')
+      .map(u => this.unitFromPvpSnapshot(u, 'allied'));
+    this.mission.enemies = snapshot.units
+      .filter(u => u.ownerParity !== localParity)
+      .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
+    this.shermanSpawnQr = { q: this.mission.sherman.pos.q, r: this.mission.sherman.pos.r };
+    this.shermanSpawnFacing = this.mission.sherman.facing;
+    this.pvpCurrentParity = snapshot.currentParity;
+    this.pvpLastSnapshotTurn = snapshot.turn;
+    this.pvpLastSentUnitHash = this.pvpUnitHash();
+  }
+
+  private applyPvpSmokeSnapshot(snapshot: PvpBattleSnapshot) {
+    if (!this.mission) return;
+    const smokeHexes = Array.isArray(snapshot.smokeHexes) ? snapshot.smokeHexes : [];
+    const ownerMap = snapshot.smokeHexOwners && typeof snapshot.smokeHexOwners === 'object'
+      ? snapshot.smokeHexOwners
+      : {};
+    this.mission.smokeHexes = new Set(smokeHexes.map(key => String(key)));
+    this.mission.smokeHexOwners = new Map();
+    const pvp = GameSession.pvpSession;
+    const localParity = pvp?.localPlayer.parity;
+    for (const key of this.mission.smokeHexes) {
+      const owner = ownerMap[key] as string | undefined;
+      const localOwner = owner === 'odd' || owner === 'even'
+        ? (owner === localParity ? 'friendly' : 'enemy')
+        : owner === 'enemy' ? 'enemy' : 'friendly';
+      this.mission.smokeHexOwners.set(key, localOwner);
+      if (!this.smokeScreenAges.has(key)) this.smokeScreenAges.set(key, 0);
+    }
+    for (const key of Array.from(this.smokeScreenAges.keys())) {
+      if (!this.mission.smokeHexes.has(key)) this.smokeScreenAges.delete(key);
+    }
+  }
+
+  private pvpSmokeHexOwnersForSubmit(): Record<string, 'odd' | 'even'> {
+    const owners: Record<string, 'odd' | 'even'> = {};
+    const pvp = GameSession.pvpSession;
+    if (!this.mission || !pvp?.active) return owners;
+    const localParity = pvp.localPlayer.parity;
+    const remoteParity = pvp.opponentPlayer.parity;
+    for (const key of this.mission.smokeHexes) {
+      owners[key] = this.mission.smokeHexOwners.get(key) === 'enemy' ? remoteParity : localParity;
+    }
+    return owners;
+  }
+
   // ---------- 状态 ----------
 
-  private applyPvpBattleSnapshot(snapshot: PvpBattleSnapshot) {
+  private receivePvpBattleSnapshot(snapshot: PvpBattleSnapshot, animateChanges = false, action?: unknown) {
+    if (this.anim || this.animQueue.length > 0) {
+      this.pvpPendingRemoteSnapshots.push({ snapshot, animate: animateChanges, action });
+      return;
+    }
+    this.applyPvpBattleSnapshot(snapshot, animateChanges);
+    this.playPvpRemoteActionCue(action);
+  }
+
+  private drainPvpPendingRemoteSnapshot() {
+    if (!GameSession.isPvp || this.anim || this.animQueue.length > 0) return false;
+    let consumed = false;
+    while (!this.anim && this.animQueue.length === 0) {
+      const next = this.pvpPendingRemoteSnapshots.shift();
+      if (!next) break;
+      consumed = true;
+      this.applyPvpBattleSnapshot(next.snapshot, next.animate);
+      this.playPvpRemoteActionCue(next.action);
+    }
+    return consumed;
+  }
+
+  private applyPvpBattleSnapshot(snapshot: PvpBattleSnapshot, animateChanges = false) {
     const pvp = GameSession.pvpSession;
     if (!pvp?.active || !this.mission || !snapshot || !Array.isArray(snapshot.units)) return;
+    const oldUnits = new Map(this.allUnits().map(unit => [unit.id, unit]));
+    this.pvpApplyingRemoteState = true;
     this.pvpBattleStarted = true;
     this.pvpCurrentParity = snapshot.currentParity;
     this.pvpLastSnapshotTurn = snapshot.turn;
@@ -1838,9 +2002,15 @@ export class BattleScene extends Component {
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
       .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
+    this.applyPvpSmokeSnapshot(snapshot);
+    const receivedUnitHash = this.pvpUnitHash();
+    if (animateChanges) this.preparePvpRemoteAnimations(oldUnits);
 
-    this.shermanSpawnQr = { q: this.mission.sherman.pos.q, r: this.mission.sherman.pos.r };
-    this.shermanSpawnFacing = this.mission.sherman.facing;
+    if (!this.shermanSpawnQr) {
+      this.shermanSpawnQr = { q: this.mission.sherman.pos.q, r: this.mission.sherman.pos.r };
+      this.shermanSpawnFacing = this.mission.sherman.facing;
+    }
+    this.pvpLastSentUnitHash = receivedUnitHash;
     this.outcome = snapshot.winnerParity
       ? (snapshot.winnerParity === localParity ? 'victory' : 'defeat')
       : this.computeOutcome();
@@ -1852,15 +2022,194 @@ export class BattleScene extends Component {
       this.refreshPhaseUI();
       this.updateHUD();
       this.redraw();
+      this.pvpApplyingRemoteState = false;
       return;
     }
-    if (snapshot.currentParity === localParity) {
+    if (snapshot.actionPhase !== 'ai' && snapshot.currentParity === localParity) {
       this.beginPlayerPhaseForNewTurn();
       this.battleLog(`[PVP] 轮到你行动（同步回合 ${snapshot.turn}）`);
     } else {
       this.enterPvpWaitingForOpponent();
-      this.battleLog(`[PVP] 等待对手行动（同步回合 ${snapshot.turn}）`);
+      this.battleLog(snapshot.actionPhase === 'ai'
+        ? `[PVP] AI 支援单位行动（同步回合 ${snapshot.turn}）`
+        : `[PVP] 等待对手行动（同步回合 ${snapshot.turn}）`);
     }
+    this.pvpApplyingRemoteState = false;
+  }
+
+  private playPvpRemoteActionCue(action: unknown) {
+    if (!action || !this.mission) return;
+    const envelope = action as { details?: unknown };
+    const details = (envelope.details ?? action) as {
+      type?: string;
+      attackerId?: string;
+      actorId?: string;
+      targetId?: string;
+      report?: AttackReport;
+      attackSound?: string;
+      unitId?: string;
+      q?: number;
+      r?: number;
+      repairTarget?: 'turret' | 'mobility';
+      hit?: boolean;
+      effect?: { hit?: boolean; effect?: string };
+    };
+    const allUnits = this.allUnits();
+    const byId = (id?: string) => id ? (allUnits.find(unit => unit.id === id) ?? null) : null;
+    const unit = byId(details.unitId ?? details.attackerId ?? details.actorId);
+    const atUnit = (fallback?: Unit | null) => fallback ?? unit ?? this.mission.sherman;
+    const atQr = (fallback?: Unit | null) => ({
+      q: Number.isFinite(Number(details.q)) ? Number(details.q) : atUnit(fallback).pos.q,
+      r: Number.isFinite(Number(details.r)) ? Number(details.r) : atUnit(fallback).pos.r,
+    });
+    switch (details.type) {
+      case 'main_gun': {
+        if (!details.attackerId || !details.targetId || !details.report) return;
+        const attacker = byId(details.attackerId);
+        const target = byId(details.targetId);
+        if (!attacker || !target) return;
+        const playCue = () => this.playAttackFireCue(attacker, target, false, details.attackSound ?? attacker.stats.attackSound ?? '', details.report!);
+        if (this.turretAimAnim?.unit === attacker) {
+          const prev = this.turretAimAnim.onDone;
+          this.turretAimAnim.onDone = () => {
+            prev();
+            playCue();
+          };
+          return;
+        }
+        playCue();
+        return;
+      }
+      case 'machine_gun': {
+        if (!details.attackerId || !details.targetId) return;
+        const attacker = byId(details.attackerId);
+        const target = byId(details.targetId);
+        if (!attacker || !target) return;
+        const hit = details.hit === true || details.report?.hit === true;
+        this.spawnMachineGunBurst(attacker, target, hit);
+        playMgFire();
+        this.spawnFloater(target.pos.q, target.pos.r, hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss'),
+          hit ? new Color(255, 120, 120, 255) : new Color(220, 220, 220, 255),
+          { size: 32, dur: hit ? 1.0 : 0.9, rise: hit ? 48 : 44 });
+        return;
+      }
+      case 'ai_attack': {
+        if (!details.actorId || !details.targetId) return;
+        const attacker = byId(details.actorId);
+        const target = byId(details.targetId);
+        if (!attacker || !target) return;
+        const hit = details.effect?.hit === true;
+        this.spawnMachineGunBurst(attacker, target, hit);
+        playMgFire();
+        const effect = details.effect?.effect;
+        const text = effect === 'destroyed'
+          ? t('dmg.outcome.destroyed')
+          : effect === 'damaged'
+            ? t('dmg.outcome.damaged')
+            : t('dice.panel.outcomeMiss');
+        const color = effect === 'destroyed'
+          ? new Color(255, 100, 100, 255)
+          : effect === 'damaged'
+            ? new Color(240, 200, 100, 255)
+            : new Color(220, 220, 220, 255);
+        this.spawnFloater(target.pos.q, target.pos.r, text, color,
+          { size: effect === 'destroyed' ? 36 : 32, dur: hit ? 1.0 : 0.9, rise: hit ? 48 : 44 });
+        return;
+      }
+      case 'smoke': {
+        const p = atQr(unit);
+        this.spawnFloater(p.q, p.r, t('floater.smokeDeployed'),
+          new Color(200, 200, 220, 255), { size: 22, dur: 0.9, rise: 24 });
+        return;
+      }
+      case 'conceal': {
+        const p = atQr(unit);
+        this.spawnFloater(p.q, p.r, t('floater.concealed'),
+          new Color(160, 220, 180, 255), { size: 22, dur: 0.9, rise: 24 });
+        return;
+      }
+      case 'repair': {
+        const p = atQr(unit);
+        this.spawnFloater(p.q, p.r, t(details.repairTarget === 'turret' ? 'floater.turretFixed' : 'floater.mobilityFixed'),
+          new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+        return;
+      }
+      case 'fire_suppress': {
+        const p = atQr(unit);
+        this.spawnFloater(p.q, p.r, t('floater.fireReduced'),
+          new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+        return;
+      }
+      case 'hatch_close': {
+        const p = atQr(unit);
+        this.spawnFloater(p.q, p.r, t('floater.hatchClosedByDice'),
+          new Color(200, 220, 240, 255), { size: 22, dur: 0.9, rise: 24 });
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  private preparePvpRemoteAnimations(oldUnits: Map<string, Unit>) {
+    if (!this.mission) return;
+    const nextUnits = this.allUnits();
+    const animations: MoveAnim[] = [];
+    for (const unit of nextUnits) {
+      const old = oldUnits.get(unit.id);
+      if (!old) continue;
+      const moved = old.pos.q !== unit.pos.q || old.pos.r !== unit.pos.r;
+      const turned = old.facing !== unit.facing && old.facing !== null && unit.facing !== null;
+      if (moved) {
+        const final = { q: unit.pos.q, r: unit.pos.r };
+        unit.pos = { q: old.pos.q, r: old.pos.r };
+        animations.push({
+          unit,
+          kind: 'move',
+          fromQ: old.pos.q,
+          fromR: old.pos.r,
+          toQ: final.q,
+          toR: final.r,
+          t: 0,
+          dur: Math.max(0.05, this.moveDuration),
+        });
+      } else if (turned) {
+        const finalFacing = unit.facing as Direction;
+        unit.facing = old.facing as Direction;
+        unit.turretFacing = old.turretFacing;
+        animations.push({
+          unit,
+          kind: 'turn',
+          fromQ: unit.pos.q,
+          fromR: unit.pos.r,
+          toQ: unit.pos.q,
+          toR: unit.pos.r,
+          t: 0,
+          dur: Math.max(0.05, this.moveDuration),
+          turnFrom: old.facing as Direction,
+          turnTo: finalFacing,
+        });
+      } else {
+        const oldTurret = old.turretFacing ?? old.facing;
+        const nextTurret = unit.turretFacing ?? unit.facing;
+        if (oldTurret !== undefined && nextTurret !== undefined && oldTurret !== nextTurret && this.enemySupportsSplitTurret(unit)) {
+          const from = (((oldTurret % 12) + 12) % 12) as FireDirection;
+          const to = (((nextTurret % 12) + 12) % 12) as FireDirection;
+          unit.turretFacing = from;
+          if (unit === this.mission.sherman) {
+            this.shermanTurretFacing = from;
+          } else {
+            this.enemyTurretFacing.set(unit.id, from);
+          }
+          if (!this.turretAimAnim) {
+            this.turretAimAnim = { unit, from, to, t: 0, dur: 0.22, onDone: () => {} };
+          }
+        }
+      }
+    }
+    if (animations.length === 0) return;
+    this.anim = animations.shift()!;
+    this.animQueue = animations;
   }
 
   private factionForPvpUnit(unit: PvpBattleUnitSnapshot): Faction {
@@ -1889,13 +2238,15 @@ export class BattleScene extends Component {
       fireLevel: Math.max(0, Number(src.fireLevel ?? 0)),
       turretDamaged: !!src.turretDamaged,
       paralyzed: !!src.paralyzed,
+      hidden: !!src.hidden,
+      smoked: !!src.smoked,
       loaded: !!src.loaded,
       hatchOpen: !!src.hatchOpen,
+      visionRange: Number.isFinite(Number(src.visionRange)) ? Number(src.visionRange) : stats.visionRange,
+      radioDamaged: !!src.radioDamaged,
       crew: src.role === 'protagonist'
         ? (src.crew ?? { commander: true, loader: true, gunner: true, driver: true, coDriver: true })
         : undefined,
-      visionRange: stats.visionRange,
-      radioDamaged: false,
     };
   }
 
@@ -1916,6 +2267,10 @@ export class BattleScene extends Component {
       fireLevel: unit.fireLevel ?? 0,
       turretDamaged: !!unit.turretDamaged,
       paralyzed: !!unit.paralyzed,
+      hidden: !!unit.hidden,
+      smoked: !!unit.smoked,
+      radioDamaged: !!unit.radioDamaged,
+      visionRange: unit.visionRange ?? unit.stats.visionRange,
       crew: unit.crew,
     };
   }
@@ -1937,15 +2292,69 @@ export class BattleScene extends Component {
     ];
   }
 
+  private pvpUnitHash(): string {
+    return JSON.stringify({
+      units: this.collectPvpBattleUnitsForSubmit().map(unit => ({
+        id: unit.id,
+        q: unit.pos.q,
+        r: unit.pos.r,
+        facing: unit.facing,
+        turretFacing: unit.turretFacing,
+        destroyed: !!unit.destroyed,
+        damaged: !!unit.damaged,
+        loaded: !!unit.loaded,
+        hatchOpen: !!unit.hatchOpen,
+        fireLevel: unit.fireLevel ?? 0,
+        turretDamaged: !!unit.turretDamaged,
+        paralyzed: !!unit.paralyzed,
+        hidden: !!unit.hidden,
+        smoked: !!unit.smoked,
+        radioDamaged: !!unit.radioDamaged,
+        visionRange: unit.visionRange ?? 0,
+        crew: unit.crew,
+      })),
+      smokeHexes: this.mission ? Array.from(this.mission.smokeHexes).sort() : [],
+      smokeHexOwners: this.pvpSmokeHexOwnersForSubmit(),
+    });
+  }
+
+  private sendPvpActionResult(label = 'action', action?: unknown) {
+    if (!GameSession.isPvp || this.pvpApplyingRemoteState || !this.pvpBattleStarted || !this.mission) return;
+    const pvp = GameSession.pvpSession;
+    if (!pvp?.active || this.pvpCurrentParity !== pvp.localPlayer.parity || this.phase !== 'player') return;
+    const hash = this.pvpUnitHash();
+    if (!hash) return;
+    this.pvpLastSentUnitHash = hash;
+    PvpService.sendBattleEvent({
+      kind: 'pvp_action_result',
+      label,
+      turn: this.pvpLastSnapshotTurn,
+      playerParity: pvp.localPlayer.parity,
+      action,
+      units: this.collectPvpBattleUnitsForSubmit(),
+      smokeHexes: Array.from(this.mission.smokeHexes),
+      smokeHexOwners: this.pvpSmokeHexOwnersForSubmit(),
+    });
+  }
+
+  private maybeSendPvpActionResult(label = 'action') {
+    const hash = this.pvpUnitHash();
+    if (!hash || hash === this.pvpLastSentUnitHash) return;
+    this.sendPvpActionResult(label);
+  }
+
   private submitPvpTurnEnd() {
     if (!GameSession.isPvp || !this.mission) return;
     const pvp = GameSession.pvpSession;
     if (!pvp?.active) return;
+    this.pvpLastSentUnitHash = this.pvpUnitHash();
     PvpService.sendBattleEvent({
       kind: 'pvp_turn_end',
       turn: this.pvpLastSnapshotTurn,
       playerParity: pvp.localPlayer.parity,
       units: this.collectPvpBattleUnitsForSubmit(),
+      smokeHexes: Array.from(this.mission.smokeHexes),
+      smokeHexOwners: this.pvpSmokeHexOwnersForSubmit(),
     });
     this.enterPvpWaitingForOpponent();
   }
@@ -1957,6 +2366,9 @@ export class BattleScene extends Component {
     this.phaseDice = [];
     this.clearGunSelection();
     this.closeDiePopover();
+    this.destroyTurnEndEventUI();
+    this.destroyFireCheckEventUI();
+    this.destroyUsCasualtyEventUI();
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -1979,6 +2391,9 @@ export class BattleScene extends Component {
     this.destroyEnemyDiceTray();
     this.clearGunSelection();
     this.closeDiePopover();
+    this.destroyTurnEndEventUI();
+    this.destroyFireCheckEventUI();
+    this.destroyUsCasualtyEventUI();
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -2065,6 +2480,9 @@ export class BattleScene extends Component {
     this.pvpOutcomeSent = false;
     this.pvpCurrentParity = null;
     this.pvpLastSnapshotTurn = 0;
+    this.pvpApplyingRemoteState = false;
+    this.pvpLastSentUnitHash = '';
+    this.pvpPendingRemoteSnapshots = [];
     this.transientFogRevealKeys.clear();
     this.clearFloaters();
     this.clearMuzzleFlashes();
@@ -2078,6 +2496,7 @@ export class BattleScene extends Component {
     this.destroyUsCasualtyEventUI();
     this.closeTileInspectModal();
     this.turnEndUnitSeq = 0;
+    if (GameSession.isPvp) this.prepareLocalPvpInitialView();
     this.refreshPhaseUI();
     this.updateHUD();
     this.updateOutcomeOverlay();
@@ -2334,6 +2753,7 @@ export class BattleScene extends Component {
 
     // 9. 战争迷雾是地图内最后一层，覆盖所有无视野格。
     this.redrawFogOverlay();
+    this.maybeSendPvpActionResult();
   }
 
   private updateMapPanBounds(data: MissionData) {
@@ -4283,6 +4703,7 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
+    if (this.drainPvpPendingRemoteSnapshot()) return;
     if (this.pendingAfterAnimChain) {
       const cb = this.pendingAfterAnimChain;
       this.pendingAfterAnimChain = null;
@@ -4290,6 +4711,11 @@ export class BattleScene extends Component {
       return;
     }
     this.redraw();
+    if (GameSession.isPvp) {
+      this.refreshPhaseUI();
+      this.updateHUD();
+      return;
+    }
     if (this.outcome !== 'ongoing') {
       this.refreshPhaseUI();
       this.updateHUD();
@@ -4323,12 +4749,6 @@ export class BattleScene extends Component {
     if (!this.g || !this.mission) return;
     const { map, sherman } = this.mission;
     if (sherman.facing === null) return;
-    const occupied = new Set(
-      this.allUnits()
-        .filter(e => e !== sherman && !e.destroyed)
-        .map(e => `${e.pos.q},${e.pos.r}`),
-    );
-
     const cands: Array<{ dir: number; color: Color }> = [
       { dir: sherman.facing,                    color: DRIVE_FWD_COLOR },
       { dir: rotateDirection(sherman.facing, 3), color: DRIVE_BWD_COLOR },
@@ -4339,7 +4759,7 @@ export class BattleScene extends Component {
       const tile = map.get(pos);
       const blocked = !tile
         || !map.canTankCrossEdge(sherman.pos, pos) // 桥梁边向校验：水域+桥梁需 dir 落在 br 端，详见 GDD §3.2
-        || occupied.has(`${pos.q},${pos.r}`);
+        || this.findMoveBlocker(sherman, pos) !== null;
       const p = this.project(pos.q, pos.r);
       this.g.strokeColor = blocked ? DRIVE_BLOCKED : c.color;
       this.g.lineWidth = 3;
@@ -7516,7 +7936,19 @@ export class BattleScene extends Component {
 
   private pvpOpponentProtagonist(): Unit | null {
     if (!this.mission) return null;
-    return this.mission.enemies.find(u => isTankUnit(u)) ?? this.mission.enemies[0] ?? null;
+    return this.mission.enemies.find(u => this.isPvpProtagonistUnit(u))
+      ?? this.mission.enemies.find(u => isTankUnit(u))
+      ?? this.mission.enemies[0]
+      ?? null;
+  }
+
+  private isPvpProtagonistUnit(unit: Unit): boolean {
+    return GameSession.isPvp && unit.id.endsWith('_protagonist');
+  }
+
+  private protagonistForAttackTarget(target: Unit): Unit {
+    if (this.mission && this.isPvpProtagonistUnit(target)) return target;
+    return this.mission?.sherman ?? target;
   }
 
   private computeOutcome(): MissionOutcome {
@@ -8408,7 +8840,7 @@ export class BattleScene extends Component {
     if (!map.get(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
       return t('floater.blockedTerrain');
     }
-    const blocker = this.allUnits().find(e => e !== sherman && !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    const blocker = this.findMoveBlocker(sherman, to);
     return blocker ? t('floater.enemyBlock') : null;
   }
 
@@ -8866,7 +9298,7 @@ export class BattleScene extends Component {
       this.closeDiePopover();
       return;
     }
-    const blocker = this.allUnits().find(e => e !== sherman && !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    const blocker = this.findMoveBlocker(sherman, to);
     if (blocker) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.enemyBlock'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -9145,6 +9577,13 @@ export class BattleScene extends Component {
     }
     slot.used = true;
     this.closeDiePopover();
+    this.sendPvpActionResult('repair', {
+      type: 'repair',
+      unitId: sherman.id,
+      repairTarget: target,
+      q: sherman.pos.q,
+      r: sherman.pos.r,
+    });
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -9173,6 +9612,14 @@ export class BattleScene extends Component {
     this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.fireReduced'),
       new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
     this.battleLogI18n('battleLog.misc.fireSuppress', { from: lvl, to: sherman.fireLevel ?? 0 });
+    this.sendPvpActionResult('fire_suppress', {
+      type: 'fire_suppress',
+      unitId: sherman.id,
+      from: lvl,
+      to: sherman.fireLevel ?? 0,
+      q: sherman.pos.q,
+      r: sherman.pos.r,
+    });
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -9239,6 +9686,13 @@ export class BattleScene extends Component {
       this.selectedMGDieIdx = -1;
       this.spawnFloater(target.pos.q, target.pos.r, t('dice.panel.outcomeMiss'),
         new Color(220, 220, 220, 255), { size: 32, dur: 0.9, rise: 44 });
+      this.sendPvpActionResult('machine_gun', {
+        type: 'machine_gun',
+        attackerId: sherman.id,
+        targetId: target.id,
+        report,
+        hit: false,
+      });
       this.refreshPhaseUI();
       this.updateHUD();
       this.redraw();
@@ -9280,6 +9734,13 @@ export class BattleScene extends Component {
         }
         this.outcome = this.computeOutcome();
         if (this.outcome !== 'ongoing') this.updateOutcomeOverlay();
+        this.sendPvpActionResult('machine_gun', {
+          type: 'machine_gun',
+          attackerId: sherman.id,
+          targetId: target.id,
+          report,
+          hit: report.hit,
+        });
         this.refreshPhaseUI();
         this.updateHUD();
         this.redraw();
@@ -9320,6 +9781,12 @@ export class BattleScene extends Component {
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.smokeDeployed'),
       new Color(200, 200, 220, 255), { size: 22, dur: 0.9, rise: 24 });
     this.battleLogI18n('battleLog.misc.smoke');
+    this.sendPvpActionResult('smoke', {
+      type: 'smoke',
+      unitId: s.id,
+      q: s.pos.q,
+      r: s.pos.r,
+    });
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -9366,6 +9833,12 @@ export class BattleScene extends Component {
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.concealed'),
       new Color(160, 220, 180, 255), { size: 22, dur: 0.9, rise: 24 });
     this.battleLogI18n('battleLog.misc.conceal', { dieIdx, partnerIdx, pip: slot.pip });
+    this.sendPvpActionResult('conceal', {
+      type: 'conceal',
+      unitId: s.id,
+      q: s.pos.q,
+      r: s.pos.r,
+    });
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
@@ -9392,6 +9865,12 @@ export class BattleScene extends Component {
     this.battleLogI18n('battleLog.hatch', { stateKey: 'status.val.hatchClosed' });
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.hatchClosedByDice'),
       new Color(200, 220, 240, 255), { size: 22, dur: 0.9, rise: 24 });
+    this.sendPvpActionResult('hatch_close', {
+      type: 'hatch_close',
+      unitId: s.id,
+      q: s.pos.q,
+      r: s.pos.r,
+    });
     this.refreshStatusPanel();
     this.refreshPhaseUI();
     this.updateHUD();
@@ -9514,7 +9993,7 @@ export class BattleScene extends Component {
       this.closeDiePopover();
       return;
     }
-    const blocker = this.allUnits().find(e => e !== sherman && !e.destroyed && e.pos.q === to.q && e.pos.r === to.r);
+    const blocker = this.findMoveBlocker(sherman, to);
     if (blocker) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.enemyBlock'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
@@ -12156,29 +12635,33 @@ export class BattleScene extends Component {
     if (!this.mission) return occ;
     for (const u of this.allUnits()) {
       if (u === self || u.destroyed) continue;
-      if (this.canJapaneseInfantryTankShareHex(self, u)) continue;
-      // 坦克/卡车可与己方徒步单位叠格，但不能驶入敌对徒步单位所在格。
-      if (!isFootUnit(self) && isFootUnit(u) && u.faction === self.faction) continue;
+      if (!this.isBlockingMoveOccupant(self, u)) continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
     return occ;
   }
 
-  private isJapaneseTankOrGun(u: Unit): boolean {
-    return u.faction === 'japanese'
-      && (u.kind === 'type95'
-        || u.kind === 'type97'
-        || u.kind === 'at_gun'
-        || u.kind === 'heavy_artillery');
+  private findMoveBlocker(mover: Unit, pos: Axial): Unit | null {
+    return this.allUnits().find(u =>
+      u !== mover
+      && !u.destroyed
+      && u.pos.q === pos.q
+      && u.pos.r === pos.r
+      && this.isBlockingMoveOccupant(mover, u)
+    ) ?? null;
   }
 
-  private canJapaneseInfantryTankShareHex(a: Unit, b: Unit): boolean {
-    if (a.faction !== 'japanese' || b.faction !== 'japanese') return false;
-    return (a.kind === 'japanese_infantry' && this.isJapaneseTankOrGun(b))
-      || (b.kind === 'japanese_infantry' && this.isJapaneseTankOrGun(a));
+  private isBlockingMoveOccupant(mover: Unit, occupant: Unit): boolean {
+    // Tanks and other vehicle-like units may enter same-faction foot-unit hexes.
+    if (!isFootUnit(mover) && isFootUnit(occupant) && mover.faction === occupant.faction) return false;
+    return true;
   }
 
   private endEnemyPhase() {
+    if (GameSession.isPvp) {
+      this.enterPvpWaitingForOpponent();
+      return;
+    }
     this.turn += 1;
     this.clearDestroyWreckVisuals();
     // 清理敌方调度中间态
@@ -12444,7 +12927,7 @@ export class BattleScene extends Component {
       attacker: sherman,
       target,
       map,
-      protagonist: sherman,
+      protagonist: this.protagonistForAttackTarget(target),
       theater: this.mission.data.theater,
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
@@ -12459,23 +12942,41 @@ export class BattleScene extends Component {
     // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，onDone 时一并消耗。
     const doublesPartnerIdx = this.selectedGunDoublesIdx;
     const precisionFire = this.selectedGunHitThresholdModifier < 0;
+    let attackApplied = false;
+    const applyAndSyncAttack = () => {
+      if (attackApplied || !this.mission) return;
+      attackApplied = true;
+      applyAttack(target, report);
+      if (target.destroyed) this.registerDestroyWreckVisual(target);
+      slot.used = true;
+      if (doublesPartnerIdx >= 0) {
+        const p = this.phaseDice[doublesPartnerIdx];
+        if (p) p.used = true;
+      }
+      sherman.loaded = false;
+      this.clearGunSelection();
+      this.presentAttackResult(t('actor.player'), report, sherman, target);
+      this.sendPvpActionResult('main_gun', {
+        type: 'main_gun',
+        attackerId: sherman.id,
+        targetId: target.id,
+        report,
+        attackSound: sherman.stats.attackSound,
+      });
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.autoEndPhaseIfDone();
+    };
     const showDice = (fireEffectPlayed = false) => {
       this.startDiceShow(report, t('actor.player'), unitDisplayName(target.kind), () => {
-        if (!this.mission) return;
-        applyAttack(target, report);
-        if (target.destroyed) this.registerDestroyWreckVisual(target);
-        slot.used = true;
-        if (doublesPartnerIdx >= 0) {
-          const p = this.phaseDice[doublesPartnerIdx];
-          if (p) p.used = true;
-        }
-        sherman.loaded = false;
-        this.clearGunSelection();
-        this.presentAttackResult(t('actor.player'), report, sherman, target);
-        this.refreshPhaseUI();
-        this.updateHUD();
-        this.autoEndPhaseIfDone();
-      }, { attackSound: sherman.stats.attackSound, attacker: sherman, target, fireEffectPlayed });
+        applyAndSyncAttack();
+      }, {
+        attackSound: sherman.stats.attackSound,
+        attacker: sherman,
+        target,
+        fireEffectPlayed,
+        onHold: applyAndSyncAttack,
+      });
     };
     this.startShermanTurretAim(target, () => {
       if (precisionFire) {
@@ -12538,7 +13039,7 @@ export class BattleScene extends Component {
       attacker: enemy,
       target,
       map,
-      protagonist: this.mission.sherman,
+      protagonist: this.protagonistForAttackTarget(target),
       theater: this.mission.data.theater,
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
@@ -12625,7 +13126,15 @@ export class BattleScene extends Component {
     attackerLabel: string,
     targetLabel: string,
     onDone: () => void,
-    opts: { mg?: boolean; keepTurnEndPanel?: boolean; attackSound?: string; attacker?: Unit | null; target?: Unit | null; fireEffectPlayed?: boolean } = {},
+    opts: {
+      mg?: boolean;
+      keepTurnEndPanel?: boolean;
+      attackSound?: string;
+      attacker?: Unit | null;
+      target?: Unit | null;
+      fireEffectPlayed?: boolean;
+      onHold?: () => void;
+    } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
@@ -12670,7 +13179,9 @@ export class BattleScene extends Component {
       attacker: opts.attacker ?? null,
       target: opts.target ?? null,
       onDone,
+      onHold: opts.onHold ?? null,
       finalized: false,
+      holdNotified: false,
       earlyDestroyedVisualApplied: false,
       panelRoot: panel.root,
       hitDieLabels: panel.hitDieLabels,
@@ -13105,6 +13616,10 @@ export class BattleScene extends Component {
     show.t = 0;
     show.outcomeLabel.node.active = false;
     if (show.confirmButton) show.confirmButton.active = !show.mg;
+    if (!show.holdNotified) {
+      show.holdNotified = true;
+      show.onHold?.();
+    }
   }
 
   private applyDiceShowDestroyedVisual(show: DiceShow) {
@@ -14137,6 +14652,10 @@ export class BattleScene extends Component {
 
   /** 敌方阶段全部结束后：若有回合结束事件表则先播主骰与说明，否则直接进入下一玩家回合。 */
   private maybeBeginTurnEndEventOrEndEnemyPhase() {
+    if (GameSession.isPvp) {
+      this.enterPvpWaitingForOpponent();
+      return;
+    }
     if (!this.mission) {
       this.endEnemyPhase();
       return;
@@ -14320,6 +14839,7 @@ export class BattleScene extends Component {
   }
 
   private startTurnEndEventFlow(missionId: string) {
+    if (GameSession.isPvp) return;
     if (!this.mission) return;
     this.clearActiveActingUnit();
     this.redraw();

@@ -23,6 +23,10 @@ export interface PvpBattleUnitSnapshot {
   fireLevel?: number;
   turretDamaged?: boolean;
   paralyzed?: boolean;
+  hidden?: boolean;
+  smoked?: boolean;
+  radioDamaged?: boolean;
+  visionRange?: number;
   crew?: ShermanCrew;
 }
 
@@ -30,9 +34,12 @@ export interface PvpBattleSnapshot {
   version: number;
   turn: number;
   currentParity: PvpParity;
+  actionPhase?: 'player' | 'ai';
   firstParity: PvpParity;
   openingDie: number;
   units: PvpBattleUnitSnapshot[];
+  smokeHexes?: string[];
+  smokeHexOwners?: Record<string, PvpParity>;
   winnerParity?: PvpParity | null;
   updatedAt?: number;
 }
