@@ -40,6 +40,11 @@ export interface PvpBattleSnapshot {
   units: PvpBattleUnitSnapshot[];
   smokeHexes?: string[];
   smokeHexOwners?: Record<string, PvpParity>;
+  turnDeadlineAt?: number;
+  turnDurationMs?: number;
+  turnRemainingMs?: number;
+  serverNow?: number;
+  clientReceivedAt?: number;
   winnerParity?: PvpParity | null;
   updatedAt?: number;
 }
@@ -228,6 +233,10 @@ class PvpServiceImpl {
         });
         break;
       case 'pvp_battle_snapshot':
+        if (msg.state && typeof msg.state === 'object') {
+          msg.state.serverNow = Number(msg.now || Date.now());
+          msg.state.clientReceivedAt = Date.now();
+        }
         this.emit({
           type: 'battleSnapshot',
           matchId: String(msg.matchId || ''),
@@ -236,6 +245,10 @@ class PvpServiceImpl {
         });
         break;
       case 'pvp_battle_event':
+        if (msg.event?.state && typeof msg.event.state === 'object') {
+          msg.event.state.serverNow = Number(msg.now || Date.now());
+          msg.event.state.clientReceivedAt = Date.now();
+        }
         this.emit({
           type: 'battleEvent',
           matchId: String(msg.matchId || ''),

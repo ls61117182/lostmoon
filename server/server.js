@@ -26,6 +26,7 @@ const sessions = new Map(); // token -> { username, expiresAt }
 const pvpQueue = [];
 const pvpRooms = new Map(); // roomCode -> room
 const pvpMatches = new Map(); // matchId -> match
+const PVP_TURN_DURATION_MS = 60000;
 
 function defaultDb() {
   return { version: 1, users: {} };
@@ -343,6 +344,8 @@ function createInitialPvpBattleState(match) {
     ],
     smokeHexes: [],
     smokeHexOwners: {},
+    turnDurationMs: PVP_TURN_DURATION_MS,
+    turnDeadlineAt: Date.now() + PVP_TURN_DURATION_MS,
     winnerParity: null,
     updatedAt: Date.now(),
   };
@@ -429,6 +432,48 @@ function updatePvpBattleFromEvent(match, event) {
   }
 }
 
+function clearPvpTurnTimer(match) {
+  if (!match || !match.turnTimer) return;
+  clearTimeout(match.turnTimer);
+  match.turnTimer = null;
+}
+
+function resetPvpTurnDeadline(match) {
+  if (!match?.battleState) return;
+  match.battleState.turnDurationMs = PVP_TURN_DURATION_MS;
+  match.battleState.turnDeadlineAt = Date.now() + PVP_TURN_DURATION_MS;
+}
+
+function finishPvpTurn(match, playerParity, reason) {
+  if (!match?.battleStarted || !match.battleState || match.battleState.winnerParity) return false;
+  if (playerParity !== match.battleState.currentParity) return false;
+  clearPvpTurnTimer(match);
+  updatePvpWinner(match);
+  if (!match.battleState.winnerParity) {
+    runPvpSupportAi(match, playerParity);
+  }
+  if (!match.battleState.winnerParity) {
+    match.battleState.currentParity = playerParity === "odd" ? "even" : "odd";
+    match.battleState.turn += 1;
+    resetPvpTurnDeadline(match);
+  }
+  match.currentParity = match.battleState.currentParity;
+  sendPvpBattleSnapshot(match, reason);
+  return true;
+}
+
+function schedulePvpTurnTimer(match) {
+  if (!match?.battleStarted || !match.battleState || match.battleState.winnerParity) return;
+  clearPvpTurnTimer(match);
+  const deadline = Number(match.battleState.turnDeadlineAt || 0);
+  const delay = Math.max(0, deadline - Date.now());
+  match.turnTimer = setTimeout(() => {
+    match.turnTimer = null;
+    if (!match.battleStarted || !match.battleState || match.battleState.winnerParity) return;
+    finishPvpTurn(match, match.battleState.currentParity, "turn_timeout");
+  }, delay);
+}
+
 function updatePvpWinner(match) {
   const oddMain = match.battleState.units.find(unit => unit.id === "pvp_odd_protagonist");
   const evenMain = match.battleState.units.find(unit => unit.id === "pvp_even_protagonist");
@@ -438,8 +483,15 @@ function updatePvpWinner(match) {
 }
 
 function publicPvpBattleState(match) {
+  const now = Date.now();
+  const deadline = Number(match.battleState.turnDeadlineAt || 0);
+  const duration = Number(match.battleState.turnDurationMs || PVP_TURN_DURATION_MS);
+  const remaining = deadline > 0 ? Math.max(0, deadline - now) : duration;
   return {
     ...match.battleState,
+    serverNow: now,
+    turnDurationMs: duration,
+    turnRemainingMs: remaining,
     units: match.battleState.units.map(unit => ({ ...unit, pos: { ...unit.pos }, crew: unit.crew ? { ...unit.crew } : undefined })),
     smokeHexes: Array.isArray(match.battleState.smokeHexes) ? [...match.battleState.smokeHexes] : [],
     smokeHexOwners: { ...(match.battleState.smokeHexOwners || {}) },
@@ -450,13 +502,16 @@ function sendPvpBattleSnapshot(match, reason) {
   if (!match.battleState) match.battleState = createInitialPvpBattleState(match);
   updatePvpWinner(match);
   match.battleState.updatedAt = Date.now();
+  if (!match.battleState.winnerParity && match.battleState.actionPhase !== "ai") schedulePvpTurnTimer(match);
+  else clearPvpTurnTimer(match);
   for (const player of match.players) {
+    const state = publicPvpBattleState(match);
     safeSend(clients.get(player.clientId), {
       type: "pvp_battle_snapshot",
       matchId: match.id,
       reason,
-      state: publicPvpBattleState(match),
-      now: Date.now(),
+      state,
+      now: state.serverNow,
     });
   }
 }
@@ -465,8 +520,10 @@ function sendPvpBattleAction(match, action, reason = "action", excludeClientId =
   if (!match.battleState) return;
   updatePvpWinner(match);
   match.battleState.updatedAt = Date.now();
+  if (match.battleState.winnerParity) clearPvpTurnTimer(match);
   for (const player of match.players) {
     if (excludeClientId && player.clientId === excludeClientId) continue;
+    const state = publicPvpBattleState(match);
     safeSend(clients.get(player.clientId), {
       type: "pvp_battle_event",
       matchId: match.id,
@@ -475,10 +532,10 @@ function sendPvpBattleAction(match, action, reason = "action", excludeClientId =
         kind: "pvp_action_result",
         reason,
         action,
-        state: publicPvpBattleState(match),
+        state,
       },
       seq: null,
-      now: Date.now(),
+      now: state.serverNow,
     });
   }
 }
@@ -604,6 +661,7 @@ function cleanupPvpClient(clientId) {
   for (const [matchId, match] of pvpMatches.entries()) {
     if (!match.players.some(player => player.clientId === clientId)) continue;
     match.closed = true;
+    clearPvpTurnTimer(match);
     pvpMatches.delete(matchId);
     for (const player of match.players) {
       if (player.clientId === clientId) continue;
@@ -637,6 +695,7 @@ function createPvpMatch(matchMode, oddPlayer, evenPlayer, roomCode) {
     readyClientIds: new Set(),
     battleStarted: false,
     battleState: null,
+    turnTimer: null,
     createdAt: Date.now(),
     closed: false,
   };
@@ -810,16 +869,7 @@ function handlePvpMessage(ws, clientId, msg) {
           return true;
         }
         updatePvpBattleFromEvent(match, event);
-        updatePvpWinner(match);
-        if (!match.battleState.winnerParity) {
-          runPvpSupportAi(match, sender.parity);
-        }
-        if (!match.battleState.winnerParity) {
-          match.battleState.currentParity = sender.parity === "odd" ? "even" : "odd";
-          match.battleState.turn += 1;
-        }
-        match.currentParity = match.battleState.currentParity;
-        sendPvpBattleSnapshot(match, "turn_end");
+        finishPvpTurn(match, sender.parity, "turn_end");
         return true;
       }
       if (event && event.kind === "pvp_action_result") {

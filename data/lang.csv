@@ -45,6 +45,8 @@ hud.miscPhase,回合 {n} | 杂项阶段 | 骰子 {dice},Turn {n} | Misc phase | 
 btn.nextPhase,下一阶段,Next Phase
 btn.endTurn,结束回合,End Turn
 btn.enemyTurnRunning,敌方回合中,Enemy Turn
+btn.waitingOpponent,等待对方行动,Waiting for opponent
+pvp.turnTimer,{player}行动剩余 {seconds}s,{player} time left {seconds}s
 btn.save,存档,Save
 btn.load,读档,Load
 btn.restart,再来一局,Play Again
@@ -386,6 +388,7 @@ battleLog.title,战斗记录 · 点标题放大,Combat log · tap title to expan
 battleLog.ready,[系统] 战斗记录就绪。,[System] Combat log ready.
 battleLog.missionLoaded,[战斗] 任务加载成功：{name}，{tiles} 格，1 + {allies} + {enemies} 个单位,"[Battle] Mission loaded: {name}, {tiles} tiles, 1 + {allies} + {enemies} units"
 battleLog.playerTurnStart,[战斗] === 进入回合 {turn}（玩家）===,[Battle] === Enter turn {turn} (Player) ===
+battleLog.pvpTurnTimeout,[PVP] 行动时间已到，自动结束当前回合。,[PVP] Time expired; ending the current turn automatically.
 battleLog.hatch,[舱盖] 车长舱盖 -> {state},[Hatch] Commander hatch -> {state}
 battleLog.phase.movement,移动,Move
 battleLog.phase.attack,攻击,Attack

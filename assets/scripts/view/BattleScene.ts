@@ -153,7 +153,7 @@ import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLo
 import { GameSession } from '../core/GameSession';
 import { getGameModeConfig } from '../core/GameMode';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
-import type { PvpFactionId } from '../core/PvpConfig';
+import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
 import { PvpBattleSnapshot, PvpBattleUnitSnapshot, PvpService } from '../core/PvpService';
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import type { MissionSource } from '../core/CustomMissionStore';
@@ -541,6 +541,7 @@ interface DiceShow {
   target: Unit | null;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
   onHold: (() => void) | null;
+  requireManualClose: boolean;
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
   holdNotified: boolean;
   earlyDestroyedVisualApplied: boolean;
@@ -829,8 +830,12 @@ const UNIT_BORDER        = new Color(255, 255, 255, 255);
 // HUD 配色：两阶段都执行过后按钮换成"提醒色"，引导玩家结束回合
 const BTN_BG_NORMAL  = new Color( 84,  95,  58, 240);
 const BTN_BG_URGENT  = new Color(154,  60,  48, 245);
+const BTN_BG_DISABLED = new Color( 78,  78,  78, 210);
 const BTN_BORDER     = new Color(204, 190, 142, 235);
 const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
+const PVP_TURN_TIMER_W = 360;
+const PVP_TURN_TIMER_H = 22;
+const PVP_TURN_DEFAULT_MS = 60000;
 /** 左上角第一行：关卡 id + 名（与回合条区分的稍弱白） */
 const HUD_MISSION_META_COLOR = new Color(226, 214, 174, 255);
 /** 与 `buildHUD` 中关卡标题 UITransform 高度一致，改布局须同步 */
@@ -869,6 +874,7 @@ const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
 const MODAL_PANEL_BG     = new Color( 36,  41,  34, 245);
 const DICE_EVENT_PANEL_BG = new Color(40, 44, 52, 51);
 const DICE_EVENT_PANEL_BORDER = new Color(90, 98, 110, 255);
+const TILE_INSPECT_PANEL_BG = DICE_EVENT_PANEL_BG;
 const MODAL_PANEL_BORDER = new Color(202, 188, 136, 230);
 const MODAL_CLOSE_BG     = new Color(134,  49,  42, 245);
 const SETTINGS_ICON_BG   = new Color( 45,  50,  44, 230);
@@ -1301,11 +1307,20 @@ export class BattleScene extends Component {
   /** 左上角最上行：任务 JSON `id` + 关卡名（`LevelDB.titleKey` 或 `MissionData.name`） */
   private missionTitleLabel: Label | null = null;
   private pvpHudLabel: Label | null = null;
+  private pvpTurnTimerRoot: Node | null = null;
+  private pvpTurnTimerBg: Graphics | null = null;
+  private pvpTurnTimerFill: Graphics | null = null;
+  private pvpTurnTimerLabel: Label | null = null;
   private pvpBattleUnlisten: (() => void) | null = null;
   private pvpBattleStarted = false;
   private pvpOutcomeSent = false;
   private pvpCurrentParity: 'odd' | 'even' | null = null;
   private pvpLastSnapshotTurn = 0;
+  private pvpTurnDeadlineAt = 0;
+  private pvpTurnDurationMs = PVP_TURN_DEFAULT_MS;
+  private pvpTurnServerNowAt = 0;
+  private pvpTurnTimerReceivedAt = 0;
+  private pvpTurnTimeoutSubmitted = false;
   private pvpApplyingRemoteState = false;
   private pvpLastSentUnitHash = '';
   private pvpPendingRemoteSnapshots: Array<{ snapshot: PvpBattleSnapshot; animate: boolean; action?: unknown }> = [];
@@ -1840,6 +1855,18 @@ export class BattleScene extends Component {
     return factionId === 'japan' ? 'japanese_infantry' : 'infantry';
   }
 
+  private pvpInitialProtagonistMarker(parity: PvpParity): { q: number; r: number; facing: Direction } {
+    return parity === 'even'
+      ? { q: 6, r: 2, facing: 3 }
+      : { q: -1, r: 5, facing: 5 };
+  }
+
+  private updatePvpSpawnMarkerForLocalParity(parity: PvpParity) {
+    const marker = this.pvpInitialProtagonistMarker(parity);
+    this.shermanSpawnQr = { q: marker.q, r: marker.r };
+    this.shermanSpawnFacing = marker.facing;
+  }
+
   private pvpInitialUnit(
     id: string,
     ownerParity: 'odd' | 'even',
@@ -1917,8 +1944,8 @@ export class BattleScene extends Component {
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
       .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
-    this.shermanSpawnQr = { q: this.mission.sherman.pos.q, r: this.mission.sherman.pos.r };
-    this.shermanSpawnFacing = this.mission.sherman.facing;
+    this.resetTurretFacingState();
+    this.updatePvpSpawnMarkerForLocalParity(localParity);
     this.pvpCurrentParity = snapshot.currentParity;
     this.pvpLastSnapshotTurn = snapshot.turn;
     this.pvpLastSentUnitHash = this.pvpUnitHash();
@@ -1961,6 +1988,104 @@ export class BattleScene extends Component {
 
   // ---------- 状态 ----------
 
+  private syncPvpTurnTimerFromSnapshot(snapshot: PvpBattleSnapshot) {
+    const serverNow = Number(snapshot.serverNow || snapshot.updatedAt || Date.now());
+    const duration = Math.max(1000, Number(snapshot.turnDurationMs || PVP_TURN_DEFAULT_MS));
+    const explicitDeadline = Number(snapshot.turnDeadlineAt || 0);
+    const explicitRemaining = Number(snapshot.turnRemainingMs);
+    const rawRemaining = Number.isFinite(explicitRemaining)
+      ? Math.max(0, explicitRemaining)
+      : explicitDeadline > 0
+        ? Math.max(0, explicitDeadline - serverNow)
+        : duration;
+    const receivedAt = Number(snapshot.clientReceivedAt || Date.now());
+    const applyDelay = Math.max(0, Date.now() - receivedAt);
+    const remaining = Math.max(0, rawRemaining - applyDelay);
+    this.pvpTurnDurationMs = duration;
+    this.pvpTurnServerNowAt = serverNow + applyDelay;
+    this.pvpTurnDeadlineAt = Date.now() + remaining;
+    this.pvpTurnTimerReceivedAt = receivedAt;
+    this.pvpTurnTimeoutSubmitted = false;
+    this.refreshPvpTurnTimer();
+  }
+
+  private ensurePvpLocalTurnTimer() {
+    if (!GameSession.isPvp || this.pvpTurnDeadlineAt > 0) return;
+    this.pvpTurnDurationMs = PVP_TURN_DEFAULT_MS;
+    this.pvpTurnServerNowAt = Date.now();
+    this.pvpTurnDeadlineAt = this.pvpTurnServerNowAt + this.pvpTurnDurationMs;
+    this.pvpTurnTimerReceivedAt = Date.now();
+    this.pvpTurnTimeoutSubmitted = false;
+    this.refreshPvpTurnTimer();
+  }
+
+  private pvpTurnRemainingMs(): number {
+    if (!this.pvpTurnDeadlineAt) return 0;
+    return Math.max(0, this.pvpTurnDeadlineAt - Date.now());
+  }
+
+  private refreshPvpTurnTimer() {
+    if (!this.pvpTurnTimerRoot || !this.pvpTurnTimerBg || !this.pvpTurnTimerFill || !this.pvpTurnTimerLabel) return;
+    const session = GameSession.pvpSession;
+    const show = !!session?.active && this.pvpBattleStarted && this.outcome === 'ongoing' && !!this.pvpTurnDeadlineAt;
+    this.pvpTurnTimerRoot.active = show;
+    if (!show || !session) return;
+
+    const remaining = this.pvpTurnRemainingMs();
+    const duration = Math.max(1, this.pvpTurnDurationMs || PVP_TURN_DEFAULT_MS);
+    const ratio = Math.max(0, Math.min(1, remaining / duration));
+    const fillW = Math.max(0, PVP_TURN_TIMER_W * ratio);
+    const seconds = Math.ceil(remaining / 1000);
+    const activeName = this.pvpCurrentParity === session.localPlayer.parity
+      ? session.localPlayer.name
+      : session.opponentPlayer.name;
+
+    this.pvpTurnTimerBg.clear();
+    this.pvpTurnTimerBg.fillColor = new Color(24, 27, 24, 210);
+    this.pvpTurnTimerBg.strokeColor = BTN_BORDER;
+    this.pvpTurnTimerBg.lineWidth = 2;
+    this.pvpTurnTimerBg.rect(-PVP_TURN_TIMER_W / 2, -PVP_TURN_TIMER_H / 2, PVP_TURN_TIMER_W, PVP_TURN_TIMER_H);
+    this.pvpTurnTimerBg.fill();
+    this.pvpTurnTimerBg.stroke();
+
+    this.pvpTurnTimerFill.clear();
+    this.pvpTurnTimerFill.fillColor = ratio <= 0.25
+      ? new Color(184, 62, 52, 235)
+      : ratio <= 0.5
+        ? new Color(210, 154, 58, 230)
+        : new Color(80, 142, 92, 230);
+    this.pvpTurnTimerFill.rect(-PVP_TURN_TIMER_W / 2, -PVP_TURN_TIMER_H / 2 + 3, fillW, PVP_TURN_TIMER_H - 6);
+    this.pvpTurnTimerFill.fill();
+
+    this.pvpTurnTimerLabel.string = t('pvp.turnTimer', { player: activeName, seconds });
+  }
+
+  private advancePvpTurnTimer() {
+    this.refreshPvpTurnTimer();
+    if (!GameSession.isPvp || this.pvpTurnTimeoutSubmitted || this.outcome !== 'ongoing') return;
+    const pvp = GameSession.pvpSession;
+    if (!pvp?.active || this.pvpCurrentParity !== pvp.localPlayer.parity || this.phase !== 'player') return;
+    if (!this.pvpTurnDeadlineAt || this.pvpTurnRemainingMs() > 0) return;
+    if (this.isBusy()) return;
+    this.pvpTurnTimeoutSubmitted = true;
+    this.forceEndPvpTurnByTimer();
+  }
+
+  private forceEndPvpTurnByTimer() {
+    if (!GameSession.isPvp || !this.mission || this.phase !== 'player' || this.outcome !== 'ongoing') return;
+    this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
+    this.phaseDice = [];
+    this.movementDone = true;
+    this.attackDone = true;
+    this.miscDone = true;
+    this.playerStep = 'choose';
+    this.clearGunSelection();
+    this.closeDiePopover();
+    this.battleLogI18n('battleLog.pvpTurnTimeout');
+    this.submitPvpTurnEnd();
+  }
+
   private receivePvpBattleSnapshot(snapshot: PvpBattleSnapshot, animateChanges = false, action?: unknown) {
     if (this.anim || this.animQueue.length > 0) {
       this.pvpPendingRemoteSnapshots.push({ snapshot, animate: animateChanges, action });
@@ -1991,6 +2116,7 @@ export class BattleScene extends Component {
     this.pvpBattleStarted = true;
     this.pvpCurrentParity = snapshot.currentParity;
     this.pvpLastSnapshotTurn = snapshot.turn;
+    this.syncPvpTurnTimerFromSnapshot(snapshot);
     this.turn = Math.max(1, Math.ceil(snapshot.turn / 2));
 
     const localParity = pvp.localPlayer.parity;
@@ -2002,14 +2128,12 @@ export class BattleScene extends Component {
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
       .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
+    this.resetTurretFacingState();
     this.applyPvpSmokeSnapshot(snapshot);
     const receivedUnitHash = this.pvpUnitHash();
     if (animateChanges) this.preparePvpRemoteAnimations(oldUnits);
 
-    if (!this.shermanSpawnQr) {
-      this.shermanSpawnQr = { q: this.mission.sherman.pos.q, r: this.mission.sherman.pos.r };
-      this.shermanSpawnFacing = this.mission.sherman.facing;
-    }
+    this.updatePvpSpawnMarkerForLocalParity(localParity);
     this.pvpLastSentUnitHash = receivedUnitHash;
     this.outcome = snapshot.winnerParity
       ? (snapshot.winnerParity === localParity ? 'victory' : 'defeat')
@@ -2480,6 +2604,12 @@ export class BattleScene extends Component {
     this.pvpOutcomeSent = false;
     this.pvpCurrentParity = null;
     this.pvpLastSnapshotTurn = 0;
+    this.pvpTurnDeadlineAt = 0;
+    this.pvpTurnDurationMs = PVP_TURN_DEFAULT_MS;
+    this.pvpTurnServerNowAt = 0;
+    this.pvpTurnTimerReceivedAt = 0;
+    this.pvpTurnTimeoutSubmitted = false;
+    this.refreshPvpTurnTimer();
     this.pvpApplyingRemoteState = false;
     this.pvpLastSentUnitHash = '';
     this.pvpPendingRemoteSnapshots = [];
@@ -3053,6 +3183,7 @@ export class BattleScene extends Component {
    */
   private drawEvacExitArrow() {
     if (!this.g || !this.mission) return;
+    if (GameSession.isPvp) return;
     const obj = this.mission.data.objective;
     if (obj.type !== 'destroy_kind_evac' || !obj.evacAt || obj.evacExitDir === undefined) return;
 
@@ -4571,6 +4702,7 @@ export class BattleScene extends Component {
     if (this.projectileTraces.length > 0) this.advanceProjectileTraces(dt);
     if (this.machineGunBursts.length > 0) this.advanceMachineGunBursts(dt);
     this.advanceUnitEffects(dt);
+    if (GameSession.isPvp) this.advancePvpTurnTimer();
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) {
@@ -6858,6 +6990,38 @@ export class BattleScene extends Component {
     this.node.addChild(pvpNode);
     this.pvpHudLabel = pvpLab;
 
+    const timerNode = new Node('PvpTurnTimer');
+    timerNode.layer = this.node.layer;
+    const timerUT = timerNode.addComponent(UITransform);
+    timerUT.setContentSize(PVP_TURN_TIMER_W, PVP_TURN_TIMER_H);
+    timerUT.setAnchorPoint(0.5, 0.5);
+    timerNode.setPosition(0, 344, 0);
+    const timerBg = timerNode.addComponent(Graphics);
+    const timerFillNode = new Node('Fill');
+    timerFillNode.layer = this.node.layer;
+    timerFillNode.addComponent(UITransform).setContentSize(PVP_TURN_TIMER_W, PVP_TURN_TIMER_H);
+    timerFillNode.setPosition(0, 0, 0);
+    const timerFill = timerFillNode.addComponent(Graphics);
+    timerNode.addChild(timerFillNode);
+    const timerLabelNode = new Node('Label');
+    timerLabelNode.layer = this.node.layer;
+    timerLabelNode.addComponent(UITransform).setContentSize(PVP_TURN_TIMER_W, PVP_TURN_TIMER_H);
+    const timerLabel = timerLabelNode.addComponent(Label);
+    timerLabel.fontSize = 17;
+    timerLabel.lineHeight = 20;
+    timerLabel.color = HUD_TEXT_COLOR;
+    timerLabel.horizontalAlign = HorizontalTextAlignment.CENTER;
+    timerLabel.verticalAlign = VerticalTextAlignment.CENTER;
+    timerLabel.overflow = Label.Overflow.SHRINK;
+    timerLabel.string = '';
+    timerNode.addChild(timerLabelNode);
+    timerNode.active = false;
+    this.node.addChild(timerNode);
+    this.pvpTurnTimerRoot = timerNode;
+    this.pvpTurnTimerBg = timerBg;
+    this.pvpTurnTimerFill = timerFill;
+    this.pvpTurnTimerLabel = timerLabel;
+
     // ---- 第二行起：回合数 + 阶段信息 ----
     const labelNode = new Node('HUDLabel');
     labelNode.layer = this.node.layer;
@@ -7760,11 +7924,11 @@ export class BattleScene extends Component {
   }
 
   /** 绘制结束回合按钮的背景。urgent=true 时换提醒色。 */
-  private drawEndTurnBg(urgent: boolean) {
+  private drawEndTurnBg(urgent: boolean, disabled = false) {
     if (!this.endTurnBg) return;
     const g = this.endTurnBg;
     g.clear();
-    drawFieldPanel(g, ADVANCE_BTN_W, ADVANCE_BTN_H, urgent ? BTN_BG_URGENT : BTN_BG_NORMAL, BTN_BORDER, STATUS_TITLE_COLOR);
+    drawFieldPanel(g, ADVANCE_BTN_W, ADVANCE_BTN_H, disabled ? BTN_BG_DISABLED : urgent ? BTN_BG_URGENT : BTN_BG_NORMAL, BTN_BORDER, STATUS_TITLE_COLOR);
   }
 
   private updateHUD() {
@@ -7817,7 +7981,7 @@ export class BattleScene extends Component {
     }
 
     const adv = this.computeAdvanceButton();
-    this.drawEndTurnBg(adv.urgent);
+    this.drawEndTurnBg(adv.urgent, adv.disabled);
     if (this.endTurnLabel) this.endTurnLabel.string = adv.label;
 
     this.refreshObjectiveHud();
@@ -7925,7 +8089,12 @@ export class BattleScene extends Component {
    *   - 其余玩家选择阶段 →「下一阶段」（蓝）
    *   - 敌方阶段 →「敌方回合中」
    */
-  private computeAdvanceButton(): { label: string; urgent: boolean } {
+  private isPvpWaitingForRemoteAction(): boolean {
+    return GameSession.isPvp && this.phase !== 'player' && this.outcome === 'ongoing';
+  }
+
+  private computeAdvanceButton(): { label: string; urgent: boolean; disabled?: boolean } {
+    if (this.isPvpWaitingForRemoteAction()) return { label: t('btn.waitingOpponent'), urgent: false, disabled: true };
     if (this.phase !== 'player') return { label: t('btn.enemyTurnRunning'), urgent: false };
     if (this.playerStep === 'misc') return { label: t('btn.endTurn'), urgent: true };
     if (this.playerStep === 'movement' || this.playerStep === 'attack') {
@@ -8835,7 +9004,7 @@ export class BattleScene extends Component {
     if (sherman.facing === null) return t('floater.noFacing');
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as Direction);
-    if (isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) return null;
+    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) return null;
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
     if (!map.get(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
       return t('floater.blockedTerrain');
@@ -9268,7 +9437,7 @@ export class BattleScene extends Component {
     }
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
-    if (isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) {
+    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) {
       slot.used = true;
       this.closeDiePopover();
       this.breakConcealment(sherman);
@@ -9713,6 +9882,10 @@ export class BattleScene extends Component {
       statusChange: report.hit ? 'destroyed' : 'none',
     };
 
+    const capturedDieIdx = this.selectedMGDieIdx;
+    const requireManualClose = this.playerStep === 'misc'
+      && this.phaseDice.length > 0
+      && this.phaseDice.every((d, i) => d.used || i === capturedDieIdx);
     const capturedSlot = slot;
     this.startDiceShow(
       panelReport,
@@ -9747,7 +9920,7 @@ export class BattleScene extends Component {
         this.refreshStatusPanel();
         this.autoEndPhaseIfDone();
       },
-      { mg: true, attacker: sherman, target },
+      { mg: true, attacker: sherman, target, requireManualClose },
     );
     // 立即刷一次 HUD，让 "点步兵扫射" 提示消失，避免玩家以为还能再点
     this.updateHUD();
@@ -9964,7 +10137,7 @@ export class BattleScene extends Component {
     }
     const driveDir = sherman.facing;
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
-    if (isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to)) {
+    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to)) {
       if (!this.consumeDoubles(dieIdx)) return;
       this.closeDiePopover();
       this.breakConcealment(sherman);
@@ -10105,6 +10278,7 @@ export class BattleScene extends Component {
    *   - 选择阶段且 A+B 已完成、杂项未开始 → 手动进入杂项（与自动进杂项二选一即可）
    */
   private onAdvanceClicked() {
+    if (this.isPvpWaitingForRemoteAction()) return;
     playUiClick();
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
@@ -10346,6 +10520,7 @@ export class BattleScene extends Component {
     this.refreshPhaseUI();
     this.updateHUD();
     this.redraw();
+    this.ensurePvpLocalTurnTimer();
     this.battleLogI18n('battleLog.playerTurnStart', { turn: this.turn });
   }
 
@@ -11533,7 +11708,7 @@ export class BattleScene extends Component {
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(panelW, panelH);
     const pgg = panel.addComponent(Graphics);
-    pgg.fillColor = MODAL_PANEL_BG;
+    pgg.fillColor = TILE_INSPECT_PANEL_BG;
     pgg.strokeColor = MODAL_PANEL_BORDER;
     pgg.lineWidth = 2;
     pgg.rect(-panelW / 2, -panelH / 2, panelW, panelH);
@@ -12697,13 +12872,18 @@ export class BattleScene extends Component {
       return;
     }
     if (this.isBusy()) return;
-    if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
-
-    this.closeDiePopover();
 
     const target = this.pickTileAtScreenUi(event);
     if (!target) return;
+
+    if (this.phase !== 'player') {
+      if (GameSession.isPvp) this.openTileInspectModal(target);
+      return;
+    }
+
+    this.closeDiePopover();
+
     const targetVisible = this.isHexVisible(target.pos);
 
     const enemiesOnTile = targetVisible ? this.mission.enemies.filter(
@@ -12943,39 +13123,47 @@ export class BattleScene extends Component {
     const doublesPartnerIdx = this.selectedGunDoublesIdx;
     const precisionFire = this.selectedGunHitThresholdModifier < 0;
     let attackApplied = false;
-    const applyAndSyncAttack = () => {
-      if (attackApplied || !this.mission) return;
-      attackApplied = true;
-      applyAttack(target, report);
-      if (target.destroyed) this.registerDestroyWreckVisual(target);
-      slot.used = true;
-      if (doublesPartnerIdx >= 0) {
-        const p = this.phaseDice[doublesPartnerIdx];
-        if (p) p.used = true;
+    let attackAutoEndChecked = false;
+    const applyAndSyncAttack = (allowDeferredAutoEnd: boolean) => {
+      if (!this.mission) return;
+      if (!attackApplied) {
+        attackApplied = true;
+        applyAttack(target, report);
+        if (target.destroyed) this.registerDestroyWreckVisual(target);
+        slot.used = true;
+        if (doublesPartnerIdx >= 0) {
+          const p = this.phaseDice[doublesPartnerIdx];
+          if (p) p.used = true;
+        }
+        sherman.loaded = false;
+        this.clearGunSelection();
+        this.presentAttackResult(t('actor.player'), report, sherman, target);
+        this.sendPvpActionResult('main_gun', {
+          type: 'main_gun',
+          attackerId: sherman.id,
+          targetId: target.id,
+          report,
+          attackSound: sherman.stats.attackSound,
+        });
+        this.refreshPhaseUI();
+        this.updateHUD();
       }
-      sherman.loaded = false;
-      this.clearGunSelection();
-      this.presentAttackResult(t('actor.player'), report, sherman, target);
-      this.sendPvpActionResult('main_gun', {
-        type: 'main_gun',
-        attackerId: sherman.id,
-        targetId: target.id,
-        report,
-        attackSound: sherman.stats.attackSound,
-      });
-      this.refreshPhaseUI();
-      this.updateHUD();
+      const waitsForResultClose = this.playerStep === 'misc'
+        && this.phaseDice.length > 0
+        && !this.phaseDice.some(d => !d.used);
+      if (attackAutoEndChecked || (waitsForResultClose && !allowDeferredAutoEnd)) return;
+      attackAutoEndChecked = true;
       this.autoEndPhaseIfDone();
     };
     const showDice = (fireEffectPlayed = false) => {
       this.startDiceShow(report, t('actor.player'), unitDisplayName(target.kind), () => {
-        applyAndSyncAttack();
+        applyAndSyncAttack(true);
       }, {
         attackSound: sherman.stats.attackSound,
         attacker: sherman,
         target,
         fireEffectPlayed,
-        onHold: applyAndSyncAttack,
+        onHold: () => applyAndSyncAttack(false),
       });
     };
     this.startShermanTurretAim(target, () => {
@@ -13134,6 +13322,7 @@ export class BattleScene extends Component {
       target?: Unit | null;
       fireEffectPlayed?: boolean;
       onHold?: () => void;
+      requireManualClose?: boolean;
     } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
@@ -13180,6 +13369,7 @@ export class BattleScene extends Component {
       target: opts.target ?? null,
       onDone,
       onHold: opts.onHold ?? null,
+      requireManualClose: !!opts.requireManualClose,
       finalized: false,
       holdNotified: false,
       earlyDestroyedVisualApplied: false,
@@ -14248,7 +14438,7 @@ export class BattleScene extends Component {
         break;
       }
       case 'hold': {
-        if (show.mg && show.t >= DICE_HOLD_DUR) {
+        if (show.mg && !show.requireManualClose && show.t >= DICE_HOLD_DUR) {
           show.stage = 'done';
           this.finalizeDiceShow(false);
         }
