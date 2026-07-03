@@ -3996,6 +3996,54 @@ export class BattleScene extends Component {
     });
   }
 
+  private spawnUiFloaterAtNode(
+    anchor: Node,
+    text: string,
+    color: Color,
+    opts?: { size?: number; dur?: number; rise?: number; offsetY?: number },
+  ) {
+    const parentUT = this.node.getComponent(UITransform);
+    const anchorUT = anchor.getComponent(UITransform);
+    if (!parentUT || !anchorUT) return;
+
+    const local = parentUT.convertToNodeSpaceAR(anchor.worldPosition);
+    const size = opts?.size ?? 20;
+    const startX = local.x;
+    const startY = local.y + anchorUT.height / 2 + (opts?.offsetY ?? 18);
+
+    const n = new Node('Floater');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(180, size + 6);
+    ut.setAnchorPoint(0.5, 0.5);
+
+    const l = n.addComponent(Label);
+    l.fontSize = size;
+    l.lineHeight = size + 4;
+    l.color = new Color(color.r, color.g, color.b, 255);
+    l.horizontalAlign = HorizontalTextAlignment.CENTER;
+    l.verticalAlign = VerticalTextAlignment.CENTER;
+    l.overflow = Label.Overflow.SHRINK;
+    l.string = text;
+
+    this.node.addChild(n);
+    n.setPosition(startX, startY, 0);
+    n.setSiblingIndex(this.node.children.length - 1);
+
+    this.floaters.push({
+      node: n,
+      label: l,
+      baseR: color.r,
+      baseG: color.g,
+      baseB: color.b,
+      baseX: startX,
+      baseY: startY,
+      t: 0,
+      dur: opts?.dur ?? 1.0,
+      rise: opts?.rise ?? 24,
+    });
+  }
+
   private advanceFloaters(dt: number) {
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       const f = this.floaters[i];
@@ -7729,6 +7777,11 @@ export class BattleScene extends Component {
     const panel = new Node('ShermanStatus');
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(W, H);
+    panel.addComponent(BlockInputEvents);
+    panel.on(Node.EventType.TOUCH_START, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_MOVE, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_CANCEL, (e: EventTouch) => { e.propagationStopped = true; }, this);
     panel.setPosition(x, y, 0);
     const bg = panel.addComponent(Graphics);
     drawFieldPanel(bg, W, H, STATUS_PANEL_BG, STATUS_PANEL_BORDER, STATUS_TITLE_COLOR);
@@ -9055,8 +9108,13 @@ export class BattleScene extends Component {
     return hasTarget ? null : t('floater.noInfantry');
   }
 
-  private showDieActionUnavailable(reason: string) {
+  private showDieActionUnavailable(reason: string, anchor?: Node) {
     if (!this.mission) return;
+    if (anchor) {
+      this.spawnUiFloaterAtNode(anchor, reason,
+        new Color(255, 200, 120, 255), { size: 22, dur: 1.0, rise: 24 });
+      return;
+    }
     const s = this.mission.sherman;
     this.closeDiePopover();
     this.spawnFloater(s.pos.q, s.pos.r, reason,
@@ -9140,13 +9198,14 @@ export class BattleScene extends Component {
     if (!vis || !slot || slot.used) return;
 
     // 构造动作项
-    type Item = { text: string; color: Color; onClick: () => void };
+    type Item = { text: string; color: Color; onClick: () => void; unavailableReason: string | null };
     const items: Item[] = [];
     const addItem = (text: string, color: Color, onClick: () => void, unavailableReason: string | null = null) => {
       items.push({
         text,
         color: unavailableReason ? DIE_ACTION_UNAVAILABLE : color,
-        onClick: unavailableReason ? () => this.showDieActionUnavailable(unavailableReason) : onClick,
+        onClick,
+        unavailableReason,
       });
     };
 
@@ -9171,12 +9230,16 @@ export class BattleScene extends Component {
       }
       // §3.6 A 列对子：驾驶员前进 / 副驾驶 ↻ 60° / 副驾驶 ↺ 60°
       if (hasDoublesPartner) {
-        addItem(t('action.doublesDriverAdvance'), DIE_ACTION_DOUBLES,
-          () => this.tryDoublesDriverAdvance(idx), this.driveActionUnavailable(+1, 'driver'));
-        addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
-          () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'));
-        addItem(t('action.doublesCoDriverTurnCCW'), DIE_ACTION_DOUBLES,
-          () => this.tryDoublesCoDriverTurn(idx, -1), this.turnActionUnavailable('coDriver'));
+        if (a !== 'drive') {
+          addItem(t('action.doublesDriverAdvance'), DIE_ACTION_DOUBLES,
+            () => this.tryDoublesDriverAdvance(idx), this.driveActionUnavailable(+1, 'driver'));
+        }
+        if (a !== 'turn') {
+          addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
+            () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'));
+          addItem(t('action.doublesCoDriverTurnCCW'), DIE_ACTION_DOUBLES,
+            () => this.tryDoublesCoDriverTurn(idx, -1), this.turnActionUnavailable('coDriver'));
+        }
       }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
@@ -9192,10 +9255,14 @@ export class BattleScene extends Component {
       }
       // §3.6 B 列对子：装填手装填（+同点骰）/ 炮手主炮射击（+同点骰）
       if (hasDoublesPartner) {
-        addItem(t('action.doublesLoaderReload'), DIE_ACTION_DOUBLES,
-          () => this.tryDoublesLoaderReload(idx), this.reloadActionUnavailable('loader'));
-        addItem(t('action.doublesGunnerFire'), DIE_ACTION_DOUBLES,
-          () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'));
+        if (a !== 'reload') {
+          addItem(t('action.doublesLoaderReload'), DIE_ACTION_DOUBLES,
+            () => this.tryDoublesLoaderReload(idx), this.reloadActionUnavailable('loader'));
+        }
+        if (a !== 'gun') {
+          addItem(t('action.doublesGunnerFire'), DIE_ACTION_DOUBLES,
+            () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'));
+        }
         if (a === 'gun' && getGameModeConfig(GameSession.gameMode).precisionFire) {
           addItem(t('action.precisionFire'), DIE_ACTION_DOUBLES,
             () => this.selectPrecisionGunDie(idx), this.gunActionUnavailable('gunner'));
@@ -9329,7 +9396,8 @@ export class BattleScene extends Component {
       btn.addChild(tn);
       btn.on(Node.EventType.TOUCH_END, () => {
         playUiClick();
-        it.onClick();
+        if (it.unavailableReason) this.showDieActionUnavailable(it.unavailableReason, btn);
+        else it.onClick();
       }, this);
       panel.addChild(btn);
     }

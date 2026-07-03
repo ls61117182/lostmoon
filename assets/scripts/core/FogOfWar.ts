@@ -87,7 +87,7 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
 
 export function hasRadioReceive(unit: Unit): boolean {
   if (unit.destroyed || unit.stats.hasRadio === false || unit.radioDamaged === true) return false;
-  return isTankUnit(unit) ? unit.crew?.coDriver !== false : true;
+  return true;
 }
 
 export function hasRadioTransmit(unit: Unit): boolean {

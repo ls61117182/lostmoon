@@ -834,7 +834,7 @@ describe('战争迷雾玩家视野', () => {
     expect(computePlayerVisibleHexes(map, sherman, [ally], true).has(HexMap.keyOf(allyForward))).toBe(true);
   });
 
-  test('tank radio transmit requires commander and receive requires co-driver', () => {
+  test('tank radio receive only requires intact radio while transmit requires commander', () => {
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const receiver = shermanAt(1, 4, 0, false);
@@ -848,10 +848,9 @@ describe('战争迷雾玩家视野', () => {
     expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(true);
 
     receiver.crew!.coDriver = false;
-    expect(hasRadioReceive(receiver)).toBe(false);
-    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(false);
+    expect(hasRadioReceive(receiver)).toBe(true);
+    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(true);
 
-    receiver.crew!.coDriver = true;
     sender.crew!.commander = false;
     expect(hasRadioTransmit(sender)).toBe(false);
     expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(false);
