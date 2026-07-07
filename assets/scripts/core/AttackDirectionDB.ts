@@ -19,7 +19,7 @@ export interface AttackDirectionRule {
 export const ATTACK_DIRECTION_RULES: Record<number, AttackDirectionRule> = {
   [-150]: { position: "正后", incomingAngle: -150, armorFace: 'rear', damageCheckType: 'rear', notes: "左后30度" },
   [-120]: { position: "左后", incomingAngle: -120, armorFace: 'rearSide', damageCheckType: 'right', notes: "左后" },
-  [-90]: { position: "正左", incomingAngle: -90, armorFace: 'rearSide', damageCheckType: 'left', notes: "正左" },
+  [-90]: { position: "正左", incomingAngle: -90, armorFace: 'frontSide', damageCheckType: 'left', notes: "正左" },
   [-60]: { position: "左前", incomingAngle: -60, armorFace: 'frontSide', damageCheckType: 'left', notes: "左前侧" },
   [-30]: { position: "正前", incomingAngle: -30, armorFace: 'front', damageCheckType: 'front', notes: "左前30度" },
   [0]: { position: "正前", incomingAngle: 0, armorFace: 'front', damageCheckType: 'front', notes: "正前" },

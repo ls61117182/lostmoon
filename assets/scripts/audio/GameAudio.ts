@@ -34,6 +34,7 @@ let maneuverSource: AudioSource | null = null;
 let maneuverPlayId = 0;
 let sfxPool: AudioSource[] = [];
 let sfxIdx = 0;
+let sfxPlayId = 0;
 let currentBgmKey: string | null = null;
 let initCalled = false;
 
@@ -171,8 +172,9 @@ export function playSfxKey(key: string, volumeMul = 1, volumeCap = 1): void {
   ensureRoot();
   const s = MenuProgress.load();
   if (s.sfxVolume <= 0) return;
+  const myId = sfxPlayId;
   getClip(key, (clip) => {
-    if (!clip || sfxPool.length === 0) return;
+    if (myId !== sfxPlayId || !clip || sfxPool.length === 0) return;
     refreshVolumes();
     const src = sfxPool[sfxIdx++ % sfxPool.length];
     src.stop();
@@ -216,6 +218,12 @@ export function startTankManeuver(): void {
 export function stopManeuverSound(): void {
   maneuverPlayId++;
   if (maneuverSource) maneuverSource.stop();
+}
+
+export function stopBattleSfx(): void {
+  sfxPlayId++;
+  stopManeuverSound();
+  for (const a of sfxPool) a.stop();
 }
 
 export function stopTankManeuver(): void {

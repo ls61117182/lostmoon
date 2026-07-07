@@ -135,10 +135,30 @@ export interface AttackContext {
 }
 
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
+export interface EffectivePenetrationBreakdown {
+  basePenetration: number;
+  effectiveRange: number;
+  distance: number;
+  rangePenalty: number;
+  penetration: number;
+}
+
+export function effectivePenetrationBreakdown(attacker: Unit, target: Unit, enabled = false): EffectivePenetrationBreakdown {
+  const basePenetration = attacker.stats.penetration;
+  const effectiveRange = attacker.stats.effectiveRange;
+  const distance = hexDistance(attacker.pos, target.pos);
+  const rangePenalty = enabled ? Math.max(0, distance - effectiveRange) : 0;
+  return {
+    basePenetration,
+    effectiveRange,
+    distance,
+    rangePenalty,
+    penetration: Math.max(0, basePenetration - rangePenalty),
+  };
+}
+
 export function effectivePenetration(attacker: Unit, target: Unit, enabled = false): number {
-  if (!enabled) return attacker.stats.penetration;
-  const rangePenalty = Math.max(0, hexDistance(attacker.pos, target.pos) - attacker.stats.effectiveRange);
-  return Math.max(0, attacker.stats.penetration - rangePenalty);
+  return effectivePenetrationBreakdown(attacker, target, enabled).penetration;
 }
 
 const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([

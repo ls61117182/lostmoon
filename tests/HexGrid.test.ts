@@ -28,7 +28,8 @@ import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
 import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit, isWithinOwnVisionRange } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
-import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, effectivePenetration, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
+import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest } from '../assets/scripts/core/FireCheck';
+import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, effectivePenetration, effectivePenetrationBreakdown, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
 import { RNG } from '../assets/scripts/core/Dice';
 
@@ -224,6 +225,17 @@ describe('Effective range penetration', () => {
     expect(effectivePenetration(attacker, unitAt('target', 5, 0, 4), true)).toBe(2);
     expect(effectivePenetration(attacker, unitAt('target', 9, 0, 4), true)).toBe(0);
     expect(attacker.stats.penetration).toBe(3);
+  });
+
+  test('breakdown reports adjacent range as distance 1 while applying no range penalty', () => {
+    const attacker = unitAt('attacker', 0, 3, 4);
+    expect(effectivePenetrationBreakdown(attacker, unitAt('target', 1, 0, 4), true)).toEqual({
+      basePenetration: 3,
+      effectiveRange: 4,
+      distance: 1,
+      rangePenalty: 0,
+      penetration: 3,
+    });
   });
 
   test('classic mode keeps base penetration beyond effective range', () => {
@@ -514,6 +526,38 @@ describe('Hardcore twelve-direction turret fire', () => {
     applyAttack(target, reportParalyzed);
     expect(target.paralyzed).toBe(true);
     expect(target.fireLevel ?? 0).toBe(0);
+  });
+
+  test('fire check table profiles resolve classic Europe, classic Pacific, and hardcore outcomes', () => {
+    expect(fireCheckProfileFor('classic', 'europe')).toBe('classic_europe');
+    expect(fireCheckProfileFor('classic', 'pacific')).toBe('classic_pacific');
+    expect(fireCheckProfileFor('hardcore', 'europe')).toBe('hardcore');
+    expect([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('classic_europe', die))).toEqual([
+      'destroyed',
+      'crewCheck',
+      'fire',
+      'fire',
+      'turret',
+      'paralyzed',
+    ]);
+    expect([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('classic_pacific', die))).toEqual([
+      'destroyed',
+      'crewCheck',
+      'fire',
+      'turret',
+      'paralyzed',
+      'none',
+    ]);
+    expect([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('hardcore', die))).toEqual([
+      'destroyed',
+      'crewCheck',
+      'fire',
+      'turret',
+      'paralyzed',
+      'none',
+    ]);
+    expect(resolveFireCheckLowest('classic_europe', [6, 5, 4, 3]).effect).toBe('fire');
+    expect(resolveFireCheckLowest('classic_pacific', [6, 5, 4]).effect).toBe('turret');
   });
 
   test('halfway ray counts both bordering hedge paths, divides by two and floors', () => {

@@ -13,6 +13,7 @@ dmg.outcome.turret,炮塔受损,Turret Hit
 dmg.outcome.paralyzed,瘫痪,Immobilized
 dmg.outcome.crewCheck,阵亡检定,Crew Check
 dmg.outcome.radio,无线电损坏,Radio Hit
+dmg.outcome.none,无效果,No effect
 turnEnd.result.noEffect,无事发生,No effect
 crew.role.1,车长,Commander
 crew.role.2,装填手,Loader
@@ -206,6 +207,40 @@ dice.panel.crewTitle,阵亡检定,Crew Check
 dice.panel.outcomeMiss,MISS,MISS
 dice.panel.outcomeRic,跳弹,Ricochet
 dice.panel.outcomeCommanderKia,车长阵亡！,Commander KIA!
+dice.rule.hitNeedTitle,命中所需点数,Hit Target Number
+dice.rule.penNeedTitle,击穿所需点数,Penetration Target Number
+dice.rule.total,总计,Total
+dice.rule.distance,距离,Distance
+dice.rule.targetSize,目标体积点数,Target Size
+dice.rule.hedges,树篱,Hedgerow
+dice.rule.building,建筑,Building
+dice.rule.smoke,烟雾,Smoke
+dice.rule.concealed,隐蔽,Concealment
+dice.rule.trees,树林,Trees
+dice.rule.rearArc,后方射界,Rear Arc
+dice.rule.attackModifier,射击修正,Attack Modifier
+dice.rule.penNeed,击穿所需,Required Roll
+dice.rule.die,骰子,Die
+dice.rule.result,结果,Result
+dice.rule.none,无,None
+dice.rule.basePen,基础穿深,Base Penetration
+dice.rule.effectiveRange,有效射程,Effective Range
+dice.rule.rangePenalty,射程衰减,Range Penalty
+dice.rule.actualPen,实际穿深,Actual Penetration
+dice.rule.armorLine,{face}装甲,{face} Armor
+dice.rule.targetType,受击类型,Target Type
+dice.rule.currentTarget,当前目标,Current Target
+dice.rule.hitDirection,受击方向,Hit Direction
+dice.rule.faceFront,前侧,Front
+dice.rule.faceRight,右侧,Right
+dice.rule.faceLeft,左侧,Left
+dice.rule.faceRear,后侧,Rear
+dice.rule.faceTarget,目标,Target
+dice.rule.germanTank,德军坦克,German Tank
+dice.rule.usTank,美军坦克,US Tank
+dice.rule.destroyedTarget,已毁目标,Destroyed Target
+dice.rule.crewEffect,乘员({roles}),Crew({roles})
+dice.rule.prioritySep,＞,>
 actor.player,玩家,Player
 actor.sherman,谢尔曼,Sherman
 actor.enemyPrefix,敌方 {name},Enemy {name}
@@ -541,6 +576,10 @@ turnEnd.panzer3.placed,敌军 III 号坦克增援：起始格骰 {spawnDie}，ei
 turnEnd.panzer3.blocked,III 号增援：骰 {spawnDie}，目标格 eid={eid} 被坦克占据或不可用，未部署。,Panzer III reinforcement: die {spawnDie}; tile eid={eid} blocked; not placed.
 turnEnd.unknown,未配置的回合结束效果类型。,Unknown turn-end effect.
 fireCheck.title,着火程度检定,Fire intensity check
+fireCheck.ruleTitle,着火检定说明,Fire check rules
+fireCheck.crewRuleTitle,阵亡检定说明,Crew check rules
+fireCheck.crewRuleBody,触发阵亡检定时，再掷 1 颗 d6：1=车长，2=装填手，3=炮手，4=驾驶员，5=副驾驶；6 点仅在车长处于打开舱盖状态时判定为车长阵亡，否则为虚惊。,"When a crew check is triggered, roll 1d6: 1=Commander, 2=Loader, 3=Gunner, 4=Driver, 5=Co-driver; 6 kills the Commander only if the hatch is open, otherwise it is a false alarm."
+fireCheck.crewOpenHatchCommander,开舱状态车长阵亡,Open hatch commander KIA
 fireCheck.confirm,确定,OK
 fireCheck.intro,按着火层数 {n} 掷 {rolls} 颗 d6：{dice}；取最低 {lowest} 结算一次。,Roll {rolls} fire check d6 for fire level {n}: {dice}; resolve the lowest {lowest} once.
 fireCheck.stepLine,第{idx}次：d6={die} → {outcome},Roll {idx}: d6={die} → {outcome}

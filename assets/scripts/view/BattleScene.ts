@@ -77,7 +77,10 @@ import {
   rollActionDice,
 } from '../core/ActionDice';
 import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, hitThreshold, maxMGHitRoll, mgHitThreshold, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
+import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, hitBreakdown, hitThreshold, maxMGHitRoll, mgHitThreshold, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
+import { DAMAGE_TABLE } from '../core/DamageTableDB';
+import type { DamageTableEffect, DamageTargetClass } from '../core/DamageTableDB';
+import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest, FireCheckEffect } from '../core/FireCheck';
 import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
 import {
@@ -178,6 +181,7 @@ import {
   onMenuVolumesChanged,
   playBgmBattle,
   stopBgm,
+  stopBattleSfx,
   playCannonReload,
   playConfiguredAttackSound,
   playDiceRoll,
@@ -188,6 +192,7 @@ import {
   stopManeuverSound,
   playUiClick,
 } from '../audio/GameAudio';
+import { visualDamageSmokeLevel } from '../core/UnitVisualState';
 import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
@@ -290,7 +295,7 @@ const PANZER3_SPLIT_GEOMETRY_CONFIG = splitTankGeometryConfigOf('panzer3');
 /** 着火检定预掷结果：确认后才写入谢尔曼状态 */
 interface FireCheckPreparedStep {
   die: number;
-  effect: DamageEffect;
+  effect: FireCheckEffect;
   crewDie?: number;
   /** 阵亡检定为 null 表示虚惊；1–5 为乘员位 */
   crewSlot?: number | null;
@@ -520,6 +525,7 @@ type DiceStage =
   | 'dmg-roll' | 'dmg-show'
   | 'crew-roll' | 'crew-show'
   | 'hold' | 'done';
+type DiceRuleKind = 'hit' | 'pen' | 'damage' | 'crew';
 
 interface DiceShow {
   stage: DiceStage;
@@ -563,6 +569,7 @@ interface DiceShow {
   crewEffectLabel: Label | null; // "驾驶员阵亡 / 虚惊 / …"
   outcomeLabel: Label;       // 底部大字：起火 / 击毁 / 跳弹 / MISS / 炮塔 / 痛痪 / 乘员阵亡
   confirmButton: Node | null;
+  ruleModalRoot: Node | null;
 }
 
 type CombatLogParams = Record<string, string | number>;
@@ -1391,6 +1398,7 @@ export class BattleScene extends Component {
     introKey: string;
     introParams: Record<string, string | number>;
     bodyText: string;
+    ruleModalRoot: Node | null;
     apply: () => void;
   } | null = null;
   private usCasualtyEventUI: {
@@ -3406,11 +3414,9 @@ export class BattleScene extends Component {
 
   // ---------- 单位状态常驻文字 ----------
 
-  /** Visual-only smoke level: real fire uses fireLevel; damaged enemy tanks show level-2 black smoke. */
+  /** Visual-only smoke level: real fire uses fireLevel; damaged non-player tanks show level-2 black smoke. */
   private damageSmokeLevel(u: Unit): number {
-    const fireLevel = Math.max(u.fireLevel ?? 0, 0);
-    const damagedEnemyTankLevel = u.faction === 'enemy' && isTankUnit(u) && u.damaged ? 2 : 0;
-    return Math.max(fireLevel, damagedEnemyTankLevel);
+    return visualDamageSmokeLevel(u, this.mission?.sherman.id);
   }
 
   /** 给本回合刚毁的单位在格子下方挂「已毁」短文字；下回合起不再生成。 */
@@ -8276,6 +8282,7 @@ export class BattleScene extends Component {
 
   private onBackToMenu() {
     this.battleLog('[BattleScene] 返回主菜单');
+    stopBattleSfx();
     if (this.pvpBattleUnlisten) this.pvpBattleUnlisten();
     this.pvpBattleUnlisten = null;
     PvpService.sendBattleEvent({ kind: 'leave_battle', turn: this.turn, phase: this.phase });
@@ -10699,6 +10706,7 @@ export class BattleScene extends Component {
       introKey,
       introParams,
       bodyText,
+      ruleModalRoot: null,
       apply: () => {
         let pendingFire = 0;
         for (const st of prep.steps) {
@@ -10720,7 +10728,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 预掷本批次全部着火检定骰，用于 UI 展示；只按最低点数生成 1 次伤害结算。
+   * 预掷本批次全部着火检定骰，用于 UI 展示；只取最低点按当前模式 / 战场的着火检定表结算一次。
    * 阵亡检定二次骰复用 Combat.resolveCrewCheck，保持已死乘员重掷等细节一致。
    */
   private prepareFireCheckSteps(nSnap: number): {
@@ -10730,6 +10738,7 @@ export class BattleScene extends Component {
   } {
     const steps: FireCheckPreparedStep[] = [];
     const allDice: number[] = [];
+    const profile = fireCheckProfileFor(GameSession.gameMode, this.mission!.data.theater);
 
     for (let i = 0; i < nSnap; i++) {
       allDice.push(this.rng.d6());
@@ -10739,9 +10748,8 @@ export class BattleScene extends Component {
       return { steps, pendingFire: 0, allDice };
     }
 
-    const die = Math.min(...allDice);
-    const effect = resolveDamageEffect(this.mission!.sherman, die, true);
-    this.battleLog(`[Phase⑤] dice=${allDice.join('+')} min=${die} → ${effect}`);
+    const { die, effect } = resolveFireCheckLowest(profile, allDice);
+    this.battleLog(`[Phase⑤] ${profile} dice=${allDice.join('+')} min=${die} → ${effect}`);
 
     if (effect === 'crewCheck') {
       const crew = resolveCrewCheck(this.mission!.sherman, this.rng);
@@ -10776,15 +10784,14 @@ export class BattleScene extends Component {
     return lines.join('\n');
   }
 
-  private fireCheckOutcomePhrase(effect: DamageEffect): string {
+  private fireCheckOutcomePhrase(effect: FireCheckEffect): string {
     switch (effect) {
       case 'destroyed': return t('dmg.outcome.destroyed');
       case 'fire': return t('dmg.effect.fire');
       case 'turret': return t('dmg.outcome.turret');
       case 'paralyzed': return t('dmg.outcome.paralyzed');
-      case 'radio': return t('dmg.outcome.radio');
-      case 'damaged': return t('dmg.outcome.damaged');
       case 'crewCheck': return t('dmg.outcome.crewCheck');
+      case 'none': return t('dmg.outcome.none');
       default: return String(effect);
     }
   }
@@ -10796,7 +10803,7 @@ export class BattleScene extends Component {
    */
   private applyFireCheckEffect(
     s: Unit,
-    effect: DamageEffect,
+    effect: FireCheckEffect,
     onFire: () => void,
     preCrew?: { crewDie: number; crewSlot: number | null },
   ) {
@@ -10824,11 +10831,6 @@ export class BattleScene extends Component {
         if (s.kind !== 'sherman') s.damaged = true;
         s.paralyzed = true;
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.paralyzed'), color,
-          { size: 22, dur: 0.9, rise: 24 });
-        break;
-      case 'radio':
-        s.radioDamaged = true;
-        this.spawnFloater(pos.q, pos.r, t('dmg.outcome.radio'), color,
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'crewCheck': {
@@ -10861,8 +10863,9 @@ export class BattleScene extends Component {
         }
         break;
       }
-      case 'damaged':
-        if (s.kind !== 'sherman') s.damaged = true;
+      case 'none':
+        this.spawnFloater(pos.q, pos.r, t('dmg.outcome.none'),
+          new Color(190, 200, 210, 255), { size: 18, dur: 0.9, rise: 24 });
         break;
     }
   }
@@ -13458,6 +13461,7 @@ export class BattleScene extends Component {
       crewEffectLabel: panel.crewEffectLabel,
       outcomeLabel: panel.outcomeLabel,
       confirmButton: panel.confirmButton,
+      ruleModalRoot: null,
     };
     playDiceRoll();
   }
@@ -13589,6 +13593,7 @@ export class BattleScene extends Component {
         RESULT_COL_X, hitDiceY - 18, RESULT_COL_W, 30, 24, new Color(255, 90, 90, 255))
       : null;
     if (hitSpecial) hitSpecial.node.active = false;
+    this.makeDiceRuleButton(panel, -238, hitDiceY, () => this.openDiceRuleModal('hit'));
 
     // 2d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有命中这一段。
     const penDice: Label[] = [];
@@ -13611,6 +13616,7 @@ export class BattleScene extends Component {
         MID_COL_X, penDiceY, MID_COL_W, 40, 30, DICE_INFO_TEXT);
       penVerdict = this.makeCenteredLabel(panel, '',
         RESULT_COL_X, penDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
+      this.makeDiceRuleButton(panel, -238, penDiceY, () => this.openDiceRuleModal('pen'));
 
       // 1d6 伤害骰 + "伤害检定" + 效果文字
       if (needsDamageRow) {
@@ -13620,6 +13626,7 @@ export class BattleScene extends Component {
         dmgEffect = this.makeCenteredLabel(panel, '',
           RESULT_COL_X, dmgDiceY, RESULT_COL_W, 58, 24, DICE_OUTCOME_HIT);
         dmgEffect.lineHeight = 28;
+        this.makeDiceRuleButton(panel, -238, dmgDiceY, () => this.openDiceRuleModal('damage'));
       }
 
       // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
@@ -13629,6 +13636,7 @@ export class BattleScene extends Component {
           MID_COL_X, crewDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
         crewEffect = this.makeCenteredLabel(panel, '',
           RESULT_COL_X, crewDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_CREW);
+        this.makeDiceRuleButton(panel, -238, crewDiceY, () => this.openDiceRuleModal('crew'));
       }
 
       // 主炮三段检定同屏滚动；未命中 / 未击穿时，伤害行在揭示时显示"无效"。
@@ -13665,6 +13673,314 @@ export class BattleScene extends Component {
       outcomeLabel: outcome,
       confirmButton,
     };
+  }
+
+  private makeDiceRuleButton(parent: Node, x: number, y: number, onClick: () => void): Node {
+    const size = 34;
+    const btn = new Node('DiceRuleHelp');
+    btn.layer = this.node.layer;
+    btn.addComponent(UITransform).setContentSize(size, size);
+    btn.setPosition(x, y, 0);
+    const g = btn.addComponent(Graphics);
+    g.lineWidth = 2;
+    g.strokeColor = new Color(48, 255, 72, 255);
+    g.circle(0, 0, size * 0.42);
+    g.stroke();
+    const lab = this.makeBattleModalLabel(btn, '?', 0, 0, size, size, 24, new Color(48, 255, 72, 255));
+    btn.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      playUiClick();
+      onClick();
+      ev.propagationStopped = true;
+    }, this);
+    this.mirrorBattleModalButtonLabel(lab, () => {
+      playUiClick();
+      onClick();
+    });
+    parent.addChild(btn);
+    return btn;
+  }
+
+  private closeDiceRuleModal() {
+    const show = this.diceShow;
+    const root = show?.ruleModalRoot;
+    if (root?.isValid) root.destroy();
+    if (show) show.ruleModalRoot = null;
+  }
+
+  private openDiceRuleModal(kind: DiceRuleKind) {
+    const show = this.diceShow;
+    if (!show) return;
+    this.closeDiceRuleModal();
+
+    const spec = this.diceRuleModalSpec(show, kind);
+    const root = new Node('DiceRuleModal');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(1280, 720);
+    const host = show.panelRoot.parent ?? show.panelRoot;
+    host.addChild(root);
+    root.setSiblingIndex(host.children.length - 1);
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(1280, 720);
+    const bg = backdrop.addComponent(Graphics);
+    bg.fillColor = new Color(0, 0, 0, 70);
+    bg.rect(-640, -360, 1280, 720);
+    bg.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      this.closeDiceRuleModal();
+      ev.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(spec.w, spec.h);
+    panel.setPosition(0, 30, 0);
+    const pg = panel.addComponent(Graphics);
+    drawDicePopupPanel(pg, spec.w, spec.h, MODAL_PANEL_BG, MODAL_PANEL_BORDER);
+    panel.on(Node.EventType.TOUCH_END, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const titleLab = this.makeBattleModalLabel(panel, spec.title, 0, spec.h / 2 - 34, spec.w - 86, 34, 24, HUD_TEXT_COLOR);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+    const close = this.makeBattleRectButton(panel, spec.w / 2 - 28, spec.h / 2 - 24, 34, 34, MODAL_CLOSE_BG,
+      () => this.closeDiceRuleModal());
+    const closeLab = this.makeBattleModalLabel(close.node, 'X', 0, 0, 34, 34, 22, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeDiceRuleModal());
+
+    let y = spec.h / 2 - 82;
+    if (kind === 'damage') {
+      y = this.populateDiceRuleDamage(panel, show, y, spec.w);
+    } else if (kind === 'pen') {
+      y = this.populateDiceRulePen(panel, show, y, spec.w);
+    } else {
+      const labelX = -spec.w * 0.22;
+      const valueX = spec.w * 0.28;
+      const labelW = spec.w * 0.46;
+      const valueW = spec.w * 0.26;
+      for (const row of spec.rows) {
+        this.makeBattleModalLabel(panel, row[0], labelX, y, labelW, 28, 21, HUD_TEXT_COLOR);
+        this.makeBattleModalLabel(panel, row[1], valueX, y, valueW, 28, 21, HUD_TEXT_COLOR);
+        y -= 38;
+      }
+      if (spec.total) {
+        this.drawDiceRuleDivider(panel, spec.w, y + 16);
+        y -= 22;
+        this.makeBattleModalLabel(panel, spec.total[0], labelX, y, labelW, 30, 22, HUD_TEXT_COLOR);
+        this.makeBattleModalLabel(panel, spec.total[1], valueX, y, valueW, 30, 22, HUD_TEXT_COLOR);
+      }
+    }
+
+    show.ruleModalRoot = root;
+  }
+
+  private diceRuleModalSpec(show: DiceShow, kind: DiceRuleKind): {
+    title: string;
+    w: number;
+    h: number;
+    rows: Array<[string, string]>;
+    total?: [string, string];
+  } {
+    const r = show.report;
+    if (kind === 'hit') {
+      const rows: Array<[string, string]> = [];
+      if (show.attacker && show.target && this.mission) {
+        const base = hitBreakdown({
+          attacker: show.attacker,
+          target: show.target,
+          map: this.mission.map,
+          theater: this.mission.data.theater,
+          units: this.allUnits(),
+          smokeHexes: this.mission.smokeHexes,
+        });
+        const add = (name: string, value: number | undefined) => {
+          if (value !== undefined && value !== 0) rows.push([name, String(value)]);
+        };
+        add(t('dice.rule.distance'), base.distance);
+        add(t('dice.rule.targetSize'), base.size);
+        add(t('dice.rule.hedges'), base.hedges);
+        add(t('dice.rule.building'), base.building);
+        add(t('dice.rule.smoke'), base.smoke);
+        add(t('dice.rule.concealed'), base.concealed);
+        add(t('dice.rule.trees'), base.trees);
+        add(t('dice.rule.rearArc'), base.rearArc);
+        const modifier = r.threshold - base.threshold;
+        add(t('dice.rule.attackModifier'), modifier);
+      }
+      if (rows.length === 0) rows.push([t('dice.rule.hitNeedTitle'), String(r.threshold)]);
+      return { title: t('dice.rule.hitNeedTitle'), w: 410, h: 420, rows, total: [t('dice.rule.total'), String(r.threshold)] };
+    }
+    if (kind === 'pen') {
+      const armor = r.armor ?? 0;
+      const pen = r.penetration ?? 0;
+      const need = r.penThreshold ?? armor - pen;
+      return {
+        title: t('dice.rule.penNeedTitle'),
+        w: 460,
+        h: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration ? 420 : 250,
+        rows: [],
+        total: [t('dice.rule.penNeed'), String(need)],
+      };
+    }
+    if (kind === 'crew') {
+      const cc = r.stagedCrewCheck ?? r.crewCheck;
+      const result = cc ? crewDeathLabel(cc).text : t('dice.rule.none');
+      return {
+        title: t('dice.panel.crewTitle'),
+        w: 410,
+        h: 220,
+        rows: [
+          [t('dice.rule.die'), cc ? String(cc.die) : '-'],
+          [t('dice.rule.result'), result],
+        ],
+      };
+    }
+    return { title: t('dice.panel.dmgTitle'), w: 460, h: 430, rows: [] };
+  }
+
+  private populateDiceRulePen(panel: Node, show: DiceShow, startY: number, panelW: number): number {
+    const report = show.report;
+    const armor = report.armor ?? 0;
+    const actualPen = report.penetration ?? show.attacker?.stats.penetration ?? 0;
+    const need = report.penThreshold ?? armor - actualPen;
+    const labelX = -panelW * 0.24;
+    const valueX = panelW * 0.28;
+    const labelW = panelW * 0.46;
+    const valueW = panelW * 0.26;
+    let y = startY;
+    const addRow = (label: string, value: string | number, fontSize = 21) => {
+      this.makeBattleModalLabel(panel, label, labelX, y, labelW, 28, fontSize, HUD_TEXT_COLOR);
+      this.makeBattleModalLabel(panel, String(value), valueX, y, valueW, 28, fontSize, HUD_TEXT_COLOR);
+      y -= 36;
+    };
+
+    const showEffectivePen = getGameModeConfig(GameSession.gameMode).effectiveRangePenetration
+      && !!show.attacker
+      && !!show.target;
+    if (showEffectivePen && show.attacker && show.target) {
+      const breakdown = effectivePenetrationBreakdown(show.attacker, show.target, true);
+      addRow(t('dice.rule.basePen'), breakdown.basePenetration);
+      addRow(t('dice.rule.effectiveRange'), breakdown.effectiveRange);
+      addRow(t('dice.rule.distance'), breakdown.distance);
+      addRow(t('dice.rule.rangePenalty'), -breakdown.rangePenalty);
+      this.drawDiceRuleDivider(panel, panelW, y + 16);
+      y -= 10;
+      addRow(t('dice.rule.actualPen'), actualPen);
+      y -= 20;
+    }
+
+    addRow(t('dice.rule.armorLine', { face: this.armorFaceText(report.armorFace) }), armor);
+    addRow(t('dice.rule.actualPen'), actualPen);
+    this.drawDiceRuleDivider(panel, panelW, y + 16);
+    y -= 18;
+    addRow(t('dice.rule.penNeed'), need, 22);
+    return y;
+  }
+
+  private populateDiceRuleDamage(panel: Node, show: DiceShow, startY: number, panelW: number): number {
+    const report = show.report;
+    const targetClass = this.damageTargetClassForRule(show);
+    const damageType = report.damageCheckType ?? 'front';
+    let y = startY;
+    const labelX = -panelW * 0.26;
+    const valueX = panelW * 0.18;
+    const dieX = -panelW * 0.32;
+    const textX = panelW * 0.16;
+    const textW = panelW * 0.58;
+    this.makeBattleModalLabel(panel, t('dice.rule.targetType'), labelX, y, panelW * 0.32, 28, 20, HUD_TEXT_COLOR);
+    this.makeBattleModalLabel(panel, targetClass ? this.damageTargetClassText(targetClass) : t('dice.rule.currentTarget'), valueX, y, textW, 28, 20, HUD_TEXT_COLOR);
+    y -= 30;
+    this.makeBattleModalLabel(panel, t('dice.rule.hitDirection'), labelX, y, panelW * 0.32, 28, 20, HUD_TEXT_COLOR);
+    this.makeBattleModalLabel(panel, this.damageCheckTypeText(damageType), valueX, y, textW, 28, 20, HUD_TEXT_COLOR);
+    y -= 46;
+
+    for (let die = 1; die <= 6; die++) {
+      const dieLabel = this.makeDieSquare(panel, dieX, y, 38);
+      this.setDieLabelFace(dieLabel, die);
+      const text = targetClass
+        ? this.damageTableEntryText(targetClass, damageType, die)
+        : (die === report.stagedDamageDie ? damageEffectSummaryLabel(report).text : '-');
+      this.makeBattleModalLabel(panel, text, textX, y, textW, 32, 18, HUD_TEXT_COLOR);
+      y -= 45;
+    }
+    return y;
+  }
+
+  private drawDiceRuleDivider(parent: Node, panelW: number, y: number) {
+    const n = new Node('Divider');
+    n.layer = this.node.layer;
+    parent.addChild(n);
+    const g = n.addComponent(Graphics);
+    g.strokeColor = new Color(226, 214, 166, 235);
+    g.lineWidth = 2;
+    g.moveTo(-panelW * 0.34, y);
+    g.lineTo(panelW * 0.34, y);
+    g.stroke();
+  }
+
+  private armorFaceText(face: AttackReport['armorFace']): string {
+    switch (face) {
+      case 'front': return t('dice.rule.faceFront');
+      case 'frontSide': return t('dice.rule.faceFront');
+      case 'rearSide': return t('dice.rule.faceRear');
+      case 'rear': return t('dice.rule.faceRear');
+      default: return t('dice.rule.faceTarget');
+    }
+  }
+
+  private damageCheckTypeText(type: NonNullable<AttackReport['damageCheckType']>): string {
+    switch (type) {
+      case 'front': return t('dice.rule.faceFront');
+      case 'right': return t('dice.rule.faceRight');
+      case 'left': return t('dice.rule.faceLeft');
+      case 'rear': return t('dice.rule.faceRear');
+    }
+  }
+
+  private damageTargetClassForRule(show: DiceShow): DamageTargetClass | null {
+    if (show.report.protagonistTarget) return 'protagonist';
+    const configured = show.target?.stats.damageTargetClass;
+    if (configured && configured in DAMAGE_TABLE) return configured as DamageTargetClass;
+    if (show.target?.faction === 'allied') return 'us_tank';
+    if (show.target && isTankUnit(show.target)) return 'german_tank';
+    return null;
+  }
+
+  private damageTargetClassText(targetClass: DamageTargetClass): string {
+    switch (targetClass) {
+      case 'protagonist': return t('actor.sherman');
+      case 'german_tank': return t('dice.rule.germanTank');
+      case 'us_tank': return t('dice.rule.usTank');
+      case 'destroyed': return t('dice.rule.destroyedTarget');
+    }
+  }
+
+  private damageTableEntryText(targetClass: DamageTargetClass, type: NonNullable<AttackReport['damageCheckType']>, die: number): string {
+    const entry = DAMAGE_TABLE[targetClass]?.[type]?.[die];
+    const groups = entry?.groups ?? [];
+    if (groups.length <= 0) return '-';
+    return groups
+      .map(group => group.map(effect => this.damageTableEffectText(effect)).join(' + '))
+      .filter(text => text.length > 0)
+      .join(t('dice.rule.prioritySep'));
+  }
+
+  private damageTableEffectText(effect: DamageTableEffect): string {
+    if (effect.kind === 'crew') {
+      const roles = (effect.crew ?? []).map(role => crewRoleName({
+        commander: 1,
+        loader: 2,
+        gunner: 3,
+        driver: 4,
+        coDriver: 5,
+      }[role] ?? 1)).join('|');
+      return t('dice.rule.crewEffect', { roles });
+    }
+    if (effect.kind === 'fire') return t('dmg.outcome.fire');
+    return damageEffectLabel(effect.kind as DamageEffect).text;
   }
 
   /** 在 panel 下挂一个带白底黑边的骰子方块 + 内部点数 Label，返回 Label 便于后续 setString。 */
@@ -14525,6 +14841,7 @@ export class BattleScene extends Component {
   private finalizeDiceShow(skip: boolean) {
     const show = this.diceShow;
     if (!show) return;
+    this.closeDiceRuleModal();
     this.lowerEnemyDiceTrayFromDiceShowIfNeeded();
     this.diceShow = null;
     if (show.panelRoot.isValid) show.panelRoot.destroy();
@@ -14549,8 +14866,148 @@ export class BattleScene extends Component {
   private destroyFireCheckEventUI() {
     const ui = this.fireCheckEventUI;
     if (!ui) return;
+    this.closeFireCheckRuleModal();
     this.fireCheckEventUI = null;
     if (ui.root.isValid) ui.root.destroy();
+  }
+
+  private closeFireCheckRuleModal() {
+    const ui = this.fireCheckEventUI;
+    const root = ui?.ruleModalRoot;
+    if (root?.isValid) root.destroy();
+    if (ui) ui.ruleModalRoot = null;
+  }
+
+  private openFireCheckRuleModal() {
+    const ui = this.fireCheckEventUI;
+    if (!ui || !this.mission) return;
+    this.closeFireCheckRuleModal();
+
+    const w = 460;
+    const h = 430;
+    const root = new Node('FireCheckRuleModal');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const host = ui.root.parent ?? ui.root;
+    host.addChild(root);
+    root.setSiblingIndex(host.children.length - 1);
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bg = backdrop.addComponent(Graphics);
+    bg.fillColor = new Color(0, 0, 0, 70);
+    bg.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    bg.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      this.closeFireCheckRuleModal();
+      ev.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(w, h);
+    panel.setPosition(0, 30, 0);
+    const pg = panel.addComponent(Graphics);
+    drawDicePopupPanel(pg, w, h, MODAL_PANEL_BG, MODAL_PANEL_BORDER);
+    panel.on(Node.EventType.TOUCH_END, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const titleLab = this.makeBattleModalLabel(panel, t('fireCheck.ruleTitle'), 0, h / 2 - 34, w - 86, 34, 24, HUD_TEXT_COLOR);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+    const close = this.makeBattleRectButton(panel, w / 2 - 28, h / 2 - 24, 34, 34, MODAL_CLOSE_BG,
+      () => this.closeFireCheckRuleModal());
+    const closeLab = this.makeBattleModalLabel(close.node, 'X', 0, 0, 34, 34, 22, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeFireCheckRuleModal());
+
+    const dieX = -w * 0.32;
+    const textX = w * 0.14;
+    const textW = w * 0.62;
+    const profile = fireCheckProfileFor(GameSession.gameMode, this.mission.data.theater);
+    let y = h / 2 - 92;
+    for (let die = 1; die <= 6; die++) {
+      const dieLabel = this.makeDieSquare(panel, dieX, y, 38);
+      this.setDieLabelFace(dieLabel, die);
+      const effect = resolveFireCheckEffect(profile, die);
+      const text = this.fireCheckOutcomePhrase(effect);
+      if (effect === 'crewCheck') {
+        this.makeDiceRuleButton(panel, textX - textW * 0.5 - 18, y, () => this.openFireCheckCrewRuleModal());
+      }
+      this.makeBattleModalLabel(panel, text, textX, y, textW, 32, 19, HUD_TEXT_COLOR);
+      y -= 46;
+    }
+
+    ui.ruleModalRoot = root;
+  }
+
+  private openFireCheckCrewRuleModal() {
+    const ui = this.fireCheckEventUI;
+    if (!ui) return;
+    this.closeFireCheckRuleModal();
+
+    const w = 460;
+    const h = 430;
+    const root = new Node('FireCheckCrewRuleModal');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const host = ui.root.parent ?? ui.root;
+    host.addChild(root);
+    root.setSiblingIndex(host.children.length - 1);
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bg = backdrop.addComponent(Graphics);
+    bg.fillColor = new Color(0, 0, 0, 70);
+    bg.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    bg.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+      this.closeFireCheckRuleModal();
+      ev.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(w, h);
+    panel.setPosition(0, 30, 0);
+    const pg = panel.addComponent(Graphics);
+    drawDicePopupPanel(pg, w, h, MODAL_PANEL_BG, MODAL_PANEL_BORDER);
+    panel.on(Node.EventType.TOUCH_END, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const titleLab = this.makeBattleModalLabel(panel, t('fireCheck.crewRuleTitle'), 0, h / 2 - 34, w - 86, 34, 24, HUD_TEXT_COLOR);
+    titleLab.enableOutline = true;
+    titleLab.outlineColor = BATTLE_MODAL_TEXT_OUTLINE;
+    titleLab.outlineWidth = 2;
+    const close = this.makeBattleRectButton(panel, w / 2 - 28, h / 2 - 24, 34, 34, MODAL_CLOSE_BG,
+      () => this.closeFireCheckRuleModal());
+    const closeLab = this.makeBattleModalLabel(close.node, 'X', 0, 0, 34, 34, 22, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeLab, () => this.closeFireCheckRuleModal());
+
+    const dieX = -w * 0.32;
+    const textX = w * 0.14;
+    const textW = w * 0.62;
+    const rows = [
+      t('crew.role.1'),
+      t('crew.role.2'),
+      t('crew.role.3'),
+      t('crew.role.4'),
+      t('crew.role.5'),
+      t('fireCheck.crewOpenHatchCommander'),
+    ];
+    let y = h / 2 - 92;
+    for (let die = 1; die <= 6; die++) {
+      const dieLabel = this.makeDieSquare(panel, dieX, y, 38);
+      this.setDieLabelFace(dieLabel, die);
+      this.makeBattleModalLabel(panel, rows[die - 1], textX, y, textW, 32, 19, HUD_TEXT_COLOR);
+      y -= 46;
+    }
+
+    ui.ruleModalRoot = root;
   }
 
   private buildFireCheckEventPanel(allDice: number[]): {
@@ -14600,6 +15057,7 @@ export class BattleScene extends Component {
     titleL.fontSize = 26;
     titleL.color = new Color(240, 240, 240, 255);
     title.setPosition(0, ph * 0.5 - 30);
+    this.makeDiceRuleButton(panel, -pw * 0.5 + 42, ph * 0.5 - 32, () => this.openFireCheckRuleModal());
 
     const dieWrap = new Node('DieWrap');
     dieWrap.layer = this.node.layer;
