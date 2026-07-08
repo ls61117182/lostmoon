@@ -66,6 +66,7 @@ import {
   hexDistance,
   neighbor,
   neighbors,
+  axialToOffset,
   offsetToAxial,
   rotateDirection,
 } from '../core/HexGrid';
@@ -155,6 +156,13 @@ function turnEndListEffectKey(effectType: TurnEndEffectType, theater?: string): 
 }
 import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
+import { CAMPAIGN_CHAPTER_ID, getCampaign } from '../core/CampaignDB';
+import {
+  StitchedCampaignData,
+  campaignSegmentForOffset,
+  carryShermanToNextSegment,
+  stitchCampaignMissions,
+} from '../core/CampaignRuntime';
 import { getGameModeConfig } from '../core/GameMode';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
 import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
@@ -194,7 +202,7 @@ import {
   playUiClick,
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel } from '../core/UnitVisualState';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -474,6 +482,16 @@ interface TurretAimAnim {
   onDone: () => void;
 }
 
+interface CampaignPanAnim {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  t: number;
+  dur: number;
+  onDone: () => void;
+}
+
 type DirectionLerp = { from: FireDirection; to: FireDirection; t: number; angular?: boolean };
 
 type Phase = 'player' | 'enemy';
@@ -726,6 +744,7 @@ const FOREST_CANOPY_LAYOUT: ReadonlyArray<{ ox: number; oy: number; scale: numbe
   { ox:  0.22, oy: -0.38, scale: 0.64 },
 ];
 const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
+const CAMPAIGN_SHADOW_COLOR = new Color(8, 10, 14, 190);
 const FOG_TURRET_AIM_HINT_COLOR = new Color(220, 235, 190, 245);
 const FOG_ATTACK_REVEAL_DURATION = 0.9;
 const PRECISION_AIM_HOLD_DURATION = 0.5;
@@ -1145,6 +1164,10 @@ export class BattleScene extends Component {
   private officerTopPoolNext = 0;
   private static readonly OFFICER_TOP_SPRITE_POOL = 4;
   private mission: LoadedMission | null = null;
+  private campaignRuntime: StitchedCampaignData | null = null;
+  private activeCampaignSegmentIndex = 0;
+  private campaignTransitionActive = false;
+  private campaignPanAnim: CampaignPanAnim | null = null;
   private offsetX = 0;
   private offsetY = 0;
   private mapPanEnabled = false;
@@ -2534,6 +2557,14 @@ export class BattleScene extends Component {
   }
 
   private loadSelectedMissionFromSession() {
+    if (GameSession.isCampaign) {
+      this.loadSelectedCampaignFromSession();
+      return;
+    }
+    this.campaignRuntime = null;
+    this.activeCampaignSegmentIndex = 0;
+    this.campaignTransitionActive = false;
+    this.campaignPanAnim = null;
     const source = GameSession.selectedMissionSource;
     if (source.type === 'custom') {
       const pkg = CustomMissionStore.load(source.packageId);
@@ -2560,6 +2591,96 @@ export class BattleScene extends Component {
       this.loadAndDraw(asset.json as MissionData);
       this.resumeAfterMissionLoadedIfNeeded();
     });
+  }
+
+  private loadSelectedCampaignFromSession() {
+    const campaignId = GameSession.selectedCampaignId;
+    const campaign = campaignId ? getCampaign(campaignId) : undefined;
+    if (!campaign) {
+      console.error('[BattleScene] campaign not found:', campaignId);
+      return;
+    }
+
+    const loaded: MissionData[] = [];
+    const loadNext = (index: number) => {
+      const segment = campaign.segments[index];
+      if (!segment) {
+        this.campaignRuntime = stitchCampaignMissions(campaign, loaded);
+        this.activeCampaignSegmentIndex = 0;
+        this.campaignTransitionActive = false;
+        this.campaignPanAnim = null;
+        this.missionSource = { type: 'resource', missionPath: campaign.segments[0]?.missionPath ?? '' };
+        this.turnEndEventProvider = OfficialTurnEndEventProvider;
+        this.loadAndDraw(this.campaignRuntime.data);
+        this.applyCampaignSegmentView(0);
+        return;
+      }
+      resources.load(segment.missionPath, JsonAsset, (err, asset) => {
+        if (err || !asset) {
+          console.error('[BattleScene] load campaign segment failed:', segment.id, segment.missionPath, err);
+          return;
+        }
+        loaded.push(asset.json as MissionData);
+        loadNext(index + 1);
+      });
+    };
+    loadNext(0);
+  }
+
+  private cloneMissionData(data: MissionData): MissionData {
+    return JSON.parse(JSON.stringify(data)) as MissionData;
+  }
+
+  private currentShermanCampaignPlacement(): UnitPlacement | null {
+    const s = this.mission?.sherman;
+    if (!s) return null;
+    return {
+      kind: 'sherman',
+      faction: s.faction,
+      facing: s.facing ?? undefined,
+      turretFacing: this.shermanTurretFacing ?? s.turretFacing ?? undefined,
+      crew: s.crew ? { ...s.crew } : undefined,
+      loaded: s.loaded === true,
+      hatchOpen: s.hatchOpen === true,
+    };
+  }
+
+  private canAdvanceCampaignSegment(): boolean {
+    return !!this.campaignRuntime
+      && this.outcome === 'victory'
+      && !this.campaignTransitionActive
+      && this.activeCampaignSegmentIndex < this.campaignRuntime.segments.length - 1;
+  }
+
+  private advanceCampaignSegment() {
+    if (!this.campaignRuntime || !this.mission) return;
+    const nextIndex = this.activeCampaignSegmentIndex + 1;
+    const nextTemplate = this.campaignRuntime.segmentMissionData[nextIndex];
+    if (!nextTemplate) return;
+
+    const carriedSherman = this.currentShermanCampaignPlacement();
+    const nextData = this.cloneMissionData(nextTemplate);
+    if (carriedSherman) {
+      nextData.sherman = carryShermanToNextSegment(carriedSherman, nextData.sherman);
+    }
+
+    this.activeCampaignSegmentIndex = nextIndex;
+    this.campaignTransitionActive = true;
+    this.loadAndDraw(nextData);
+    this.battleLogI18n('battleLog.campaign.advance', { segment: nextIndex + 1 });
+    this.startCampaignPanToSegment(nextIndex);
+  }
+
+  private currentTurnEndMissionId(): string {
+    if (this.campaignRuntime) {
+      const segment = this.campaignRuntime.segments[this.activeCampaignSegmentIndex];
+      return this.mission?.data.eventTableId
+        ?? segment?.sourcePacificMissionId
+        ?? segment?.missionId
+        ?? this.mission?.data.id
+        ?? this.missionId;
+    }
+    return this.mission?.data.eventTableId ?? this.mission?.data.id ?? this.missionId;
   }
 
   private resumeAfterMissionLoadedIfNeeded() {
@@ -2854,6 +2975,7 @@ export class BattleScene extends Component {
     // 4e. 军官单位（任务 8 红框建筑里的高级军官，kind='officer'）：在所在格绘制红色 hex 边框
     this.drawOfficerTileHighlights();
     this.drawActiveActingUnitFrame();
+    this.redrawCampaignShadow();
 
     // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
     const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
@@ -2947,6 +3069,60 @@ export class BattleScene extends Component {
     this.terrainLayerNode?.setPosition(clampedX, clampedY, 0);
   }
 
+  private campaignSegmentPanTarget(index: number): { x: number; y: number } {
+    const segment = this.campaignRuntime?.segments[index];
+    if (!segment) return { x: this.mapNode?.position.x ?? 0, y: this.mapNode?.position.y ?? 0 };
+    const rowParityOffset = this.mission?.data.rowParityOffset === 1 ? 1 : 0;
+    const centerCol = segment.colOffset + (segment.cols - 1) / 2;
+    const centerRow = segment.rowOffset + (segment.rows - 1) / 2;
+    const axial = offsetToAxial({ col: Math.round(centerCol), row: Math.round(centerRow) }, rowParityOffset);
+    const center = this.project(axial.q, axial.r);
+    const x = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, -center.x));
+    const y = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, -center.y));
+    return { x, y };
+  }
+
+  private applyCampaignSegmentView(index: number) {
+    const target = this.campaignSegmentPanTarget(index);
+    this.applyMapViewPosition(target.x, target.y);
+  }
+
+  private startCampaignPanToSegment(index: number) {
+    const target = this.campaignSegmentPanTarget(index);
+    const fromX = this.mapNode?.position.x ?? 0;
+    const fromY = this.mapNode?.position.y ?? 0;
+    this.campaignPanAnim = {
+      fromX,
+      fromY,
+      toX: target.x,
+      toY: target.y,
+      t: 0,
+      dur: 2,
+      onDone: () => {
+        this.campaignTransitionActive = false;
+        this.campaignPanAnim = null;
+        this.applyCampaignSegmentView(index);
+        this.refreshPlayerVisibility();
+        this.refreshPhaseUI();
+        this.updateHUD();
+        this.redraw();
+      },
+    };
+  }
+
+  private advanceCampaignPanAnim(dt: number) {
+    const anim = this.campaignPanAnim;
+    if (!anim) return;
+    anim.t += dt;
+    const p = Math.min(1, anim.t / anim.dur);
+    const eased = easeInOutCubic(p);
+    this.applyMapViewPosition(
+      anim.fromX + (anim.toX - anim.fromX) * eased,
+      anim.fromY + (anim.toY - anim.fromY) * eased,
+    );
+    if (p >= 1) anim.onDone();
+  }
+
   private onMapPanStart() {
     if (!this.mapPanEnabled) return;
     this.mapPanMoved = false;
@@ -3012,6 +3188,21 @@ export class BattleScene extends Component {
   private isUnitOutsideFog(unit: Unit): boolean {
     if (unit === this.mission?.sherman || !fogOfWarEnabled(GameSession.gameMode)) return true;
     return this.visibleHexKeys.has(HexMap.keyOf(unit.pos));
+  }
+
+  private redrawCampaignShadow() {
+    if (!this.g || !this.mission || !this.campaignRuntime) return;
+    const g = this.g;
+    const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
+    g.fillColor = CAMPAIGN_SHADOW_COLOR;
+    for (const tile of this.mission.map.all()) {
+      const offset = axialToOffset(tile.pos, rowParityOffset);
+      const segmentIndex = campaignSegmentForOffset(this.campaignRuntime, offset);
+      if (segmentIndex === null || segmentIndex <= this.activeCampaignSegmentIndex) continue;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPath(c.x, c.y, this.hexSize);
+      g.fill();
+    }
   }
 
   private redrawUnitVisibilityMask() {
@@ -4759,6 +4950,10 @@ export class BattleScene extends Component {
     if (this.machineGunBursts.length > 0) this.advanceMachineGunBursts(dt);
     this.advanceUnitEffects(dt);
     if (GameSession.isPvp) this.advancePvpTurnTimer();
+    if (this.campaignPanAnim) {
+      this.advanceCampaignPanAnim(dt);
+      return;
+    }
 
     // 攻击掷骰动画：最高优先级推进（在 anim 之前，避免被 return 提前打断）
     if (this.diceShow) {
@@ -8182,6 +8377,10 @@ export class BattleScene extends Component {
       if (this.backToMenuBtn) this.backToMenuBtn.active = false;
       return;
     }
+    if (this.canAdvanceCampaignSegment()) {
+      this.advanceCampaignSegment();
+      return;
+    }
     if (GameSession.isPvp && !this.pvpOutcomeSent) {
       this.pvpOutcomeSent = true;
       const pvp = GameSession.pvpSession;
@@ -8203,11 +8402,15 @@ export class BattleScene extends Component {
     }
     // 胜利时回写菜单进度，下次主菜单会显示 ★ 并解锁下一关。
     // markCompleted 内部幂等，重复调用无副作用。
-    const completedLevel = this.missionSource.type === 'resource'
+    const completedLevel = !this.campaignRuntime && this.missionSource.type === 'resource'
       ? findLevelByMissionId(this.missionId)
       : undefined;
-    if (!GameSession.isPvp && this.outcome === 'victory' && completedLevel) {
-      MenuProgress.markCompleted(completedLevel.id, completedLevel.chapterId);
+    if (!GameSession.isPvp && this.outcome === 'victory') {
+      if (this.campaignRuntime) {
+        MenuProgress.markCompleted(GameSession.selectedLevelId, CAMPAIGN_CHAPTER_ID);
+      } else if (completedLevel) {
+        MenuProgress.markCompleted(completedLevel.id, completedLevel.chapterId);
+      }
     }
     if (!this.outcomeLabel) {
       const n = new Node('OutcomeLabel');
@@ -14861,7 +15064,8 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
+    return this.campaignTransitionActive || this.campaignPanAnim !== null
+      || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null
       || this.precisionAimHoldCallback !== null
@@ -15386,7 +15590,6 @@ export class BattleScene extends Component {
     }
     this.clearActiveActingUnit();
     this.redraw();
-    const mid = this.mission.data.id;
     /** 胜负态在 BattleScene.this.outcome；mission 对象无 outcome 字段，勿用 this.mission.outcome */
     if (this.outcome !== 'ongoing') {
       this.endEnemyPhase();
@@ -15401,7 +15604,7 @@ export class BattleScene extends Component {
       this.endEnemyPhase();
       return;
     }
-    const mid = this.mission.data.id;
+    const mid = this.currentTurnEndMissionId();
     if (!this.turnEndEventProvider.has(mid)) {
       this.endEnemyPhase();
       return;

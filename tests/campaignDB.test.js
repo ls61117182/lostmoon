@@ -45,6 +45,14 @@ assertContains('assets/scripts/core/GameSession.ts', 'selectCampaign(levelId: nu
 assertContains('assets/scripts/core/GameSession.ts', 'get isCampaign()');
 assertContains('assets/scripts/view/MainMenuScene.ts', "meta.entryKind === 'campaign'");
 assertContains('assets/scripts/view/MainMenuScene.ts', 'GameSession.selectCampaign(meta.id, meta.campaignId)');
+assertContains('assets/scripts/view/BattleScene.ts', 'private campaignRuntime');
+assertContains('assets/scripts/view/BattleScene.ts', 'loadSelectedCampaignFromSession');
+assertContains('assets/scripts/view/BattleScene.ts', 'redrawCampaignShadow');
+assertContains('assets/scripts/view/BattleScene.ts', 'stitchCampaignMissions');
+assertContains('assets/scripts/view/BattleScene.ts', 'canAdvanceCampaignSegment');
+assertContains('assets/scripts/view/BattleScene.ts', 'carryShermanToNextSegment');
+assertContains('assets/scripts/view/BattleScene.ts', 'currentTurnEndMissionId');
+assertContains('assets/scripts/view/BattleScene.ts', 'CAMPAIGN_CHAPTER_ID');
 assertNotContainsInPacificBlock();
 
 console.log('campaignDB tests passed');
