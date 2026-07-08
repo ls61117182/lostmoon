@@ -1,0 +1,270 @@
+﻿{
+    "id":  "campaign_tarawa_red_beach_2_02",
+    "name":  "Tarawa, Red Beach 2 - Clear the Central Airfield",
+    "description":  "Pacific Scenario C8. Move off the map along the red arrow with no Japanese units, including Heavy Artillery, remaining on the map. Place the Heavy Artillery and Type 95 tanks on red numbered hexes; place Infantry on blue numbered hexes. The Sherman starts on the black outlined hex.",
+    "theater":  "pacific",
+    "usCasualtyLimit":  10,
+    "cols":  8,
+    "rows":  6,
+    "enemyStartByDice":  true,
+    "tiles":  [
+                  [
+                      null,
+                      null,
+                      {
+                          "t":  "c",
+                          "bd":  1
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  5
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T",
+                          "eid":  5,
+                          "ef":  2
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "001001"
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  3
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "001001"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  2,
+                          "ef":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "001001"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  1,
+                          "ef":  3
+                      }
+                  ],
+                  [
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  4
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "001001"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  1
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  3,
+                          "ef":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "001001"
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  4,
+                          "ef":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "T",
+                          "rid":  6
+                      },
+                      {
+                          "t":  "c",
+                          "eid":  6,
+                          "ef":  5
+                      },
+                      {
+                          "t":  "a",
+                          "rd":  "010010"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  2
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      null,
+                      null
+                  ]
+              ],
+    "sherman":  {
+                    "kind":  "sherman",
+                    "faction":  "allied",
+                    "at":  {
+                               "col":  0,
+                               "row":  3
+                           },
+                    "facing":  0
+                },
+    "enemies":  [
+                    {
+                        "kind":  "heavy_artillery",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4
+                                      ]
+                    },
+                    {
+                        "kind":  "type95",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "type95",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "type95",
+                        "faction":  "japanese",
+                        "startEids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "japanese_infantry",
+                        "faction":  "japanese",
+                        "startRids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    },
+                    {
+                        "kind":  "japanese_infantry",
+                        "faction":  "japanese",
+                        "startRids":  [
+                                          1,
+                                          2,
+                                          3,
+                                          4,
+                                          5,
+                                          6
+                                      ]
+                    }
+                ],
+    "objective":  {
+                      "type":  "destroy_kind_evac",
+                      "destroyAllEnemiesBeforeEvac":  true,
+                      "evacAt":  {
+                                     "col":  6,
+                                     "row":  0
+                                 },
+                      "evacExitDir":  5
+                  },
+    "actionTableId":  "pacific_b4",
+    "aiTableId":  "pacific_b4",
+    "eventTableId":  "mission_pacific_08"
+}

@@ -1,0 +1,229 @@
+﻿{
+    "id":  "campaign_tarawa_red_beach_2_01",
+    "name":  "Tarawa, Red Beach 2 - The Landing",
+    "description":  "Pacific Scenario C7. Move off the map along the red arrow. Place 1 Heavy Artillery on the fixed hexagonal building hex. Place AT Guns on the three red numbered hexes 4, 5, and 6. The Sherman starts on the black outlined hex. Sherman can only cross the sea wall using Misc action 5.",
+    "theater":  "pacific",
+    "usCasualtyLimit":  10,
+    "cols":  8,
+    "rows":  6,
+    "enemyStartByDice":  false,
+    "tiles":  [
+                  [
+                      null,
+                      null,
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "T",
+                          "bw":  "000100",
+                          "eid":  2,
+                          "ef":  2,
+                          "rid":  2
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "bw":  "000110",
+                          "eid":  3,
+                          "ef":  2,
+                          "rid":  1
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  3
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "dw"
+                      },
+                      {
+                          "t":  "c",
+                          "bw":  "001110"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  1,
+                          "ef":  3
+                      }
+                  ],
+                  [
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "bw":  "001100",
+                          "eid":  4,
+                          "ef":  3
+                      },
+                      {
+                          "t":  "T"
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  4
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "rid":  6,
+                          "eid":  5,
+                          "ef":  3
+                      },
+                      {
+                          "t":  "T",
+                          "rid":  5
+                      },
+                      null
+                  ],
+                  [
+                      null,
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "B"
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      {
+                          "t":  "c",
+                          "bd":  1,
+                          "eid":  6,
+                          "ef":  4
+                      },
+                      {
+                          "t":  "c"
+                      },
+                      null,
+                      null
+                  ]
+              ],
+    "sherman":  {
+                    "kind":  "sherman",
+                    "faction":  "allied",
+                    "at":  {
+                               "col":  0,
+                               "row":  3
+                           },
+                    "facing":  0
+                },
+    "enemies":  [
+                    {
+                        "kind":  "heavy_artillery",
+                        "faction":  "japanese",
+                        "at":  {
+                                   "col":  7,
+                                   "row":  2
+                               },
+                        "facing":  3
+                    },
+                    {
+                        "kind":  "at_gun",
+                        "faction":  "japanese",
+                        "at":  {
+                                   "col":  4,
+                                   "row":  3
+                               },
+                        "facing":  3
+                    },
+                    {
+                        "kind":  "at_gun",
+                        "faction":  "japanese",
+                        "at":  {
+                                   "col":  5,
+                                   "row":  4
+                               },
+                        "facing":  3
+                    },
+                    {
+                        "kind":  "at_gun",
+                        "faction":  "japanese",
+                        "at":  {
+                                   "col":  4,
+                                   "row":  5
+                               },
+                        "facing":  4
+                    }
+                ],
+    "objective":  {
+                      "type":  "destroy_kind_evac",
+                      "evacAt":  {
+                                     "col":  6,
+                                     "row":  0
+                                 },
+                      "evacExitDir":  0
+                  },
+    "actionTableId":  "pacific_b4",
+    "aiTableId":  "pacific_b4",
+    "eventTableId":  "mission_pacific_07"
+}

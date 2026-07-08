@@ -606,4 +606,11 @@ export const LANG_DB: Record<string, LangEntry> = {
   'usCasualty.noDice': { zh: "无骰子", en: "No dice" },
   'usCasualty.result': { zh: "美军伤亡+{hits}", en: "US Casualties +{hits}" },
   'usCasualty.confirm': { zh: "确定", en: "OK" },
+  'chapter.campaign.title': { zh: "战役", en: "Campaign" },
+  'chapter.campaign.subtitle': { zh: "连续作战：以当前车组状态推进三段战斗", en: "Campaign operations: fight three linked segments" },
+  'campaign.tarawaRedBeach1.title': { zh: "塔拉瓦红滩1", en: "Tarawa Red Beach 1" },
+  'campaign.saipan.title': { zh: "塞班岛", en: "Saipan" },
+  'campaign.tarawaRedBeach2.title': { zh: "塔拉瓦红滩2", en: "Tarawa Red Beach 2" },
+  'campaign.peleliu.title': { zh: "贝里琉", en: "Peleliu" },
+  'battleLog.campaign.advance': { zh: "推进至下一阶段：{name}", en: "Advancing to next operation: {name}" },
 };

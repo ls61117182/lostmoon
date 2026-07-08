@@ -594,3 +594,10 @@ usCasualty.noProviders,各单位提供的骰子数量：无,Dice provided by uni
 usCasualty.noDice,无骰子,No dice
 usCasualty.result,美军伤亡+{hits},US Casualties +{hits}
 usCasualty.confirm,确定,OK
+chapter.campaign.title,战役,Campaign
+chapter.campaign.subtitle,连续作战：以当前车组状态推进三段战斗,Campaign operations: fight three linked segments
+campaign.tarawaRedBeach1.title,塔拉瓦红滩1,Tarawa Red Beach 1
+campaign.saipan.title,塞班岛,Saipan
+campaign.tarawaRedBeach2.title,塔拉瓦红滩2,Tarawa Red Beach 2
+campaign.peleliu.title,贝里琉,Peleliu
+battleLog.campaign.advance,推进至下一阶段：{name},Advancing to next operation: {name}

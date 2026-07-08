@@ -1,0 +1,44 @@
+{
+  "campaigns": [
+    {
+      "id": "tarawa_red_beach_1",
+      "title": "塔拉瓦红滩1",
+      "segments": [
+        "missions/campaign_pacific/campaign_tarawa_red_beach_1_01",
+        "missions/campaign_pacific/campaign_tarawa_red_beach_1_02",
+        "missions/campaign_pacific/campaign_tarawa_red_beach_1_03"
+      ],
+      "transitionSeconds": 2
+    },
+    {
+      "id": "saipan",
+      "title": "塞班岛",
+      "segments": [
+        "missions/campaign_pacific/campaign_saipan_01",
+        "missions/campaign_pacific/campaign_saipan_02",
+        "missions/campaign_pacific/campaign_saipan_03"
+      ],
+      "transitionSeconds": 2
+    },
+    {
+      "id": "tarawa_red_beach_2",
+      "title": "塔拉瓦红滩2",
+      "segments": [
+        "missions/campaign_pacific/campaign_tarawa_red_beach_2_01",
+        "missions/campaign_pacific/campaign_tarawa_red_beach_2_02",
+        "missions/campaign_pacific/campaign_tarawa_red_beach_2_03"
+      ],
+      "transitionSeconds": 2
+    },
+    {
+      "id": "peleliu",
+      "title": "贝里琉",
+      "segments": [
+        "missions/campaign_pacific/campaign_peleliu_01",
+        "missions/campaign_pacific/campaign_peleliu_02",
+        "missions/campaign_pacific/campaign_peleliu_03"
+      ],
+      "transitionSeconds": 2
+    }
+  ]
+}
