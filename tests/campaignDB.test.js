@@ -43,6 +43,8 @@ assertContains('assets/scripts/core/LevelDB.ts', "id: CAMPAIGN_CHAPTER_ID");
 assertContains('assets/scripts/core/LevelDB.ts', "entryKind: 'campaign'");
 assertContains('assets/scripts/core/GameSession.ts', 'selectCampaign(levelId: number, campaignId: string)');
 assertContains('assets/scripts/core/GameSession.ts', 'get isCampaign()');
+assertContains('assets/scripts/view/MainMenuScene.ts', "meta.entryKind === 'campaign'");
+assertContains('assets/scripts/view/MainMenuScene.ts', 'GameSession.selectCampaign(meta.id, meta.campaignId)');
 assertNotContainsInPacificBlock();
 
 console.log('campaignDB tests passed');

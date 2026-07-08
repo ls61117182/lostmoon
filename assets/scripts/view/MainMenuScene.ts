@@ -1172,6 +1172,15 @@ export class MainMenuScene extends Component {
       this.loadBattleScene();
       return;
     }
+    if (meta.entryKind === 'campaign') {
+      if (!meta.campaignId) {
+        console.warn('[Menu] campaign entry missing campaignId:', meta.id);
+        return;
+      }
+      GameSession.selectCampaign(meta.id, meta.campaignId);
+      this.loadBattleScene();
+      return;
+    }
     GameSession.selectMission(meta.id, meta.missionPath);
     this.loadBattleScene();
   }
