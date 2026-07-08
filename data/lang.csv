@@ -264,7 +264,7 @@ terrain.rocky,岩石高地,Rocky high ground
 terrain.deep_water,深海,Deep sea
 terrain.airstrip,机场,Airstrip
 dice.aiHeader,{col}  {n}骰,{col}  {n}d
-dice.aiHeader.hardcoreTank,{terrain} 攻击{attack}/移动{move},{terrain} Attack {attack}/Move {move}
+dice.aiHeader.hardcoreTank,{terrain} 攻击{attack}/移动{move}/杂项{misc},{terrain} Attack {attack}/Move {move}/Misc {misc}
 dice.aiTerrain.road,公路,Road
 dice.aiTerrain.field,田地,Field
 dice.aiTerrain.mud,泥地,Mud

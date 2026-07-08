@@ -589,9 +589,10 @@ d6 ≥ 目标对应面装甲 - 攻击方穿甲值  → 造成伤害
 
 **转向规则（共 4 条优先级）**：
 1. 当前目标在正前直线 + 前格可通行 → 不转向
-2. 当前目标在正前直线 + 前格不可通行 → 转向到正前可通行格
-3. 当前目标在正后直线 + 后格可通行 → 转向到正前可通行格
-4. 否则朝"对准当前目标方向"角度最小的一边转向
+2. 当前目标在正前直线 + 前格不可通行  + 当前目标不在相邻格子 → 转向到正前可通行格
+3. 当前目标在正前直线 + 前格不可通行  + 当前目标在相邻格子 → 不转向
+4. 当前目标在正后直线 + 后格可通行 → 转向到正前可通行格
+5. 否则朝"对准当前目标方向"角度最小的一边转向
 
 **连续反向移动过滤（硬核模式）**：仅硬核模式启用。硬核模式下，同一 AI 单位执行 `turn` / `advance` / `reverse` / `advance_to_building` 后，立即记录本次移动状态（顺时针转向、逆时针转向、前进、后退）。该单位后续骰子若准备执行与当前移动状态相反的移动动作（顺时针 ↔ 逆时针、前进 ↔ 后退），该动作视为不可执行，继续尝试同一 AI 表条目的下一个备选动作；若无备选则本骰空转。射击、烟雾、修复、隐蔽、Hull Down、炮塔转向侦察等非车体移动动作不改变该状态。该单位所有行动骰执行完毕、跳到下一 AI 单位前，立即清除移动状态。经典模式不记录该移动状态，AI 按原行动表与备选链执行。
 
@@ -1255,7 +1256,7 @@ setLang('en');   // 一行切到英文，下一次 t() 调用立即返回英文
 | `data/units.csv` | `tools/buildUnitDB.js` | `core/UnitDB.ts` | 单位类型：阵营 / 体型 / 4 个装甲面 / 穿甲 / 视野类型与距离 / 受击目标类别 `damageTargetClass` / 美军伤亡骰 / 移动音效 / 攻击音效 |
 | `data/lang.csv` | `tools/buildLangDB.js` | `core/LangDB.ts` | 所有玩家可见文本（见 6.5）|
 | `data/player_action_table.csv` + `data/player_dice_pool.csv` | `tools/buildPlayerActionDB.js` | `core/PlayerActionDB.ts` | §3.6 玩家行动表（§3.6.2：1..6 + 对子 → A/B/C）+ §3.6.1 掷骰数（子阶段 × 地形基础 + 按阶段乘员 / 舱盖修正 + 下限 / 可选上限）|
-| `data/enemy_ai_table.csv` + `data/enemy_ai_dice.csv` + `data/enemy_hardcore_tank_action_table.csv` + `data/enemy_hardcore_tank_dice.csv` | `tools/buildEnemyAIDB.js` | `core/EnemyAIDB.ts` | §3.7 经典 / 非坦克 AI 表（列 × 骰面 → 主动作 / 备选动作）+ 每列骰数；硬核模式非玩家坦克的攻击骰 / 移动骰动作表与地形骰数表 |
+| `data/enemy_ai_table.csv` + `data/enemy_ai_dice.csv` + `data/enemy_hardcore_tank_action_table.csv` + `data/enemy_hardcore_tank_dice.csv` | `tools/buildEnemyAIDB.js` | `core/EnemyAIDB.ts` | §3.7 经典 / 非坦克 AI 表（列 × 骰面 → 主动作 / 备选动作）+ 每列骰数；硬核模式非玩家坦克的攻击骰 / 移动骰 / 杂项骰动作表与地形骰数表 |
 | `data/attack_direction_table.csv` | `tools/buildAttackDirectionDB.js` | `core/AttackDirectionDB.ts` | 十二向入射角 → 使用的装甲面与损伤判定类型（顺时针为正，`60°` 为右前）|
 | `data/terrain.csv`（规划）| `tools/buildTerrainDB.js` | `core/TerrainDB.ts` | 地形移动成本 / LoS 阻挡 / 射击修正 |
 | `data/damage_table.csv` | `tools/buildDamageTableDB.js` | `core/DamageTableDB.ts` | 硬核模式下按目标类型 + 损伤判定类型 + 1d6 点数 → 效果（起火/炮塔/瘫痪/无线电/乘员伤害/击毁）|
@@ -1416,7 +1417,7 @@ Excel 开 data/XX.csv → 改数值 → 另存为 CSV UTF-8 →
 **v0.39 变更**：硬核模式在原六条格边射线之间增加六条炮塔 / 主炮夹角射线；车体、固定炮和机枪仍保持原六向。新增射线使用最短六角距离，按 30° / 90° / 150° 入射方向分别使用前 / 前侧 / 后侧装甲，树篱统计两侧路径总数后除以 2 向下取整；炮塔转向和迷雾格标记同步支持十二向。
 **v0.40 变更**：硬核模式下 AI 车体移动新增连续反向过滤：同一单位在一组行动骰内不会立刻执行与上一次车体转向 / 前进 / 后退相反的移动动作，改为尝试该骰条目的后续备选动作或空转；非移动动作不影响此临时状态，单位行动结束即清除。经典模式保持原 AI 行动表行为。
 **v0.41 变更**：AI 有炮塔单位用主炮骰改为“炮塔转向目标方向”时，目标距离必须不超过行动单位自身 `visionRange`；超出视野属性距离的目标不能触发该转向动作。
-**v0.42 变更**：硬核模式下非玩家坦克 AI 改为同时掷攻击骰和移动骰，欧洲 / Pacific 坦克共用 `enemy_hardcore_tank_action_table.csv` 与 `enemy_hardcore_tank_dice.csv`；两类骰按颜色区分，混合后按点数升序执行，点数相同时移动骰先于攻击骰。
-**v0.43 变更**：硬核模式非玩家坦克基础骰允许为负数，并叠加存活乘员加成：车长 / 炮手 / 装填手各给攻击骰 +1，驾驶员 / 副驾驶各给移动骰 +1，最终每类骰数下限为 0；同步更新硬核敌坦攻击骰 / 移动骰行动表。
+**v0.42 变更**：硬核模式下非玩家坦克 AI 改为同时掷攻击骰、移动骰和杂项骰，欧洲 / Pacific 坦克共用 `enemy_hardcore_tank_action_table.csv` 与 `enemy_hardcore_tank_dice.csv`；三类骰按颜色区分，混合后按点数升序执行，点数相同时攻击骰先于移动骰，移动骰先于杂项骰。
+**v0.43 变更**：硬核模式非玩家坦克基础骰允许为负数，并叠加存活乘员加成：车长给杂项骰 +1，驾驶员给移动骰 +1；炮手、装填手、副驾驶不再提供骰数加成，最终每类骰数下限为 0；同步更新硬核敌坦攻击骰 / 移动骰 / 杂项骰行动表。
 **v0.44 变更**：阶段⑤着火检定改为 `data/fire_check_table.csv` 配置驱动，经典欧洲 / 经典太平洋 / 硬核模式使用不同 profile，但所有模式均按 `fireLevel` 掷同等数量 d6 后只取最低点结算 1 次；结果 2 触发阵亡检定时再掷 1d6，1-5 对应乘员阵亡，6 仅在车长打开舱盖时判定车长阵亡，否则虚惊。UI 需显示阵亡检定点数与结果，并在着火检定说明面板中提供阵亡检定说明按钮。
 **下一步**：与主程评审第六章实现方案；与美术评审第五章 UI 草稿。

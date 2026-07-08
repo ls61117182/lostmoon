@@ -318,6 +318,26 @@ describe('Hardcore twelve-direction turret fire', () => {
     expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(false);
   });
 
+  test('StuG III fixed gun may only fire along the hull facing', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    attacker.kind = 'stug3';
+    attacker.stats = { ...attacker.stats, visionType: 'fixed' };
+    const forward = tankAt('forward', 2, 0);
+    const flank = tankAt('flank', 0, 2);
+    const diagonal = tankAt('diagonal', 1, 1);
+    const map = fieldMap(0, 2);
+
+    expect(canAttack({ attacker, target: forward, map }).ok).toBe(true);
+    expect(canAttack({ attacker, target: flank, map })).toEqual({
+      ok: false,
+      reason: 'attack.reason.fixedGunFacing',
+    });
+    expect(canAttack({ attacker, target: diagonal, map, expandedTurretDirections: true })).toEqual({
+      ok: false,
+      reason: 'attack.reason.notStraight',
+    });
+  });
+
   test('hardcore halfway main gun fire ignores a single flanking LoS blocker', () => {
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);

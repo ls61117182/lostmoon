@@ -276,7 +276,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'terrain.deep_water': { zh: "深海", en: "Deep sea" },
   'terrain.airstrip': { zh: "机场", en: "Airstrip" },
   'dice.aiHeader': { zh: "{col}  {n}骰", en: "{col}  {n}d" },
-  'dice.aiHeader.hardcoreTank': { zh: "{terrain} 攻击{attack}/移动{move}", en: "{terrain} Attack {attack}/Move {move}" },
+  'dice.aiHeader.hardcoreTank': { zh: "{terrain} 攻击{attack}/移动{move}/杂项{misc}", en: "{terrain} Attack {attack}/Move {move}/Misc {misc}" },
   'dice.aiTerrain.road': { zh: "公路", en: "Road" },
   'dice.aiTerrain.field': { zh: "田地", en: "Field" },
   'dice.aiTerrain.mud': { zh: "泥地", en: "Mud" },

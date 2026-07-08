@@ -198,7 +198,7 @@ export type AttackDenyReason =
   | 'attack.reason.turretDamaged';
 
 function isForwardOnlyGun(unit: Unit): boolean {
-  return unit.kind === 'at_gun' || unit.kind === 'heavy_artillery';
+  return unit.stats.visionType === 'fixed' || unit.kind === 'at_gun' || unit.kind === 'heavy_artillery';
 }
 
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {

@@ -104,6 +104,7 @@ import {
   rollHardcoreTankAIDice,
   selectAIOrder,
 } from '../core/EnemyAI';
+import type { CrewSlot } from '../core/EnemyAIDB';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, isUnitInVision, isWithinOwnVisionRange } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
@@ -262,16 +263,16 @@ function drawDicePopupPanel(g: Graphics, w: number, h: number, fill: Color, bord
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
-type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
-type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
 function isSplitTankKind(k: UnitKind): k is SplitTankKind {
@@ -937,6 +938,7 @@ const DICE_PANEL_BORDER= DICE_EVENT_PANEL_BORDER;
 const DICE_DIE_FILL    = new Color(245, 245, 235, 255);
 const AI_ATTACK_DIE_FILL = new Color(255, 210, 210, 255);
 const AI_MOVE_DIE_FILL   = new Color(214, 246, 214, 255);
+const AI_MISC_DIE_FILL   = new Color(255, 240, 170, 255);
 const DICE_DIE_BORDER  = new Color( 30,  30,  30, 255);
 const DICE_DIE_TEXT    = new Color( 20,  20,  20, 255);
 const DICE_OK_TEXT     = new Color(120, 230, 120, 255); // 命中 / 击穿
@@ -6319,23 +6321,7 @@ export class BattleScene extends Component {
     node.setScale(1, 1, 1);
 
     // forward 单位向量（屏幕坐标系，y 向上）
-    let ux: number;
-    let uy: number;
-    if (facingLerp) {
-      const v = this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
-      ux = v.ux;
-      uy = v.uy;
-    } else if (u.facing !== null) {
-      const np = this.project(neighbor(u.pos, u.facing).q, neighbor(u.pos, u.facing).r);
-      const dx = np.x - c.x;
-      const dy = np.y - c.y;
-      const len = Math.hypot(dx, dy) || 1;
-      ux = dx / len;
-      uy = dy / len;
-    } else {
-      ux = 1;
-      uy = 0;
-    }
+    const { ux, uy } = this.topDownForwardVec(u, c, facingLerp);
 
     // 局部偏移 → 世界偏移：right = forward 顺时针 90°（屏幕 y 向上）= (uy, -ux)
     // dx = forward·ux + right·uy；dy = forward·uy + right·(-ux)
@@ -8696,7 +8682,7 @@ export class BattleScene extends Component {
     const g = vis.bg;
     g.clear();
     this.drawDieBody(g, W, H, {
-      fill: slot.used ? DIE_FACE_USED_FILL : DIE_FACE_FILL,
+      fill: slot.used ? DIE_FACE_USED_FILL : this.playerDieFillColor(),
       border: highlighted ? DIE_FACE_SELECTED : DIE_FACE_BORDER,
       lineWidth: highlighted ? 4 : 2,
       shadow: !slot.used,
@@ -12583,7 +12569,8 @@ export class BattleScene extends Component {
     if (opts.commitMoveState) this.pendingAIMoveState = null;
 
     // shoot 的真正可行性必须由 canAttack 决定，这里先做再说
-    const tryOne = (a: EnemyAction): boolean => {
+    const tryOne = (a: EnemyAction, crew?: CrewSlot): boolean => {
+      if (!this.enemyCrewRequirementMet(enemy, crew)) return false;
       if (a === 'shoot') {
         return this.canAIExecuteShoot(enemy);
       }
@@ -12601,10 +12588,15 @@ export class BattleScene extends Component {
       return true;
     };
 
-    if (entry.primary !== 'none' && tryOne(entry.primary)) return entry.primary;
-    if (entry.fallback && entry.fallback !== 'none' && tryOne(entry.fallback)) return entry.fallback;
-    if (entry.fallback2 && entry.fallback2 !== 'none' && tryOne(entry.fallback2)) return entry.fallback2;
+    if (entry.primary !== 'none' && tryOne(entry.primary, entry.primaryCrew)) return entry.primary;
+    if (entry.fallback && entry.fallback !== 'none' && tryOne(entry.fallback, entry.fallbackCrew)) return entry.fallback;
+    if (entry.fallback2 && entry.fallback2 !== 'none' && tryOne(entry.fallback2, entry.fallback2Crew)) return entry.fallback2;
     return null;
+  }
+
+  private enemyCrewRequirementMet(enemy: Unit, crew?: CrewSlot): boolean {
+    if (!crew) return true;
+    return enemy.crew?.[crew] !== false;
   }
 
   /**
@@ -14218,25 +14210,38 @@ export class BattleScene extends Component {
   private usesHardcoreTankDice(unit: Unit): boolean {
     return !!this.mission
       && unit !== this.mission.sherman
-      && isTankUnit(unit)
+      && !!unit.stats.actionTable
       && getGameModeConfig(GameSession.gameMode).aiHardcoreTankDice;
   }
 
   private enemyDieActionEntry(dieIdx: number): AIActionEntry {
     const pip = this.enemyDice[dieIdx];
     const type = this.enemyDiceTypes[dieIdx];
-    return type ? actionForHardcoreTankDie(type, pip) : actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
+    const enemy = this.enemyOrder[this.enemyIndex];
+    return type && enemy ? actionForHardcoreTankDie(enemy, type, pip) : actionFor(DEFAULT_AI_TABLE, this.enemyAICol, pip);
   }
 
   private enemyDieTypeSortValue(dieIdx: number): number {
-    return this.enemyDiceTypes[dieIdx] === 'move' ? 0 : 1;
+    const type = this.enemyDiceTypes[dieIdx];
+    if (type === 'attack') return 0;
+    if (type === 'move') return 1;
+    if (type === 'misc') return 2;
+    return 3;
   }
 
   private enemyDieFillColor(dieIdx: number): Color {
     const type = this.enemyDiceTypes[dieIdx];
     if (type === 'attack') return AI_ATTACK_DIE_FILL;
     if (type === 'move') return AI_MOVE_DIE_FILL;
+    if (type === 'misc') return AI_MISC_DIE_FILL;
     return DICE_DIE_FILL;
+  }
+
+  private playerDieFillColor(): Color {
+    if (this.playerStep === 'attack') return AI_ATTACK_DIE_FILL;
+    if (this.playerStep === 'movement') return AI_MOVE_DIE_FILL;
+    if (this.playerStep === 'misc') return AI_MISC_DIE_FILL;
+    return DIE_FACE_FILL;
   }
 
   private describeEnemyDie(dieIdx: number): string {
@@ -14258,8 +14263,9 @@ export class BattleScene extends Component {
       : {
         attack: this.enemyDiceTypes.filter(type => type === 'attack').length,
         move: this.enemyDiceTypes.filter(type => type === 'move').length,
+        misc: this.enemyDiceTypes.filter(type => type === 'misc').length,
       };
-    return `${t(`dice.aiTerrain.${key}`)} A${count.attack}/M${count.move}`;
+    return `${t(`dice.aiTerrain.${key}`)} A${count.attack}/M${count.move}/X${count.misc}`;
   }
 
   private enemyHardcoreTankTerrainLabel(): string {
@@ -14371,6 +14377,7 @@ export class BattleScene extends Component {
       ? {
         attack: this.enemyDiceTypes.filter(type => type === 'attack').length,
         move: this.enemyDiceTypes.filter(type => type === 'move').length,
+        misc: this.enemyDiceTypes.filter(type => type === 'misc').length,
       }
       : null;
     hl.string = typedCount
@@ -14378,6 +14385,7 @@ export class BattleScene extends Component {
         terrain: this.enemyHardcoreTankTerrainLabel(),
         attack: typedCount.attack,
         move: typedCount.move,
+        misc: typedCount.misc,
       })
       : t('dice.aiHeader', { col: aiColumnDisplayName(this.enemyAICol), n: count });
     hl.enableOutline = true;

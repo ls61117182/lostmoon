@@ -7,11 +7,12 @@
  *   - 每一颗骰子再按列表映射到一个行动（A>B 表示先尝试 A，A 做不了才做 B）
  *   - 多辆敌坦的行动顺序：距谢尔曼最近 → 最远；同距随机
  *
- * 转向规则（4 条优先级）：
- *   1. 谢尔曼在"正前直线" + 正前一格可通行 → 不转向
- *   2. 谢尔曼在"正前直线" + 正前一格不可通行 → 随机转向左右可通行的一侧
- *   3. 谢尔曼在"正后直线" + 正后一格可通行 → 朝"转向后正前可通行"的一侧转 1 步
- *   4. 否则 → 朝"approximateDirection(enemy→sherman)"最近的一侧转 1 步
+ * 转向规则（5 条优先级）：
+ *   1. 当前目标在"正前直线" + 正前一格可通行 → 不转向
+ *   2. 当前目标在"正前直线" + 正前一格不可通行 + 目标不相邻 → 转向左右可通行的一侧
+ *   3. 当前目标在"正前直线" + 正前一格不可通行 + 目标相邻 → 不转向
+ *   4. 当前目标在"正后直线" + 正后一格可通行 → 朝"转向后正前可通行"的一侧转 1 步
+ *   5. 否则 → 朝"approximateDirection(enemy→target)"最近的一侧转 1 步
  *
  * 本文件只做纯决策，不触碰 Unit 状态；具体执行（动画 / 攻击 / 消耗骰子）放在
  * BattleScene 里，配合 update() 驱动。
@@ -24,6 +25,7 @@ import {
   AIActionTable,
   AIColumn,
   DEFAULT_AI_TABLE,
+  DEFAULT_HARDCORE_TANK_ACTION_TABLE,
   EnemyAction,
   EnemyTankDieType,
   HARDCORE_TANK_AI_DICE_COUNT,
@@ -108,19 +110,18 @@ function crewAlive(unit: Unit, slot: 'commander' | 'loader' | 'gunner' | 'driver
   return unit.crew?.[slot] !== false;
 }
 
-export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number } {
+export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number; misc: number } {
+  switch (unit.kind) {
+    case 'at_gun': return { attack: 2, move: 0, misc: 0 };
+    case 'japanese_infantry': return { attack: 0, move: 3, misc: 0 };
+    case 'heavy_artillery': return { attack: 1, move: 0, misc: 0 };
+  }
   const key = hardcoreTankDiceTerrain(terrain);
   const base = HARDCORE_TANK_AI_DICE_COUNT[key];
-  const attackCrew =
-    (crewAlive(unit, 'commander') ? 1 : 0)
-    + (crewAlive(unit, 'gunner') ? 1 : 0)
-    + (crewAlive(unit, 'loader') ? 1 : 0);
-  const moveCrew =
-    (crewAlive(unit, 'driver') ? 1 : 0)
-    + (crewAlive(unit, 'coDriver') ? 1 : 0);
   return {
-    attack: Math.max(0, base.attack + attackCrew),
-    move: Math.max(0, base.move + moveCrew),
+    attack: Math.max(0, base.attack),
+    move: Math.max(0, base.move + (crewAlive(unit, 'driver') ? 1 : 0)),
+    misc: Math.max(0, base.misc + (crewAlive(unit, 'commander') ? 1 : 0)),
   };
 }
 
@@ -129,6 +130,7 @@ export function rollHardcoreTankAIDice(rng: RNG, unit: Unit, terrain: TerrainTyp
   const out: EnemyAIDie[] = [];
   for (let i = 0; i < count.attack; i++) out.push({ type: 'attack', pip: rng.d6() });
   for (let i = 0; i < count.move; i++) out.push({ type: 'move', pip: rng.d6() });
+  for (let i = 0; i < count.misc; i++) out.push({ type: 'misc', pip: rng.d6() });
   return out;
 }
 
@@ -138,8 +140,9 @@ export function actionFor(table: AIActionTable, col: AIColumn, pip: number): AIA
   return row?.[pip] ?? { primary: 'none' };
 }
 
-export function actionForHardcoreTankDie(type: EnemyTankDieType, pip: number): AIActionEntry {
-  return HARDCORE_TANK_AI_TABLE[type]?.[pip] ?? { primary: 'none' };
+export function actionForHardcoreTankDie(unit: Unit, type: EnemyTankDieType, pip: number): AIActionEntry {
+  const tableId = (unit.stats.actionTable?.[type] ?? DEFAULT_HARDCORE_TANK_ACTION_TABLE[type]) as keyof typeof HARDCORE_TANK_AI_TABLE;
+  return HARDCORE_TANK_AI_TABLE[tableId]?.[pip] ?? { primary: 'none' };
 }
 
 // ---------- 排序：最近 → 最远 ----------
@@ -223,7 +226,7 @@ export function selectAIOrder(
 export type TurnDecision = 'stay' | 'cw' | 'ccw';
 
 /**
- * 四条优先级：见文件头注释。返回 'stay' / 'cw' / 'ccw'，调用方据此旋转 1 步（60°）。
+ * 五条优先级：见文件头注释。返回 'stay' / 'cw' / 'ccw'，调用方据此旋转 1 步（60°）。
  *
  * @param enemy     当前敌坦
  * @param sherman   谢尔曼
@@ -248,7 +251,7 @@ export function decideEnemyTurn(
     return true;
   };
 
-  // 规则 2 / 3 共用：尝试 CW / CCW 一步旋转，挑"新正前可通行"那侧；都行时可随机；都不行 → 朝谢尔曼最短转。
+  // 规则 2 / 4 共用：尝试 CW / CCW 一步旋转，挑"新正前可通行"那侧；都行时可随机；都不行 → 朝目标最短转。
   const pickTurnToOpenFront = (randomTie = false): TurnDecision => {
     const cwFront  = rotateDirection(facing, 1);
     const ccwFront = rotateDirection(facing, 5);
@@ -263,18 +266,19 @@ export function decideEnemyTurn(
 
   const straightDir = directionTo(enemy.pos, sherman.pos);
 
-  // 规则 1/2：严格正对谢尔曼时，正前可通行才 stay；正前被挡则转向左右可通行的一侧。
+  // 规则 1/2/3：严格正对当前目标时，正前可通行或目标相邻都 stay；非相邻被挡才转向左右可通行的一侧。
   if (straightDir === facing) {
-    return canEnterFront(facing) ? 'stay' : pickTurnToOpenFront(true);
+    if (canEnterFront(facing)) return 'stay';
+    return hexDistance(enemy.pos, sherman.pos) === 1 ? 'stay' : pickTurnToOpenFront(true);
   }
 
-  // 规则 3：谢尔曼在正后直线 + 正后可通行 → 朝"旋转后正前可通行"一侧转 1 步
+  // 规则 4：当前目标在正后直线 + 正后可通行 → 朝"旋转后正前可通行"一侧转 1 步
   const rear = rotateDirection(facing, 3);
   if (straightDir === rear && canEnterFront(rear)) {
     return pickTurnToOpenFront();
   }
 
-  // 规则 4：朝 approximateDirection 方向最短旋转一步
+  // 规则 5：朝 approximateDirection 方向最短旋转一步
   return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
 }
 

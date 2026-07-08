@@ -16,15 +16,18 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'units.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
+const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
 
 const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
+const ACTION_TABLE_FIELD = 'action_table';
+const CREW_MEMBER_FIELD = 'crewMembers';
 const FACTIONS = ['allied', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
-const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, 'notes'];
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'truck', 'infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
+const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
+const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);
@@ -143,6 +146,56 @@ function jsString(s) {
   return JSON.stringify(s ?? '');
 }
 
+function parseCrewMembers(rec) {
+  const raw = String(rec[CREW_MEMBER_FIELD] ?? '').trim();
+  if (!raw) return [];
+  const members = raw.split('|').map(s => s.trim()).filter(Boolean);
+  const seen = new Set();
+  for (const member of members) {
+    const n = Number(member);
+    if (!Number.isInteger(n) || n < 1 || n > 5) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${CREW_MEMBER_FIELD}="${raw}" must contain crew slots 1..5 separated by |`);
+    }
+    if (seen.has(n)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${CREW_MEMBER_FIELD}="${raw}" contains duplicate crew slot ${n}`);
+    }
+    seen.add(n);
+  }
+  return members.map(Number);
+}
+
+function parseActionTable(rec, validIds) {
+  const raw = String(rec[ACTION_TABLE_FIELD] ?? '').trim();
+  if (!raw) return null;
+  const out = {};
+  const seen = new Set();
+  for (const part of raw.split('|')) {
+    const [rawKey, rawValue, extra] = part.split('=');
+    const key = String(rawKey ?? '').trim();
+    const value = String(rawValue ?? '').trim();
+    if (extra !== undefined || !key || !value) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${ACTION_TABLE_FIELD}="${raw}" must use attack=id|move=id|misc=id`);
+    }
+    if (!['attack', 'move', 'misc'].includes(key)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${ACTION_TABLE_FIELD} key="${key}" must be attack / move / misc`);
+    }
+    if (seen.has(key)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${ACTION_TABLE_FIELD} repeats key="${key}"`);
+    }
+    if (!validIds.has(value)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${ACTION_TABLE_FIELD} references unknown action table "${value}"`);
+    }
+    seen.add(key);
+    out[key] = value;
+  }
+  for (const key of ['attack', 'move', 'misc']) {
+    if (!seen.has(key)) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${ACTION_TABLE_FIELD}="${raw}" must include ${key}=...`);
+    }
+  }
+  return out;
+}
+
 function boolOrThrow(rec, field) {
   const raw = String(rec[field] ?? '').trim().toLowerCase();
   if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'y') return true;
@@ -160,6 +213,16 @@ function readDamageTargetClasses() {
   return new Set(rows.slice(1).map(row => (row[targetClassIdx] ?? '').trim()).filter(Boolean));
 }
 
+function readHardcoreTankActionTableIds() {
+  const rows = readCsvRowsSmart(HARDCORE_TANK_ACTION_CSV_PATH, {
+    toolName: 'buildUnitDB',
+    requiredHeaders: ['die_type', 'die', 'primary'],
+  });
+  const headers = rows[0].map(h => h.trim().replace(/^\uFEFF/, ''));
+  const dieTypeIdx = headers.indexOf('die_type');
+  return new Set(rows.slice(1).map(row => (row[dieTypeIdx] ?? '').trim()).filter(Boolean));
+}
+
 function build() {
   const rows = readCsvRowsSmart(CSV_PATH, {
     toolName: 'buildUnitDB',
@@ -167,6 +230,7 @@ function build() {
   });
   const records = toRecords(rows);
   const damageTargetClasses = readDamageTargetClasses();
+  const actionTableIds = readHardcoreTankActionTableIds();
 
   const seen = new Set();
   for (const rec of records) {
@@ -234,6 +298,11 @@ function build() {
     for (const f of BONUS_FIELDS) {
       lines.push(`    ${f}: ${intOrThrow(r, f)},`);
     }
+    const actionTable = parseActionTable(r, actionTableIds);
+    if (actionTable) {
+      lines.push(`    actionTable: { attack: ${jsString(actionTable.attack)}, move: ${jsString(actionTable.move)}, misc: ${jsString(actionTable.misc)} },`);
+    }
+    lines.push(`    crewMembers: [${parseCrewMembers(r).join(', ')}],`);
     lines.push('  },');
   }
   lines.push('};');

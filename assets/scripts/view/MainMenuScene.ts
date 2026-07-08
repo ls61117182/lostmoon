@@ -2409,6 +2409,7 @@ export class MainMenuScene extends Component {
       sherman: 'Sherman',
       tiger: 'Tiger',
       panzer4: 'Pz IV',
+      stug3: 'StuG III',
       panzer3: 'Pz III',
       truck: 'Truck',
       infantry: 'Infantry',
@@ -2419,8 +2420,8 @@ export class MainMenuScene extends Component {
       heavy_artillery: 'Artillery',
       officer: 'Officer',
     };
-    const allUnitKinds: UnitKind[] = ['sherman', 'panzer3', 'panzer4', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
-    const enemyKinds: UnitKind[] = ['panzer3', 'panzer4', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
+    const allUnitKinds: UnitKind[] = ['sherman', 'panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
+    const enemyKinds: UnitKind[] = ['panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
     const allyKinds: UnitKind[] = ['sherman'];
     const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge', 'destroy_truck'];
     const objectiveTypeLabels: Record<MissionObjective['type'], string> = {

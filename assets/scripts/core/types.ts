@@ -108,6 +108,7 @@ export type UnitKind =
   | 'sherman'
   | 'tiger'
   | 'panzer4'
+  | 'stug3'
   | 'panzer3'
   | 'truck'
   | 'infantry'
@@ -142,6 +143,7 @@ export function isTankKind(kind: UnitKind): boolean {
   return kind === 'sherman'
     || kind === 'tiger'
     || kind === 'panzer4'
+    || kind === 'stug3'
     || kind === 'panzer3'
     || kind === 'type95'
     || kind === 'type97';
@@ -152,6 +154,12 @@ export function isTankUnit(u: { kind: UnitKind }): boolean {
 }
 
 export type VisionType = 'turreted' | 'fixed' | 'infantry';
+export interface EnemyTankActionTableIds {
+  attack: string;
+  move: string;
+  misc: string;
+}
+
 export interface UnitStats {
   faction: Faction;          // 阵营
   size: number;            // 体型
@@ -167,8 +175,10 @@ export interface UnitStats {
   infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
   visionType: VisionType;   // 炮塔视野 / 车体正面视野 / 步兵环形视野
   damageTargetClass?: string; // 受击目标类别；硬核模式下直接读取 damage_table.csv 的 targetClass
+  actionTable?: EnemyTankActionTableIds; // 硬核敌坦按 attack/move/misc 骰类型选择的行动子表
   visionRange: number;      // 六角格距离；步兵类型固定使用周围 2 格
   hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
+  crewMembers: CrewSlot[];   // 单位乘员槽位：1=车长, 2=装填手, 3=炮手, 4=驾驶员, 5=副驾驶
 }
 
 /** 玩家车辆默认当前视野范围；后续天气等系统可修改 Unit.visionRange。 */

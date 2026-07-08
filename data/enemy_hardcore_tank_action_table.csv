@@ -1,13 +1,37 @@
-﻿die_type,die,primary,fallback,fallback2,notes
-move,1,turn,,,转向
-move,2,advance,turn,,前进>转向
-move,3,advance,reverse,,前进>后退
-move,4,advance,turn,,前进>转向
-move,5,advance,reverse,,前进>后退
-move,6,advance,smoke,,前进>烟雾
-attack,1,repair,shoot,turn,修复并灭火（需要车长存活）>射击>转向
-attack,2,advance,shoot,,前进>射击
-attack,3,shoot,advance,,射击>前进
-attack,4,shoot,turn,,射击>转向
-attack,5,shoot,advance,,射击>前进
-attack,6,shoot,conceal,,射击>隐蔽
+﻿die_type,die,primary,primary_crew,fallback,fallback_crew,fallback2,fallback2_crew,notes
+attack1,1,shoot,,,,,,射击
+attack1,2,shoot,loader,,,,,射击（需要装填手存活）
+attack1,3,shoot,loader,,,,,射击（需要装填手存活）
+attack1,4,shoot,gunner,,,,,射击（需要炮手存活）
+attack1,5,shoot,gunner,,,,,射击（需要炮手存活）
+attack1,6,shoot,commander,,,,,射击（需要车长存活）
+move1,1,turn,,,,,,转向
+move1,2,advance,,reverse,,,,前进>后退
+move1,3,advance,,turn,,,,前进>转向
+move1,4,advance,,turn,,,,前进>转向
+move1,5,advance,,reverse,,,,前进>后退
+move1,6,advance,,smoke,,,,前进>烟雾
+misc1,1,repair,commander,shoot,gunner,,,修复并灭火（需要车长存活）>射击（需要炮手存活）
+misc1,2,turn,,turn,coDriver,,,射击>转向（需要副驾驶存活）
+misc1,3,advance,coDriver,turn,coDriver,,,前进（需要副驾驶存活）>转向（需要副驾驶存活）
+misc1,4,shoot,gunner,,,,,射击（需要炮手存活）
+misc1,5,smoke,,,,,,烟雾
+misc1,6,conceal,,,,,,隐蔽
+at_gun1,1,turn,,,,,,TURN towards Sherman random
+at_gun1,2,advance_to_building,,,,,,If facing building hex, move to it
+at_gun1,3,turn,,,,,,TURN towards Sherman random
+at_gun1,4,none,,,,,,No action
+at_gun1,5,shoot,,,,,,FIRE
+at_gun1,6,shoot,,,,,,FIRE
+japanese_infantry1,1,shoot_adjacent,,,,,,FIRE if adjacent to Sherman
+japanese_infantry1,2,infantry_move,,,,,,MOVE R>B>T>V>H
+japanese_infantry1,3,shoot_adjacent,,,,,,FIRE if adjacent to Sherman
+japanese_infantry1,4,infantry_move,,,,,,MOVE R>B>T>V>H
+japanese_infantry1,5,infantry_move,,,,,,MOVE R>B>T>V>H
+japanese_infantry1,6,shoot_adjacent,,,,,,FIRE if adjacent to Sherman
+heavy_artillery1,1,none,,,,,,No Action
+heavy_artillery1,2,none,,,,,,No Action
+heavy_artillery1,3,shoot,,,,,,FIRE
+heavy_artillery1,4,shoot,,,,,,FIRE
+heavy_artillery1,5,shoot,,,,,,FIRE
+heavy_artillery1,6,shoot,,,,,,FIRE

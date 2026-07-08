@@ -17,6 +17,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "turreted",
     damageTargetClass: "us_tank",
     infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
   },
   tiger: { // 虎式 - 重型敌方坦克
     faction: "german",
@@ -27,6 +29,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "turreted",
     damageTargetClass: "german_tank",
     infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
   },
   panzer4: { // 四号坦克 - 中坚敌方坦克
     faction: "german",
@@ -37,6 +41,20 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "turreted",
     damageTargetClass: "german_tank",
     infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
+  },
+  stug3: { // 三号突击炮 - 突击炮；暂复制四号坦克数据；固定主炮仅能攻击正前方
+    faction: "german",
+    size: 5, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 2, effectiveRange: 2, usCasualtyDice: 0, visionRange: 4,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    visionType: "fixed",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4],
   },
   panzer3: { // 三号坦克 - 次级敌方坦克
     faction: "german",
@@ -47,6 +65,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "turreted",
     damageTargetClass: "german_tank",
     infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
   },
   truck: { // 卡车 - 占位 - 后续按特殊规则结算
     faction: "german",
@@ -57,6 +77,7 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "fixed",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
+    crewMembers: [4],
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
@@ -67,6 +88,7 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "infantry",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
+    crewMembers: [],
   },
   officer: { // 军官 - 任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
     faction: "german",
@@ -77,6 +99,7 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "infantry",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
+    crewMembers: [],
   },
   type95: { // 九五式轻战车 - Pacific D11: Type 95 Ha-Go
     faction: "japanese",
@@ -87,6 +110,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "turreted",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
   },
   type97: { // 九七式中战车 - Pacific: Type 97 Chi-Ha
     faction: "japanese",
@@ -97,6 +122,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "turreted",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
   },
   at_gun: { // 反坦克炮 - Pacific: AT Gun
     faction: "japanese",
@@ -107,6 +134,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "fixed",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
+    actionTable: { attack: "at_gun1", move: "at_gun1", misc: "at_gun1" },
+    crewMembers: [],
   },
   japanese_infantry: { // 日本步兵 - Pacific: Japanese Infantry
     faction: "japanese",
@@ -117,6 +146,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "infantry",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
+    actionTable: { attack: "japanese_infantry1", move: "japanese_infantry1", misc: "japanese_infantry1" },
+    crewMembers: [],
   },
   heavy_artillery: { // 重炮 - Pacific: Heavy Artillery
     faction: "japanese",
@@ -127,6 +158,8 @@ const DB: Record<UnitKind, UnitStats> = {
     visionType: "fixed",
     damageTargetClass: "destroyed",
     infantryTankCoordination: 0,
+    actionTable: { attack: "heavy_artillery1", move: "heavy_artillery1", misc: "heavy_artillery1" },
+    crewMembers: [],
   },
 };
 

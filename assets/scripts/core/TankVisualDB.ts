@@ -7,9 +7,9 @@
 
 import { UnitKind } from './types';
 
-export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3' | 'type97'>;
-export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97', 'at_gun', 'heavy_artillery', 'truck'];
+export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = ['sherman', 'tiger', 'panzer4', 'stug3', 'panzer3', 'type97', 'at_gun', 'heavy_artillery', 'truck'];
 export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97'];
 
 export interface TankVisualAssetConfig {
@@ -59,6 +59,7 @@ const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = 
   sherman: { topSpritePath: "textures/units/sherman_top/spriteFrame", hullSpritePath: "textures/units/sherman_top_hull/spriteFrame", turretSpritePath: "textures/units/sherman_top_turret/spriteFrame", destroyedSpritePath: "textures/units/sherman_top_destroyed/spriteFrame" },
   tiger: { topSpritePath: "textures/units/tiger_top/spriteFrame", hullSpritePath: "textures/units/tiger_top_hull/spriteFrame", turretSpritePath: "textures/units/tiger_top_turret/spriteFrame", destroyedSpritePath: "textures/units/tiger_top_destroyed/spriteFrame" },
   panzer4: { topSpritePath: "textures/units/panzer4_top/spriteFrame", hullSpritePath: "textures/units/panzer4_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer4_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer4_top_destroyed/spriteFrame" },
+  stug3: { topSpritePath: "textures/units/stug3_top/spriteFrame", hullSpritePath: "", turretSpritePath: "", destroyedSpritePath: "textures/units/stug3_top_destroyed/spriteFrame" },
   panzer3: { topSpritePath: "textures/units/panzer3_top/spriteFrame", hullSpritePath: "textures/units/panzer3_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer3_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer3_top_destroyed/spriteFrame" },
   type97: { topSpritePath: "textures/units/type97_top_hull/spriteFrame", hullSpritePath: "textures/units/type97_top_hull/spriteFrame", turretSpritePath: "textures/units/type97_top_turret/spriteFrame", destroyedSpritePath: "textures/units/type97_top_destroyed/spriteFrame" },
   at_gun: { topSpritePath: "textures/units/at_gun_top/spriteFrame", hullSpritePath: "", turretSpritePath: "", destroyedSpritePath: "textures/units/at_gun_top_destroyed/spriteFrame" },
@@ -70,6 +71,7 @@ const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
   sherman: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 94, spriteY: 99 }, destroyedOffsetForward: -7.5, destroyedOffsetRight: 0 },
   tiger: { fitScale: 0.9, offsetForward: 0.1, offsetRight: 0, aspectRatioMul: 1.1, muzzle: { spriteX: 0, spriteY: 243 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 222 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  stug3: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 2, spriteY: 66 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 296 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 205 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   at_gun: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 16, spriteY: 305 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
@@ -123,7 +125,7 @@ export function tankVisualAssetConfigOf(kind: TankVisualKind): TankVisualAssetCo
 }
 
 export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {
-  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'panzer3' || kind === 'type97' || kind === 'at_gun' || kind === 'heavy_artillery' || kind === 'truck') {
+  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'stug3' || kind === 'panzer3' || kind === 'type97' || kind === 'at_gun' || kind === 'heavy_artillery' || kind === 'truck') {
     return TANK_VISUAL_CONFIG[kind];
   }
   return TANK_VISUAL_DEFAULT;
