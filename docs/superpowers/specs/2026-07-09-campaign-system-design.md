@@ -1,68 +1,54 @@
-# Campaign System Design
+# 战役系统设计
 
-Date: 2026-07-09
+日期：2026-07-09
 
-## Goal
+## 目标
 
-Add a campaign mode where one campaign contains three continuous missions. The
-player completes each segment and continues into the next segment with selected
-Sherman state carried forward. The existing Europe and Pacific mission tabs keep
-their current behavior; a new Campaign tab provides four campaign entries built
-from copied, independent Pacific mission resources.
+新增战役模式。每个战役由 3 个连续小关卡组成，玩家完成当前小关后，以指定的谢尔曼状态进入下一小关。现有欧洲战场、太平洋战场入口保持不变；新增“战役”页签，先用复制出来的太平洋关卡资源组成 4 个独立战役。
 
-## User-Facing Behavior
+## 玩家可见行为
 
-- Add a new Campaign tab after Europe and Pacific.
-- The Campaign tab initially contains four campaigns:
-  - 塔拉瓦红滩1: copied Pacific missions 01-03
-  - 塞班岛: copied Pacific missions 04-06
-  - 塔拉瓦红滩2: copied Pacific missions 07-09
-  - 贝里琉: copied Pacific missions 10-12
-- The existing Pacific tab still lists the original 12 Pacific missions and can
-  start any original mission directly.
-- A campaign is won only after all three segments are completed.
-- If the player is defeated at any point, retrying the campaign starts from the
-  first segment. No mid-campaign retry checkpoint is created.
+- 在“欧洲战场”“太平洋战场”页签后新增“战役”页签。
+- “战役”页签初始提供 4 个战役：
+  - 塔拉瓦红滩1：复制太平洋 01-03 关。
+  - 塞班岛：复制太平洋 04-06 关。
+  - 塔拉瓦红滩2：复制太平洋 07-09 关。
+  - 贝里琉：复制太平洋 10-12 关。
+- 原“太平洋战场”页签仍显示原来的 12 个太平洋关卡，玩家仍可选择任意指定关卡单独挑战。
+- 只有 3 个小关全部完成后，战役才算胜利。
+- 玩家在战役中任意小关失败后，重新挑战该战役时只能从第 1 小关开始，不提供中途复活点。
 
-## Approach
+## 方案
 
-Use approach A: one stitched campaign battlefield with segment activation.
+采用方案 A：预拼接战役地图，加分段激活。
 
-The battle scene loads a campaign definition, loads the three copied segment
-missions, stitches their maps into one larger map, and tracks the active segment.
-Only the active segment has units, objective resolution, and turn-end events.
-Inactive future segments contribute visible terrain, but their units and events
-do not exist at runtime until the Sherman enters that segment.
+战斗场景加载战役定义后，继续加载 3 个复制出来的小关任务资源，把 3 张地图拼接成一张大地图，并记录当前激活的小关段。只有当前激活段会生成单位、结算任务目标、触发回合结束事件。未来小关段只提供可见地形，单位和事件在谢尔曼进入该段前不存在。
 
-This keeps the old single-mission flow intact and adds campaign behavior as a
-runtime layer around mission loading, objective evaluation, drawing, and segment
-transition.
+这样可以保留旧单关流程，同时在 BattleScene 外围增加战役运行层，负责关卡加载、目标包装、绘制、阴影和关间转场。
 
-## Data Model
+## 数据模型
 
-Add a campaign-capable entry kind to `LevelDB`:
+在 `LevelDB` 中新增战役入口类型：
 
-- `entryKind: 'mission'` remains the default single-mission path.
-- `entryKind: 'campaign'` identifies a campaign entry.
-- Campaign progress is stored under its own chapter id, for example `campaign`,
-  so it does not collide with Europe or Pacific level ids.
+- `entryKind: 'mission'` 保持现有单关入口行为。
+- `entryKind: 'campaign'` 表示战役入口。
+- 战役进度使用独立章节 id，例如 `campaign`，避免与欧洲或太平洋关卡编号冲突。
 
-Add campaign definitions under resources, for example:
+新增战役定义资源，例如：
 
 ```text
 assets/resources/campaigns/pacific_campaigns.json
 ```
 
-Each campaign definition contains:
+每个战役定义包含：
 
-- stable campaign id
-- title localization key
-- three copied segment mission paths
-- stitch direction, initially horizontal
-- optional camera transition duration, default 2 seconds
+- 稳定的战役 id。
+- 标题本地化 key。
+- 3 个复制出来的小关任务资源路径。
+- 地图拼接方向，首版固定为横向拼接。
+- 可选镜头转场时长，默认约 2 秒。
 
-Copy the existing Pacific mission JSON resources into a campaign-specific
-folder, for example:
+把现有太平洋任务 JSON 复制到战役专用目录，例如：
 
 ```text
 assets/resources/missions/campaign_pacific/campaign_tarawa_red_beach_1_01.json
@@ -70,194 +56,164 @@ assets/resources/missions/campaign_pacific/campaign_tarawa_red_beach_1_02.json
 assets/resources/missions/campaign_pacific/campaign_tarawa_red_beach_1_03.json
 ```
 
-The copied missions are the source of truth for campaign-specific configuration.
-Original `mission_pacific_01..12` resources are not modified for campaign-only
-differences. Internal resource names can use ASCII slugs; player-visible names
-must use the requested Chinese campaign titles.
+复制出的任务资源是战役小关配置的来源。原 `mission_pacific_01..12` 资源不为战役差异做修改。内部资源名可以使用 ASCII slug；玩家可见名称必须使用本设计中的中文战役名。
 
-## Runtime State
+## 运行态
 
-`GameSession` gains a campaign selection path alongside `selectMission`:
+`GameSession` 在 `selectMission` 旁新增战役选择路径，记录：
 
-- selected campaign id
-- selected campaign resource path
-- selected campaign entry level id
-- resume flag remains false for a fresh campaign start
+- 当前战役 id。
+- 当前战役资源路径。
+- 当前战役入口编号。
+- 是否从存档恢复；首版新开战役固定为 false。
 
-`BattleScene` stores campaign runtime state when a campaign is active:
+`BattleScene` 在战役模式下维护战役运行态：
 
-- active segment index
-- segment definitions and loaded `MissionData`
-- stitched map offsets per segment
-- active segment objective and event table id
-- segment bounds for drawing, shadowing, and camera centering
+- 当前激活小关索引。
+- 3 个小关定义和已加载的 `MissionData`。
+- 每个小关拼接到大地图后的坐标偏移。
+- 当前激活小关的目标和回合事件表 id。
+- 每个小关的边界，用于绘制、阴影和镜头居中。
 
-When not in campaign mode, existing mission loading and battle behavior should
-remain unchanged.
+非战役模式下，现有单关加载和战斗行为保持不变。
 
-## Map Stitching
+## 地图拼接
 
-The three segment maps are stitched horizontally in segment order. Each segment's
-offset coordinates are translated into one shared map coordinate space.
+3 个小关按战役顺序横向拼接。每个小关的 offset 坐标会转换到同一个大地图坐标系中。
 
-For the first implementation:
+首版实现规则：
 
-- preserve each copied mission's row layout and terrain definitions
-- place segment 2 to the east of segment 1, and segment 3 to the east of segment 2
-- keep enough boundary adjacency that driving off the current segment's evac edge
-  places the Sherman onto the next segment's corresponding start hex
-- use the current segment's objective `evacAt` and `evacExitDir` to determine
-  the transition trigger
+- 保留每个复制小关原有行列布局和地形定义。
+- 第 2 小关放在第 1 小关东侧，第 3 小关放在第 2 小关东侧。
+- 当前小关的撤离边和下一小关入口需要形成足够清楚的边界衔接，使“驶离当前小关”自然进入下一小关起始格。
+- 使用当前小关目标中的 `evacAt` 和 `evacExitDir` 判断是否触发进入下一段。
 
-The Sherman begins at the first segment's configured start. When moving to the
-next segment, the Sherman appears on the next segment's configured start hex,
-with position continuity represented by the exit-to-entry transition rather than
-by reusing the exact out-of-map coordinate.
+谢尔曼从第 1 小关配置的起始格开始。进入下一小关时，谢尔曼出现在下一小关配置的起始格；连续性通过“从当前出口进入下一入口”的关间转场表达，而不是复用越界后的临时坐标。
 
-## Segment Activation
+## 分段激活
 
-At campaign load:
+战役加载时：
 
-- segment 0 is active
-- segment 1 and 2 terrain are present in the stitched map
-- segment 1 and 2 units are not created
-- only segment 0 objective and event table are active
+- 第 0 段为当前激活段。
+- 第 1、2 段地形已经存在于拼接后的地图里。
+- 第 1、2 段单位不生成。
+- 只有第 0 段目标和回合事件表生效。
 
-When the active segment is completed by evac:
+当前激活段通过撤离完成时：
 
-1. Suppress the normal victory overlay if there is another segment.
-2. Apply the inter-segment Sherman state rules.
-3. Increment the active segment index.
-4. Instantiate the new segment's allies and enemies from its copied mission data.
-5. Switch objective, event table, and mission metadata to the new segment.
-6. Recompute visibility for the new active segment.
-7. Pan the camera to the new segment center over about 2 seconds.
-8. Start the next player turn or phase using the normal battle flow.
+1. 如果后面还有小关，拦截普通胜利面板。
+2. 应用关间谢尔曼状态规则。
+3. 当前激活段索引加 1。
+4. 从复制任务数据中初始化新小关的友军和敌军。
+5. 切换目标、事件表和任务元信息到新小关。
+6. 重新计算新激活段的可见范围。
+7. 用约 2 秒把镜头平移到新小关地图中心。
+8. 按现有战斗流程开始下一段的玩家回合或阶段。
 
-Only the third segment completion marks the campaign complete and shows final
-victory.
+只有第 3 段完成时，才标记战役完成并显示最终胜利。
 
-## Inter-Segment Sherman State
+## 关间谢尔曼状态
 
-Carry forward:
+进入下一小关时保留：
 
-- crew survival state
-- current facing and turret facing when still valid
-- loaded state
-- hatch open or closed state
+- 乘员存活状态。
+- 当前车体朝向和炮塔朝向，前提是方向值仍有效。
+- 主炮装填状态。
+- 舱盖开闭状态。
 
-Clear before entering the next segment:
+进入下一小关前清除：
 
-- fire level
-- paralyzed state
-- turret damaged state
-- radio damaged state
-- smoke state
+- 着火等级。
+- 瘫痪状态。
+- 炮塔受损状态。
+- 无线电受损状态。
+- 烟雾状态。
 
-Recompute on the new segment:
+进入下一小关后重新计算：
 
-- vision range, using the new segment's start configuration and unit defaults
+- 视野范围，使用下一小关开局配置和单位默认值。
 
-This gives the campaign continuity through the Sherman crew and immediate tank
-operation, while treating temporary or repairable vehicle damage as cleared
-between linked missions.
+这样战役连续性主要体现在车组和车辆操作状态上，同时把关间可以整备的临时损伤清除，避免上一关的着火、瘫痪等状态直接锁死后续小关。
 
-## Fog And Campaign Shadow
+## 迷雾与战役阴影
 
-Campaign shadow is separate from fog of war.
+战役阴影独立于战争迷雾。
 
-- Normal fog still uses `FogOfWar.ts` and the selected game mode.
-- Future segment terrain is visible even when not active.
-- Future segment terrain receives an extra dark overlay that is darker than
-  normal fog.
-- Future segment units are not drawn because they do not exist yet.
-- Past completed segment terrain remains visible as terrain; it does not need
-  active objectives or events.
+- 普通战争迷雾仍由 `FogOfWar.ts` 和当前游戏模式控制。
+- 未来小关地形即使未激活也可见。
+- 未来小关地形额外覆盖一层战役阴影，亮度比普通迷雾更低。
+- 未来小关单位不绘制，因为它们尚未生成。
+- 已完成小关的地形仍保留可见，但不再拥有激活目标或事件。
 
-The draw order should keep campaign shadow above terrain and below active unit
-presentation. Normal fog still applies to the active segment.
+绘制顺序应保证战役阴影位于地形之上、激活单位表现之下。普通迷雾仍只按当前激活段的规则应用。
 
-## Camera Transition
+## 镜头转场
 
-Campaign segment transition uses the existing map pan layer rather than a new
-camera system.
+小关切换时复用现有地图平移层，不新增独立摄像机系统。
 
-The transition target is the center of the next segment's stitched bounds. The
-map view interpolates from the current pan position to that target over roughly
-2 seconds. During transition, player input is blocked. After transition,
-standard controls resume and the next segment starts.
+转场目标是下一小关拼接边界的中心点。地图视图从当前平移位置插值到目标位置，时长约 2 秒。转场期间阻止玩家输入。转场结束后恢复标准操作，并开始下一小关。
 
-## Objectives And Outcome
+## 目标与胜负
 
-`Objective.checkOutcome` can remain the single-segment evaluator. BattleScene
-wraps victory handling when campaign mode is active:
+`Objective.checkOutcome` 仍可作为单小关目标判断器。BattleScene 在战役模式下包装胜利处理：
 
-- `defeat` remains immediate campaign defeat
-- `victory` on segments 0 and 1 becomes `advance campaign segment`
-- `victory` on segment 2 becomes final campaign victory
+- `defeat` 仍然立即判定为战役失败。
+- 第 0、1 段的 `victory` 转换为“进入下一小关”。
+- 第 2 段的 `victory` 才转换为最终战役胜利。
 
-Campaign completion marks the campaign entry complete in `MenuProgress`. Single
-Pacific mission completion continues to mark only the original Pacific mission.
+战役完成后，`MenuProgress` 标记战役入口完成。单独挑战原太平洋关卡时，仍只标记原太平洋关卡进度。
 
-## Turn-End Events
+## 回合结束事件
 
-Only the active segment's event table is bound to the runtime event provider.
-Future segment event tables are ignored until their segment activates.
+只有当前激活段的事件表会绑定到运行时事件 provider。未来小关的事件表在该小关激活前完全忽略。
 
-On segment transition:
+小关切换时：
 
-- destroy current turn-end event UI
-- clear pending turn-end event runtime state
-- create or select the provider for the new segment's `eventTableId`
-- reset per-segment turn-end sequence state
+- 销毁当前回合结束事件 UI。
+- 清理未完成的回合结束事件运行态。
+- 创建或切换到新小关 `eventTableId` 对应的事件 provider。
+- 重置每段专用的事件序列状态。
 
-## Save And Continue
+## 存档与继续
 
-The first version does not add campaign mid-run resume support. If a campaign is
-started from the menu, it starts at segment 0. The existing single battle save
-path should not be reused for partial campaign checkpoints unless a later design
-adds an explicit campaign save schema.
+首版不新增战役中途保存和继续功能。玩家从菜单开始战役时，总是从第 0 段开始。现有单关战斗存档路径不应被复用于战役中途检查点，除非后续另行设计显式的战役存档结构。
 
-The existing Continue button can keep its current single-mission behavior.
+主菜单现有“继续游戏”按钮保持当前单关行为。
 
-## Localization
+## 本地化
 
-Add language keys for:
+新增语言 key：
 
-- campaign chapter title and subtitle
-- four campaign button titles
-- optional transition log text, such as "Advancing to next operation"
+- 战役章节标题和副标题。
+- 4 个战役按钮标题。
+- 可选的转场战报文本，例如“推进至下一阶段”。
 
-Keep campaign titles free of boardgame scenario labels.
+可见战役或关卡标题不应包含桌游剧本标签，例如 `Scenario A1:`。
 
-## Tests And Verification
+## 测试与验证
 
-Focused checks:
+重点检查：
 
-- campaign definitions map to 4 entries and 12 copied segment resources
-- original Pacific `LevelDB` entries still point to original `mission_pacific_*`
-  paths
-- campaign progress uses the campaign chapter id and does not mark Pacific
-  mission completion
-- Sherman inter-segment state carries and clears the confirmed fields
-- only active segment units are instantiated
-- first two segment victories advance instead of ending the battle
-- third segment victory marks final campaign victory
+- 战役定义映射到 4 个入口和 12 个复制小关资源。
+- 原太平洋 `LevelDB` 入口仍指向原 `mission_pacific_*` 路径。
+- 战役进度使用 `campaign` 章节 id，不会标记太平洋单关完成。
+- 谢尔曼关间状态按确认规则保留、清除和重新计算。
+- 只有当前激活段单位会被初始化。
+- 前两段胜利进入下一段，而不是结束战斗。
+- 第三段胜利才标记最终战役胜利。
 
-Practical validation:
+实际验证：
 
-- run targeted TypeScript or `node --check` style checks for edited scripts
-- add focused runtime probes for pure helper code where possible
-- use `git diff --check`
+- 对编辑过的脚本运行有针对性的 TypeScript 或 `node --check` 类检查。
+- 对纯 helper 代码尽量增加聚焦运行探针。
+- 运行 `git diff --check`。
 
-Whole-project `tsc --noEmit` is not required as the primary signal because this
-checkout has known Cocos TypeScript noise.
+整仓 `tsc --noEmit` 不作为主要验证信号，因为当前 Cocos 工程已知存在 TypeScript 噪声。
 
-## Out Of Scope
+## 不在首版范围内
 
-- Multiplayer/PVP campaign mode
-- Campaign mid-run save and resume
-- Branching campaigns
-- Campaign-specific rewards, repairs, or supply rules beyond the confirmed
-  inter-segment Sherman state rules
-- Reworking original Pacific missions
+- 多人/PVP 战役模式。
+- 战役中途保存和继续。
+- 分支战役。
+- 除已确认关间谢尔曼状态规则之外的奖励、维修、补给系统。
+- 重做或修改原太平洋单关资源。
