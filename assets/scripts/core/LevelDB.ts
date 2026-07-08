@@ -13,6 +13,7 @@
 import { LangCode } from './Lang';
 import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode, isGameMode } from './GameMode';
+import { CAMPAIGNS, CAMPAIGN_CHAPTER_ID } from './CampaignDB';
 
 export type ChapterId = string;
 
@@ -27,7 +28,8 @@ export interface LevelMeta {
   titleKey: string;
   /** MissionData.id 字段值；用于把战斗存档和关卡对应起来 */
   missionId: string;
-  entryKind?: 'mission' | 'editor' | 'custom';
+  entryKind?: 'mission' | 'campaign' | 'editor' | 'custom';
+  campaignId?: string;
   customPackageId?: string;
   titleOverride?: string;
   badgeOverride?: string;
@@ -93,6 +95,24 @@ export const CHAPTERS: ChapterMeta[] = [
       { chapterId: 'pacific', id: 11, missionPath: 'missions/mission_pacific_11', titleKey: 'level.pacific.11.title', missionId: 'mission_pacific_11' },
       { chapterId: 'pacific', id: 12, missionPath: 'missions/mission_pacific_12', titleKey: 'level.pacific.12.title', missionId: 'mission_pacific_12' },
     ],
+  },
+  {
+    id: CAMPAIGN_CHAPTER_ID,
+    order: 3,
+    titleKey: 'chapter.campaign.title',
+    subtitleKey: 'chapter.campaign.subtitle',
+    levels: CAMPAIGNS
+      .slice()
+      .sort((a, b) => a.order - b.order)
+      .map(campaign => ({
+        chapterId: CAMPAIGN_CHAPTER_ID,
+        id: campaign.levelId,
+        missionPath: '',
+        titleKey: campaign.titleKey,
+        missionId: campaign.missionId,
+        entryKind: 'campaign' as const,
+        campaignId: campaign.id,
+      })),
   },
   {
     id: 'test',
