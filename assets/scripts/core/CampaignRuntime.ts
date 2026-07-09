@@ -1,5 +1,6 @@
 import type { CampaignDefinition } from './CampaignDB';
-import type { MissionData, Offset, TileDef, UnitPlacement } from './types';
+import { axialToOffset, neighbor, offsetToAxial } from './HexGrid';
+import type { Direction, MissionData, Offset, TileDef, UnitPlacement } from './types';
 
 export interface CampaignSegmentRuntime {
   index: number;
@@ -11,6 +12,11 @@ export interface CampaignSegmentRuntime {
   cols: number;
   rows: number;
   missionId: string;
+}
+
+interface RawSegmentOffset {
+  col: number;
+  row: number;
 }
 
 export interface StitchedCampaignData {
@@ -55,6 +61,54 @@ function stripStartMarkers(tile: TileDef): TileDef {
 
 function translateTruckPath(data: MissionData, colOffset: number, rowOffset: number): MissionData['truckPath'] {
   return data.truckPath?.map(p => ({ ...p, col: p.col + colOffset, row: p.row + rowOffset }));
+}
+
+function campaignExitTarget(data: MissionData, segmentOffset: RawSegmentOffset): Offset | null {
+  const evacAt = data.objective.evacAt;
+  const evacExitDir = data.objective.evacExitDir;
+  if (!evacAt || evacExitDir == null) return null;
+  const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
+  const globalEvacAt = { col: evacAt.col + segmentOffset.col, row: evacAt.row + segmentOffset.row };
+  return axialToOffset(
+    neighbor(offsetToAxial(globalEvacAt, rowParityOffset), evacExitDir as Direction),
+    rowParityOffset,
+  );
+}
+
+function segmentEntryAnchor(data: MissionData): Offset {
+  return data.sherman.at ? { ...data.sherman.at } : { col: 0, row: 0 };
+}
+
+function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntime[] {
+  const rawOffsets: RawSegmentOffset[] = [{ col: 0, row: 0 }];
+
+  for (let i = 1; i < missions.length; i++) {
+    const prev = missions[i - 1]!;
+    const current = missions[i]!;
+    const prevOffset = rawOffsets[i - 1]!;
+    const exitTarget = campaignExitTarget(prev, prevOffset)
+      ?? { col: prevOffset.col + prev.cols, row: prevOffset.row };
+    const entry = segmentEntryAnchor(current);
+    rawOffsets.push({
+      col: exitTarget.col - entry.col,
+      row: exitTarget.row - entry.row,
+    });
+  }
+
+  const minCol = Math.min(...rawOffsets.map((offset) => offset.col));
+  const minRow = Math.min(...rawOffsets.map((offset) => offset.row));
+
+  return rawOffsets.map((offset, index) => ({
+    index,
+    id: '',
+    missionPath: '',
+    sourcePacificMissionId: '',
+    colOffset: offset.col - minCol,
+    rowOffset: offset.row - minRow,
+    cols: missions[index]!.cols,
+    rows: missions[index]!.rows,
+    missionId: missions[index]!.id,
+  }));
 }
 
 export function translateMissionData(data: MissionData, segmentIndex: number, colOffset: number, rowOffset = 0): MissionData {
@@ -125,27 +179,24 @@ export function stitchCampaignMissions(campaign: CampaignDefinition, missions: M
     throw new Error(`Campaign ${campaign.id} expected ${campaign.segments.length} segments, got ${missions.length}`);
   }
 
-  const totalCols = missions.reduce((sum, mission) => sum + mission.cols, 0);
-  const totalRows = Math.max(...missions.map(mission => mission.rows));
-  const segments: CampaignSegmentRuntime[] = [];
-  let colOffset = 0;
+  const segments = calculateSegmentOffsets(missions);
 
   for (let i = 0; i < missions.length; i++) {
     const mission = missions[i]!;
     const definition = campaign.segments[i]!;
-    segments.push({
-      index: i,
+    segments[i] = {
+      ...segments[i]!,
       id: definition.id,
       missionPath: definition.missionPath,
       sourcePacificMissionId: definition.sourcePacificMissionId,
-      colOffset,
-      rowOffset: 0,
       cols: mission.cols,
       rows: mission.rows,
       missionId: mission.id,
-    });
-    colOffset += mission.cols;
+    };
   }
+
+  const totalCols = Math.max(...segments.map(segment => segment.colOffset + segment.cols));
+  const totalRows = Math.max(...segments.map(segment => segment.rowOffset + segment.rows));
 
   const segmentMissionData = missions.map((_, index) =>
     buildActiveMissionData(campaign, missions, segments, index, totalCols, totalRows),

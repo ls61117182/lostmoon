@@ -19,6 +19,7 @@ function loadTsModule(rel) {
   const req = (id) => {
     if (id === './types') return loadTsModule('assets/scripts/core/types.ts');
     if (id === './CampaignDB') return loadTsModule('assets/scripts/core/CampaignDB.ts');
+    if (id === './HexGrid') return loadTsModule('assets/scripts/core/HexGrid.ts');
     return require(id);
   };
   new Function('require', 'module', 'exports', js)(req, mod, mod.exports);
@@ -37,7 +38,7 @@ const segA = {
   tiles: [[{ t: 'c', eid: 1, rid: 1 }, { t: 'c', eid: 2, rid: 2 }]],
   sherman: { kind: 'sherman', faction: 'allied', at: { col: 0, row: 0 }, facing: 0, loaded: true, hatchOpen: true },
   enemies: [{ kind: 'at_gun', faction: 'japanese', at: { col: 1, row: 0 }, facing: 3 }],
-  objective: { type: 'destroy_kind_evac', kind: 'at_gun', evacAt: { col: 1, row: 0 }, evacExitDir: 0 },
+  objective: { type: 'destroy_kind_evac', kind: 'at_gun', evacAt: { col: 1, row: 0 }, evacExitDir: 1 },
   eventTableId: 'seg_a_events',
 };
 
@@ -71,17 +72,19 @@ const campaign = {
 
 const stitched = runtime.stitchCampaignMissions(campaign, [segA, segB]);
 assert.strictEqual(stitched.data.id, 'campaign_test');
-assert.strictEqual(stitched.data.cols, 5);
+assert.strictEqual(stitched.data.cols, 4);
+assert.strictEqual(stitched.data.rows, 2);
 assert.strictEqual(stitched.segments[0].colOffset, 0);
-assert.strictEqual(stitched.segments[1].colOffset, 2);
-assert.strictEqual(stitched.data.tiles[0][3].t, 'T');
-assert.strictEqual(stitched.data.tiles[0][3].eid, undefined, 'future segment start markers are inactive');
-assert.strictEqual(stitched.segmentMissionData[1].tiles[0][3].eid, 2, 'active segment keeps own markers');
+assert.strictEqual(stitched.segments[1].colOffset, 1);
+assert.strictEqual(stitched.segments[1].rowOffset, 1);
+assert.strictEqual(stitched.data.tiles[1][2].t, 'T');
+assert.strictEqual(stitched.data.tiles[1][2].eid, undefined, 'future segment start markers are inactive');
+assert.strictEqual(stitched.segmentMissionData[1].tiles[1][2].eid, 2, 'active segment keeps own markers');
 assert.strictEqual(stitched.segmentMissionData[1].tiles[0][0].eid, undefined, 'previous segment start markers are inactive');
-assert.deepStrictEqual(stitched.segmentMissionData[1].enemies[0].at, { col: 4, row: 0 });
+assert.deepStrictEqual(stitched.segmentMissionData[1].enemies[0].at, { col: 3, row: 1 });
 assert.strictEqual(stitched.segmentMissionData[0].enemies.length, 1);
 assert.strictEqual(stitched.segmentMissionData[1].enemies.length, 1);
-assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 3, row: 0 }), 1);
+assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 2, row: 1 }), 1);
 assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 1, row: 0 }), 0);
 
 const carried = runtime.carryShermanToNextSegment({
@@ -99,7 +102,7 @@ const carried = runtime.carryShermanToNextSegment({
   hatchOpen: true,
   visionRange: 1,
 }, stitched.segmentMissionData[1].sherman);
-assert.deepStrictEqual(carried.at, { col: 2, row: 0 });
+assert.deepStrictEqual(carried.at, { col: 1, row: 1 });
 assert.strictEqual(carried.loaded, true);
 assert.strictEqual(carried.hatchOpen, true);
 assert.deepStrictEqual(carried.crew, { commander: false, loader: true, gunner: true, driver: true, coDriver: false });
