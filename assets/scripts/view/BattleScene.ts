@@ -2699,6 +2699,15 @@ export class BattleScene extends Component {
     });
   }
 
+  private isCampaignNextSegmentEntry(pos: Axial): boolean {
+    if (!this.mission || !this.campaignRuntime) return false;
+    const nextIndex = this.activeCampaignSegmentIndex + 1;
+    if (nextIndex >= this.campaignRuntime.segments.length) return false;
+    const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
+    const offset = axialToOffset(pos, rowParityOffset);
+    return campaignSegmentForOffset(this.campaignRuntime, offset) === nextIndex;
+  }
+
   private resumeAfterMissionLoadedIfNeeded() {
     if (!GameSession.resumeFromSave) return;
     this.onLoad_Save(/* skipHint */ true);
@@ -9274,7 +9283,9 @@ export class BattleScene extends Component {
     if (sherman.facing === null) return t('floater.noFacing');
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as Direction);
-    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) return null;
+    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
+      canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
+    })) return null;
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
     if (!map.get(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
       return t('floater.blockedTerrain');
@@ -9722,7 +9733,9 @@ export class BattleScene extends Component {
     }
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
-    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to)) {
+    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
+      canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
+    })) {
       slot.used = true;
       this.closeDiePopover();
       this.breakConcealment(sherman);
@@ -10422,7 +10435,9 @@ export class BattleScene extends Component {
     }
     const driveDir = sherman.facing;
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
-    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to)) {
+    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to, {
+      canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
+    })) {
       if (!this.consumeDoubles(dieIdx)) return;
       this.closeDiePopover();
       this.breakConcealment(sherman);

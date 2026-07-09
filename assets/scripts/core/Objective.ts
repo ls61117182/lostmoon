@@ -2,6 +2,10 @@ import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
 import { Axial, Direction, MissionObjective, tileHasBridge, UnitKind } from './types';
 
+export interface ShermanEvacDriveOptions {
+  canExitTo?: (to: Axial) => boolean;
+}
+
 /** `destroy_kind_evac`：歼敌前置是否已满足（纯撤离无 kind/kinds 时恒为 true） */
 export function destroyKindEvacPrereqMet(mission: LoadedMission, obj: MissionObjective): boolean {
   if (obj.type !== 'destroy_kind_evac') return false;
@@ -49,6 +53,7 @@ export function isShermanEvacDrive(
   facing: Direction,
   dirSign: 1 | -1,
   to: Axial,
+  options: ShermanEvacDriveOptions = {},
 ): boolean {
   const obj = mission.data.objective;
   if (obj.type !== 'destroy_kind_evac') return false;
@@ -61,7 +66,7 @@ export function isShermanEvacDrive(
   // 撤离格若是桥梁，驶出方向须落在桥端两方向之一
   const fromTile = mission.map.get(from);
   if (tileHasBridge(fromTile) && !fromTile!.bridgeEnds!.includes(driveDir as Direction)) return false;
-  return !mission.map.has(to);
+  return !mission.map.has(to) || options.canExitTo?.(to) === true;
 }
 
 export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): boolean {
