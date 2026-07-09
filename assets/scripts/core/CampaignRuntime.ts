@@ -15,6 +15,7 @@ export interface CampaignSegmentRuntime {
   maxRowOffset: number;
   cols: number;
   rows: number;
+  tileKeys: string[];
   missionId: string;
 }
 
@@ -32,6 +33,10 @@ export interface StitchedCampaignData {
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function offsetKey(pos: Offset): string {
+  return `${pos.col},${pos.row}`;
 }
 
 function localRowParity(data: MissionData): 0 | 1 {
@@ -136,6 +141,7 @@ function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntim
     const minRow = Math.min(...translatedOffsets.map((pos) => pos.row));
     const maxCol = Math.max(...translatedOffsets.map((pos) => pos.col));
     const maxRow = Math.max(...translatedOffsets.map((pos) => pos.row));
+    const tileKeys = translatedOffsets.map(offsetKey);
     return {
       index,
       id: '',
@@ -149,6 +155,7 @@ function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntim
       maxRowOffset: maxRow,
       cols: mission.cols,
       rows: mission.rows,
+      tileKeys,
       missionId: mission.id,
     };
   });
@@ -254,10 +261,9 @@ export function stitchCampaignMissions(campaign: CampaignDefinition, missions: M
 }
 
 export function campaignSegmentForOffset(stitched: StitchedCampaignData, pos: Offset): number | null {
+  const key = offsetKey(pos);
   for (const segment of stitched.segments) {
-    const inCol = pos.col >= segment.colOffset && pos.col <= segment.maxColOffset;
-    const inRow = pos.row >= segment.rowOffset && pos.row <= segment.maxRowOffset;
-    if (inCol && inRow) return segment.index;
+    if (segment.tileKeys.includes(key)) return segment.index;
   }
   return null;
 }

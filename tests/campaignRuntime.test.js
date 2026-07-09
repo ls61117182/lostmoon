@@ -90,6 +90,7 @@ assert.strictEqual(stitched.segmentMissionData[0].enemies.length, 1);
 assert.strictEqual(stitched.segmentMissionData[1].enemies.length, 1);
 assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 2, row: 1 }), 1);
 assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 1, row: 0 }), 0);
+assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 1, row: 2 }), null, 'segment lookup ignores bounding-box holes');
 
 const carried = runtime.carryShermanToNextSegment({
   kind: 'sherman',
