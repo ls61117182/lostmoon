@@ -45,6 +45,8 @@ export type TerrainType =
 export interface Tile {
   pos: Axial;
   terrain: TerrainType;
+  /** Purely visual terrain outside the playable battlefield; units cannot enter. */
+  displayOnly?: boolean;
   /** 建筑叠加：非独立地形；坦克可入；视线仅路径中间格阻挡；目标仍 +1 掩护 */
   hasBuilding?: boolean;
   /** 沿 6 条边是否有树篱（按 Direction 索引） */
@@ -383,6 +385,8 @@ export interface TileDef {
    * - 配置后该水域格视为可通行，骰子基数与移动力按公路计算；车辆仅能从 `a` / `b` 两端方向驶入 / 驶出本格。
    */
   br?: [number, number];
+  /** Purely visual terrain outside the playable battlefield; accepts 1 or true. */
+  disp?: 1 | true;
 }
 
 /** 有建筑时：田/泥+建筑=农场，公路+建筑=村庄（与 GDD §3.2 一致） */

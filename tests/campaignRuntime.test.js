@@ -117,4 +117,67 @@ assert.strictEqual(carried.turretDamaged, undefined);
 assert.strictEqual(carried.radioDamaged, undefined);
 assert.strictEqual(carried.visionRange, undefined);
 
+function overlapMission(id, tile, shermanAt) {
+  return {
+    id,
+    name: id,
+    description: '',
+    theater: 'pacific',
+    cols: 2,
+    rows: 1,
+    tiles: [[tile, null]],
+    sherman: { kind: 'sherman', faction: 'allied', at: shermanAt, facing: 0 },
+    enemies: [],
+    objective: { type: 'destroy_all_enemies', evacAt: { col: 0, row: 0 }, evacExitDir: 0 },
+  };
+}
+
+function overlapCampaign(id) {
+  return {
+    id,
+    order: 1,
+    levelId: 1,
+    titleKey: `campaign.${id}.title`,
+    missionId: id,
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    segments: [
+      { id: `${id}_a`, missionPath: `${id}_a`, sourcePacificMissionId: `${id}_source_a` },
+      { id: `${id}_b`, missionPath: `${id}_b`, sourcePacificMissionId: `${id}_source_b` },
+    ],
+  };
+}
+
+const effectiveBeatsDisplay = runtime.stitchCampaignMissions(overlapCampaign('effective_beats_display'), [
+  overlapMission('effective_a', { t: 'c' }, { col: 0, row: 0 }),
+  overlapMission('effective_b', { t: 'f', disp: 1 }, { col: 1, row: 0 }),
+]);
+assert.strictEqual(effectiveBeatsDisplay.segmentMissionData[1].tiles[0][0].t, 'c');
+assert.strictEqual(effectiveBeatsDisplay.segmentMissionData[1].tiles[0][0].disp, undefined);
+assert.strictEqual(runtime.campaignSegmentForOffset(effectiveBeatsDisplay, { col: 0, row: 0 }), 0);
+
+const laterEffectiveBeatsEarlierDisplay = runtime.stitchCampaignMissions(overlapCampaign('later_effective_beats_display'), [
+  overlapMission('later_effective_a', { t: 'f', disp: 1 }, { col: 0, row: 0 }),
+  overlapMission('later_effective_b', { t: 'm' }, { col: 1, row: 0 }),
+]);
+assert.strictEqual(laterEffectiveBeatsEarlierDisplay.segmentMissionData[0].tiles[0][0].t, 'm');
+assert.strictEqual(laterEffectiveBeatsEarlierDisplay.segmentMissionData[0].tiles[0][0].disp, undefined);
+assert.strictEqual(runtime.campaignSegmentForOffset(laterEffectiveBeatsEarlierDisplay, { col: 0, row: 0 }), 1);
+
+const earlierDisplayBeatsLaterDisplay = runtime.stitchCampaignMissions(overlapCampaign('display_overlap'), [
+  overlapMission('display_a', { t: 'f', disp: 1 }, { col: 0, row: 0 }),
+  overlapMission('display_b', { t: 'm', disp: 1 }, { col: 1, row: 0 }),
+]);
+assert.strictEqual(earlierDisplayBeatsLaterDisplay.segmentMissionData[1].tiles[0][0].t, 'f');
+assert.strictEqual(earlierDisplayBeatsLaterDisplay.segmentMissionData[1].tiles[0][0].disp, 1);
+assert.strictEqual(runtime.campaignSegmentForOffset(earlierDisplayBeatsLaterDisplay, { col: 0, row: 0 }), 0);
+
+assert.throws(
+  () => runtime.stitchCampaignMissions(overlapCampaign('invalid_effective_overlap'), [
+    overlapMission('invalid_a', { t: 'c' }, { col: 0, row: 0 }),
+    overlapMission('invalid_b', { t: 'm' }, { col: 1, row: 0 }),
+  ]),
+  /overlapping effective tiles.*configuration is invalid/,
+);
+
 console.log('campaign runtime tests passed');

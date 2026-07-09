@@ -336,6 +336,7 @@ export class HexMap {
   canTankEnter(p: Axial): boolean {
     const t = this.get(p);
     if (!t) return false;
+    if (t.displayOnly) return false;
     if (t.terrain === 'forest' || t.terrain === 'rocky') return false;
     if (t.terrain === 'water' || t.terrain === 'deep_water') return tileHasBridge(t);
     return true;

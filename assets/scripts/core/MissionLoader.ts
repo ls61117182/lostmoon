@@ -101,6 +101,7 @@ export interface LoadedMission {
 function buildCellsByEidFromMap(missionId: string, map: HexMap): Map<number, { pos: Axial; facing: Direction }> {
   const cellsByEid = new Map<number, { pos: Axial; facing: Direction }>();
   for (const tile of map.all()) {
+    if (tile.displayOnly) continue;
     const eid = tile.enemyStartId;
     if (eid != null) {
       if (!Number.isInteger(eid) || eid < 1 || eid > 6) {
@@ -114,6 +115,11 @@ function buildCellsByEidFromMap(missionId: string, map: HexMap): Map<number, { p
     }
   }
   return cellsByEid;
+}
+
+function validateUnitNotOnDisplayOnly(missionId: string, map: HexMap, unit: Unit): void {
+  if (!map.get(unit.pos)?.displayOnly) return;
+  throw new Error(`任务 ${missionId}：单位 ${unit.id} 初始位置位于纯显示格 displayOnly`);
 }
 
 /** 掷 1d6 后链式尝试 eid 1..maxEid（模 maxEid），首个未被 `taken` 占用的 eid 格胜出。 */
@@ -228,6 +234,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       const tile: Tile = {
         pos: offsetToAxial({ col, row }, rowParityOffset),
         terrain,
+        ...(def.disp === 1 || def.disp === true ? { displayOnly: true } : {}),
         ...(hasBuilding ? { hasBuilding: true } : {}),
         hedges: hedgeFlagsFromMapJson(def.h),
         breakwaters: breakwaterFlagsFromMapJson(def.bw),
@@ -301,6 +308,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   }
   const sherman = makeUnit('sherman_player', shermanPlacement, rowParityOffset);
   const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p, rowParityOffset));
+  validateUnitNotOnDisplayOnly(data.id, map, sherman);
+  for (const ally of allies) validateUnitNotOnDisplayOnly(data.id, map, ally);
 
   // 3. 德军：可选掷骰出生
   // enemyStartByDice 为 true 时：有 `at` 的单位用 JSON 固定格；无 `at` 的单位掷 1d6 链式占位——
@@ -335,6 +344,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     }
     return makeUnit(`enemy_${i}`, p, rowParityOffset);
   });
+  for (const enemy of enemies) validateUnitNotOnDisplayOnly(data.id, map, enemy);
   if (diceList && di !== diceList.length) {
     throw new Error(
       `任务 ${data.id}：内部错误：无坐标掷骰数 ${diceList.length} 与无 at 的敌方数不一致`,
@@ -439,6 +449,7 @@ function resolveEnemyDicePlacements(
   const cellsByEid = buildCellsByEidFromMap(data.id, map);
   const cellsByRid = new Map<number, { pos: Axial; facing: Direction }>();
   for (const tile of map.all()) {
+    if (tile.displayOnly) continue;
     const rid = tile.reinforceId;
     if (rid != null) {
       if (!Number.isInteger(rid) || rid < 1 || rid > 6) {

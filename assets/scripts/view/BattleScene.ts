@@ -745,6 +745,7 @@ const FOREST_CANOPY_LAYOUT: ReadonlyArray<{ ox: number; oy: number; scale: numbe
 ];
 const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
 const CAMPAIGN_SHADOW_COLOR = new Color(8, 10, 14, 190);
+const EFFECTIVE_BATTLEFIELD_BOUNDARY_COLOR = new Color(245, 225, 150, 210);
 const FOG_TURRET_AIM_HINT_COLOR = new Color(220, 235, 190, 245);
 const FOG_ATTACK_REVEAL_DURATION = 0.9;
 const PRECISION_AIM_HOLD_DURATION = 0.5;
@@ -1098,6 +1099,7 @@ export class BattleScene extends Component {
   private g: Graphics | null = null;
   private terrainLayerNode: Node | null = null;
   private mapNode: Node | null = null;
+  private mapInputNode: Node | null = null;
   private fogNode: Node | null = null;
   private fogGraphics: Graphics | null = null;
   private unitVisibilityMaskNode: Node | null = null;
@@ -1364,6 +1366,7 @@ export class BattleScene extends Component {
   private endTurnBtn: Node | null = null;
   private endTurnBg: Graphics | null = null;
   private endTurnLabel: Label | null = null;
+  private campaignDebugSkipBtn: Node | null = null;
   /** 底部"阶段选择"条：舱盖 + 移动 / 攻击；在 choose 子步骤可见，其他子步骤隐藏 */
   private chooseBar: Node | null = null;
   private chooseHatchBtn: Node | null = null;
@@ -1829,10 +1832,17 @@ export class BattleScene extends Component {
       });
     });
 
-    // 注册地图点击与关卡可选的拖动浏览。
-    gNode.on(Node.EventType.TOUCH_START, this.onMapPanStart, this);
-    gNode.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
-    gNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
+    const mapInputNode = new Node('MapInput');
+    mapInputNode.layer = this.node.layer;
+    mapInputNode.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    mapInputNode.setPosition(0, 0, 0);
+    this.node.addChild(mapInputNode);
+    this.mapInputNode = mapInputNode;
+
+    // Register map touches on a root-level layer so campaign camera offsets do not move the hit area.
+    mapInputNode.on(Node.EventType.TOUCH_START, this.onMapPanStart, this);
+    mapInputNode.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
+    mapInputNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
 
     // HUD：回合数 + 阶段信息 + 下一阶段按钮
     this.buildHUD();
@@ -2677,6 +2687,20 @@ export class BattleScene extends Component {
     this.startCampaignPanToSegment(nextIndex);
   }
 
+  private debugSkipCampaignSegment() {
+    if (!this.campaignRuntime || !this.mission) return;
+    if (this.isBusy()) return;
+    if (this.activeCampaignSegmentIndex >= this.campaignRuntime.segments.length - 1) return;
+    this.closeDiePopover();
+    this.clearGunSelection();
+    this.phaseDice = [];
+    this.playerDiceRollAnim = null;
+    this.playerDiceSortAnim = null;
+    this.outcome = 'victory';
+    this.battleLog('[Debug] 跳到下一关');
+    this.advanceCampaignSegment();
+  }
+
   private currentTurnEndMissionId(): string {
     if (this.campaignRuntime) {
       const segment = this.campaignRuntime.segments[this.activeCampaignSegmentIndex];
@@ -2692,11 +2716,46 @@ export class BattleScene extends Component {
   private campaignViewTiles(): Tile[] {
     if (!this.mission || !this.campaignRuntime) return this.mission?.map.all() ?? [];
     const viewIndex = this.campaignViewSegmentIndexOverride ?? this.activeCampaignSegmentIndex;
+    return this.cameraReferenceSegmentTiles(viewIndex);
+  }
+
+  private cameraReferenceSegmentTiles(index: number): Tile[] {
+    if (!this.mission || !this.campaignRuntime) return [];
     const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
     return this.mission.map.all().filter(tile => {
       const offset = axialToOffset(tile.pos, rowParityOffset);
-      return campaignSegmentForOffset(this.campaignRuntime!, offset) === viewIndex;
+      return campaignSegmentForOffset(this.campaignRuntime!, offset) === index;
     });
+  }
+
+  private cameraReferenceTilesForSegment(index: number): Tile[] {
+    const segmentTiles = this.cameraReferenceSegmentTiles(index);
+    const playableTiles = segmentTiles.filter(tile => !tile.displayOnly);
+    return playableTiles.length > 0 ? playableTiles : segmentTiles;
+  }
+
+  private cameraReferenceTiles(): Tile[] {
+    if (!this.mission) return [];
+    if (this.campaignRuntime) {
+      const viewIndex = this.campaignViewSegmentIndexOverride ?? this.activeCampaignSegmentIndex;
+      return this.cameraReferenceTilesForSegment(viewIndex);
+    }
+    const tiles = this.mission.map.all();
+    const playableTiles = tiles.filter(tile => !tile.displayOnly);
+    return playableTiles.length > 0 ? playableTiles : tiles;
+  }
+
+  private tileBoundsCenter(tiles: Tile[]): { x: number; y: number } | null {
+    if (tiles.length <= 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const t of tiles) {
+      const p = axialToPixel(t.pos, this.hexSize);
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
   }
 
   private isCampaignNextSegmentEntry(pos: Axial): boolean {
@@ -2706,6 +2765,26 @@ export class BattleScene extends Component {
     const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
     const offset = axialToOffset(pos, rowParityOffset);
     return campaignSegmentForOffset(this.campaignRuntime, offset) === nextIndex;
+  }
+
+  private isCurrentCampaignSegmentTile(pos: Axial): boolean {
+    if (!this.mission || !this.campaignRuntime) return true;
+    const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
+    const offset = axialToOffset(pos, rowParityOffset);
+    return campaignSegmentForOffset(this.campaignRuntime, offset) === this.activeCampaignSegmentIndex;
+  }
+
+  private canMoveWithinCurrentCampaignSegment(pos: Axial): boolean {
+    return this.isCurrentCampaignSegmentTile(pos);
+  }
+
+  private isEffectiveBattleTile(tile: Tile | undefined | null): boolean {
+    return !!tile && !tile.displayOnly && this.isCurrentCampaignSegmentTile(tile.pos);
+  }
+
+  private canMoveToBattleTile(pos: Axial): boolean {
+    if (!this.mission) return false;
+    return this.isEffectiveBattleTile(this.mission.map.get(pos));
   }
 
   private resumeAfterMissionLoadedIfNeeded() {
@@ -2727,20 +2806,13 @@ export class BattleScene extends Component {
     this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
     this.shermanSpawnFacing = sh0.facing;
     const tiles = this.mission.map.all();
-    const viewTiles = this.campaignRuntime ? this.campaignViewTiles() : tiles;
+    const viewTiles = this.cameraReferenceTiles();
 
     // 计算地图像素包围盒，用于居中
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const t of viewTiles.length > 0 ? viewTiles : tiles) {
-      const p = axialToPixel(t.pos, this.hexSize);
-      if (p.x < minX) minX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y > maxY) maxY = p.y;
-    }
-    this.offsetX = -(minX + maxX) / 2;
+    const center = this.tileBoundsCenter(viewTiles.length > 0 ? viewTiles : tiles) ?? { x: 0, y: 0 };
+    this.offsetX = -center.x;
     // Cocos Y 朝上，但我们希望 row 0 在屏幕顶部 → Y 取负
-    this.offsetY = (minY + maxY) / 2 + BOARD_CENTER_OFFSET_Y;
+    this.offsetY = center.y + BOARD_CENTER_OFFSET_Y;
     this.updateMapPanBounds(data);
     this.applyMapViewPosition(0, 0);
 
@@ -3002,6 +3074,8 @@ export class BattleScene extends Component {
     this.drawOfficerTileHighlights();
     this.drawActiveActingUnitFrame();
     this.redrawCampaignShadow();
+    this.redrawDisplayOnlyShadow();
+    this.drawEffectiveBattlefieldBoundary();
 
     // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
     const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
@@ -3096,15 +3170,15 @@ export class BattleScene extends Component {
   }
 
   private campaignSegmentPanTarget(index: number): { x: number; y: number } {
-    const segment = this.campaignRuntime?.segments[index];
-    if (!segment) return { x: this.mapNode?.position.x ?? 0, y: this.mapNode?.position.y ?? 0 };
-    const rowParityOffset = this.mission?.data.rowParityOffset === 1 ? 1 : 0;
-    const centerCol = segment.colOffset + (segment.cols - 1) / 2;
-    const centerRow = segment.rowOffset + (segment.rows - 1) / 2;
-    const axial = offsetToAxial({ col: Math.round(centerCol), row: Math.round(centerRow) }, rowParityOffset);
-    const center = this.project(axial.q, axial.r);
+    const segmentTiles = this.cameraReferenceTilesForSegment(index);
+    const boundsCenter = this.tileBoundsCenter(segmentTiles);
+    if (!boundsCenter) return { x: this.mapNode?.position.x ?? 0, y: this.mapNode?.position.y ?? 0 };
+    const center = {
+      x: boundsCenter.x + this.offsetX,
+      y: -boundsCenter.y + this.offsetY,
+    };
     const rawX = -center.x;
-    const rawY = -center.y;
+    const rawY = BOARD_CENTER_OFFSET_Y - center.y;
     if (this.campaignRuntime) return { x: rawX, y: rawY };
     const x = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, rawX));
     const y = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, rawY));
@@ -3222,17 +3296,66 @@ export class BattleScene extends Component {
   private redrawCampaignShadow() {
     if (!this.g || !this.mission || !this.campaignRuntime) return;
     const g = this.g;
-    const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
     g.fillColor = CAMPAIGN_SHADOW_COLOR;
     for (const tile of this.mission.map.all()) {
-      const offset = axialToOffset(tile.pos, rowParityOffset);
-      const segmentIndex = campaignSegmentForOffset(this.campaignRuntime, offset);
-      if (segmentIndex !== null && segmentIndex !== this.activeCampaignSegmentIndex) {
+      if (this.isCampaignShadowTile(tile)) {
         const c = this.project(tile.pos.q, tile.pos.r);
         this.traceHexPath(c.x, c.y, this.hexSize);
         g.fill();
       }
     }
+  }
+
+  private isCampaignShadowTile(tile: Tile): boolean {
+    if (!this.mission || !this.campaignRuntime) return false;
+    const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
+    const offset = axialToOffset(tile.pos, rowParityOffset);
+    const segmentIndex = campaignSegmentForOffset(this.campaignRuntime, offset);
+    return segmentIndex !== null && segmentIndex !== this.activeCampaignSegmentIndex;
+  }
+
+  private isDeepShadowTile(tile: Tile): boolean {
+    return !!tile.displayOnly || this.isCampaignShadowTile(tile);
+  }
+
+  private redrawDisplayOnlyShadow() {
+    if (!this.g || !this.mission) return;
+    const g = this.g;
+    g.fillColor = CAMPAIGN_SHADOW_COLOR;
+    for (const tile of this.mission.map.all()) {
+      if (!tile.displayOnly) continue;
+      if (this.isCampaignShadowTile(tile)) continue;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPath(c.x, c.y, this.hexSize);
+      g.fill();
+    }
+  }
+
+  private drawEffectiveBattlefieldBoundary() {
+    if (!this.g || !this.mission) return;
+    const g = this.g;
+    g.strokeColor = EFFECTIVE_BATTLEFIELD_BOUNDARY_COLOR;
+    g.lineWidth = 4;
+    for (const tile of this.mission.map.all()) {
+      if (!this.isEffectiveBattleTile(tile)) continue;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      for (let ax = 0; ax < 6; ax++) {
+        const n = this.mission.map.get(neighbor(tile.pos, ax as Direction));
+        if (this.isEffectiveBattleTile(n)) continue;
+        this.drawBattlefieldBoundaryEdge(c.x, c.y, this.hexSize, ax as Direction);
+      }
+    }
+    g.lineWidth = 2;
+  }
+
+  private drawBattlefieldBoundaryEdge(cx: number, cy: number, size: number, axialDir: Direction) {
+    const g = this.g!;
+    const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axialDir];
+    const a1 = (-30 + 60 * edge) * Math.PI / 180;
+    const a2 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
+    g.moveTo(cx + size * Math.cos(a1), cy + size * Math.sin(a1));
+    g.lineTo(cx + size * Math.cos(a2), cy + size * Math.sin(a2));
+    g.stroke();
   }
 
   private redrawUnitVisibilityMask() {
@@ -3257,6 +3380,7 @@ export class BattleScene extends Component {
     if (!fogNode.active) return;
     fog.fillColor = FOG_OVERLAY_COLOR;
     for (const tile of this.mission.map.all()) {
+      if (this.isDeepShadowTile(tile)) continue;
       if (this.isHexVisible(tile.pos)) continue;
       const c = this.project(tile.pos.q, tile.pos.r);
       this.traceHexPathOn(fog, c.x, c.y, this.hexSize);
@@ -3264,6 +3388,7 @@ export class BattleScene extends Component {
     }
     if (this.hasTurretReconGunSelection() && !this.turretAimAnim) {
       for (const tile of this.mission.map.all()) {
+        if (this.isDeepShadowTile(tile)) continue;
         if (this.fogTurretAimDirection(tile.pos) === null) continue;
         const c = this.project(tile.pos.q, tile.pos.r);
         this.drawFogTurretAimEye(fog, c.x, c.y);
@@ -5170,9 +5295,14 @@ export class BattleScene extends Component {
     for (const c of cands) {
       const pos = neighbor(sherman.pos, c.dir as 0 | 1 | 2 | 3 | 4 | 5);
       const tile = map.get(pos);
-      const blocked = !tile
+      const dirSign = c.dir === sherman.facing ? 1 : -1;
+      const isEvacExit = !GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign as 1 | -1, pos, {
+        canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
+      });
+      const blocked = !isEvacExit && (!tile
+        || !this.canMoveToBattleTile(pos)
         || !map.canTankCrossEdge(sherman.pos, pos) // 桥梁边向校验：水域+桥梁需 dir 落在 br 端，详见 GDD §3.2
-        || this.findMoveBlocker(sherman, pos) !== null;
+        || this.findMoveBlocker(sherman, pos) !== null);
       const p = this.project(pos.q, pos.r);
       this.g.strokeColor = blocked ? DRIVE_BLOCKED : c.color;
       this.g.lineWidth = 3;
@@ -7363,6 +7493,7 @@ export class BattleScene extends Component {
     btn.on(Node.EventType.TOUCH_END, this.onAdvanceClicked, this);
     this.node.addChild(btn);
     this.endTurnBtn = btn;
+    this.buildCampaignDebugSkipButton();
 
     // ---- 右侧谢尔曼状态面板：须先于 ⚙ 创建，否则面板会盖在设置按钮上 ----
     this.buildStatusPanel();
@@ -7376,6 +7507,33 @@ export class BattleScene extends Component {
       this.node, BATTLE_SETTINGS_CX, BATTLE_SETTINGS_CY, BATTLE_SETTINGS_R, '⚙',
       () => this.openBattleSettings(),
     );
+  }
+
+  private buildCampaignDebugSkipButton() {
+    const btn = this.makeBattleRectButton(
+      this.node,
+      CANVAS_W * 0.5 - 100,
+      BOTTOM_PHASE_ROW_Y + 74,
+      180,
+      38,
+      BATTLE_BTN_ACCENT,
+      () => this.debugSkipCampaignSegment(),
+    );
+    const lab = this.makeBattleModalLabel(btn.node, '跳到下一关', 0, 0, 180, 38, 18, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(lab, () => {
+      playUiClick();
+      this.debugSkipCampaignSegment();
+    });
+    this.campaignDebugSkipBtn = btn.node;
+    this.campaignDebugSkipBtn.active = false;
+  }
+
+  private refreshCampaignDebugSkipButton() {
+    if (!this.campaignDebugSkipBtn) return;
+    this.campaignDebugSkipBtn.active = !!this.campaignRuntime
+      && this.outcome === 'ongoing'
+      && !this.campaignTransitionActive
+      && this.activeCampaignSegmentIndex < this.campaignRuntime.segments.length - 1;
   }
 
   /** 左下角战斗记录：ScrollView + 标题条点击放大；展开时全屏半透明遮罩点击缩小。 */
@@ -8729,6 +8887,7 @@ export class BattleScene extends Component {
   private refreshPhaseUI() {
     const pvpReady = !GameSession.isPvp || this.pvpBattleStarted;
     const inBattle = pvpReady && this.phase === 'player' && this.outcome === 'ongoing';
+    this.refreshCampaignDebugSkipButton();
     /** 即将自动进杂项：本帧不应亮选择条，否则会闪一帧移动/攻击按钮再消失 */
     const pendingMiscAuto = inBattle && this.playerStep === 'choose'
       && this.movementDone && this.attackDone && !this.miscDone;
@@ -9227,10 +9386,25 @@ export class BattleScene extends Component {
       if (!this.movementDone || !this.attackDone) {
         const next = !this.movementDone ? 'movement' : 'attack';
         if (this.isBusy()) {
-          this.scheduleOnce(() => this.enterPhaseIfChoose(next), 0);
+          this.autoEnterPhaseWhenReady(next);
         }
       }
     }
+  }
+
+  private autoEnterPhaseWhenReady(which: 'movement' | 'attack' | 'misc', attempts = 0) {
+    this.scheduleOnce(() => {
+      if (this.phase !== 'player' || this.outcome !== 'ongoing') return;
+      if (this.playerStep !== 'choose') return;
+      if (which === 'movement' && this.movementDone) return;
+      if (which === 'attack' && this.attackDone) return;
+      if (which === 'misc' && (this.miscDone || !this.movementDone || !this.attackDone)) return;
+      if (this.isBusy()) {
+        if (attempts < 60) this.autoEnterPhaseWhenReady(which, attempts + 1);
+        return;
+      }
+      this.enterPhaseIfChoose(which);
+    }, 0);
   }
 
   /**
@@ -9287,7 +9461,7 @@ export class BattleScene extends Component {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) return null;
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
-    if (!map.get(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
+    if (!map.get(to) || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
       return t('floater.blockedTerrain');
     }
     const blocker = this.findMoveBlocker(sherman, to);
@@ -9759,7 +9933,7 @@ export class BattleScene extends Component {
     const tile = map.get(to);
     // 桥梁规则（GDD §3.2）：水域+桥梁可入；入 / 出方向须落在 bridgeEnds 端，否则等同越水阻挡。
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
-    if (!tile || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
+    if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
@@ -10460,7 +10634,7 @@ export class BattleScene extends Component {
     }
     const tile = map.get(to);
     // 桥梁规则（GDD §3.2）：与单骰 drive 路径一致 —— 水域+桥梁需边向落在 bridgeEnds 端
-    if (!tile || !map.canTankCrossEdge(sherman.pos, to)) {
+    if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
@@ -12820,6 +12994,8 @@ export class BattleScene extends Component {
         return !!this.findJapaneseInfantryMove(enemy);
       }
       if (!canExecuteAction(enemy, a, target, map, occupied, this.mission?.smokeHexes)) return false;
+      const moveDestination = this.aiMoveDestinationForAction(enemy, a);
+      if (moveDestination && !this.canMoveToBattleTile(moveDestination)) return false;
       if (!this.isAIReverseMoveFilterEnabled()) return true;
       const moveState = this.aiMoveStateForAction(enemy, a, target, occupied, { useRng: !!opts.commitMoveState });
       if (!this.isAIMoveStateAllowed(moveState, enemy)) return false;
@@ -12916,6 +13092,7 @@ export class BattleScene extends Component {
           ? enemy.facing
           : rotateDirection(enemy.facing, 3);
         const to = neighbor(enemy.pos, dir);
+        if (!this.canMoveToBattleTile(to)) return 'done';
         // §3.5 隐蔽：坦克前进 / 后退也会脱离隐蔽
         this.breakConcealment(enemy);
         if (this.isAIReverseMoveFilterEnabled()) {
@@ -13034,6 +13211,7 @@ export class BattleScene extends Component {
     for (const n of neighbors(enemy.pos)) {
       const tile = this.mission.map.get(n);
       if (!tile) continue;
+      if (!this.canMoveToBattleTile(n)) continue;
       if (tile.terrain === 'beach' || tile.terrain === 'deep_water') continue;
       if (occupied.has(`${n.q},${n.r}`)) continue;
       const d = hexDistance(n, target.pos);
@@ -13095,6 +13273,19 @@ export class BattleScene extends Component {
         return 'advance';
       case 'reverse':
         return 'reverse';
+      default:
+        return null;
+    }
+  }
+
+  private aiMoveDestinationForAction(enemy: Unit, action: EnemyAction): Axial | null {
+    if (enemy.facing === null) return null;
+    switch (action) {
+      case 'advance':
+      case 'advance_to_building':
+        return neighbor(enemy.pos, enemy.facing);
+      case 'reverse':
+        return neighbor(enemy.pos, rotateDirection(enemy.facing, 3));
       default:
         return null;
     }
@@ -14420,7 +14611,7 @@ export class BattleScene extends Component {
     show.stage = 'hold';
     show.t = 0;
     show.outcomeLabel.node.active = false;
-    if (show.confirmButton) show.confirmButton.active = !show.mg;
+    if (show.confirmButton) show.confirmButton.active = !show.mg || show.requireManualClose;
     if (!show.holdNotified) {
       show.holdNotified = true;
       show.onHold?.();
@@ -16216,6 +16407,13 @@ export class BattleScene extends Component {
         : undefined;
 
     if (truck && truckSegments && truckSegments.length > 0) {
+      if (truckSegments.some(seg => seg.type === 'move' && !this.canMoveToBattleTile(seg.to))) {
+        this.destroyTurnEndEventUI();
+        this.refreshStatusPanel();
+        this.redraw();
+        this.endEnemyPhase();
+        return;
+      }
       const defeatAfterExitMove = !!ui.germanTruckDefeatAfterExitMove;
       this.destroyTurnEndEventUI();
       this.pendingAfterAnimChain = () => {
@@ -16236,6 +16434,13 @@ export class BattleScene extends Component {
     }
 
     if (tankReinforceMove && this.mission) {
+      if (!this.canMoveToBattleTile(tankReinforceMove.to)) {
+        this.destroyTurnEndEventUI();
+        this.refreshStatusPanel();
+        this.redraw();
+        this.endEnemyPhase();
+        return;
+      }
       this.destroyTurnEndEventUI();
       try {
         applyFn();

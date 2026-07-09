@@ -147,6 +147,27 @@ export const LEVELS: LevelMeta[] = CHAPTERS
   .sort((a, b) => a.order - b.order)
   .flatMap(chapter => chapter.levels);
 
+export function getImportableMissionLevels(): LevelMeta[] {
+  const missionLevels = LEVELS
+    .filter(level => level.missionPath && (level.entryKind ?? 'mission') === 'mission')
+    .map(level => ({ ...level }));
+  const campaignSegments: LevelMeta[] = [];
+  for (const campaign of CAMPAIGNS
+    .slice()
+    .sort((a, b) => a.order - b.order)) {
+    campaignSegments.push(...campaign.segments.map((segment, index) => ({
+      chapterId: CAMPAIGN_CHAPTER_ID,
+      id: campaign.levelId * 10 + index + 1,
+      missionPath: segment.missionPath,
+      titleKey: campaign.titleKey,
+      missionId: segment.id,
+      entryKind: 'mission' as const,
+      titleOverride: `${campaign.titleKey} · ${String(index + 1).padStart(2, '0')}`,
+    })));
+  }
+  return [...missionLevels, ...campaignSegments];
+}
+
 export function getChapter(id: ChapterId): ChapterMeta | undefined {
   return CHAPTERS.find(c => c.id === id);
 }

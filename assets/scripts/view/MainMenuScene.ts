@@ -20,7 +20,7 @@
 
 import {
   _decorator, Canvas, Color, Component, EditBox, EventMouse, EventTouch, Graphics,
-  HorizontalTextAlignment, Label, Layers, Mask, Node, ScrollView, Sprite, SpriteFrame, UITransform,
+  HorizontalTextAlignment, JsonAsset, Label, Layers, Mask, Node, ScrollView, Sprite, SpriteFrame, UITransform,
   Vec3, VerticalTextAlignment, director, resources,
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
@@ -45,6 +45,7 @@ import {
   MenuProgress,
   getChapter,
   getChapterLevels,
+  getImportableMissionLevels,
 } from '../core/LevelDB';
 import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
@@ -125,6 +126,8 @@ const CHAPTER_BTN_ACTIVE  = new Color(148,  96,  46, 245);
 const CHAPTER_EMPTY_BG    = new Color( 42,  48,  42, 222);
 const MODE_BTN_IDLE       = new Color( 55,  61,  53, 238);
 const MODE_BTN_ACTIVE     = new Color(145,  95,  44, 245);
+const DISPLAY_ONLY_EDITOR_SHADE = new Color(0, 0, 0, 125);
+const EDITOR_BATTLEFIELD_EDGE = new Color(255, 232, 154, 245);
 
 const AUTH_CARD_BG        = new Color( 44,  50,  42, 245);
 const AUTH_CARD_ACTIVE    = new Color( 77,  88,  57, 248);
@@ -2312,7 +2315,7 @@ export class MainMenuScene extends Component {
 
     type EditorTile = TileDef | null;
     type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null };
-    type EditorCell = { redraw: (tile: EditorTile) => void };
+    type EditorCell = { redraw: (tile: EditorTile) => void; drawBoundary: () => void };
 
     const terrainTools: TerrainTool[] = [
       { code: null, key: 'levelEditor.terrain.none', color: new Color(18, 24, 22, 120), spriteKey: null },
@@ -2342,15 +2345,19 @@ export class MainMenuScene extends Component {
 
     const spriteFrames: Record<string, SpriteFrame | null> = {};
     const cells: EditorCell[] = [];
+    const drawEffectiveBattlefieldBoundary = () => {
+      for (const cell of cells) cell.drawBoundary();
+    };
     const existingEntries = CustomMissionStore.list();
     const requestedEntry = initialPackageId ? existingEntries.find(entry => entry.id === initialPackageId) : null;
     let editingPackageId: string | null = requestedEntry?.id ?? existingEntries[0]?.id ?? null;
+    const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
     const existingPackage = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
+    let draftBaseMission: Partial<MissionData> = cloneJson(existingPackage?.mission ?? {});
     let rows = existingPackage?.mission.rows ?? 6;
     let cols = existingPackage?.mission.cols ?? 8;
     let draftRowParityOffset: 0 | 1 = existingPackage?.mission.rowParityOffset === 1 ? 1 : 0;
     let draftTiles: EditorTile[][] = this.cloneEditorTiles(existingPackage?.mission.tiles, rows, cols);
-    const cloneJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
     const defaultSherman = (): UnitPlacement => ({
       kind: 'sherman',
       faction: 'allied',
@@ -2481,6 +2488,7 @@ export class MainMenuScene extends Component {
       return `${unitKindLabels[unit.kind]} ${at} f${unit.facing ?? '-'}`;
     };
     const refreshDraftForNewMission = () => {
+      draftBaseMission = {};
       draftName = getLang() === 'en' ? 'Custom Mission' : '自定义关卡';
       draftDescription = draftName;
       draftObjective = { type: 'destroy_all_enemies' };
@@ -2513,6 +2521,10 @@ export class MainMenuScene extends Component {
       terrainTools.find(tool => tool.code === (tile?.t ?? null))?.spriteKey ?? null;
     const normalizeFlags = (raw: string | undefined) =>
       /^[01]{6}$/.test(raw ?? '') ? raw! : '000000';
+    const isDisplayOnlyEditorTile = (tile: EditorTile) =>
+      !!tile && (tile.disp === 1 || tile.disp === true);
+    const isEffectiveEditorTile = (tile: EditorTile) =>
+      !!tile && !isDisplayOnlyEditorTile(tile);
     const setFlag = (raw: string | undefined, index: number, value: boolean): string | undefined => {
       const chars = normalizeFlags(raw).split('');
       chars[index] = value ? '1' : '0';
@@ -2550,6 +2562,7 @@ export class MainMenuScene extends Component {
           cells[row * cols + col]?.redraw(draftTiles[row]?.[col] ?? null);
         }
       }
+      drawEffectiveBattlefieldBoundary();
     };
     const propRoot = new Node('EditorTileProps');
     propRoot.layer = this.node.layer;
@@ -2923,18 +2936,29 @@ export class MainMenuScene extends Component {
         const allowsAirstripDirs = tile.t === 'a';
         const allowsBridge = tile.t === 'w';
         const allowsBreakwater = tile.t === 'c' || tile.t === 'T';
-        const allowsStarts = tile.t !== 'dw';
+        const allowsStarts = tile.t !== 'dw' && !isDisplayOnlyEditorTile(tile);
 
+        addBtn(isDisplayOnlyEditorTile(tile) ? '显示格: 不可进入' : '战场格: 可进入', 0, 114, 168, 28, isDisplayOnlyEditorTile(tile), () => {
+          if (isDisplayOnlyEditorTile(tile)) {
+            delete tile.disp;
+          } else {
+            tile.disp = 1;
+            delete tile.rid;
+            delete tile.rf;
+            delete tile.eid;
+            delete tile.ef;
+          }
+        });
         if (allowsBuilding) {
-          addBtn(tile.bd === 1 ? '建筑: 有' : '建筑: 无', -72, 114, 112, 28, tile.bd === 1, () => {
+          addBtn(tile.bd === 1 ? '建筑: 有' : '建筑: 无', -72, 82, 112, 28, tile.bd === 1, () => {
             if (tile.bd === 1) delete tile.bd;
             else tile.bd = 1;
           });
         }
-        addBtn('清空附加', allowsBuilding ? 72 : 0, 114, 112, 28, false, () => {
+        addBtn('清空附加', allowsBuilding ? 72 : 0, 82, 112, 28, false, () => {
           delete tile.bd; delete tile.h; delete tile.bw; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
         });
-        const sectionY = 34;
+        const sectionY = 8;
         if (allowsHedge) {
           addDirHexButtons(-78, sectionY, '树篱\nh', (i) => normalizeFlags(tile.h)[i] === '1', (i) => {
             tile.h = setFlag(tile.h, i, normalizeFlags(tile.h)[i] !== '1');
@@ -3023,7 +3047,7 @@ export class MainMenuScene extends Component {
       const allowsAirstripDirs = tile.t === 'a';
       const allowsBridge = tile.t === 'w';
       const allowsBreakwater = tile.t === 'c' || tile.t === 'T';
-      const allowsStarts = tile.t !== 'dw';
+      const allowsStarts = tile.t !== 'dw' && !isDisplayOnlyEditorTile(tile);
 
       if (allowsBuilding) {
         addBtn(tile.bd === 1 ? '建筑: 有' : '建筑: 无', -72, 146, 112, 28, tile.bd === 1, () => {
@@ -3122,6 +3146,18 @@ export class MainMenuScene extends Component {
       gridContent.setScale(gridScale, gridScale, 1);
       clampGridPosition();
     };
+    const editorNeighborOffset = (row: number, col: number, dir: number): { row: number; col: number } => {
+      const odd = (row + draftRowParityOffset) % 2 === 1;
+      switch (dir) {
+        case 0: return { row, col: col + 1 };
+        case 1: return { row: row + 1, col: odd ? col + 1 : col };
+        case 2: return { row: row + 1, col: odd ? col : col - 1 };
+        case 3: return { row, col: col - 1 };
+        case 4: return { row: row - 1, col: odd ? col : col - 1 };
+        case 5: return { row: row - 1, col: odd ? col + 1 : col };
+        default: return { row, col };
+      }
+    };
     gridViewport.on(Node.EventType.TOUCH_START, (ev: EventTouch) => {
       gridDragged = false;
       gridDragDistance = 0;
@@ -3216,6 +3252,18 @@ export class MainMenuScene extends Component {
       };
       const drawTileOverlays = (tile: EditorTile) => {
         if (!tile) return;
+        if (isDisplayOnlyEditorTile(tile)) {
+          outlineGraphics.fillColor = DISPLAY_ONLY_EDITOR_SHADE;
+          for (let i = 0; i < 6; i++) {
+            const angle = Math.PI / 180 * (60 * i - 30);
+            const px = Math.cos(angle) * radius;
+            const py = Math.sin(angle) * radius;
+            if (i === 0) outlineGraphics.moveTo(px, py);
+            else outlineGraphics.lineTo(px, py);
+          }
+          outlineGraphics.close();
+          outlineGraphics.fill();
+        }
         const rd = normalizeFlags(tile.rd);
         outlineGraphics.strokeColor = new Color(238, 212, 154, 240);
         outlineGraphics.lineWidth = 4;
@@ -3275,6 +3323,24 @@ export class MainMenuScene extends Component {
           outlineGraphics.fill();
         }
       };
+      const drawBoundary = () => {
+        const tile = draftTiles[row]?.[col] ?? null;
+        if (!isEffectiveEditorTile(tile)) return;
+        outlineGraphics.strokeColor = EDITOR_BATTLEFIELD_EDGE;
+        outlineGraphics.lineWidth = 4;
+        const angles = [0, -60, -120, 180, 120, 60];
+        for (let dir = 0; dir < 6; dir++) {
+          const n = editorNeighborOffset(row, col, dir);
+          const neighborTile = draftTiles[n.row]?.[n.col] ?? null;
+          if (isEffectiveEditorTile(neighborTile)) continue;
+          const a = angles[dir]!;
+          const p1 = pointForAngle(a - 30);
+          const p2 = pointForAngle(a + 30);
+          outlineGraphics.moveTo(p1.x * 0.99, p1.y * 0.99);
+          outlineGraphics.lineTo(p2.x * 0.99, p2.y * 0.99);
+          outlineGraphics.stroke();
+        }
+      };
       const redraw = (tile: EditorTile) => {
         const spriteKey = spriteKeyForTile(tile);
         sprite.spriteFrame = spriteKey ? (spriteFrames[spriteKey] ?? null) : null;
@@ -3307,7 +3373,7 @@ export class MainMenuScene extends Component {
       }, this);
       gridContent.addChild(node);
       redraw(draftTiles[row]![col] ?? null);
-      return { redraw };
+      return { redraw, drawBoundary };
     };
 
     const rebuildGrid = (resetView = false) => {
@@ -3328,12 +3394,160 @@ export class MainMenuScene extends Component {
           cells.push(makeCell(row, col, x, y));
         }
       }
+      drawEffectiveBattlefieldBoundary();
       if (resetView) {
         gridContent.setPosition(0, 0, 0);
         setGridScale(1);
       } else {
         clampGridPosition();
       }
+    };
+
+    let importPickerRoot: Node | null = null;
+    const closeImportPicker = () => {
+      if (importPickerRoot && importPickerRoot.isValid) importPickerRoot.destroy();
+      importPickerRoot = null;
+    };
+    const applyImportedMission = (mission: MissionData, meta: LevelMeta) => {
+      captureMissionFields();
+      draftBaseMission = cloneJson(mission);
+      rows = Math.max(1, mission.rows || 6);
+      cols = Math.max(1, mission.cols || 8);
+      draftRowParityOffset = mission.rowParityOffset === 1 ? 1 : 0;
+      draftTiles = this.cloneEditorTiles(mission.tiles, rows, cols);
+      draftName = mission.name || t(meta.titleKey) || meta.missionId;
+      draftDescription = mission.description || draftName;
+      draftObjective = cloneJson(mission.objective ?? { type: 'destroy_all_enemies' });
+      draftSherman = cloneJson(mission.sherman ?? defaultSherman());
+      draftAllies = cloneJson(mission.allies ?? []);
+      draftEnemies = cloneJson(mission.enemies ?? [defaultEnemy()]);
+      draftTurnEndEvents = [];
+      draftEnemyStartByDice = !!mission.enemyStartByDice;
+      draftShermanStartByDice = !!mission.shermanStartByDice;
+      draftEnemyDiceEidMax = mission.enemyDiceEidMax;
+      draftAllowMapPan = !!mission.allowMapPan;
+      draftTruckPath = cloneJson(mission.truckPath ?? []);
+      selectedRow = 0;
+      selectedCol = 0;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          if (draftTiles[row]?.[col]) {
+            selectedRow = row;
+            selectedCol = col;
+            row = rows;
+            break;
+          }
+        }
+      }
+      editorTab = 'terrain';
+      unitKindPickerTarget = null;
+      unitRandomPickerTarget = null;
+      titleInput = null;
+      descInput = null;
+      rebuildGrid(true);
+      refreshSelection();
+      refreshCurrentLabel();
+      statusLabel.string = `已导入：${draftName}。点击保存后写入当前关卡。`;
+    };
+    const openImportMissionPicker = () => {
+      closeImportPicker();
+      const catalog = getImportableMissionLevels();
+      importPickerRoot = new Node('LevelEditorImportPicker');
+      importPickerRoot.layer = this.node.layer;
+      importPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
+      importPickerRoot.setPosition(0, 0, 0);
+      const backdrop = importPickerRoot.addComponent(Graphics);
+      backdrop.fillColor = new Color(0, 0, 0, 150);
+      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+      backdrop.fill();
+      importPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+        closeImportPicker();
+        ev.propagationStopped = true;
+      }, this);
+      panel.addChild(importPickerRoot);
+
+      const picker = new Node('ImportMissionList');
+      picker.layer = this.node.layer;
+      picker.addComponent(UITransform).setContentSize(900, 520);
+      picker.setPosition(0, 20, 0);
+      const pickerBg = picker.addComponent(Graphics);
+      drawFieldPanel(pickerBg, 900, 520, new Color(31, 38, 32, 250), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      picker.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+        ev.propagationStopped = true;
+      }, this);
+      importPickerRoot.addChild(picker);
+
+      this.makeLabel(picker, '导入关卡', 0, 214, 260, 34, 26, TEXT_TITLE);
+      const hint = this.makeLabel(picker, '选择一个已有配置关卡导入到当前编辑草稿。导入不会自动保存。', 0, 178, 760, 26, 17, TEXT_SUBTITLE);
+      hint.overflow = Label.Overflow.SHRINK;
+      const closeBtn = this.makeRectButton(picker, 410, 218, 38, 34, MODAL_CLOSE_BG, () => closeImportPicker());
+      this.makeLabel(closeBtn.node, 'X', 0, 0, 30, 30, 17, TEXT_PRIMARY);
+
+      if (!catalog.length) {
+        this.makeLabel(picker, '没有可导入的官方关卡。', 0, 30, 520, 34, 20, TEXT_SUBTITLE);
+        return;
+      }
+
+      const columns = 4;
+      const buttonW = 180;
+      const buttonH = 58;
+      const importViewportW = 820;
+      const importViewportH = 330;
+      const importColGap = 18;
+      const importRowGap = 72;
+      const importRows = Math.ceil(catalog.length / columns);
+      const importContentH = Math.max(importViewportH, importRows * importRowGap + 28);
+      const importViewport = new Node('ImportMissionViewport');
+      importViewport.layer = this.node.layer;
+      importViewport.addComponent(UITransform).setContentSize(importViewportW, importViewportH);
+      importViewport.setPosition(0, -18, 0);
+      importViewport.addComponent(Mask);
+      picker.addChild(importViewport);
+
+      const importScroll = importViewport.addComponent(ScrollView);
+      importScroll.vertical = true;
+      importScroll.horizontal = false;
+      importScroll.inertia = true;
+      importScroll.brake = 0.55;
+      importScroll.bounceDuration = 0.2;
+      importScroll.cancelInnerEvents = false;
+      importScroll.verticalScrollBar = null;
+      importScroll.horizontalScrollBar = null;
+
+      const importContent = new Node('ImportMissionContent');
+      importContent.layer = this.node.layer;
+      importContent.addComponent(UITransform).setContentSize(importViewportW, importContentH);
+      importViewport.addChild(importContent);
+      importScroll.content = importContent;
+
+      const gridW = columns * buttonW + (columns - 1) * importColGap;
+      const startX = -gridW / 2 + buttonW / 2;
+      const startY = importContentH / 2 - buttonH / 2 - 14;
+      for (let i = 0; i < catalog.length; i++) {
+        const meta = catalog[i]!;
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+        const x = startX + col * (buttonW + importColGap);
+        const y = startY - row * importRowGap;
+        const btn = this.makeRectButton(importContent, x, y, buttonW, buttonH, BTN_LEVEL_UNLOCKED, () => {
+          const importTitle = meta.titleOverride ?? t(meta.titleKey);
+          statusLabel.string = `正在导入：${importTitle}`;
+          resources.load(meta.missionPath, JsonAsset, (err, asset) => {
+            if (err || !asset?.json) {
+              console.warn('[LevelEditor] import mission failed:', meta.missionPath, err);
+              statusLabel.string = `导入失败：${importTitle}`;
+              return;
+            }
+            applyImportedMission(asset.json as MissionData, meta);
+            closeImportPicker();
+          });
+        });
+        const title = this.makeLabel(btn.node, meta.titleOverride ?? t(meta.titleKey), 0, 9, buttonW - 12, 24, 14, TEXT_PRIMARY);
+        title.overflow = Label.Overflow.SHRINK;
+        const sub = this.makeLabel(btn.node, meta.missionId, 0, -14, buttonW - 12, 18, 10, TEXT_SUBTITLE);
+        sub.overflow = Label.Overflow.SHRINK;
+      }
+      importPickerRoot.setSiblingIndex(panel.children.length - 1);
     };
 
     const shiftOffset = (offset: { col: number; row: number } | undefined, dc: number, dr: number) => {
@@ -3440,6 +3654,8 @@ export class MainMenuScene extends Component {
     this.makeLabel(prevBtn.node, t('levelEditor.workspace.prev'), 0, 0, 78, 40, 15, TEXT_PRIMARY);
     const nextBtn = this.makeRectButton(panel, -365, -322, 82, 40, BTN_LEVEL_UNLOCKED, () => switchMission(1));
     this.makeLabel(nextBtn.node, t('levelEditor.workspace.next'), 0, 0, 78, 40, 15, TEXT_PRIMARY);
+    const importBtn = this.makeRectButton(panel, -250, -322, 120, 40, BTN_LEVEL_UNLOCKED, () => openImportMissionPicker());
+    this.makeLabel(importBtn.node, '导入关卡', 0, 0, 112, 40, 15, TEXT_PRIMARY);
 
     const buildTurnEndEvents = (missionId: string): TurnEndEventRow[] =>
       draftTurnEndEvents.map(ev => ({
@@ -3458,7 +3674,7 @@ export class MainMenuScene extends Component {
         delete sherman.facing;
       }
       const mission: MissionData = {
-        ...(oldPkg?.mission ?? {}),
+        ...draftBaseMission,
         id: missionId,
         name: draftName || fallbackName,
         description: draftDescription || draftName || fallbackName,
@@ -3468,9 +3684,9 @@ export class MainMenuScene extends Component {
         sherman,
         enemies: cloneJson(draftEnemies),
         objective: cloneJson(draftObjective),
-        actionTableId: oldPkg?.mission.actionTableId ?? 'standard',
-        aiTableId: oldPkg?.mission.aiTableId ?? 'standard',
-        eventTableId: missionId,
+        actionTableId: draftBaseMission.actionTableId ?? 'standard',
+        aiTableId: draftBaseMission.aiTableId ?? 'standard',
+        eventTableId: draftBaseMission.eventTableId ?? missionId,
       };
       if (draftRowParityOffset === 1) mission.rowParityOffset = 1;
       else delete mission.rowParityOffset;

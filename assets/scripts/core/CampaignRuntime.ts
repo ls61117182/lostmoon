@@ -76,6 +76,78 @@ function stripStartMarkers(tile: TileDef): TileDef {
   return out;
 }
 
+interface CampaignTileCandidate {
+  tile: TileDef;
+  segmentIndex: number;
+  segmentId: string;
+  pos: Offset;
+}
+
+function isDisplayOnlyTile(tile: TileDef): boolean {
+  return tile.disp === 1 || tile.disp === true;
+}
+
+function resolveCampaignTileOverlap(
+  campaignId: string,
+  existing: CampaignTileCandidate | undefined,
+  incoming: CampaignTileCandidate,
+): CampaignTileCandidate {
+  if (!existing) return incoming;
+
+  const existingDisplayOnly = isDisplayOnlyTile(existing.tile);
+  const incomingDisplayOnly = isDisplayOnlyTile(incoming.tile);
+  if (!existingDisplayOnly && !incomingDisplayOnly) {
+    throw new Error(
+      `Campaign ${campaignId} has overlapping effective tiles at ${incoming.pos.col},${incoming.pos.row} `
+      + `between ${existing.segmentId} and ${incoming.segmentId}; campaign configuration is invalid`,
+    );
+  }
+  if (existingDisplayOnly && !incomingDisplayOnly) return incoming;
+  return existing;
+}
+
+function resolveCampaignTiles(
+  campaignId: string,
+  missions: MissionData[],
+  segments: CampaignSegmentRuntime[],
+  tileForSegment: (tile: TileDef, segmentIndex: number) => TileDef,
+): Map<string, CampaignTileCandidate> {
+  const resolved = new Map<string, CampaignTileCandidate>();
+  for (let i = 0; i < missions.length; i++) {
+    const mission = missions[i]!;
+    const segment = segments[i]!;
+    for (let row = 0; row < mission.rows; row++) {
+      for (let col = 0; col < mission.cols; col++) {
+        const tile = mission.tiles[row]?.[col] ?? null;
+        if (!tile) continue;
+        const target = translateOffset({ col, row }, mission, segment)!;
+        const key = offsetKey(target);
+        const incoming: CampaignTileCandidate = {
+          tile: tileForSegment(tile, i),
+          segmentIndex: i,
+          segmentId: segment.id || segment.missionId,
+          pos: target,
+        };
+        resolved.set(key, resolveCampaignTileOverlap(campaignId, resolved.get(key), incoming));
+      }
+    }
+  }
+  return resolved;
+}
+
+function resolveSegmentTileKeys(
+  campaignId: string,
+  missions: MissionData[],
+  segments: CampaignSegmentRuntime[],
+): string[][] {
+  const resolved = resolveCampaignTiles(campaignId, missions, segments, (tile) => tile);
+  const keys = segments.map((): string[] => []);
+  for (const [key, candidate] of resolved.entries()) {
+    keys[candidate.segmentIndex]!.push(key);
+  }
+  return keys;
+}
+
 function translateTruckPath(data: MissionData, segment: CampaignSegmentRuntime): MissionData['truckPath'] {
   return data.truckPath?.map(p => ({ ...p, ...translateOffset(p, data, segment)! }));
 }
@@ -175,6 +247,7 @@ export function translateMissionData(data: MissionData, segmentIndex: number, se
 }
 
 function buildTilesForActiveSegment(
+  campaignId: string,
   missions: MissionData[],
   segments: CampaignSegmentRuntime[],
   activeIndex: number,
@@ -186,19 +259,11 @@ function buildTilesForActiveSegment(
     () => Array.from({ length: totalCols }, () => null),
   );
 
-  for (let i = 0; i < missions.length; i++) {
-    const mission = missions[i]!;
-    const segment = segments[i]!;
-    for (let row = 0; row < mission.rows; row++) {
-      for (let col = 0; col < mission.cols; col++) {
-        const tile = mission.tiles[row]?.[col] ?? null;
-        if (!tile) continue;
-        const target = translateOffset({ col, row }, mission, segment)!;
-        rows[target.row]![target.col] = i === activeIndex
-          ? { ...tile }
-          : stripStartMarkers(tile);
-      }
-    }
+  const resolved = resolveCampaignTiles(campaignId, missions, segments, (tile, segmentIndex) =>
+    segmentIndex === activeIndex ? { ...tile } : stripStartMarkers(tile),
+  );
+  for (const candidate of resolved.values()) {
+    rows[candidate.pos.row]![candidate.pos.col] = candidate.tile;
   }
 
   return rows;
@@ -222,7 +287,7 @@ function buildActiveMissionData(
     description: translated.description,
     cols: totalCols,
     rows: totalRows,
-    tiles: buildTilesForActiveSegment(missions, segments, activeIndex, totalCols, totalRows),
+    tiles: buildTilesForActiveSegment(campaign.id, missions, segments, activeIndex, totalCols, totalRows),
   };
 }
 
@@ -242,6 +307,14 @@ export function stitchCampaignMissions(campaign: CampaignDefinition, missions: M
       missionPath: definition.missionPath,
       sourcePacificMissionId: definition.sourcePacificMissionId,
       missionId: mission.id,
+    };
+  }
+
+  const resolvedTileKeys = resolveSegmentTileKeys(campaign.id, missions, segments);
+  for (let i = 0; i < segments.length; i++) {
+    segments[i] = {
+      ...segments[i]!,
+      tileKeys: resolvedTileKeys[i]!,
     };
   }
 

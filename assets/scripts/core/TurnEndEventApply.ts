@@ -278,7 +278,7 @@ function prepareTankSpawnEvent(
   const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck', 'type95', 'type97', 'at_gun', 'heavy_artillery'];
   const blocked = occupants.some(occ => tankKinds.includes(occ.kind));
   const invalidTerrain = kind === 'type97' && tile?.terrain === 'rocky';
-  const placed = !!pos && !blocked && !invalidTerrain;
+  const placed = !!pos && !tile?.displayOnly && !blocked && !invalidTerrain;
   const face = ((spawnPoint === 'rid'
     ? tile?.reinforceFacing
     : tile?.enemyStartFacing) ?? (pos ? approximateDirection(pos, sh.pos) : 0)) as Direction;
@@ -549,7 +549,7 @@ export function prepareTurnEndEvent(
       const blocked = pacific
         ? occupants.some(blocksJapaneseInfantrySpawn)
         : occupants.length > 0;
-      const placed = !!pos && !blocked;
+      const placed = !!pos && !tile?.displayOnly && !blocked;
       return {
         bodyKey: placed
           ? (pacific ? 'turnEnd.japaneseInfantry.placed' : 'turnEnd.infantry.placed')
