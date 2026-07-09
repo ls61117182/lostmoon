@@ -1166,6 +1166,7 @@ export class BattleScene extends Component {
   private mission: LoadedMission | null = null;
   private campaignRuntime: StitchedCampaignData | null = null;
   private activeCampaignSegmentIndex = 0;
+  private campaignViewSegmentIndexOverride: number | null = null;
   private campaignTransitionActive = false;
   private campaignPanAnim: CampaignPanAnim | null = null;
   private offsetX = 0;
@@ -2563,6 +2564,7 @@ export class BattleScene extends Component {
     }
     this.campaignRuntime = null;
     this.activeCampaignSegmentIndex = 0;
+    this.campaignViewSegmentIndexOverride = null;
     this.campaignTransitionActive = false;
     this.campaignPanAnim = null;
     const source = GameSession.selectedMissionSource;
@@ -2607,6 +2609,7 @@ export class BattleScene extends Component {
       if (!segment) {
         this.campaignRuntime = stitchCampaignMissions(campaign, loaded);
         this.activeCampaignSegmentIndex = 0;
+        this.campaignViewSegmentIndexOverride = null;
         this.campaignTransitionActive = false;
         this.campaignPanAnim = null;
         this.missionSource = { type: 'resource', missionPath: campaign.segments[0]?.missionPath ?? '' };
@@ -2654,6 +2657,7 @@ export class BattleScene extends Component {
 
   private advanceCampaignSegment() {
     if (!this.campaignRuntime || !this.mission) return;
+    const previousIndex = this.activeCampaignSegmentIndex;
     const nextIndex = this.activeCampaignSegmentIndex + 1;
     const nextTemplate = this.campaignRuntime.segmentMissionData[nextIndex];
     if (!nextTemplate) return;
@@ -2666,9 +2670,11 @@ export class BattleScene extends Component {
 
     this.activeCampaignSegmentIndex = nextIndex;
     this.campaignTransitionActive = true;
+    this.campaignViewSegmentIndexOverride = previousIndex;
     this.loadAndDraw(nextData);
-    this.campaignTransitionActive = false;
+    this.campaignViewSegmentIndexOverride = null;
     this.battleLogI18n('battleLog.campaign.advance', { segment: nextIndex + 1 });
+    this.startCampaignPanToSegment(nextIndex);
   }
 
   private currentTurnEndMissionId(): string {
@@ -2685,10 +2691,11 @@ export class BattleScene extends Component {
 
   private campaignViewTiles(): Tile[] {
     if (!this.mission || !this.campaignRuntime) return this.mission?.map.all() ?? [];
+    const viewIndex = this.campaignViewSegmentIndexOverride ?? this.activeCampaignSegmentIndex;
     const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
     return this.mission.map.all().filter(tile => {
       const offset = axialToOffset(tile.pos, rowParityOffset);
-      return campaignSegmentForOffset(this.campaignRuntime!, offset) === this.activeCampaignSegmentIndex;
+      return campaignSegmentForOffset(this.campaignRuntime!, offset) === viewIndex;
     });
   }
 
@@ -3073,8 +3080,8 @@ export class BattleScene extends Component {
   }
 
   private applyMapViewPosition(x: number, y: number) {
-    const clampedX = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, x));
-    const clampedY = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, y));
+    const clampedX = this.campaignRuntime ? x : Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, x));
+    const clampedY = this.campaignRuntime ? y : Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, y));
     this.mapNode?.setPosition(clampedX, clampedY, 0);
     this.terrainLayerNode?.setPosition(clampedX, clampedY, 0);
   }
@@ -3087,8 +3094,11 @@ export class BattleScene extends Component {
     const centerRow = segment.rowOffset + (segment.rows - 1) / 2;
     const axial = offsetToAxial({ col: Math.round(centerCol), row: Math.round(centerRow) }, rowParityOffset);
     const center = this.project(axial.q, axial.r);
-    const x = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, -center.x));
-    const y = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, -center.y));
+    const rawX = -center.x;
+    const rawY = -center.y;
+    if (this.campaignRuntime) return { x: rawX, y: rawY };
+    const x = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, rawX));
+    const y = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, rawY));
     return { x, y };
   }
 
