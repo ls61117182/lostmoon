@@ -1,6 +1,6 @@
 import type { CampaignDefinition } from './CampaignDB';
-import { axialToOffset, neighbor, offsetToAxial } from './HexGrid';
-import type { Direction, MissionData, Offset, TileDef, UnitPlacement } from './types';
+import { axialAdd, axialToOffset, neighbor, offsetToAxial } from './HexGrid';
+import type { Axial, Direction, MissionData, Offset, TileDef, UnitPlacement } from './types';
 
 export interface CampaignSegmentRuntime {
   index: number;
@@ -9,14 +9,18 @@ export interface CampaignSegmentRuntime {
   sourcePacificMissionId: string;
   colOffset: number;
   rowOffset: number;
+  axialQOffset: number;
+  axialROffset: number;
+  maxColOffset: number;
+  maxRowOffset: number;
   cols: number;
   rows: number;
   missionId: string;
 }
 
 interface RawSegmentOffset {
-  col: number;
-  row: number;
+  q: number;
+  r: number;
 }
 
 export interface StitchedCampaignData {
@@ -30,23 +34,31 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function translateOffset(pos: Offset | undefined, colOffset: number, rowOffset: number): Offset | undefined {
-  if (!pos) return undefined;
-  return { col: pos.col + colOffset, row: pos.row + rowOffset };
+function localRowParity(data: MissionData): 0 | 1 {
+  return data.rowParityOffset === 1 ? 1 : 0;
 }
 
-function translatePlacement(p: UnitPlacement, colOffset: number, rowOffset: number): UnitPlacement {
+function translateOffset(pos: Offset | undefined, data: MissionData, segment: CampaignSegmentRuntime): Offset | undefined {
+  if (!pos) return undefined;
+  return axialToOffset(
+    axialAdd(offsetToAxial(pos, localRowParity(data)), { q: segment.axialQOffset, r: segment.axialROffset }),
+    0,
+  );
+}
+
+function translatePlacement(p: UnitPlacement, data: MissionData, segment: CampaignSegmentRuntime): UnitPlacement {
   const out: UnitPlacement = { ...p };
-  if (p.at) out.at = translateOffset(p.at, colOffset, rowOffset);
+  if (p.at) out.at = translateOffset(p.at, data, segment);
   if (p.crew) out.crew = { ...p.crew };
   if (p.startEids) out.startEids = p.startEids.slice();
   if (p.startRids) out.startRids = p.startRids.slice();
   return out;
 }
 
-function translateObjective(obj: MissionData['objective'], colOffset: number, rowOffset: number): MissionData['objective'] {
+function translateObjective(data: MissionData, segment: CampaignSegmentRuntime): MissionData['objective'] {
+  const obj = data.objective;
   const out = cloneJson(obj);
-  if (out.evacAt) out.evacAt = translateOffset(out.evacAt, colOffset, rowOffset);
+  if (out.evacAt) out.evacAt = translateOffset(out.evacAt, data, segment);
   return out;
 }
 
@@ -59,67 +71,99 @@ function stripStartMarkers(tile: TileDef): TileDef {
   return out;
 }
 
-function translateTruckPath(data: MissionData, colOffset: number, rowOffset: number): MissionData['truckPath'] {
-  return data.truckPath?.map(p => ({ ...p, col: p.col + colOffset, row: p.row + rowOffset }));
+function translateTruckPath(data: MissionData, segment: CampaignSegmentRuntime): MissionData['truckPath'] {
+  return data.truckPath?.map(p => ({ ...p, ...translateOffset(p, data, segment)! }));
 }
 
-function campaignExitTarget(data: MissionData, segmentOffset: RawSegmentOffset): Offset | null {
+function campaignExitTarget(data: MissionData, segmentOffset: RawSegmentOffset): Axial | null {
   const evacAt = data.objective.evacAt;
   const evacExitDir = data.objective.evacExitDir;
   if (!evacAt || evacExitDir == null) return null;
-  const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
-  const globalEvacAt = { col: evacAt.col + segmentOffset.col, row: evacAt.row + segmentOffset.row };
-  return axialToOffset(
-    neighbor(offsetToAxial(globalEvacAt, rowParityOffset), evacExitDir as Direction),
-    rowParityOffset,
-  );
+  const globalEvacAt = axialAdd(offsetToAxial(evacAt, localRowParity(data)), segmentOffset);
+  return neighbor(globalEvacAt, evacExitDir as Direction);
 }
 
-function segmentEntryAnchor(data: MissionData): Offset {
-  return data.sherman.at ? { ...data.sherman.at } : { col: 0, row: 0 };
+function segmentEntryAnchor(data: MissionData): Axial {
+  return offsetToAxial(data.sherman.at ? data.sherman.at : { col: 0, row: 0 }, localRowParity(data));
 }
 
 function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntime[] {
-  const rawOffsets: RawSegmentOffset[] = [{ col: 0, row: 0 }];
+  const rawOffsets: RawSegmentOffset[] = [{ q: 0, r: 0 }];
 
   for (let i = 1; i < missions.length; i++) {
     const prev = missions[i - 1]!;
     const current = missions[i]!;
     const prevOffset = rawOffsets[i - 1]!;
     const exitTarget = campaignExitTarget(prev, prevOffset)
-      ?? { col: prevOffset.col + prev.cols, row: prevOffset.row };
+      ?? axialAdd(offsetToAxial({ col: prev.cols, row: 0 }, localRowParity(prev)), prevOffset);
     const entry = segmentEntryAnchor(current);
     rawOffsets.push({
-      col: exitTarget.col - entry.col,
-      row: exitTarget.row - entry.row,
+      q: exitTarget.q - entry.q,
+      r: exitTarget.r - entry.r,
     });
   }
 
-  const minCol = Math.min(...rawOffsets.map((offset) => offset.col));
-  const minRow = Math.min(...rawOffsets.map((offset) => offset.row));
+  const translatedTileAxials: Axial[] = [];
+  for (let i = 0; i < missions.length; i++) {
+    const mission = missions[i]!;
+    const offset = rawOffsets[i]!;
+    for (let row = 0; row < mission.rows; row++) {
+      for (let col = 0; col < mission.cols; col++) {
+        if (!mission.tiles[row]?.[col]) continue;
+        translatedTileAxials.push(axialAdd(offsetToAxial({ col, row }, localRowParity(mission)), offset));
+      }
+    }
+  }
 
-  return rawOffsets.map((offset, index) => ({
-    index,
-    id: '',
-    missionPath: '',
-    sourcePacificMissionId: '',
-    colOffset: offset.col - minCol,
-    rowOffset: offset.row - minRow,
-    cols: missions[index]!.cols,
-    rows: missions[index]!.rows,
-    missionId: missions[index]!.id,
-  }));
+  const minQ = Math.min(...translatedTileAxials.map((pos) => pos.q));
+  const minR = Math.min(...translatedTileAxials.map((pos) => pos.r));
+  const normalize = { q: -minQ, r: -minR };
+
+  return rawOffsets.map((offset, index) => {
+    const mission = missions[index]!;
+    const axialOffset = axialAdd(offset, normalize);
+    const translatedOffsets: Offset[] = [];
+    for (let row = 0; row < mission.rows; row++) {
+      for (let col = 0; col < mission.cols; col++) {
+        if (!mission.tiles[row]?.[col]) continue;
+        translatedOffsets.push(axialToOffset(
+          axialAdd(offsetToAxial({ col, row }, localRowParity(mission)), axialOffset),
+          0,
+        ));
+      }
+    }
+    const minCol = Math.min(...translatedOffsets.map((pos) => pos.col));
+    const minRow = Math.min(...translatedOffsets.map((pos) => pos.row));
+    const maxCol = Math.max(...translatedOffsets.map((pos) => pos.col));
+    const maxRow = Math.max(...translatedOffsets.map((pos) => pos.row));
+    return {
+      index,
+      id: '',
+      missionPath: '',
+      sourcePacificMissionId: '',
+      colOffset: minCol,
+      rowOffset: minRow,
+      axialQOffset: axialOffset.q,
+      axialROffset: axialOffset.r,
+      maxColOffset: maxCol,
+      maxRowOffset: maxRow,
+      cols: mission.cols,
+      rows: mission.rows,
+      missionId: mission.id,
+    };
+  });
 }
 
-export function translateMissionData(data: MissionData, segmentIndex: number, colOffset: number, rowOffset = 0): MissionData {
+export function translateMissionData(data: MissionData, segmentIndex: number, segment: CampaignSegmentRuntime): MissionData {
   void segmentIndex;
   return {
     ...cloneJson(data),
-    sherman: translatePlacement(data.sherman, colOffset, rowOffset),
-    allies: (data.allies ?? []).map(p => translatePlacement(p, colOffset, rowOffset)),
-    enemies: data.enemies.map(p => translatePlacement(p, colOffset, rowOffset)),
-    objective: translateObjective(data.objective, colOffset, rowOffset),
-    truckPath: translateTruckPath(data, colOffset, rowOffset),
+    rowParityOffset: 0,
+    sherman: translatePlacement(data.sherman, data, segment),
+    allies: (data.allies ?? []).map(p => translatePlacement(p, data, segment)),
+    enemies: data.enemies.map(p => translatePlacement(p, data, segment)),
+    objective: translateObjective(data, segment),
+    truckPath: translateTruckPath(data, segment),
   };
 }
 
@@ -142,7 +186,8 @@ function buildTilesForActiveSegment(
       for (let col = 0; col < mission.cols; col++) {
         const tile = mission.tiles[row]?.[col] ?? null;
         if (!tile) continue;
-        rows[row + segment.rowOffset]![col + segment.colOffset] = i === activeIndex
+        const target = translateOffset({ col, row }, mission, segment)!;
+        rows[target.row]![target.col] = i === activeIndex
           ? { ...tile }
           : stripStartMarkers(tile);
       }
@@ -162,7 +207,7 @@ function buildActiveMissionData(
 ): MissionData {
   const source = missions[activeIndex]!;
   const segment = segments[activeIndex]!;
-  const translated = translateMissionData(source, activeIndex, segment.colOffset, segment.rowOffset);
+  const translated = translateMissionData(source, activeIndex, segment);
   return {
     ...translated,
     id: activeIndex === 0 ? campaign.missionId : translated.id,
@@ -189,14 +234,12 @@ export function stitchCampaignMissions(campaign: CampaignDefinition, missions: M
       id: definition.id,
       missionPath: definition.missionPath,
       sourcePacificMissionId: definition.sourcePacificMissionId,
-      cols: mission.cols,
-      rows: mission.rows,
       missionId: mission.id,
     };
   }
 
-  const totalCols = Math.max(...segments.map(segment => segment.colOffset + segment.cols));
-  const totalRows = Math.max(...segments.map(segment => segment.rowOffset + segment.rows));
+  const totalCols = Math.max(...segments.map(segment => segment.maxColOffset + 1));
+  const totalRows = Math.max(...segments.map(segment => segment.maxRowOffset + 1));
 
   const segmentMissionData = missions.map((_, index) =>
     buildActiveMissionData(campaign, missions, segments, index, totalCols, totalRows),
@@ -212,8 +255,8 @@ export function stitchCampaignMissions(campaign: CampaignDefinition, missions: M
 
 export function campaignSegmentForOffset(stitched: StitchedCampaignData, pos: Offset): number | null {
   for (const segment of stitched.segments) {
-    const inCol = pos.col >= segment.colOffset && pos.col < segment.colOffset + segment.cols;
-    const inRow = pos.row >= segment.rowOffset && pos.row < segment.rowOffset + segment.rows;
+    const inCol = pos.col >= segment.colOffset && pos.col <= segment.maxColOffset;
+    const inRow = pos.row >= segment.rowOffset && pos.row <= segment.maxRowOffset;
     if (inCol && inRow) return segment.index;
   }
   return null;

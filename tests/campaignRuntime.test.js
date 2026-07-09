@@ -48,8 +48,11 @@ const segB = {
   description: '',
   theater: 'pacific',
   cols: 3,
-  rows: 1,
-  tiles: [[{ t: 'c', eid: 1, rid: 1 }, { t: 'T', eid: 2, rid: 2 }, { t: 'c', eid: 3, rid: 3 }]],
+  rows: 2,
+  tiles: [
+    [{ t: 'c', eid: 1, rid: 1 }, { t: 'T', eid: 2, rid: 2 }, { t: 'c', eid: 3, rid: 3 }],
+    [{ t: 'f' }, null, null],
+  ],
   sherman: { kind: 'sherman', faction: 'allied', at: { col: 0, row: 0 }, facing: 0 },
   enemies: [{ kind: 'type95', faction: 'japanese', at: { col: 2, row: 0 }, facing: 3 }],
   objective: { type: 'destroy_all_enemies' },
@@ -73,11 +76,12 @@ const campaign = {
 const stitched = runtime.stitchCampaignMissions(campaign, [segA, segB]);
 assert.strictEqual(stitched.data.id, 'campaign_test');
 assert.strictEqual(stitched.data.cols, 4);
-assert.strictEqual(stitched.data.rows, 2);
+assert.strictEqual(stitched.data.rows, 3);
 assert.strictEqual(stitched.segments[0].colOffset, 0);
 assert.strictEqual(stitched.segments[1].colOffset, 1);
 assert.strictEqual(stitched.segments[1].rowOffset, 1);
 assert.strictEqual(stitched.data.tiles[1][2].t, 'T');
+assert.strictEqual(stitched.data.tiles[2][2].t, 'f', 'odd-row segment translation preserves local hex shape');
 assert.strictEqual(stitched.data.tiles[1][2].eid, undefined, 'future segment start markers are inactive');
 assert.strictEqual(stitched.segmentMissionData[1].tiles[1][2].eid, 2, 'active segment keeps own markers');
 assert.strictEqual(stitched.segmentMissionData[1].tiles[0][0].eid, undefined, 'previous segment start markers are inactive');
