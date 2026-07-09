@@ -77,6 +77,7 @@ assert.strictEqual(stitched.segments[1].colOffset, 2);
 assert.strictEqual(stitched.data.tiles[0][3].t, 'T');
 assert.strictEqual(stitched.data.tiles[0][3].eid, undefined, 'future segment start markers are inactive');
 assert.strictEqual(stitched.segmentMissionData[1].tiles[0][3].eid, 2, 'active segment keeps own markers');
+assert.strictEqual(stitched.segmentMissionData[1].tiles[0][0].eid, undefined, 'previous segment start markers are inactive');
 assert.deepStrictEqual(stitched.segmentMissionData[1].enemies[0].at, { col: 4, row: 0 });
 assert.strictEqual(stitched.segmentMissionData[0].enemies.length, 1);
 assert.strictEqual(stitched.segmentMissionData[1].enemies.length, 1);

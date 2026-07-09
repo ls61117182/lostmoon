@@ -2667,8 +2667,8 @@ export class BattleScene extends Component {
     this.activeCampaignSegmentIndex = nextIndex;
     this.campaignTransitionActive = true;
     this.loadAndDraw(nextData);
+    this.campaignTransitionActive = false;
     this.battleLogI18n('battleLog.campaign.advance', { segment: nextIndex + 1 });
-    this.startCampaignPanToSegment(nextIndex);
   }
 
   private currentTurnEndMissionId(): string {
@@ -2683,6 +2683,15 @@ export class BattleScene extends Component {
     return this.mission?.data.eventTableId ?? this.mission?.data.id ?? this.missionId;
   }
 
+  private campaignViewTiles(): Tile[] {
+    if (!this.mission || !this.campaignRuntime) return this.mission?.map.all() ?? [];
+    const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
+    return this.mission.map.all().filter(tile => {
+      const offset = axialToOffset(tile.pos, rowParityOffset);
+      return campaignSegmentForOffset(this.campaignRuntime!, offset) === this.activeCampaignSegmentIndex;
+    });
+  }
+
   private resumeAfterMissionLoadedIfNeeded() {
     if (!GameSession.resumeFromSave) return;
     this.onLoad_Save(/* skipHint */ true);
@@ -2694,7 +2703,7 @@ export class BattleScene extends Component {
     this.missionId = data.id;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
-    this.mapPanEnabled = data.allowMapPan === true || data.cols > 8 || data.rows > 6;
+    this.mapPanEnabled = this.campaignRuntime ? false : data.allowMapPan === true || data.cols > 8 || data.rows > 6;
     this.mapPanMoved = false;
     this.mapPanDistance = 0;
     const { sherman: sh0 } = this.mission;
@@ -2702,10 +2711,11 @@ export class BattleScene extends Component {
     this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
     this.shermanSpawnFacing = sh0.facing;
     const tiles = this.mission.map.all();
+    const viewTiles = this.campaignRuntime ? this.campaignViewTiles() : tiles;
 
     // 计算地图像素包围盒，用于居中
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const t of tiles) {
+    for (const t of viewTiles.length > 0 ? viewTiles : tiles) {
       const p = axialToPixel(t.pos, this.hexSize);
       if (p.x < minX) minX = p.x;
       if (p.y < minY) minY = p.y;
@@ -3198,10 +3208,11 @@ export class BattleScene extends Component {
     for (const tile of this.mission.map.all()) {
       const offset = axialToOffset(tile.pos, rowParityOffset);
       const segmentIndex = campaignSegmentForOffset(this.campaignRuntime, offset);
-      if (segmentIndex === null || segmentIndex <= this.activeCampaignSegmentIndex) continue;
-      const c = this.project(tile.pos.q, tile.pos.r);
-      this.traceHexPath(c.x, c.y, this.hexSize);
-      g.fill();
+      if (segmentIndex !== null && segmentIndex !== this.activeCampaignSegmentIndex) {
+        const c = this.project(tile.pos.q, tile.pos.r);
+        this.traceHexPath(c.x, c.y, this.hexSize);
+        g.fill();
+      }
     }
   }
 

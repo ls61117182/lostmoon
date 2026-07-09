@@ -53,6 +53,10 @@ assertContains('assets/scripts/view/BattleScene.ts', 'canAdvanceCampaignSegment'
 assertContains('assets/scripts/view/BattleScene.ts', 'carryShermanToNextSegment');
 assertContains('assets/scripts/view/BattleScene.ts', 'currentTurnEndMissionId');
 assertContains('assets/scripts/view/BattleScene.ts', 'CAMPAIGN_CHAPTER_ID');
+assertContains('assets/scripts/view/BattleScene.ts', 'private campaignViewTiles()');
+assertContains('assets/scripts/view/BattleScene.ts', 'this.mapPanEnabled = this.campaignRuntime ? false');
+assertContains('assets/scripts/view/BattleScene.ts', 'segmentIndex !== this.activeCampaignSegmentIndex');
+assertContains('assets/scripts/view/BattleScene.ts', 'this.campaignTransitionActive = false;');
 assertNotContainsInPacificBlock();
 
 console.log('campaignDB tests passed');
