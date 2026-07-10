@@ -292,6 +292,7 @@ function pvpProtagonistKind(factionId) {
 
 function pvpSupportKind(factionId) {
   if (factionId === "japan") return "japanese_infantry";
+  if (factionId === "usa") return "american_infantry";
   return "infantry";
 }
 
