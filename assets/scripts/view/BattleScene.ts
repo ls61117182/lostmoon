@@ -1158,6 +1158,18 @@ export class BattleScene extends Component {
     { dw: 0, dh: 0 },
     { dw: 0, dh: 0 },
   ];
+  private japaneseInfantrySpriteFrames: Array<SpriteFrame | null> = [null, null, null];
+  private japaneseInfantrySpriteDims: Array<{ dw: number; dh: number }> = [
+    { dw: 0, dh: 0 },
+    { dw: 0, dh: 0 },
+    { dw: 0, dh: 0 },
+  ];
+  private americanInfantrySpriteFrames: Array<SpriteFrame | null> = [null, null, null];
+  private americanInfantrySpriteDims: Array<{ dw: number; dh: number }> = [
+    { dw: 0, dh: 0 },
+    { dw: 0, dh: 0 },
+    { dw: 0, dh: 0 },
+  ];
   private infantryTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private infantryTopPoolNext = 0;
   private static readonly INFANTRY_SPRITES_PER_UNIT = 3;
@@ -1803,6 +1815,52 @@ export class BattleScene extends Component {
       });
     }
 
+    const japaneseInfantryPaths = [
+      'textures/units/JapaneseInfantry01/spriteFrame',
+      'textures/units/JapaneseInfantry02/spriteFrame',
+      'textures/units/JapaneseInfantry03/spriteFrame',
+    ];
+    for (let i = 0; i < japaneseInfantryPaths.length; i++) {
+      const idx = i;
+      resources.load(japaneseInfantryPaths[idx], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] 日本步兵图加载失败 (JapaneseInfantry0${idx + 1})，该单位将回退矢量小人:`, err);
+          return;
+        }
+        const rw = sf.rect.width;
+        const rh = sf.rect.height;
+        this.japaneseInfantrySpriteFrames[idx] = sf;
+        this.japaneseInfantrySpriteDims[idx] = {
+          dw: rw > 0 ? rw : sf.width,
+          dh: rh > 0 ? rh : sf.height,
+        };
+        this.redraw();
+      });
+    }
+
+    const americanInfantryPaths = [
+      'textures/units/AmericanInfantry01/spriteFrame',
+      'textures/units/AmericanInfantry02/spriteFrame',
+      'textures/units/AmericanInfantry03/spriteFrame',
+    ];
+    for (let i = 0; i < americanInfantryPaths.length; i++) {
+      const idx = i;
+      resources.load(americanInfantryPaths[idx], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] 美军步兵图加载失败 (AmericanInfantry0${idx + 1})，该单位将回退矢量小人:`, err);
+          return;
+        }
+        const rw = sf.rect.width;
+        const rh = sf.rect.height;
+        this.americanInfantrySpriteFrames[idx] = sf;
+        this.americanInfantrySpriteDims[idx] = {
+          dw: rw > 0 ? rw : sf.width,
+          dh: rh > 0 ? rh : sf.height,
+        };
+        this.redraw();
+      });
+    }
+
     // 军官棋子单张：未加载完成时 drawInfantry 在 officer 分支也会回退到矢量小人
     resources.load('textures/units/Officer/spriteFrame', SpriteFrame, (err, sf) => {
       if (err || !sf) {
@@ -1919,7 +1977,9 @@ export class BattleScene extends Component {
   }
 
   private pvpSupportKind(factionId: PvpFactionId): UnitKind {
-    return factionId === 'japan' ? 'japanese_infantry' : 'infantry';
+    if (factionId === 'japan') return 'japanese_infantry';
+    if (factionId === 'usa') return 'american_infantry';
+    return 'infantry';
   }
 
   private pvpInitialProtagonistMarker(parity: PvpParity): { q: number; r: number; facing: Direction } {
@@ -4188,8 +4248,8 @@ export class BattleScene extends Component {
 
     const sample = this.rainVisualSample;
     let drewRain = false;
-    g.lineWidth = 1.25;
-    g.strokeColor = new Color(184, 224, 240, 154);
+    g.lineWidth = 2;
+    g.strokeColor = new Color(210, 238, 248, 218);
     for (let i = 0; i < RAIN_VISUAL_SLOT_COUNT; i++) {
       sampleRainVisual(i, this.unitEffectTime, CANVAS_W, CANVAS_H, sample);
       if (sample.phase !== 'fall') continue;
@@ -4205,8 +4265,8 @@ export class BattleScene extends Component {
     const splashBuckets = 3;
     for (let bucket = 0; bucket < splashBuckets; bucket++) {
       let drewSplash = false;
-      g.lineWidth = 1;
-      g.strokeColor = new Color(190, 230, 242, 48 + bucket * 44);
+      g.lineWidth = 1.25;
+      g.strokeColor = new Color(208, 238, 248, 72 + bucket * 50);
       for (let i = 0; i < RAIN_VISUAL_SLOT_COUNT; i++) {
         sampleRainVisual(i, this.unitEffectTime, CANVAS_W, CANVAS_H, sample);
         if (sample.phase !== 'splash') continue;
@@ -7316,6 +7376,18 @@ export class BattleScene extends Component {
    * 资源未加载完时回退到老版本"圆头 + 圆身"矢量小人；击毙后不留残骸 / 标志 / 名字。
    * 军官 (kind='officer') 在小队外缘叠一圈红色光环，与说明书原图"红框建筑里的德军步兵"呼应。
    */
+  private infantryVisualsFor(u: Unit): {
+    frames: Array<SpriteFrame | null>;
+    dims: Array<{ dw: number; dh: number }>;
+  } {
+    if (u.kind === 'american_infantry') {
+      return { frames: this.americanInfantrySpriteFrames, dims: this.americanInfantrySpriteDims };
+    }
+    return u.kind === 'japanese_infantry'
+      ? { frames: this.japaneseInfantrySpriteFrames, dims: this.japaneseInfantrySpriteDims }
+      : { frames: this.infantrySpriteFrames, dims: this.infantrySpriteDims };
+  }
+
   private drawInfantry(u: Unit, cx: number, cy: number) {
     const g = this.g!;
     const teamRadius = this.hexSize * 0.5;
@@ -7363,10 +7435,8 @@ export class BattleScene extends Component {
     }
 
     // 资源加载完毕才用 sprite 小队；否则回退矢量小人，避免空白
-    const allLoaded =
-      this.infantrySpriteFrames[0] !== null &&
-      this.infantrySpriteFrames[1] !== null &&
-      this.infantrySpriteFrames[2] !== null;
+    const infantryVisuals = this.infantryVisualsFor(u);
+    const allLoaded = infantryVisuals.frames.every((sf) => sf !== null);
 
     if (!allLoaded) {
       const bodyR = this.hexSize * 0.30;
@@ -7419,10 +7489,10 @@ export class BattleScene extends Component {
 
     for (let i = 0; i < BattleScene.INFANTRY_SPRITES_PER_UNIT; i++) {
       if (this.infantryTopPoolNext >= this.infantryTopSpritePool.length) break;
-      const sf = this.infantrySpriteFrames[i];
+      const sf = infantryVisuals.frames[i];
       if (!sf) continue;
       const slot = this.infantryTopSpritePool[this.infantryTopPoolNext++];
-      const dim = this.infantrySpriteDims[i];
+      const dim = infantryVisuals.dims[i];
       const w = dim.dw > 0 ? dim.dw : sf.width;
       const h = dim.dh > 0 ? dim.dh : sf.height;
       const maxDim = Math.max(w, h) || 1;
@@ -8540,7 +8610,7 @@ export class BattleScene extends Component {
     const active = !!this.mission && weather === 'rain' && !GameSession.isPvp;
     label.node.active = active;
     label.string = active
-      ? (getLang() === 'zh' ? '雨天  命中+1 / 视野-1' : 'Rain  Hit +1 / Vision -1')
+      ? (getLang() === 'zh' ? '雨天  命中-1 / 视野-1' : 'Rain  Hit -1 / Vision -1')
       : '';
   }
 
@@ -12150,7 +12220,8 @@ export class BattleScene extends Component {
         this.g = oldG;
         return;
       }
-      const allLoaded = this.infantrySpriteFrames.every((sf) => !!sf);
+      const infantryVisuals = this.infantryVisualsFor(u);
+      const allLoaded = infantryVisuals.frames.every((sf) => !!sf);
       if (!allLoaded) {
         const bodyR = hexR * 0.30;
         const headR = hexR * 0.16;
@@ -12173,9 +12244,9 @@ export class BattleScene extends Component {
       ];
       const spriteFit = hexR * 0.58;
       for (let i = 0; i < BattleScene.INFANTRY_SPRITES_PER_UNIT; i++) {
-        const sf = this.infantrySpriteFrames[i];
+        const sf = infantryVisuals.frames[i];
         if (!sf) continue;
-        const dim = this.infantrySpriteDims[i];
+        const dim = infantryVisuals.dims[i];
         const fit = i === 0 ? spriteFit : spriteFit * 1.15;
         this.addTileInspectSprite(parent, sf, dim.dw, dim.dh, fit, offsets[i].ox, offsets[i].oy);
       }
@@ -13120,7 +13191,7 @@ export class BattleScene extends Component {
         return !!this.selectAIShootTarget(enemy, false, true);
       }
       if (a === 'infantry_move') {
-        return !!this.findJapaneseInfantryMove(enemy);
+        return !!this.findInfantryAIMove(enemy);
       }
       if (!canExecuteAction(enemy, a, target, map, occupied, this.mission?.smokeHexes)) return false;
       const moveDestination = this.aiMoveDestinationForAction(enemy, a);
@@ -13247,7 +13318,7 @@ export class BattleScene extends Component {
       }
 
       case 'infantry_move': {
-        const to = this.findJapaneseInfantryMove(enemy);
+        const to = this.findInfantryAIMove(enemy);
         if (!to) return 'done';
         this.breakConcealment(enemy);
         this.anim = {
@@ -13326,8 +13397,9 @@ export class BattleScene extends Component {
     }
   }
 
-  private findJapaneseInfantryMove(enemy: Unit): Axial | null {
-    if (!this.mission || enemy.kind !== 'japanese_infantry') return null;
+  private findInfantryAIMove(enemy: Unit): Axial | null {
+    if (!this.mission
+      || (enemy.kind !== 'japanese_infantry' && enemy.kind !== 'american_infantry')) return null;
     const target = this.currentAITarget(enemy);
     if (!target) return null;
     const currentDist = hexDistance(enemy.pos, target.pos);
@@ -13342,10 +13414,13 @@ export class BattleScene extends Component {
       if (!tile) continue;
       if (!this.canMoveToBattleTile(n)) continue;
       if (tile.terrain === 'beach' || tile.terrain === 'deep_water') continue;
-      if (occupied.has(`${n.q},${n.r}`)) continue;
       const d = hexDistance(n, target.pos);
       if (d >= currentDist) continue;
-      const priority = this.japaneseInfantryMovePriority(tile);
+      const priority = enemy.kind === 'american_infantry'
+        ? this.americanInfantryMovePriority(enemy, n, tile)
+        : this.japaneseInfantryMovePriority(tile);
+      const canShareFriendlyTank = enemy.kind === 'american_infantry' && priority === 0;
+      if (occupied.has(`${n.q},${n.r}`) && !canShareFriendlyTank) continue;
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
         bestPriority = priority;
         bestDist = d;
@@ -13365,6 +13440,18 @@ export class BattleScene extends Component {
     if (tile.hasBuilding) return 1;
     if (tile.terrain === 'trees') return 2;
     return 3;
+  }
+
+  private americanInfantryMovePriority(enemy: Unit, pos: Axial, tile: Tile): number {
+    const occupants = this.allBattleUnits().filter(u =>
+      u !== enemy && !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r,
+    );
+    if (occupants.length > 0
+      && occupants.every(u => u.faction === enemy.faction && isTankUnit(u))) return 0;
+    if (tile.hasBuilding) return 1;
+    if (tile.terrain === 'forest') return 2;
+    if (tile.terrain === 'trees') return 3;
+    return 4;
   }
 
   private clearAIMoveState(unit?: Unit | null) {

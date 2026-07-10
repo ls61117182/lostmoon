@@ -12,7 +12,7 @@ const HARDCORE_TANK_ACTION_CSV = path.join(ROOT, 'data', 'enemy_hardcore_tank_ac
 const HARDCORE_TANK_DICE_CSV = path.join(ROOT, 'data', 'enemy_hardcore_tank_dice.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'EnemyAIDB.ts');
 
-const AI_COLUMNS = ['road', 'field', 'mud', 'damaged', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'heavy_artillery'];
+const AI_COLUMNS = ['road', 'field', 'mud', 'damaged', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'american_infantry', 'heavy_artillery'];
 const HARDCORE_TANK_DIE_TYPES = ['attack', 'move', 'misc'];
 const DEFAULT_HARDCORE_TANK_ACTION_TABLE = { attack: 'attack1', move: 'move1', misc: 'misc1' };
 const HARDCORE_TANK_TERRAINS = ['road', 'field', 'mud', 'clear', 'trees', 'beach', 'airstrip'];

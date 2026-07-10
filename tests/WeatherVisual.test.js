@@ -18,7 +18,7 @@ const loaded = { exports: {} };
 new Function('exports', 'module', compiled)(loaded.exports, loaded);
 
 const { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } = loaded.exports;
-assert.strictEqual(RAIN_VISUAL_SLOT_COUNT, 56, 'Rain should use the fixed 56-slot budget');
+assert.strictEqual(RAIN_VISUAL_SLOT_COUNT, 96, 'Rain should use a stronger fixed 96-slot budget');
 assert.strictEqual(typeof sampleRainVisual, 'function', 'sampleRainVisual() should be exported');
 
 const blankSample = () => ({
@@ -53,6 +53,23 @@ for (let slot = 0; slot < RAIN_VISUAL_SLOT_COUNT; slot++) {
 }
 assert(impactKeys.size > 48, 'Rain slots should not form repeated rows or shared impact points');
 
+let totalFallCount = 0;
+let totalActiveCount = 0;
+const sampleTimes = [0, 0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05];
+for (const time of sampleTimes) {
+  let fallCount = 0;
+  let activeCount = 0;
+  for (let slot = 0; slot < RAIN_VISUAL_SLOT_COUNT; slot++) {
+    const current = sample(slot, time);
+    if (current.phase === 'fall') fallCount++;
+    if (current.phase === 'fall' || current.phase === 'splash') activeCount++;
+  }
+  totalFallCount += fallCount;
+  totalActiveCount += activeCount;
+}
+assert(totalFallCount / sampleTimes.length >= 18, 'Rain should have enough simultaneous falling streaks to be visible');
+assert(totalActiveCount / sampleTimes.length >= 45, 'Rain should keep many visible drops or splashes active');
+
 let fall = null;
 let earlySplash = null;
 let lateSplash = null;
@@ -78,9 +95,11 @@ for (let t = 0; t <= 4; t += 0.002) {
 }
 
 assert(fall, 'A slot should enter a falling phase');
-assert(fall.fallDistance >= 50 && fall.fallDistance <= 90, 'Fall distance should stay finite');
-assert(fall.fallSpeed >= 700 && fall.fallSpeed <= 1000, 'Rain should fall quickly');
+assert(fall.fallDistance >= 75 && fall.fallDistance <= 120, 'Fall distance should stay finite but readable');
+assert(fall.fallSpeed >= 850 && fall.fallSpeed <= 1250, 'Rain should fall quickly');
 assert(fall.slant >= 0.02 && fall.slant <= 0.06, 'Rain should remain close to vertical');
+assert(fall.streakLength >= 20 && fall.streakLength <= 32, 'Falling streaks should be long enough to read');
+assert(fall.alpha >= 185 && fall.alpha <= 235, 'Falling streaks should be bright enough to see over the map');
 assert(Math.abs(fall.headY - fall.impactY) <= fall.fallDistance + 0.001, 'A streak should not cross the full viewport');
 assert(
   phaseRuns.join(',').includes('fall,splash,idle'),

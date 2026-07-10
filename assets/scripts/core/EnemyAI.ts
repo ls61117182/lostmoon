@@ -69,6 +69,7 @@ export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
     case 'type97': return 'type97';
     case 'at_gun': return 'at_gun';
     case 'japanese_infantry': return 'japanese_infantry';
+    case 'american_infantry': return 'american_infantry';
     case 'heavy_artillery': return 'heavy_artillery';
   }
   if (enemy.damaged || (enemy.fireLevel ?? 0) > 0) return 'damaged';
@@ -114,6 +115,7 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
   switch (unit.kind) {
     case 'at_gun': return { attack: 2, move: 0, misc: 0 };
     case 'japanese_infantry': return { attack: 0, move: 3, misc: 0 };
+    case 'american_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'heavy_artillery': return { attack: 1, move: 0, misc: 0 };
   }
   const key = hardcoreTankDiceTerrain(terrain);
@@ -166,7 +168,9 @@ export function aiTargetPriority(u: Unit, missionTargets: readonly Unit[]): numb
 }
 
 export function isAIActorUnit(u: Unit): boolean {
-  return !u.destroyed && u.kind !== 'truck' && (!isFootUnit(u) || u.kind === 'japanese_infantry');
+  return !u.destroyed
+    && u.kind !== 'truck'
+    && (!isFootUnit(u) || u.kind === 'japanese_infantry' || u.kind === 'american_infantry');
 }
 
 export function currentTargetFor(
@@ -342,7 +346,7 @@ export function canExecuteAction(
     case 'conceal': return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
     case 'shoot_adjacent': return enemy.facing !== null && hexDistance(enemy.pos, sherman.pos) === 1;
     case 'infantry_move':
-      return enemy.kind === 'japanese_infantry';
+      return enemy.kind === 'japanese_infantry' || enemy.kind === 'american_infantry';
     case 'advance_to_building': {
       if (enemy.paralyzed) return false;
       if (enemy.facing === null) return false;

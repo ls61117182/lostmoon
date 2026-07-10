@@ -149,6 +149,18 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "japanese_infantry1", move: "japanese_infantry1", misc: "japanese_infantry1" },
     crewMembers: [],
   },
+  american_infantry: { // 美军步兵 - Allied AI support infantry
+    faction: "allied",
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 1, visionRange: 2,
+    hasRadio: true,
+    moveSound: "",
+    attackSound: "",
+    visionType: "infantry",
+    damageTargetClass: "destroyed",
+    infantryTankCoordination: 0,
+    actionTable: { attack: "american_infantry1", move: "american_infantry1", misc: "american_infantry1" },
+    crewMembers: [],
+  },
   heavy_artillery: { // 重炮 - Pacific: Heavy Artillery
     faction: "japanese",
     size: 4, armorFront: 10, armorFrontSide: 9, armorRearSide: 7, armorRear: 6, penetration: 4, effectiveRange: 4, usCasualtyDice: 2, visionRange: 4,

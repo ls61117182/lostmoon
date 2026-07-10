@@ -30,9 +30,9 @@ export interface AIActionEntry {
 }
 
 export type CrewSlot = 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver';
-export type AIColumn = 'road' | 'field' | 'mud' | 'damaged' | 'type95' | 'type97' | 'at_gun' | 'japanese_infantry' | 'heavy_artillery';
+export type AIColumn = 'road' | 'field' | 'mud' | 'damaged' | 'type95' | 'type97' | 'at_gun' | 'japanese_infantry' | 'american_infantry' | 'heavy_artillery';
 export type EnemyTankDieType = 'attack' | 'move' | 'misc';
-export type HardcoreTankActionTableId = 'at_gun1' | 'attack1' | 'heavy_artillery1' | 'japanese_infantry1' | 'misc1' | 'move1';
+export type HardcoreTankActionTableId = 'american_infantry1' | 'at_gun1' | 'attack1' | 'heavy_artillery1' | 'japanese_infantry1' | 'misc1' | 'move1';
 export type HardcoreTankDiceTerrain = 'road' | 'field' | 'mud' | 'clear' | 'trees' | 'beach' | 'airstrip';
 
 export interface HardcoreTankDiceCount {
@@ -53,6 +53,7 @@ export const AI_DICE_COUNT: Record<AIColumn, number> = {
   type97: 4,
   at_gun: 2,
   japanese_infantry: 3,
+  american_infantry: 3,
   heavy_artillery: 1,
 };
 
@@ -121,6 +122,14 @@ export const DEFAULT_AI_TABLE: AIActionTable = {
     5: { primary: 'infantry_move' },
     6: { primary: 'shoot_adjacent' },
   },
+  american_infantry: {
+    1: { primary: 'shoot_adjacent' },
+    2: { primary: 'infantry_move' },
+    3: { primary: 'shoot_adjacent' },
+    4: { primary: 'infantry_move' },
+    5: { primary: 'infantry_move' },
+    6: { primary: 'shoot_adjacent' },
+  },
   heavy_artillery: {
     1: { primary: 'none' },
     2: { primary: 'none' },
@@ -148,6 +157,14 @@ export const DEFAULT_HARDCORE_TANK_ACTION_TABLE: Record<EnemyTankDieType, Hardco
 };
 
 export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {
+  american_infantry1: {
+    1: { primary: 'shoot_adjacent' },
+    2: { primary: 'infantry_move' },
+    3: { primary: 'shoot_adjacent' },
+    4: { primary: 'infantry_move' },
+    5: { primary: 'infantry_move' },
+    6: { primary: 'shoot_adjacent' },
+  },
   at_gun1: {
     1: { primary: 'turn' },
     2: { primary: 'advance_to_building' },

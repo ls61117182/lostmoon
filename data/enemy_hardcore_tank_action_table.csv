@@ -29,6 +29,12 @@ japanese_infantry1,3,shoot_adjacent,,,,,,FIRE if adjacent to Sherman
 japanese_infantry1,4,infantry_move,,,,,,MOVE R>B>T>V>H
 japanese_infantry1,5,infantry_move,,,,,,MOVE R>B>T>V>H
 japanese_infantry1,6,shoot_adjacent,,,,,,FIRE if adjacent to Sherman
+american_infantry1,1,shoot_adjacent,,,,,,FIRE if adjacent to Axis target
+american_infantry1,2,infantry_move,,,,,,MOVE friendly tank > building > forest > trees > other
+american_infantry1,3,shoot_adjacent,,,,,,FIRE if adjacent to Axis target
+american_infantry1,4,infantry_move,,,,,,MOVE friendly tank > building > forest > trees > other
+american_infantry1,5,infantry_move,,,,,,MOVE friendly tank > building > forest > trees > other
+american_infantry1,6,shoot_adjacent,,,,,,FIRE if adjacent to Axis target
 heavy_artillery1,1,none,,,,,,No Action
 heavy_artillery1,2,none,,,,,,No Action
 heavy_artillery1,3,shoot,,,,,,FIRE

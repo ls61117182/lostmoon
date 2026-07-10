@@ -20,6 +20,14 @@ assert(
   'BattleScene should reuse one rain sample instead of allocating per-drop objects each frame',
 );
 
+assert(
+  /雨天\s+命中-1\s*\/\s*视野-1/.test(battleScene)
+    && /Rain\s+Hit -1\s*\/\s*Vision -1/.test(battleScene)
+    && !/雨天\s+命中\+1\s*\/\s*视野-1/.test(battleScene)
+    && !/Rain\s+Hit \+1\s*\/\s*Vision -1/.test(battleScene),
+  'Rain HUD should describe the hit chance penalty as Hit -1 instead of threshold +1',
+);
+
 const drawWeatherEffects = battleScene.match(
   /private\s+drawWeatherEffects\s*\(\)\s*\{[\s\S]*?\n\s{2}\}/,
 );
@@ -36,6 +44,12 @@ assert(
   /sample\.phase\s*!==\s*'fall'/.test(body)
     && /sample\.streakLength\s*\*\s*sample\.slant/.test(body),
   'Rain paths should be short, near-vertical streaks from the lifecycle sample',
+);
+
+assert(
+  /g\.lineWidth\s*=\s*2(?:\.0)?/.test(body)
+    && /g\.strokeColor\s*=\s*new Color\(210,\s*238,\s*248,\s*218\)/.test(body),
+  'Falling rain should be thick and bright enough to remain visible over the battle map',
 );
 
 assert(

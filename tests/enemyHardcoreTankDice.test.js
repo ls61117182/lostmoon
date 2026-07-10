@@ -41,6 +41,12 @@ assert.strictEqual(
 );
 
 assert.strictEqual(
+  unitRows.find((row) => row.unitKind === 'american_infantry').action_table,
+  'attack=american_infantry1|move=american_infantry1|misc=american_infantry1',
+  'American infantry should use its independent configurable action-table path',
+);
+
+assert.strictEqual(
   unitRows.find((row) => row.unitKind === 'heavy_artillery').action_table,
   'attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1',
   'Heavy artillery should use the configurable action-table path',
@@ -92,6 +98,12 @@ assert.deepStrictEqual(
     'japanese_infantry1:4': ['infantry_move', '', '', '', '', ''],
     'japanese_infantry1:5': ['infantry_move', '', '', '', '', ''],
     'japanese_infantry1:6': ['shoot_adjacent', '', '', '', '', ''],
+    'american_infantry1:1': ['shoot_adjacent', '', '', '', '', ''],
+    'american_infantry1:2': ['infantry_move', '', '', '', '', ''],
+    'american_infantry1:3': ['shoot_adjacent', '', '', '', '', ''],
+    'american_infantry1:4': ['infantry_move', '', '', '', '', ''],
+    'american_infantry1:5': ['infantry_move', '', '', '', '', ''],
+    'american_infantry1:6': ['shoot_adjacent', '', '', '', '', ''],
     'heavy_artillery1:1': ['none', '', '', '', '', ''],
     'heavy_artillery1:2': ['none', '', '', '', '', ''],
     'heavy_artillery1:3': ['shoot', '', '', '', '', ''],
@@ -121,7 +133,7 @@ assert.deepStrictEqual(
 );
 
 assert.match(generated, /export type EnemyTankDieType = 'attack' \| 'move' \| 'misc';/);
-assert.match(generated, /export type HardcoreTankActionTableId = 'at_gun1' \| 'attack1' \| 'heavy_artillery1' \| 'japanese_infantry1' \| 'misc1' \| 'move1';/);
+assert.match(generated, /export type HardcoreTankActionTableId = 'american_infantry1' \| 'at_gun1' \| 'attack1' \| 'heavy_artillery1' \| 'japanese_infantry1' \| 'misc1' \| 'move1';/);
 assert.match(generated, /export const DEFAULT_HARDCORE_TANK_ACTION_TABLE: Record<EnemyTankDieType, HardcoreTankActionTableId> = \{/);
 assert.match(generated, /road: \{ attack: 1, move: 3, misc: -1 \}/);
 assert.match(generated, /2: \{ primary: 'shoot', primaryCrew: 'loader' \}/);
@@ -129,11 +141,13 @@ assert.match(generated, /6: \{ primary: 'shoot', primaryCrew: 'commander' \}/);
 assert.match(generated, /misc1: \{\n\s+1: \{ primary: 'repair', primaryCrew: 'commander', fallback: 'shoot', fallbackCrew: 'gunner' \}/);
 assert.match(generated, /at_gun1: \{\n\s+1: \{ primary: 'turn' \}/);
 assert.match(generated, /japanese_infantry1: \{\n\s+1: \{ primary: 'shoot_adjacent' \}/);
+assert.match(generated, /american_infantry1: \{\n\s+1: \{ primary: 'shoot_adjacent' \}/);
 assert.match(generated, /heavy_artillery1: \{\n\s+1: \{ primary: 'none' \}/);
 assert.match(generated, /3: \{ primary: 'advance', primaryCrew: 'coDriver', fallback: 'turn', fallbackCrew: 'coDriver' \}/);
 assert.match(unitGenerated, /actionTable: \{ attack: "attack1", move: "move1", misc: "misc1" \}/);
 assert.match(unitGenerated, /actionTable: \{ attack: "at_gun1", move: "at_gun1", misc: "at_gun1" \}/);
 assert.match(unitGenerated, /actionTable: \{ attack: "japanese_infantry1", move: "japanese_infantry1", misc: "japanese_infantry1" \}/);
+assert.match(unitGenerated, /actionTable: \{ attack: "american_infantry1", move: "american_infantry1", misc: "american_infantry1" \}/);
 assert.match(unitGenerated, /actionTable: \{ attack: "heavy_artillery1", move: "heavy_artillery1", misc: "heavy_artillery1" \}/);
 assert.match(enemyAI, /attack: Math\.max\(0, base\.attack\)/);
 assert.match(enemyAI, /move: Math\.max\(0, base\.move \+ \(crewAlive\(unit, 'driver'\) \? 1 : 0\)\)/);
@@ -141,6 +155,7 @@ assert.match(enemyAI, /misc: Math\.max\(0, base\.misc \+ \(crewAlive\(unit, 'com
 assert.match(enemyAI, /out\.push\(\{ type: 'misc', pip: rng\.d6\(\) \}\)/);
 assert.match(enemyAI, /case 'at_gun': return \{ attack: 2, move: 0, misc: 0 \};/);
 assert.match(enemyAI, /case 'japanese_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
+assert.match(enemyAI, /case 'american_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);
 assert.match(enemyAI, /export function actionForHardcoreTankDie\(unit: Unit, type: EnemyTankDieType, pip: number\): AIActionEntry/);
 assert.match(battleScene, /unit\.stats\.actionTable/);

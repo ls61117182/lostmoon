@@ -119,6 +119,7 @@ export type UnitKind =
   | 'type97'
   | 'at_gun'
   | 'japanese_infantry'
+  | 'american_infantry'
   | 'heavy_artillery'
   /**
    * 高级军官（任务 8 起）：与步兵同属「徒步类」单位（size=0、不可朝向、机枪打、不参与坦克 AI），
@@ -135,7 +136,10 @@ export type UnitKind =
  *   `Objective.allEnemiesOfKindDestroyed(mission, 'officer')` 等按 kind 精确判定的位置不应换成本 helper。
  */
 export function isFootKind(kind: UnitKind): boolean {
-  return kind === 'infantry' || kind === 'officer' || kind === 'japanese_infantry';
+  return kind === 'infantry'
+    || kind === 'officer'
+    || kind === 'japanese_infantry'
+    || kind === 'american_infantry';
 }
 
 export function isFootUnit(u: { kind: UnitKind }): boolean {

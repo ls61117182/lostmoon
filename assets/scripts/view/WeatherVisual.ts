@@ -1,4 +1,4 @@
-export const RAIN_VISUAL_SLOT_COUNT = 56;
+export const RAIN_VISUAL_SLOT_COUNT = 96;
 
 export type RainVisualPhase = 'idle' | 'fall' | 'splash';
 
@@ -47,24 +47,24 @@ export function sampleRainVisual(
 ): void {
   const safeSlot = Math.max(0, Math.floor(slot));
   const safeTime = Math.max(0, time);
-  const period = lerp(0.55, 0.90, hash01(safeSlot, 0, 0));
+  const period = lerp(0.40, 0.62, hash01(safeSlot, 0, 0));
   const phaseOffset = period * hash01(safeSlot, 0, 1);
   const elapsed = safeTime + phaseOffset;
   const cycle = Math.floor(elapsed / period);
   const cycleTime = elapsed - cycle * period;
 
-  const fallDistance = lerp(50, 90, hash01(safeSlot, cycle, 2));
-  const fallSpeed = lerp(700, 1000, hash01(safeSlot, cycle, 3));
+  const fallDistance = lerp(75, 120, hash01(safeSlot, cycle, 2));
+  const fallSpeed = lerp(850, 1250, hash01(safeSlot, cycle, 3));
   const fallDuration = fallDistance / fallSpeed;
-  const splashDuration = lerp(0.12, 0.18, hash01(safeSlot, cycle, 4));
+  const splashDuration = lerp(0.16, 0.24, hash01(safeSlot, cycle, 4));
   const slant = lerp(0.02, 0.06, hash01(safeSlot, cycle, 5));
   const inset = 8;
   const impactWidth = Math.max(0, width - inset * 2);
   const impactHeight = Math.max(0, height - inset * 2);
   const impactX = (hash01(safeSlot, cycle, 6) - 0.5) * impactWidth;
   const impactY = (hash01(safeSlot, cycle, 7) - 0.5) * impactHeight;
-  const streakLength = lerp(12, 22, hash01(safeSlot, cycle, 8));
-  const baseAlpha = Math.round(lerp(118, 176, hash01(safeSlot, cycle, 9)));
+  const streakLength = lerp(20, 32, hash01(safeSlot, cycle, 8));
+  const baseAlpha = Math.round(lerp(185, 235, hash01(safeSlot, cycle, 9)));
 
   out.impactX = impactX;
   out.impactY = impactY;
@@ -95,8 +95,8 @@ export function sampleRainVisual(
     const eased = 1 - (1 - progress) * (1 - progress);
     out.phase = 'splash';
     out.alpha = Math.round(baseAlpha * (1 - progress));
-    out.splashRadius = lerp(1.5, 6, eased);
-    out.splashRayLength = Math.sin(progress * Math.PI) * lerp(3, 6, hash01(safeSlot, cycle, 12));
+    out.splashRadius = lerp(2.5, 8, eased);
+    out.splashRayLength = Math.sin(progress * Math.PI) * lerp(4, 8, hash01(safeSlot, cycle, 12));
     return;
   }
 

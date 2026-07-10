@@ -256,6 +256,7 @@ unit.name.type95,九五式,Type 95 Ha-Go
 unit.name.type97,九七式,Type 97 Chi-Ha
 unit.name.at_gun,反坦克炮,AT Gun
 unit.name.japanese_infantry,日本步兵,Japanese Infantry
+unit.name.american_infantry,美军步兵,American Infantry
 unit.name.heavy_artillery,重炮,Heavy Artillery
 terrain.clear,开阔地,Clear
 terrain.trees,树木,Trees
@@ -280,6 +281,7 @@ dice.aiCol.type95,九五式,Type 95
 dice.aiCol.type97,九七式,Type 97
 dice.aiCol.at_gun,反坦克炮,AT Gun
 dice.aiCol.japanese_infantry,日本步兵,Japanese Infantry
+dice.aiCol.american_infantry,美军步兵,American Infantry
 dice.aiCol.heavy_artillery,重炮,Heavy Artillery
 dice.aiEnemy.shoot,主炮射击,Main gun
 dice.aiEnemy.turn,转向,Turn

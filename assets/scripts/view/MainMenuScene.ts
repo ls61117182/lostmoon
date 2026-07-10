@@ -50,7 +50,8 @@ import {
 import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
-import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement } from '../core/types';
+import { normalizeWeather } from '../core/Weather';
+import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import {
   SPLIT_TANK_KINDS,
@@ -2316,6 +2317,7 @@ export class MainMenuScene extends Component {
     type EditorTile = TileDef | null;
     type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null };
     type EditorCell = { redraw: (tile: EditorTile) => void; drawBoundary: () => void };
+    type EditorWeatherOption = { id: WeatherType; label: string; desc: string };
 
     const terrainTools: TerrainTool[] = [
       { code: null, key: 'levelEditor.terrain.none', color: new Color(18, 24, 22, 120), spriteKey: null },
@@ -2342,6 +2344,12 @@ export class MainMenuScene extends Component {
       beach: 'textures/terrain/pacific_water/spriteFrame',
       rocky: 'textures/terrain/pacific_rocks/spriteFrame',
     };
+    const weatherOptions: EditorWeatherOption[] = [
+      { id: 'clear', label: '无', desc: '不使用天气修正' },
+      { id: 'rain', label: '雨天', desc: '命中-1 / 视野-1' },
+    ];
+    const weatherLabel = (weather: WeatherType) =>
+      weatherOptions.find(option => option.id === weather)?.label ?? weatherOptions[0]!.label;
 
     const spriteFrames: Record<string, SpriteFrame | null> = {};
     const cells: EditorCell[] = [];
@@ -2382,6 +2390,7 @@ export class MainMenuScene extends Component {
     let draftEnemyDiceEidMax = existingPackage?.mission.enemyDiceEidMax;
     let draftAllowMapPan = !!existingPackage?.mission.allowMapPan;
     let draftTruckPath = cloneJson(existingPackage?.mission.truckPath ?? []);
+    let draftWeather: WeatherType = normalizeWeather(existingPackage?.mission.weather);
     let editorTab: 'terrain' | 'tile' | 'mission' | 'units' = 'terrain';
     let unitKindPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
     let unitRandomPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
@@ -2433,12 +2442,13 @@ export class MainMenuScene extends Component {
       type97: 'Type97',
       at_gun: 'AT Gun',
       japanese_infantry: 'JP Inf',
+      american_infantry: 'US Inf',
       heavy_artillery: 'Artillery',
       officer: 'Officer',
     };
-    const allUnitKinds: UnitKind[] = ['sherman', 'panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
+    const allUnitKinds: UnitKind[] = ['sherman', 'american_infantry', 'panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
     const enemyKinds: UnitKind[] = ['panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
-    const allyKinds: UnitKind[] = ['sherman'];
+    const allyKinds: UnitKind[] = ['sherman', 'american_infantry'];
     const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge', 'destroy_truck'];
     const objectiveTypeLabels: Record<MissionObjective['type'], string> = {
       destroy_all_enemies: '击毁所有单位',
@@ -2501,6 +2511,7 @@ export class MainMenuScene extends Component {
       draftEnemyDiceEidMax = undefined;
       draftAllowMapPan = false;
       draftTruckPath = [];
+      draftWeather = 'clear';
       draftRowParityOffset = 0;
       titleInput = null;
       descInput = null;
@@ -2678,37 +2689,40 @@ export class MainMenuScene extends Component {
           this.makeLabel(propRoot, '描述', -102, 112, 54, 22, 14, TEXT_TITLE);
           descInput = this.makeInputField(propRoot, 44, 112, 196, 30, '关卡描述', false, draftDescription);
           descInput.maxLength = 80;
-          addPlainBtn(objectiveTypeLabels[draftObjective.type], 0, 72, 220, 28, true, () => {
+          addPlainBtn(objectiveTypeLabels[draftObjective.type], 0, 76, 220, 28, true, () => {
             draftObjective = { type: cycleIn(objectiveTypes, draftObjective.type, 'destroy_all_enemies') };
           }, 13);
-          addPlainBtn(`战斗中拖动地图 ${draftAllowMapPan ? '开' : '关'}`, 0, 38, 180, 26, draftAllowMapPan, () => {
+          addPlainBtn(`天气：${weatherLabel(draftWeather)}`, 0, 42, 180, 26, draftWeather !== 'clear', () => {
+            openWeatherPicker();
+          }, 12);
+          addPlainBtn(`战斗中拖动地图 ${draftAllowMapPan ? '开' : '关'}`, 0, 10, 180, 26, draftAllowMapPan, () => {
             draftAllowMapPan = !draftAllowMapPan;
           }, 12);
           if (draftObjective.type === 'destroy_kind' || draftObjective.type === 'destroy_kind_evac') {
-            addPlainBtn(`目标 ${unitKindLabels[draftObjective.kind ?? 'infantry']}`, -62, 6, 104, 26, true, () => {
+            addPlainBtn(`目标 ${unitKindLabels[draftObjective.kind ?? 'infantry']}`, -62, -22, 104, 26, true, () => {
               draftObjective.kind = cycleIn(enemyKinds, draftObjective.kind, 'infantry');
             }, 12);
           }
           if (draftObjective.type === 'exit_from_edge' || draftObjective.type === 'destroy_kind_evac') {
-            addPlainBtn(`方向 ${draftObjective.exitDirection ?? draftObjective.evacExitDir ?? '-'}`, 62, 6, 104, 26, true, () => {
+            addPlainBtn(`方向 ${draftObjective.exitDirection ?? draftObjective.evacExitDir ?? '-'}`, 62, -22, 104, 26, true, () => {
               const next = cycleFacing((draftObjective.exitDirection ?? draftObjective.evacExitDir) as number | undefined);
               if (draftObjective.type === 'exit_from_edge') draftObjective.exitDirection = next as MissionObjective['exitDirection'];
               else draftObjective.evacExitDir = next as MissionObjective['evacExitDir'];
             }, 12);
           }
           if (draftObjective.type === 'destroy_kind_evac') {
-            addPlainBtn(`撤离格 ${draftObjective.evacAt ? `${draftObjective.evacAt.col},${draftObjective.evacAt.row}` : '-'}`, 0, -24, 156, 26, !!draftObjective.evacAt, () => {
+            addPlainBtn(`撤离格 ${draftObjective.evacAt ? `${draftObjective.evacAt.col},${draftObjective.evacAt.row}` : '-'}`, 0, -52, 156, 26, !!draftObjective.evacAt, () => {
               draftObjective.evacAt = selectedOffset();
             }, 12);
           }
-          this.makeLabel(propRoot, '回合结束事件', 0, -52, 170, 22, 14, TEXT_TITLE);
-          addPlainBtn('新增事件', 0, -78, 100, 24, false, () => {
+          this.makeLabel(propRoot, '回合结束事件', 0, -84, 170, 22, 14, TEXT_TITLE);
+          addPlainBtn('新增事件', 0, -110, 100, 24, false, () => {
             draftTurnEndEvents.push({ missionId: '', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'none' });
           }, 12);
           const rowsToShow = draftTurnEndEvents.slice(0, 4);
           for (let i = 0; i < rowsToShow.length; i++) {
             const ev = rowsToShow[i]!;
-            const y = -106 - i * 28;
+            const y = -138 - i * 28;
             addPlainBtn(`${ev.sumMin}-${ev.sumMax}`, -86, y, 54, 24, false, () => {
               const index = eventRanges.findIndex(([a, b]) => a === ev.sumMin && b === ev.sumMax);
               const next = eventRanges[(index + 1 + eventRanges.length) % eventRanges.length]!;
@@ -2723,7 +2737,7 @@ export class MainMenuScene extends Component {
             }, 12);
           }
           if (draftTurnEndEvents.length > rowsToShow.length) {
-            this.makeLabel(propRoot, `还有 ${draftTurnEndEvents.length - rowsToShow.length} 条，保存/导出会保留`, 0, -214, 230, 20, 11, TEXT_SUBTITLE);
+            this.makeLabel(propRoot, `还有 ${draftTurnEndEvents.length - rowsToShow.length} 条，保存/导出会保留`, 0, -238, 230, 20, 11, TEXT_SUBTITLE);
           }
           return;
         }
@@ -3408,6 +3422,90 @@ export class MainMenuScene extends Component {
       if (importPickerRoot && importPickerRoot.isValid) importPickerRoot.destroy();
       importPickerRoot = null;
     };
+    let weatherPickerRoot: Node | null = null;
+    const closeWeatherPicker = () => {
+      if (weatherPickerRoot && weatherPickerRoot.isValid) weatherPickerRoot.destroy();
+      weatherPickerRoot = null;
+    };
+    const openWeatherPicker = () => {
+      closeWeatherPicker();
+      const weatherColumns = 3;
+      const weatherRows = 2;
+      const pickerW = 420;
+      const pickerH = 260;
+      const buttonW = 116;
+      const buttonH = 58;
+      const gapX = 14;
+      const gapY = 14;
+
+      weatherPickerRoot = new Node('LevelEditorWeatherPicker');
+      weatherPickerRoot.layer = this.node.layer;
+      weatherPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
+      weatherPickerRoot.setPosition(0, 0, 0);
+      const backdrop = weatherPickerRoot.addComponent(Graphics);
+      backdrop.fillColor = new Color(0, 0, 0, 132);
+      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+      backdrop.fill();
+      weatherPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+        closeWeatherPicker();
+        ev.propagationStopped = true;
+      }, this);
+      panel.addChild(weatherPickerRoot);
+
+      const picker = new Node('WeatherOptionPanel');
+      picker.layer = this.node.layer;
+      picker.addComponent(UITransform).setContentSize(pickerW, pickerH);
+      picker.setPosition(0, -20, 0);
+      const pickerBg = picker.addComponent(Graphics);
+      drawFieldPanel(pickerBg, pickerW, pickerH, new Color(31, 38, 32, 250), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      picker.on(Node.EventType.TOUCH_START, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+      picker.on(Node.EventType.TOUCH_END, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+      weatherPickerRoot.addChild(picker);
+
+      this.makeLabel(picker, '天气', 0, 96, 160, 30, 24, TEXT_TITLE);
+      const hint = this.makeLabel(picker, '选择本关固定天气。空位保留给后续天气类型。', 0, 66, 330, 22, 14, TEXT_SUBTITLE);
+      hint.overflow = Label.Overflow.SHRINK;
+      const closeBtn = this.makeRectButton(picker, 180, 98, 34, 28, MODAL_CLOSE_BG, () => closeWeatherPicker());
+      this.makeLabel(closeBtn.node, 'X', 0, 0, 28, 24, 14, TEXT_PRIMARY);
+
+      const gridW = weatherColumns * buttonW + (weatherColumns - 1) * gapX;
+      const gridH = weatherRows * buttonH + (weatherRows - 1) * gapY;
+      const startX = -gridW / 2 + buttonW / 2;
+      const startY = gridH / 2 - buttonH / 2 + 2;
+      const reservedSlots = weatherColumns * weatherRows;
+      for (let i = 0; i < reservedSlots; i++) {
+        const option = weatherOptions[i];
+        const col = i % weatherColumns;
+        const row = Math.floor(i / weatherColumns);
+        const x = startX + col * (buttonW + gapX);
+        const y = startY - row * (buttonH + gapY);
+        if (!option) {
+          const btn = this.makeRectButton(picker, x, y, buttonW, buttonH, BTN_LEVEL_LOCKED, () => {});
+          this.makeLabel(btn.node, '预留', 0, 6, buttonW - 12, 20, 13, TEXT_DISABLED);
+          this.makeLabel(btn.node, '未来天气', 0, -14, buttonW - 12, 18, 11, TEXT_DISABLED);
+          continue;
+        }
+        const active = option.id === draftWeather;
+        const btn = this.makeRectButton(
+          picker,
+          x,
+          y,
+          buttonW,
+          buttonH,
+          active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
+          () => {
+            draftWeather = option.id;
+            closeWeatherPicker();
+            refreshPropertyPanel();
+          },
+        );
+        const title = this.makeLabel(btn.node, option.label, 0, 10, buttonW - 12, 22, 16, TEXT_PRIMARY);
+        title.overflow = Label.Overflow.SHRINK;
+        const desc = this.makeLabel(btn.node, option.desc, 0, -14, buttonW - 12, 18, 10, TEXT_SUBTITLE);
+        desc.overflow = Label.Overflow.SHRINK;
+      }
+      weatherPickerRoot.setSiblingIndex(panel.children.length - 1);
+    };
     const applyImportedMission = (mission: MissionData, meta: LevelMeta) => {
       captureMissionFields();
       draftBaseMission = cloneJson(mission);
@@ -3427,6 +3525,7 @@ export class MainMenuScene extends Component {
       draftEnemyDiceEidMax = mission.enemyDiceEidMax;
       draftAllowMapPan = !!mission.allowMapPan;
       draftTruckPath = cloneJson(mission.truckPath ?? []);
+      draftWeather = normalizeWeather(mission.weather);
       selectedRow = 0;
       selectedCol = 0;
       for (let row = 0; row < rows; row++) {
@@ -3702,6 +3801,8 @@ export class MainMenuScene extends Component {
       else delete mission.shermanStartByDice;
       if (draftEnemyDiceEidMax !== undefined) mission.enemyDiceEidMax = draftEnemyDiceEidMax;
       else delete mission.enemyDiceEidMax;
+      if (draftWeather === 'rain') mission.weather = draftWeather;
+      else delete mission.weather;
       return mission;
     };
 

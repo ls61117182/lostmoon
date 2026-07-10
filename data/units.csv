@@ -11,4 +11,5 @@ type95,九五式轻战车,japanese,4,11,10,9,8,0,2,1,4,1,audio/tank_move,audio/c
 type97,九七式中战车,japanese,4,9,8,8,7,1,2,1,4,1,audio/tank_move,audio/cannon_fire,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Pacific: Type 97 Chi-Ha
 at_gun,反坦克炮,japanese,5,8,8,7,6,2,2,1,4,1,,audio/cannon_fire,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,Pacific: AT Gun
 japanese_infantry,日本步兵,japanese,2,0,0,0,0,3,2,1,2,1,,,infantry,destroyed,0,attack=japanese_infantry1|move=japanese_infantry1|misc=japanese_infantry1,,Pacific: Japanese Infantry
+american_infantry,美军步兵,allied,2,0,0,0,0,3,2,1,2,1,,,infantry,destroyed,0,attack=american_infantry1|move=american_infantry1|misc=american_infantry1,,Allied AI support infantry
 heavy_artillery,重炮,japanese,4,10,9,7,6,4,4,2,4,1,,audio/cannon_fire,fixed,destroyed,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,Pacific: Heavy Artillery

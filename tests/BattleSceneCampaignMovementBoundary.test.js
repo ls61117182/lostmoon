@@ -59,11 +59,11 @@ assert(
   'AI action execution should guard against movement outside the active campaign segment',
 );
 
-const infantryMove = battleScene.match(/private\s+findJapaneseInfantryMove\s*\([\s\S]*?\n  }\n\n/);
-assert(infantryMove, 'findJapaneseInfantryMove() should be found');
+const infantryMove = battleScene.match(/private\s+findInfantryAIMove\s*\([\s\S]*?\n  }\n\n/);
+assert(infantryMove, 'findInfantryAIMove() should be found');
 assert(
   infantryMove[0].includes('this.canMoveToBattleTile(n)'),
-  'Japanese infantry movement should skip destinations outside the active campaign segment',
+  'AI infantry movement should skip destinations outside the active campaign segment',
 );
 
 assert(
