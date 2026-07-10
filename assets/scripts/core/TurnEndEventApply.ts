@@ -59,6 +59,7 @@ export interface TurnEndTankReinforceMove {
 /** 相邻步兵对谢尔曼齐射：一发对应一条预掷战报（UI 用主炮同款 DiceShow 逐发播放） */
 export interface AdjacentInfantryVolleyPreview {
   report: AttackReport;
+  attackerId: string;
   attackerKind: UnitKind;
 }
 
@@ -356,7 +357,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
     const ctx = { attacker: inf, target: simTarget, map: mission.map, smokeHexes: mission.smokeHexes, effectiveRangePenetration, weather };
     if (canAttack(ctx).ok) {
       const rep = rollAttack(ctx, rng);
-      volleys.push({ report: rep, attackerKind: inf.kind });
+      volleys.push({ report: rep, attackerId: inf.id, attackerKind: inf.kind });
       applyAttack(simTarget, rep);
       continue;
     }

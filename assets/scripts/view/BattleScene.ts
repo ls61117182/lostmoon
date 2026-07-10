@@ -173,6 +173,7 @@ import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
 import { normalizeWeather } from '../core/Weather';
 import { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } from './WeatherVisual';
 import type { RainVisualSample } from './WeatherVisual';
+import { infantrySpriteAngle, infantryVisualDirection } from './InfantryVisualFacing';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
@@ -1199,6 +1200,7 @@ export class BattleScene extends Component {
   private turretAimAnim: TurretAimAnim | null = null;
   private shermanTurretFacing: FireDirection | null = null;
   private enemyTurretFacing = new Map<string, FireDirection>();
+  private infantryVisualFacing = new Map<string, Direction>();
 
   private resetTurretFacingState() {
     this.turretAimAnim = null;
@@ -2337,6 +2339,8 @@ export class BattleScene extends Component {
         const target = byId(details.targetId);
         if (!attacker || !target) return;
         const hit = details.hit === true || details.report?.hit === true;
+        this.setInfantryVisualFacing(attacker, target.pos);
+        this.redraw();
         this.spawnMachineGunBurst(attacker, target, hit);
         playMgFire();
         this.spawnFloater(target.pos.q, target.pos.r, hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss'),
@@ -2350,6 +2354,8 @@ export class BattleScene extends Component {
         const target = byId(details.targetId);
         if (!attacker || !target) return;
         const hit = details.effect?.hit === true;
+        this.setInfantryVisualFacing(attacker, target.pos);
+        this.redraw();
         this.spawnMachineGunBurst(attacker, target, hit);
         playMgFire();
         const effect = details.effect?.effect;
@@ -2878,6 +2884,7 @@ export class BattleScene extends Component {
 
   private loadAndDraw(data: MissionData) {
     this.cancelPrecisionAimHold();
+    this.infantryVisualFacing.clear();
     this.missionId = data.id;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
@@ -4616,6 +4623,10 @@ export class BattleScene extends Component {
     attackSound: string,
     report?: AttackReport,
   ) {
+    if (attacker && target) {
+      this.setInfantryVisualFacing(attacker, target.pos);
+      this.redraw();
+    }
     if (mg) {
       this.spawnMachineGunBurst(attacker, target, report?.hit === true);
       playMgFire();
@@ -5243,6 +5254,7 @@ export class BattleScene extends Component {
         });
         return;
       }
+      this.setInfantryVisualFacing(u, { q: this.anim.toQ, r: this.anim.toR });
       const k = easeOutCubic(this.anim.t);
       const a = this.project(this.anim.fromQ, this.anim.fromR);
       const b = this.project(this.anim.toQ, this.anim.toR);
@@ -7388,9 +7400,21 @@ export class BattleScene extends Component {
       : { frames: this.infantrySpriteFrames, dims: this.infantrySpriteDims };
   }
 
+  private setInfantryVisualFacing(unit: Unit, target: Axial) {
+    if (!isFootUnit(unit)) return;
+    const direction = infantryVisualDirection(unit.pos, target);
+    if (direction !== null) this.infantryVisualFacing.set(unit.id, direction);
+  }
+
+  private infantryVisualAngle(unit: Unit): number {
+    const direction = this.infantryVisualFacing.get(unit.id) ?? unit.facing;
+    return direction === null ? 0 : infantrySpriteAngle(direction);
+  }
+
   private drawInfantry(u: Unit, cx: number, cy: number) {
     const g = this.g!;
     const teamRadius = this.hexSize * 0.5;
+    const visualAngle = this.infantryVisualAngle(u);
 
     if (u.destroyed) return;
 
@@ -7415,7 +7439,7 @@ export class BattleScene extends Component {
         slot.sprite.spriteFrame = sf;
         slot.node.getComponent(UITransform)!.setContentSize(tw, th);
         slot.node.setPosition(cx, cy, 0);
-        slot.node.angle = 0;
+        slot.node.angle = visualAngle;
         slot.node.setScale(1, 1, 1);
         slot.node.active = true;
       } else {
@@ -7504,7 +7528,7 @@ export class BattleScene extends Component {
       ut.setContentSize(tw, th);
       const off = offsets[i];
       slot.node.setPosition(cx + off.ox, cy + off.oy, 0);
-      slot.node.angle = 0;
+      slot.node.angle = visualAngle;
       slot.node.setScale(1, 1, 1);
       slot.node.active = true;
     }
@@ -12215,8 +12239,18 @@ export class BattleScene extends Component {
     this.drawHexOutline(0, 0, hexR);
 
     if (isFootUnit(u)) {
+      const visualAngle = this.infantryVisualAngle(u);
       if (u.kind === 'officer' && this.officerSpriteFrame) {
-        this.addTileInspectSprite(parent, this.officerSpriteFrame, this.officerSpriteDim.dw, this.officerSpriteDim.dh, hexR * 1.06);
+        this.addTileInspectSprite(
+          parent,
+          this.officerSpriteFrame,
+          this.officerSpriteDim.dw,
+          this.officerSpriteDim.dh,
+          hexR * 1.06,
+          0,
+          0,
+          visualAngle,
+        );
         this.g = oldG;
         return;
       }
@@ -12248,7 +12282,16 @@ export class BattleScene extends Component {
         if (!sf) continue;
         const dim = infantryVisuals.dims[i];
         const fit = i === 0 ? spriteFit : spriteFit * 1.15;
-        this.addTileInspectSprite(parent, sf, dim.dw, dim.dh, fit, offsets[i].ox, offsets[i].oy);
+        this.addTileInspectSprite(
+          parent,
+          sf,
+          dim.dw,
+          dim.dh,
+          fit,
+          offsets[i].ox,
+          offsets[i].oy,
+          visualAngle,
+        );
       }
       this.g = oldG;
       return;
@@ -12969,6 +13012,7 @@ export class BattleScene extends Component {
     // 写回场景状态；中断任何敌方阶段调度 / 骰子态 / 动画
     this.turn = result.turn!;
     this.phase = result.phase!;
+    this.infantryVisualFacing.clear();
     this.resetTurretFacingState();
     this.movementDone = (result.movesLeft ?? 2) === 0;
     this.attackDone   = (result.attacksLeft ?? 1) === 0;
@@ -16451,6 +16495,7 @@ export class BattleScene extends Component {
     const v = volleys[idx];
     const actor = t('actor.enemyPrefix', { name: unitDisplayName(v.attackerKind) });
     const sh = this.mission.sherman;
+    const attacker = this.mission.enemies.find(unit => unit.id === v.attackerId) ?? null;
 
     this.startDiceShow(
       v.report,
@@ -16464,6 +16509,8 @@ export class BattleScene extends Component {
         mg: false,
         keepTurnEndPanel: true,
         attackSound: getUnitStats(v.attackerKind, this.mission.data.theater ?? 'europe').attackSound,
+        attacker,
+        target: sh,
       },
     );
   }
