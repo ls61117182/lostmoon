@@ -174,6 +174,7 @@ import { normalizeWeather } from '../core/Weather';
 import { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } from './WeatherVisual';
 import type { RainVisualSample } from './WeatherVisual';
 import { infantrySpriteAngle, infantryVisualDirection } from './InfantryVisualFacing';
+import { orderMachineGunBurstEndpointsClockwise } from './MachineGunBurstOrder';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
@@ -5154,23 +5155,37 @@ export class BattleScene extends Component {
     const nx = -b.uy;
     const ny = b.ux;
     const shots = 15;
+    const maxScatterAngle = 7 * Math.PI / 180;
+    const maxPerpByAngle = Math.tan(maxScatterAngle) * dist;
+    const maxPerp = Math.min(this.hexSize * 0.42, maxPerpByAngle);
+    const endpoints = orderMachineGunBurstEndpointsClockwise(
+      Array.from({ length: shots }, (_, shotIndex) => {
+        const r0 = this.seededUnit(b.seed, shotIndex * 4 + 0);
+        const r1 = this.seededUnit(b.seed, shotIndex * 4 + 1);
+        const r2 = this.seededUnit(b.seed, shotIndex * 4 + 2);
+        const r3 = this.seededUnit(b.seed, shotIndex * 4 + 3);
+        const endPerp = (r0 - 0.5) * 2 * maxPerp;
+        const endForward = (r3 - 0.5) * this.hexSize * 0.18;
+        return {
+          x: b.targetX + b.ux * endForward + nx * endPerp,
+          y: b.targetY + b.uy * endForward + ny * endPerp,
+          shotIndex,
+          r1,
+          r2,
+          r3,
+        };
+      }),
+      b.targetX,
+      b.targetY,
+    );
 
-    for (let i = 0; i < shots; i++) {
-      const shotStart = i * 0.035;
+    for (let sequenceIndex = 0; sequenceIndex < endpoints.length; sequenceIndex++) {
+      const endpoint = endpoints[sequenceIndex];
+      const shotStart = sequenceIndex * 0.035;
       const shotP = (p - shotStart) / 0.36;
       if (shotP < 0 || shotP > 1) continue;
 
-      const r0 = this.seededUnit(b.seed, i * 4 + 0);
-      const r1 = this.seededUnit(b.seed, i * 4 + 1);
-      const r2 = this.seededUnit(b.seed, i * 4 + 2);
-      const r3 = this.seededUnit(b.seed, i * 4 + 3);
-      const maxScatterAngle = 7 * Math.PI / 180;
-      const maxPerpByAngle = Math.tan(maxScatterAngle) * dist;
-      const maxPerp = Math.min(this.hexSize * 0.42, maxPerpByAngle);
-      const endPerp = (r0 - 0.5) * 2 * maxPerp;
-      const endForward = (r3 - 0.5) * this.hexSize * 0.18;
-      const endX = b.targetX + b.ux * endForward + nx * endPerp;
-      const endY = b.targetY + b.uy * endForward + ny * endPerp;
+      const { x: endX, y: endY, r1, r2, r3 } = endpoint;
       const shotDx = endX - b.startX;
       const shotDy = endY - b.startY;
       const shotLen = Math.hypot(shotDx, shotDy) || 1;
