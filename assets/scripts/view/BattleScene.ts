@@ -170,6 +170,9 @@ import { PvpBattleSnapshot, PvpBattleUnitSnapshot, PvpService } from '../core/Pv
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import type { MissionSource } from '../core/CustomMissionStore';
 import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
+import { normalizeWeather } from '../core/Weather';
+import { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } from './WeatherVisual';
+import type { RainVisualSample } from './WeatherVisual';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
@@ -202,7 +205,7 @@ import {
   playUiClick,
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel } from '../core/UnitVisualState';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -1341,6 +1344,25 @@ export class BattleScene extends Component {
   // HUD
   /** 左上角最上行：任务 JSON `id` + 关卡名（`LevelDB.titleKey` 或 `MissionData.name`） */
   private missionTitleLabel: Label | null = null;
+  private weatherHudLabel: Label | null = null;
+  private weatherEffectNode: Node | null = null;
+  private weatherEffectGraphics: Graphics | null = null;
+  private readonly rainVisualSample: RainVisualSample = {
+    phase: 'idle',
+    impactX: 0,
+    impactY: 0,
+    headX: 0,
+    headY: 0,
+    streakLength: 0,
+    slant: 0,
+    alpha: 0,
+    fallDistance: 0,
+    fallSpeed: 0,
+    splashRadius: 0,
+    splashRayLength: 0,
+    splashRayCount: 0,
+    splashRotation: 0,
+  };
   private pvpHudLabel: Label | null = null;
   private pvpTurnTimerRoot: Node | null = null;
   private pvpTurnTimerBg: Graphics | null = null;
@@ -1844,6 +1866,7 @@ export class BattleScene extends Component {
     mapInputNode.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
     mapInputNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
 
+    this.buildWeatherEffectLayer();
     // HUD：回合数 + 阶段信息 + 下一阶段按钮
     this.buildHUD();
     // 底部阶段选择条 + 骰子托盘（空的，交给 refreshPhaseUI 根据状态切换可见性）
@@ -3257,6 +3280,7 @@ export class BattleScene extends Component {
       this.mission.sherman,
       this.mission.allies,
       getGameModeConfig(GameSession.gameMode).radioVisionSharing,
+      this.currentWeather(),
     );
   }
 
@@ -3279,7 +3303,7 @@ export class BattleScene extends Component {
     if (!this.mission || !fogOfWarEnabled(GameSession.gameMode) || this.isCommanderHatchOpen()) return null;
     if (this.isHexVisible(pos)) return null;
     const sherman = this.mission.sherman;
-    if (hexDistance(sherman.pos, pos) > currentVisionRange(sherman)) return null;
+    if (hexDistance(sherman.pos, pos) > currentVisionRange(sherman, this.currentWeather())) return null;
     return fireDirectionTo(sherman.pos, pos);
   }
 
@@ -3427,6 +3451,7 @@ export class BattleScene extends Component {
         map,
         theater: this.mission.data.theater,
         smokeHexes: this.mission.smokeHexes,
+        weather: this.currentWeather(),
         hitThresholdModifier: this.selectedGunHitThresholdModifier,
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       };
@@ -3455,7 +3480,7 @@ export class BattleScene extends Component {
     for (const e of enemies) {
       if (e.destroyed) continue;
       if (!this.isUnitVisible(e)) continue;
-      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes };
+      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather() };
       if (!canMGAttack(ctx).ok) continue;
 
       const c = this.project(e.pos.q, e.pos.r);
@@ -4048,6 +4073,7 @@ export class BattleScene extends Component {
     this.unitEffectTime += dt;
     this.syncUnitEffects(dt);
     this.drawUnitEffects();
+    this.drawWeatherEffects();
   }
 
   private syncUnitEffects(dt: number) {
@@ -4131,6 +4157,75 @@ export class BattleScene extends Component {
         smokeAlpha: 1,
         smokeAge: this.smokeScreenAges.get(key) ?? 0,
       });
+    }
+  }
+
+  private buildWeatherEffectLayer() {
+    if (this.weatherEffectNode) return;
+    const node = new Node('WeatherEffectLayer');
+    node.layer = this.node.layer;
+    node.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    node.setPosition(0, 0, 0);
+    node.active = false;
+    this.weatherEffectGraphics = node.addComponent(Graphics);
+    this.node.addChild(node);
+    this.weatherEffectNode = node;
+  }
+
+  private drawWeatherEffects() {
+    const node = this.weatherEffectNode;
+    const g = this.weatherEffectGraphics;
+    if (!node || !g) return;
+    const raining = !!this.mission && this.currentWeather() === 'rain' && !GameSession.isPvp;
+    node.active = raining;
+    g.clear();
+    if (!raining) return;
+
+    // A restrained cool veil makes rain readable over bright terrain without obscuring the HUD above this layer.
+    g.fillColor = new Color(30, 52, 63, 24);
+    g.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
+    g.fill();
+
+    const sample = this.rainVisualSample;
+    let drewRain = false;
+    g.lineWidth = 1.25;
+    g.strokeColor = new Color(184, 224, 240, 154);
+    for (let i = 0; i < RAIN_VISUAL_SLOT_COUNT; i++) {
+      sampleRainVisual(i, this.unitEffectTime, CANVAS_W, CANVAS_H, sample);
+      if (sample.phase !== 'fall') continue;
+      g.moveTo(
+        sample.headX + sample.streakLength * sample.slant,
+        sample.headY + sample.streakLength,
+      );
+      g.lineTo(sample.headX, sample.headY);
+      drewRain = true;
+    }
+    if (drewRain) g.stroke();
+
+    const splashBuckets = 3;
+    for (let bucket = 0; bucket < splashBuckets; bucket++) {
+      let drewSplash = false;
+      g.lineWidth = 1;
+      g.strokeColor = new Color(190, 230, 242, 48 + bucket * 44);
+      for (let i = 0; i < RAIN_VISUAL_SLOT_COUNT; i++) {
+        sampleRainVisual(i, this.unitEffectTime, CANVAS_W, CANVAS_H, sample);
+        if (sample.phase !== 'splash') continue;
+        const alphaBucket = Math.min(splashBuckets - 1, Math.floor(sample.alpha / 59));
+        if (alphaBucket !== bucket) continue;
+
+        g.circle(sample.impactX, sample.impactY, sample.splashRadius);
+        for (let ray = 0; ray < sample.splashRayCount; ray++) {
+          const angle = sample.splashRotation + ray * Math.PI * 2 / sample.splashRayCount;
+          const ux = Math.cos(angle);
+          const uy = Math.sin(angle);
+          const inner = sample.splashRadius * 0.55;
+          const outer = sample.splashRadius + sample.splashRayLength;
+          g.moveTo(sample.impactX + ux * inner, sample.impactY + uy * inner);
+          g.lineTo(sample.impactX + ux * outer, sample.impactY + uy * outer);
+        }
+        drewSplash = true;
+      }
+      if (drewSplash) g.stroke();
     }
   }
 
@@ -7367,6 +7462,24 @@ export class BattleScene extends Component {
     this.node.addChild(mNode);
     this.missionTitleLabel = mLab;
 
+    const weatherNode = new Node('WeatherHudLabel');
+    weatherNode.layer = this.node.layer;
+    const weatherUT = weatherNode.addComponent(UITransform);
+    weatherUT.setContentSize(320, 24);
+    weatherUT.setAnchorPoint(0, 1);
+    const weatherLab = weatherNode.addComponent(Label);
+    weatherLab.fontSize = 18;
+    weatherLab.lineHeight = 22;
+    weatherLab.color = new Color(166, 218, 235, 255);
+    weatherLab.horizontalAlign = HorizontalTextAlignment.LEFT;
+    weatherLab.verticalAlign = VerticalTextAlignment.TOP;
+    weatherLab.overflow = Label.Overflow.SHRINK;
+    weatherLab.string = '';
+    weatherNode.setPosition(-74, 344, 0);
+    weatherNode.active = false;
+    this.node.addChild(weatherNode);
+    this.weatherHudLabel = weatherLab;
+
     const pvpNode = new Node('PvpHudLabel');
     pvpNode.layer = this.node.layer;
     const pvpUT = pvpNode.addComponent(UITransform);
@@ -8374,6 +8487,7 @@ export class BattleScene extends Component {
       }
     }
     this.refreshPvpHud();
+    this.refreshWeatherHud();
 
     if (this.hudLabel) {
       if (this.phase !== 'player') {
@@ -8413,6 +8527,21 @@ export class BattleScene extends Component {
     if (this.endTurnLabel) this.endTurnLabel.string = adv.label;
 
     this.refreshObjectiveHud();
+  }
+
+  private currentWeather(): WeatherType {
+    return normalizeWeather(this.mission?.data.weather);
+  }
+
+  private refreshWeatherHud() {
+    const label = this.weatherHudLabel;
+    if (!label) return;
+    const weather = this.currentWeather();
+    const active = !!this.mission && weather === 'rain' && !GameSession.isPvp;
+    label.node.active = active;
+    label.string = active
+      ? (getLang() === 'zh' ? '雨天  命中+1 / 视野-1' : 'Rain  Hit +1 / Vision -1')
+      : '';
   }
 
   /** 将单条目标模板展开为带序号的完整行（i18n）。 */
@@ -10297,7 +10426,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes };
+    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather() };
     const maxRoll = maxMGHitRoll(ctx);
     const impossibleThreshold = mgHitThreshold(ctx);
     const impossible = maxRoll < impossibleThreshold;
@@ -10819,7 +10948,7 @@ export class BattleScene extends Component {
       if (target.faction === actor.faction) continue;
       if (isFootUnit(target) || target.kind === 'truck') continue;
       const d = hexDistance(actor.pos, target.pos);
-      if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && d > currentVisionRange(actor)) continue;
+      if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && d > currentVisionRange(actor, this.currentWeather())) continue;
       if (adjacentOnly && d !== 1) continue;
       if (!canAttack({
         attacker: actor,
@@ -10853,9 +10982,9 @@ export class BattleScene extends Component {
     const tied: Unit[] = [];
     for (const target of this.aiTargetsFor(actor)) {
       if (target.faction === actor.faction) continue;
-      if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor)) continue;
-      if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing)) continue;
-      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units }).ok) continue;
+      if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
+      if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) continue;
+      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, weather: this.currentWeather() }).ok) continue;
       const priority = aiTargetPriority(target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
@@ -10882,8 +11011,8 @@ export class BattleScene extends Component {
   private canAIMainGunResolveSelectedTarget(actor: Unit, target: Unit): boolean {
     if (!this.mission) return false;
     const radioVisionSharing = getGameModeConfig(GameSession.gameMode).radioVisionSharing;
-    if (isUnitInVision(this.mission.map, actor, target, this.aiFriendliesFor(actor), radioVisionSharing)) return true;
-    return actor.stats.visionType === 'turreted' && isWithinOwnVisionRange(actor, target);
+    if (isUnitInVision(this.mission.map, actor, target, this.aiFriendliesFor(actor), radioVisionSharing, this.currentWeather())) return true;
+    return actor.stats.visionType === 'turreted' && isWithinOwnVisionRange(actor, target, this.currentWeather());
   }
 
   private beginAllyPhase() {
@@ -13604,6 +13733,7 @@ export class BattleScene extends Component {
       theater: this.mission.data.theater,
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
+      weather: this.currentWeather(),
       hitThresholdModifier: this.selectedGunHitThresholdModifier,
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections,
@@ -13691,9 +13821,9 @@ export class BattleScene extends Component {
       return false;
     }
 
-    if (!isUnitInVision(map, enemy, target, this.aiFriendliesFor(enemy), getGameModeConfig(GameSession.gameMode).radioVisionSharing)) {
+    if (!isUnitInVision(map, enemy, target, this.aiFriendliesFor(enemy), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) {
       if (enemy.stats.visionType !== 'turreted') return false;
-      if (!isWithinOwnVisionRange(enemy, target)) {
+      if (!isWithinOwnVisionRange(enemy, target, this.currentWeather())) {
         if (!opts.adjacentOnly && getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG) {
           return this.tryAIMGAttack(enemy);
         }
@@ -13724,6 +13854,7 @@ export class BattleScene extends Component {
       theater: this.mission.data.theater,
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
+      weather: this.currentWeather(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
@@ -14217,6 +14348,7 @@ export class BattleScene extends Component {
           theater: this.mission.data.theater,
           units: this.allUnits(),
           smokeHexes: this.mission.smokeHexes,
+          weather: this.currentWeather(),
         });
         const add = (name: string, value: number | undefined) => {
           if (value !== undefined && value !== 0) rows.push([name, String(value)]);
@@ -14229,6 +14361,7 @@ export class BattleScene extends Component {
         add(t('dice.rule.concealed'), base.concealed);
         add(t('dice.rule.trees'), base.trees);
         add(t('dice.rule.rearArc'), base.rearArc);
+        add(getLang() === 'zh' ? '雨天' : 'Rain', base.weather);
         const modifier = r.threshold - base.threshold;
         add(t('dice.rule.attackModifier'), modifier);
       }
@@ -15902,6 +16035,7 @@ export class BattleScene extends Component {
       theater: this.mission.data.theater,
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
+      weather: this.currentWeather(),
     };
     const maxRoll = maxMGHitRoll(ctx);
     const threshold = mgHitThreshold(ctx);
@@ -16015,6 +16149,7 @@ export class BattleScene extends Component {
         return `turnend_${this.turnEndUnitSeq}`;
       },
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+      weather: this.currentWeather(),
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
     const extraPhases = prepared.extraDicePhases ?? [];

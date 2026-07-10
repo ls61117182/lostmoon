@@ -105,6 +105,7 @@ export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType
 export type Faction = 'allied' | 'german' | 'japanese';
 
 export type Theater = 'europe' | 'pacific';
+export type WeatherType = 'clear' | 'rain';
 
 export type UnitKind =
   | 'sherman'
@@ -286,6 +287,8 @@ export interface MissionData {
   name: string;
   description: string;
   theater?: Theater;
+  /** Fixed weather for the mission. Omitted missions use clear weather. */
+  weather?: WeatherType;
   /** 地图列数 / 行数（offset） */
   cols: number;
   rows: number;

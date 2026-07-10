@@ -705,6 +705,22 @@ describe('战争迷雾玩家视野', () => {
     expect(precision).toBe(normal - 2);
   });
 
+  test('rain weather increases hit threshold by one', () => {
+    const map = new HexMap(5, 5);
+    addRect(map, 5, 5);
+    const attacker = shermanAt(2, 2, 0, false);
+    const target: Unit = {
+      ...shermanAt(2, 1, 3, false),
+      id: 'target',
+      kind: 'panzer4',
+      faction: 'german',
+      stats: { size: 4 } as Unit['stats'],
+    };
+    const clear = hitThreshold({ attacker, target, map });
+    const rain = hitThreshold({ attacker, target, map, weather: 'rain' });
+    expect(rain).toBe(clear + 1);
+  });
+
   test('关舱：六个相邻格可见，远处仅沿炮塔方向形成射线', () => {
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
@@ -777,6 +793,16 @@ describe('战争迷雾玩家视野', () => {
     expect(visible.has(HexMap.keyOf(forward2))).toBe(true);
     expect(visible.has(HexMap.keyOf(forward3))).toBe(false);
     expect(visible.has(HexMap.keyOf(offAxis3))).toBe(false);
+  });
+
+  test('rain weather reduces vision with closed-hatch minimum one', () => {
+    const open = shermanAt(3, 4, 0, true);
+    open.visionRange = 4;
+    expect(currentVisionRange(open, 'rain')).toBe(3);
+
+    const closed = shermanAt(3, 4, 0, false);
+    closed.visionRange = 1;
+    expect(currentVisionRange(closed, 'rain')).toBe(1);
   });
 
   test('关舱时炮塔方向视野不得超过当前视野属性', () => {

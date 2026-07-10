@@ -31,7 +31,8 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { Axial, CrewSlot, isFootUnit, isTankUnit, ShermanCrew, Theater, Unit, UnitKind } from './types';
+import { Axial, CrewSlot, isFootUnit, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { weatherHitThresholdModifier } from './Weather';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
 
@@ -120,6 +121,8 @@ export interface AttackContext {
   units?: readonly Unit[];
   /** HexMap.keyOf(pos) entries containing active smoke screens. */
   smokeHexes?: ReadonlySet<string>;
+  /** Fixed mission weather. Rain makes attacks harder to hit. */
+  weather?: WeatherType;
   /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
   protagonist?: Unit;
   /** Action-specific modifier applied to the final hit threshold; precision fire uses -2. */
@@ -254,6 +257,7 @@ export interface HitBreakdown {
   trees?: number;
   rearArc?: number;
   actionModifier?: number;
+  weather?: number;
 }
 
 export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
@@ -271,10 +275,11 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const rearArc = includeRearArc && pacific && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
   const frontArcModifier = opts.frontArcModifier ?? 0;
   const actionModifier = ctx.hitThresholdModifier ?? 0;
+  const weather = weatherHitThresholdModifier(ctx.weather);
   return {
-    size, distance, hedges, building, smoke, concealed, trees, rearArc, actionModifier,
+    size, distance, hedges, building, smoke, concealed, trees, rearArc, actionModifier, weather,
     threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc
-      + frontArcModifier + actionModifier,
+      + frontArcModifier + actionModifier + weather,
   };
 }
 

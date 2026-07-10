@@ -1,6 +1,7 @@
 import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, isTankUnit, Unit } from './types';
+import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, isTankUnit, Unit, WeatherType } from './types';
+import { weatherVisionRange } from './Weather';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
@@ -16,20 +17,21 @@ export function fogOfWarEnabled(mode: GameMode): boolean {
 }
 
 /** Grid ranges are non-negative integers; old missions/units default to 4. */
-export function currentVisionRange(unit: Unit): number {
+export function currentVisionRange(unit: Unit, weather?: WeatherType): number {
   const raw = unit.visionRange ?? unit.stats.visionRange;
-  return typeof raw === 'number' && Number.isFinite(raw)
+  const baseRange = typeof raw === 'number' && Number.isFinite(raw)
     ? Math.max(0, Math.floor(raw))
     : DEFAULT_VISION_RANGE;
+  return weatherVisionRange(unit, baseRange, weather);
 }
 
 /** Whether the target is within the observer's own configured vision range. */
-export function isWithinOwnVisionRange(observer: Unit, target: Unit): boolean {
-  return hexDistance(observer.pos, target.pos) <= currentVisionRange(observer);
+export function isWithinOwnVisionRange(observer: Unit, target: Unit, weather?: WeatherType): boolean {
+  return hexDistance(observer.pos, target.pos) <= currentVisionRange(observer, weather);
 }
 
 /** Runtime source of truth for the map coordinates visible to one unit. */
-export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
+export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: WeatherType): Set<string> {
   const visible = new Set<string>();
   const add = (p: Axial) => {
     if (map.has(p)) visible.add(HexMap.keyOf(p));
@@ -40,7 +42,7 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit): Set<string> {
   const visionType = unit.stats.visionType ?? 'turreted';
   const commanderAlive = unit.crew?.commander !== false;
   const openHatch = commanderAlive && unit.hatchOpen === true;
-  const visionRange = currentVisionRange(unit);
+  const visionRange = currentVisionRange(unit, weather);
 
   if (openHatch) {
     for (const tile of map.all()) {
@@ -99,12 +101,13 @@ export function computeRadioSharedVisibleHexes(
   map: HexMap,
   receiver: Unit,
   friendlies: readonly Unit[] = [],
+  weather?: WeatherType,
 ): Set<string> {
-  const visible = computeUnitVisibleHexes(map, receiver);
+  const visible = computeUnitVisibleHexes(map, receiver, weather);
   if (!hasRadioReceive(receiver)) return visible;
   for (const friendly of friendlies) {
     if (friendly === receiver || friendly.faction !== receiver.faction || !hasRadioTransmit(friendly)) continue;
-    for (const key of computeUnitVisibleHexes(map, friendly)) visible.add(key);
+    for (const key of computeUnitVisibleHexes(map, friendly, weather)) visible.add(key);
   }
   return visible;
 }
@@ -115,10 +118,11 @@ export function computePlayerVisibleHexes(
   sherman: Unit,
   allies: readonly Unit[] = [],
   radioVisionSharing = false,
+  weather?: WeatherType,
 ): Set<string> {
   const visible = radioVisionSharing
-    ? computeRadioSharedVisibleHexes(map, sherman, allies)
-    : computeUnitVisibleHexes(map, sherman);
+    ? computeRadioSharedVisibleHexes(map, sherman, allies, weather)
+    : computeUnitVisibleHexes(map, sherman, weather);
   for (const ally of allies) {
     if (!ally.destroyed && map.has(ally.pos)) visible.add(HexMap.keyOf(ally.pos));
   }
@@ -131,10 +135,11 @@ export function isUnitInVision(
   target: Unit,
   friendlies: readonly Unit[] = [],
   radioVisionSharing = false,
+  weather?: WeatherType,
 ): boolean {
   const visible = radioVisionSharing
-    ? computeRadioSharedVisibleHexes(map, observer, friendlies)
-    : computeUnitVisibleHexes(map, observer);
+    ? computeRadioSharedVisibleHexes(map, observer, friendlies, weather)
+    : computeUnitVisibleHexes(map, observer, weather);
   return visible.has(HexMap.keyOf(target.pos));
 }
 

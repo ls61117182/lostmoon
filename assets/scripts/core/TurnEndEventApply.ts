@@ -26,13 +26,14 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Faction, isFootUnit, Offset, Unit, UnitKind } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, isFootUnit, Offset, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
   rng: RNG;
   nextEnemyId: () => string;
   effectiveRangePenetration?: boolean;
+  weather?: WeatherType;
 }
 
 /** 主骰播完后依次展示的额外掷骰（点数已预掷，仅用于动画与说明节奏） */
@@ -333,6 +334,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   mission: LoadedMission,
   rng: RNG,
   effectiveRangePenetration = false,
+  weather: WeatherType | undefined = mission.data.weather,
 ): {
   volleys: AdjacentInfantryVolleyPreview[];
 } {
@@ -351,7 +353,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
 
   for (const inf of infs) {
     if (simTarget.destroyed) break;
-    const ctx = { attacker: inf, target: simTarget, map: mission.map, smokeHexes: mission.smokeHexes, effectiveRangePenetration };
+    const ctx = { attacker: inf, target: simTarget, map: mission.map, smokeHexes: mission.smokeHexes, effectiveRangePenetration, weather };
     if (canAttack(ctx).ok) {
       const rep = rollAttack(ctx, rng);
       volleys.push({ report: rep, attackerKind: inf.kind });
@@ -574,7 +576,7 @@ export function prepareTurnEndEvent(
     }
     case 'adjacent_infantry_fire': {
       const { volleys } = simulateAdjacentInfantryVolleysForTurnEnd(
-        mission, rng, ctx.effectiveRangePenetration,
+        mission, rng, ctx.effectiveRangePenetration, ctx.weather,
       );
       const reports = volleys.map(v => v.report);
       const bodyKey =
