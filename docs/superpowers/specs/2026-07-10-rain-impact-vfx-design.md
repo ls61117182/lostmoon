@@ -1,81 +1,81 @@
-# Rain Impact VFX Design
+# 雨滴触地特效设计
 
-## Goal
+## 目标
 
-Replace the current evenly spaced, endlessly scrolling rain lines with a lightweight top-down rain effect. Each drop must appear independently, fall a short distance almost vertically, hit the ground, create a small splash, and disappear.
+将当前间距整齐、无限平移的雨线，替换为适合 90 度俯视角的轻量雨天特效。每滴雨应独立出现，沿接近垂直的方向快速下落一小段距离，触地后产生小水花并消失。
 
-This is a presentation-only change. Existing mission weather rules, combat modifiers, vision modifiers, and HUD text remain unchanged.
+本次仅修改美术表现。现有任务天气规则、战斗命中修正、视野修正和 HUD 文本均保持不变。
 
-## Scope
+## 范围
 
-- The first version covers the full battle viewport.
-- Rain and splashes render below the HUD.
-- Restricting impacts to hex-map terrain is deferred until the full-screen effect is visually approved.
-- No particle textures, particle-system components, or per-drop scene nodes are introduced.
+- 首个版本覆盖整个战斗画面。
+- 雨线和水花绘制在 HUD 下方。
+- 等全屏效果通过视觉确认后，再考虑将触地点限制在六角地图地面内。
+- 不引入粒子贴图、粒子系统组件或每滴雨独立的场景节点。
 
-## Rendering Model
+## 绘制模型
 
-Use the existing `WeatherEffectLayer` and one `Graphics` component. Maintain 56 procedural rain slots. A slot does not represent a permanently visible line; it independently cycles through idle, falling, and splash phases.
+复用现有的 `WeatherEffectLayer` 和单个 `Graphics` 组件，维护 56 个程序化雨滴槽位。槽位并不代表一条永久可见的雨线，而是独立循环经历等待、下落和水花三个阶段。
 
-All variation is generated from deterministic hashes of the slot index and cycle number. This gives random-looking distribution without per-frame allocation or unstable calls to `Math.random()`.
+所有变化都根据槽位序号和循环序号生成确定性散列值。这样可以获得随机分布的观感，同时避免每帧分配对象或调用不稳定的 `Math.random()`。
 
-Rain lines and splash marks are accumulated into batched paths. The implementation should use a small, fixed number of `fill()` and `stroke()` calls per frame rather than one call per drop.
+雨线与水花分别累积为批量路径。每帧只使用少量固定的 `fill()` 和 `stroke()` 调用，不为每滴雨单独提交绘制。
 
-## Drop Lifecycle
+## 雨滴生命周期
 
-Each slot receives independently varied timing and geometry:
+每个槽位独立获得不同的时序和几何参数：
 
-- Idle delay: randomized so slots do not start in rows or waves.
-- Fall distance: approximately 50 to 90 pixels.
-- Fall speed: approximately 700 to 1000 pixels per second.
-- Fall duration: derived from distance divided by speed, typically approximately 0.05 to 0.13 seconds.
-- Streak length: approximately 12 to 22 pixels.
-- Splash duration: approximately 0.12 to 0.18 seconds.
+- 等待时间：随机错开，避免雨滴同时成排或成波出现。
+- 下落距离：约 50–90 像素。
+- 下落速度：约 700–1000 像素/秒。
+- 下落时长：由下落距离除以下落速度计算，通常约 0.05–0.13 秒。
+- 雨线长度：约 12–22 像素。
+- 水花时长：约 0.12–0.18 秒。
 
-At the end of the fall phase, the streak disappears immediately and the splash begins at the impact point. After the splash fades, the slot enters a newly randomized cycle with a new position and timing.
+下落阶段结束时，雨线立即消失，并在撞击点进入水花阶段。水花淡出后，该槽位使用新的位置和时序参数进入下一轮循环。
 
-## Direction And Randomness
+## 方向与随机性
 
-The camera is a 90-degree top-down view, so streaks should be nearly vertical. Horizontal travel should be only 2% to 6% of vertical travel, producing an angle close to 90 degrees. A shared wind direction keeps the rain coherent while small per-drop variation prevents exact parallel duplication.
+游戏采用 90 度俯视视角，因此雨线应接近垂直。横向位移仅为纵向位移的 2%–6%，使雨线角度接近 90 度。整体风向保持一致，避免雨势散乱；每滴雨保留少量方向差异，避免形成完全平行的复制线。
 
-Impact positions, phase offsets, fall distances, streak lengths, opacity, and splash sizes vary independently. The distribution must not form visible rows, columns, or synchronized groups.
+触地点、阶段偏移、下落距离、雨线长度、透明度和水花大小分别独立变化。画面中不得形成明显的行列或同步下落群组。
 
-## Splash Appearance
+## 水花表现
 
-The splash is a small top-down mark rather than a side-view crown:
+水花采用俯视角的小型痕迹，不绘制侧视角的皇冠形水花：
 
-- A thin circular ripple expands from roughly 1.5 to 6 pixels.
-- Two or three short radial droplets briefly expand outward.
-- Alpha fades to zero over the splash phase.
-- Splash geometry disappears completely before the slot is reused.
+- 一圈细水纹从约 1.5 像素扩张到约 6 像素。
+- 两到三条短小水滴射线短暂向外扩散。
+- 透明度在水花阶段内逐渐降为零。
+- 槽位重新使用前，水花几何应完全消失。
 
-The effect remains subtle enough not to hide units, terrain, objectives, or combat feedback.
+整体效果应足够克制，不遮挡单位、地形、任务目标或战斗反馈。
 
-## Performance
+## 性能约束
 
-- Fixed pool of 56 logical slots.
-- No node creation or destruction during gameplay.
-- No per-frame arrays or temporary particle objects.
-- Deterministic arithmetic only for slot state and geometry.
-- Batched rain and splash drawing through the existing `Graphics` layer.
+- 固定使用 56 个逻辑槽位。
+- 游戏过程中不创建或销毁节点。
+- 每帧不创建数组或临时粒子对象。
+- 仅使用确定性算术计算槽位状态和几何数据。
+- 通过现有 `Graphics` 层批量绘制雨线和水花。
 
-## Verification
+## 验证方式
 
-Focused tests should protect these behaviors:
+专项测试应保护以下行为：
 
-- Slots use independent deterministic cycle timing and positions.
-- Fall distance is finite; rain does not traverse the viewport endlessly.
-- Horizontal displacement stays within 2% to 6% of vertical displacement.
-- Every falling phase transitions into a splash phase.
-- Splash radius expands while opacity decreases.
-- Drawing remains batched rather than issuing one stroke per drop.
-- Existing weather gameplay and map-input tests continue to pass.
+- 各槽位使用独立且确定性的循环时序与位置。
+- 下落距离有限，雨线不会无限穿越整个画面。
+- 横向位移保持在纵向位移的 2%–6%。
+- 每次下落阶段结束后都会进入水花阶段。
+- 水花半径逐渐扩大，同时透明度逐渐降低。
+- 绘制保持批处理，不为每滴雨单独调用一次 `stroke()`。
+- 现有天气玩法测试和地图输入测试继续通过。
 
-## Acceptance Criteria
+## 验收标准
 
-- No visible rows of evenly spaced rain lines.
-- Rain streaks are nearly vertical in the top-down view.
-- Each streak falls quickly over a short distance and disappears at impact.
-- Small water splashes appear at impact points and fade naturally.
-- The full-screen effect remains readable but does not obscure the HUD or board state.
-- Frame cost remains comparable to the current fixed-count `Graphics` effect.
+- 不出现间距整齐、成排下落的雨线。
+- 雨线在俯视画面中接近垂直。
+- 每条雨线只快速下落一小段距离，并在触地时消失。
+- 撞击点出现小型水花，随后自然淡出。
+- 全屏效果清晰可辨，但不遮挡 HUD 和棋盘状态。
+- 帧开销与当前固定数量的 `Graphics` 雨效相近。
