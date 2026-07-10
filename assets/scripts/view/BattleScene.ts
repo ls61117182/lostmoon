@@ -174,7 +174,7 @@ import { normalizeWeather } from '../core/Weather';
 import { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } from './WeatherVisual';
 import type { RainVisualSample } from './WeatherVisual';
 import { infantrySpriteAngle, infantryVisualDirection } from './InfantryVisualFacing';
-import { orderMachineGunBurstEndpointsClockwise } from './MachineGunBurstOrder';
+import { orderMachineGunBurstEndpointsByLateralOffset } from './MachineGunBurstOrder';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
@@ -5158,7 +5158,7 @@ export class BattleScene extends Component {
     const maxScatterAngle = 7 * Math.PI / 180;
     const maxPerpByAngle = Math.tan(maxScatterAngle) * dist;
     const maxPerp = Math.min(this.hexSize * 0.42, maxPerpByAngle);
-    const endpoints = orderMachineGunBurstEndpointsClockwise(
+    const endpoints = orderMachineGunBurstEndpointsByLateralOffset(
       Array.from({ length: shots }, (_, shotIndex) => {
         const r0 = this.seededUnit(b.seed, shotIndex * 4 + 0);
         const r1 = this.seededUnit(b.seed, shotIndex * 4 + 1);
@@ -5169,14 +5169,13 @@ export class BattleScene extends Component {
         return {
           x: b.targetX + b.ux * endForward + nx * endPerp,
           y: b.targetY + b.uy * endForward + ny * endPerp,
+          lateralOffset: endPerp,
           shotIndex,
           r1,
           r2,
           r3,
         };
       }),
-      b.targetX,
-      b.targetY,
     );
 
     for (let sequenceIndex = 0; sequenceIndex < endpoints.length; sequenceIndex++) {

@@ -17,20 +17,20 @@ const compiled = ts.transpileModule(source, {
 const loaded = { exports: {} };
 new Function('exports', 'module', 'require', compiled)(loaded.exports, loaded, require);
 
-const { orderMachineGunBurstEndpointsClockwise } = loaded.exports;
-assert.strictEqual(typeof orderMachineGunBurstEndpointsClockwise, 'function');
+const { orderMachineGunBurstEndpointsByLateralOffset } = loaded.exports;
+assert.strictEqual(typeof orderMachineGunBurstEndpointsByLateralOffset, 'function');
 
 const endpoints = [
-  { x: 0, y: -1, shotIndex: 0 },
-  { x: 1, y: 0, shotIndex: 1 },
-  { x: 0, y: 1, shotIndex: 2 },
-  { x: -1, y: 0, shotIndex: 3 },
+  { lateralOffset: -4, shotIndex: 0 },
+  { lateralOffset: 3, shotIndex: 1 },
+  { lateralOffset: 7, shotIndex: 2 },
+  { lateralOffset: 0, shotIndex: 3 },
 ];
-const ordered = orderMachineGunBurstEndpointsClockwise(endpoints, 0, 0);
+const ordered = orderMachineGunBurstEndpointsByLateralOffset(endpoints);
 assert.deepStrictEqual(
   ordered.map(point => point.shotIndex),
-  [3, 2, 1, 0],
-  'the greatest counterclockwise angle should fire first, then descend clockwise',
+  [2, 1, 3, 0],
+  'the greatest counterclockwise-side lateral offset should fire first',
 );
 assert.deepStrictEqual(
   new Set(ordered),
@@ -38,14 +38,14 @@ assert.deepStrictEqual(
   'ordering should preserve the exact generated endpoint objects',
 );
 
-const sameAngle = [
-  { x: 2, y: 2, shotIndex: 4 },
-  { x: 1, y: 1, shotIndex: 2 },
+const sameOffset = [
+  { lateralOffset: 2, shotIndex: 4 },
+  { lateralOffset: 2, shotIndex: 2 },
 ];
 assert.deepStrictEqual(
-  orderMachineGunBurstEndpointsClockwise(sameAngle, 0, 0).map(point => point.shotIndex),
+  orderMachineGunBurstEndpointsByLateralOffset(sameOffset).map(point => point.shotIndex),
   [2, 4],
-  'equal-angle endpoints should retain their original shot order',
+  'equal-offset endpoints should retain their original shot order',
 );
 
 console.log('Machine-gun burst ordering tests passed');

@@ -2,17 +2,17 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Play existing machine-gun scatter endpoints from the greatest counterclockwise angle downward so the tracers sweep clockwise around the selected target.
+**Goal:** Play existing machine-gun scatter endpoints from the greatest lateral offset downward so the tracers sweep from the counterclockwise side toward the clockwise side.
 
-**Architecture:** Add a Cocos-independent pure helper for angular ordering, covered by a direct Node test. Keep endpoint generation in `BattleScene.ts`, but generate the complete old endpoint set before drawing and consume it in the helper's stable clockwise order.
+**Architecture:** Add a Cocos-independent pure helper for lateral-offset ordering, covered by a direct Node test. Keep endpoint generation in `BattleScene.ts`, but generate the complete old endpoint set before drawing and consume it from the counterclockwise side toward the clockwise side.
 
 **Tech Stack:** TypeScript, Cocos Creator 3.8, Node.js `assert`, TypeScript `transpileModule`
 
 ## Global Constraints
 
 - Do not change combat rules, hit or damage outcomes, audio, PVP synchronization, shot count, seeded randomness, spread angle, or impact-offset formulas.
-- The endpoint with the greatest counterclockwise angle around the selected target center fires first.
-- Equal-angle endpoints retain their original shot order.
+- The endpoint with the greatest lateral offset on the counterclockwise side of the firing direction fires first.
+- Equal-offset endpoints retain their original shot order.
 
 ---
 
@@ -25,27 +25,27 @@
 - Modify: `assets/scripts/view/BattleScene.ts:5147`
 
 **Interfaces:**
-- Consumes: endpoint objects containing `x`, `y`, and `shotIndex`, plus target-center coordinates.
-- Produces: `orderMachineGunBurstEndpointsClockwise<T extends MachineGunBurstEndpoint>(endpoints: readonly T[], centerX: number, centerY: number): T[]`.
+- Consumes: endpoint objects containing `lateralOffset` and `shotIndex`.
+- Produces: `orderMachineGunBurstEndpointsByLateralOffset<T extends MachineGunBurstEndpoint>(endpoints: readonly T[]): T[]`.
 
 - [ ] **Step 1: Write the failing pure-helper test**
 
-Create a Node test that transpiles `MachineGunBurstOrder.ts`, loads `orderMachineGunBurstEndpointsClockwise`, and asserts this order:
+Create a Node test that transpiles `MachineGunBurstOrder.ts`, loads `orderMachineGunBurstEndpointsByLateralOffset`, and asserts this order:
 
 ```js
 const endpoints = [
-  { x: 0, y: -1, shotIndex: 0 },
-  { x: 1, y: 0, shotIndex: 1 },
-  { x: 0, y: 1, shotIndex: 2 },
-  { x: -1, y: 0, shotIndex: 3 },
+  { lateralOffset: -4, shotIndex: 0 },
+  { lateralOffset: 3, shotIndex: 1 },
+  { lateralOffset: 7, shotIndex: 2 },
+  { lateralOffset: 0, shotIndex: 3 },
 ];
 assert.deepStrictEqual(
-  orderMachineGunBurstEndpointsClockwise(endpoints, 0, 0).map(point => point.shotIndex),
-  [3, 2, 1, 0],
+  orderMachineGunBurstEndpointsByLateralOffset(endpoints).map(point => point.shotIndex),
+  [2, 1, 3, 0],
 );
 ```
 
-Also assert equal-angle ordering by `shotIndex` and object-identity preservation.
+Also assert equal-offset ordering by `shotIndex` and object-identity preservation.
 
 - [ ] **Step 2: Run the test to verify RED**
 
@@ -59,21 +59,16 @@ Create the module with this contract:
 
 ```ts
 export interface MachineGunBurstEndpoint {
-  x: number;
-  y: number;
+  lateralOffset: number;
   shotIndex: number;
 }
 
-export function orderMachineGunBurstEndpointsClockwise<T extends MachineGunBurstEndpoint>(
+export function orderMachineGunBurstEndpointsByLateralOffset<T extends MachineGunBurstEndpoint>(
   endpoints: readonly T[],
-  centerX: number,
-  centerY: number,
 ): T[] {
-  return [...endpoints].sort((a, b) => {
-    const angleDelta = Math.atan2(b.y - centerY, b.x - centerX)
-      - Math.atan2(a.y - centerY, a.x - centerX);
-    return Math.abs(angleDelta) > 1e-12 ? angleDelta : a.shotIndex - b.shotIndex;
-  });
+  return [...endpoints].sort((a, b) =>
+    b.lateralOffset - a.lateralOffset || a.shotIndex - b.shotIndex,
+  );
 }
 ```
 
@@ -87,7 +82,7 @@ Expected: PASS with `Machine-gun burst ordering tests passed`.
 
 - [ ] **Step 5: Integrate the helper without changing endpoint generation**
 
-Import the helper in `BattleScene.ts`. In `drawMachineGunBurst`, build the existing 15 endpoints with the same `seededUnit`, `maxScatterAngle`, `maxPerp`, `endPerp`, and `endForward` formulas. Sort the generated array around `{ x: b.targetX, y: b.targetY }`. Draw in sorted sequence order, while using each endpoint's original `shotIndex` for seeded tail/fade values and the sequence index for `shotStart` timing.
+Import the helper in `BattleScene.ts`. In `drawMachineGunBurst`, build the existing 15 endpoints with the same `seededUnit`, `maxScatterAngle`, `maxPerp`, `endPerp`, and `endForward` formulas. Store `endPerp` as `lateralOffset`, sort the generated array descending by that value, and draw in sorted sequence order. Use each endpoint's original `shotIndex` for seeded styling and the sequence index for `shotStart` timing.
 
 - [ ] **Step 6: Run focused and integration verification**
 
