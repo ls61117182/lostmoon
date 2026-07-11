@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'stug3', 'panzer3', 'type97', 'at_gun', 'heavy_artillery', 'truck'];
-const SPLIT_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97'];
+const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'at_gun', 'heavy_artillery', 'truck'];
+const SPLIT_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97', 'type95'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',
@@ -187,10 +187,10 @@ function build() {
   lines.push('');
   lines.push("import { UnitKind } from './types';");
   lines.push('');
-  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;");
-  lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3' | 'type97'>;");
-  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'stug3\', \'panzer3\', \'type97\', \'at_gun\', \'heavy_artillery\', \'truck\'];');
-  lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\'];');
+  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;");
+  lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3' | 'type97' | 'type95'>;");
+  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'stug3\', \'panzer3\', \'type97\', \'type95\', \'at_gun\', \'heavy_artillery\', \'truck\'];');
+  lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\', \'type95\'];');
   lines.push('');
   lines.push('export interface TankVisualAssetConfig {');
   lines.push('  topSpritePath: string;');

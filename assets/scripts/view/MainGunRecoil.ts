@@ -2,9 +2,9 @@ import type { UnitKind } from '../core/types';
 
 export type MainGunRecoilMode = 'turret' | 'whole';
 
-export const MAIN_GUN_RECOIL_BACK_TIME = 0.07;
-export const MAIN_GUN_RECOIL_RETURN_TIME = 0.16;
-export const MAIN_GUN_RECOIL_DISTANCE_RATIO = 0.06;
+export const MAIN_GUN_RECOIL_BACK_TIME = 0.05;
+export const MAIN_GUN_RECOIL_RETURN_TIME = 0.12;
+export const MAIN_GUN_RECOIL_DISTANCE_RATIO = 0.04;
 
 const MAIN_GUN_RECOIL_TOTAL_TIME = MAIN_GUN_RECOIL_BACK_TIME + MAIN_GUN_RECOIL_RETURN_TIME;
 

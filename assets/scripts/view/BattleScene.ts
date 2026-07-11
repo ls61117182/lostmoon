@@ -283,16 +283,16 @@ function drawDicePopupPanel(g: Graphics, w: number, h: number, fill: Color, bord
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
-type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
-type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
 function isSplitTankKind(k: UnitKind): k is SplitTankKind {
@@ -1125,6 +1125,7 @@ export class BattleScene extends Component {
   private unitVisibilityMaskGraphics: Graphics | null = null;
   private unitGraphics: Graphics | null = null;
   private mapOcclusionGraphics: Graphics | null = null;
+  private mapDeepShadowGraphics: Graphics | null = null;
   private infantryBloodDecalLayerNode: Node | null = null;
   private infantryBloodSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private infantryBloodDecalNodes: Node[] = [];
@@ -1744,6 +1745,15 @@ export class BattleScene extends Component {
       this.foliageSpritePool.push({ node: h, sprite: sp });
       gNode.addChild(h);
     }
+
+    // Keep inactive-campaign/display-only darkness in its own compositing layer.
+    // It must sit above buildings and foliage so those overlays cannot appear lit
+    // inside a shadowed hex, while units and the regular fog layer remain separate.
+    const deepShadowNode = new Node('MapDeepShadow');
+    deepShadowNode.layer = this.node.layer;
+    deepShadowNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.mapDeepShadowGraphics = deepShadowNode.addComponent(Graphics);
+    gNode.addChild(deepShadowNode);
 
     // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上。
     // Units are always rendered, then clipped to the union of currently visible hexes.
@@ -3036,7 +3046,7 @@ export class BattleScene extends Component {
   // ---------- 绘制 ----------
 
   private redraw() {
-    if (!this.g || !this.mapOcclusionGraphics || !this.unitGraphics || !this.mission) return;
+    if (!this.g || !this.mapOcclusionGraphics || !this.mapDeepShadowGraphics || !this.unitGraphics || !this.mission) return;
     this.refreshPlayerVisibility();
     this.redrawUnitVisibilityMask();
     const surfaceGraphics = this.g;
@@ -3044,6 +3054,7 @@ export class BattleScene extends Component {
     const g = surfaceGraphics;
     surfaceGraphics.clear();
     occlusionGraphics.clear();
+    this.mapDeepShadowGraphics.clear();
     this.unitGraphics.clear();
     this.terrainSpritePoolNext = 0;
     for (const { node } of this.terrainSpritePool) node.active = false;
@@ -3440,13 +3451,13 @@ export class BattleScene extends Component {
   }
 
   private redrawCampaignShadow() {
-    if (!this.g || !this.mission || !this.campaignRuntime) return;
-    const g = this.g;
+    if (!this.mapDeepShadowGraphics || !this.mission || !this.campaignRuntime) return;
+    const g = this.mapDeepShadowGraphics;
     g.fillColor = CAMPAIGN_SHADOW_COLOR;
     for (const tile of this.mission.map.all()) {
       if (this.isCampaignShadowTile(tile)) {
         const c = this.project(tile.pos.q, tile.pos.r);
-        this.traceHexPath(c.x, c.y, this.hexSize);
+        this.traceHexPathOn(g, c.x, c.y, this.hexSize);
         g.fill();
       }
     }
@@ -3465,14 +3476,14 @@ export class BattleScene extends Component {
   }
 
   private redrawDisplayOnlyShadow() {
-    if (!this.g || !this.mission) return;
-    const g = this.g;
+    if (!this.mapDeepShadowGraphics || !this.mission) return;
+    const g = this.mapDeepShadowGraphics;
     g.fillColor = CAMPAIGN_SHADOW_COLOR;
     for (const tile of this.mission.map.all()) {
       if (!tile.displayOnly) continue;
       if (this.isCampaignShadowTile(tile)) continue;
       const c = this.project(tile.pos.q, tile.pos.r);
-      this.traceHexPath(c.x, c.y, this.hexSize);
+      this.traceHexPathOn(g, c.x, c.y, this.hexSize);
       g.fill();
     }
   }
@@ -7058,6 +7069,17 @@ export class BattleScene extends Component {
           offsetForward: PANZER3_SPLIT_VISUAL_CONFIG.hullOffsetForward,
           offsetRight: PANZER3_SPLIT_VISUAL_CONFIG.hullOffsetRight,
         };
+      case 'type95': {
+        const geometry = splitTankGeometryConfigOf('type95');
+        const visual = splitTankVisualConfigOf('type95');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
       default:
         return null;
     }

@@ -26,9 +26,9 @@ const {
   mainGunRecoilOffset,
 } = loaded.exports;
 
-assert.strictEqual(MAIN_GUN_RECOIL_BACK_TIME, 0.07);
-assert.strictEqual(MAIN_GUN_RECOIL_RETURN_TIME, 0.16);
-assert.strictEqual(MAIN_GUN_RECOIL_DISTANCE_RATIO, 0.06);
+assert.strictEqual(MAIN_GUN_RECOIL_BACK_TIME, 0.05);
+assert.strictEqual(MAIN_GUN_RECOIL_RETURN_TIME, 0.12);
+assert.strictEqual(MAIN_GUN_RECOIL_DISTANCE_RATIO, 0.04);
 
 assert.strictEqual(mainGunRecoilMode('sherman', false, true, true), 'turret');
 assert.strictEqual(mainGunRecoilMode('stug3', false, false, true), 'whole');
@@ -49,8 +49,8 @@ assert.strictEqual(
 
 assert.deepStrictEqual(
   mainGunRecoilOffset(MAIN_GUN_RECOIL_BACK_TIME, 100, 0.6, 0.8),
-  { x: -3.6, y: -4.8 },
-  'peak recoil should move opposite the normalized firing direction by 6% of hex radius',
+  { x: -2.4, y: -3.2 },
+  'peak recoil should move opposite the normalized firing direction by 4% of hex radius',
 );
 assert.deepStrictEqual(mainGunRecoilOffset(1, 100, 1, 0), { x: 0, y: 0 });
 

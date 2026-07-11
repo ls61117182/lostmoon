@@ -84,6 +84,17 @@ assert(
   'BattleScene.redraw() should render display-only shadow overlays',
 );
 
+assert(
+  battleScene.includes("const deepShadowNode = new Node('MapDeepShadow');")
+    && battleScene.includes('this.mapDeepShadowGraphics = deepShadowNode.addComponent(Graphics);'),
+  'Deep shadow should use a dedicated compositing layer above map overlays',
+);
+assert(
+  displayOnlyShadow[0].includes('const g = this.mapDeepShadowGraphics;')
+    && displayOnlyShadow[0].includes('this.traceHexPathOn(g,'),
+  'Display-only darkness should render through the dedicated deep-shadow layer',
+);
+
 const fogOverlay = battleScene.match(/private\s+redrawFogOverlay\s*\(\)\s*{[\s\S]*?\n  }\n\n/);
 assert(fogOverlay, 'BattleScene.redrawFogOverlay() should be found');
 assert(

@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Recoil is visual-only and must not alter combat, multiplayer, mission, or saved state.
-- Maximum displacement is 6% of hex radius; recoil lasts 0.07 seconds and recovery lasts 0.16 seconds.
+- Maximum displacement is 4% of hex radius; recoil lasts 0.05 seconds and recovery lasts 0.12 seconds.
 - Split-turret units move only the turret; eligible fixed-gun units move the whole top sprite.
 - Heavy artillery, foot units, machine-gun fire, and units without eligible visuals do not recoil.
 - Preserve all unrelated dirty-worktree changes.
@@ -33,7 +33,7 @@
 
 - [ ] **Step 1: Write the failing pure-module test**
 
-Create a Node test that transpiles the TypeScript module and asserts: split turret returns `turret`; StuG/AT-style top sprite returns `whole`; `heavy_artillery`, foot units, and missing sprites return `null`; progress is 0 at start, 1 at 0.07 seconds, between 0 and 1 during recovery, and 0 at 0.23 seconds; offset at peak equals `-ux/-uy * hexSize * 0.06`.
+Create a Node test that transpiles the TypeScript module and asserts: split turret returns `turret`; StuG/AT-style top sprite returns `whole`; `heavy_artillery`, foot units, and missing sprites return `null`; progress is 0 at start, 1 at 0.05 seconds, between 0 and 1 during recovery, and 0 at 0.17 seconds; offset at peak equals `-ux/-uy * hexSize * 0.04`.
 
 - [ ] **Step 2: Run the test and verify RED**
 
@@ -43,7 +43,7 @@ Expected: FAIL because `assets/scripts/view/MainGunRecoil.ts` does not exist.
 
 - [ ] **Step 3: Implement the minimal pure model**
 
-Implement exact constants `0.07`, `0.16`, and `0.06`; use a fast outward easing during recoil and smooth recovery; explicitly exclude `heavy_artillery`; return finite screen offsets opposite `(ux, uy)`.
+Implement exact constants `0.05`, `0.12`, and `0.04`; use a fast outward easing during recoil and smooth recovery; explicitly exclude `heavy_artillery`; return finite screen offsets opposite `(ux, uy)`.
 
 - [ ] **Step 4: Run the test and verify GREEN**
 

@@ -22,11 +22,11 @@ The recoil implementation remains inside the view layer. Combat reports, attack 
 
 Each active recoil stores the firing unit ID, the screen-space firing direction, elapsed time, and whether the rendered turret or whole unit should move.
 
-The animation lasts approximately 0.23 seconds:
+The animation lasts approximately 0.17 seconds:
 
-- Recoil phase: 0.07 seconds, moving rapidly from rest to the maximum rearward displacement.
-- Recovery phase: 0.16 seconds, easing smoothly back to rest.
-- Maximum displacement: about 6% of the current hex radius.
+- Recoil phase: 0.05 seconds, moving rapidly from rest to the maximum rearward displacement.
+- Recovery phase: 0.12 seconds, easing smoothly back to rest.
+- Maximum displacement: about 4% of the current hex radius.
 
 The displacement is opposite the screen-space direction from attacker to target. Repeated fire by the same unit restarts the effect from the new shot without stacking displacement.
 
