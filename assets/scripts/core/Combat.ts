@@ -847,9 +847,14 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   if (!isFootUnit(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
-  const fireDir = directionTo(attacker.pos, target.pos);
+  const fireDir = ctx.expandedTurretDirections
+    ? fireDirectionTo(attacker.pos, target.pos)
+    : directionTo(attacker.pos, target.pos);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
-  if (!map.hasLineOfSight(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
+  const hasSight = ctx.expandedTurretDirections && isDiagonalFireDirection(fireDir)
+    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir)
+    : map.hasLineOfSight(attacker.pos, target.pos);
+  if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
 

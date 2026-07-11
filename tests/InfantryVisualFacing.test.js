@@ -67,9 +67,10 @@ const requireModule = request => {
 };
 new Function('exports', 'module', 'require', compiled)(loaded.exports, loaded, requireModule);
 
-const { infantryVisualDirection, infantrySpriteAngle } = loaded.exports;
+const { infantryVisualDirection, infantrySpriteAngle, infantrySquadOffsets } = loaded.exports;
 assert.strictEqual(typeof infantryVisualDirection, 'function');
 assert.strictEqual(typeof infantrySpriteAngle, 'function');
+assert.strictEqual(typeof infantrySquadOffsets, 'function');
 
 assert.strictEqual(infantryVisualDirection({ q: 2, r: 3 }, { q: 2, r: 3 }), null);
 
@@ -99,6 +100,26 @@ assert.deepStrictEqual(
   neighbors.map((_, direction) => infantrySpriteAngle(direction)),
   [90, 30, -30, -90, -150, 150],
   'downward-facing source art should rotate toward the six projected screen directions',
+);
+
+const roundOffset = p => ({ ox: Math.round(p.ox * 1_000_000) / 1_000_000, oy: Math.round(p.oy * 1_000_000) / 1_000_000 });
+assert.deepStrictEqual(
+  infantrySquadOffsets(100, false).map(roundOffset),
+  [
+    { ox: 0, oy: 27.3 },
+    { ox: 23.642494, oy: -13.65 },
+    { ox: -23.642494, oy: -13.65 },
+  ],
+  'normal infantry squads should place three blood/decal anchors on the same compact triangle used by the sprites',
+);
+assert.deepStrictEqual(
+  infantrySquadOffsets(100, true).map(roundOffset),
+  [
+    { ox: 0, oy: 58 },
+    { ox: 50.229473, oy: -29 },
+    { ox: -50.229473, oy: -29 },
+  ],
+  'squads sharing a vehicle hex should use the wider three-soldier anchor triangle',
 );
 
 console.log('Infantry visual facing tests passed');

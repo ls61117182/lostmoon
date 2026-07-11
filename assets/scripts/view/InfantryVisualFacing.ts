@@ -16,3 +16,14 @@ export function infantrySpriteAngle(direction: Direction): number {
   while (angle <= -180) angle += 360;
   return Math.round(angle * 1_000_000) / 1_000_000;
 }
+
+export function infantrySquadOffsets(hexSize: number, coLocateVehicle: boolean): Array<{ ox: number; oy: number }> {
+  const teamRadius = hexSize * 0.5;
+  const ringR = coLocateVehicle ? hexSize * 0.58 : teamRadius * 0.546;
+  const sin60 = Math.sqrt(3) / 2;
+  return [
+    { ox: 0, oy: ringR },
+    { ox: ringR * sin60, oy: -ringR * 0.5 },
+    { ox: -ringR * sin60, oy: -ringR * 0.5 },
+  ];
+}

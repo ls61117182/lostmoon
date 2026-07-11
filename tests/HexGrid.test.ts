@@ -29,7 +29,7 @@ import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
 import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit, isWithinOwnVisionRange } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest } from '../assets/scripts/core/FireCheck';
-import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, effectivePenetration, effectivePenetrationBreakdown, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
+import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, canMGAttack, effectivePenetration, effectivePenetrationBreakdown, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
 import { RNG } from '../assets/scripts/core/Dice';
 
@@ -355,6 +355,43 @@ describe('Hardcore twelve-direction turret fire', () => {
     map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
 
     expect(canAttack({ attacker, target, map, expandedTurretDirections: true })).toEqual({
+      ok: false,
+      reason: 'attack.reason.blocked',
+    });
+  });
+
+  test('halfway machine-gun target is legal only with the hardcore expansion', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 1, 1);
+    target.kind = 'infantry';
+    const map = fieldMap(0, 1);
+
+    expect(canMGAttack({ attacker, target, map })).toEqual({
+      ok: false,
+      reason: 'attack.reason.notStraight',
+    });
+    expect(canMGAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
+  });
+
+  test('hardcore halfway machine-gun fire ignores a single flanking LoS blocker', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 1, 1);
+    target.kind = 'infantry';
+    const map = fieldMap(0, 1);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+
+    expect(canMGAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
+  });
+
+  test('hardcore halfway machine-gun fire is blocked by both flanking LoS blockers', () => {
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 1, 1);
+    target.kind = 'infantry';
+    const map = fieldMap(0, 1);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+    map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
+
+    expect(canMGAttack({ attacker, target, map, expandedTurretDirections: true })).toEqual({
       ok: false,
       reason: 'attack.reason.blocked',
     });

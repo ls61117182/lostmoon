@@ -173,8 +173,15 @@ import { findLevelByMissionId, MenuProgress } from '../core/LevelDB';
 import { normalizeWeather } from '../core/Weather';
 import { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } from './WeatherVisual';
 import type { RainVisualSample } from './WeatherVisual';
-import { infantrySpriteAngle, infantryVisualDirection } from './InfantryVisualFacing';
+import { infantrySpriteAngle, infantrySquadOffsets, infantryVisualDirection } from './InfantryVisualFacing';
 import { orderMachineGunBurstEndpointsByLateralOffset } from './MachineGunBurstOrder';
+import {
+  MAIN_GUN_RECOIL_BACK_TIME,
+  MAIN_GUN_RECOIL_RETURN_TIME,
+  MainGunRecoilMode,
+  mainGunRecoilMode,
+  mainGunRecoilOffset,
+} from './MainGunRecoil';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import {
@@ -668,6 +675,13 @@ interface MuzzleFlash {
   dur: number;
 }
 
+interface MainGunRecoilState {
+  elapsed: number;
+  ux: number;
+  uy: number;
+  mode: MainGunRecoilMode;
+}
+
 type ProjectileTraceMode = 'miss' | 'ricochet' | 'penetration';
 type ProjectileTracePhase = 'flight' | 'ricochet' | 'impact';
 
@@ -1110,6 +1124,11 @@ export class BattleScene extends Component {
   private unitVisibilityMaskNode: Node | null = null;
   private unitVisibilityMaskGraphics: Graphics | null = null;
   private unitGraphics: Graphics | null = null;
+  private mapOcclusionGraphics: Graphics | null = null;
+  private infantryBloodDecalLayerNode: Node | null = null;
+  private infantryBloodSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
+  private infantryBloodDecalNodes: Node[] = [];
+  private infantryBloodDecalUnitIds = new Set<string>();
   private unitEffectNode: Node | null = null;
   private unitEffectGraphics: Graphics | null = null;
   private unitEffectVisuals = new Map<string, UnitEffectVisual>();
@@ -1337,6 +1356,7 @@ export class BattleScene extends Component {
   private muzzleFlashes: MuzzleFlash[] = [];
   private projectileTraces: ProjectileTrace[] = [];
   private machineGunBursts: MachineGunBurst[] = [];
+  private mainGunRecoils = new Map<string, MainGunRecoilState>();
   private firedAttackCueReports = new WeakSet<AttackReport>();
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
@@ -1695,6 +1715,18 @@ export class BattleScene extends Component {
     this.node.addChild(gNode);
     this.mapNode = gNode;
 
+    const bloodDecalNode = new Node('InfantryBloodDecals');
+    bloodDecalNode.layer = this.node.layer;
+    bloodDecalNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.infantryBloodDecalLayerNode = bloodDecalNode;
+    gNode.addChild(bloodDecalNode);
+
+    const occlusionNode = new Node('MapOcclusion');
+    occlusionNode.layer = this.node.layer;
+    occlusionNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.mapOcclusionGraphics = occlusionNode.addComponent(Graphics);
+    gNode.addChild(occlusionNode);
+
     const fogNode = new Node('FogOfWar');
     fogNode.layer = this.node.layer;
     fogNode.addComponent(UITransform).setContentSize(1280, 720);
@@ -1794,6 +1826,21 @@ export class BattleScene extends Component {
     gNode.addChild(effectNode);
 
     this.loadTankVisualSprites();
+
+    [
+      'infantry_blood_stain',
+      'infantry_blood_stain_02',
+      'infantry_blood_stain_03',
+      'infantry_blood_stain_04',
+    ].forEach((name, idx) => {
+      resources.load(`textures/effects/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] 步兵血迹图加载失败 (${name})，将跳过该血迹造型:`, err);
+          return;
+        }
+        this.infantryBloodSpriteFrames[idx] = sf;
+      });
+    });
 
     const infantryPaths = [
       'textures/units/Infantry01/spriteFrame',
@@ -2886,6 +2933,8 @@ export class BattleScene extends Component {
   private loadAndDraw(data: MissionData) {
     this.cancelPrecisionAimHold();
     this.infantryVisualFacing.clear();
+    this.mainGunRecoils.clear();
+    this.clearInfantryBloodDecals();
     this.missionId = data.id;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
@@ -2987,11 +3036,14 @@ export class BattleScene extends Component {
   // ---------- 绘制 ----------
 
   private redraw() {
-    if (!this.g || !this.unitGraphics || !this.mission) return;
+    if (!this.g || !this.mapOcclusionGraphics || !this.unitGraphics || !this.mission) return;
     this.refreshPlayerVisibility();
     this.redrawUnitVisibilityMask();
-    const g = this.g;
-    g.clear();
+    const surfaceGraphics = this.g;
+    const occlusionGraphics = this.mapOcclusionGraphics;
+    const g = surfaceGraphics;
+    surfaceGraphics.clear();
+    occlusionGraphics.clear();
     this.unitGraphics.clear();
     this.terrainSpritePoolNext = 0;
     for (const { node } of this.terrainSpritePool) node.active = false;
@@ -3077,13 +3129,6 @@ export class BattleScene extends Component {
       this.drawRoadHexOverlay(c.x, c.y, this.hexSize, t);
     }
 
-    // 1a. 林地表冠层：示意树木（在基底之上、建筑/树篱之前）
-    for (const t of tiles) {
-      if (t.terrain !== 'forest') continue;
-      const c = this.project(t.pos.q, t.pos.r);
-      this.drawForestCanopy(c.x, c.y, this.hexSize, t);
-    }
-
     // 1a-bridge. 桥梁叠加（GDD §3.2，仅水域格 + bridgeEnds）：在水面上画一条贯通两端的木桥
     for (const t of tiles) {
       if (!tileHasBridge(t)) continue;
@@ -3101,6 +3146,14 @@ export class BattleScene extends Component {
       } else {
         this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads, t);
       }
+    }
+
+    this.g = occlusionGraphics;
+    // 1a. 林地表冠层：示意树木，绘制在血迹之上。
+    for (const t of tiles) {
+      if (t.terrain !== 'forest') continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawForestCanopy(c.x, c.y, this.hexSize, t);
     }
 
     // 1b. 建筑图案（不改变基底地形色，仅格内若干个矢量俯视方屋；公路格自动避开路面）
@@ -3121,6 +3174,7 @@ export class BattleScene extends Component {
         }
       }
     }
+    this.g = surfaceGraphics;
 
     // 2b. Pacific 防波堤：沿格边绘制石块，规则层由 HexMap.canTankCrossEdge 判定。
     const breakwaterKeys = new Set<string>();
@@ -3256,8 +3310,8 @@ export class BattleScene extends Component {
   private applyMapViewPosition(x: number, y: number) {
     const clampedX = this.campaignRuntime ? x : Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, x));
     const clampedY = this.campaignRuntime ? y : Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, y));
-    this.mapNode?.setPosition(clampedX, clampedY, 0);
     this.terrainLayerNode?.setPosition(clampedX, clampedY, 0);
+    this.mapNode?.setPosition(clampedX, clampedY, 0);
   }
 
   private campaignSegmentPanTarget(index: number): { x: number; y: number } {
@@ -3548,7 +3602,7 @@ export class BattleScene extends Component {
     for (const e of enemies) {
       if (e.destroyed) continue;
       if (!this.isUnitVisible(e)) continue;
-      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather() };
+      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections };
       if (!canMGAttack(ctx).ok) continue;
 
       const c = this.project(e.pos.q, e.pos.r);
@@ -4435,8 +4489,68 @@ export class BattleScene extends Component {
     return u.destroyed && this.destroyWreckVisualIds.has(u.id);
   }
 
+  private infantrySharesHexWithVehicle(u: Unit): boolean {
+    if (!this.mission) return false;
+    const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
+    for (const o of all) {
+      if (o === u || o.destroyed || isFootUnit(o)) continue;
+      if (o.pos.q === u.pos.q && o.pos.r === u.pos.r) return true;
+    }
+    return false;
+  }
+
+  private clearInfantryBloodDecals(): void {
+    for (const node of this.infantryBloodDecalNodes) {
+      if (node.isValid) node.destroy();
+    }
+    this.infantryBloodDecalNodes.length = 0;
+    this.infantryBloodDecalUnitIds.clear();
+  }
+
+  private infantryBloodSpriteFrameFor(unitId: string, soldierIndex: number): SpriteFrame | null {
+    const loaded = this.infantryBloodSpriteFrames.filter((sf): sf is SpriteFrame => sf !== null);
+    if (loaded.length === 0) return null;
+    let hash = soldierIndex * 97;
+    for (let i = 0; i < unitId.length; i++) {
+      hash = (hash * 31 + unitId.charCodeAt(i)) >>> 0;
+    }
+    return loaded[hash % loaded.length] ?? loaded[0];
+  }
+
+  private spawnInfantryBloodDecals(u: Unit): void {
+    const layer = this.infantryBloodDecalLayerNode;
+    if (!layer || this.infantryBloodDecalUnitIds.has(u.id)) return;
+    this.infantryBloodDecalUnitIds.add(u.id);
+
+    const c = this.project(u.pos.q, u.pos.r);
+    const coLocateVehicle = this.infantrySharesHexWithVehicle(u);
+    const offsets = infantrySquadOffsets(this.hexSize, coLocateVehicle);
+    const decalSize = 50;
+    for (let i = 0; i < offsets.length; i++) {
+      const sf = this.infantryBloodSpriteFrameFor(u.id, i);
+      if (!sf) continue;
+      const off = offsets[i];
+      const node = new Node('InfantryBloodDecal');
+      node.layer = this.node.layer;
+      const ut = node.addComponent(UITransform);
+      ut.setContentSize(decalSize, decalSize);
+      const sprite = node.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      sprite.spriteFrame = sf;
+      ut.setContentSize(decalSize, decalSize);
+      node.setPosition(c.x + off.ox, c.y + off.oy, 0);
+      layer.addChild(node);
+      this.infantryBloodDecalNodes.push(node);
+    }
+  }
+
   private registerDestroyWreckVisual(u: Unit): void {
-    if (u.destroyed) this.destroyWreckVisualIds.add(u.id);
+    if (!u.destroyed) return;
+    if (isFootUnit(u)) {
+      this.spawnInfantryBloodDecals(u);
+      return;
+    }
+    this.destroyWreckVisualIds.add(u.id);
   }
 
   private clearDestroyWreckVisuals(): void {
@@ -4637,9 +4751,44 @@ export class BattleScene extends Component {
       if (this.firedAttackCueReports.has(report)) return;
       this.firedAttackCueReports.add(report);
     }
+    this.startMainGunRecoil(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
     this.spawnProjectileTrace(attacker, target, report);
     playConfiguredAttackSound(attackSound);
+  }
+
+  private startMainGunRecoil(attacker: Unit | null, target: Unit | null) {
+    if (!attacker || !target || attacker.destroyed) return;
+    const mode = mainGunRecoilMode(
+      attacker.kind,
+      isFootUnit(attacker),
+      isSplitTankKind(attacker.kind) && this.enemySupportsSplitTurret(attacker),
+      isEnemyTopKind(attacker.kind) || isTankUnit(attacker),
+    );
+    if (!mode) return;
+    const shot = this.muzzleFlashPosition(attacker, target);
+    if (!shot) return;
+    this.mainGunRecoils.set(attacker.id, {
+      elapsed: 0,
+      ux: shot.ux,
+      uy: shot.uy,
+      mode,
+    });
+  }
+
+  private mainGunRecoilOffsetFor(u: Unit, mode: MainGunRecoilMode): { x: number; y: number } {
+    const recoil = this.mainGunRecoils.get(u.id);
+    if (!recoil || recoil.mode !== mode || u.destroyed) return { x: 0, y: 0 };
+    return mainGunRecoilOffset(recoil.elapsed, this.hexSize, recoil.ux, recoil.uy);
+  }
+
+  private advanceMainGunRecoils(dt: number) {
+    const totalTime = MAIN_GUN_RECOIL_BACK_TIME + MAIN_GUN_RECOIL_RETURN_TIME;
+    for (const [unitId, recoil] of this.mainGunRecoils) {
+      recoil.elapsed += Math.max(0, dt);
+      if (recoil.elapsed >= totalTime) this.mainGunRecoils.delete(unitId);
+    }
+    this.redraw();
   }
 
   private spawnMachineGunBurst(attacker: Unit | null, target: Unit | null, hit: boolean) {
@@ -5284,6 +5433,7 @@ export class BattleScene extends Component {
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
     if (this.projectileTraces.length > 0) this.advanceProjectileTraces(dt);
     if (this.machineGunBursts.length > 0) this.advanceMachineGunBursts(dt);
+    if (this.mainGunRecoils.size > 0) this.advanceMainGunRecoils(dt);
     this.advanceUnitEffects(dt);
     if (GameSession.isPvp) this.advancePvpTurnTimer();
     if (this.campaignPanAnim) {
@@ -6867,9 +7017,10 @@ export class BattleScene extends Component {
     const r = cfg.offsetRight * offsetUnit;
     const ox = f * ux + r * uy;
     const oy = f * uy + r * (-ux);
+    const recoil = this.mainGunRecoilOffsetFor(u, 'whole');
     const angle = (Math.atan2(uy, ux) * 180) / Math.PI + 180;
     ut.setAnchorPoint(0.5, 0.5);
-    node.setPosition(c.x + ox, c.y + oy, 0);
+    node.setPosition(c.x + ox + recoil.x, c.y + oy + recoil.y, 0);
     node.angle = angle;
   }
 
@@ -7040,6 +7191,7 @@ export class BattleScene extends Component {
     const turretR = cfg.turretOffsetRight * offsetUnit;
     const baseX = c.x + f * body.ux + r * body.uy;
     const baseY = c.y + f * body.uy + r * (-body.ux);
+    const recoil = this.mainGunRecoilOffsetFor(u, 'turret');
 
     const pivotLocalX = (pivot.bodyX - (topTrim.x + topTrim.w / 2)) * scale;
     const pivotLocalY = ((topTrim.y + topTrim.h / 2) - pivot.bodyY) * scale;
@@ -7059,8 +7211,8 @@ export class BattleScene extends Component {
     );
     node.setScale(1, 1, 1);
     node.setPosition(
-      baseX + pivotLocalX * cos - pivotLocalY * sin,
-      baseY + pivotLocalX * sin + pivotLocalY * cos,
+      baseX + pivotLocalX * cos - pivotLocalY * sin + recoil.x,
+      baseY + pivotLocalX * sin + pivotLocalY * cos + recoil.y,
       0,
     );
     node.angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
@@ -7382,6 +7534,11 @@ export class BattleScene extends Component {
       }
     }
 
+    // Units without a loaded top sprite (for example Type 95) use vector fallback rendering.
+    const fallbackRecoil = this.mainGunRecoilOffsetFor(u, 'whole');
+    c.x += fallbackRecoil.x;
+    c.y += fallbackRecoil.y;
+
     // 起火和受损统一由炮塔黑烟表达；矢量回退车体保持原阵营配色。
     g.fillColor = this.tankVisualColor(FACTION_COLORS[u.faction], u);
     g.strokeColor = this.tankVisualColor(UNIT_BORDER, u);
@@ -7427,7 +7584,6 @@ export class BattleScene extends Component {
 
   private drawInfantry(u: Unit, cx: number, cy: number) {
     const g = this.g!;
-    const teamRadius = this.hexSize * 0.5;
     const visualAngle = this.infantryVisualAngle(u);
 
     if (u.destroyed) return;
@@ -7493,19 +7649,7 @@ export class BattleScene extends Component {
     // 同格车辆（坦克 / 卡车）检测：步兵棋子默认贴近格心 → 与同格的车辆几何重叠会糊成一团；
     // 当本格仍有非摧毁的车辆类单位时，把 3 个士兵从 0.27·hexSize 散开到 0.58·hexSize，
     // 让出格心给车辆显示，3 人各自朝顶 / 右下 / 左下方向退到格内切圆附近（仍保留三角阵相对关系）。
-    let coLocateVehicle = false;
-    if (this.mission && !u.destroyed) {
-      const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
-      for (const o of all) {
-        if (o === u) continue;
-        if (o.destroyed) continue;
-        if (isFootUnit(o)) continue; // 同为徒步类不需要避让
-        if (o.pos.q === u.pos.q && o.pos.r === u.pos.r) {
-          coLocateVehicle = true;
-          break;
-        }
-      }
-    }
+    const coLocateVehicle = this.infantrySharesHexWithVehicle(u);
 
     // 等边三角形布局（顶点朝上）：3 个士兵中心位于半径 ringR 的小圆周上，间隔 120°
     //   位置 0（Infantry01，主图）：顶（cy + ringR）
@@ -7513,13 +7657,7 @@ export class BattleScene extends Component {
     //   位置 2（Infantry03）：左下（cx - ringR·sin60°, cy - ringR·cos60°）
     // 默认 ringR = teamRadius·0.546 ≈ hexSize·0.273（紧凑成队）；
     // 同格有车辆时 ringR = hexSize·0.58，三人散到格内切圆（≈ hexSize·0.866）附近，避开车辆体型。
-    const ringR = coLocateVehicle ? this.hexSize * 0.58 : teamRadius * 0.546;
-    const sin60 = Math.sqrt(3) / 2;
-    const offsets: Array<{ ox: number; oy: number }> = [
-      { ox: 0,                oy:  ringR },
-      { ox:  ringR * sin60,   oy: -ringR * 0.5 },
-      { ox: -ringR * sin60,   oy: -ringR * 0.5 },
-    ];
+    const offsets = infantrySquadOffsets(this.hexSize, coLocateVehicle);
     /** 单兵 sprite 显示尺寸（按图最长边等比缩放到该值） */
     const spriteFit = this.hexSize * 0.58;
     /** 第 1 个兵（Infantry01）保持基础大小，其余两个放大 15% 以视觉拉开「主兵 / 后排」层次 */
@@ -9743,6 +9881,7 @@ export class BattleScene extends Component {
       map,
       theater: this.mission!.data.theater,
       units,
+      expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
     }).ok);
     return hasTarget ? null : t('floater.noInfantry');
   }
@@ -10523,7 +10662,7 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[this.selectedMGDieIdx];
     if (!slot || slot.used) return;
 
-    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units });
+    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units, expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections });
     if (!check.ok) {
       this.battleLogI18n('battleLog.combat.cannotAttack', {
         reasonKey: check.reason ?? 'attack.reason.unknown',
@@ -11092,7 +11231,7 @@ export class BattleScene extends Component {
       if (target.faction === actor.faction) continue;
       if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
       if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) continue;
-      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, weather: this.currentWeather() }).ok) continue;
+      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections }).ok) continue;
       const priority = aiTargetPriority(target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
@@ -13681,7 +13820,7 @@ export class BattleScene extends Component {
       // 叠格场景：机枪挑 canMGAttack 认可的步兵目标；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
       if (mgSel) {
         const units = this.allUnits();
-        const inf = enemiesOnTile.find(e => canMGAttack({ attacker: this.mission!.sherman, target: e, map: this.mission!.map, theater: this.mission!.data.theater, units }).ok) ?? enemiesOnTile[0]!;
+        const inf = enemiesOnTile.find(e => canMGAttack({ attacker: this.mission!.sherman, target: e, map: this.mission!.map, theater: this.mission!.data.theater, units, expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections }).ok) ?? enemiesOnTile[0]!;
         this.tryMGAttack(inf);
         return;
       }
