@@ -15,6 +15,8 @@ export interface GameSessionState {
   gameMode: GameMode;
   /** Local frontend PVP session state; server-backed data can replace this later. */
   pvpSession: PvpSessionConfig | null;
+  /** Open the PVP selection dialog once after the main menu scene loads. */
+  openPvpSelectionOnMenu: boolean;
   selectedCampaignId: string | null;
 }
 
@@ -27,6 +29,7 @@ const DEFAULT_STATE: GameSessionState = {
   resumeFromSave: false,
   gameMode: DEFAULT_GAME_MODE,
   pvpSession: null,
+  openPvpSelectionOnMenu: false,
   selectedCampaignId: null,
 };
 
@@ -39,6 +42,7 @@ export const GameSession = {
   get resumeFromSave() { return state.resumeFromSave; },
   get gameMode() { return state.gameMode; },
   get pvpSession() { return state.pvpSession; },
+  get openPvpSelectionOnMenu() { return state.openPvpSelectionOnMenu; },
   get isPvp() { return !!state.pvpSession?.active; },
   get selectedCampaignId() { return state.selectedCampaignId; },
   get isCampaign() { return !!state.selectedCampaignId; },
@@ -61,8 +65,20 @@ export const GameSession = {
     state.pvpSession = null;
   },
 
+  returnToPvpSelection() {
+    state.pvpSession = null;
+    state.openPvpSelectionOnMenu = true;
+  },
+
+  consumePvpSelectionRequest() {
+    const shouldOpen = state.openPvpSelectionOnMenu;
+    state.openPvpSelectionOnMenu = false;
+    return shouldOpen;
+  },
+
   selectMission(levelId: number, missionPath: string) {
     state.pvpSession = null;
+    state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = missionPath;
@@ -72,6 +88,7 @@ export const GameSession = {
 
   selectCustomMission(packageId: string) {
     state.pvpSession = null;
+    state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
     state.selectedLevelId = -1;
     state.selectedMissionPath = '';
@@ -81,6 +98,7 @@ export const GameSession = {
 
   resumeMission(levelId: number, missionPath: string) {
     state.pvpSession = null;
+    state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = missionPath;
@@ -90,6 +108,7 @@ export const GameSession = {
 
   resumeCustomMission(packageId: string) {
     state.pvpSession = null;
+    state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
     state.selectedLevelId = -1;
     state.selectedMissionPath = '';
@@ -99,6 +118,7 @@ export const GameSession = {
 
   selectCampaign(levelId: number, campaignId: string) {
     state.pvpSession = null;
+    state.openPvpSelectionOnMenu = false;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'resource', missionPath: '' };
@@ -117,6 +137,7 @@ export const GameSession = {
     state.resumeFromSave = DEFAULT_STATE.resumeFromSave;
     state.gameMode = DEFAULT_STATE.gameMode;
     state.pvpSession = DEFAULT_STATE.pvpSession;
+    state.openPvpSelectionOnMenu = DEFAULT_STATE.openPvpSelectionOnMenu;
     state.selectedCampaignId = DEFAULT_STATE.selectedCampaignId;
   },
 };

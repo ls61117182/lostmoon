@@ -41,14 +41,14 @@
       "userData": {
         "trimThreshold": 1,
         "rotated": false,
-        "offsetX": 0.5,
+        "offsetX": 0,
         "offsetY": 0,
-        "trimX": 1,
+        "trimX": 0,
         "trimY": 0,
-        "width": 317,
-        "height": 137,
-        "rawWidth": 318,
-        "rawHeight": 137,
+        "width": 100,
+        "height": 50,
+        "rawWidth": 100,
+        "rawHeight": 50,
         "borderTop": 0,
         "borderBottom": 0,
         "borderLeft": 0,
@@ -60,17 +60,17 @@
         "meshType": 0,
         "vertices": {
           "rawPosition": [
-            -158.5,
-            -68.5,
+            -50,
+            -25,
             0,
-            158.5,
-            -68.5,
+            50,
+            -25,
             0,
-            -158.5,
-            68.5,
+            -50,
+            25,
             0,
-            158.5,
-            68.5,
+            50,
+            25,
             0
           ],
           "indexes": [
@@ -82,40 +82,40 @@
             3
           ],
           "uv": [
-            1,
-            137,
-            318,
-            137,
-            1,
             0,
-            318,
+            50,
+            100,
+            50,
+            0,
+            0,
+            100,
             0
           ],
           "nuv": [
-            0.0031446540880503146,
+            0,
             0,
             1,
             0,
-            0.0031446540880503146,
+            0,
             1,
             1,
             1
           ],
           "minPos": [
-            -158.5,
-            -68.5,
+            -50,
+            -25,
             0
           ],
           "maxPos": [
-            158.5,
-            68.5,
+            50,
+            25,
             0
           ]
         },
         "isUuid": true,
         "imageUuidOrDatabaseUri": "2887462b-2e6c-4859-8591-8594d32518bf@6c48a",
         "atlasUuid": "",
-        "trimType": "auto"
+        "trimType": "none"
       },
       "ver": "1.0.12",
       "imported": true,

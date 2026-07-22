@@ -153,7 +153,10 @@ type TankVisualDebugKey =
   | 'turretPivotX'
   | 'turretPivotY'
   | 'muzzleSpriteX'
-  | 'muzzleSpriteY';
+  | 'muzzleSpriteY'
+  | 'commanderHatchSpriteX'
+  | 'commanderHatchSpriteY'
+  | 'commanderHatchScale';
 type TankVisualDebugDraft = Record<TankVisualDebugKey, number>;
 
 // ---------- 工具类型 ----------
@@ -261,6 +264,10 @@ export class MainMenuScene extends Component {
 
     initGameAudio();
     playBgmMenu();
+
+    if (GameSession.consumePvpSelectionRequest()) {
+      this.openPvpHome();
+    }
 
     this.scheduleOnce(() => {
       if (!getAuthSession()) this.openLoginGate();
@@ -1262,6 +1269,12 @@ export class MainMenuScene extends Component {
     let dragMode: 'body' | 'turret' | null = null;
     let lastPivot = { x: 0, y: 0 };
     let showMuzzleFlash = false;
+    let showCommanderHatch = false;
+    const commanderHatchFrames: Record<'allied' | 'german' | 'japanese', SpriteFrame | null> = {
+      allied: null,
+      german: null,
+      japanese: null,
+    };
     const tankButtons: ButtonRefs[] = [];
 
     const makeDraft = (kind: TankVisualKind): TankVisualDebugDraft => {
@@ -1283,6 +1296,9 @@ export class MainMenuScene extends Component {
         turretPivotY: geometry?.pivot.bodyY ?? 0,
         muzzleSpriteX: geometry?.muzzle.spriteX ?? top.muzzle.spriteX,
         muzzleSpriteY: geometry?.muzzle.spriteY ?? top.muzzle.spriteY,
+        commanderHatchSpriteX: split?.commanderHatchSpriteX ?? 0,
+        commanderHatchSpriteY: split?.commanderHatchSpriteY ?? 0,
+        commanderHatchScale: split?.commanderHatchScale ?? 0,
       };
     };
 
@@ -1312,6 +1328,17 @@ export class MainMenuScene extends Component {
           if (kind === selectedKind) refreshPreview();
         });
       }
+    }
+    const commanderSpritePaths: Array<[keyof typeof commanderHatchFrames, string]> = [
+      ['allied', 'textures/units/sherman_commander_hatch_open_v2/spriteFrame'],
+      ['german', 'textures/units/german_commander_hatch_open/spriteFrame'],
+      ['japanese', 'textures/units/japanese_commander_hatch_open/spriteFrame'],
+    ];
+    for (const [faction, path] of commanderSpritePaths) {
+      resources.load(path, SpriteFrame, (err, sf) => {
+        if (!err && sf) commanderHatchFrames[faction] = sf;
+        refreshPreview();
+      });
     }
 
     const stage = new Node('TankVisualDebugStage');
@@ -1346,6 +1373,13 @@ export class MainMenuScene extends Component {
     });
     flashBtn.label = this.makeLabel(flashBtn.node, '炮口火焰', 0, 0, 126, 22, 15, TEXT_PRIMARY);
 
+    const hatchBtn = this.makeRectButton(stage, 74, 248, 150, 30, MODE_BTN_IDLE, () => {
+      showCommanderHatch = !showCommanderHatch;
+      refreshHatchButton();
+      refreshPreview();
+    });
+    hatchBtn.label = this.makeLabel(hatchBtn.node, '打开舱盖', 0, 0, 126, 22, 15, TEXT_PRIMARY);
+
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
     listPanel.addComponent(UITransform).setContentSize(255, 280);
@@ -1367,6 +1401,7 @@ export class MainMenuScene extends Component {
         turretAngleDeg = 0;
         refreshKindButtons();
         refreshFlashButton();
+        refreshHatchButton();
         rebuildInputs();
         refreshPreview();
       });
@@ -1398,21 +1433,43 @@ export class MainMenuScene extends Component {
       { key: 'turretPivotY', label: '车身转轴Y' },
       { key: 'muzzleSpriteX', label: '炮塔图炮口X' },
       { key: 'muzzleSpriteY', label: '炮塔图炮口Y' },
+      { key: 'commanderHatchSpriteX', label: '车长舱口图X' },
+      { key: 'commanderHatchSpriteY', label: '车长舱口图Y' },
+      { key: 'commanderHatchScale', label: '车长图缩放' },
     ];
+
+    const inputViewport = new Node('TankVisualParamViewport');
+    inputViewport.layer = this.node.layer;
+    inputViewport.addComponent(UITransform).setContentSize(280, 540);
+    inputViewport.setPosition(0, -18, 0);
+    inputViewport.addComponent(Mask);
+    propsPanel.addChild(inputViewport);
+
+    const inputScroll = inputViewport.addComponent(ScrollView);
+    inputScroll.horizontal = false;
+    inputScroll.vertical = true;
+    inputScroll.inertia = true;
+    inputScroll.brake = 0.55;
+    inputScroll.cancelInnerEvents = false;
 
     const inputRoot = new Node('TankVisualParamInputs');
     inputRoot.layer = this.node.layer;
-    inputRoot.addComponent(UITransform).setContentSize(280, 570);
-    inputRoot.setPosition(0, -18, 0);
-    propsPanel.addChild(inputRoot);
+    const inputRootTransform = inputRoot.addComponent(UITransform);
+    inputRootTransform.setAnchorPoint(0.5, 0.5);
+    inputRootTransform.setContentSize(280, 540);
+    inputRoot.setPosition(0, 0, 0);
+    inputViewport.addChild(inputRoot);
+    inputScroll.content = inputRoot;
 
     const rebuildInputs = () => {
       inputRoot.removeAllChildren();
       const draft = drafts[selectedKind]!;
+      const contentH = Math.max(540, fieldDefs.length * 38 + 20);
+      inputRootTransform.setContentSize(280, contentH);
       for (let i = 0; i < fieldDefs.length; i++) {
         const def = fieldDefs[i]!;
         const x = 0;
-        const y = 258 - i * 38;
+        const y = contentH / 2 - 22 - i * 38;
         const lab = this.makeLabel(inputRoot, def.label, -78, y, 118, 28, 13, TEXT_SUBTITLE);
         lab.overflow = Label.Overflow.SHRINK;
         lab.horizontalAlign = HorizontalTextAlignment.RIGHT;
@@ -1430,6 +1487,7 @@ export class MainMenuScene extends Component {
         input.node.on('editing-did-ended', () => applyValue(true), this);
         input.node.on('text-changed', () => applyValue(false), this);
       }
+      inputScroll.scrollToTop(0);
     };
 
     function refreshKindButtons() {
@@ -1444,6 +1502,14 @@ export class MainMenuScene extends Component {
     function refreshFlashButton() {
       flashBtn.redraw(showMuzzleFlash ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: showMuzzleFlash });
       if (flashBtn.label) flashBtn.label.color = showMuzzleFlash ? TEXT_TITLE : TEXT_PRIMARY;
+    }
+
+    function refreshHatchButton() {
+      hatchBtn.redraw(showCommanderHatch ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: showCommanderHatch });
+      if (hatchBtn.label) {
+        hatchBtn.label.string = showCommanderHatch ? '关闭舱盖' : '打开舱盖';
+        hatchBtn.label.color = showCommanderHatch ? TEXT_TITLE : TEXT_PRIMARY;
+      }
     }
 
     const normalizeAngleDeg = (deg: number) => {
@@ -1663,6 +1729,31 @@ export class MainMenuScene extends Component {
           anchorY,
           'turret',
         );
+        const commanderFaction = selectedKind === 'type95' || selectedKind === 'type97'
+          ? 'japanese'
+          : selectedKind === 'sherman'
+            ? 'allied'
+            : 'german';
+        const commanderHatchFrame = commanderHatchFrames[commanderFaction];
+        if (showCommanderHatch && commanderHatchFrame && draft.commanderHatchScale > 0) {
+          // Keep this transform identical to BattleScene: the hatch is at (31, 6)
+          // in the source turret and rotates around the same turret pivot.
+          const commanderSize = draft.commanderHatchScale * turretScale;
+          const localX = (draft.commanderHatchSpriteX - pivot.spriteX) * turretScale;
+          const localY = (pivot.spriteY - draft.commanderHatchSpriteY) * turretScale;
+          const turretAngle = (turret.deg + 180) * Math.PI / 180;
+          const commanderX = pivotX + localX * Math.cos(turretAngle) - localY * Math.sin(turretAngle);
+          const commanderY = pivotY + localX * Math.sin(turretAngle) + localY * Math.cos(turretAngle);
+          addSprite(
+            previewRoot,
+            commanderHatchFrame,
+            commanderSize,
+            commanderSize,
+            commanderX,
+            commanderY,
+            turret.deg + 90,
+          );
+        }
         if (showMuzzleFlash) {
           const localX = (draft.muzzleSpriteX - pivot.spriteX) * turretScale - turretF;
           const localY = (pivot.spriteY - draft.muzzleSpriteY) * turretScale + turretR;
@@ -1729,6 +1820,7 @@ export class MainMenuScene extends Component {
 
     refreshKindButtons();
     refreshFlashButton();
+    refreshHatchButton();
     rebuildInputs();
     refreshPreview();
   }
@@ -1902,7 +1994,15 @@ export class MainMenuScene extends Component {
     const rootUt = root.addComponent(UITransform);
     rootUt.setContentSize(w, h);
     root.setPosition(x, y, 0);
-    const g = root.addComponent(Graphics);
+
+    // Keep Graphics off the EditBox node. On Windows native, both components
+    // otherwise compete for the node's RenderEntity and Graphics can receive
+    // the STATIC entity owned by EditBox, tripping RenderEntity.cpp:105.
+    const background = new Node('InputFieldBackground');
+    background.layer = this.node.layer;
+    background.addComponent(UITransform).setContentSize(w, h);
+    root.addChild(background);
+    const g = background.addComponent(Graphics);
     g.fillColor = AUTH_INPUT_BG;
     g.rect(-w / 2, -h / 2, w, h);
     g.fill();

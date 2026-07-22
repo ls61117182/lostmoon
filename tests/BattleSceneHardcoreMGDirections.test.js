@@ -19,4 +19,22 @@ for (const call of calls) {
   );
 }
 
+assert.match(
+  source,
+  /private\s+hasTurretReconGunSelection\s*\(\)\s*:\s*boolean\s*\{[\s\S]*?selectedMGDieIdx\s*>=\s*0/,
+  'a selected machine-gun die should enable the fog-tile turret-aim path',
+);
+
+assert.match(
+  source,
+  /tryAimShermanTurretAtFogTile\(aimDirection,\s*mgSel\)/,
+  'fog-tile aiming should preserve whether the selected die is a machine gun',
+);
+
+assert.match(
+  source,
+  /const\s+dieIdx\s*=\s*useMG\s*\?\s*this\.selectedMGDieIdx\s*:\s*this\.selectedGunDieIdx/,
+  'machine-gun fog aiming should consume the selected machine-gun die',
+);
+
 console.log('BattleScene hardcore machine-gun direction tests passed');

@@ -36,6 +36,9 @@ export interface SplitTankVisualConfig {
   hullOffsetRight: number;
   turretOffsetForward: number;
   turretOffsetRight: number;
+  commanderHatchSpriteX: number;
+  commanderHatchSpriteY: number;
+  commanderHatchScale: number;
 }
 
 export interface SplitTankGeometryConfig {
@@ -69,63 +72,63 @@ const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = 
 };
 
 const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
-  sherman: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 94, spriteY: 99 }, destroyedOffsetForward: -7.5, destroyedOffsetRight: 0 },
-  tiger: { fitScale: 0.9, offsetForward: 0.1, offsetRight: 0, aspectRatioMul: 1.1, muzzle: { spriteX: 0, spriteY: 243 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 222 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  stug3: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 2, spriteY: 66 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 296 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 205 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
-  type95: { fitScale: 0.6, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 359 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  sherman: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 12 }, destroyedOffsetForward: -7.5, destroyedOffsetRight: 0 },
+  tiger: { fitScale: 0.9, offsetForward: 0.1, offsetRight: 0, aspectRatioMul: 1.1, muzzle: { spriteX: 0, spriteY: 18 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 19 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  stug3: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 24 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 20 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 14 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
+  type95: { fitScale: 0.6, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 21 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   at_gun: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 16, spriteY: 305 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   heavy_artillery: { fitScale: 0.85, offsetForward: 0.15, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 8, spriteY: 335 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
   truck: { fitScale: 0.8, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 0 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0 },
 };
 
 const SPLIT_TANK_VISUAL_CONFIG: Record<SplitTankKind, SplitTankVisualConfig> = {
-  sherman: { hullFitScale: 0.76, turretScale: 3, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.015, turretOffsetRight: 0 },
-  tiger: { hullFitScale: 0.6755, turretScale: 0.75, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.05, turretOffsetRight: 0 },
-  panzer4: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0 },
-  panzer3: { hullFitScale: 0.84, turretScale: 0.63, hullOffsetForward: -0.1, hullOffsetRight: 0, turretOffsetForward: 0.05, turretOffsetRight: 0 },
-  type97: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.015, turretOffsetRight: 0 },
-  type95: { hullFitScale: 0.6, turretScale: 0.65, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0 },
+  sherman: { hullFitScale: 0.7, turretScale: 1.55, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 34, commanderHatchSpriteY: 7, commanderHatchScale: 12 },
+  tiger: { hullFitScale: 0.6755, turretScale: 1.2, hullOffsetForward: 0, hullOffsetRight: -0.01, turretOffsetForward: 0.07, turretOffsetRight: 0.004, commanderHatchSpriteX: 71, commanderHatchSpriteY: 25, commanderHatchScale: 17 },
+  panzer4: { hullFitScale: 0.7, turretScale: 0.92, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 46, commanderHatchSpriteY: 19, commanderHatchScale: 19 },
+  panzer3: { hullFitScale: 0.6, turretScale: 0.9, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.01, turretOffsetRight: 0, commanderHatchSpriteX: 52, commanderHatchSpriteY: 20, commanderHatchScale: 23 },
+  type97: { hullFitScale: 0.65, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.015, turretOffsetRight: 0, commanderHatchSpriteX: 47, commanderHatchSpriteY: 9, commanderHatchScale: 18 },
+  type95: { hullFitScale: 0.55, turretScale: 0.65, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.01, turretOffsetRight: -0.025, commanderHatchSpriteX: 46, commanderHatchSpriteY: 30, commanderHatchScale: 28 },
 };
 
 const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig> = {
   sherman: {
-    topTrim: { x: 259, y: 12, w: 1310, h: 576 },
-    turretTrim: { x: 94, y: 24, w: 286, h: 157 },
-    pivot: { bodyX: 915, bodyY: 296, spriteX: 309, spriteY: 99 },
-    muzzle: { spriteX: 94, spriteY: 99 },
+    topTrim: { x: 0, y: 0, w: 100, h: 44 },
+    turretTrim: { x: 0, y: 0, w: 44, h: 24 },
+    pivot: { bodyX: 50, bodyY: 22, spriteX: 32, spriteY: 12 },
+    muzzle: { spriteX: 0, spriteY: 12 },
   },
   tiger: {
-    topTrim: { x: 0, y: 0, w: 901, h: 592 },
-    turretTrim: { x: 0, y: 0, w: 1341, h: 500 },
-    pivot: { bodyX: 430, bodyY: 292, spriteX: 875, spriteY: 243 },
-    muzzle: { spriteX: 0, spriteY: 243 },
+    topTrim: { x: 0, y: 0, w: 100, h: 66 },
+    turretTrim: { x: 0, y: 0, w: 100, h: 37 },
+    pivot: { bodyX: 49, bodyY: 33, spriteX: 65, spriteY: 18 },
+    muzzle: { spriteX: 0, spriteY: 18 },
   },
   panzer4: {
-    topTrim: { x: 0, y: 0, w: 1174, h: 588 },
-    turretTrim: { x: 0, y: 0, w: 769, h: 458 },
-    pivot: { bodyX: 589, bodyY: 294, spriteX: 425, spriteY: 222 },
-    muzzle: { spriteX: 0, spriteY: 222 },
+    topTrim: { x: 0, y: 0, w: 100, h: 50 },
+    turretTrim: { x: 0, y: 0, w: 66, h: 39 },
+    pivot: { bodyX: 50, bodyY: 25, spriteX: 36, spriteY: 19 },
+    muzzle: { spriteX: 0, spriteY: 19 },
   },
   panzer3: {
-    topTrim: { x: 0, y: 0, w: 1463, h: 592 },
-    turretTrim: { x: 0, y: 0, w: 1373, h: 591 },
-    pivot: { bodyX: 480, bodyY: 296, spriteX: 711, spriteY: 296 },
-    muzzle: { spriteX: 0, spriteY: 296 },
+    topTrim: { x: 0, y: 0, w: 100, h: 53 },
+    turretTrim: { x: 0, y: 0, w: 79, h: 40 },
+    pivot: { bodyX: 42, bodyY: 26, spriteX: 41, spriteY: 20 },
+    muzzle: { spriteX: 0, spriteY: 20 },
   },
   type97: {
-    topTrim: { x: 0, y: 0, w: 1509, h: 632 },
-    turretTrim: { x: 0, y: 0, w: 959, h: 410 },
-    pivot: { bodyX: 660, bodyY: 270, spriteX: 687, spriteY: 205 },
-    muzzle: { spriteX: 0, spriteY: 205 },
+    topTrim: { x: 0, y: 0, w: 100, h: 42 },
+    turretTrim: { x: 0, y: 0, w: 64, h: 27 },
+    pivot: { bodyX: 44, bodyY: 18, spriteX: 46, spriteY: 14 },
+    muzzle: { spriteX: 0, spriteY: 14 },
   },
   type95: {
-    topTrim: { x: 0, y: 0, w: 1674, h: 858 },
-    turretTrim: { x: 0, y: 0, w: 1326, h: 723 },
-    pivot: { bodyX: 786, bodyY: 480, spriteX: 888, spriteY: 414 },
-    muzzle: { spriteX: 0, spriteY: 359 },
+    topTrim: { x: 0, y: 0, w: 100, h: 51 },
+    turretTrim: { x: 0, y: 0, w: 79, h: 43 },
+    pivot: { bodyX: 47, bodyY: 29, spriteX: 45, spriteY: 29 },
+    muzzle: { spriteX: 0, spriteY: 21 },
   },
 };
 

@@ -137,10 +137,10 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   if (s.turretDamaged !== undefined) live.turretDamaged = s.turretDamaged;
   if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
   if (s.loaded !== undefined) live.loaded = s.loaded;
-  live.hatchOpen = live.kind === 'sherman' && s.hatchOpen === true;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
   if (s.radioDamaged !== undefined) live.radioDamaged = s.radioDamaged;
   if (s.crew) live.crew = { ...s.crew };
+  live.hatchOpen = s.hatchOpen === true && live.crew?.commander !== false;
 }
 
 function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMission['data']['theater']): Unit {

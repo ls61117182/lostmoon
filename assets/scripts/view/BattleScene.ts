@@ -1160,6 +1160,10 @@ export class BattleScene extends Component {
   private shermanTopSpriteFrame: SpriteFrame | null = null;
   private shermanTurretSpriteNode: Node | null = null;
   private shermanTurretTopSprite: Sprite | null = null;
+  private shermanCommanderHatchSprite: Sprite | null = null;
+  private shermanCommanderHatchSpriteNode: Node | null = null;
+  private shermanCommanderHatchSpriteFrame: SpriteFrame | null = null;
+  private commanderHatchSpriteFrames: Partial<Record<SplitTankKind, SpriteFrame>> = {};
   private splitTankSprites: Partial<Record<SplitTankKind, SplitTankSpriteAssets>> = {};
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
@@ -1170,6 +1174,9 @@ export class BattleScene extends Component {
   private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private enemyTopPoolNext = 0;
   private static readonly ENEMY_TOP_SPRITE_POOL = 16;
+  private commanderHatchSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private commanderHatchPoolNext = 0;
+  private static readonly COMMANDER_HATCH_SPRITE_POOL = 12;
   /**
    * 步兵 / 军官小队俯视图：每个徒步单位用 3 张 Infantry01~03.png 组成"3 人小队"。
    * 池大小 = 单位数上限 × 3；redraw 开头与坦克池一并清零。
@@ -1681,6 +1688,33 @@ export class BattleScene extends Component {
         },
       );
     });
+
+    this.loadSpriteFrame(
+      'textures/units/sherman_commander_hatch_open_v2/spriteFrame',
+      '[BattleScene] Sherman commander hatch sprite load failed; hatch will have no commander visual:',
+      (sf) => {
+        this.shermanCommanderHatchSpriteFrame = sf;
+        if (this.shermanCommanderHatchSprite) this.shermanCommanderHatchSprite.spriteFrame = sf;
+      },
+    );
+
+    const commanderHatchPaths: Partial<Record<SplitTankKind, string>> = {
+      sherman: 'textures/units/sherman_commander_hatch_open_v2/spriteFrame',
+      tiger: 'textures/units/german_commander_hatch_open/spriteFrame',
+      panzer4: 'textures/units/german_commander_hatch_open/spriteFrame',
+      panzer3: 'textures/units/german_commander_hatch_open/spriteFrame',
+      type97: 'textures/units/japanese_commander_hatch_open/spriteFrame',
+      type95: 'textures/units/japanese_commander_hatch_open/spriteFrame',
+    };
+    (Object.keys(commanderHatchPaths) as SplitTankKind[]).forEach((kind) => {
+      this.loadSpriteFrame(
+        commanderHatchPaths[kind]!,
+        `[BattleScene] ${kind} commander hatch sprite load failed; hatch will have no commander visual:`,
+        (sf) => {
+          this.commanderHatchSpriteFrames[kind] = sf;
+        },
+      );
+    });
   }
 
   onLoad() {
@@ -1793,6 +1827,16 @@ export class BattleScene extends Component {
     shTurretNode.active = false;
     unitContentNode.addChild(shTurretNode);
 
+    // Kept under the turret node so the commander inherits every turret rotation.
+    const shCommanderNode = new Node('ShermanCommanderHatchSprite');
+    shCommanderNode.layer = this.node.layer;
+    shCommanderNode.addComponent(UITransform).setContentSize(1, 1);
+    this.shermanCommanderHatchSprite = shCommanderNode.addComponent(Sprite);
+    this.shermanCommanderHatchSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.shermanCommanderHatchSpriteNode = shCommanderNode;
+    shCommanderNode.active = false;
+    shTurretNode.addChild(shCommanderNode);
+
     for (let i = 0; i < BattleScene.ENEMY_TOP_SPRITE_POOL; i++) {
       const pz = new Node(`EnemyTop_${i}`);
       pz.layer = this.node.layer;
@@ -1802,6 +1846,16 @@ export class BattleScene extends Component {
       pz.active = false;
       this.enemyTopSpritePool.push({ node: pz, sprite: spz });
       unitContentNode.addChild(pz);
+    }
+    for (let i = 0; i < BattleScene.COMMANDER_HATCH_SPRITE_POOL; i++) {
+      const commander = new Node(`CommanderHatch_${i}`);
+      commander.layer = this.node.layer;
+      commander.addComponent(UITransform).setContentSize(1, 1);
+      const sprite = commander.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      commander.active = false;
+      this.commanderHatchSpritePool.push({ node: commander, sprite });
+      unitContentNode.addChild(commander);
     }
     // 步兵 3 人小队：每帧 redraw 时按需占用，单位摧毁 / 不存在时关闭即可
     for (let i = 0; i < BattleScene.INFANTRY_TOP_SPRITE_POOL; i++) {
@@ -2317,6 +2371,15 @@ export class BattleScene extends Component {
       .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
     this.resetTurretFacingState();
     this.applyPvpSmokeSnapshot(snapshot);
+    // PVP snapshots replace the unit objects wholesale, bypassing the local
+    // combat paths that normally register a newly killed infantry unit's blood.
+    // Compare against the pre-snapshot state so both remote kills and a
+    // reconnected client's first snapshot produce the persistent decal.
+    this.registerNewlyDestroyedSince(new Set(
+      Array.from(oldUnits.values())
+        .filter(unit => unit.destroyed)
+        .map(unit => unit.id),
+    ));
     const receivedUnitHash = this.pvpUnitHash();
     if (animateChanges) this.preparePvpRemoteAnimations(oldUnits);
 
@@ -3062,6 +3125,8 @@ export class BattleScene extends Component {
     for (const { node } of this.foliageSpritePool) node.active = false;
     this.enemyTopPoolNext = 0;
     for (const { node } of this.enemyTopSpritePool) node.active = false;
+    this.commanderHatchPoolNext = 0;
+    for (const { node } of this.commanderHatchSpritePool) node.active = false;
     if (this.shermanSpriteNode) this.shermanSpriteNode.active = false;
     if (this.shermanTurretSpriteNode) this.shermanTurretSpriteNode.active = false;
     this.infantryTopPoolNext = 0;
@@ -3441,7 +3506,8 @@ export class BattleScene extends Component {
   }
 
   private hasTurretReconGunSelection(): boolean {
-    return this.selectedGunDieIdx >= 0 && this.selectedGunHitThresholdModifier >= 0;
+    return (this.selectedGunDieIdx >= 0 && this.selectedGunHitThresholdModifier >= 0)
+      || this.selectedMGDieIdx >= 0;
   }
 
   /** Natural player vision only; transient firing reveals must not unlock detailed combat UI. */
@@ -7241,6 +7307,73 @@ export class BattleScene extends Component {
     node.active = true;
   }
 
+  private applySplitTankCommanderHatchSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    kind: SplitTankKind,
+    c: { x: number; y: number },
+    bodyFacingLerp?: DirectionLerp | null,
+    turretFacingLerp?: DirectionLerp | null,
+  ) {
+    const sf = this.commanderHatchSpriteFrames[kind];
+    const commanderAlive = u.crew?.commander !== false;
+    if (!sf || !u.hatchOpen || !commanderAlive) {
+      slot.node.active = false;
+      return;
+    }
+
+    const cfg = splitTankVisualConfigOf(kind);
+    const geometry = splitTankGeometryConfigOf(kind);
+    if (cfg.commanderHatchScale <= 0) {
+      slot.node.active = false;
+      return;
+    }
+
+    const topTrim = geometry.topTrim;
+    const pivot = geometry.pivot;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
+    const bodyScale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
+    const turretScale = bodyScale * cfg.turretScale;
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const turret = this.topDownForwardVec(u, c, turretFacingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const f = cfg.hullOffsetForward * offsetUnit;
+    const r = cfg.hullOffsetRight * offsetUnit;
+    const baseX = c.x + f * body.ux + r * body.uy;
+    const baseY = c.y + f * body.uy + r * (-body.ux);
+    const pivotLocalX = (pivot.bodyX - (topTrim.x + topTrim.w / 2)) * bodyScale;
+    const pivotLocalY = ((topTrim.y + topTrim.h / 2) - pivot.bodyY) * bodyScale;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const bodyCos = Math.cos(bodyAngle);
+    const bodySin = Math.sin(bodyAngle);
+    const recoil = this.mainGunRecoilOffsetFor(u, 'turret');
+    const pivotX = baseX + pivotLocalX * bodyCos - pivotLocalY * bodySin + recoil.x;
+    const pivotY = baseY + pivotLocalX * bodySin + pivotLocalY * bodyCos + recoil.y;
+
+    const hatchLocalX = (cfg.commanderHatchSpriteX - pivot.spriteX) * turretScale;
+    const hatchLocalY = (pivot.spriteY - cfg.commanderHatchSpriteY) * turretScale;
+    const turretAngle = Math.atan2(turret.uy, turret.ux) + Math.PI;
+    const turretCos = Math.cos(turretAngle);
+    const turretSin = Math.sin(turretAngle);
+    const node = slot.node;
+    const sp = slot.sprite;
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyTankConcealmentOpacity(sp, u);
+    const size = cfg.commanderHatchScale * turretScale;
+    const ut = node.getComponent(UITransform)!;
+    ut.setContentSize(size, size);
+    ut.setAnchorPoint(0.5, 0.5);
+    node.setScale(1, 1, 1);
+    node.setPosition(
+      pivotX + hatchLocalX * turretCos - hatchLocalY * turretSin,
+      pivotY + hatchLocalX * turretSin + hatchLocalY * turretCos,
+      0,
+    );
+    node.angle = (turretAngle * 180) / Math.PI - 90;
+    node.active = true;
+  }
+
   private applyTankConcealmentOpacity(sp: Sprite, u: Unit) {
     sp.color = new Color(255, 255, 255, u.hidden ? TANK_CONCEALED_ALPHA : 255);
   }
@@ -7311,7 +7444,9 @@ export class BattleScene extends Component {
         facingLerp,
         this.currentShermanTurretLerp(u) ?? facingLerp,
       );
+      this.updateShermanCommanderHatchSprite(u);
     } else {
+      if (this.shermanCommanderHatchSpriteNode) this.shermanCommanderHatchSpriteNode.active = false;
       this.applyTopDownTankSprite(
         this.shermanSpriteNode!,
         this.shermanTopSprite!,
@@ -7329,6 +7464,47 @@ export class BattleScene extends Component {
         this.shermanTurretSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
       }
     }
+  }
+
+  /**
+   * The commander is a child of the rotating turret node.  These coordinates
+   * are in the untrimmed Sherman turret source: the hatch is the small circle
+   * just forward of the turret pivot (the position marked in the reference).
+   */
+  private updateShermanCommanderHatchSprite(u: Unit) {
+    const node = this.shermanCommanderHatchSpriteNode;
+    const sp = this.shermanCommanderHatchSprite;
+    const sf = this.shermanCommanderHatchSpriteFrame;
+    const commanderAlive = u.crew?.commander !== false;
+    if (!node || !sp || !sf || !u.hatchOpen || !commanderAlive) {
+      if (node) node.active = false;
+      return;
+    }
+
+    const geometry = splitTankGeometryConfigOf('sherman');
+    const cfg = splitTankVisualConfigOf('sherman');
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
+    const bodyScale = fit / Math.max(geometry.topTrim.w, geometry.topTrim.h);
+    const turretScale = bodyScale * cfg.turretScale;
+    const hatchSpriteX = cfg.commanderHatchSpriteX;
+    const hatchSpriteY = cfg.commanderHatchSpriteY;
+    const size = cfg.commanderHatchScale * turretScale;
+
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyTankConcealmentOpacity(sp, u);
+    const ut = node.getComponent(UITransform)!;
+    ut.setContentSize(size, size);
+    ut.setAnchorPoint(0.5, 0.5);
+    node.setPosition(
+      (hatchSpriteX - geometry.pivot.spriteX) * turretScale,
+      (geometry.pivot.spriteY - hatchSpriteY) * turretScale,
+      0,
+    );
+    // The commander art faces down in its source frame, while the canonical
+    // Sherman turret art faces left, so compensate by -90° inside the turret.
+    node.angle = -90;
+    node.active = true;
   }
 
   private currentShermanTurretLerp(u: Unit): DirectionLerp | null {
@@ -7491,6 +7667,7 @@ export class BattleScene extends Component {
       if (u.destroyed || !this.shermanTopSpriteFrame) {
         this.shermanSpriteNode.active = false;
         if (this.shermanTurretSpriteNode) this.shermanTurretSpriteNode.active = false;
+        if (this.shermanCommanderHatchSpriteNode) this.shermanCommanderHatchSpriteNode.active = false;
       }
     }
     const r = this.hexSize * 0.5;
@@ -7536,7 +7713,22 @@ export class BattleScene extends Component {
         const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
         this.applySplitTankHullSprite(hullSlot, u, u.kind, c, facingLerp);
         const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
-        this.applySplitTankTurretSprite(turretSlot, u, u.kind, c, facingLerp, this.currentEnemyTurretLerp(u) ?? facingLerp);
+        const turretFacingLerp = this.currentEnemyTurretLerp(u) ?? facingLerp;
+        this.applySplitTankTurretSprite(turretSlot, u, u.kind, c, facingLerp, turretFacingLerp);
+        if (u.hatchOpen
+            && u.crew?.commander !== false
+            && this.commanderHatchSpriteFrames[u.kind]
+            && this.commanderHatchPoolNext < this.commanderHatchSpritePool.length) {
+          const commanderSlot = this.commanderHatchSpritePool[this.commanderHatchPoolNext++];
+          this.applySplitTankCommanderHatchSprite(
+            commanderSlot,
+            u,
+            u.kind,
+            c,
+            facingLerp,
+            turretFacingLerp,
+          );
+        }
         return;
       }
       const meta = this.enemyTopMeta[u.kind];
@@ -9073,6 +9265,10 @@ export class BattleScene extends Component {
    */
   private restartMission() {
     if (!this.mission) return;
+    if (GameSession.isPvp) {
+      this.returnToPvpSelection();
+      return;
+    }
     const data = this.mission.data;
     // 中断动画与敌方阶段调度，丢弃所有过场视觉 / 阶段残留
     stopManeuverSound();
@@ -9109,6 +9305,19 @@ export class BattleScene extends Component {
     if (this.restartBtn) this.restartBtn.active = false;
     this.loadAndDraw(data);
     this.battleLog('[BattleScene] === 重开当前任务 ===');
+  }
+
+  /** PVP 结算后的“再来一局”应重新选择匹配方式，而不是重置当前对局。 */
+  private returnToPvpSelection() {
+    this.battleLog('[BattleScene] PVP 对局结束，返回 PVP 对战选择');
+    stopBattleSfx();
+    if (this.pvpBattleUnlisten) this.pvpBattleUnlisten();
+    this.pvpBattleUnlisten = null;
+    PvpService.sendBattleEvent({ kind: 'leave_battle', turn: this.turn, phase: this.phase });
+    GameSession.returnToPvpSelection();
+    director.loadScene(this.mainMenuSceneName, (err) => {
+      if (err) console.error('[BattleScene] 加载主菜单场景失败:', this.mainMenuSceneName, err);
+    });
   }
 
   // ---------- 阶段选择条 + 骰子托盘 ----------
@@ -10518,7 +10727,8 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 选中一颗机枪骰进入"选步兵"态；之后点合法步兵格触发扫射。
+   * 选中一颗机枪骰进入"选步兵 / 迷雾空地转炮塔"态；之后点合法步兵格触发扫射，
+   * 或在硬核迷雾中点空地，消耗此骰并仅旋转炮塔获得新视野。
    *
    * 合法骰面：
    *   - 攻击阶段：pip ∈ {3, 4}（classifyAttackDie == 'mg'）
@@ -10675,7 +10885,7 @@ export class BattleScene extends Component {
    * 动画路径与主炮 DiceShow 分离 —— 走一条轻量"骰面浮字 + 结果浮字"的路线，
    * 避免在玩家扫射 1 名步兵时出现整块遮罩面板（视觉成本与 impact 不对等）。
    */
-  private tryMGAttack(target: Unit) {
+  private tryMGAttack(target: Unit, turretAlreadyAimed = false) {
     if (!this.mission) return;
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
     if (this.selectedMGDieIdx < 0) return;
@@ -10692,6 +10902,15 @@ export class BattleScene extends Component {
       const msg = t(check.reason ?? 'attack.reason.unknown');
       this.spawnFloater(sherman.pos.q, sherman.pos.r, msg,
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
+      return;
+    }
+
+    // 机枪扫射也由炮塔指向目标；先完成与主炮一致的瞄准动画，再掷骰/开火，
+    // 以便硬核模式的 12 向目标会正确写入并显示 turretFacing。
+    if (!turretAlreadyAimed) {
+      this.startShermanTurretAim(target, () => this.tryMGAttack(target, true));
+      this.updateHUD();
+      this.redraw();
       return;
     }
 
@@ -13821,7 +14040,7 @@ export class BattleScene extends Component {
     const gunSel = this.selectedGunDieIdx >= 0;
     const mgSel = this.selectedMGDieIdx >= 0;
 
-    if (attackOrMisc && gunSel && this.hasTurretReconGunSelection() && !this.isCommanderHatchOpen()) {
+    if (attackOrMisc && this.hasTurretReconGunSelection() && !this.isCommanderHatchOpen()) {
       const direction = fireDirectionTo(this.mission.sherman.pos, target.pos);
       if (direction === null) {
         this.showGunAimWarning('attack.reason.cannotTurnDirection');
@@ -13833,7 +14052,7 @@ export class BattleScene extends Component {
           this.showGunAimWarning('attack.reason.turretAimRange');
           return;
         }
-        this.tryAimShermanTurretAtFogTile(aimDirection);
+        this.tryAimShermanTurretAtFogTile(aimDirection, mgSel);
         return;
       }
     }
@@ -13856,7 +14075,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 玩家主炮：可对可见合法目标开火，或在硬核迷雾中消耗行动骰旋转炮塔获得新视野。
+   * 玩家主炮 / 机枪：可对可见合法目标开火，或在硬核迷雾中消耗所选行动骰旋转炮塔获得新视野。
    * 只有实际开炮要求并清空 loaded；单纯旋转炮塔不消耗炮弹。
    */
   private showGunAimWarning(key: 'attack.reason.cannotTurnDirection' | 'attack.reason.turretAimRange') {
@@ -13866,12 +14085,12 @@ export class BattleScene extends Component {
       new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
   }
 
-  private tryAimShermanTurretAtFogTile(direction: FireDirection) {
-    if (!this.mission || this.selectedGunDieIdx < 0) return;
-    const slot = this.phaseDice[this.selectedGunDieIdx];
+  private tryAimShermanTurretAtFogTile(direction: FireDirection, useMG = false) {
+    const dieIdx = useMG ? this.selectedMGDieIdx : this.selectedGunDieIdx;
+    if (!this.mission || dieIdx < 0) return;
+    const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
-    const doublesPartnerIdx = this.selectedGunDoublesIdx;
-    const sherman = this.mission.sherman;
+    const doublesPartnerIdx = useMG ? -1 : this.selectedGunDoublesIdx;
     this.startShermanTurretAimDirection(direction, () => {
       slot.used = true;
       if (doublesPartnerIdx >= 0) {
@@ -16328,10 +16547,17 @@ export class BattleScene extends Component {
   }
 
   /** Execute the hardcore shoot-action MG fallback after main-gun targeting failed. */
-  private tryAIMGAttack(actor: Unit): boolean {
+  private tryAIMGAttack(actor: Unit, aimedTarget?: Unit): boolean {
     if (!this.mission || actor.destroyed || this.outcome !== 'ongoing') return false;
-    const target = this.selectAIMGTarget(actor, true);
+    const target = aimedTarget ?? this.selectAIMGTarget(actor, true);
     if (!target) return false;
+
+    // 与主炮相同：坦克机枪在扫射前先旋转炮塔。传入已选目标可避免
+    // 动画结束后重新随机选择 AI 目标。
+    if (!aimedTarget && actor.stats.visionType === 'turreted') {
+      this.startEnemyTurretAim(actor, target, () => this.tryAIMGAttack(actor, target));
+      return true;
+    }
 
     const { map } = this.mission;
     const ctx = {
