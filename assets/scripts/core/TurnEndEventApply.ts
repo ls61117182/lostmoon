@@ -201,7 +201,7 @@ function blocksJapaneseInfantrySpawn(u: Unit): boolean {
 }
 
 function reinforcementFaction(mission: LoadedMission, side: ReinforcementSide): Faction {
-  if (side === 'friendly') return 'allied';
+  if (side === 'friendly') return mission.sherman.faction;
   return mission.data.theater === 'pacific' ? 'japanese' : 'german';
 }
 

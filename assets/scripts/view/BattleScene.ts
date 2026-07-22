@@ -164,6 +164,7 @@ import {
   stitchCampaignMissions,
 } from '../core/CampaignRuntime';
 import { getGameModeConfig } from '../core/GameMode';
+import { shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
 import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
 import { PvpBattleSnapshot, PvpBattleUnitSnapshot, PvpService } from '../core/PvpService';
@@ -198,6 +199,12 @@ import {
   tankVisualConfigOf,
 } from '../core/TankVisualDB';
 import {
+  INFANTRY_VISUAL_KINDS,
+  InfantryVisualKind,
+  infantryVisualConfigOf,
+  infantryVisualKindOf,
+} from '../core/InfantryVisualDB';
+import {
   initGameAudio,
   onMenuVolumesChanged,
   playBgmBattle,
@@ -214,7 +221,7 @@ import {
   playUiClick,
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel } from '../core/UnitVisualState';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isFriendlyFaction, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -283,16 +290,16 @@ function drawDicePopupPanel(g: Graphics, w: number, h: number, fill: Color, bord
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
-type EnemyTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'sherman76' || k === 't34' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
-type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
 
 function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
-  return k === 'sherman' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'sherman76' || k === 't34' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
 }
 
 function isSplitTankKind(k: UnitKind): k is SplitTankKind {
@@ -1137,6 +1144,10 @@ export class BattleScene extends Component {
   private unitEffectTime = 0;
   private visibleHexKeys = new Set<string>();
   private transientFogRevealKeys = new Set<string>();
+  /** Tracks living allied tanks between redraws so a newly destroyed tank can keep only its own hex visible briefly. */
+  private visibilityTrackingMission: LoadedMission | null = null;
+  private livingFriendlyTankHexKeys = new Map<string, string>();
+  private destroyedFriendlyTankHexRevealExpiry = new Map<string, number>();
   private terrainSpriteFrames: Record<TerrainType, SpriteFrame | null> = {
     road: null,
     field: null,
@@ -1163,7 +1174,8 @@ export class BattleScene extends Component {
   private shermanCommanderHatchSprite: Sprite | null = null;
   private shermanCommanderHatchSpriteNode: Node | null = null;
   private shermanCommanderHatchSpriteFrame: SpriteFrame | null = null;
-  private commanderHatchSpriteFrames: Partial<Record<SplitTankKind, SpriteFrame>> = {};
+  /** Keyed by the commander SpriteFrame path from units.csv, not by faction or tank kind. */
+  private commanderHatchSpriteFrames: Record<string, SpriteFrame> = {};
   private splitTankSprites: Partial<Record<SplitTankKind, SplitTankSpriteAssets>> = {};
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
@@ -1181,24 +1193,20 @@ export class BattleScene extends Component {
    * 步兵 / 军官小队俯视图：每个徒步单位用 3 张 Infantry01~03.png 组成"3 人小队"。
    * 池大小 = 单位数上限 × 3；redraw 开头与坦克池一并清零。
    */
-  private infantrySpriteFrames: Array<SpriteFrame | null> = [null, null, null];
-  private infantrySpriteDims: Array<{ dw: number; dh: number }> = [
-    { dw: 0, dh: 0 },
-    { dw: 0, dh: 0 },
-    { dw: 0, dh: 0 },
-  ];
-  private japaneseInfantrySpriteFrames: Array<SpriteFrame | null> = [null, null, null];
-  private japaneseInfantrySpriteDims: Array<{ dw: number; dh: number }> = [
-    { dw: 0, dh: 0 },
-    { dw: 0, dh: 0 },
-    { dw: 0, dh: 0 },
-  ];
-  private americanInfantrySpriteFrames: Array<SpriteFrame | null> = [null, null, null];
-  private americanInfantrySpriteDims: Array<{ dw: number; dh: number }> = [
-    { dw: 0, dh: 0 },
-    { dw: 0, dh: 0 },
-    { dw: 0, dh: 0 },
-  ];
+  private infantrySpriteFramesByKind: Record<InfantryVisualKind, Array<SpriteFrame | null>> = {
+    infantry: [null, null, null],
+    german_infantry: [null, null, null],
+    soviet_infantry: [null, null, null],
+    japanese_infantry: [null, null, null],
+    american_infantry: [null, null, null],
+  };
+  private infantrySpriteDimsByKind: Record<InfantryVisualKind, Array<{ dw: number; dh: number }>> = {
+    infantry: [{ dw: 0, dh: 0 }, { dw: 0, dh: 0 }, { dw: 0, dh: 0 }],
+    german_infantry: [{ dw: 0, dh: 0 }, { dw: 0, dh: 0 }, { dw: 0, dh: 0 }],
+    soviet_infantry: [{ dw: 0, dh: 0 }, { dw: 0, dh: 0 }, { dw: 0, dh: 0 }],
+    japanese_infantry: [{ dw: 0, dh: 0 }, { dw: 0, dh: 0 }, { dw: 0, dh: 0 }],
+    american_infantry: [{ dw: 0, dh: 0 }, { dw: 0, dh: 0 }, { dw: 0, dh: 0 }],
+  };
   private infantryTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private infantryTopPoolNext = 0;
   private static readonly INFANTRY_SPRITES_PER_UNIT = 3;
@@ -1698,20 +1706,17 @@ export class BattleScene extends Component {
       },
     );
 
-    const commanderHatchPaths: Partial<Record<SplitTankKind, string>> = {
-      sherman: 'textures/units/sherman_commander_hatch_open_v2/spriteFrame',
-      tiger: 'textures/units/german_commander_hatch_open/spriteFrame',
-      panzer4: 'textures/units/german_commander_hatch_open/spriteFrame',
-      panzer3: 'textures/units/german_commander_hatch_open/spriteFrame',
-      type97: 'textures/units/japanese_commander_hatch_open/spriteFrame',
-      type95: 'textures/units/japanese_commander_hatch_open/spriteFrame',
-    };
-    (Object.keys(commanderHatchPaths) as SplitTankKind[]).forEach((kind) => {
+    const commanderHatchPaths = new Set(
+      SPLIT_TANK_KINDS
+        .map((kind) => getUnitStats(kind).commanderSpritePath ?? '')
+        .filter((path) => !!path),
+    );
+    commanderHatchPaths.forEach((path) => {
       this.loadSpriteFrame(
-        commanderHatchPaths[kind]!,
-        `[BattleScene] ${kind} commander hatch sprite load failed; hatch will have no commander visual:`,
+        path,
+        `[BattleScene] commander hatch sprite load failed (${path}); hatch will have no commander visual:`,
         (sf) => {
-          this.commanderHatchSpriteFrames[kind] = sf;
+          this.commanderHatchSpriteFrames[path] = sf;
         },
       );
     });
@@ -1906,72 +1911,23 @@ export class BattleScene extends Component {
       });
     });
 
-    const infantryPaths = [
-      'textures/units/Infantry01/spriteFrame',
-      'textures/units/Infantry02/spriteFrame',
-      'textures/units/Infantry03/spriteFrame',
-    ];
-    for (let i = 0; i < infantryPaths.length; i++) {
-      const idx = i;
-      resources.load(infantryPaths[idx], SpriteFrame, (err, sf) => {
-        if (err || !sf) {
-          console.warn(`[BattleScene] 步兵图加载失败 (Infantry0${idx + 1})，该单位将回退矢量小人:`, err);
-          return;
-        }
-        const rw = sf.rect.width;
-        const rh = sf.rect.height;
-        this.infantrySpriteFrames[idx] = sf;
-        this.infantrySpriteDims[idx] = {
-          dw: rw > 0 ? rw : sf.width,
-          dh: rh > 0 ? rh : sf.height,
-        };
-        this.redraw();
-      });
-    }
-
-    const japaneseInfantryPaths = [
-      'textures/units/JapaneseInfantry01/spriteFrame',
-      'textures/units/JapaneseInfantry02/spriteFrame',
-      'textures/units/JapaneseInfantry03/spriteFrame',
-    ];
-    for (let i = 0; i < japaneseInfantryPaths.length; i++) {
-      const idx = i;
-      resources.load(japaneseInfantryPaths[idx], SpriteFrame, (err, sf) => {
-        if (err || !sf) {
-          console.warn(`[BattleScene] 日本步兵图加载失败 (JapaneseInfantry0${idx + 1})，该单位将回退矢量小人:`, err);
-          return;
-        }
-        const rw = sf.rect.width;
-        const rh = sf.rect.height;
-        this.japaneseInfantrySpriteFrames[idx] = sf;
-        this.japaneseInfantrySpriteDims[idx] = {
-          dw: rw > 0 ? rw : sf.width,
-          dh: rh > 0 ? rh : sf.height,
-        };
-        this.redraw();
-      });
-    }
-
-    const americanInfantryPaths = [
-      'textures/units/AmericanInfantry01/spriteFrame',
-      'textures/units/AmericanInfantry02/spriteFrame',
-      'textures/units/AmericanInfantry03/spriteFrame',
-    ];
-    for (let i = 0; i < americanInfantryPaths.length; i++) {
-      const idx = i;
-      resources.load(americanInfantryPaths[idx], SpriteFrame, (err, sf) => {
-        if (err || !sf) {
-          console.warn(`[BattleScene] 美军步兵图加载失败 (AmericanInfantry0${idx + 1})，该单位将回退矢量小人:`, err);
-          return;
-        }
-        const rw = sf.rect.width;
-        const rh = sf.rect.height;
-        this.americanInfantrySpriteFrames[idx] = sf;
-        this.americanInfantrySpriteDims[idx] = {
-          dw: rw > 0 ? rw : sf.width,
-          dh: rh > 0 ? rh : sf.height,
-        };
-        this.redraw();
+    for (const kind of INFANTRY_VISUAL_KINDS) {
+      const visualConfig = infantryVisualConfigOf(kind);
+      visualConfig.soldiers.forEach((soldier, index) => {
+        resources.load(soldier.spritePath, SpriteFrame, (err, sf) => {
+          if (err || !sf) {
+            console.warn(`[BattleScene] ${kind} 步兵图加载失败（位置 ${index + 1}），将回退矢量小人:`, err);
+            return;
+          }
+          const rw = sf.rect.width;
+          const rh = sf.rect.height;
+          this.infantrySpriteFramesByKind[kind][index] = sf;
+          this.infantrySpriteDimsByKind[kind][index] = {
+            dw: rw > 0 ? rw : sf.width,
+            dh: rh > 0 ? rh : sf.height,
+          };
+          this.redraw();
+        });
       });
     }
 
@@ -2178,10 +2134,10 @@ export class BattleScene extends Component {
     if (!pvp?.active || !snapshot || !this.mission) return;
     const localParity = pvp.localPlayer.parity;
     const localMain = snapshot.units.find(u => u.ownerParity === localParity && u.role === 'protagonist');
-    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'allied');
+    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'usa');
     this.mission.allies = snapshot.units
       .filter(u => u.ownerParity === localParity && u.role !== 'protagonist')
-      .map(u => this.unitFromPvpSnapshot(u, 'allied'));
+      .map(u => this.unitFromPvpSnapshot(u, 'usa'));
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
       .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
@@ -2362,10 +2318,10 @@ export class BattleScene extends Component {
 
     const localParity = pvp.localPlayer.parity;
     const localMain = snapshot.units.find(u => u.ownerParity === localParity && u.role === 'protagonist');
-    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'allied');
+    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'usa');
     this.mission.allies = snapshot.units
       .filter(u => u.ownerParity === localParity && u.role !== 'protagonist')
-      .map(u => this.unitFromPvpSnapshot(u, 'allied'));
+      .map(u => this.unitFromPvpSnapshot(u, 'usa'));
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
       .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
@@ -3471,15 +3427,63 @@ export class BattleScene extends Component {
       for (const tile of this.mission.map.all()) {
         this.visibleHexKeys.add(HexMap.keyOf(tile.pos));
       }
+    } else {
+      this.visibleHexKeys = computePlayerVisibleHexes(
+        this.mission.map,
+        this.mission.sherman,
+        this.mission.allies,
+        getGameModeConfig(GameSession.gameMode).radioVisionSharing,
+        this.currentWeather(),
+      );
+    }
+    this.applyDestroyedFriendlyTankHexVisionDelay();
+  }
+
+  /**
+   * Hardcore-only presentation rule: destroying an allied tank removes its
+   * radio-shared sight immediately, but leaves the wreck's own hex visible for
+   * one second. The normal visibility set is checked first, so a hex which is
+   * still visible from another source never receives a transient reveal.
+   */
+  private applyDestroyedFriendlyTankHexVisionDelay() {
+    if (!this.mission) return;
+
+    const livingNow = new Map<string, string>();
+    for (const ally of this.mission.allies) {
+      if (ally.destroyed || !isTankUnit(ally)) continue;
+      livingNow.set(ally.id, HexMap.keyOf(ally.pos));
+    }
+
+    if (this.visibilityTrackingMission !== this.mission) {
+      this.visibilityTrackingMission = this.mission;
+      this.livingFriendlyTankHexKeys = livingNow;
+      this.destroyedFriendlyTankHexRevealExpiry.clear();
       return;
     }
-    this.visibleHexKeys = computePlayerVisibleHexes(
-      this.mission.map,
-      this.mission.sherman,
-      this.mission.allies,
-      getGameModeConfig(GameSession.gameMode).radioVisionSharing,
-      this.currentWeather(),
-    );
+
+    if (GameSession.gameMode === 'hardcore') {
+      const now = Date.now();
+      for (const [unitId, hexKey] of this.livingFriendlyTankHexKeys) {
+        if (livingNow.has(unitId) || this.visibleHexKeys.has(hexKey)) continue;
+        const expiry = now + 1000;
+        this.destroyedFriendlyTankHexRevealExpiry.set(hexKey, expiry);
+        this.scheduleOnce(() => {
+          if (this.destroyedFriendlyTankHexRevealExpiry.get(hexKey) !== expiry) return;
+          this.destroyedFriendlyTankHexRevealExpiry.delete(hexKey);
+          this.redraw();
+        }, 1);
+      }
+    }
+    this.livingFriendlyTankHexKeys = livingNow;
+
+    const now = Date.now();
+    for (const [hexKey, expiry] of this.destroyedFriendlyTankHexRevealExpiry) {
+      if (expiry <= now) {
+        this.destroyedFriendlyTankHexRevealExpiry.delete(hexKey);
+      } else {
+        this.visibleHexKeys.add(hexKey);
+      }
+    }
   }
 
   private isHexVisible(pos: Axial): boolean {
@@ -3860,7 +3864,7 @@ export class BattleScene extends Component {
 
   private activeActingUnitFrameColor(unit: Unit): Color {
     if (unit === this.mission?.sherman) return ACTIVE_UNIT_PLAYER_FRAME;
-    if (unit.faction === 'allied') return ACTIVE_UNIT_ALLIED_FRAME;
+    if (isFriendlyFaction(unit.faction)) return ACTIVE_UNIT_ALLIED_FRAME;
     return ACTIVE_UNIT_ENEMY_FRAME;
   }
 
@@ -4177,7 +4181,7 @@ export class BattleScene extends Component {
       ? UNIT_NAME_TEXT_DEAD
       : u === this.mission?.sherman
         ? UNIT_NAME_TEXT_PLAYER
-        : (u.faction === 'allied' ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
+        : (isFriendlyFaction(u.faction) ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
     const isPvpAiUnit = GameSession.isPvp && u !== this.mission?.sherman && u !== this.pvpOpponentProtagonist();
     const isPvpOpponentHero = GameSession.isPvp && u === this.pvpOpponentProtagonist();
     l.string = `${t(`unit.name.${u.kind}`)}${isPvpOpponentHero ? ' 主角' : isPvpAiUnit ? ' AI' : ''}`;
@@ -7111,6 +7115,28 @@ export class BattleScene extends Component {
           offsetForward: splitTankVisualConfigOf('sherman').hullOffsetForward,
           offsetRight: splitTankVisualConfigOf('sherman').hullOffsetRight,
         };
+      case 'sherman76': {
+        const geometry = splitTankGeometryConfigOf('sherman76');
+        const visual = splitTankVisualConfigOf('sherman76');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
+      case 't34': {
+        const geometry = splitTankGeometryConfigOf('t34');
+        const visual = splitTankVisualConfigOf('t34');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
       case 'tiger':
         return {
           trimW: BattleScene.TIGER_TOP_TRIM_W,
@@ -7146,6 +7172,17 @@ export class BattleScene extends Component {
           offsetRight: visual.hullOffsetRight,
         };
       }
+      case 'type97': {
+        const geometry = splitTankGeometryConfigOf('type97');
+        const visual = splitTankVisualConfigOf('type97');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
       default:
         return null;
     }
@@ -7158,9 +7195,9 @@ export class BattleScene extends Component {
     if (split && split.trimH > 0) {
       const hullFit = radius * 1.8 * split.fitScale;
       const hullScale = hullFit / (Math.max(split.trimW, split.trimH) || 1);
-      const targetVehicleWidth = split.trimH * hullScale;
-      const scale = targetVehicleWidth / h;
-      return { w: w * scale, h: h * scale };
+      // 残骸必须和存活车身使用完全一致的显示宽高；不应由残骸 PNG
+      // 的画布比例再次推导，否则旋转后会显得比车身更大。
+      return { w: split.trimW * hullScale, h: split.trimH * hullScale };
     }
 
     const cfg = tankVisualConfigOf(kind);
@@ -7315,7 +7352,7 @@ export class BattleScene extends Component {
     bodyFacingLerp?: DirectionLerp | null,
     turretFacingLerp?: DirectionLerp | null,
   ) {
-    const sf = this.commanderHatchSpriteFrames[kind];
+    const sf = this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? ''];
     const commanderAlive = u.crew?.commander !== false;
     if (!sf || !u.hatchOpen || !commanderAlive) {
       slot.node.active = false;
@@ -7717,7 +7754,7 @@ export class BattleScene extends Component {
         this.applySplitTankTurretSprite(turretSlot, u, u.kind, c, facingLerp, turretFacingLerp);
         if (u.hatchOpen
             && u.crew?.commander !== false
-            && this.commanderHatchSpriteFrames[u.kind]
+            && this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? '']
             && this.commanderHatchPoolNext < this.commanderHatchSpritePool.length) {
           const commanderSlot = this.commanderHatchSpritePool[this.commanderHatchPoolNext++];
           this.applySplitTankCommanderHatchSprite(
@@ -7776,13 +7813,15 @@ export class BattleScene extends Component {
   private infantryVisualsFor(u: Unit): {
     frames: Array<SpriteFrame | null>;
     dims: Array<{ dw: number; dh: number }>;
+    scales: readonly number[];
   } {
-    if (u.kind === 'american_infantry') {
-      return { frames: this.americanInfantrySpriteFrames, dims: this.americanInfantrySpriteDims };
-    }
-    return u.kind === 'japanese_infantry'
-      ? { frames: this.japaneseInfantrySpriteFrames, dims: this.japaneseInfantrySpriteDims }
-      : { frames: this.infantrySpriteFrames, dims: this.infantrySpriteDims };
+    const kind = infantryVisualKindOf(u.kind);
+    const config = infantryVisualConfigOf(kind);
+    return {
+      frames: this.infantrySpriteFramesByKind[kind],
+      dims: this.infantrySpriteDimsByKind[kind],
+      scales: config.soldiers.map(soldier => soldier.scale),
+    };
   }
 
   private setInfantryVisualFacing(unit: Unit, target: Axial) {
@@ -7874,8 +7913,6 @@ export class BattleScene extends Component {
     const offsets = infantrySquadOffsets(this.hexSize, coLocateVehicle);
     /** 单兵 sprite 显示尺寸（按图最长边等比缩放到该值） */
     const spriteFit = this.hexSize * 0.58;
-    /** 第 1 个兵（Infantry01）保持基础大小，其余两个放大 15% 以视觉拉开「主兵 / 后排」层次 */
-    const spriteFitByIndex = [spriteFit, spriteFit * 1.00, spriteFit * 1.15];
 
     for (let i = 0; i < BattleScene.INFANTRY_SPRITES_PER_UNIT; i++) {
       if (this.infantryTopPoolNext >= this.infantryTopSpritePool.length) break;
@@ -7886,7 +7923,7 @@ export class BattleScene extends Component {
       const w = dim.dw > 0 ? dim.dw : sf.width;
       const h = dim.dh > 0 ? dim.dh : sf.height;
       const maxDim = Math.max(w, h) || 1;
-      const fitI = spriteFitByIndex[i];
+      const fitI = spriteFit * infantryVisuals.scales[i];
       const tw = (w / maxDim) * fitI;
       const th = (h / maxDim) * fitI;
       slot.sprite.spriteFrame = sf;
@@ -11391,21 +11428,21 @@ export class BattleScene extends Component {
 
   private aiTargetsFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    return actor.faction !== 'allied'
+    return !isFriendlyFaction(actor.faction)
       ? [this.mission.sherman, ...this.mission.allies]
       : this.mission.enemies;
   }
 
   private aiFriendliesFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    return actor.faction !== 'allied'
+    return !isFriendlyFaction(actor.faction)
       ? this.mission.enemies.filter(u => u !== actor && u.faction === actor.faction)
       : [this.mission.sherman, ...this.mission.allies].filter(u => u !== actor);
   }
 
   private aiMissionTargetsFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    if (actor.faction !== 'allied') return [this.mission.sherman];
+    if (!isFriendlyFaction(actor.faction)) return [this.mission.sherman];
     const candidates = this.mission.enemies;
     const objective = this.mission.data.objective;
     if (objective.type === 'destroy_all_enemies' || objective.destroyAllEnemiesBeforeEvac) {
@@ -12675,7 +12712,7 @@ export class BattleScene extends Component {
         const sf = infantryVisuals.frames[i];
         if (!sf) continue;
         const dim = infantryVisuals.dims[i];
-        const fit = i === 0 ? spriteFit : spriteFit * 1.15;
+        const fit = spriteFit * infantryVisuals.scales[i];
         this.addTileInspectSprite(
           parent,
           sf,
@@ -13495,6 +13532,7 @@ export class BattleScene extends Component {
     this.enemyDidActThisTurn = false;
     this.clearAIMoveState();
     this.setActiveActingUnit(enemy);
+    this.updateNonPlayerTankCommanderHatch(enemy);
     const tile = this.mission.map.get(enemy.pos);
     const terrain = effectiveDiceTerrain(tile);
     this.enemyAICol = aiColumnFor(enemy, terrain);
@@ -13517,6 +13555,21 @@ export class BattleScene extends Component {
 
     this.buildEnemyDiceTray(enemy, { playSort: true });
     if (!this.enemyDiceSortAnim) this.runNextEnemyStep();
+  }
+
+  /** Applies the hardcore-only AI commander hatch rule before this tank acts. */
+  private updateNonPlayerTankCommanderHatch(unit: Unit) {
+    if (!this.mission) return;
+    if (GameSession.gameMode !== 'hardcore' || unit === this.mission.sherman || !isTankUnit(unit)) return;
+    const nextOpen = shouldNonPlayerTankOpenCommanderHatch(
+      unit,
+      this.allUnits(),
+      this.mission.sherman,
+      GameSession.gameMode,
+    );
+    if (unit.hatchOpen === nextOpen) return;
+    unit.hatchOpen = nextOpen;
+    this.redraw();
   }
 
   /**
@@ -13776,7 +13829,7 @@ export class BattleScene extends Component {
 
       case 'smoke': {
         if (tileForbidsSmokeOrConcealment(map.get(enemy.pos)) || this.hasSmokeAt(enemy.pos)) return 'done';
-        this.deploySmokeAt(enemy.pos, enemy.faction === 'allied' ? 'friendly' : 'enemy');
+        this.deploySmokeAt(enemy.pos, isFriendlyFaction(enemy.faction) ? 'friendly' : 'enemy');
         this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 施放烟雾`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.smoke'),
           new Color(200, 200, 220, 255), { size: 24 });
@@ -13881,7 +13934,7 @@ export class BattleScene extends Component {
   }
 
   private americanInfantryMovePriority(enemy: Unit, pos: Axial, tile: Tile): number {
-    const occupants = this.allBattleUnits().filter(u =>
+    const occupants = this.allUnits().filter(u =>
       u !== enemy && !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r,
     );
     if (occupants.length > 0
@@ -14401,12 +14454,12 @@ export class BattleScene extends Component {
       ...attackCtx,
       hitThresholdModifier: precisionFire ? -2 : 0,
     }, this.rng);
-    const enemyActor = enemy.faction !== 'allied'
+    const enemyActor = !isFriendlyFaction(enemy.faction)
       ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
     const targetLabel = target === this.mission.sherman
       ? t('actor.sherman')
-      : target.faction !== 'allied'
+      : !isFriendlyFaction(target.faction)
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     if (precisionFire) {
@@ -15024,7 +15077,7 @@ export class BattleScene extends Component {
     if (show.report.protagonistTarget) return 'protagonist';
     const configured = show.target?.stats.damageTargetClass;
     if (configured && configured in DAMAGE_TABLE) return configured as DamageTargetClass;
-    if (show.target?.faction === 'allied') return 'us_tank';
+    if (show.target && isFriendlyFaction(show.target.faction)) return 'us_tank';
     if (show.target && isTankUnit(show.target)) return 'german_tank';
     return null;
   }
@@ -16582,12 +16635,12 @@ export class BattleScene extends Component {
           hit: false,
         }
       : rollMGAttack(ctx, this.rng);
-    const actorLabel = actor.faction !== 'allied'
+    const actorLabel = !isFriendlyFaction(actor.faction)
       ? t('actor.enemyPrefix', { name: unitDisplayName(actor.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(actor.kind) });
     const targetLabel = target === this.mission.sherman
       ? t('actor.sherman')
-      : target.faction !== 'allied'
+      : !isFriendlyFaction(target.faction)
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     this.battleLogI18n('battleLog.combatMgAI', {
@@ -17245,7 +17298,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const actorParams: CombatLogParams = _attacker === this.mission.sherman && target !== this.mission.sherman
       ? { actorKey: 'actor.player' }
-      : _attacker.faction !== 'allied'
+      : !isFriendlyFaction(_attacker.faction)
         ? { actorNameKey: `unit.name.${_attacker.kind}` }
         : { actorText: actor };
     const baseParams: CombatLogParams = {

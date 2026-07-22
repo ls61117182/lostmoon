@@ -5,7 +5,7 @@ import { decideEnemyTurn } from '../assets/scripts/core/EnemyAI';
 import { HexMap } from '../assets/scripts/core/HexGrid';
 import { Unit } from '../assets/scripts/core/types';
 
-function tank(id: string, q: number, r: number, facing: 0 | 1 | 2 | 3 | 4 | 5, faction: 'allied' | 'german'): Unit {
+function tank(id: string, q: number, r: number, facing: 0 | 1 | 2 | 3 | 4 | 5, faction: 'usa' | 'german'): Unit {
   return {
     id,
     kind: faction === 'german' ? 'panzer4' : 'sherman',
@@ -36,7 +36,7 @@ function fieldMap(min: number, max: number): HexMap {
 
 {
   const enemy = tank('enemy', 0, 0, 0, 'german');
-  const target = tank('sherman', 1, 0, 3, 'allied');
+  const target = tank('sherman', 1, 0, 3, 'usa');
   const occupied = new Set<string>(['1,0']);
 
   assert.strictEqual(

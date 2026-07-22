@@ -20,14 +20,14 @@ const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_ta
 
 const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
-const STRING_FIELDS = ['moveSound', 'attackSound', 'visionType', 'damageTargetClass'];
+const STRING_FIELDS = ['moveSound', 'attackSound', 'commanderSpritePath', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
 const ACTION_TABLE_FIELD = 'action_table';
 const CREW_MEMBER_FIELD = 'crewMembers';
-const FACTIONS = ['allied', 'german', 'japanese'];
+const FACTIONS = ['usa', 'soviet', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
 const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'american_infantry', 'heavy_artillery'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'at_gun', 'japanese_infantry', 'american_infantry', 'heavy_artillery'];
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);
@@ -307,9 +307,16 @@ function build() {
   }
   lines.push('};');
   lines.push('');
+  lines.push('export function getAllUnitKinds(): UnitKind[] {');
+  lines.push('  return Object.keys(DB) as UnitKind[];');
+  lines.push('}');
+  lines.push('');
   lines.push('const PACIFIC_OVERRIDES: Partial<Record<UnitKind, Partial<UnitStats>>> = {');
   lines.push('  sherman: {');
   lines.push('    size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 2, usCasualtyDice: 0,');
+  lines.push('  },');
+  lines.push('  sherman76: {');
+  lines.push('    size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, penetration: 4, usCasualtyDice: 0,');
   lines.push('  },');
   lines.push('};');
   lines.push('');

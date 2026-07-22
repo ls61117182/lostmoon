@@ -16,6 +16,7 @@ const CONFIG_TABLES = {
   'enemy_hardcore_tank_action_table.csv': 'tools/buildEnemyAIDB.js',
   'enemy_hardcore_tank_dice.csv': 'tools/buildEnemyAIDB.js',
   'fire_check_table.csv': 'tools/buildFireCheckDB.js',
+  'infantry_visuals.csv': 'tools/buildInfantryVisualDB.js',
   'lang.csv': 'tools/buildLangDB.js',
   'player_action_table.csv': 'tools/buildPlayerActionDB.js',
   'player_dice_pool.csv': 'tools/buildPlayerActionDB.js',

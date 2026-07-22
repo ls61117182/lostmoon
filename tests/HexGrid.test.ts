@@ -28,6 +28,7 @@ import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
 import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit, isWithinOwnVisionRange } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
+import { shouldNonPlayerTankOpenCommanderHatch } from '../assets/scripts/core/CommanderHatch';
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest } from '../assets/scripts/core/FireCheck';
 import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, canMGAttack, effectivePenetration, effectivePenetrationBreakdown, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
@@ -180,11 +181,11 @@ describe('Effective range penetration', () => {
   const unitAt = (id: string, q: number, penetration: number, effectiveRange: number): Unit => ({
     id,
     kind: 'panzer4',
-    faction: id === 'attacker' ? 'allied' : 'german',
+    faction: id === 'attacker' ? 'usa' : 'german',
     pos: { q, r: 0 },
     facing: 0,
     stats: {
-      faction: id === 'attacker' ? 'allied' : 'german',
+      faction: id === 'attacker' ? 'usa' : 'german',
       size: 4,
       armorFront: 10,
       armorFrontSide: 9,
@@ -267,11 +268,11 @@ describe('Hardcore twelve-direction turret fire', () => {
   const tankAt = (id: string, q: number, r: number, facing: Direction = 0): Unit => ({
     id,
     kind: 'panzer4',
-    faction: id === 'attacker' ? 'allied' : 'german',
+    faction: id === 'attacker' ? 'usa' : 'german',
     pos: { q, r },
     facing,
     stats: {
-      faction: id === 'attacker' ? 'allied' : 'german',
+      faction: id === 'attacker' ? 'usa' : 'german',
       size: 4,
       armorFront: 10,
       armorFrontSide: 9,
@@ -442,6 +443,7 @@ describe('Hardcore twelve-direction turret fire', () => {
     const attacker = tankAt('attacker', 1, -1);
     const target = tankAt('target', 0, 0, 0);
     target.crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
+    target.hatchOpen = true;
     const map = fieldMap(-1, 1);
     const rng = rngFrom(6, 6, 6, 6, 1);
     const report = rollAttack({
@@ -459,6 +461,9 @@ describe('Hardcore twelve-direction turret fire', () => {
     expect(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot).toBe(3);
     expect(target.fireLevel).toBe(1);
     expect(target.crew!.gunner).toBe(false);
+    expect(report.commanderKilledByHitDoubles).toBe(true);
+    expect(target.crew!.commander).toBe(false);
+    expect(target.hatchOpen).toBe(false);
     expect(target.damaged).toBeFalsy();
   });
 
@@ -535,7 +540,7 @@ describe('Hardcore twelve-direction turret fire', () => {
     const attacker = tankAt('attacker', 0, 1);
     const target = tankAt('target', 0, 0, 0);
     target.kind = 'sherman';
-    target.faction = 'allied';
+    target.faction = 'usa';
     target.crew = { commander: true, loader: true, gunner: false, driver: true, coDriver: true };
     const map = fieldMap(-1, 1);
     const report = rollAttack({
@@ -560,7 +565,7 @@ describe('Hardcore twelve-direction turret fire', () => {
     const attacker = tankAt('attacker', -1, 0);
     const target = tankAt('target', 0, 0, 0);
     target.kind = 'sherman';
-    target.faction = 'allied';
+    target.faction = 'usa';
     target.crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
     const map = fieldMap(-1, 1);
     const ctx = {
@@ -717,13 +722,31 @@ describe('战争迷雾玩家视野', () => {
   const shermanAt = (col: number, row: number, facing: Direction, hatchOpen: boolean): Unit => ({
     id: 'sherman',
     kind: 'sherman',
-    faction: 'allied',
+    faction: 'usa',
     pos: offsetToAxial({ col, row }),
     facing,
     stats: {} as Unit['stats'],
     hatchOpen,
     visionRange: 4,
     crew: { commander: true, loader: true, gunner: true, driver: true, coDriver: true },
+  });
+
+  test('hardcore AI tanks only open a commander hatch when their faction has none open, unless on fire', () => {
+    const protagonist = shermanAt(2, 2, 0, false);
+    const ally = { ...shermanAt(3, 2, 0, false), id: 'ally', kind: 'sherman76' as const };
+    const enemy = { ...shermanAt(4, 2, 0, false), id: 'enemy', kind: 'panzer4' as const, faction: 'german' as const };
+
+    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'classic')).toBe(false);
+    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(true);
+
+    protagonist.hatchOpen = true;
+    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(false);
+
+    ally.fireLevel = 1;
+    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(true);
+
+    ally.crew!.commander = false;
+    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(false);
   });
 
   test('精确射击只在最终命中阈值上应用 -2', () => {
@@ -995,6 +1018,26 @@ describe('战争迷雾玩家视野', () => {
     infantry.radioDamaged = true;
     expect(hasRadioReceive(infantry)).toBe(false);
     expect(hasRadioTransmit(infantry)).toBe(false);
+  });
+
+  test('non-radio infantry shares sight only with a friendly tank in the same hex', () => {
+    const map = new HexMap(9, 9);
+    addRect(map, 9, 9);
+    const receiver = shermanAt(2, 4, 0, false);
+    receiver.visionRange = 1;
+    const infantry = shermanAt(2, 4, 0, false);
+    infantry.id = 'soviet_infantry';
+    infantry.kind = 'soviet_infantry';
+    infantry.faction = 'soviet';
+    infantry.facing = null;
+    infantry.crew = undefined;
+    infantry.stats = { ...infantry.stats, hasRadio: false, visionType: 'infantry', visionRange: 2 };
+    const infantrySight = neighbor(neighbor(receiver.pos, 2), 2);
+    const remoteTank = shermanAt(7, 4, 0, false);
+    remoteTank.id = 'remote';
+
+    expect(computeRadioSharedVisibleHexes(map, receiver, [infantry]).has(HexMap.keyOf(infantrySight))).toBe(true);
+    expect(computeRadioSharedVisibleHexes(map, remoteTank, [receiver, infantry]).has(HexMap.keyOf(infantrySight))).toBe(false);
   });
 });
 

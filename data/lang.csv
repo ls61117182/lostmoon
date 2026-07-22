@@ -246,11 +246,15 @@ actor.sherman,谢尔曼,Sherman
 actor.enemyPrefix,敌方 {name},Enemy {name}
 actor.allyPrefix,友军 {name},Allied {name}
 unit.name.sherman,谢尔曼,Sherman
+unit.name.sherman76,谢尔曼 76,Sherman 76
+unit.name.t34,T-34/76,T-34/76
 unit.name.tiger,虎式,Tiger
 unit.name.panzer4,四号,Panzer IV
 unit.name.panzer3,三号,Panzer III
 unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
+unit.name.german_infantry,德军步兵,German Infantry
+unit.name.soviet_infantry,苏军步兵,Soviet Infantry
 unit.name.officer,军官,Officer
 unit.name.type95,九五式,Type 95 Ha-Go
 unit.name.type97,九七式,Type 97 Chi-Ha

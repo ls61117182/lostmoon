@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="92" height="52" viewBox="0 0 92 52">
+  <defs>
+    <linearGradient id="paint" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8b9261"/>
+      <stop offset="0.48" stop-color="#6d7447"/>
+      <stop offset="1" stop-color="#4b5233"/>
+    </linearGradient>
+  </defs>
+  <g stroke="#20241b" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path fill="#5f673f" d="M1 24 L23 24 L23 28 L1 28 Z"/>
+    <path fill="#818957" d="M2 25 L23 25 L23 27 L2 27 Z" stroke="none"/>
+    <path fill="#464c30" d="M22 20 L30 20 L34 23 L34 29 L30 32 L22 32 Z"/>
+    <path fill="url(#paint)" d="M29 21 C31 16 35 13 41 10 C48 6 59 7 68 10 C76 12 81 17 83 22 C85 27 82 33 77 37 C70 42 61 45 51 45 C42 45 35 41 31 36 C28 32 27 26 29 21 Z"/>
+    <path fill="none" stroke="#a8ad74" stroke-width="1" d="M33 20 C37 14 45 10 54 10 C65 10 74 14 79 20"/>
+    <path fill="#626a43" d="M26 19 L32 19 L35 22 L35 30 L32 33 L26 33 Z"/>
+    <path fill="#939966" d="M27 21 L31 21 L33 23 L33 29 L31 31 L27 31 Z" stroke="none"/>
+    <path fill="#515938" d="M46 15 L52 15 L53 17 L53 21 L51 22 L46 22 L45 20 L45 17 Z"/>
+    <path fill="#89905d" stroke="#303522" stroke-width="1" d="M47 16 L51 16 L52 17 L52 20 L51 21 L47 21 L46 20 L46 17 Z"/>
+    <path fill="#424930" d="M58 33 L62 33 L63 35 L62 37 L58 37 L57 35 Z"/>
+  </g>
+</svg>

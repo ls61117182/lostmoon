@@ -36,7 +36,7 @@ const segA = {
   cols: 2,
   rows: 1,
   tiles: [[{ t: 'c', eid: 1, rid: 1 }, { t: 'c', eid: 2, rid: 2 }]],
-  sherman: { kind: 'sherman', faction: 'allied', at: { col: 0, row: 0 }, facing: 0, loaded: true, hatchOpen: true },
+  sherman: { kind: 'sherman', faction: 'usa', at: { col: 0, row: 0 }, facing: 0, loaded: true, hatchOpen: true },
   enemies: [{ kind: 'at_gun', faction: 'japanese', at: { col: 1, row: 0 }, facing: 3 }],
   objective: { type: 'destroy_kind_evac', kind: 'at_gun', evacAt: { col: 1, row: 0 }, evacExitDir: 1 },
   eventTableId: 'seg_a_events',
@@ -53,7 +53,7 @@ const segB = {
     [{ t: 'c', eid: 1, rid: 1 }, { t: 'T', eid: 2, rid: 2 }, { t: 'c', eid: 3, rid: 3 }],
     [{ t: 'f' }, null, null],
   ],
-  sherman: { kind: 'sherman', faction: 'allied', at: { col: 0, row: 0 }, facing: 0 },
+  sherman: { kind: 'sherman', faction: 'usa', at: { col: 0, row: 0 }, facing: 0 },
   enemies: [{ kind: 'type95', faction: 'japanese', at: { col: 2, row: 0 }, facing: 3 }],
   objective: { type: 'destroy_all_enemies' },
   eventTableId: 'seg_b_events',
@@ -94,7 +94,7 @@ assert.strictEqual(runtime.campaignSegmentForOffset(stitched, { col: 1, row: 2 }
 
 const carried = runtime.carryShermanToNextSegment({
   kind: 'sherman',
-  faction: 'allied',
+  faction: 'usa',
   at: { col: 9, row: 9 },
   facing: 5,
   turretFacing: 7,
@@ -126,7 +126,7 @@ function overlapMission(id, tile, shermanAt) {
     cols: 2,
     rows: 1,
     tiles: [[tile, null]],
-    sherman: { kind: 'sherman', faction: 'allied', at: shermanAt, facing: 0 },
+    sherman: { kind: 'sherman', faction: 'usa', at: shermanAt, facing: 0 },
     enemies: [],
     objective: { type: 'destroy_all_enemies', evacAt: { col: 0, row: 0 }, evacExitDir: 0 },
   };

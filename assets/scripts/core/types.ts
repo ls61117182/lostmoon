@@ -102,19 +102,28 @@ export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType
 }
 
 // ---------- 单位 ----------
-export type Faction = 'allied' | 'german' | 'japanese';
+export type Faction = 'usa' | 'soviet' | 'german' | 'japanese';
+
+/** 美军与苏军在战斗中属于同一友方阵线，但保留独立阵营身份。 */
+export function isFriendlyFaction(faction: Faction): boolean {
+  return faction === 'usa' || faction === 'soviet';
+}
 
 export type Theater = 'europe' | 'pacific';
 export type WeatherType = 'clear' | 'rain';
 
 export type UnitKind =
   | 'sherman'
+  | 'sherman76'
+  | 't34'
   | 'tiger'
   | 'panzer4'
   | 'stug3'
   | 'panzer3'
   | 'truck'
   | 'infantry'
+  | 'german_infantry'
+  | 'soviet_infantry'
   | 'type95'
   | 'type97'
   | 'at_gun'
@@ -137,6 +146,8 @@ export type UnitKind =
  */
 export function isFootKind(kind: UnitKind): boolean {
   return kind === 'infantry'
+    || kind === 'german_infantry'
+    || kind === 'soviet_infantry'
     || kind === 'officer'
     || kind === 'japanese_infantry'
     || kind === 'american_infantry';
@@ -148,6 +159,8 @@ export function isFootUnit(u: { kind: UnitKind }): boolean {
 
 export function isTankKind(kind: UnitKind): boolean {
   return kind === 'sherman'
+    || kind === 'sherman76'
+    || kind === 't34'
     || kind === 'tiger'
     || kind === 'panzer4'
     || kind === 'stug3'
@@ -179,6 +192,7 @@ export interface UnitStats {
   usCasualtyDice: number;
   moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
+  commanderSpritePath?: string; // 车长打开舱盖时使用的 resources SpriteFrame 路径；空字符串或未配置表示不显示
   infantryTankCoordination: number; // 给同格步兵提供的步坦协同命中修正；0 表示不提供
   visionType: VisionType;   // 炮塔视野 / 车体正面视野 / 步兵环形视野
   damageTargetClass?: string; // 受击目标类别；硬核模式下直接读取 damage_table.csv 的 targetClass

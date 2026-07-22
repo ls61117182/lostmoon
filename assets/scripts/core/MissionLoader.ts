@@ -11,6 +11,7 @@ import {
   Axial,
   DEFAULT_VISION_RANGE,
   Direction,
+  Faction,
   isFootKind,
   isTankKind,
   MissionData,
@@ -639,6 +640,8 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }
   const stats = getUnitStats(p.kind, currentMissionTheater ?? 'europe');
+  // 旧关卡 JSON 以 allied 记录美军单位；运行时迁移为新的精确阵营，保持旧任务可加载。
+  const placementFaction = p.faction === ('allied' as unknown as Faction) ? 'usa' : p.faction;
   /** 朝向仅 0..5（E…NE）。关卡 JSON 误填 6 或负数时归一，避免 neighbor → axialAdd 读 undefined.q 崩溃。 */
   let facingNorm: Direction | null = p.facing ?? null;
   if (facingNorm !== null) {
@@ -648,11 +651,13 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
   const u: Unit = {
     id,
     kind: p.kind,
-    faction: p.faction ?? stats.faction,
+    faction: placementFaction ?? stats.faction,
     pos: offsetToAxial(p.at, rowParityOffset),
     facing: facingNorm,
     stats,
-    hatchOpen: false,
+    // The protagonist always starts a newly loaded mission with the hatch open.
+    // Other tanks remain closed unless their placement explicitly opts in.
+    hatchOpen: id === 'sherman_player',
     visionRange: stats.visionRange,
   };
   if (stats.visionType === 'turreted' && u.facing !== null) {
@@ -682,7 +687,9 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
         if (v === false || v === true) u.crew![slot] = v;
       }
     }
-    u.hatchOpen = !!p.hatchOpen;
+    // Preserve explicit mission placement values, while keeping the player's
+    // default open hatch across every game mode.
+    u.hatchOpen = p.hatchOpen ?? id === 'sherman_player';
   }
   if (p.kind === 'sherman') {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;

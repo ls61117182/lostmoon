@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'tiger', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'at_gun', 'heavy_artillery', 'truck'];
-const SPLIT_KINDS = ['sherman', 'tiger', 'panzer4', 'panzer3', 'type97', 'type95'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'at_gun', 'heavy_artillery', 'truck'];
+const SPLIT_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'panzer4', 'panzer3', 'type97', 'type95'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',
@@ -190,10 +190,14 @@ function build() {
   lines.push('');
   lines.push("import { UnitKind } from './types';");
   lines.push('');
-  lines.push("export type TankVisualKind = Extract<UnitKind, 'sherman' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;");
-  lines.push("export type SplitTankKind = Extract<UnitKind, 'sherman' | 'tiger' | 'panzer4' | 'panzer3' | 'type97' | 'type95'>;");
-  lines.push('export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'stug3\', \'panzer3\', \'type97\', \'type95\', \'at_gun\', \'heavy_artillery\', \'truck\'];');
-  lines.push('export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [\'sherman\', \'tiger\', \'panzer4\', \'panzer3\', \'type97\', \'type95\'];');
+  const tankVisualType = REQUIRED_KINDS.map(kind => `'${kind}'`).join(' | ');
+  const splitTankType = SPLIT_KINDS.map(kind => `'${kind}'`).join(' | ');
+  const tankVisualKinds = REQUIRED_KINDS.map(kind => `'${kind}'`).join(', ');
+  const splitTankKinds = SPLIT_KINDS.map(kind => `'${kind}'`).join(', ');
+  lines.push(`export type TankVisualKind = Extract<UnitKind, ${tankVisualType}>;`);
+  lines.push(`export type SplitTankKind = Extract<UnitKind, ${splitTankType}>;`);
+  lines.push(`export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [${tankVisualKinds}];`);
+  lines.push(`export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [${splitTankKinds}];`);
   lines.push('');
   lines.push('export interface TankVisualAssetConfig {');
   lines.push('  topSpritePath: string;');
@@ -279,7 +283,7 @@ function build() {
   lines.push('}');
   lines.push('');
   lines.push('export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {');
-  lines.push("  if (kind === 'sherman' || kind === 'tiger' || kind === 'panzer4' || kind === 'stug3' || kind === 'panzer3' || kind === 'type97' || kind === 'at_gun' || kind === 'heavy_artillery' || kind === 'truck') {");
+  lines.push(`  if (${REQUIRED_KINDS.map(kind => `kind === '${kind}'`).join(' || ')}) {`);
   lines.push('    return TANK_VISUAL_CONFIG[kind];');
   lines.push('  }');
   lines.push('  return TANK_VISUAL_DEFAULT;');

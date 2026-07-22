@@ -51,6 +51,7 @@ import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
 import { normalizeWeather } from '../core/Weather';
+import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
 import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import {
@@ -1260,6 +1261,9 @@ export class MainMenuScene extends Component {
       topH: number;
       hull: SpriteFrame | null;
       turret: SpriteFrame | null;
+      destroyed: SpriteFrame | null;
+      destroyedW: number;
+      destroyedH: number;
     }> = {};
     const drafts: Record<string, TankVisualDebugDraft> = {};
     const hexR = 185;
@@ -1270,11 +1274,8 @@ export class MainMenuScene extends Component {
     let lastPivot = { x: 0, y: 0 };
     let showMuzzleFlash = false;
     let showCommanderHatch = false;
-    const commanderHatchFrames: Record<'allied' | 'german' | 'japanese', SpriteFrame | null> = {
-      allied: null,
-      german: null,
-      japanese: null,
-    };
+    let showDestroyed = false;
+    const commanderHatchFrames: Record<string, SpriteFrame | null> = {};
     const tankButtons: ButtonRefs[] = [];
 
     const makeDraft = (kind: TankVisualKind): TankVisualDebugDraft => {
@@ -1304,7 +1305,16 @@ export class MainMenuScene extends Component {
 
     for (const kind of TANK_VISUAL_KINDS) {
       drafts[kind] = makeDraft(kind);
-      frames[kind] = { top: null, topW: 0, topH: 0, hull: null, turret: null };
+      frames[kind] = {
+        top: null,
+        topW: 0,
+        topH: 0,
+        hull: null,
+        turret: null,
+        destroyed: null,
+        destroyedW: 0,
+        destroyedH: 0,
+      };
       const assets = tankVisualAssetConfigOf(kind);
       if (assets.topSpritePath) {
         resources.load(assets.topSpritePath, SpriteFrame, (err, sf) => {
@@ -1328,15 +1338,25 @@ export class MainMenuScene extends Component {
           if (kind === selectedKind) refreshPreview();
         });
       }
+      if (assets.destroyedSpritePath) {
+        resources.load(assets.destroyedSpritePath, SpriteFrame, (err, sf) => {
+          if (!err && sf) {
+            frames[kind]!.destroyed = sf;
+            frames[kind]!.destroyedW = sf.rect.width > 0 ? sf.rect.width : sf.width;
+            frames[kind]!.destroyedH = sf.rect.height > 0 ? sf.rect.height : sf.height;
+          }
+          if (kind === selectedKind) refreshPreview();
+        });
+      }
     }
-    const commanderSpritePaths: Array<[keyof typeof commanderHatchFrames, string]> = [
-      ['allied', 'textures/units/sherman_commander_hatch_open_v2/spriteFrame'],
-      ['german', 'textures/units/german_commander_hatch_open/spriteFrame'],
-      ['japanese', 'textures/units/japanese_commander_hatch_open/spriteFrame'],
-    ];
-    for (const [faction, path] of commanderSpritePaths) {
+    const commanderSpritePaths = new Set(
+      SPLIT_TANK_KINDS
+        .map((kind) => getUnitStats(kind).commanderSpritePath ?? '')
+        .filter((path) => !!path),
+    );
+    for (const path of commanderSpritePaths) {
       resources.load(path, SpriteFrame, (err, sf) => {
-        if (!err && sf) commanderHatchFrames[faction] = sf;
+        if (!err && sf) commanderHatchFrames[path] = sf;
         refreshPreview();
       });
     }
@@ -1380,21 +1400,28 @@ export class MainMenuScene extends Component {
     });
     hatchBtn.label = this.makeLabel(hatchBtn.node, '打开舱盖', 0, 0, 126, 22, 15, TEXT_PRIMARY);
 
+    const destroyedBtn = this.makeRectButton(stage, -92, 248, 150, 30, MODE_BTN_IDLE, () => {
+      showDestroyed = !showDestroyed;
+      refreshDestroyedButton();
+      refreshPreview();
+    });
+    destroyedBtn.label = this.makeLabel(destroyedBtn.node, '正常状态', 0, 0, 126, 22, 15, TEXT_PRIMARY);
+
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
-    listPanel.addComponent(UITransform).setContentSize(255, 280);
-    listPanel.setPosition(495, 132, 0);
+    listPanel.addComponent(UITransform).setContentSize(255, 340);
+    listPanel.setPosition(495, 102, 0);
     const listG = listPanel.addComponent(Graphics);
-    drawFieldPanel(listG, 255, 280, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    drawFieldPanel(listG, 255, 340, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
     panel.addChild(listPanel);
-    this.makeLabel(listPanel, '坦克列表', 0, 112, 180, 28, 20, TEXT_TITLE);
+    this.makeLabel(listPanel, '坦克列表', 0, 142, 180, 28, 20, TEXT_TITLE);
 
     for (let i = 0; i < TANK_VISUAL_KINDS.length; i++) {
       const kind = TANK_VISUAL_KINDS[i]!;
       const col = i % 2;
       const row = Math.floor(i / 2);
       const x = -58 + col * 116;
-      const y = 70 - row * 52;
+      const y = 100 - row * 50;
       const btn = this.makeRectButton(listPanel, x, y, 104, 38, BTN_LEVEL_UNLOCKED, () => {
         selectedKind = kind;
         bodyAngleDeg = 0;
@@ -1509,6 +1536,14 @@ export class MainMenuScene extends Component {
       if (hatchBtn.label) {
         hatchBtn.label.string = showCommanderHatch ? '关闭舱盖' : '打开舱盖';
         hatchBtn.label.color = showCommanderHatch ? TEXT_TITLE : TEXT_PRIMARY;
+      }
+    }
+
+    function refreshDestroyedButton() {
+      destroyedBtn.redraw(showDestroyed ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: showDestroyed });
+      if (destroyedBtn.label) {
+        destroyedBtn.label.string = showDestroyed ? '击毁状态' : '正常状态';
+        destroyedBtn.label.color = showDestroyed ? TEXT_TITLE : TEXT_PRIMARY;
       }
     }
 
@@ -1688,6 +1723,47 @@ export class MainMenuScene extends Component {
       turretAngleLabel.string = `炮塔 ${Math.round(normalizeAngleDeg(turretAngleDeg))}°`;
       lastPivot = { x: 0, y: 0 };
 
+      if (showDestroyed && loaded.destroyed) {
+        const sf = loaded.destroyed;
+        const displayW = loaded.destroyedW > 0 ? loaded.destroyedW : sf.width;
+        const displayH = loaded.destroyedH > 0 ? loaded.destroyedH : sf.height;
+        let w: number;
+        let h: number;
+        if (splitKindSet.has(selectedKind)) {
+          const geometry = splitTankGeometryConfigOf(selectedKind as SplitTankKind);
+          const fit = hexR * 1.8 * Math.max(0.001, draft.hullFitScale);
+          const hullScale = fit / (Math.max(geometry.topTrim.w, geometry.topTrim.h) || 1);
+          const scale = (geometry.topTrim.h * hullScale) / (displayH || 1);
+          w = displayW * scale;
+          h = displayH * scale;
+        } else {
+          const fit = hexR * 1.8 * Math.max(0.001, draft.fitScale);
+          const scale = fit / (Math.max(displayW, displayH) || 1);
+          const k = Math.sqrt(Math.max(0.001, draft.aspectRatioMul));
+          w = displayW * scale * k;
+          h = displayH * scale / k;
+        }
+        const cfg = tankVisualConfigOf(selectedKind);
+        const f = (splitKindSet.has(selectedKind) ? draft.hullOffsetForward : draft.offsetForward) * offsetUnit
+          + cfg.destroyedOffsetForward;
+        const r = (splitKindSet.has(selectedKind) ? draft.hullOffsetRight : draft.offsetRight) * offsetUnit
+          + cfg.destroyedOffsetRight;
+        addSprite(
+          previewRoot,
+          sf,
+          w,
+          h,
+          f * body.ux + r * body.uy,
+          f * body.uy + r * (-body.ux),
+          body.deg + 180,
+          0.5,
+          0.5,
+          'body',
+        );
+        statusLabel.string = '击毁状态预览；显示战斗界面使用的残骸贴图。';
+        return;
+      }
+
       if (splitKindSet.has(selectedKind) && loaded.hull && loaded.turret) {
         const kind = selectedKind as SplitTankKind;
         const geometry = splitTankGeometryConfigOf(kind);
@@ -1729,12 +1805,7 @@ export class MainMenuScene extends Component {
           anchorY,
           'turret',
         );
-        const commanderFaction = selectedKind === 'type95' || selectedKind === 'type97'
-          ? 'japanese'
-          : selectedKind === 'sherman'
-            ? 'allied'
-            : 'german';
-        const commanderHatchFrame = commanderHatchFrames[commanderFaction];
+        const commanderHatchFrame = commanderHatchFrames[getUnitStats(selectedKind).commanderSpritePath ?? ''];
         if (showCommanderHatch && commanderHatchFrame && draft.commanderHatchScale > 0) {
           // Keep this transform identical to BattleScene: the hatch is at (31, 6)
           // in the source turret and rotates around the same turret pivot.
@@ -1821,6 +1892,7 @@ export class MainMenuScene extends Component {
     refreshKindButtons();
     refreshFlashButton();
     refreshHatchButton();
+    refreshDestroyedButton();
     rebuildInputs();
     refreshPreview();
   }
@@ -2468,7 +2540,7 @@ export class MainMenuScene extends Component {
     let draftTiles: EditorTile[][] = this.cloneEditorTiles(existingPackage?.mission.tiles, rows, cols);
     const defaultSherman = (): UnitPlacement => ({
       kind: 'sherman',
-      faction: 'allied',
+      faction: 'usa',
       at: { col: 1, row: 5 },
       facing: 0,
     });
@@ -2494,6 +2566,8 @@ export class MainMenuScene extends Component {
     let editorTab: 'terrain' | 'tile' | 'mission' | 'units' = 'terrain';
     let unitKindPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
     let unitRandomPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
+    let unitListScrollStart = 0;
+    let unitKindPickerScrollStart = 0;
     let titleInput: EditBox | null = null;
     let descInput: EditBox | null = null;
     let selectedTool: TerrainTool | null = null;
@@ -2532,12 +2606,16 @@ export class MainMenuScene extends Component {
     const selectedOffset = () => ({ col: selectedCol, row: selectedRow });
     const unitKindLabels: Record<UnitKind, string> = {
       sherman: 'Sherman',
+      sherman76: 'Sherman 76',
+      t34: 'T-34/76',
       tiger: 'Tiger',
       panzer4: 'Pz IV',
       stug3: 'StuG III',
       panzer3: 'Pz III',
       truck: 'Truck',
       infantry: 'Infantry',
+      german_infantry: 'German Inf',
+      soviet_infantry: 'Soviet Inf',
       type95: 'Type95',
       type97: 'Type97',
       at_gun: 'AT Gun',
@@ -2546,9 +2624,10 @@ export class MainMenuScene extends Component {
       heavy_artillery: 'Artillery',
       officer: 'Officer',
     };
-    const allUnitKinds: UnitKind[] = ['sherman', 'american_infantry', 'panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
-    const enemyKinds: UnitKind[] = ['panzer3', 'panzer4', 'stug3', 'tiger', 'truck', 'infantry', 'officer', 'type95', 'type97', 'japanese_infantry', 'at_gun', 'heavy_artillery'];
-    const allyKinds: UnitKind[] = ['sherman', 'american_infantry'];
+    // Keep editor choices in sync with data/units.csv (via the generated UnitDB).
+    const allUnitKinds = getAllUnitKinds();
+    const enemyKinds = allUnitKinds.filter(kind => getUnitStats(kind).faction !== 'usa' && getUnitStats(kind).faction !== 'soviet');
+    const allyKinds = allUnitKinds.filter(kind => getUnitStats(kind).faction === 'usa' || getUnitStats(kind).faction === 'soviet');
     const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge', 'destroy_truck'];
     const objectiveTypeLabels: Record<MissionObjective['type'], string> = {
       destroy_all_enemies: '击毁所有单位',
@@ -2846,7 +2925,7 @@ export class MainMenuScene extends Component {
           this.makeLabel(propRoot, `当前格 ${selectedCol},${selectedRow}`, 0, 152, 190, 24, 16, TEXT_TITLE);
           addPlainBtn(`谢尔曼 ${draftSherman.at ? `${draftSherman.at.col},${draftSherman.at.row}` : '骰子'}`, -60, 116, 128, 26, true, () => {
             draftSherman.at = selectedOffset();
-            draftSherman.faction = 'allied';
+            draftSherman.faction = 'usa';
             draftSherman.kind = 'sherman';
           }, 12);
           addPlainBtn(`朝向 ${draftSherman.facing ?? '-'}`, 76, 116, 78, 26, draftSherman.facing !== undefined, () => {
@@ -2866,12 +2945,16 @@ export class MainMenuScene extends Component {
             draftEnemies.push({ ...defaultEnemy(), at: selectedOffset() });
           }, 12);
           addPlainBtn('新增友军', 104, 18, 82, 24, false, () => {
-            draftAllies.push({ kind: 'sherman', faction: 'allied', at: selectedOffset(), facing: 0 });
+            draftAllies.push({ kind: 'sherman', faction: 'usa', at: selectedOffset(), facing: 0 });
           }, 12);
-          const units = [
+          const allUnits = [
             ...draftEnemies.map((unit, index) => ({ unit, index, group: 'enemy' as const })),
             ...draftAllies.map((unit, index) => ({ unit, index, group: 'ally' as const })),
-          ].slice(0, 6);
+          ];
+          const visibleUnitRows = 6;
+          const maxUnitListScroll = Math.max(0, allUnits.length - visibleUnitRows);
+          unitListScrollStart = Math.max(0, Math.min(unitListScrollStart, maxUnitListScroll));
+          const units = allUnits.slice(unitListScrollStart, unitListScrollStart + visibleUnitRows);
           for (let i = 0; i < units.length; i++) {
             const item = units[i]!;
             const y = -14 - i * 30;
@@ -2899,7 +2982,14 @@ export class MainMenuScene extends Component {
               else draftEnemies.splice(item.index, 1);
             }, 12);
           }
-          if (draftEnemies.length + draftAllies.length > units.length) {
+          if (maxUnitListScroll > 0) {
+            addPlainBtn('▲', 150, -42, 24, 24, false, () => {
+              unitListScrollStart = Math.max(0, unitListScrollStart - 1);
+            }, 14);
+            addPlainBtn('▼', 150, -164, 24, 24, false, () => {
+              unitListScrollStart = Math.min(maxUnitListScroll, unitListScrollStart + 1);
+            }, 14);
+            this.makeLabel(propRoot, `${unitListScrollStart + 1}-${unitListScrollStart + units.length}/${allUnits.length}`, 142, -105, 42, 20, 10, TEXT_SUBTITLE);
             this.makeLabel(propRoot, `还有 ${draftEnemies.length + draftAllies.length - units.length} 个单位未显示`, 0, -210, 220, 20, 11, TEXT_SUBTITLE);
           }
           if (unitKindPickerTarget) {
@@ -2921,10 +3011,16 @@ export class MainMenuScene extends Component {
                 refreshPropertyPanel();
               });
               this.makeLabel(closeBtn.node, 'X', 0, 0, 28, 22, 14, TEXT_PRIMARY);
-              for (let k = 0; k < allUnitKinds.length; k++) {
+              const visibleKindRows = 5;
+              const totalKindRows = Math.ceil(allUnitKinds.length / 2);
+              const maxKindPickerScroll = Math.max(0, totalKindRows - visibleKindRows);
+              unitKindPickerScrollStart = Math.max(0, Math.min(unitKindPickerScrollStart, maxKindPickerScroll));
+              const firstKind = unitKindPickerScrollStart * 2;
+              const lastKind = Math.min(allUnitKinds.length, firstKind + visibleKindRows * 2);
+              for (let k = firstKind; k < lastKind; k++) {
                 const kind = allUnitKinds[k]!;
                 const col = k % 2;
-                const row = Math.floor(k / 2);
+                const row = Math.floor((k - firstKind) / 2);
                 const x = -58 + col * 116;
                 const y = 70 - row * 30;
                 const btn = this.makeRectButton(
@@ -2936,13 +3032,26 @@ export class MainMenuScene extends Component {
                   kind === targetUnit.kind ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
                   () => {
                     targetUnit.kind = kind;
-                    targetUnit.faction = unitKindPickerTarget?.group === 'ally' ? 'allied' : 'german';
+                    targetUnit.faction = getUnitStats(kind).faction;
                     unitKindPickerTarget = null;
                     refreshPropertyPanel();
                   },
                 );
                 const lab = this.makeLabel(btn.node, unitKindLabels[kind], 0, 0, 96, 24, 11, TEXT_PRIMARY);
                 lab.overflow = Label.Overflow.SHRINK;
+              }
+              if (maxKindPickerScroll > 0) {
+                const up = this.makeRectButton(picker, -102, -94, 38, 24, BTN_LEVEL_UNLOCKED, () => {
+                  unitKindPickerScrollStart = Math.max(0, unitKindPickerScrollStart - 1);
+                  refreshPropertyPanel();
+                });
+                this.makeLabel(up.node, '▲', 0, 0, 32, 22, 13, TEXT_PRIMARY);
+                const down = this.makeRectButton(picker, 102, -94, 38, 24, BTN_LEVEL_UNLOCKED, () => {
+                  unitKindPickerScrollStart = Math.min(maxKindPickerScroll, unitKindPickerScrollStart + 1);
+                  refreshPropertyPanel();
+                });
+                this.makeLabel(down.node, '▼', 0, 0, 32, 22, 13, TEXT_PRIMARY);
+                this.makeLabel(picker, `${unitKindPickerScrollStart + 1}-${Math.min(totalKindRows, unitKindPickerScrollStart + visibleKindRows)}/${totalKindRows}`, 0, -94, 100, 20, 10, TEXT_SUBTITLE);
               }
               picker.setSiblingIndex(propRoot.children.length - 1);
             }
@@ -3217,6 +3326,51 @@ export class MainMenuScene extends Component {
       const rawLabel = this.makeLabel(propRoot, raw, 0, -178, 250, 22, 10, TEXT_SUBTITLE);
       rawLabel.overflow = Label.Overflow.SHRINK;
     };
+    let unitListTouchY: number | null = null;
+    const pointInPropertyPanel = (event: EventTouch | EventMouse) => {
+      const point = event.getUILocation();
+      return propRoot.getComponent(UITransform)!.convertToNodeSpaceAR(new Vec3(point.x, point.y, 0));
+    };
+    const scrollUnitList = (delta: number) => {
+      if (editorTab !== 'units' || unitKindPickerTarget || unitRandomPickerTarget || delta === 0) return false;
+      const total = draftEnemies.length + draftAllies.length;
+      const max = Math.max(0, total - 6);
+      const next = Math.max(0, Math.min(max, unitListScrollStart + delta));
+      if (next === unitListScrollStart) return false;
+      unitListScrollStart = next;
+      refreshPropertyPanel();
+      return true;
+    };
+    const scrollUnitKindPicker = (delta: number) => {
+      if (!unitKindPickerTarget || delta === 0) return false;
+      const max = Math.max(0, Math.ceil(allUnitKinds.length / 2) - 5);
+      const next = Math.max(0, Math.min(max, unitKindPickerScrollStart + delta));
+      if (next === unitKindPickerScrollStart) return false;
+      unitKindPickerScrollStart = next;
+      refreshPropertyPanel();
+      return true;
+    };
+    propRoot.on(Node.EventType.TOUCH_START, (event: EventTouch) => {
+      const point = pointInPropertyPanel(event);
+      const inUnitList = editorTab === 'units' && !unitKindPickerTarget && !unitRandomPickerTarget && point.y <= 2 && point.y >= -198;
+      const inKindPicker = !!unitKindPickerTarget && point.y <= 60 && point.y >= -182;
+      unitListTouchY = inUnitList || inKindPicker ? point.y : null;
+    }, this);
+    propRoot.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
+      if (unitListTouchY === null) return;
+      const point = pointInPropertyPanel(event);
+      const delta = unitListTouchY - point.y;
+      if (Math.abs(delta) < 20) return;
+      unitListTouchY = point.y;
+      const direction = delta > 0 ? 1 : -1;
+      if ((unitKindPickerTarget ? scrollUnitKindPicker(direction) : scrollUnitList(direction))) event.propagationStopped = true;
+    }, this);
+    propRoot.on(Node.EventType.TOUCH_END, () => { unitListTouchY = null; }, this);
+    propRoot.on(Node.EventType.TOUCH_CANCEL, () => { unitListTouchY = null; }, this);
+    propRoot.on(Node.EventType.MOUSE_WHEEL, (event: EventMouse) => {
+      const direction = event.getScrollY() > 0 ? -1 : 1;
+      if ((unitKindPickerTarget ? scrollUnitKindPicker(direction) : scrollUnitList(direction))) event.propagationStopped = true;
+    }, this);
     const gridViewportW = 800;
     const gridViewportH = 480;
     const gridViewport = new Node('EditorGridViewport');
@@ -4201,6 +4355,8 @@ function readSaveSafe(): SaveData | null {
 function tankVisualAssetName(kind: TankVisualKind): string {
   switch (kind) {
     case 'sherman': return 'Sherman';
+    case 'sherman76': return 'Sherman 76';
+    case 't34': return 'T-34/76';
     case 'tiger': return 'Tiger';
     case 'panzer4': return 'Panzer IV';
     case 'panzer3': return 'Panzer III';

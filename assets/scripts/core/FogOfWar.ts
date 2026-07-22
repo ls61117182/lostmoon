@@ -1,6 +1,6 @@
 import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, isTankUnit, Unit, WeatherType } from './types';
+import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
 
 const GEOMETRY_HEX_SIZE = 1;
@@ -97,6 +97,11 @@ export function hasRadioTransmit(unit: Unit): boolean {
   return isTankUnit(unit) ? unit.crew?.commander !== false : true;
 }
 
+function shareVisionFaction(a: Unit, b: Unit): boolean {
+  return a.faction === b.faction
+    || (isFriendlyFaction(a.faction) && isFriendlyFaction(b.faction));
+}
+
 export function computeRadioSharedVisibleHexes(
   map: HexMap,
   receiver: Unit,
@@ -104,10 +109,25 @@ export function computeRadioSharedVisibleHexes(
   weather?: WeatherType,
 ): Set<string> {
   const visible = computeUnitVisibleHexes(map, receiver, weather);
-  if (!hasRadioReceive(receiver)) return visible;
-  for (const friendly of friendlies) {
-    if (friendly === receiver || friendly.faction !== receiver.faction || !hasRadioTransmit(friendly)) continue;
-    for (const key of computeUnitVisibleHexes(map, friendly, weather)) visible.add(key);
+  if (hasRadioReceive(receiver)) {
+    for (const friendly of friendlies) {
+      if (friendly === receiver || !shareVisionFaction(friendly, receiver) || !hasRadioTransmit(friendly)) continue;
+      for (const key of computeUnitVisibleHexes(map, friendly, weather)) visible.add(key);
+    }
+  }
+  // Non-radio infantry can brief only the tank occupying the same hex. Their
+  // sight is merged directly here, never treated as a radio transmission, so
+  // another tank cannot relay it through its intact radio.
+  if (isTankUnit(receiver)) {
+    for (const friendly of friendlies) {
+      if (friendly === receiver
+        || friendly.destroyed
+        || !isFootUnit(friendly)
+        || friendly.stats.hasRadio !== false
+        || !shareVisionFaction(friendly, receiver)
+        || !axialEquals(friendly.pos, receiver.pos)) continue;
+      for (const key of computeUnitVisibleHexes(map, friendly, weather)) visible.add(key);
+    }
   }
   return visible;
 }

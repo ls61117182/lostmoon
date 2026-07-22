@@ -31,7 +31,7 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { Axial, CrewSlot, isFootUnit, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { Axial, CrewSlot, isFootUnit, isFriendlyFaction, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
@@ -106,7 +106,7 @@ export interface AttackReport {
   stagedCrewCheck?: CrewDeathResult;
   /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值。 */
   crewCheck?: CrewDeathResult;
-  /** Enemy hit-roll doubles kill an open-hatch protagonist commander on a successful hit. */
+  /** Matching hit dice kill the commander of any open-hatch tank on a successful hit. */
   commanderKilledByHitDoubles?: boolean;
   /** 本次伤害是否按主角受伤表结算；用于 applyAttack 区分同型号队友。 */
   protagonistTarget?: boolean;
@@ -180,7 +180,7 @@ function isPacificCombat(ctx: AttackContext): boolean {
 
 function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: number): boolean {
   return ctx.attacker.faction !== ctx.target.faction
-    && isProtagonistTarget(ctx)
+    && isTankUnit(ctx.target)
     && d1 === d2
     && !!ctx.target.hatchOpen
     && !!ctx.target.crew?.commander;
@@ -376,7 +376,7 @@ function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfi
   if (protagonistTarget) return 'protagonist';
   if (useConfiguredClass && target.stats.damageTargetClass) return target.stats.damageTargetClass as DamageTargetClass;
   if (!isTankUnit(target)) return null;
-  return target.faction === 'allied' ? 'us_tank' : 'german_tank';
+  return isFriendlyFaction(target.faction) ? 'us_tank' : 'german_tank';
 }
 
 function crewRoleSlot(role: DamageTableCrewRole): CrewSlot {
