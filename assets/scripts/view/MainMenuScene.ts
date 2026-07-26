@@ -52,6 +52,7 @@ import { loginServer, registerServer, ServerProfile, syncServerProfile } from '.
 import { readActiveSaveRaw } from '../core/SaveSlot';
 import { normalizeWeather } from '../core/Weather';
 import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
+import { isFootKind, isTankKind } from '../core/types';
 import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import {
@@ -2808,6 +2809,7 @@ export class MainMenuScene extends Component {
           const btn = this.makeRectButton(propRoot, x, y, w, h, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
             captureMissionFields();
             onClick();
+            redrawAllCells();
             refreshPropertyPanel();
           });
           const lab = this.makeLabel(btn.node, text, 0, 0, w - 8, h, fontSize, TEXT_PRIMARY);
@@ -3034,6 +3036,7 @@ export class MainMenuScene extends Component {
                     targetUnit.kind = kind;
                     targetUnit.faction = getUnitStats(kind).faction;
                     unitKindPickerTarget = null;
+                    redrawAllCells();
                     refreshPropertyPanel();
                   },
                 );
@@ -3081,6 +3084,7 @@ export class MainMenuScene extends Component {
                 targetUnit.at = selectedOffset();
                 targetUnit.facing = targetUnit.facing ?? 0;
                 unitRandomPickerTarget = null;
+                redrawAllCells();
                 refreshPropertyPanel();
               });
               this.makeLabel(clearBtn.node, '清空', 0, 0, 56, 22, 12, TEXT_PRIMARY);
@@ -3099,6 +3103,7 @@ export class MainMenuScene extends Component {
                     targetUnit.at = selectedOffset();
                     targetUnit.facing = targetUnit.facing ?? 0;
                   }
+                  redrawAllCells();
                   refreshPropertyPanel();
                 });
                 this.makeLabel(eidBtn.node, String(n), 0, 0, 19, 21, 11, TEXT_PRIMARY);
@@ -3113,6 +3118,7 @@ export class MainMenuScene extends Component {
                     targetUnit.at = selectedOffset();
                     targetUnit.facing = targetUnit.facing ?? 0;
                   }
+                  redrawAllCells();
                   refreshPropertyPanel();
                 });
                 this.makeLabel(ridBtn.node, String(n), 0, 0, 19, 21, 11, TEXT_PRIMARY);
@@ -3591,6 +3597,79 @@ export class MainMenuScene extends Component {
           outlineGraphics.fill();
         }
       };
+      const drawUnitMarkers = () => {
+        // The editor intentionally shows broad unit roles rather than the exact unit kind:
+        // tank = hull/turret, infantry = chevron, other = gun diamond.
+        const unitEntries = [
+          { unit: draftSherman, friendly: true },
+          ...draftAllies.map(unit => ({ unit, friendly: true })),
+          ...draftEnemies.map(unit => ({ unit, friendly: false })),
+        ].filter(({ unit }) => unit.at?.row === row && unit.at?.col === col);
+        if (unitEntries.length === 0) {
+          label.node.setPosition(0, -2, 0);
+          return;
+        }
+        label.node.setPosition(0, -16, 0);
+        const scale = unitEntries.length === 1 ? 1 : unitEntries.length <= 3 ? 0.68 : 0.52;
+        const offsetRadius = unitEntries.length === 1 ? 0 : unitEntries.length <= 3 ? 9 : 11;
+        const directionAngles = [0, -60, -120, 180, 120, 60];
+        const drawPolygon = (points: Array<{ x: number; y: number }>) => {
+          points.forEach((point, index) => {
+            if (index === 0) outlineGraphics.moveTo(point.x, point.y);
+            else outlineGraphics.lineTo(point.x, point.y);
+          });
+          outlineGraphics.close();
+          outlineGraphics.fill();
+          outlineGraphics.stroke();
+        };
+        unitEntries.forEach((entry, index) => {
+          const spreadAngle = -Math.PI / 2 + index * Math.PI * 2 / unitEntries.length;
+          const centerX = Math.cos(spreadAngle) * offsetRadius;
+          const centerY = 5 + Math.sin(spreadAngle) * offsetRadius;
+          const color = entry.friendly
+            ? new Color(52, 150, 235, 255)
+            : new Color(224, 70, 64, 255);
+          const edge = entry.friendly
+            ? new Color(190, 232, 255, 255)
+            : new Color(255, 205, 195, 255);
+          outlineGraphics.fillColor = color;
+          outlineGraphics.strokeColor = edge;
+          outlineGraphics.lineWidth = Math.max(1.2, 2 * scale);
+
+          if (isTankKind(entry.unit.kind)) {
+            const facing = entry.unit.facing ?? 0;
+            const angle = Math.PI / 180 * directionAngles[facing]!;
+            const rotate = (x: number, y: number) => ({
+              x: centerX + (x * Math.cos(angle) - y * Math.sin(angle)) * scale,
+              y: centerY + (x * Math.sin(angle) + y * Math.cos(angle)) * scale,
+            });
+            drawPolygon([rotate(-11, -6), rotate(11, -6), rotate(12, 6), rotate(-11, 6)]);
+            outlineGraphics.circle(centerX, centerY, 5 * scale);
+            outlineGraphics.fill();
+            const barrelStart = rotate(3, 0);
+            const barrelEnd = rotate(17, 0);
+            outlineGraphics.moveTo(barrelStart.x, barrelStart.y);
+            outlineGraphics.lineTo(barrelEnd.x, barrelEnd.y);
+            outlineGraphics.stroke();
+          } else if (isFootKind(entry.unit.kind)) {
+            drawPolygon([
+              { x: centerX, y: centerY + 11 * scale },
+              { x: centerX - 10 * scale, y: centerY - 7 * scale },
+              { x: centerX + 10 * scale, y: centerY - 7 * scale },
+            ]);
+          } else {
+            drawPolygon([
+              { x: centerX, y: centerY + 11 * scale },
+              { x: centerX - 11 * scale, y: centerY },
+              { x: centerX, y: centerY - 11 * scale },
+              { x: centerX + 11 * scale, y: centerY },
+            ]);
+            outlineGraphics.moveTo(centerX + 3 * scale, centerY + 2 * scale);
+            outlineGraphics.lineTo(centerX + 16 * scale, centerY + 8 * scale);
+            outlineGraphics.stroke();
+          }
+        });
+      };
       const drawBoundary = () => {
         const tile = draftTiles[row]?.[col] ?? null;
         if (!isEffectiveEditorTile(tile)) return;
@@ -3616,6 +3695,7 @@ export class MainMenuScene extends Component {
         spriteNode.active = !!sprite.spriteFrame;
         drawHex(colorForTile(tile));
         drawTileOverlays(tile);
+        drawUnitMarkers();
         if (row === selectedRow && col === selectedCol) {
           outlineGraphics.strokeColor = TEXT_TITLE;
           outlineGraphics.lineWidth = 4;

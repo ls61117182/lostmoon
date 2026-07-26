@@ -119,7 +119,7 @@ assert.deepStrictEqual(
     { ox: 50.229473, oy: -29 },
     { ox: -50.229473, oy: -29 },
   ],
-  'squads sharing a vehicle hex should use the wider three-soldier anchor triangle',
+  'squads sharing any other unit\'s hex should use the wider three-soldier anchor triangle',
 );
 
 console.log('Infantry visual facing tests passed');

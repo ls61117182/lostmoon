@@ -185,6 +185,7 @@ import {
 } from './MainGunRecoil';
 import { syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
+import { readCampaignCheckpoint, writeCampaignCheckpoint } from '../core/CampaignCheckpointStore';
 import {
   SPLIT_TANK_KINDS,
   SplitTankKind,
@@ -1759,7 +1760,6 @@ export class BattleScene extends Component {
     bloodDecalNode.layer = this.node.layer;
     bloodDecalNode.addComponent(UITransform).setContentSize(1280, 720);
     this.infantryBloodDecalLayerNode = bloodDecalNode;
-    gNode.addChild(bloodDecalNode);
 
     const occlusionNode = new Node('MapOcclusion');
     occlusionNode.layer = this.node.layer;
@@ -1805,6 +1805,10 @@ export class BattleScene extends Component {
     unitMask.type = Mask.Type.GRAPHICS_STENCIL;
     this.unitVisibilityMaskNode = unitMaskNode;
     this.unitVisibilityMaskGraphics = unitMask.subComp as Graphics;
+
+    // Blood decals share the destroyed-tank visibility mask: they are hidden
+    // in fog and return only when their hex becomes visible again.
+    unitMaskNode.addChild(bloodDecalNode);
 
     const unitContentNode = new Node('UnitContent');
     unitContentNode.layer = this.node.layer;
@@ -2849,8 +2853,38 @@ export class BattleScene extends Component {
     this.campaignViewSegmentIndexOverride = previousIndex;
     this.loadAndDraw(nextData);
     this.campaignViewSegmentIndexOverride = null;
+    this.writeCampaignSegmentCheckpoint();
     this.battleLogI18n('battleLog.campaign.advance', { segment: nextIndex + 1 });
     this.startCampaignPanToSegment(nextIndex);
+  }
+
+  /** Save the start state of the newly entered campaign segment in its own slot. */
+  private writeCampaignSegmentCheckpoint() {
+    if (!this.campaignRuntime || !this.mission) return;
+    const save = captureSave({
+      gameMode: GameSession.gameMode,
+      missionId: this.missionId,
+      mission: this.mission,
+      turn: this.turn,
+      phase: this.phase,
+      movesLeft: this.movementDone ? 0 : 2,
+      attacksLeft: this.attackDone ? 0 : 1,
+      miscDone: this.miscDone,
+      playerStep: this.playerStep as SavePlayerStep,
+      hatchChangedThisTurn: this.hatchChangedThisTurn,
+      phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+      missionSource: this.missionSource,
+    });
+    try {
+      writeCampaignCheckpoint({
+        campaignId: this.campaignRuntime.campaign.id,
+        segmentIndex: this.activeCampaignSegmentIndex,
+        save,
+      });
+      this.battleLog(`[Campaign] 已保存第 ${this.activeCampaignSegmentIndex + 1} 小关检查点`);
+    } catch (e) {
+      console.error('[Campaign] 写入小关检查点失败:', e);
+    }
   }
 
   private debugSkipCampaignSegment() {
@@ -4570,11 +4604,12 @@ export class BattleScene extends Component {
     return u.destroyed && this.destroyWreckVisualIds.has(u.id);
   }
 
-  private infantrySharesHexWithVehicle(u: Unit): boolean {
+  /** Returns whether another living unit shares this infantry unit's hex. */
+  private infantrySharesHexWithOtherUnit(u: Unit): boolean {
     if (!this.mission) return false;
     const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
     for (const o of all) {
-      if (o === u || o.destroyed || isFootUnit(o)) continue;
+      if (o === u || o.destroyed) continue;
       if (o.pos.q === u.pos.q && o.pos.r === u.pos.r) return true;
     }
     return false;
@@ -4604,9 +4639,10 @@ export class BattleScene extends Component {
     this.infantryBloodDecalUnitIds.add(u.id);
 
     const c = this.project(u.pos.q, u.pos.r);
-    const coLocateVehicle = this.infantrySharesHexWithVehicle(u);
-    const offsets = infantrySquadOffsets(this.hexSize, coLocateVehicle);
-    const decalSize = 50;
+    const coLocateOtherUnit = this.infantrySharesHexWithOtherUnit(u);
+    const offsets = infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
+    // The source decals are 100×100; render at 60% of the previous 50 px size.
+    const decalSize = 30;
     for (let i = 0; i < offsets.length; i++) {
       const sf = this.infantryBloodSpriteFrameFor(u.id, i);
       if (!sf) continue;
@@ -7902,7 +7938,7 @@ export class BattleScene extends Component {
     // 同格车辆（坦克 / 卡车）检测：步兵棋子默认贴近格心 → 与同格的车辆几何重叠会糊成一团；
     // 当本格仍有非摧毁的车辆类单位时，把 3 个士兵从 0.27·hexSize 散开到 0.58·hexSize，
     // 让出格心给车辆显示，3 人各自朝顶 / 右下 / 左下方向退到格内切圆附近（仍保留三角阵相对关系）。
-    const coLocateVehicle = this.infantrySharesHexWithVehicle(u);
+    const coLocateOtherUnit = this.infantrySharesHexWithOtherUnit(u);
 
     // 等边三角形布局（顶点朝上）：3 个士兵中心位于半径 ringR 的小圆周上，间隔 120°
     //   位置 0（Infantry01，主图）：顶（cy + ringR）
@@ -7910,7 +7946,7 @@ export class BattleScene extends Component {
     //   位置 2（Infantry03）：左下（cx - ringR·sin60°, cy - ringR·cos60°）
     // 默认 ringR = teamRadius·0.546 ≈ hexSize·0.273（紧凑成队）；
     // 同格有车辆时 ringR = hexSize·0.58，三人散到格内切圆（≈ hexSize·0.866）附近，避开车辆体型。
-    const offsets = infantrySquadOffsets(this.hexSize, coLocateVehicle);
+    const offsets = infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
     /** 单兵 sprite 显示尺寸（按图最长边等比缩放到该值） */
     const spriteFit = this.hexSize * 0.58;
 
@@ -9257,15 +9293,21 @@ export class BattleScene extends Component {
       this.outcomeLabel.color = new Color(255, 80, 80, 255);
     }
 
-    // "再来一局"按钮：左，"返回主菜单"按钮：右。makeSimpleButton 宽 140，间距 20。
+    // 战役失败时可从自动保存的小关检查点重新开始；其他模式保留原“再来一局”。
+    const retryCampaignSegment = !!this.campaignRuntime && this.outcome === 'defeat';
     if (!this.restartBtn) {
       this.restartBtn = this.makeSimpleButton(
-        'RestartBtn', t('btn.restart'),
+        'RestartBtn', retryCampaignSegment ? t('btn.retryCampaignSegment') : t('btn.restart'),
         -80, -90,
         BTN_BG_NORMAL,
-        () => this.restartMission(),
+        () => this.campaignRuntime && this.outcome === 'defeat'
+          ? this.restartCampaignSegment()
+          : this.restartMission(),
       );
       this.restartBtnLabel = this.restartBtn.getChildByName('Label')?.getComponent(Label) ?? null;
+    }
+    if (this.restartBtnLabel) {
+      this.restartBtnLabel.string = retryCampaignSegment ? t('btn.retryCampaignSegment') : t('btn.restart');
     }
     if (!this.backToMenuBtn) {
       this.backToMenuBtn = this.makeSimpleButton(
@@ -9342,6 +9384,27 @@ export class BattleScene extends Component {
     if (this.restartBtn) this.restartBtn.active = false;
     this.loadAndDraw(data);
     this.battleLog('[BattleScene] === 重开当前任务 ===');
+  }
+
+  /** Restore the campaign-only checkpoint instead of reloading the campaign's first segment. */
+  private restartCampaignSegment() {
+    if (!this.campaignRuntime || !this.mission) return;
+    const checkpoint = readCampaignCheckpoint(this.campaignRuntime.campaign.id);
+    if (!checkpoint
+      || checkpoint.campaignId !== this.campaignRuntime.campaign.id
+      || checkpoint.segmentIndex !== this.activeCampaignSegmentIndex) {
+      console.warn('[Campaign] 当前小关没有可用检查点，改为重开当前任务');
+      this.restartMission();
+      return;
+    }
+    const result = applySave(this.mission, this.missionId, checkpoint.save);
+    if (!result.ok) {
+      console.warn('[Campaign] 小关检查点无效，改为重开当前任务:', result.reason);
+      this.restartMission();
+      return;
+    }
+    this.restoreAppliedSave(result, true);
+    this.battleLog(`[Campaign] === 从第 ${this.activeCampaignSegmentIndex + 1} 小关检查点重新挑战 ===`);
   }
 
   /** PVP 结算后的“再来一局”应重新选择匹配方式，而不是重置当前对局。 */
@@ -13440,6 +13503,11 @@ export class BattleScene extends Component {
       this.flashBattleSettingsHint(t('battle.load.fail', { reason: result.reason ?? '' }));
       return;
     }
+    this.restoreAppliedSave(result, skipHint);
+  }
+
+  /** Apply the runtime state common to normal saves and campaign checkpoints. */
+  private restoreAppliedSave(result: ReturnType<typeof applySave>, skipHint?: boolean) {
     // 写回场景状态；中断任何敌方阶段调度 / 骰子态 / 动画
     this.turn = result.turn!;
     this.phase = result.phase!;

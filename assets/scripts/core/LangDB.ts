@@ -63,6 +63,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'btn.save': { zh: "存档", en: "Save" },
   'btn.load': { zh: "读档", en: "Load" },
   'btn.restart': { zh: "再来一局", en: "Play Again" },
+  'btn.retryCampaignSegment': { zh: "重新挑战本关", en: "Retry This Operation" },
   'btn.backToMenu': { zh: "返回主菜单", en: "Back to Menu" },
   'btn.movePhase': { zh: "移动阶段", en: "Move Phase" },
   'btn.attackPhase': { zh: "攻击阶段", en: "Attack Phase" },

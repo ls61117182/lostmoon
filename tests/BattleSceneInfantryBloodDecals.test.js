@@ -31,7 +31,7 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /private\s+spawnInfantryBloodDecals\s*\(u:\s*Unit\)[\s\S]*?infantrySquadOffsets\(this\.hexSize,\s*coLocateVehicle\)/,
+  /private\s+spawnInfantryBloodDecals\s*\(u:\s*Unit\)[\s\S]*?infantrySquadOffsets\(this\.hexSize,\s*coLocateOtherUnit\)/,
   'blood decal placement should use the same three-person squad offsets as live infantry sprites',
 );
 assert.match(
@@ -41,8 +41,8 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /const\s+decalSize\s*=\s*50/,
-  'blood decals should render at 50% of the 100x100 source image size',
+  /const\s+decalSize\s*=\s*30/,
+  'blood decals should render at 60% of their previous 50 px display size',
 );
 assert.match(
   battleScene,
@@ -76,15 +76,15 @@ assert.match(
   'BattleScene should have a separate occlusion graphics layer for buildings/tree fallback above blood decals',
 );
 const layerSetup = battleScene.match(
-  /const\s+gNode\s*=\s*new Node\('MapGraphics'\);[\s\S]*?this\.node\.addChild\(gNode\);[\s\S]*?const\s+bloodDecalNode\s*=\s*new Node\('InfantryBloodDecals'\);[\s\S]*?gNode\.addChild\(bloodDecalNode\);[\s\S]*?const\s+occlusionNode\s*=\s*new Node\('MapOcclusion'\);[\s\S]*?this\.mapOcclusionGraphics\s*=\s*occlusionNode\.addComponent\(Graphics\);[\s\S]*?gNode\.addChild\(occlusionNode\);/,
+  /const\s+gNode\s*=\s*new Node\('MapGraphics'\);[\s\S]*?this\.node\.addChild\(gNode\);[\s\S]*?const\s+bloodDecalNode\s*=\s*new Node\('InfantryBloodDecals'\);[\s\S]*?const\s+unitMaskNode\s*=\s*new Node\('VisibleUnitMask'\);[\s\S]*?unitMaskNode\.addChild\(bloodDecalNode\);[\s\S]*?const\s+unitContentNode\s*=\s*new Node\('UnitContent'\);/,
 );
 assert(
   layerSetup,
-  'blood decal layer should be inside MapGraphics after the surface graphics but before the building/tree occlusion layer',
+  'blood decal layer should be inside the visible-unit mask and below unit content',
 );
 assert(
-  !/this\.node\.addChild\(bloodDecalNode\)/.test(battleScene),
-  'blood decal layer should not be a scene-root layer because that puts it below roads, bridges, and airstrips',
+  /unitMaskNode\.addChild\(bloodDecalNode\)/.test(battleScene),
+  'blood decal layer should use the same visibility mask as destroyed tanks',
 );
 assert.match(
   battleScene,
