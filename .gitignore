@@ -29,4 +29,5 @@ server/data/
 #//////////////////////////
 .cursor/
 .codex-tmp/
+.superpowers/
 asset_backups/
