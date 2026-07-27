@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'at_gun', 'heavy_artillery', 'truck'];
-const SPLIT_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'panzer4', 'panzer3', 'type97', 'type95'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
+const SPLIT_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',
@@ -45,6 +45,7 @@ const NUM_FIELDS = [
   'muzzleSpriteY',
   'destroyedOffsetForward',
   'destroyedOffsetRight',
+  'destroyedFitScale',
   'commanderHatchSpriteX',
   'commanderHatchSpriteY',
   'commanderHatchScale',
@@ -61,13 +62,16 @@ function readCsvSmart(filePath) {
   const hasBOM = buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF;
 
   let text;
+  let sourceLabel;
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+    sourceLabel = hasBOM ? 'UTF-8 (with BOM)' : 'UTF-8 (no BOM)';
   } catch (_) {
     text = new TextDecoder('gbk').decode(buf);
+    sourceLabel = 'GBK';
   }
 
-  if (!hasBOM) {
+  if (!hasBOM || sourceLabel === 'GBK') {
     fs.writeFileSync(filePath, Buffer.concat([
       Buffer.from([0xEF, 0xBB, 0xBF]),
       Buffer.from(text, 'utf8'),
@@ -144,6 +148,16 @@ function numberOrThrow(rec, field) {
   return n;
 }
 
+function numberOrDefault(rec, field, fallback) {
+  const raw = rec[field];
+  if (raw === '' || raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    throw new Error(`row ${rec.__row} ${rec.kind || '?'}: field ${field}="${raw}" is not a number`);
+  }
+  return n;
+}
+
 function emitNum(n) {
   return Number.isInteger(n) ? String(n) : String(n);
 }
@@ -168,7 +182,9 @@ function build() {
       throw new Error(`row ${rec.__row}: duplicate kind "${rec.kind}"`);
     }
     for (const field of NUM_FIELDS) {
-      rec[field] = numberOrThrow(rec, field);
+      rec[field] = field === 'destroyedFitScale'
+        ? numberOrDefault(rec, field, 1)
+        : numberOrThrow(rec, field);
     }
     for (const field of STRING_FIELDS) {
       rec[field] = rec[field] || '';
@@ -214,6 +230,7 @@ function build() {
   lines.push('  muzzle: { spriteX: number; spriteY: number };');
   lines.push('  destroyedOffsetForward: number;');
   lines.push('  destroyedOffsetRight: number;');
+  lines.push('  destroyedFitScale: number;');
   lines.push('}');
   lines.push('');
   lines.push('export interface SplitTankVisualConfig {');
@@ -243,6 +260,7 @@ function build() {
   lines.push('  muzzle: { spriteX: 0, spriteY: 0 },');
   lines.push('  destroyedOffsetForward: 0,');
   lines.push('  destroyedOffsetRight: 0,');
+  lines.push('  destroyedFitScale: 1,');
   lines.push('};');
   lines.push('');
   lines.push('const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = {');
@@ -255,7 +273,7 @@ function build() {
   lines.push('const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {');
   for (const kind of REQUIRED_KINDS) {
     const r = byKind.get(kind);
-    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)} },`);
+    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)} },`);
   }
   lines.push('};');
   lines.push('');

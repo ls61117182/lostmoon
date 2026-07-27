@@ -14,7 +14,7 @@ export function mainGunRecoilMode(
   hasSplitTurret: boolean,
   hasTopSprite: boolean,
 ): MainGunRecoilMode | null {
-  if (isFoot || kind === 'heavy_artillery') return null;
+  if (isFoot || kind === 'heavy_artillery' || kind === 'german_heavy_artillery') return null;
   if (hasSplitTurret) return 'turret';
   return hasTopSprite ? 'whole' : null;
 }

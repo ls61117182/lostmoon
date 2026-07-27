@@ -49,6 +49,7 @@ import {
   SpriteFrame,
   sys,
   UITransform,
+  UIOpacity,
   Vec3,
   VerticalTextAlignment,
   director,
@@ -164,9 +165,11 @@ import {
   stitchCampaignMissions,
 } from '../core/CampaignRuntime';
 import { getGameModeConfig } from '../core/GameMode';
+import { firstDamagedRepairableComponent, repairableComponentById, repairableComponentsFor, RepairableComponentId } from '../core/RepairableComponents';
 import { shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
 import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
+import { factionUiFor } from '../core/FactionUI';
 import { PvpBattleSnapshot, PvpBattleUnitSnapshot, PvpService } from '../core/PvpService';
 import { CustomMissionStore } from '../core/CustomMissionStore';
 import type { MissionSource } from '../core/CustomMissionStore';
@@ -291,16 +294,16 @@ function drawDicePopupPanel(g: Graphics, w: number, h: number, fill: Color, bord
 const { ccclass, property } = _decorator;
 
 /** 使用通用俯视 PNG 池的车辆单位；玩家谢尔曼仍额外占用专属节点 */
-type EnemyTopKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type EnemyTopKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'tigerking' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'german_heavy_artillery' | 'truck'>;
 
 function isEnemyTopKind(k: UnitKind): k is EnemyTopKind {
-  return k === 'sherman' || k === 'sherman76' || k === 't34' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'sherman76' || k === 't34' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'tigerking' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'german_heavy_artillery' || k === 'truck';
 }
 
-type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'panzer4' | 'stug3' | 'panzer3' | 'tiger' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'truck'>;
+type DestroyedTopKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'tiger' | 'tigerking' | 'panzer4' | 'stug3' | 'panzer3' | 'type97' | 'type95' | 'at_gun' | 'heavy_artillery' | 'german_heavy_artillery' | 'truck'>;
 
 function isDestroyedTopKind(k: UnitKind): k is DestroyedTopKind {
-  return k === 'sherman' || k === 'sherman76' || k === 't34' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'truck';
+  return k === 'sherman' || k === 'sherman76' || k === 't34' || k === 'panzer4' || k === 'stug3' || k === 'panzer3' || k === 'tiger' || k === 'tigerking' || k === 'type97' || k === 'type95' || k === 'at_gun' || k === 'heavy_artillery' || k === 'german_heavy_artillery' || k === 'truck';
 }
 
 function isSplitTankKind(k: UnitKind): k is SplitTankKind {
@@ -1433,6 +1436,12 @@ export class BattleScene extends Component {
   private pvpApplyingRemoteState = false;
   private pvpLastSentUnitHash = '';
   private pvpPendingRemoteSnapshots: Array<{ snapshot: PvpBattleSnapshot; animate: boolean; action?: unknown }> = [];
+  private pvpLastTransitionKey = '';
+  private turnTransition: {
+    root: Node; panel: Node; panelOpacity: UIOpacity; title: Label; subtitle: Label; icon: Sprite;
+    t: number; faction: string; onDone: () => void;
+  } | null = null;
+  private factionSpriteFrames = new Map<string, SpriteFrame>();
   private hudLabel: Label | null = null;
   /** 回合数下方：多行任务目标（与 `OBJECTIVE_HUD_MAX` 同序） */
   private objectiveHudLabels: Label[] = [];
@@ -1523,6 +1532,7 @@ export class BattleScene extends Component {
   private statusFire: Label | null = null;     // 着火层数 / "-"（车体旧文案已迁出）
   private statusTurret: Label | null = null;   // 完好 / 受损
   private statusMobility: Label | null = null; // 正常 / 痛痪
+  private statusRadio: Label | null = null;
   private statusCrewLabels: Label[] = [];      // 5 个乘员值标签（车长..副驾驶）
   /** 状态面板固定文案（切语言时刷新） */
   private statusPanelTitleLabel: Label | null = null;
@@ -2005,6 +2015,7 @@ export class BattleScene extends Component {
     this.buildChooseBar();
     this.buildDiceTray();
     this.buildCombatLog();
+    this.buildTurnTransition();
     this.setupPvpBattleChannel();
 
     // 主菜单选关时会写入 GameSession.selectedMissionPath；绕过菜单直接启动场景
@@ -2033,6 +2044,106 @@ export class BattleScene extends Component {
         this.battleLog(`[PVP] received battle event: ${JSON.stringify(event.event)}`);
       }
     });
+  }
+
+  /** 屏幕中央的回合横幅；回合号只出现在横幅内，不新增 HUD 回合控件。 */
+  private buildTurnTransition() {
+    const root = new Node('TurnTransition');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.addComponent(BlockInputEvents);
+    root.active = false;
+    this.node.addChild(root);
+
+    const panel = new Node('Banner');
+    panel.layer = this.node.layer;
+    // 横幅贯穿整屏；信息组仍留在中部，避免与两侧 HUD 贴边拥挤。
+    panel.addComponent(UITransform).setContentSize(CANVAS_W, 132);
+    const opacity = panel.addComponent(UIOpacity);
+    root.addChild(panel);
+    const panelG = panel.addComponent(Graphics);
+
+    const iconNode = new Node('FactionIcon');
+    iconNode.layer = this.node.layer;
+    iconNode.addComponent(UITransform).setContentSize(72, 72);
+    iconNode.setPosition(-360, 0, 0);
+    const icon = iconNode.addComponent(Sprite);
+    icon.sizeMode = Sprite.SizeMode.CUSTOM;
+    panel.addChild(iconNode);
+
+    const title = this.makeCenteredLabel(panel, '', 0, 21, 560, 38, 29, Color.WHITE);
+    title.horizontalAlign = HorizontalTextAlignment.CENTER;
+    title.enableOutline = true;
+    title.outlineColor = new Color(12, 14, 11, 230);
+    title.outlineWidth = 2;
+    const subtitle = this.makeCenteredLabel(panel, '', 0, -20, 560, 28, 17, new Color(225, 225, 210, 255));
+    subtitle.horizontalAlign = HorizontalTextAlignment.CENTER;
+    (root as any).__turnTransitionRefs = { panel, panelG, opacity, title, subtitle, icon };
+  }
+
+  private showTurnTransition(factionId: string, side: 'player' | 'enemy', onDone: () => void) {
+    const root = this.node.getChildByName('TurnTransition');
+    const refs = (root as any)?.__turnTransitionRefs;
+    if (!root || !refs) { onDone(); return; }
+    const faction = factionUiFor(factionId as any);
+    const accent = side === 'enemy' ? new Color(202, 75, 61, 255) : new Color(faction.accent.r, faction.accent.g, faction.accent.b, 255);
+    const w = refs.panel.getComponent(UITransform)!.contentSize.width;
+    const h = refs.panel.getComponent(UITransform)!.contentSize.height;
+    const g: Graphics = refs.panelG;
+    g.clear();
+    g.fillColor = new Color(17, 21, 15, 238); g.rect(-w * 0.5, -h * 0.5, w, h); g.fill();
+    g.fillColor = new Color(accent.r, accent.g, accent.b, 42); g.rect(-w * 0.5, h * 0.5 - 10, w, 10); g.fill();
+    // 开放式横幅：只保留上下横线，不在两侧形成封闭方框。
+    g.strokeColor = accent; g.lineWidth = 2;
+    g.moveTo(-w * 0.5, h * 0.5 - 1); g.lineTo(w * 0.5, h * 0.5 - 1);
+    g.moveTo(-w * 0.5, -h * 0.5 + 1); g.lineTo(w * 0.5, -h * 0.5 + 1);
+    g.stroke();
+    refs.title.string = getLang() === 'zh'
+      ? `第 ${String(this.turn).padStart(2, '0')} 回合 · ${side === 'player' ? '玩家回合' : '敌方回合'}`
+      : `TURN ${this.turn} · ${side === 'player' ? 'PLAYER TURN' : 'ENEMY TURN'}`;
+    refs.subtitle.string = getLang() === 'zh'
+      ? (side === 'player' ? '选择行动阶段，指挥你的部队' : '敌军正在部署行动')
+      : (side === 'player' ? 'Choose a phase and command your forces' : 'Enemy forces are deploying');
+    refs.icon.spriteFrame = this.factionSpriteFrames.get(faction.id) ?? null;
+    resources.load(faction.iconPath, SpriteFrame, (err, sf) => {
+      if (!err && sf && this.turnTransition?.faction === faction.id) {
+        this.factionSpriteFrames.set(faction.id, sf);
+        refs.icon.spriteFrame = sf;
+      }
+    });
+    root.active = true;
+    refs.panel.setPosition(-CANVAS_W, 0, 0);
+    refs.opacity.opacity = 255;
+    this.turnTransition = { root, panel: refs.panel, panelOpacity: refs.opacity, title: refs.title, subtitle: refs.subtitle, icon: refs.icon, t: 0, faction: faction.id, onDone };
+  }
+
+  private advanceTurnTransition(dt: number) {
+    const transition = this.turnTransition;
+    if (!transition) return;
+    transition.t += dt;
+    const enter = 0.24, hold = 1.2, leave = 0.26;
+    if (transition.t < enter) {
+      transition.panel.setPosition(-CANVAS_W + CANVAS_W * (transition.t / enter), 0, 0);
+      return;
+    }
+    if (transition.t < enter + hold) { transition.panel.setPosition(0, 0, 0); return; }
+    const p = Math.min(1, (transition.t - enter - hold) / leave);
+    transition.panel.setPosition(CANVAS_W * 0.12 * p, 0, 0);
+    transition.panelOpacity.opacity = Math.round(255 * (1 - p));
+    if (p < 1) return;
+    transition.root.active = false;
+    this.turnTransition = null;
+    transition.onDone();
+  }
+
+  private beginPvpPhaseWithTransition(snapshot: PvpBattleSnapshot, onDone: () => void) {
+    const pvp = GameSession.pvpSession;
+    if (!pvp) { onDone(); return; }
+    const faction = snapshot.currentParity === pvp.localPlayer.parity ? pvp.localPlayer.factionId : pvp.opponentPlayer.factionId;
+    const key = `${snapshot.turn}:${snapshot.currentParity}`;
+    if (this.pvpLastTransitionKey === key) { onDone(); return; }
+    this.pvpLastTransitionKey = key;
+    this.showTurnTransition(faction, snapshot.currentParity === pvp.localPlayer.parity ? 'player' : 'enemy', onDone);
   }
 
   private startPvpBattleAfterBarrier() {
@@ -2359,15 +2470,17 @@ export class BattleScene extends Component {
       this.pvpApplyingRemoteState = false;
       return;
     }
-    if (snapshot.actionPhase !== 'ai' && snapshot.currentParity === localParity) {
-      this.beginPlayerPhaseForNewTurn();
-      this.battleLog(`[PVP] 轮到你行动（同步回合 ${snapshot.turn}）`);
-    } else {
-      this.enterPvpWaitingForOpponent();
-      this.battleLog(snapshot.actionPhase === 'ai'
-        ? `[PVP] AI 支援单位行动（同步回合 ${snapshot.turn}）`
-        : `[PVP] 等待对手行动（同步回合 ${snapshot.turn}）`);
-    }
+    this.beginPvpPhaseWithTransition(snapshot, () => {
+      if (snapshot.actionPhase !== 'ai' && snapshot.currentParity === localParity) {
+        this.beginPlayerPhaseForNewTurn();
+        this.battleLog(`[PVP] 轮到你行动（同步回合 ${snapshot.turn}）`);
+      } else {
+        this.enterPvpWaitingForOpponent();
+        this.battleLog(snapshot.actionPhase === 'ai'
+          ? `[PVP] AI 支援单位行动（同步回合 ${snapshot.turn}）`
+          : `[PVP] 等待对手行动（同步回合 ${snapshot.turn}）`);
+      }
+    });
     this.pvpApplyingRemoteState = false;
   }
 
@@ -2384,7 +2497,7 @@ export class BattleScene extends Component {
       unitId?: string;
       q?: number;
       r?: number;
-      repairTarget?: 'turret' | 'mobility';
+      repairTarget?: RepairableComponentId;
       hit?: boolean;
       effect?: { hit?: boolean; effect?: string };
     };
@@ -2468,7 +2581,8 @@ export class BattleScene extends Component {
       }
       case 'repair': {
         const p = atQr(unit);
-        this.spawnFloater(p.q, p.r, t(details.repairTarget === 'turret' ? 'floater.turretFixed' : 'floater.mobilityFixed'),
+        const component = details.repairTarget ? repairableComponentById(details.repairTarget) : null;
+        this.spawnFloater(p.q, p.r, t(component?.floaterKey ?? 'floater.repair'),
           new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
         return;
       }
@@ -3087,7 +3201,8 @@ export class BattleScene extends Component {
         phase: this.phase,
       });
     } else {
-      this.beginPlayerPhaseForNewTurn();
+      // 新战斗的第一个玩家回合也应经过与换回合相同的横幅提示。
+      this.showTurnTransition(this.mission.sherman.faction, 'player', () => this.beginPlayerPhaseForNewTurn());
     }
   }
 
@@ -5545,6 +5660,7 @@ export class BattleScene extends Component {
   }
 
   update(dt: number) {
+    this.advanceTurnTransition(dt);
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
     if (this.floaters.length > 0) this.advanceFloaters(dt);
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
@@ -5648,6 +5764,7 @@ export class BattleScene extends Component {
     const finishedUnit = anim.unit;
     if (anim.kind === 'move') {
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
+      this.crushEnemyATGunsAt(finishedUnit);
       if (anim.evacExit && this.mission) {
         this.mission.shermanEvacuated = true;
         this.outcome = this.computeOutcome();
@@ -7227,28 +7344,29 @@ export class BattleScene extends Component {
   private destroyedTankDisplaySize(kind: UnitKind, displayW: number, displayH: number, radius: number): { w: number; h: number } {
     const w = Math.max(1, displayW);
     const h = Math.max(1, displayH);
+    const cfg = tankVisualConfigOf(kind);
     const split = this.splitHullDisplayBasis(kind);
     if (split && split.trimH > 0) {
       const hullFit = radius * 1.8 * split.fitScale;
       const hullScale = hullFit / (Math.max(split.trimW, split.trimH) || 1);
       // 残骸必须和存活车身使用完全一致的显示宽高；不应由残骸 PNG
       // 的画布比例再次推导，否则旋转后会显得比车身更大。
-      return { w: split.trimW * hullScale, h: split.trimH * hullScale };
+      return { w: split.trimW * hullScale * cfg.destroyedFitScale, h: split.trimH * hullScale * cfg.destroyedFitScale };
+      return { w: split.trimW * hullScale * cfg.destroyedFitScale, h: split.trimH * hullScale * cfg.destroyedFitScale };
     }
 
-    const cfg = tankVisualConfigOf(kind);
     const fit = radius * 1.8 * cfg.fitScale;
     const scale = fit / (Math.max(w, h) || 1);
     const k = Math.sqrt(Math.max(1e-6, cfg.aspectRatioMul));
-    return { w: w * scale * k, h: h * scale / k };
+    return { w: w * scale * k * cfg.destroyedFitScale, h: h * scale / k * cfg.destroyedFitScale };
   }
 
   private destroyedTankOffset(kind: UnitKind, offsetUnit: number): { forward: number; right: number } {
     const cfg = tankVisualConfigOf(kind);
     const split = this.splitHullDisplayBasis(kind);
     return {
-      forward: (split ? split.offsetForward : cfg.offsetForward) * offsetUnit + cfg.destroyedOffsetForward,
-      right: (split ? split.offsetRight : cfg.offsetRight) * offsetUnit + cfg.destroyedOffsetRight,
+      forward: ((split ? split.offsetForward : cfg.offsetForward) + cfg.destroyedOffsetForward) * offsetUnit,
+      right: ((split ? split.offsetRight : cfg.offsetRight) + cfg.destroyedOffsetRight) * offsetUnit,
     };
   }
 
@@ -8780,7 +8898,7 @@ export class BattleScene extends Component {
     const W = 240;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
-    const H = 312;
+    const H = GameSession.gameMode === 'hardcore' ? 334 : 312;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
     const x = CANVAS_W * 0.5 - W * 0.5 - 10;
@@ -8790,7 +8908,7 @@ export class BattleScene extends Component {
     const innerTop = H / 2 - 8;
     const shermanTitleY = innerTop - 14;
     const bodyFirstY = shermanTitleY - 24;
-    const bodyRowY = [0, 1, 2, 3].map(j => bodyFirstY - j * BODY_GAP);
+    const bodyRowY = Array.from({ length: GameSession.gameMode === 'hardcore' ? 5 : 4 }, (_, j) => bodyFirstY - j * BODY_GAP);
     const sepY = bodyRowY[bodyRowY.length - 1] - 20;
     const crewTitleY = sepY - 18;
     const crewFirstY = crewTitleY - 26;
@@ -8840,12 +8958,13 @@ export class BattleScene extends Component {
     // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
     this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
       0, shermanTitleY, W - 20, 28, 22, STATUS_TITLE_COLOR);
-    const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'fire']> = [
+    const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'radio' | 'fire']> = [
       [t('status.row.loaded'),    'loaded'],
       [t('status.row.turret'),    'turret'],
       [t('status.row.mobility'),  'mobility'],
-      [t('status.row.fireLevel'), 'fire'],
     ];
+    if (GameSession.gameMode === 'hardcore') bodyRows.push([t('status.row.radio'), 'radio']);
+    bodyRows.push([t('status.row.fireLevel'), 'fire']);
     for (let i = 0; i < bodyRows.length; i++) {
       const [label, key] = bodyRows[i];
       const leftLab = this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22, 18, STATUS_LABEL_COLOR);
@@ -8856,6 +8975,7 @@ export class BattleScene extends Component {
         case 'fire':     this.statusFire = val; break;
         case 'turret':   this.statusTurret = val; break;
         case 'mobility': this.statusMobility = val; break;
+        case 'radio':    this.statusRadio = val; break;
       }
     }
   }
@@ -8969,6 +9089,19 @@ export class BattleScene extends Component {
       } else {
         this.statusMobility.string = t('status.val.normal');
         this.statusMobility.color = STATUS_VALUE_OK;
+      }
+    }
+
+    if (this.statusRadio) {
+      if (s.destroyed) {
+        this.statusRadio.string = '—';
+        this.statusRadio.color = STATUS_VALUE_DOWN;
+      } else if (s.radioDamaged) {
+        this.statusRadio.string = t('status.val.damaged');
+        this.statusRadio.color = STATUS_VALUE_DEAD;
+      } else {
+        this.statusRadio.string = t('status.val.intact');
+        this.statusRadio.color = STATUS_VALUE_OK;
       }
     }
 
@@ -10204,6 +10337,8 @@ export class BattleScene extends Component {
     if (!this.mission) return t('attack.reason.unknown');
     const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
     if (crewReason) return crewReason;
+    // 硬核模式可将机枪骰用于瞄准迷雾内地格；即使当前没有合法步兵目标也不禁用。
+    if (GameSession.gameMode === 'hardcore') return null;
     const { map, sherman } = this.mission;
     const units = this.allUnits();
     const hasTarget = this.mission.enemies.some(e => !e.destroyed && canMGAttack({
@@ -10403,38 +10538,34 @@ export class BattleScene extends Component {
             () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1, 'driver'));
           break;
         case 'repair':
-          // 4 点 C 列：修复炮塔或瘫痪；无可修复内容时保留浅灰提示项。
+          // 4 点 C 列：修复任一受损的已配置部件；无可修复内容时保留浅灰提示项。
           if (sherman) {
             const repairBlocked = tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos))
               ? t('floater.beachNoRepair') : null;
-            if (sherman.turretDamaged) {
-              addItem(t('action.repairTurret'), PHASE_BTN_MISC,
-                () => this.tryRepair(idx, 'turret'), repairBlocked);
+            const repairable = repairableComponentsFor(GameSession.gameMode)
+              .filter((component) => component.isDamaged(sherman));
+            for (const component of repairable) {
+              addItem(t(component.actionKey), PHASE_BTN_MISC,
+                () => this.tryRepair(idx, component.id), repairBlocked);
             }
-            if (sherman.paralyzed) {
-              addItem(t('action.repairMobility'), PHASE_BTN_MISC,
-                () => this.tryRepair(idx, 'mobility'), repairBlocked);
-            }
-            if (!sherman.turretDamaged && !sherman.paralyzed) {
+            if (repairable.length === 0) {
               addItem(t('action.repair'), PHASE_BTN_MISC, () => {}, t('floater.noRepair'));
             }
           }
           break;
         case 'smoke_or_repair':
-          // 5 点 C 列：烟雾 / 修复（炮塔 / 瘫痪）
+          // 5 点 C 列：烟雾 / 修复（所有已配置的受损部件）
           const smokeBlocked = !sherman ? t('attack.reason.unknown')
             : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoSmoke')
               : this.hasSmokeAt(sherman.pos) ? t('floater.alreadySmoked') : null;
           addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), smokeBlocked);
-          if (sherman && sherman.turretDamaged) {
-            addItem(t('action.repairTurret'), PHASE_BTN_MISC, () => this.tryRepair(idx, 'turret'),
+          const smokeRepairable = sherman ? repairableComponentsFor(GameSession.gameMode)
+            .filter((component) => component.isDamaged(sherman)) : [];
+          for (const component of smokeRepairable) {
+            addItem(t(component.actionKey), PHASE_BTN_MISC, () => this.tryRepair(idx, component.id),
               tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoRepair') : null);
           }
-          if (sherman && sherman.paralyzed) {
-            addItem(t('action.repairMobility'), PHASE_BTN_MISC, () => this.tryRepair(idx, 'mobility'),
-              tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoRepair') : null);
-          }
-          if (sherman && !sherman.turretDamaged && !sherman.paralyzed) {
+          if (sherman && smokeRepairable.length === 0) {
             addItem(t('action.repair'), PHASE_BTN_MISC, () => {}, t('floater.noRepair'));
           }
           break;
@@ -10897,7 +11028,7 @@ export class BattleScene extends Component {
    *
    * 调用方（popover）已确保对应状态存在；此处再校验一次做防御。
    */
-  private tryRepair(dieIdx: number, target: 'turret' | 'mobility') {
+  private tryRepair(dieIdx: number, target: RepairableComponentId) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
@@ -10911,19 +11042,12 @@ export class BattleScene extends Component {
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
-    if (target === 'turret') {
-      if (!sherman.turretDamaged) return;
-      sherman.turretDamaged = false;
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.turretFixed'),
-        new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-      this.battleLogI18n('battleLog.misc.repairTurret');
-    } else {
-      if (!sherman.paralyzed) return;
-      sherman.paralyzed = false;
-      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.mobilityFixed'),
-        new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
-      this.battleLogI18n('battleLog.misc.repairMobility');
-    }
+    const component = repairableComponentById(target);
+    if (!component.playerAvailable(GameSession.gameMode) || !component.isDamaged(sherman)) return;
+    component.repair(sherman);
+    this.spawnFloater(sherman.pos.q, sherman.pos.r, t(component.floaterKey),
+      new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
+    this.battleLogI18n(component.battleLogKey);
     slot.used = true;
     this.closeDiePopover();
     this.sendPvpActionResult('repair', {
@@ -11721,6 +11845,12 @@ export class BattleScene extends Component {
       this.submitPvpTurnEnd();
       return;
     }
+    const faction = this.mission.enemies.find(unit => !unit.destroyed)?.faction ?? 'german';
+    this.showTurnTransition(faction, 'enemy', () => this.beginEnemyPhaseAfterTransition());
+  }
+
+  private beginEnemyPhaseAfterTransition() {
+    if (!this.mission) return;
     this.phase = 'enemy';
     this.aiSide = 'ally';
     // §2.1 阶段④：移除德军烟雾（烟雾只保留一回合）
@@ -12059,7 +12189,10 @@ export class BattleScene extends Component {
       }
       if (u.turretDamaged) parts.push(t('tileInspect.status.turretDamaged'));
       if (u.paralyzed) parts.push(t('tileInspect.status.paralyzed'));
-      if (u.radioDamaged) parts.push(t('tileInspect.status.radioDamaged'));
+      if (GameSession.gameMode === 'hardcore') {
+        const radio = repairableComponentById('radio');
+        parts.push(t(radio.isDamaged(u) ? radio.statusDamagedKey : radio.statusIntactKey!));
+      }
       if (u.hidden) parts.push(t('tileInspect.status.hidden'));
       if (this.hasSmokeAt(u.pos) || u.smoked) parts.push(t('tileInspect.status.smoked'));
       parts.push(u.loaded ? t('tileInspect.status.loaded') : t('tileInspect.status.unloaded'));
@@ -13351,8 +13484,9 @@ export class BattleScene extends Component {
       'status.row.loaded',
       'status.row.turret',
       'status.row.mobility',
+      ...(GameSession.gameMode === 'hardcore' ? ['status.row.radio'] as const : []),
       'status.row.fireLevel',
-    ] as const;
+    ];
     for (let i = 0; i < this.statusBodyLeftLabels.length && i < bodyKeys.length; i++) {
       this.statusBodyLeftLabels[i].string = t(bodyKeys[i]);
     }
@@ -13907,14 +14041,9 @@ export class BattleScene extends Component {
 
       case 'repair': {
         let repaired = false;
-        if (enemy.paralyzed) {
-          enemy.paralyzed = false;
-          repaired = true;
-        } else if (enemy.turretDamaged) {
-          enemy.turretDamaged = false;
-          repaired = true;
-        } else if (enemy.radioDamaged) {
-          enemy.radioDamaged = false;
+        const component = firstDamagedRepairableComponent(enemy);
+        if (component) {
+          component.repair(enemy);
           repaired = true;
         } else if (enemy.damaged) {
           enemy.damaged = false;
@@ -14095,9 +14224,35 @@ export class BattleScene extends Component {
   }
 
   private isBlockingMoveOccupant(mover: Unit, occupant: Unit): boolean {
+    if (GameSession.gameMode === 'hardcore') {
+      // AT guns cannot move into a hex occupied by any non-tank unit.
+      if (mover.kind === 'at_gun' && !isTankUnit(occupant)) return true;
+      // A non-foot unit can overrun an enemy AT gun, but never a friendly one.
+      if (!isFootUnit(mover) && occupant.kind === 'at_gun') {
+        return mover.faction === occupant.faction;
+      }
+    }
     // Tanks and other vehicle-like units may enter same-faction foot-unit hexes.
     if (!isFootUnit(mover) && isFootUnit(occupant) && mover.faction === occupant.faction) return false;
     return true;
+  }
+
+  /** Hardcore: a vehicle entering an enemy AT-gun hex destroys the gun by overrun. */
+  private crushEnemyATGunsAt(mover: Unit): void {
+    if (GameSession.gameMode !== 'hardcore' || isFootUnit(mover)) return;
+    for (const unit of this.allUnits()) {
+      if (unit === mover
+        || unit.destroyed
+        || unit.kind !== 'at_gun'
+        || unit.faction === mover.faction
+        || unit.pos.q !== mover.pos.q
+        || unit.pos.r !== mover.pos.r) continue;
+      unit.destroyed = true;
+      this.registerDestroyWreckVisual(unit);
+      this.spawnFloater(unit.pos.q, unit.pos.r, t('floater.crushed'),
+        new Color(255, 180, 80, 255), { size: 28, dur: 1.0, rise: 34 });
+      this.battleLog(`[Hardcore] ${unitDisplayName(mover.kind)} crushed ${unitDisplayName(unit.kind)}`);
+    }
   }
 
   private endEnemyPhase() {
@@ -14122,8 +14277,16 @@ export class BattleScene extends Component {
       this.outcome = this.computeOutcome();
       this.updateOutcomeOverlay();
     }
-    this.beginPlayerPhaseForNewTurn();
-    this.writeCurrentSave({ silent: true });
+    if (this.outcome !== 'ongoing') {
+      this.beginPlayerPhaseForNewTurn();
+      this.writeCurrentSave({ silent: true });
+      return;
+    }
+    const faction = this.mission?.sherman.faction ?? 'usa';
+    this.showTurnTransition(faction, 'player', () => {
+      this.beginPlayerPhaseForNewTurn();
+      this.writeCurrentSave({ silent: true });
+    });
   }
 
   // ---------- 交互 ----------
@@ -16070,7 +16233,7 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return this.campaignTransitionActive || this.campaignPanAnim !== null
+    return this.turnTransition !== null || this.campaignTransitionActive || this.campaignPanAnim !== null
       || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null

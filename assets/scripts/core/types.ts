@@ -117,6 +117,7 @@ export type UnitKind =
   | 'sherman76'
   | 't34'
   | 'tiger'
+  | 'tigerking'
   | 'panzer4'
   | 'stug3'
   | 'panzer3'
@@ -126,10 +127,12 @@ export type UnitKind =
   | 'soviet_infantry'
   | 'type95'
   | 'type97'
+  | 'type4'
   | 'at_gun'
   | 'japanese_infantry'
   | 'american_infantry'
   | 'heavy_artillery'
+  | 'german_heavy_artillery'
   /**
    * 高级军官（任务 8 起）：与步兵同属「徒步类」单位（size=0、不可朝向、机枪打、不参与坦克 AI），
    * 但在关卡目标上是与 `infantry` **互不替代**的独立 `kind`——避免与回合结束 5–6 spawn 的普通步兵
@@ -162,11 +165,13 @@ export function isTankKind(kind: UnitKind): boolean {
     || kind === 'sherman76'
     || kind === 't34'
     || kind === 'tiger'
+    || kind === 'tigerking'
     || kind === 'panzer4'
     || kind === 'stug3'
     || kind === 'panzer3'
     || kind === 'type95'
-    || kind === 'type97';
+    || kind === 'type97'
+    || kind === 'type4';
 }
 
 export function isTankUnit(u: { kind: UnitKind }): boolean {

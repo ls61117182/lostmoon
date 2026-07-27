@@ -54,6 +54,7 @@ function cellKey(pos: Axial): string {
 function isJapaneseTankOrGunKind(kind: UnitKind): boolean {
   return kind === 'type95'
     || kind === 'type97'
+    || kind === 'type4'
     || kind === 'at_gun'
     || kind === 'heavy_artillery';
 }

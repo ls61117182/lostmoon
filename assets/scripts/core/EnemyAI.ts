@@ -67,10 +67,13 @@ export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
   switch (enemy.kind) {
     case 'type95': return 'type95';
     case 'type97': return 'type97';
+    // 四式中战车暂沿用九七式的日军坦克 AI 骰表。
+    case 'type4': return 'type97';
     case 'at_gun': return 'at_gun';
     case 'japanese_infantry': return 'japanese_infantry';
     case 'american_infantry': return 'american_infantry';
-    case 'heavy_artillery': return 'heavy_artillery';
+    case 'heavy_artillery':
+    case 'german_heavy_artillery': return 'heavy_artillery';
   }
   if (enemy.damaged || (enemy.fireLevel ?? 0) > 0) return 'damaged';
   switch (terrain) {
@@ -116,7 +119,8 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
     case 'at_gun': return { attack: 2, move: 0, misc: 0 };
     case 'japanese_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'american_infantry': return { attack: 0, move: 3, misc: 0 };
-    case 'heavy_artillery': return { attack: 1, move: 0, misc: 0 };
+    case 'heavy_artillery':
+    case 'german_heavy_artillery': return { attack: 1, move: 0, misc: 0 };
   }
   const key = hardcoreTankDiceTerrain(terrain);
   const base = HARDCORE_TANK_AI_DICE_COUNT[key];

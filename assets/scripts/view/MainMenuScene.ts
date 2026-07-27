@@ -145,6 +145,9 @@ type TankVisualDebugKey =
   | 'fitScale'
   | 'offsetForward'
   | 'offsetRight'
+  | 'destroyedOffsetForward'
+  | 'destroyedOffsetRight'
+  | 'destroyedFitScale'
   | 'aspectRatioMul'
   | 'hullFitScale'
   | 'turretScale'
@@ -1287,6 +1290,9 @@ export class MainMenuScene extends Component {
         fitScale: top.fitScale,
         offsetForward: top.offsetForward,
         offsetRight: top.offsetRight,
+        destroyedOffsetForward: top.destroyedOffsetForward,
+        destroyedOffsetRight: top.destroyedOffsetRight,
+        destroyedFitScale: top.destroyedFitScale,
         aspectRatioMul: top.aspectRatioMul,
         hullFitScale: split?.hullFitScale ?? 0,
         turretScale: split?.turretScale ?? 1,
@@ -1410,19 +1416,19 @@ export class MainMenuScene extends Component {
 
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
-    listPanel.addComponent(UITransform).setContentSize(255, 340);
+    listPanel.addComponent(UITransform).setContentSize(255, 400);
     listPanel.setPosition(495, 102, 0);
     const listG = listPanel.addComponent(Graphics);
-    drawFieldPanel(listG, 255, 340, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    drawFieldPanel(listG, 255, 400, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
     panel.addChild(listPanel);
-    this.makeLabel(listPanel, '坦克列表', 0, 142, 180, 28, 20, TEXT_TITLE);
+    this.makeLabel(listPanel, '坦克列表', 0, 170, 180, 28, 20, TEXT_TITLE);
 
     for (let i = 0; i < TANK_VISUAL_KINDS.length; i++) {
       const kind = TANK_VISUAL_KINDS[i]!;
       const col = i % 2;
       const row = Math.floor(i / 2);
       const x = -58 + col * 116;
-      const y = 100 - row * 50;
+      const y = 126 - row * 47;
       const btn = this.makeRectButton(listPanel, x, y, 104, 38, BTN_LEVEL_UNLOCKED, () => {
         selectedKind = kind;
         bodyAngleDeg = 0;
@@ -1450,6 +1456,9 @@ export class MainMenuScene extends Component {
       { key: 'fitScale', label: '完整图缩放' },
       { key: 'offsetForward', label: '完整图前后' },
       { key: 'offsetRight', label: '完整图右侧' },
+      { key: 'destroyedOffsetForward', label: '击毁图前后' },
+      { key: 'destroyedOffsetRight', label: '击毁图右侧' },
+      { key: 'destroyedFitScale', label: '击毁图缩放' },
       { key: 'aspectRatioMul', label: '宽高比倍率' },
       { key: 'hullFitScale', label: '车身缩放' },
       { key: 'turretScale', label: '炮塔缩放' },
@@ -1744,11 +1753,12 @@ export class MainMenuScene extends Component {
           w = displayW * scale * k;
           h = displayH * scale / k;
         }
-        const cfg = tankVisualConfigOf(selectedKind);
-        const f = (splitKindSet.has(selectedKind) ? draft.hullOffsetForward : draft.offsetForward) * offsetUnit
-          + cfg.destroyedOffsetForward;
-        const r = (splitKindSet.has(selectedKind) ? draft.hullOffsetRight : draft.offsetRight) * offsetUnit
-          + cfg.destroyedOffsetRight;
+        w *= Math.max(0.001, draft.destroyedFitScale);
+        h *= Math.max(0.001, draft.destroyedFitScale);
+        const f = ((splitKindSet.has(selectedKind) ? draft.hullOffsetForward : draft.offsetForward)
+          + draft.destroyedOffsetForward) * offsetUnit;
+        const r = ((splitKindSet.has(selectedKind) ? draft.hullOffsetRight : draft.offsetRight)
+          + draft.destroyedOffsetRight) * offsetUnit;
         addSprite(
           previewRoot,
           sf,
@@ -2610,6 +2620,7 @@ export class MainMenuScene extends Component {
       sherman76: 'Sherman 76',
       t34: 'T-34/76',
       tiger: 'Tiger',
+      tigerking: 'Tiger II',
       panzer4: 'Pz IV',
       stug3: 'StuG III',
       panzer3: 'Pz III',
@@ -2619,10 +2630,12 @@ export class MainMenuScene extends Component {
       soviet_infantry: 'Soviet Inf',
       type95: 'Type95',
       type97: 'Type97',
+      type4: 'Type 4 Chi-To',
       at_gun: 'AT Gun',
       japanese_infantry: 'JP Inf',
       american_infantry: 'US Inf',
       heavy_artillery: 'Artillery',
+      german_heavy_artillery: 'German Artillery',
       officer: 'Officer',
     };
     // Keep editor choices in sync with data/units.csv (via the generated UnitDB).
@@ -4438,11 +4451,13 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'sherman76': return 'Sherman 76';
     case 't34': return 'T-34/76';
     case 'tiger': return 'Tiger';
+    case 'tigerking': return 'Tiger II';
     case 'panzer4': return 'Panzer IV';
     case 'panzer3': return 'Panzer III';
     case 'type97': return 'Type 97';
     case 'at_gun': return 'AT Gun';
     case 'heavy_artillery': return 'Artillery';
+    case 'german_heavy_artillery': return 'German Artillery';
     case 'truck': return 'Truck';
     default: return kind;
   }

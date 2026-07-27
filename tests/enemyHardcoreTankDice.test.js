@@ -52,6 +52,12 @@ assert.strictEqual(
   'Heavy artillery should use the configurable action-table path',
 );
 
+assert.strictEqual(
+  unitRows.find((row) => row.unitKind === 'german_heavy_artillery').action_table,
+  'attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1',
+  'German heavy artillery should reuse the Japanese heavy-artillery action table',
+);
+
 assert.deepStrictEqual(
   actionRows.filter((row) => row.die_type === 'misc1').map((row) => Number(row.die)),
   [1, 2, 3, 4, 5, 6],
@@ -156,10 +162,12 @@ assert.match(enemyAI, /out\.push\(\{ type: 'misc', pip: rng\.d6\(\) \}\)/);
 assert.match(enemyAI, /case 'at_gun': return \{ attack: 2, move: 0, misc: 0 \};/);
 assert.match(enemyAI, /case 'japanese_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'american_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
-assert.match(enemyAI, /case 'heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);
+assert.match(enemyAI, /case 'german_heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);
 assert.match(enemyAI, /export function actionForHardcoreTankDie\(unit: Unit, type: EnemyTankDieType, pip: number\): AIActionEntry/);
 assert.match(battleScene, /unit\.stats\.actionTable/);
 assert.match(battleScene, /actionForHardcoreTankDie\(enemy, type, pip\)/);
 assert.match(battleScene, /const AI_MISC_DIE_FILL\s+= new Color\(255, 240, 170, 255\)/);
 assert.match(battleScene, /if \(this\.playerStep === 'misc'\) return AI_MISC_DIE_FILL/);
 assert.match(battleScene, /this\.enemyCrewRequirementMet\(enemy, crew\)/);
+assert.match(battleScene, /firstDamagedRepairableComponent\(enemy\)/);
+assert.doesNotMatch(battleScene, /else if \(enemy\.radioDamaged\)/);

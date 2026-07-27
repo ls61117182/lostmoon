@@ -37,4 +37,10 @@ assert.match(
   'machine-gun fog aiming should consume the selected machine-gun die',
 );
 
+assert.match(
+  source,
+  /private\s+mgActionUnavailable[\s\S]*?if\s*\(GameSession\.gameMode\s*===\s*'hardcore'\)\s*return\s+null;/,
+  'hardcore machine-gun dice should stay available without an infantry target for fog-tile turret aiming',
+);
+
 console.log('BattleScene hardcore machine-gun direction tests passed');

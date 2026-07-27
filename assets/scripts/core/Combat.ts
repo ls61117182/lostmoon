@@ -167,6 +167,7 @@ export function effectivePenetration(attacker: Unit, target: Unit, enabled = fal
 const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
   'type95',
   'type97',
+  'type4',
   'at_gun',
   'japanese_infantry',
   'heavy_artillery',

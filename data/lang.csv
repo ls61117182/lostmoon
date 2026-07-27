@@ -51,6 +51,7 @@ pvp.turnTimer,{player}行动剩余 {seconds}s,{player} time left {seconds}s
 btn.save,存档,Save
 btn.load,读档,Load
 btn.restart,再来一局,Play Again
+btn.retryCampaignSegment,重新挑战本关,Retry This Operation
 btn.backToMenu,返回主菜单,Back to Menu
 btn.movePhase,移动阶段,Move Phase
 btn.attackPhase,攻击阶段,Attack Phase
@@ -78,6 +79,7 @@ status.row.hatch,舱盖,Hatch
 status.row.fire,车体,Hull
 status.row.turret,炮塔,Turret
 status.row.mobility,机动,Mobility
+status.row.radio,无线电,Radio
 status.row.fireLevel,着火程度,Fire level
 status.row.crewTitle,乘员,Crew
 status.crew.1,① 车长,① COM
@@ -140,6 +142,7 @@ action.fireMGCoDriver,副驾驶机枪扫射,Co-driver Fire MG
 floater.noFacing,未定朝向,No Facing
 floater.blockedTerrain,地形阻挡,Blocked Terrain
 floater.enemyBlock,敌方占据,Enemy Blocks
+floater.crushed,碾压,Overrun
 floater.smoke,烟雾,Smoke
 floater.repair,修复,Repair
 floater.repairAndFire,修复并灭火,Repair/Fire
@@ -258,6 +261,7 @@ unit.name.soviet_infantry,苏军步兵,Soviet Infantry
 unit.name.officer,军官,Officer
 unit.name.type95,九五式,Type 95 Ha-Go
 unit.name.type97,九七式,Type 97 Chi-Ha
+unit.name.type4,四式中战车,Type 4 Chi-To
 unit.name.at_gun,反坦克炮,AT Gun
 unit.name.japanese_infantry,日本步兵,Japanese Infantry
 unit.name.american_infantry,美军步兵,American Infantry
