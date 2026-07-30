@@ -1,4 +1,5 @@
 ﻿modifier,value,notes
+修正项,数值,备注
 move_road,2,移动阶段·公路基础骰
 move_field,1,移动阶段·田地基础骰
 move_mud,0,移动阶段·泥地基础骰

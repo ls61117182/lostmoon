@@ -1,4 +1,5 @@
 ﻿kind,sprite1Path,sprite1Scale,sprite2Path,sprite2Scale,sprite3Path,sprite3Scale
+单位类型ID,精灵图1路径,精灵图1缩放,精灵图2路径,精灵图2缩放,精灵图3路径,精灵图3缩放
 infantry,textures/units/Infantry01/spriteFrame,0.6,textures/units/Infantry02/spriteFrame,0.6,textures/units/Infantry03/spriteFrame,0.69
 german_infantry,textures/units/Infantry01/spriteFrame,0.6,textures/units/Infantry02/spriteFrame,0.6,textures/units/Infantry03/spriteFrame,0.69
 soviet_infantry,textures/units/Infantry01/spriteFrame,0.6,textures/units/Infantry02/spriteFrame,0.6,textures/units/Infantry03/spriteFrame,0.6

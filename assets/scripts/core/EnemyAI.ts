@@ -42,7 +42,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isFootUnit, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { Axial, Direction, isAbandonedATGun, isAttachedATGunCrew, isFootUnit, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
 
 // ---------- 行动分类 ----------
 
@@ -173,6 +173,8 @@ export function aiTargetPriority(u: Unit, missionTargets: readonly Unit[]): numb
 
 export function isAIActorUnit(u: Unit): boolean {
   return !u.destroyed
+    && !isAbandonedATGun(u)
+    && !isAttachedATGunCrew(u)
     && u.kind !== 'truck'
     && (!isFootUnit(u) || u.kind === 'japanese_infantry' || u.kind === 'american_infantry');
 }
@@ -185,6 +187,8 @@ export function currentTargetFor(
 ): Unit | null {
   const hostile = candidates.filter(u =>
     !u.destroyed
+    && !isAbandonedATGun(u)
+    && !isAttachedATGunCrew(u)
     && u.faction !== actor.faction
     && (u.kind !== 'truck' || missionTargets.includes(u)),
   );

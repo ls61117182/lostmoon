@@ -142,6 +142,16 @@ function intOrThrow(rec, field) {
   return n;
 }
 
+function optionalInt(rec, field, fallback) {
+  const raw = rec[field];
+  if (raw === '' || raw === undefined) return fallback;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: field ${field}="${raw}" is not a non-negative integer`);
+  }
+  return n;
+}
+
 function jsString(s) {
   return JSON.stringify(s ?? '');
 }
@@ -287,7 +297,9 @@ function build() {
       `penetration: ${r.penetration}, ` +
       `effectiveRange: ${r.effectiveRange}, ` +
       `usCasualtyDice: ${r.usCasualtyDice}, ` +
-      `visionRange: ${r.visionRange},`
+      `visionRange: ${r.visionRange}, ` +
+      `gunnerVisionRange: ${optionalInt(r, 'gunnerVisionRange', 4)}, ` +
+      `interiorVisionRange: ${optionalInt(r, 'interiorVisionRange', 1)},`
     );
     for (const f of BOOL_FIELDS) {
       lines.push(`    ${f}: ${boolOrThrow(r, f)},`);

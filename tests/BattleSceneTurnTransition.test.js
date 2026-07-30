@@ -37,5 +37,15 @@ assert.match(
   /this\.showTurnTransition\(this\.mission\.sherman\.faction, 'player', \(\) => this\.beginPlayerPhaseForNewTurn\(\)\)/,
   'the first player turn of a new battle must also display the banner',
 );
+assert.match(
+  source,
+  /iconNode\.setPosition\(-240, 0, 0\)/,
+  'faction insignia should sit close to the centered copy',
+);
+assert.match(
+  source,
+  /const enter = 0\.12, hold = 1\.2, leave = 0\.13/,
+  'banner enter and leave animations should be twice as fast without changing hold time',
+);
 
 console.log('BattleScene turn-transition tests passed');

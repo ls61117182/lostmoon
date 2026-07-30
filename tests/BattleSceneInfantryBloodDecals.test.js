@@ -31,6 +31,16 @@ assert.match(
 );
 assert.match(
   battleScene,
+  /this\.infantryBloodSpriteFrames\[idx\] = sf;[\s\S]*?this\.flushPendingInfantryBloodDecals\(\);/,
+  'a blood sprite finishing its asynchronous load should flush queued deaths',
+);
+assert.match(
+  battleScene,
+  /if \(!this\.infantryBloodSpriteFrames\.some\(sf => sf !== null\)\)[\s\S]*?this\.pendingInfantryBloodDecals\.set\(u\.id,/,
+  'deaths occurring before blood sprites load should remain queued instead of being silently discarded',
+);
+assert.match(
+  battleScene,
   /private\s+spawnInfantryBloodDecals\s*\(u:\s*Unit\)[\s\S]*?infantrySquadOffsets\(this\.hexSize,\s*coLocateOtherUnit\)/,
   'blood decal placement should use the same three-person squad offsets as live infantry sprites',
 );

@@ -1,4 +1,5 @@
 ﻿position,incomingAngle,armor,damageCheckType,notes
+来袭方位,来袭角度,装甲部位,伤害检定类型,备注
 正前,0,front,front,正前
 正前,30,front,front,右前30度
 正前,-30,front,front,左前30度

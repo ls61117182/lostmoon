@@ -220,12 +220,13 @@ import {
   playMgFire,
   playTankHitPenetration,
   playTankHitRicochet,
+  playStukaFlyover,
   startManeuverSound,
   stopManeuverSound,
   playUiClick,
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel } from '../core/UnitVisualState';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, isFootUnit, isFriendlyFaction, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, MissionData, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -517,7 +518,7 @@ interface CampaignPanAnim {
 
 type DirectionLerp = { from: FireDirection; to: FireDirection; t: number; angular?: boolean };
 
-type Phase = 'player' | 'enemy';
+type Phase = 'player' | 'ally' | 'enemy';
 
 /**
  * 玩家回合内的细分状态机：
@@ -671,6 +672,19 @@ interface Floater {
   t: number;       // 已播放时长（秒）
   dur: number;     // 总时长（秒）
   rise: number;    // 整段动画向上移动的像素
+}
+
+/** A map-local Stuka pass. The plane is deliberately separate from unit redraws. */
+interface StukaFlyover {
+  target: Axial;
+  fromX: number;
+  toX: number;
+  y: number;
+  t: number;
+  dur: number;
+  cannonT: number;
+  cannonSeed: number;
+  onDone: () => void;
 }
 
 // ---------- 配色 ----------
@@ -870,10 +884,12 @@ const ROAD_GRIT_DARK      = new Color(195, 182, 158, 130);
 const WATER_BANK_OUTER    = new Color(168, 142,  92, 230);
 const WATER_BANK_INNER    = new Color(214, 196, 152, 235);
 
-const FACTION_COLORS = {
-  allied: new Color( 60, 160,  80, 255),
+const FACTION_COLORS: Record<Faction, Color> = {
+  usa: new Color( 60, 160,  80, 255),
+  soviet: new Color( 88, 132,  72, 255),
   german: new Color( 60,  60,  60, 255),
   japanese: new Color(128,  52,  44, 255),
+  neutral: new Color(115, 110, 98, 255),
 };
 
 /** 树篱上离散「灌木丛」：比林地略深、略灰，与 FOREST_* 区分 */
@@ -1141,6 +1157,11 @@ export class BattleScene extends Component {
   private infantryBloodSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private infantryBloodDecalNodes: Node[] = [];
   private infantryBloodDecalUnitIds = new Set<string>();
+  private pendingInfantryBloodDecals = new Map<string, {
+    unit: Unit;
+    forceCoLocateOtherUnit: boolean;
+    customOffsets?: Array<{ ox: number; oy: number }>;
+  }>();
   private unitEffectNode: Node | null = null;
   private unitEffectGraphics: Graphics | null = null;
   private unitEffectVisuals = new Map<string, UnitEffectVisual>();
@@ -1221,6 +1242,12 @@ export class BattleScene extends Component {
   private officerTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private officerTopPoolNext = 0;
   private static readonly OFFICER_TOP_SPRITE_POOL = 4;
+  /** Stuka presentation sits above unit content; the graphics layer renders its cannon pass. */
+  private stukaSpriteFrame: SpriteFrame | null = null;
+  private stukaSpriteNode: Node | null = null;
+  private stukaBlastNode: Node | null = null;
+  private stukaBlastGraphics: Graphics | null = null;
+  private stukaFlyover: StukaFlyover | null = null;
   private mission: LoadedMission | null = null;
   private campaignRuntime: StitchedCampaignData | null = null;
   private activeCampaignSegmentIndex = 0;
@@ -1484,6 +1511,7 @@ export class BattleScene extends Component {
     bodyParams: Record<string, string | number>;
     /** 本行效果类型（本地化短名），写入战斗记录用 */
     effectName: string;
+    effectType: TurnEndEffectType;
     apply: () => void;
     extraPhases: TurnEndExtraDicePhase[];
     extraIdx: number;
@@ -1731,6 +1759,18 @@ export class BattleScene extends Component {
         },
       );
     });
+
+    this.loadSpriteFrame(
+      'textures/units/stuka_top/spriteFrame',
+      '[BattleScene] Stuka sprite load failed; flyover will use its fallback marker:',
+      (sf) => {
+        this.stukaSpriteFrame = sf;
+        if (this.stukaSpriteNode) {
+          const sprite = this.stukaSpriteNode.getComponent(Sprite);
+          if (sprite) sprite.spriteFrame = sf;
+        }
+      },
+    );
   }
 
   onLoad() {
@@ -1908,6 +1948,25 @@ export class BattleScene extends Component {
     this.unitEffectNode = effectNode;
     gNode.addChild(effectNode);
 
+    // The blast must cover units, while the aircraft remains the top-most map actor.
+    const stukaBlast = new Node('StukaBlast');
+    stukaBlast.layer = this.node.layer;
+    stukaBlast.addComponent(UITransform).setContentSize(1280, 720);
+    this.stukaBlastGraphics = stukaBlast.addComponent(Graphics);
+    this.stukaBlastNode = stukaBlast;
+    stukaBlast.active = false;
+    this.node.addChild(stukaBlast);
+
+    const stuka = new Node('StukaFlyover');
+    stuka.layer = this.node.layer;
+    stuka.addComponent(UITransform).setContentSize(1, 1);
+    const stukaSprite = stuka.addComponent(Sprite);
+    stukaSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    if (this.stukaSpriteFrame) stukaSprite.spriteFrame = this.stukaSpriteFrame;
+    this.stukaSpriteNode = stuka;
+    stuka.active = false;
+    this.node.addChild(stuka);
+
     this.loadTankVisualSprites();
 
     [
@@ -1922,6 +1981,7 @@ export class BattleScene extends Component {
           return;
         }
         this.infantryBloodSpriteFrames[idx] = sf;
+        this.flushPendingInfantryBloodDecals();
       });
     });
 
@@ -2066,7 +2126,7 @@ export class BattleScene extends Component {
     const iconNode = new Node('FactionIcon');
     iconNode.layer = this.node.layer;
     iconNode.addComponent(UITransform).setContentSize(72, 72);
-    iconNode.setPosition(-360, 0, 0);
+    iconNode.setPosition(-240, 0, 0);
     const icon = iconNode.addComponent(Sprite);
     icon.sizeMode = Sprite.SizeMode.CUSTOM;
     panel.addChild(iconNode);
@@ -2081,7 +2141,7 @@ export class BattleScene extends Component {
     (root as any).__turnTransitionRefs = { panel, panelG, opacity, title, subtitle, icon };
   }
 
-  private showTurnTransition(factionId: string, side: 'player' | 'enemy', onDone: () => void) {
+  private showTurnTransition(factionId: string, side: 'player' | 'ally' | 'enemy', onDone: () => void) {
     const root = this.node.getChildByName('TurnTransition');
     const refs = (root as any)?.__turnTransitionRefs;
     if (!root || !refs) { onDone(); return; }
@@ -2099,11 +2159,11 @@ export class BattleScene extends Component {
     g.moveTo(-w * 0.5, -h * 0.5 + 1); g.lineTo(w * 0.5, -h * 0.5 + 1);
     g.stroke();
     refs.title.string = getLang() === 'zh'
-      ? `第 ${String(this.turn).padStart(2, '0')} 回合 · ${side === 'player' ? '玩家回合' : '敌方回合'}`
-      : `TURN ${this.turn} · ${side === 'player' ? 'PLAYER TURN' : 'ENEMY TURN'}`;
+      ? `第 ${String(this.turn).padStart(2, '0')} 回合 · ${side === 'player' ? '玩家回合' : side === 'ally' ? '友方 AI 回合' : '敌方回合'}`
+      : `TURN ${this.turn} · ${side === 'player' ? 'PLAYER TURN' : side === 'ally' ? 'ALLIED AI TURN' : 'ENEMY TURN'}`;
     refs.subtitle.string = getLang() === 'zh'
-      ? (side === 'player' ? '选择行动阶段，指挥你的部队' : '敌军正在部署行动')
-      : (side === 'player' ? 'Choose a phase and command your forces' : 'Enemy forces are deploying');
+      ? (side === 'player' ? '选择行动阶段，指挥你的部队' : side === 'ally' ? '友方单位正在部署行动' : '敌军正在部署行动')
+      : (side === 'player' ? 'Choose a phase and command your forces' : side === 'ally' ? 'Allied forces are deploying' : 'Enemy forces are deploying');
     refs.icon.spriteFrame = this.factionSpriteFrames.get(faction.id) ?? null;
     resources.load(faction.iconPath, SpriteFrame, (err, sf) => {
       if (!err && sf && this.turnTransition?.faction === faction.id) {
@@ -2121,7 +2181,8 @@ export class BattleScene extends Component {
     const transition = this.turnTransition;
     if (!transition) return;
     transition.t += dt;
-    const enter = 0.24, hold = 1.2, leave = 0.26;
+    // 入场与淡出各提速 100%；完整展示时长保持不变。
+    const enter = 0.12, hold = 1.2, leave = 0.13;
     if (transition.t < enter) {
       transition.panel.setPosition(-CANVAS_W + CANVAS_W * (transition.t / enter), 0, 0);
       return;
@@ -2695,6 +2756,8 @@ export class BattleScene extends Component {
       loaded: !!src.loaded,
       hatchOpen: !!src.hatchOpen,
       visionRange: Number.isFinite(Number(src.visionRange)) ? Number(src.visionRange) : stats.visionRange,
+      gunnerVisionRange: Number.isFinite(Number(src.gunnerVisionRange)) ? Number(src.gunnerVisionRange) : stats.gunnerVisionRange,
+      interiorVisionRange: Number.isFinite(Number(src.interiorVisionRange)) ? Number(src.interiorVisionRange) : stats.interiorVisionRange,
       radioDamaged: !!src.radioDamaged,
       crew: src.role === 'protagonist'
         ? (src.crew ?? { commander: true, loader: true, gunner: true, driver: true, coDriver: true })
@@ -2723,6 +2786,8 @@ export class BattleScene extends Component {
       smoked: !!unit.smoked,
       radioDamaged: !!unit.radioDamaged,
       visionRange: unit.visionRange ?? unit.stats.visionRange,
+      gunnerVisionRange: unit.gunnerVisionRange ?? unit.stats.gunnerVisionRange,
+      interiorVisionRange: unit.interiorVisionRange ?? unit.stats.interiorVisionRange,
       crew: unit.crew,
     };
   }
@@ -2763,6 +2828,8 @@ export class BattleScene extends Component {
         smoked: !!unit.smoked,
         radioDamaged: !!unit.radioDamaged,
         visionRange: unit.visionRange ?? 0,
+        gunnerVisionRange: unit.gunnerVisionRange ?? 0,
+        interiorVisionRange: unit.interiorVisionRange ?? 0,
         crew: unit.crew,
       })),
       smokeHexes: this.mission ? Array.from(this.mission.smokeHexes).sort() : [],
@@ -2980,7 +3047,7 @@ export class BattleScene extends Component {
       missionId: this.missionId,
       mission: this.mission,
       turn: this.turn,
-      phase: this.phase,
+      phase: this.phase === 'ally' ? 'enemy' : this.phase,
       movesLeft: this.movementDone ? 0 : 2,
       attacksLeft: this.attackDone ? 0 : 1,
       miscDone: this.miscDone,
@@ -3412,6 +3479,11 @@ export class BattleScene extends Component {
     for (const u of units) {
       if (!u.destroyed) this.drawUnitMaybeAnim(u);
     }
+    // Controlled AT guns are a composite: gun sprite first, then the three
+    // operator infantry sprites using the controlling faction's visuals.
+    for (const u of units) {
+      if (GameSession.gameMode === 'hardcore' && isControlledATGun(u)) this.drawATGunCrewMaybeAnim(u);
+    }
     this.g = g;
     this.placeUnitEffectLayerAboveUnits();
     this.syncUnitEffects(0);
@@ -3832,7 +3904,7 @@ export class BattleScene extends Component {
     for (const e of enemies) {
       if (e.destroyed) continue;
       if (!this.isUnitVisible(e)) continue;
-      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections };
+      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore' };
       if (!canMGAttack(ctx).ok) continue;
 
       const c = this.project(e.pos.q, e.pos.r);
@@ -4297,6 +4369,7 @@ export class BattleScene extends Component {
    */
   private spawnUnitNameLabel(u: Unit) {
     if (!this.mapNode) return;
+    if (isAttachedATGunCrew(u) || isAbandonedATGun(u)) return;
     if (!this.isUnitVisible(u)) return;
     if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return;
     if (u.destroyed && this.hasLiveUnitOnSameTile(u)) return;
@@ -4736,6 +4809,7 @@ export class BattleScene extends Component {
     }
     this.infantryBloodDecalNodes.length = 0;
     this.infantryBloodDecalUnitIds.clear();
+    this.pendingInfantryBloodDecals.clear();
   }
 
   private infantryBloodSpriteFrameFor(unitId: string, soldierIndex: number): SpriteFrame | null {
@@ -4749,13 +4823,32 @@ export class BattleScene extends Component {
   }
 
   private spawnInfantryBloodDecals(u: Unit): void {
+    this.spawnInfantryBloodDecalsAt(u, false);
+  }
+
+  private spawnInfantryBloodDecalsAt(
+    u: Unit,
+    forceCoLocateOtherUnit: boolean,
+    customOffsets?: Array<{ ox: number; oy: number }>,
+  ): void {
     const layer = this.infantryBloodDecalLayerNode;
     if (!layer || this.infantryBloodDecalUnitIds.has(u.id)) return;
+    if (!this.infantryBloodSpriteFrames.some(sf => sf !== null)) {
+      // Resource loading is asynchronous. Keep the death request so a hit in
+      // the first moments of a mission still receives decals once a frame loads.
+      this.pendingInfantryBloodDecals.set(u.id, {
+        unit: u,
+        forceCoLocateOtherUnit,
+        customOffsets,
+      });
+      return;
+    }
+    this.pendingInfantryBloodDecals.delete(u.id);
     this.infantryBloodDecalUnitIds.add(u.id);
 
     const c = this.project(u.pos.q, u.pos.r);
-    const coLocateOtherUnit = this.infantrySharesHexWithOtherUnit(u);
-    const offsets = infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
+    const coLocateOtherUnit = forceCoLocateOtherUnit || this.infantrySharesHexWithOtherUnit(u);
+    const offsets = customOffsets ?? infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
     // The source decals are 100×100; render at 60% of the previous 50 px size.
     const decalSize = 30;
     for (let i = 0; i < offsets.length; i++) {
@@ -4776,6 +4869,18 @@ export class BattleScene extends Component {
     }
   }
 
+  private flushPendingInfantryBloodDecals(): void {
+    if (!this.infantryBloodSpriteFrames.some(sf => sf !== null)) return;
+    const pending = [...this.pendingInfantryBloodDecals.values()];
+    for (const request of pending) {
+      this.spawnInfantryBloodDecalsAt(
+        request.unit,
+        request.forceCoLocateOtherUnit,
+        request.customOffsets,
+      );
+    }
+  }
+
   private registerDestroyWreckVisual(u: Unit): void {
     if (!u.destroyed) return;
     if (isFootUnit(u)) {
@@ -4783,6 +4888,69 @@ export class BattleScene extends Component {
       return;
     }
     this.destroyWreckVisualIds.add(u.id);
+  }
+
+  private atGunController(gun: Unit): Unit | null {
+    if (!gun.atGunControllerUnitId) return null;
+    return this.allUnits().find(u => u.id === gun.atGunControllerUnitId) ?? null;
+  }
+
+  /** Kill only the AT-gun operator group, leaving an intact neutral gun behind. */
+  private killATGunCrew(gun: Unit): void {
+    if (gun.kind !== 'at_gun') return;
+    // Blood must remain exactly where the three visible operators stood, not
+    // at the generic infantry triangle used by ordinary squads.
+    const crewOffsets = this.atGunCrewFormationOffsets(gun);
+    const controller = this.atGunController(gun);
+    if (controller && !controller.destroyed) {
+      controller.pos = { ...gun.pos };
+      controller.destroyed = true;
+      controller.attachedToATGunId = undefined;
+      this.spawnInfantryBloodDecalsAt(controller, true, crewOffsets);
+    } else {
+      const crew = this.atGunCrewProxy(gun);
+      crew.destroyed = true;
+      this.spawnInfantryBloodDecalsAt(crew, true, crewOffsets);
+    }
+    gun.atGunCrewAlive = false;
+    gun.atGunControllerUnitId = undefined;
+    gun.faction = 'neutral';
+    gun.visionRange = 0;
+  }
+
+  private rehomeCapturedATGun(gun: Unit): void {
+    if (!this.mission) return;
+    const friendly = isFriendlyFaction(gun.faction);
+    const from = friendly ? this.mission.enemies : this.mission.allies;
+    const to = friendly ? this.mission.allies : this.mission.enemies;
+    const idx = from.indexOf(gun);
+    if (idx >= 0) {
+      from.splice(idx, 1);
+      if (!to.includes(gun)) to.push(gun);
+    }
+  }
+
+  /** Hardcore: infantry entering an abandoned gun hex becomes its operator group. */
+  private captureAbandonedATGunsAt(infantry: Unit): void {
+    if (GameSession.gameMode !== 'hardcore' || !isFootUnit(infantry) || infantry.destroyed) return;
+    const gun = this.allUnits().find(unit =>
+      isAbandonedATGun(unit)
+      && unit.pos.q === infantry.pos.q
+      && unit.pos.r === infantry.pos.r
+    );
+    if (!gun) return;
+    gun.faction = infantry.faction;
+    gun.atGunCrewAlive = true;
+    gun.atGunCrewKind = infantryKindForFaction(infantry.faction);
+    gun.atGunCrewTargetSize = infantry.stats.size;
+    gun.atGunCrewGeneration = (gun.atGunCrewGeneration ?? 0) + 1;
+    gun.atGunControllerUnitId = infantry.id;
+    gun.visionRange = infantry.visionRange ?? infantry.stats.visionRange;
+    infantry.attachedToATGunId = gun.id;
+    infantry.pos = { ...gun.pos };
+    infantry.facing = gun.facing;
+    this.rehomeCapturedATGun(gun);
+    this.battleLog(`[Hardcore] ${unitDisplayName(infantry.kind)} controls ${unitDisplayName(gun.kind)}`);
   }
 
   private clearDestroyWreckVisuals(): void {
@@ -5659,8 +5827,287 @@ export class BattleScene extends Component {
     }
   }
 
+  /**
+   * Plays a Stuka across the target row. `attackerIsPlayer` makes the same
+   * presentation usable by future player/PvP air-strike events.
+   */
+  private playStukaFlyover(target: Unit, attackerIsPlayer: boolean, onDone: () => void) {
+    if (!this.mission || !this.mapNode || this.stukaFlyover) {
+      onDone();
+      return;
+    }
+    const targetPoint = this.project(target.pos.q, target.pos.r);
+    const mapPos = this.mapNode.position;
+    const screenLeft = -CANVAS_W / 2;
+    const screenRight = CANVAS_W / 2;
+    // Keep the whole 150%-sized aircraft outside the canvas at both ends.
+    const offscreenPad = this.hexSize * 1.2;
+    const fromX = attackerIsPlayer
+      ? screenLeft - offscreenPad
+      : screenRight + offscreenPad;
+    const toX = attackerIsPlayer
+      ? screenRight + offscreenPad
+      : screenLeft - offscreenPad;
+    this.stukaFlyover = {
+      target: { ...target.pos }, fromX, toX, y: targetPoint.y + mapPos.y,
+      t: 0, dur: 4, cannonT: -1,
+      cannonSeed: this.hashStringToSeed(`stuka:${target.id}:${this.turn}`),
+      onDone,
+    };
+    if (this.stukaSpriteNode) {
+      this.stukaSpriteNode.active = true;
+    }
+    playStukaFlyover();
+  }
+
+  private advanceStukaFlyover(dt: number) {
+    const pass = this.stukaFlyover;
+    if (!pass) return;
+    pass.t += dt;
+    const p = Math.min(1, pass.t / pass.dur);
+    const x = pass.fromX + (pass.toX - pass.fromX) * p;
+    const targetX = this.project(pass.target.q, pass.target.r).x
+      + (this.mapNode?.position.x ?? 0);
+    const direction = pass.toX < pass.fromX ? -1 : 1;
+    // Start roughly three hexes before the target, so the plane is still
+    // approaching while its cannon tracers converge on the tank.
+    const attackLead = this.hexSize * Math.sqrt(3) * 3;
+    const attackStartX = targetX - direction * attackLead;
+    if (pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
+      pass.cannonT = 0;
+    }
+    if (pass.cannonT >= 0) {
+      pass.cannonT += dt;
+      // The Ju 87 G attacks with its BK 3.7 cannon pods.  The visuals are
+      // deliberately a compact burst: combat resolution stays unchanged.
+      this.drawStukaCannonBurst(pass);
+    }
+    const plane = this.stukaSpriteNode;
+    if (plane) {
+      const sprite = plane.getComponent(Sprite);
+      const transform = plane.getComponent(UITransform);
+      if (sprite?.spriteFrame && transform) {
+        // 150% of the original 1.35-hex presentation size.
+        transform.setContentSize(this.hexSize * 2.025, this.hexSize * 2.025);
+      }
+      plane.setPosition(x, pass.y, 0);
+      // The source art's nose/propeller points right (+X); its tail is on the
+      // left. Align that authored forward vector with the horizontal velocity.
+      plane.angle = pass.toX < pass.fromX ? 180 : 0;
+      plane.setScale(1, 1, 1);
+    }
+    if (p < 1) return;
+    if (plane) plane.active = false;
+    if (this.stukaBlastNode) this.stukaBlastNode.active = false;
+    this.stukaFlyover = null;
+    pass.onDone();
+  }
+
+  /**
+   * Draw a short BK 3.7 cannon sweep directly over the tank.  It is kept on a
+   * screen-space overlay so it stays readable above the unit sprite while the
+   * map/camera moves.  Eight visible tracers stand in for the full fire rate.
+   */
+  private drawStukaCannonBurst(pass: StukaFlyover) {
+    const node = this.stukaBlastNode;
+    const g = this.stukaBlastGraphics;
+    if (!node || !g || !this.mapNode) return;
+
+    g.clear();
+    node.active = true;
+    const target = this.project(pass.target.q, pass.target.r);
+    const mapPos = this.mapNode.position;
+    const targetX = target.x + mapPos.x;
+    const targetY = target.y + mapPos.y;
+    const cannonStartT = pass.t - pass.cannonT;
+    const direction = pass.toX < pass.fromX ? -1 : 1;
+    const shots = 8;
+    const shotGap = 0.075;
+    const flightDur = 0.12;
+
+    for (let i = 0; i < shots; i++) {
+      const shotStart = i * shotGap;
+      const age = pass.cannonT - shotStart;
+      if (age < 0 || age > 0.78) continue;
+      const lateral = (this.seededUnit(pass.cannonSeed, i * 5) - 0.5) * this.hexSize * 0.52;
+      const forward = (this.seededUnit(pass.cannonSeed, i * 5 + 1) - 0.5) * this.hexSize * 0.30;
+      const impactX = targetX + lateral;
+      const impactY = targetY + forward;
+      const launchP = Math.max(0, Math.min(1, (cannonStartT + shotStart) / pass.dur));
+      const launchX = pass.fromX + (pass.toX - pass.fromX) * launchP;
+      const launchY = pass.y + (i % 2 === 0 ? -1 : 1) * this.hexSize * 0.13;
+
+      if (age <= flightDur) {
+        const travel = age / flightDur;
+        const headX = launchX + (impactX - launchX) * travel;
+        const headY = launchY + (impactY - launchY) * travel;
+        const dx = impactX - launchX;
+        const dy = impactY - launchY;
+        const len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len;
+        const uy = dy / len;
+        const tail = Math.min(this.hexSize * 0.7, len * 0.30);
+        g.lineWidth = Math.max(2, this.hexSize * 0.035);
+        g.strokeColor = new Color(255, 166, 36, 218);
+        g.moveTo(headX - ux * tail, headY - uy * tail);
+        g.lineTo(headX, headY);
+        g.stroke();
+        g.lineWidth = Math.max(1, this.hexSize * 0.016);
+        g.strokeColor = new Color(255, 247, 176, 250);
+        g.moveTo(headX - ux * tail * 0.62, headY - uy * tail * 0.62);
+        g.lineTo(headX + ux * this.hexSize * 0.04, headY + uy * this.hexSize * 0.04);
+        g.stroke();
+        continue;
+      }
+
+      const impactAge = age - flightDur;
+      const sparkFade = Math.max(0, 1 - impactAge / 0.24);
+      const scorchFade = Math.max(0, 1 - impactAge / 0.66);
+      const impactSize = this.hexSize * (0.12 + Math.min(impactAge, 0.16) * 0.42);
+      if (scorchFade > 0) {
+        g.fillColor = new Color(24, 20, 17, Math.round(75 * scorchFade));
+        g.ellipse(impactX, impactY, impactSize * 1.45, impactSize * 0.70);
+        g.fill();
+      }
+      if (sparkFade <= 0) continue;
+
+      g.fillColor = new Color(255, 204, 62, Math.round(225 * sparkFade));
+      g.circle(impactX, impactY, impactSize);
+      g.fill();
+      g.fillColor = new Color(255, 249, 204, Math.round(255 * sparkFade));
+      g.circle(impactX, impactY, Math.max(1.5, impactSize * 0.42));
+      g.fill();
+      for (let ray = 0; ray < 6; ray++) {
+        const angle = (ray * Math.PI * 2 / 6) + this.seededUnit(pass.cannonSeed, i * 11 + ray + 2) * 0.5;
+        const length = impactSize * (1.8 + this.seededUnit(pass.cannonSeed, i * 13 + ray) * 1.5) * sparkFade;
+        g.strokeColor = ray % 2 === 0
+          ? new Color(255, 238, 142, Math.round(220 * sparkFade))
+          : new Color(255, 104, 28, Math.round(185 * sparkFade));
+        g.lineWidth = Math.max(1, this.hexSize * 0.012);
+        g.moveTo(impactX, impactY);
+        g.lineTo(impactX + Math.cos(angle) * length, impactY + Math.sin(angle) * length);
+        g.stroke();
+      }
+
+      // A few shells visibly glance away, selling the tank's armour without
+      // suggesting every round penetrates.
+      if (i % 3 === 1) {
+        const ricochetLife = Math.max(0, 1 - impactAge / 0.32);
+        const bounceAngle = direction > 0 ? -0.55 : Math.PI + 0.55;
+        const bounceLen = this.hexSize * 0.60 * ricochetLife;
+        g.strokeColor = new Color(255, 218, 104, Math.round(210 * ricochetLife));
+        g.lineWidth = Math.max(1, this.hexSize * 0.018);
+        g.moveTo(impactX, impactY);
+        g.lineTo(impactX + Math.cos(bounceAngle) * bounceLen, impactY + Math.sin(bounceAngle) * bounceLen);
+        g.stroke();
+      }
+    }
+
+    // A restrained pulse is enough to make the tank feel under sustained fire.
+    if (pass.cannonT < 0.72) {
+      const pulse = 0.5 + 0.5 * Math.sin(pass.cannonT * Math.PI * 22);
+      g.strokeColor = new Color(255, 244, 202, Math.round(42 * pulse));
+      g.lineWidth = Math.max(1, this.hexSize * 0.018);
+      g.ellipse(targetX, targetY, this.hexSize * 0.40, this.hexSize * 0.25);
+      g.stroke();
+    }
+  }
+
+  private drawStukaBlast(target: Axial, progress: number) {
+    const node = this.stukaBlastNode;
+    const g = this.stukaBlastGraphics;
+    if (!node || !g) return;
+    const c = this.project(target.q, target.r);
+    const mapPos = this.mapNode?.position ?? Vec3.ZERO;
+    const cx = c.x + mapPos.x;
+    const cy = c.y + mapPos.y;
+    g.clear();
+    node.active = true;
+    const p = Math.max(0, Math.min(1, progress));
+    const expand = 1 - Math.pow(1 - p, 3);
+    const flash = Math.max(0, 1 - p / 0.32);
+    const fire = Math.max(0, 1 - Math.max(0, p - 0.08) / 0.72);
+    const smokeIn = Math.min(1, Math.max(0, (p - 0.10) / 0.28));
+    const smokeOut = Math.max(0, 1 - Math.max(0, p - 0.58) / 0.42);
+    const smoke = smokeIn * smokeOut;
+    const alpha = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+    // Overall blast presentation remains at 180% of its base animated radius.
+    const r = this.hexSize * (0.20 + expand * 0.48) * 1.8;
+
+    // Ground dust and heavy brown-black smoke build behind the fireball.
+    for (let i = 0; i < 20; i++) {
+      const a = i * Math.PI * 2 / 20 + Math.sin(i * 7.31) * 0.10;
+      const radial = r * (0.36 + smokeIn * 0.34 + (i % 4) * 0.035);
+      const blobR = r * (0.105 + (i % 5) * 0.014 + smokeIn * 0.045);
+      const x = cx + Math.cos(a) * radial;
+      const y = cy + Math.sin(a) * radial;
+      const shade = 38 + (i % 4) * 13;
+      g.fillColor = new Color(
+        shade + 22,
+        Math.max(22, shade - 4),
+        Math.max(14, shade - 16),
+        alpha(205 * smoke),
+      );
+      g.circle(x, y, blobR);
+      g.fill();
+      g.fillColor = new Color(24, 22, 20, alpha(105 * smoke));
+      g.circle(x + blobR * 0.18, y + blobR * 0.16, blobR * 0.68);
+      g.fill();
+    }
+
+    // Fast incandescent jets and darker debris make the impact directional
+    // and irregular instead of reading as a geometric sun icon.
+    for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI * 2 / 24 + Math.sin(i * 4.73) * 0.075;
+      const inner = r * (0.08 + (i % 3) * 0.018);
+      const outer = r * (0.56 + (i % 5) * 0.09) * (0.72 + flash * 0.28);
+      g.strokeColor = i % 3 === 0
+        ? new Color(255, 248, 185, alpha(255 * fire))
+        : new Color(255, 143 + (i % 4) * 18, 18, alpha(235 * fire));
+      g.lineWidth = Math.max(2, r * (i % 4 === 0 ? 0.052 : 0.026));
+      g.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      g.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+      g.stroke();
+    }
+    for (let i = 0; i < 11; i++) {
+      const a = i * Math.PI * 2 / 11 + 0.19;
+      const inner = r * 0.48;
+      const outer = r * (0.76 + (i % 3) * 0.10);
+      g.strokeColor = new Color(48, 32, 22, alpha(175 * smoke));
+      g.lineWidth = Math.max(2, r * 0.025);
+      g.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+      g.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+      g.stroke();
+    }
+
+    // Overlapping lobes form an uneven orange-red fireball.
+    for (let i = 0; i < 15; i++) {
+      const a = i * Math.PI * 2 / 15 + Math.sin(i * 2.17) * 0.12;
+      const radial = r * (0.20 + (i % 4) * 0.025);
+      const blobR = r * (0.17 + (i % 3) * 0.025);
+      const hot = i % 3 === 0;
+      g.fillColor = hot
+        ? new Color(255, 190, 35, alpha(238 * fire))
+        : new Color(224, 66 + (i % 4) * 13, 15, alpha(220 * fire));
+      g.circle(cx + Math.cos(a) * radial, cy + Math.sin(a) * radial, blobR);
+      g.fill();
+    }
+
+    // White-hot center peaks immediately, then reveals the orange core.
+    g.fillColor = new Color(255, 116, 16, alpha(235 * fire));
+    g.circle(cx, cy, r * 0.31);
+    g.fill();
+    g.fillColor = new Color(255, 224, 82, alpha(250 * Math.max(fire, flash)));
+    g.circle(cx, cy, r * (0.19 + flash * 0.07));
+    g.fill();
+    g.fillColor = new Color(255, 255, 238, alpha(255 * flash));
+    g.circle(cx, cy, r * (0.10 + flash * 0.08));
+    g.fill();
+  }
+
   update(dt: number) {
     this.advanceTurnTransition(dt);
+    this.advanceStukaFlyover(dt);
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
     if (this.floaters.length > 0) this.advanceFloaters(dt);
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
@@ -5765,6 +6212,7 @@ export class BattleScene extends Component {
     if (anim.kind === 'move') {
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
       this.crushEnemyATGunsAt(finishedUnit);
+      this.captureAbandonedATGunsAt(finishedUnit);
       if (anim.evacExit && this.mission) {
         this.mission.shermanEvacuated = true;
         this.outcome = this.computeOutcome();
@@ -5825,7 +6273,7 @@ export class BattleScene extends Component {
       return;
     }
     // 若处于敌方阶段，紧接着调度下一颗骰（骰子托盘固定在 UI 上，无需每步重建）
-    if (this.phase === 'enemy') {
+    if (this.phase === 'ally' || this.phase === 'enemy') {
       this.enemyDiceHighlightIdx = -1;
       this.refreshEnemyDiceTray();
       this.runNextEnemyStep();
@@ -7845,6 +8293,7 @@ export class BattleScene extends Component {
     overrideY?: number,
     facingLerp?: DirectionLerp | null,
   ) {
+    if (isAttachedATGunCrew(u)) return;
     const g = this.g!;
     const c = overrideX !== undefined && overrideY !== undefined
       ? { x: overrideX, y: overrideY }
@@ -7955,6 +8404,51 @@ export class BattleScene extends Component {
     // PNG 车辆通过炮管/炮塔表达朝向；fallback 矢量车体不再额外画长朝向线，避免出现多余细边线。
   }
 
+  private atGunCrewProxy(gun: Unit): Unit {
+    const kind = gun.atGunCrewKind ?? infantryKindForFaction(gun.faction);
+    return {
+      id: `${gun.id}:crew:${gun.atGunCrewGeneration ?? 0}`,
+      kind,
+      faction: gun.faction,
+      pos: gun.pos,
+      facing: gun.facing,
+      stats: getUnitStats(kind, this.mission?.data.theater ?? 'europe'),
+    };
+  }
+
+  private atGunCrewFormationOffsets(gun: Unit): Array<{ ox: number; oy: number }> {
+    const facing = gun.facing ?? 0;
+    const next = this.project(neighbor(gun.pos, facing).q, neighbor(gun.pos, facing).r);
+    const origin = this.project(gun.pos.q, gun.pos.r);
+    const len = Math.hypot(next.x - origin.x, next.y - origin.y) || 1;
+    const ux = (next.x - origin.x) / len;
+    const uy = (next.y - origin.y) / len;
+    const rx = -uy;
+    const ry = ux;
+    // The supplied reference places the crew on the PNG's right-hand side as
+    // a triangle: upper-right, far-right centre, and lower-right. The authored
+    // sprite axis is opposite the logical facing vector used by combat rules.
+    const crewSide = -1;
+    const forwardShift = this.hexSize * 0.25;
+    return [
+      { forward: this.hexSize * 0.47, side: -this.hexSize * 0.43 },
+      { forward: this.hexSize * 0.82, side: 0 },
+      { forward: this.hexSize * 0.47, side: this.hexSize * 0.43 },
+    ].map(({ forward, side }) => ({
+      ox: ux * (forward * crewSide + forwardShift) + rx * side,
+      oy: uy * (forward * crewSide + forwardShift) + ry * side,
+    }));
+  }
+
+  private drawATGunCrewMaybeAnim(gun: Unit): void {
+    if (!isControlledATGun(gun)) return;
+    const c = this.anim?.unit === gun
+      ? this.interpolatedPos(gun)
+      : this.project(gun.pos.q, gun.pos.r);
+    const offsets = this.atGunCrewFormationOffsets(gun);
+    this.drawInfantry(this.atGunCrewProxy(gun), c.x, c.y, offsets);
+  }
+
   /**
    * 步兵 / 军官渲染：用 Infantry01~03.png 三张俯视图组成"3 人小队"棋子，整体半径约占格 50%。
    *
@@ -7989,7 +8483,12 @@ export class BattleScene extends Component {
     return direction === null ? 0 : infantrySpriteAngle(direction);
   }
 
-  private drawInfantry(u: Unit, cx: number, cy: number) {
+  private drawInfantry(
+    u: Unit,
+    cx: number,
+    cy: number,
+    customOffsets?: Array<{ ox: number; oy: number }>,
+  ) {
     const g = this.g!;
     const visualAngle = this.infantryVisualAngle(u);
 
@@ -8064,7 +8563,7 @@ export class BattleScene extends Component {
     //   位置 2（Infantry03）：左下（cx - ringR·sin60°, cy - ringR·cos60°）
     // 默认 ringR = teamRadius·0.546 ≈ hexSize·0.273（紧凑成队）；
     // 同格有车辆时 ringR = hexSize·0.58，三人散到格内切圆（≈ hexSize·0.866）附近，避开车辆体型。
-    const offsets = infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
+    const offsets = customOffsets ?? infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
     /** 单兵 sprite 显示尺寸（按图最长边等比缩放到该值） */
     const spriteFit = this.hexSize * 0.58;
 
@@ -9156,7 +9655,9 @@ export class BattleScene extends Component {
     this.refreshWeatherHud();
 
     if (this.hudLabel) {
-      if (this.phase !== 'player') {
+      if (this.phase === 'ally') {
+        this.hudLabel.string = t('hud.allyTurn', { n: this.turn });
+      } else if (this.phase === 'enemy') {
         this.hudLabel.string = t('hud.enemyTurn', { n: this.turn });
       } else if (this.playerStep === 'choose') {
         const doneTag = [
@@ -9318,7 +9819,8 @@ export class BattleScene extends Component {
 
   private computeAdvanceButton(): { label: string; urgent: boolean; disabled?: boolean } {
     if (this.isPvpWaitingForRemoteAction()) return { label: t('btn.waitingOpponent'), urgent: false, disabled: true };
-    if (this.phase !== 'player') return { label: t('btn.enemyTurnRunning'), urgent: false };
+    if (this.phase === 'ally') return { label: t('btn.allyTurnRunning'), urgent: false };
+    if (this.phase === 'enemy') return { label: t('btn.enemyTurnRunning'), urgent: false };
     if (this.playerStep === 'misc') return { label: t('btn.endTurn'), urgent: true };
     if (this.playerStep === 'movement' || this.playerStep === 'attack') {
       return { label: t('btn.nextPhase'), urgent: false };
@@ -10204,7 +10706,7 @@ export class BattleScene extends Component {
         this.submitPvpTurnEnd();
         return;
       }
-      this.beginEnemyPhase();
+      this.beginAllyPhase();
       return;
     }
     this.playerStep = 'choose';
@@ -10320,8 +10822,11 @@ export class BattleScene extends Component {
     if (s.turretDamaged) return t('attack.reason.turretDamaged');
     const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
     if (crewReason) return crewReason;
+    // 硬核模式关闭舱盖时，主炮骰可用于战争迷雾中的炮塔侦察；该用途不需要装填。
+    // 实际开炮仍会在 tryAttack 中要求 loaded。
+    const canUseUnloadedForTurretRecon = GameSession.gameMode === 'hardcore' && !s.hatchOpen;
+    if (!s.loaded && !canUseUnloadedForTurretRecon) return t('hud.unloaded');
     if (!fogOfWarEnabled(GameSession.gameMode)) {
-      if (!s.loaded) return t('hud.unloaded');
       const hasTarget = this.mission.enemies.some(e => !e.destroyed && canAttack({
         attacker: s,
         target: e,
@@ -10348,6 +10853,7 @@ export class BattleScene extends Component {
       theater: this.mission!.data.theater,
       units,
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
+      atGunCrewTargets: GameSession.gameMode === 'hardcore',
     }).ok);
     return hasTarget ? null : t('floater.noInfantry');
   }
@@ -10634,11 +11140,18 @@ export class BattleScene extends Component {
       lab.overflow = Label.Overflow.SHRINK;
       lab.string = this.fitTextForLabel(lab, it.text, ITEM_W);
       btn.addChild(tn);
-      btn.on(Node.EventType.TOUCH_END, () => {
-        playUiClick();
-        if (it.unavailableReason) this.showDieActionUnavailable(it.unavailableReason, btn);
-        else it.onClick();
-      }, this);
+      // 不满足条件的选项仅作为状态提示展示：置灰且不注册点击事件。
+      if (!it.unavailableReason) {
+        btn.on(Node.EventType.TOUCH_END, () => {
+          playUiClick();
+          it.onClick();
+        }, this);
+      } else {
+        // 灰色项不可执行，但仍需吞掉触摸，避免点按穿透到下方的地图格。
+        const swallowTouch = (event: EventTouch) => { event.propagationStopped = true; };
+        btn.on(Node.EventType.TOUCH_START, swallowTouch, this);
+        btn.on(Node.EventType.TOUCH_END, swallowTouch, this);
+      }
       panel.addChild(btn);
     }
     this.diePopover = panel;
@@ -11118,7 +11631,7 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[this.selectedMGDieIdx];
     if (!slot || slot.used) return;
 
-    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units, expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections });
+    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units, expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore' });
     if (!check.ok) {
       this.battleLogI18n('battleLog.combat.cannotAttack', {
         reasonKey: check.reason ?? 'attack.reason.unknown',
@@ -11138,7 +11651,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather() };
+    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), atGunCrewTargets: GameSession.gameMode === 'hardcore' };
     const maxRoll = maxMGHitRoll(ctx);
     const impossibleThreshold = mgHitThreshold(ctx);
     const impossible = maxRoll < impossibleThreshold;
@@ -11206,7 +11719,7 @@ export class BattleScene extends Component {
       unitDisplayName(target.kind),
       () => {
         if (!this.mission) return;
-        applyMGAttack(target, report);
+        this.applyMachineGunAttackResult(target, report);
         if (target.destroyed) this.registerDestroyWreckVisual(target);
         capturedSlot.used = true;
         this.selectedMGDieIdx = -1;
@@ -11630,7 +12143,7 @@ export class BattleScene extends Component {
   private aiMissionTargetsFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
     if (!isFriendlyFaction(actor.faction)) return [this.mission.sherman];
-    const candidates = this.mission.enemies;
+    const candidates = this.mission.enemies.filter(u => !isAbandonedATGun(u) && !isAttachedATGunCrew(u));
     const objective = this.mission.data.objective;
     if (objective.type === 'destroy_all_enemies' || objective.destroyAllEnemiesBeforeEvac) {
       return candidates;
@@ -11657,6 +12170,7 @@ export class BattleScene extends Component {
     let bestDist = Infinity;
     const tied: Unit[] = [];
     for (const target of this.aiTargetsFor(actor)) {
+      if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
       if (target.faction === actor.faction) continue;
       if (isFootUnit(target) || target.kind === 'truck') continue;
       const d = hexDistance(actor.pos, target.pos);
@@ -11693,10 +12207,11 @@ export class BattleScene extends Component {
     let bestDist = Infinity;
     const tied: Unit[] = [];
     for (const target of this.aiTargetsFor(actor)) {
+      if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
       if (target.faction === actor.faction) continue;
       if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
       if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) continue;
-      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections }).ok) continue;
+      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore' }).ok) continue;
       const priority = aiTargetPriority(target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
@@ -11729,7 +12244,18 @@ export class BattleScene extends Component {
 
   private beginAllyPhase() {
     if (!this.mission) return;
-    this.phase = 'enemy';
+    const aiCandidates = this.mission.allies.filter(isAIActorUnit);
+    if (aiCandidates.length === 0) {
+      this.beginEnemyPhase();
+      return;
+    }
+    this.beginAllyPhaseAfterTransition();
+  }
+
+  private beginAllyPhaseAfterTransition() {
+    if (!this.mission) return;
+    const aiCandidates = this.mission.allies.filter(isAIActorUnit);
+    this.phase = 'ally';
     this.aiSide = 'ally';
     this.outcome = this.computeOutcome();
     this.updateOutcomeOverlay();
@@ -11739,7 +12265,6 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
-    const aiCandidates = this.mission.allies.filter(isAIActorUnit);
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       this.mission.enemies,
@@ -11756,7 +12281,7 @@ export class BattleScene extends Component {
     this.destroyEnemyDiceTray();
     this.closeDiePopover();
     if (this.enemyOrder.length === 0) {
-      this.beginGermanAIPhase();
+      this.beginEnemyPhase();
       return;
     }
     this.refreshPhaseUI();
@@ -11852,7 +12377,7 @@ export class BattleScene extends Component {
   private beginEnemyPhaseAfterTransition() {
     if (!this.mission) return;
     this.phase = 'enemy';
-    this.aiSide = 'ally';
+    this.aiSide = 'german';
     // §2.1 阶段④：移除德军烟雾（烟雾只保留一回合）
     this.consumeLegacyUnitSmoke();
     for (const pos of this.clearSmokeByOwner('enemy')) {
@@ -11877,10 +12402,6 @@ export class BattleScene extends Component {
       return;
     }
     // 徒步类（步兵 / 军官）无俯视图 AI；卡车仅在回合结束事件 german_truck_move 中沿路移动，不参与敌方阶段掷骰
-    if (this.aiSide !== 'german') {
-      this.beginAllyPhase();
-      return;
-    }
     const aiCandidates = this.mission.enemies.filter(isAIActorUnit);
     this.enemyOrder = selectAIOrder(
       aiCandidates,
@@ -12172,7 +12693,7 @@ export class BattleScene extends Component {
     if (!this.mission) return [];
     const { sherman, enemies } = this.mission;
     const all = [sherman, ...this.mission.allies, ...enemies];
-    const units = all.filter(u => !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r);
+    const units = all.filter(u => !u.destroyed && !isAttachedATGunCrew(u) && u.pos.q === pos.q && u.pos.r === pos.r);
     return units.sort((a, b) => {
       const af = isFootUnit(a) ? 1 : 0;
       const bf = isFootUnit(b) ? 1 : 0;
@@ -13723,7 +14244,7 @@ export class BattleScene extends Component {
       this.clearActiveActingUnit();
       this.destroyEnemyDiceTray();
       if (this.aiSide === 'ally') {
-        this.beginGermanAIPhase();
+        this.beginEnemyPhase();
       } else {
         this.maybeBeginTurnEndEventOrEndEnemyPhase();
       }
@@ -14224,12 +14745,15 @@ export class BattleScene extends Component {
   }
 
   private isBlockingMoveOccupant(mover: Unit, occupant: Unit): boolean {
+    if (isAttachedATGunCrew(occupant)) return false;
     if (GameSession.gameMode === 'hardcore') {
       // AT guns cannot move into a hex occupied by any non-tank unit.
       if (mover.kind === 'at_gun' && !isTankUnit(occupant)) return true;
-      // A non-foot unit can overrun an enemy AT gun, but never a friendly one.
-      if (!isFootUnit(mover) && occupant.kind === 'at_gun') {
-        return mover.faction === occupant.faction;
+      // Infantry may enter an abandoned gun's hex to take control.
+      if (isFootUnit(mover) && isAbandonedATGun(occupant)) return false;
+      // A tank can overrun an enemy or neutral AT gun, but never a friendly controlled one.
+      if (isTankUnit(mover) && occupant.kind === 'at_gun') {
+        return isControlledATGun(occupant) && mover.faction === occupant.faction;
       }
     }
     // Tanks and other vehicle-like units may enter same-faction foot-unit hexes.
@@ -14237,16 +14761,17 @@ export class BattleScene extends Component {
     return true;
   }
 
-  /** Hardcore: a vehicle entering an enemy AT-gun hex destroys the gun by overrun. */
+  /** Hardcore: a tank entering an enemy/neutral AT-gun hex destroys gun and crew. */
   private crushEnemyATGunsAt(mover: Unit): void {
-    if (GameSession.gameMode !== 'hardcore' || isFootUnit(mover)) return;
+    if (GameSession.gameMode !== 'hardcore' || !isTankUnit(mover)) return;
     for (const unit of this.allUnits()) {
       if (unit === mover
         || unit.destroyed
         || unit.kind !== 'at_gun'
-        || unit.faction === mover.faction
+        || (isControlledATGun(unit) && unit.faction === mover.faction)
         || unit.pos.q !== mover.pos.q
         || unit.pos.r !== mover.pos.r) continue;
+      if (isControlledATGun(unit)) this.killATGunCrew(unit);
       unit.destroyed = true;
       this.registerDestroyWreckVisual(unit);
       this.spawnFloater(unit.pos.q, unit.pos.r, t('floater.crushed'),
@@ -14345,7 +14870,7 @@ export class BattleScene extends Component {
       // 叠格场景：机枪挑 canMGAttack 认可的步兵目标；主炮只打坦克类（含 truck）。按选中的武器骰挑同格中合适的目标
       if (mgSel) {
         const units = this.allUnits();
-        const inf = enemiesOnTile.find(e => canMGAttack({ attacker: this.mission!.sherman, target: e, map: this.mission!.map, theater: this.mission!.data.theater, units, expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections }).ok) ?? enemiesOnTile[0]!;
+      const inf = enemiesOnTile.find(e => canMGAttack({ attacker: this.mission!.sherman, target: e, map: this.mission!.map, theater: this.mission!.data.theater, units, expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore' }).ok) ?? enemiesOnTile[0]!;
         this.tryMGAttack(inf);
         return;
       }
@@ -14496,6 +15021,31 @@ export class BattleScene extends Component {
     this.scheduleOnce(callback, PRECISION_AIM_HOLD_DURATION);
   }
 
+  private applyMainGunAttackResult(target: Unit, report: AttackReport): void {
+    // Dice presentation may have already applied the destroyed visual, so do
+    // not use isControlledATGun here (it deliberately rejects destroyed guns).
+    const hadATGunCrew = GameSession.gameMode === 'hardcore'
+      && target.kind === 'at_gun'
+      && target.atGunCrewAlive === true;
+    applyAttack(target, report);
+    if (hadATGunCrew && target.destroyed) this.killATGunCrew(target);
+  }
+
+  private applyMachineGunAttackResult(target: Unit, report: ReturnType<typeof rollMGAttack>): void {
+    const hadATGunCrew = GameSession.gameMode === 'hardcore'
+      && target.kind === 'at_gun'
+      && target.atGunCrewAlive === true;
+    if (hadATGunCrew && report.hit) {
+      // MG fire kills only the operators. Undo any generic early-destroy
+      // presentation state and leave the physical gun intact and neutral.
+      target.destroyed = false;
+      this.destroyWreckVisualIds.delete(target.id);
+      this.killATGunCrew(target);
+      return;
+    }
+    applyMGAttack(target, report);
+  }
+
   private tryAttack(target: Unit) {
     if (!this.mission) return;
     if (this.playerStep !== 'attack' && this.playerStep !== 'misc') return;
@@ -14560,7 +15110,7 @@ export class BattleScene extends Component {
       if (!this.mission) return;
       if (!attackApplied) {
         attackApplied = true;
-        applyAttack(target, report);
+        this.applyMainGunAttackResult(target, report);
         if (target.destroyed) this.registerDestroyWreckVisual(target);
         slot.used = true;
         if (doublesPartnerIdx >= 0) {
@@ -14641,7 +15191,7 @@ export class BattleScene extends Component {
       const targetDirection = fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
       this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 主炮目标不在视野内，炮塔转向 ${targetDirection}`);
       this.startEnemyTurretAim(enemy, target, () => {
-        if (this.outcome === 'ongoing' && this.phase === 'enemy') this.runNextEnemyStep();
+        if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) this.runNextEnemyStep();
       });
       return true;
     }
@@ -14702,12 +15252,12 @@ export class BattleScene extends Component {
     }
     const showDice = (fireEffectPlayed = false) => this.startDiceShow(report, enemyActor, targetLabel, () => {
       if (!this.mission) return;
-      applyAttack(target, report);
+      this.applyMainGunAttackResult(target, report);
       if (target.destroyed) this.registerDestroyWreckVisual(target);
       this.presentAttackResult(enemyActor, report, enemy, target);
       if (this.outcome !== 'ongoing') this.clearActiveActingUnit(enemy);
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
-      if (this.outcome === 'ongoing' && this.phase === 'enemy') {
+      if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
         // 重新浮出托盘（可能还剩骰子），再继续调度
         if (this.enemyDiceUsed.some(u => !u)) {
           const current = this.enemyOrder[this.enemyIndex];
@@ -15563,6 +16113,12 @@ export class BattleScene extends Component {
   private applyDiceShowDestroyedVisual(show: DiceShow) {
     if (show.earlyDestroyedVisualApplied) return;
     const target = show.target;
+    // A hardcore MG hit abandons an AT gun; it must never preview the gun's
+    // destroyed sprite. Crew death and blood are applied by the real result.
+    if (show.mg
+        && GameSession.gameMode === 'hardcore'
+        && target?.kind === 'at_gun'
+        && target.atGunCrewAlive === true) return;
     const destroysTarget = show.mg
       ? show.report.hit || show.report.statusChange === 'destroyed'
       : show.report.hit && (show.report.statusChange === 'destroyed' || show.report.damageEffect === 'destroyed');
@@ -16791,7 +17347,7 @@ export class BattleScene extends Component {
     const dice: number[] = [];
     const providerByKind = new Map<UnitKind, { unitCount: number; diceCount: number }>();
     for (const enemy of this.mission.enemies) {
-      if (enemy.destroyed || enemy.faction !== 'japanese') continue;
+      if (enemy.destroyed || enemy.faction !== 'japanese' || isAbandonedATGun(enemy) || isAttachedATGunCrew(enemy)) continue;
       const count = Math.max(0, Math.floor(enemy.stats.usCasualtyDice ?? 0));
       if (count <= 0) continue;
       const prev = providerByKind.get(enemy.kind) ?? { unitCount: 0, diceCount: 0 };
@@ -16852,6 +17408,7 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
+      atGunCrewTargets: GameSession.gameMode === 'hardcore',
     };
     const maxRoll = maxMGHitRoll(ctx);
     const threshold = mgHitThreshold(ctx);
@@ -16883,7 +17440,7 @@ export class BattleScene extends Component {
 
     const finish = () => {
       if (!this.mission) return;
-      applyMGAttack(target, report);
+      this.applyMachineGunAttackResult(target, report);
       if (target.destroyed) this.registerDestroyWreckVisual(target);
       if (this.isUnitVisible(target)) {
         this.spawnFloater(
@@ -16902,7 +17459,7 @@ export class BattleScene extends Component {
       this.updateHUD();
       this.redraw();
       this.refreshStatusPanel();
-      if (this.outcome === 'ongoing' && this.phase === 'enemy') {
+      if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
         if (this.enemyDiceUsed.some(used => !used)) {
           const current = this.enemyOrder[this.enemyIndex];
           if (current && !current.destroyed) this.buildEnemyDiceTray(current, { playSort: false });
@@ -16987,6 +17544,7 @@ export class BattleScene extends Component {
       bodyKey: prepared.bodyKey,
       bodyParams: prepared.bodyParams,
       effectName,
+      effectType: row.effectType,
       apply: prepared.apply,
       extraPhases,
       extraIdx: 0,
@@ -16998,6 +17556,11 @@ export class BattleScene extends Component {
       tankReinforceMove: prepared.tankReinforceMove,
       adjacentInfantryVolleys: adjacentVolleys.length > 0 ? adjacentVolleys : undefined,
     };
+    // Start after the event panel has been created; both sequences run in
+    // parallel while the root-level UI remains above the battle presentation.
+    if (row.effectType === 'stuka') {
+      this.playStukaFlyover(this.mission.sherman, false, () => {});
+    }
     playDiceRoll();
   }
 

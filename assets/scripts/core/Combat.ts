@@ -31,7 +31,7 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { Axial, CrewSlot, isFootUnit, isFriendlyFaction, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { Axial, CrewSlot, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
@@ -135,6 +135,8 @@ export interface AttackContext {
   directionalDamageCheck?: boolean;
   /** Hardcore rule: Step 3 target class may come from units.csv. */
   unitDamageTargetClass?: boolean;
+  /** Hardcore rule: a controlled AT gun exposes its three-man operator group to MG fire. */
+  atGunCrewTargets?: boolean;
 }
 
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
@@ -846,7 +848,8 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
-  if (!isFootUnit(target)) return { ok: false, reason: 'attack.reason.notInfantry' };
+  const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(target);
+  if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
   const fireDir = ctx.expandedTurretDirections
     ? fireDirectionTo(attacker.pos, target.pos)
@@ -870,8 +873,22 @@ export interface MGReport {
 
 export function mgHitThreshold(ctx: AttackContext): number {
   const frontArcModifier = isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0;
-  return hitThreshold(ctx, { includeRearArc: false, frontArcModifier })
-    + mgTankCoordinationModifier(ctx);
+  const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
+  const hitContext = atGunCrewTarget
+    ? {
+        ...ctx,
+        target: {
+          ...ctx.target,
+          stats: {
+            ...ctx.target.stats,
+            size: ctx.target.atGunCrewTargetSize ?? 0,
+          },
+        },
+      }
+    : ctx;
+  return hitThreshold(hitContext, { includeRearArc: false, frontArcModifier })
+    + mgTankCoordinationModifier(ctx)
+    + (atGunCrewTarget ? 1 : 0);
 }
 
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
@@ -887,7 +904,13 @@ export function maxMGHitRoll(ctx: AttackContext): number {
 
 /** 写入机枪攻击结果：命中 = 目标直接击毙。 */
 export function applyMGAttack(target: Unit, report: MGReport): void {
-  if (report.hit) target.destroyed = true;
+  if (!report.hit) return;
+  if (isControlledATGun(target)) {
+    target.atGunCrewAlive = false;
+    target.faction = 'neutral';
+    return;
+  }
+  target.destroyed = true;
 }
 
 // ---------- 不掷骰的"预演" ----------

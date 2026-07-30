@@ -1,4 +1,5 @@
 ﻿die_type,die,primary,primary_crew,fallback,fallback_crew,fallback2,fallback2_crew,notes
+骰子类型,骰值,首选行动,首选行动所需乘员,备用行动,备用行动所需乘员,第二备用行动,第二备用行动所需乘员,备注
 attack1,1,shoot,,,,,,射击
 attack1,2,shoot,loader,,,,,射击（需要装填手存活）
 attack1,3,shoot,loader,,,,,射击（需要装填手存活）

@@ -1,4 +1,5 @@
 ﻿column,dice,notes
+地形列,骰子数量,备注
 road,4,公路格掷 4 骰
 field,4,田地格掷 4 骰
 mud,3,泥地格掷 3 骰

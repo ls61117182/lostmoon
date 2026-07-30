@@ -12,6 +12,7 @@ import {
   DEFAULT_VISION_RANGE,
   Direction,
   Faction,
+  infantryKindForFaction,
   isFootKind,
   isTankKind,
   MissionData,
@@ -660,7 +661,19 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     // Other tanks remain closed unless their placement explicitly opts in.
     hatchOpen: id === 'sherman_player',
     visionRange: stats.visionRange,
+    gunnerVisionRange: stats.gunnerVisionRange,
+    interiorVisionRange: stats.interiorVisionRange,
   };
+  if (u.kind === 'at_gun') {
+    const crewKind = infantryKindForFaction(u.faction);
+    const crewStats = getUnitStats(crewKind, currentMissionTheater ?? 'europe');
+    u.atGunCrewAlive = true;
+    u.atGunCrewKind = crewKind;
+    u.atGunCrewTargetSize = crewStats.size;
+    u.atGunCrewGeneration = 0;
+    // In hardcore mode the gun sees exactly as its operator infantry does.
+    u.visionRange = crewStats.visionRange;
+  }
   if (stats.visionType === 'turreted' && u.facing !== null) {
     const rawTurretFacing = Number(p.turretFacing ?? u.facing);
     u.turretFacing = (Number.isInteger(rawTurretFacing) && rawTurretFacing >= 0 && rawTurretFacing <= 11
@@ -698,6 +711,12 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     u.visionRange = typeof p.visionRange === 'number' && Number.isFinite(p.visionRange)
       ? Math.max(0, Math.floor(p.visionRange))
       : stats.visionRange ?? DEFAULT_VISION_RANGE;
+    u.gunnerVisionRange = typeof p.gunnerVisionRange === 'number' && Number.isFinite(p.gunnerVisionRange)
+      ? Math.max(0, Math.floor(p.gunnerVisionRange))
+      : stats.gunnerVisionRange;
+    u.interiorVisionRange = typeof p.interiorVisionRange === 'number' && Number.isFinite(p.interiorVisionRange)
+      ? Math.max(0, Math.floor(p.interiorVisionRange))
+      : stats.interiorVisionRange;
     if (p.turretDamaged) u.turretDamaged = true;
   }
   if (p.paralyzed) u.paralyzed = true;

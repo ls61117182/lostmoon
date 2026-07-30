@@ -27,6 +27,8 @@ export interface PvpBattleUnitSnapshot {
   smoked?: boolean;
   radioDamaged?: boolean;
   visionRange?: number;
+  gunnerVisionRange?: number;
+  interiorVisionRange?: number;
   crew?: ShermanCrew;
 }
 

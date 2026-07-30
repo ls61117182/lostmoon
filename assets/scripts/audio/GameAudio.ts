@@ -19,6 +19,7 @@ export const AudioKeys = {
   mgFire: 'audio/mg_fire',
   tankHitRicochet: 'audio/tank_hit_ricochet',
   tankHitPenetration: 'audio/tank_hit_penetration',
+  stukaFlyover: 'audio/stuka',
   /** 主炮装填完成（玩家消耗装填骰 / 对子装填手） */
   cannonReload: 'audio/cannon_reload',
 } as const;
@@ -253,6 +254,11 @@ export function playTankHitRicochet(): void {
 
 export function playTankHitPenetration(): void {
   playSfxKey(AudioKeys.tankHitPenetration, 3.0, 3.0);
+}
+
+/** One-shot siren/engine cue for the Stuka flyover presentation. */
+export function playStukaFlyover(): void {
+  playSfxKey(AudioKeys.stukaFlyover, 1.4, 1.4);
 }
 
 /** 装填：相对默认 SFX 约 +150%（2.5×），上限同步放宽 */

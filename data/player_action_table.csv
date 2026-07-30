@@ -1,4 +1,5 @@
 ﻿die,move,attack,misc,notes
+骰值,移动行动,攻击行动,杂项行动,备注
 1,reverse,reload,fire_suppress,A列后退；B列装填；C列灭火：着火程度-1
 2,turn,reload,repair,A列转向；B列装填；C列修复
 3,turn,mg,smoke_or_repair,A列转向；B列机枪射击（相邻步兵7+）；C列烟雾或修复

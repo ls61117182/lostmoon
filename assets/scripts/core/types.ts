@@ -102,7 +102,7 @@ export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType
 }
 
 // ---------- 单位 ----------
-export type Faction = 'usa' | 'soviet' | 'german' | 'japanese';
+export type Faction = 'usa' | 'soviet' | 'german' | 'japanese' | 'neutral';
 
 /** 美军与苏军在战斗中属于同一友方阵线，但保留独立阵营身份。 */
 export function isFriendlyFaction(faction: Faction): boolean {
@@ -160,6 +160,35 @@ export function isFootUnit(u: { kind: UnitKind }): boolean {
   return isFootKind(u.kind);
 }
 
+export type ATGunCrewKind = Extract<
+  UnitKind,
+  'infantry' | 'german_infantry' | 'soviet_infantry' | 'japanese_infantry' | 'american_infantry'
+>;
+
+export function infantryKindForFaction(faction: Faction): ATGunCrewKind {
+  switch (faction) {
+    case 'usa': return 'american_infantry';
+    case 'soviet': return 'soviet_infantry';
+    case 'german': return 'german_infantry';
+    case 'japanese': return 'japanese_infantry';
+    default: return 'infantry';
+  }
+}
+
+/** Hardcore AT guns are operational only while their three-man crew is alive. */
+export function isControlledATGun(u: Pick<Unit, 'kind' | 'destroyed' | 'atGunCrewAlive'>): boolean {
+  return u.kind === 'at_gun' && !u.destroyed && u.atGunCrewAlive === true;
+}
+
+/** An abandoned gun remains on the map, but has no faction, vision, AI, or objective weight. */
+export function isAbandonedATGun(u: Pick<Unit, 'kind' | 'destroyed' | 'atGunCrewAlive'>): boolean {
+  return u.kind === 'at_gun' && !u.destroyed && u.atGunCrewAlive === false;
+}
+
+export function isAttachedATGunCrew(u: Pick<Unit, 'attachedToATGunId'>): boolean {
+  return typeof u.attachedToATGunId === 'string' && u.attachedToATGunId.length > 0;
+}
+
 export function isTankKind(kind: UnitKind): boolean {
   return kind === 'sherman'
     || kind === 'sherman76'
@@ -202,13 +231,20 @@ export interface UnitStats {
   visionType: VisionType;   // 炮塔视野 / 车体正面视野 / 步兵环形视野
   damageTargetClass?: string; // 受击目标类别；硬核模式下直接读取 damage_table.csv 的 targetClass
   actionTable?: EnemyTankActionTableIds; // 硬核敌坦按 attack/move/misc 骰类型选择的行动子表
-  visionRange: number;      // 六角格距离；步兵类型固定使用周围 2 格
+  /** 车长开舱时的环形观察距离；运行时可由车长观察装备等效果修改。 */
+  visionRange: number;
+  /** 炮手沿主炮方向的直线观察距离；独立于车长与车内视野。 */
+  gunnerVisionRange?: number;
+  /** 关舱时的车内环形观察距离；默认 1 格。 */
+  interiorVisionRange?: number;
   hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
   crewMembers: CrewSlot[];   // 单位乘员槽位：1=车长, 2=装填手, 3=炮手, 4=驾驶员, 5=副驾驶
 }
 
-/** 玩家车辆默认当前视野范围；后续天气等系统可修改 Unit.visionRange。 */
+/** 玩家车辆默认车长开舱观察范围；后续天气等系统可修改 Unit.visionRange。 */
 export const DEFAULT_VISION_RANGE = 4;
+export const DEFAULT_GUNNER_VISION_RANGE = 4;
+export const DEFAULT_INTERIOR_VISION_RANGE = 1;
 
 export interface Unit {
   id: string;
@@ -230,9 +266,26 @@ export interface Unit {
   smoked?: boolean;         // 有烟雾掩护
   loaded?: boolean;         // 主炮已装填
   hatchOpen?: boolean;      // 车长打开舱盖
-  visionRange?: number;     // 当前视野范围（六角距离）；玩家车辆初始 4，可受天气等效果修改
+  /** 当前车长开舱观察范围；可受车长装备、天气等效果修改。 */
+  visionRange?: number;
+  /** 当前炮手直线观察范围；只受炮手专用效果修改。 */
+  gunnerVisionRange?: number;
+  /** 当前车内环形观察范围；只受车内/车长观察装备修改。 */
+  interiorVisionRange?: number;
   radioDamaged?: boolean;   // 无线电损坏；缺省 false 即完好
   crew?: ShermanCrew;       // 坦克单位五乘员；非坦克无乘员
+  /** Hardcore AT gun: whether its three-man operator group is alive and controlling it. */
+  atGunCrewAlive?: boolean;
+  /** Infantry visuals used by the AT-gun operator group. */
+  atGunCrewKind?: ATGunCrewKind;
+  /** Target-size value inherited from the controlling infantry profile. */
+  atGunCrewTargetSize?: number;
+  /** Increments on every recapture so each operator group's blood decals are unique. */
+  atGunCrewGeneration?: number;
+  /** Runtime id of an infantry unit that captured this gun; omitted for scenario-start crews. */
+  atGunControllerUnitId?: string;
+  /** Infantry folded into an AT-gun composite unit after entering an abandoned gun's hex. */
+  attachedToATGunId?: string;
 }
 
 // ---------- 谢尔曼乘员 ----------
@@ -301,6 +354,10 @@ export interface UnitPlacement {
   hatchOpen?: boolean;
   /** 谢尔曼专用：初始视野范围；缺省为 DEFAULT_VISION_RANGE (4) */
   visionRange?: number;
+  /** 初始炮手直线视野范围；缺省为单位表 gunnerVisionRange。 */
+  gunnerVisionRange?: number;
+  /** 初始车内环形视野范围；缺省为单位表 interiorVisionRange。 */
+  interiorVisionRange?: number;
   /** 谢尔曼专用：主炮是否已装填；缺省 false（未装填） */
   loaded?: boolean;
 }

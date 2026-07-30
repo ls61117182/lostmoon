@@ -1,4 +1,5 @@
 ﻿targetClass,damageCheckType,die,effects,notes
+目标类别,伤害检定类型,骰值,效果,备注
 german_tank,front,1,fire,
 german_tank,front,2,fire+crew(coDriver|driver),
 german_tank,front,3,fire+turret,

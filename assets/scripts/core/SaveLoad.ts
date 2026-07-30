@@ -1,6 +1,6 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import type { Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind } from './types';
+import type { ATGunCrewKind, Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind } from './types';
 import { isTankKind } from './types';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
@@ -39,8 +39,16 @@ interface UnitSnapshot {
   loaded?: boolean;
   hatchOpen?: boolean;
   visionRange?: number;
+  gunnerVisionRange?: number;
+  interiorVisionRange?: number;
   radioDamaged?: boolean;
   crew?: ShermanCrew;
+  atGunCrewAlive?: boolean;
+  atGunCrewKind?: ATGunCrewKind;
+  atGunCrewTargetSize?: number;
+  atGunCrewGeneration?: number;
+  atGunControllerUnitId?: string;
+  attachedToATGunId?: string;
 }
 
 export interface SaveData {
@@ -108,8 +116,16 @@ function captureUnit(u: Unit): UnitSnapshot {
     loaded: u.loaded,
     hatchOpen: u.hatchOpen,
     visionRange: u.visionRange,
+    gunnerVisionRange: u.gunnerVisionRange,
+    interiorVisionRange: u.interiorVisionRange,
     radioDamaged: u.radioDamaged,
     crew: u.crew ? { ...u.crew } : undefined,
+    atGunCrewAlive: u.atGunCrewAlive,
+    atGunCrewKind: u.atGunCrewKind,
+    atGunCrewTargetSize: u.atGunCrewTargetSize,
+    atGunCrewGeneration: u.atGunCrewGeneration,
+    atGunControllerUnitId: u.atGunControllerUnitId,
+    attachedToATGunId: u.attachedToATGunId,
     smoked: u.smoked,
   };
 }
@@ -138,8 +154,16 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
   if (s.loaded !== undefined) live.loaded = s.loaded;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
+  if (s.gunnerVisionRange !== undefined) live.gunnerVisionRange = s.gunnerVisionRange;
+  if (s.interiorVisionRange !== undefined) live.interiorVisionRange = s.interiorVisionRange;
   if (s.radioDamaged !== undefined) live.radioDamaged = s.radioDamaged;
   if (s.crew) live.crew = { ...s.crew };
+  if (s.atGunCrewAlive !== undefined) live.atGunCrewAlive = s.atGunCrewAlive;
+  if (s.atGunCrewKind !== undefined) live.atGunCrewKind = s.atGunCrewKind;
+  if (s.atGunCrewTargetSize !== undefined) live.atGunCrewTargetSize = s.atGunCrewTargetSize;
+  if (s.atGunCrewGeneration !== undefined) live.atGunCrewGeneration = s.atGunCrewGeneration;
+  live.atGunControllerUnitId = s.atGunControllerUnitId;
+  live.attachedToATGunId = s.attachedToATGunId;
   live.hatchOpen = s.hatchOpen === true && live.crew?.commander !== false;
 }
 
@@ -294,6 +318,8 @@ export function applySave(
     if (ss.loaded !== undefined) sh.loaded = ss.loaded;
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
     if (ss.visionRange !== undefined) sh.visionRange = ss.visionRange;
+    if (ss.gunnerVisionRange !== undefined) sh.gunnerVisionRange = ss.gunnerVisionRange;
+    if (ss.interiorVisionRange !== undefined) sh.interiorVisionRange = ss.interiorVisionRange;
     if (ss.crew) sh.crew = { ...ss.crew };
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
     mission.shermanEvacuated = save.shermanEvacuated ?? false;

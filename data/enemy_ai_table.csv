@@ -1,4 +1,5 @@
 ﻿column,die,primary,fallback,fallback2,notes
+地形列,骰值,首选行动,备用行动,第二备用行动,备注
 road,1,shoot,turn,,射击>转向
 road,2,advance,shoot,,前进>射击
 road,3,shoot,advance,,射击>前进

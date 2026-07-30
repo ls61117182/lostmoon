@@ -1,6 +1,6 @@
-import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
+import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_VISION_RANGE, Direction, FireDirection, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
+import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
 
 const GEOMETRY_HEX_SIZE = 1;
@@ -25,55 +25,92 @@ export function currentVisionRange(unit: Unit, weather?: WeatherType): number {
   return weatherVisionRange(unit, baseRange, weather);
 }
 
-/** Whether the target is within the observer's own configured vision range. */
+/** Gunner sight is deliberately separate from commander and interior vision. */
+export function currentGunnerVisionRange(unit: Unit): number {
+  return normalizedVisionRange(
+    unit.gunnerVisionRange ?? unit.stats.gunnerVisionRange,
+    DEFAULT_GUNNER_VISION_RANGE,
+  );
+}
+
+/** Closed-hatch interior sight is deliberately separate from gunner sight. */
+export function currentInteriorVisionRange(unit: Unit): number {
+  return normalizedVisionRange(
+    unit.interiorVisionRange ?? unit.stats.interiorVisionRange,
+    DEFAULT_INTERIOR_VISION_RANGE,
+  );
+}
+
+function normalizedVisionRange(raw: unknown, fallback: number): number {
+  return typeof raw === 'number' && Number.isFinite(raw)
+    ? Math.max(0, Math.floor(raw))
+    : fallback;
+}
+
+/**
+ * Whether a target is within the observer's own direct aiming range. Tanks use
+ * the gunner's independent sight; non-tanks retain their legacy vision range.
+ */
 export function isWithinOwnVisionRange(observer: Unit, target: Unit, weather?: WeatherType): boolean {
-  return hexDistance(observer.pos, target.pos) <= currentVisionRange(observer, weather);
+  const range = isTankUnit(observer)
+    ? currentGunnerVisionRange(observer)
+    : currentVisionRange(observer, weather);
+  return hexDistance(observer.pos, target.pos) <= range;
 }
 
 /** Runtime source of truth for the map coordinates visible to one unit. */
 export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: WeatherType): Set<string> {
   const visible = new Set<string>();
+  if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
   const add = (p: Axial) => {
     if (map.has(p)) visible.add(HexMap.keyOf(p));
   };
 
   add(unit.pos);
   // Old tests/saves predate the config field; vehicle behavior remains turreted by default.
-  const visionType = unit.stats.visionType ?? 'turreted';
+  const visionType = isControlledATGun(unit) ? 'infantry' : (unit.stats.visionType ?? 'turreted');
   const commanderAlive = unit.crew?.commander !== false;
   const openHatch = commanderAlive && unit.hatchOpen === true;
-  const visionRange = currentVisionRange(unit, weather);
+  const commanderVisionRange = currentVisionRange(unit, weather);
 
   if (openHatch) {
     for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) > visionRange) continue;
+      if (hexDistance(unit.pos, tile.pos) > commanderVisionRange) continue;
       if (hasDirectionalFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
     }
   }
 
   if (visionType === 'infantry') {
+    const infantryRange = isControlledATGun(unit) ? commanderVisionRange : 2;
     for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) <= 2 && hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+      if (hexDistance(unit.pos, tile.pos) <= infantryRange && hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
     }
     return visible;
   }
 
-  // Turreted vehicles see all adjacent hexes plus a ray along the turret.
-  // Fixed guns only see the ray along the unit's hull facing.
+  // Tanks (including fixed-gun tank destroyers and assault guns) always add
+  // gunner sight. Closed hatches also add independent interior sight.
+  // Other fixed-gun units (AT guns, artillery, trucks) keep their legacy ray.
+  const tank = isTankUnit(unit);
+  if (tank && !openHatch) {
+    const interiorVisionRange = currentInteriorVisionRange(unit);
+    for (const tile of map.all()) {
+      if (hexDistance(unit.pos, tile.pos) <= interiorVisionRange
+        && hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+    }
+  }
+
+  // Turreted vehicles use their turret direction; fixed guns use hull direction.
   const sightFacing = visionType === 'turreted'
     ? (unit.turretFacing ?? unit.facing)
     : unit.facing;
   if (sightFacing !== null) {
-    if (!openHatch && visionType === 'turreted') {
-      for (let direction = 0; direction < 6; direction++) {
-        add(neighbor(unit.pos, direction as Direction));
-      }
-    }
+    const gunnerVisionRange = tank ? currentGunnerVisionRange(unit) : commanderVisionRange;
     const rayVector = fireDirectionVector(sightFacing as FireDirection);
     const fireDirection = sightFacing as FireDirection;
     const diagonalRay = isDiagonalFireDirection(fireDirection);
     let p = axialAdd(unit.pos, rayVector);
-    while (hexDistance(unit.pos, p) <= visionRange && map.has(p)) {
+    while (hexDistance(unit.pos, p) <= gunnerVisionRange && map.has(p)) {
       if (diagonalRay) {
         if (!map.hasDiagonalLineOfSight(unit.pos, p, fireDirection)) break;
       }
