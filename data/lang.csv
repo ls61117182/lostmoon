@@ -612,3 +612,29 @@ campaign.saipan.title,塞班岛,Saipan
 campaign.tarawaRedBeach2.title,塔拉瓦红滩2,Tarawa Red Beach 2
 campaign.peleliu.title,贝里琉,Peleliu
 battleLog.campaign.advance,推进至下一阶段：{name},Advancing to next operation: {name}
+campaignUpgrade.selectTitle,选择战役强化,Choose Campaign Upgrade
+campaignUpgrade.selectSubtitle,选择 1 项强化，效果将在本战役持续生效,Choose 1 upgrade for the rest of this campaign
+campaignUpgrade.progress,第 {current}/{total} 关,Operation {current}/{total}
+campaignUpgrade.acquiredTitle,已获得强化,Acquired Upgrades
+campaignUpgrade.confirm,确认选择,Confirm
+campaignUpgrade.acquiredLog,获得战役强化：{name},Campaign upgrade acquired: {name}
+campaignUpgrade.commanderCupola.name,车长观测塔,Commander Cupola
+campaignUpgrade.commanderCupola.description,关舱时的车内近距视野范围 +1，不增加炮塔射线距离,Interior close-range vision +1 while buttoned up; turret sight range is unchanged.
+campaignUpgrade.improvedOptics.name,改进瞄准镜,Improved Optics
+campaignUpgrade.improvedOptics.description,炮手视野 +1；主炮攻击命中所需点数 -1,Gunner vision +1; main-gun hit target number -1.
+campaignUpgrade.wetAmmoRack.name,湿式弹药架,Wet Ammo Rack
+campaignUpgrade.wetAmmoRack.description,被击穿后的伤害结果若为“摧毁”，取消该结果,Cancel a Destroyed result caused after armor penetration.
+campaignUpgrade.spallLiner.name,防崩落衬层,Spall Liner
+campaignUpgrade.spallLiner.description,被击穿后的伤害结果若为“乘员阵亡”，取消该结果,Cancel a Crew Casualty result caused after armor penetration.
+campaignUpgrade.automaticExtinguisher.name,自动灭火器,Automatic Extinguisher
+campaignUpgrade.automaticExtinguisher.description,杂项阶段中，具有修复功能的骰子增加“灭火”选项,Repair-capable misc dice also gain a Fire Suppression option.
+campaignUpgrade.sideSkirts.name,裙板,Side Skirts
+campaignUpgrade.sideSkirts.description,前侧装甲、后侧装甲各 +1,Front-side and rear-side armor +1.
+campaignUpgrade.wideTracks.name,宽履带,Wide Tracks
+campaignUpgrade.wideTracks.description,位于泥地时，攻击、移动、杂项阶段骰子数量各 +1,"While in mud, attack, movement, and misc dice each +1."
+campaignUpgrade.improvedTransmission.name,改进变速箱,Improved Transmission
+campaignUpgrade.improvedTransmission.description,所有“前进”行动骰都可改为执行“转向”,Any Advance action die may be used to Turn instead.
+campaignUpgrade.smokeLauncher.name,烟幕发射器,Smoke Launcher
+campaignUpgrade.smokeLauncher.description,解锁“烟雾弹”动作,Unlocks the Smoke action.
+campaignUpgrade.intercom.name,车内通话器,Intercom
+campaignUpgrade.intercom.description,杂项阶段骰子数量 +1,Misc phase dice +1.

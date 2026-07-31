@@ -111,6 +111,8 @@ export interface ActionDicePoolOpts {
   commanderBonusWithoutOpenHatch?: boolean;
   /** 五名乘员存活标记；缺省按全 false 处理 */
   crew: ShermanCrew;
+  /** 战役强化等系统在钳制前追加的阶段骰修正。 */
+  externalBonus?: number;
 }
 
 /**
@@ -138,6 +140,8 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
   } else {
     if (hatchOpenForDice) n += cfg.miscMods.hatch;
   }
+
+  n += opts.externalBonus ?? 0;
 
   const capped = cfg.capMax == null ? n : Math.min(cfg.capMax, n);
   return Math.max(cfg.capMin, capped);

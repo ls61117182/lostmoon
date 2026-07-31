@@ -26,7 +26,7 @@ assert(
   'Japanese infantry visuals should be selected through the shared configured unit-kind boundary',
 );
 
-const drawInfantry = battleScene.match(/private\s+drawInfantry\s*\(u:\s*Unit,[\s\S]*?\n  }\n\n/);
+const drawInfantry = battleScene.match(/private\s+drawInfantry\s*\(\s*u:\s*Unit,[\s\S]*?\n  }\n\n/);
 assert(drawInfantry, 'drawInfantry() should be found');
 assert(
   drawInfantry[0].includes('this.infantryVisualsFor(u)'),

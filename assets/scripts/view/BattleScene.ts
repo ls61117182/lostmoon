@@ -44,7 +44,9 @@ import {
   Mask,
   Node,
   RichText,
+  Rect,
   ScrollView,
+  Size,
   Sprite,
   SpriteFrame,
   sys,
@@ -164,6 +166,15 @@ import {
   carryShermanToNextSegment,
   stitchCampaignMissions,
 } from '../core/CampaignRuntime';
+import {
+  applyCampaignUpgradesToSherman,
+  campaignUpgradeDefinition,
+  campaignUpgradeDiceBonus,
+  campaignUpgradeHitThresholdModifier,
+  drawCampaignUpgradeCandidates,
+  hasCampaignUpgrade,
+} from '../core/CampaignUpgrade';
+import type { CampaignUpgradeDefinition, CampaignUpgradeId } from '../core/CampaignUpgrade';
 import { getGameModeConfig } from '../core/GameMode';
 import { firstDamagedRepairableComponent, repairableComponentById, repairableComponentsFor, RepairableComponentId } from '../core/RepairableComponents';
 import { shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
@@ -515,6 +526,25 @@ interface CampaignPanAnim {
   dur: number;
   onDone: () => void;
 }
+
+interface CampaignUpgradeCardRefs {
+  id: CampaignUpgradeId;
+  node: Node;
+  redraw: (selected: boolean) => void;
+}
+
+const CAMPAIGN_UPGRADE_ICON_ORDER: readonly CampaignUpgradeId[] = [
+  'commander_cupola',
+  'improved_optics',
+  'wet_ammo_rack',
+  'spall_liner',
+  'automatic_extinguisher',
+  'side_skirts',
+  'wide_tracks',
+  'improved_transmission',
+  'smoke_launcher',
+  'intercom',
+];
 
 type DirectionLerp = { from: FireDirection; to: FireDirection; t: number; angular?: boolean };
 
@@ -1033,6 +1063,13 @@ const STATUS_VALUE_WARN   = new Color(255, 180,  60, 255);
 const STATUS_VALUE_FIRE   = new Color(255, 120,  40, 255);
 const STATUS_VALUE_DOWN   = new Color(130, 130, 130, 255);
 const STATUS_VALUE_DEAD   = new Color(240,  90,  90, 255);
+const CREW_STATUS_ICON_PATHS = [
+  'textures/ui/crew_icons_source_split/crew_icon_01_star/spriteFrame',
+  'textures/ui/crew_icons_source_split/crew_icon_03_shell/spriteFrame',
+  'textures/ui/crew_icons_source_split/crew_icon_02_crosshair/spriteFrame',
+  'textures/ui/crew_icons_source_split/crew_icon_04_steering/spriteFrame',
+  'textures/ui/crew_icons_source_split/crew_icon_05_radio/spriteFrame',
+] as const;
 
 // 掷骰结果展示时序（秒）；骰面转动统一使用 DICE_ROLL_DUR。
 const DICE_HIT_SHOW_DUR   = 0.6;
@@ -1254,6 +1291,19 @@ export class BattleScene extends Component {
   private campaignViewSegmentIndexOverride: number | null = null;
   private campaignTransitionActive = false;
   private campaignPanAnim: CampaignPanAnim | null = null;
+  private campaignUpgradeIds: CampaignUpgradeId[] = [];
+  private campaignUpgradeCandidates: CampaignUpgradeId[] = [];
+  private campaignUpgradeChosenSegments = new Set<number>();
+  private campaignUpgradeSelectedIndex = 1;
+  private campaignUpgradeChoiceRoot: Node | null = null;
+  private campaignUpgradeDetailRoot: Node | null = null;
+  private campaignUpgradeChoiceCards: CampaignUpgradeCardRefs[] = [];
+  private campaignUpgradeStatusRoot: Node | null = null;
+  private campaignUpgradeStatusTitleLabel: Label | null = null;
+  private campaignUpgradeStatusSlots: Node[] = [];
+  private campaignUpgradeIconAtlas: SpriteFrame | null = null;
+  private campaignUpgradeIconAtlasLoading = false;
+  private campaignUpgradeIconWaiters: Array<(atlas: SpriteFrame | null) => void> = [];
   private offsetX = 0;
   private offsetY = 0;
   private mapPanEnabled = false;
@@ -1567,6 +1617,7 @@ export class BattleScene extends Component {
   private statusBodyLeftLabels: Label[] = [];
   private statusCrewTitleLabel: Label | null = null;
   private statusCrewLeftLabels: Label[] = [];
+  private crewStatusIconFrames: Array<SpriteFrame | null> = [null, null, null, null, null];
   /** 底部阶段条按钮文字 */
   private chooseMoveLabel: Label | null = null;
   private chooseAttackLabel: Label | null = null;
@@ -2928,6 +2979,7 @@ export class BattleScene extends Component {
     this.campaignViewSegmentIndexOverride = null;
     this.campaignTransitionActive = false;
     this.campaignPanAnim = null;
+    this.resetCampaignUpgradeRuntime();
     const source = GameSession.selectedMissionSource;
     if (source.type === 'custom') {
       const pkg = CustomMissionStore.load(source.packageId);
@@ -2964,6 +3016,8 @@ export class BattleScene extends Component {
       return;
     }
 
+    this.resetCampaignUpgradeRuntime();
+
     const loaded: MissionData[] = [];
     const loadNext = (index: number) => {
       const segment = campaign.segments[index];
@@ -2977,6 +3031,7 @@ export class BattleScene extends Component {
         this.turnEndEventProvider = OfficialTurnEndEventProvider;
         this.loadAndDraw(this.campaignRuntime.data);
         this.applyCampaignSegmentView(0);
+        this.openCampaignUpgradeChoiceForCurrentSegment();
         return;
       }
       resources.load(segment.missionPath, JsonAsset, (err, asset) => {
@@ -3034,7 +3089,6 @@ export class BattleScene extends Component {
     this.campaignViewSegmentIndexOverride = previousIndex;
     this.loadAndDraw(nextData);
     this.campaignViewSegmentIndexOverride = null;
-    this.writeCampaignSegmentCheckpoint();
     this.battleLogI18n('battleLog.campaign.advance', { segment: nextIndex + 1 });
     this.startCampaignPanToSegment(nextIndex);
   }
@@ -3066,6 +3120,536 @@ export class BattleScene extends Component {
     } catch (e) {
       console.error('[Campaign] 写入小关检查点失败:', e);
     }
+  }
+
+  private campaignUpgradesEnabled(): boolean {
+    return !!this.campaignRuntime
+      && GameSession.gameMode === 'hardcore'
+      && !GameSession.isPvp;
+  }
+
+  private campaignUpgradeActive(id: CampaignUpgradeId): boolean {
+    return this.campaignUpgradesEnabled() && hasCampaignUpgrade(this.campaignUpgradeIds, id);
+  }
+
+  private campaignMainGunHitThresholdModifier(): number {
+    return this.selectedGunHitThresholdModifier
+      + campaignUpgradeHitThresholdModifier(this.campaignUpgradeIds);
+  }
+
+  private campaignSmokeUnlocked(): boolean {
+    return !this.campaignUpgradesEnabled() || this.campaignUpgradeActive('smoke_launcher');
+  }
+
+  private resetCampaignUpgradeRuntime() {
+    this.closeCampaignUpgradeDetail();
+    if (this.campaignUpgradeChoiceRoot?.isValid) this.campaignUpgradeChoiceRoot.destroy();
+    this.campaignUpgradeChoiceRoot = null;
+    this.campaignUpgradeChoiceCards = [];
+    this.campaignUpgradeIds = [];
+    this.campaignUpgradeCandidates = [];
+    this.campaignUpgradeChosenSegments.clear();
+    this.campaignUpgradeSelectedIndex = 1;
+    this.refreshCampaignUpgradeStatusSlots();
+  }
+
+  private openCampaignUpgradeChoiceForCurrentSegment() {
+    if (!this.campaignUpgradesEnabled() || !this.campaignRuntime || !this.mission) return;
+    if (this.campaignUpgradeChosenSegments.has(this.activeCampaignSegmentIndex)) return;
+    if (this.campaignUpgradeChoiceRoot?.isValid) return;
+    this.closeCampaignUpgradeDetail();
+    this.campaignUpgradeCandidates = drawCampaignUpgradeCandidates(this.rng, this.campaignUpgradeIds, 3);
+    if (this.campaignUpgradeCandidates.length === 0) return;
+    this.campaignUpgradeSelectedIndex = Math.min(1, this.campaignUpgradeCandidates.length - 1);
+    this.buildCampaignUpgradeChoiceUI();
+  }
+
+  private buildCampaignUpgradeChoiceUI() {
+    if (!this.campaignRuntime) return;
+    const root = new Node('CampaignUpgradeChoice');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.addComponent(BlockInputEvents);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+    this.campaignUpgradeChoiceRoot = root;
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bd = backdrop.addComponent(Graphics);
+    bd.fillColor = new Color(5, 8, 5, 205);
+    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
+    bd.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (event: EventTouch) => { event.propagationStopped = true; }, this);
+    root.addChild(backdrop);
+
+    const panelW = Math.min(1180, CANVAS_W - 44);
+    const panelH = Math.min(674, CANVAS_H - 28);
+    const panel = new Node('Panel');
+    panel.layer = this.node.layer;
+    panel.addComponent(UITransform).setContentSize(panelW, panelH);
+    const pg = panel.addComponent(Graphics);
+    this.drawCampaignUpgradePanel(pg, panelW, panelH);
+    panel.on(Node.EventType.TOUCH_START, (event: EventTouch) => { event.propagationStopped = true; }, this);
+    panel.on(Node.EventType.TOUCH_END, (event: EventTouch) => { event.propagationStopped = true; }, this);
+    root.addChild(panel);
+
+    const plaque = new Node('TitlePlaque');
+    plaque.layer = this.node.layer;
+    plaque.addComponent(UITransform).setContentSize(550, 88);
+    plaque.setPosition(0, panelH / 2 - 50, 0);
+    const plaqueG = plaque.addComponent(Graphics);
+    this.drawCampaignUpgradePlaque(plaqueG, 550, 88);
+    panel.addChild(plaque);
+    const titleLabel = this.makeBattleModalLabel(plaque, t('campaignUpgrade.selectTitle'), 0, 2,
+      500, 66, 42, new Color(232, 218, 167, 255));
+    titleLabel.enableOutline = true;
+    titleLabel.outlineColor = new Color(25, 25, 18, 255);
+    titleLabel.outlineWidth = 2;
+    this.makeBattleModalLabel(panel, t('campaignUpgrade.selectSubtitle'), 0, panelH / 2 - 116,
+      panelW - 300, 34, 21, new Color(201, 188, 143, 255));
+    this.makeBattleModalLabel(panel, t('campaignUpgrade.progress', {
+      current: this.activeCampaignSegmentIndex + 1,
+      total: this.campaignRuntime.segments.length,
+    }), panelW / 2 - 112, panelH / 2 - 66, 190, 38, 23, new Color(224, 198, 116, 255));
+
+    const cardW = Math.min(340, (panelW - 120) / 3);
+    const cardH = 410;
+    const gap = 25;
+    const cardY = -4;
+    this.campaignUpgradeChoiceCards = [];
+    this.campaignUpgradeCandidates.forEach((id, index) => {
+      const x = (index - 1) * (cardW + gap);
+      const refs = this.buildCampaignUpgradeCard(
+        panel,
+        campaignUpgradeDefinition(id),
+        x,
+        cardY,
+        cardW,
+        cardH,
+        index === this.campaignUpgradeSelectedIndex,
+        () => this.selectCampaignUpgradeCandidate(index),
+      );
+      this.campaignUpgradeChoiceCards.push(refs);
+    });
+
+    const footerH = 86;
+    const bottomY = -panelH / 2 + footerH / 2 + 6;
+    const footer = new Node('UpgradeFooter');
+    footer.layer = this.node.layer;
+    footer.addComponent(UITransform).setContentSize(panelW - 24, footerH);
+    footer.setPosition(0, bottomY, 0);
+    const footerG = footer.addComponent(Graphics);
+    this.drawCampaignUpgradeFooter(footerG, panelW - 24, footerH);
+    panel.addChild(footer);
+    this.makeBattleModalLabel(footer, t('campaignUpgrade.acquiredTitle'), -panelW / 2 + 132,
+      0, 190, 40, 22, new Color(215, 198, 145, 255));
+    for (let i = 0; i < 3; i++) {
+      const id = this.campaignUpgradeIds[i];
+      this.buildCampaignUpgradeCompactSlot(footer, id, -panelW / 2 + 258 + i * 70, 0, 60, 58);
+    }
+    const confirm = this.makeBattleRectButton(
+      footer,
+      panelW / 2 - 145,
+      0,
+      240,
+      58,
+      new Color(120, 92, 42, 255),
+      () => this.confirmCampaignUpgradeChoice(),
+    );
+    this.redrawCampaignUpgradeConfirmButton(confirm.node, 240, 58);
+    const confirmLabel = this.makeBattleModalLabel(confirm.node, t('campaignUpgrade.confirm'), 0, 0,
+      224, 50, 25, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(confirmLabel, () => this.confirmCampaignUpgradeChoice());
+  }
+
+  private drawCampaignUpgradePanel(g: Graphics, w: number, h: number) {
+    g.fillColor = new Color(20, 25, 19, 252);
+    g.strokeColor = new Color(137, 123, 78, 255);
+    g.lineWidth = 3;
+    g.rect(-w / 2, -h / 2, w, h); g.fill(); g.stroke();
+    g.strokeColor = new Color(212, 190, 120, 170);
+    g.lineWidth = 1;
+    g.rect(-w / 2 + 8, -h / 2 + 8, w - 16, h - 16); g.stroke();
+    g.strokeColor = new Color(64, 67, 48, 255);
+    g.rect(-w / 2 + 15, -h / 2 + 15, w - 30, h - 30); g.stroke();
+    g.fillColor = new Color(184, 159, 88, 255);
+    for (const [x, y] of [[-w / 2 + 18, -h / 2 + 18], [w / 2 - 18, -h / 2 + 18],
+      [-w / 2 + 18, h / 2 - 18], [w / 2 - 18, h / 2 - 18]]) {
+      g.circle(x, y, 4); g.fill();
+    }
+  }
+
+  private drawCampaignUpgradePlaque(g: Graphics, w: number, h: number) {
+    g.fillColor = new Color(42, 43, 32, 255);
+    g.strokeColor = new Color(126, 112, 70, 255);
+    g.lineWidth = 3;
+    g.moveTo(-w / 2 + 26, -h / 2); g.lineTo(w / 2 - 26, -h / 2);
+    g.lineTo(w / 2, -h / 2 + 22); g.lineTo(w / 2, h / 2 - 22);
+    g.lineTo(w / 2 - 26, h / 2); g.lineTo(-w / 2 + 26, h / 2);
+    g.lineTo(-w / 2, h / 2 - 22); g.lineTo(-w / 2, -h / 2 + 22); g.close();
+    g.fill(); g.stroke();
+    g.strokeColor = new Color(211, 185, 105, 125);
+    g.lineWidth = 1;
+    g.rect(-w / 2 + 12, -h / 2 + 10, w - 24, h - 20); g.stroke();
+    g.fillColor = new Color(188, 160, 82, 255);
+    g.circle(-w / 2 + 20, 0, 4); g.circle(w / 2 - 20, 0, 4); g.fill();
+  }
+
+  private drawCampaignUpgradeFooter(g: Graphics, w: number, h: number) {
+    g.fillColor = new Color(33, 35, 27, 255);
+    g.strokeColor = new Color(112, 101, 67, 255);
+    g.lineWidth = 2;
+    g.rect(-w / 2, -h / 2, w, h); g.fill(); g.stroke();
+    g.strokeColor = new Color(190, 168, 101, 90);
+    g.lineWidth = 1;
+    g.moveTo(-w / 2 + 12, h / 2 - 8); g.lineTo(w / 2 - 12, h / 2 - 8); g.stroke();
+    g.moveTo(330, -h / 2 + 14); g.lineTo(330, h / 2 - 14); g.stroke();
+  }
+
+  private redrawCampaignUpgradeConfirmButton(node: Node, w: number, h: number) {
+    const g = node.getComponent(Graphics);
+    if (!g) return;
+    g.clear();
+    g.fillColor = new Color(125, 91, 39, 255);
+    g.strokeColor = new Color(224, 192, 105, 255);
+    g.lineWidth = 3;
+    g.rect(-w / 2, -h / 2, w, h); g.fill(); g.stroke();
+    g.strokeColor = new Color(245, 221, 150, 150);
+    g.lineWidth = 1;
+    g.rect(-w / 2 + 7, -h / 2 + 7, w - 14, h - 14); g.stroke();
+    g.fillColor = new Color(236, 205, 116, 255);
+    g.circle(-w / 2 + 12, 0, 3); g.circle(w / 2 - 12, 0, 3); g.fill();
+  }
+
+  private buildCampaignUpgradeCard(
+    parent: Node,
+    def: CampaignUpgradeDefinition,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    selected: boolean,
+    onSelect?: () => void,
+  ): CampaignUpgradeCardRefs {
+    const card = new Node(`CampaignUpgradeCard_${def.id}`);
+    card.layer = this.node.layer;
+    card.addComponent(UITransform).setContentSize(w, h);
+    card.setPosition(x, y, 0);
+    const frame = card.addComponent(Graphics);
+    const redraw = (isSelected: boolean) => {
+      frame.clear();
+      if (isSelected) {
+        frame.strokeColor = new Color(255, 190, 42, 70);
+        frame.lineWidth = 12;
+        frame.rect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6); frame.stroke();
+      }
+      frame.fillColor = new Color(48, 45, 33, 255);
+      frame.rect(-w / 2 - 5, -h / 2 - 6, w + 10, h + 10); frame.fill();
+      frame.fillColor = new Color(218, 204, 158, 255);
+      frame.rect(-w / 2, -h / 2, w, h); frame.fill();
+      frame.fillColor = new Color(236, 224, 184, 65);
+      frame.rect(-w / 2 + 10, -h / 2 + 10, w - 20, h - 20); frame.fill();
+      frame.strokeColor = isSelected ? new Color(245, 184, 44, 255) : new Color(99, 83, 47, 255);
+      frame.lineWidth = isSelected ? 5 : 3;
+      frame.rect(-w / 2 + 1, -h / 2 + 1, w - 2, h - 2); frame.stroke();
+      frame.strokeColor = new Color(91, 76, 42, 210);
+      frame.lineWidth = 1;
+      frame.rect(-w / 2 + 10, -h / 2 + 10, w - 20, h - 20); frame.stroke();
+      const dividerY = -h * 0.105;
+      frame.moveTo(-w / 2 + 28, dividerY); frame.lineTo(-18, dividerY); frame.stroke();
+      frame.moveTo(18, dividerY); frame.lineTo(w / 2 - 28, dividerY); frame.stroke();
+      frame.fillColor = new Color(97, 80, 40, 255);
+      frame.moveTo(0, dividerY + 9); frame.lineTo(5, dividerY + 3); frame.lineTo(12, dividerY + 3);
+      frame.lineTo(7, dividerY - 2); frame.lineTo(9, dividerY - 10); frame.lineTo(0, dividerY - 5);
+      frame.lineTo(-9, dividerY - 10); frame.lineTo(-7, dividerY - 2); frame.lineTo(-12, dividerY + 3);
+      frame.lineTo(-5, dividerY + 3); frame.close(); frame.fill();
+      frame.fillColor = new Color(103, 87, 50, 255);
+      for (const [rx, ry] of [[-w / 2 + 17, -h / 2 + 17], [w / 2 - 17, -h / 2 + 17],
+        [-w / 2 + 17, h / 2 - 17], [w / 2 - 17, h / 2 - 17]]) {
+        frame.circle(rx, ry, 3); frame.fill();
+      }
+    };
+    redraw(selected);
+    parent.addChild(card);
+
+    const title = this.makeBattleModalLabel(card, t(def.nameKey), 0, h / 2 - 38, w - 50, 48, 30, new Color(47, 41, 25, 255));
+    title.overflow = Label.Overflow.SHRINK;
+    const iconSize = Math.min(h > 480 ? 245 : 178, h * 0.41);
+    this.buildCampaignUpgradeIconNode(card, def.id, 0, h * 0.13, iconSize);
+
+    const body = new Node('Description');
+    body.layer = this.node.layer;
+    body.addComponent(UITransform).setContentSize(w - 54, h * 0.33);
+    body.setPosition(0, -h * 0.32, 0);
+    const description = body.addComponent(Label);
+    description.string = t(def.descriptionKey);
+    description.fontSize = 22;
+    description.lineHeight = 31;
+    description.color = new Color(50, 44, 27, 255);
+    description.horizontalAlign = HorizontalTextAlignment.LEFT;
+    description.verticalAlign = VerticalTextAlignment.CENTER;
+    description.enableWrapText = true;
+    description.overflow = Label.Overflow.SHRINK;
+    card.addChild(body);
+
+    card.on(Node.EventType.TOUCH_START, (event: EventTouch) => { event.propagationStopped = true; }, this);
+    card.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+      if (onSelect) {
+        playUiClick();
+        onSelect();
+      }
+      event.propagationStopped = true;
+    }, this);
+    return { id: def.id, node: card, redraw };
+  }
+
+  private loadCampaignUpgradeIconAtlas(onReady: (atlas: SpriteFrame | null) => void) {
+    if (this.campaignUpgradeIconAtlas?.isValid) {
+      onReady(this.campaignUpgradeIconAtlas);
+      return;
+    }
+    this.campaignUpgradeIconWaiters.push(onReady);
+    if (this.campaignUpgradeIconAtlasLoading) return;
+    this.campaignUpgradeIconAtlasLoading = true;
+    resources.load('textures/ui/campaign_upgrades/upgrade_icons_atlas_v1/spriteFrame', SpriteFrame, (err, atlas) => {
+      this.campaignUpgradeIconAtlasLoading = false;
+      this.campaignUpgradeIconAtlas = !err && atlas ? atlas : null;
+      if (err || !atlas) console.warn('[CampaignUpgrade] icon atlas load failed:', err);
+      const waiters = this.campaignUpgradeIconWaiters.splice(0);
+      for (const waiter of waiters) waiter(this.campaignUpgradeIconAtlas);
+    });
+  }
+
+  private campaignUpgradeIconFrame(atlas: SpriteFrame, id: CampaignUpgradeId): SpriteFrame | null {
+    const index = CAMPAIGN_UPGRADE_ICON_ORDER.indexOf(id);
+    if (index < 0) return null;
+    const texture = atlas.texture;
+    const cellW = texture.width / 5;
+    const cellH = texture.height / 2;
+    const frame = new SpriteFrame();
+    frame.reset({
+      texture,
+      rect: new Rect((index % 5) * cellW, Math.floor(index / 5) * cellH, cellW, cellH),
+      originalSize: new Size(cellW, cellH),
+    });
+    return frame;
+  }
+
+  private buildCampaignUpgradeIconNode(
+    parent: Node,
+    id: CampaignUpgradeId,
+    x: number,
+    y: number,
+    size: number,
+  ): Node {
+    const root = new Node(`UpgradeArt_${id}`);
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(size, size);
+    root.setPosition(x, y, 0);
+    parent.addChild(root);
+
+    const halo = new Node('ArtHalo');
+    halo.layer = this.node.layer;
+    halo.addComponent(UITransform).setContentSize(size, size * 0.45);
+    halo.setPosition(0, -size * 0.22, 0);
+    const haloG = halo.addComponent(Graphics);
+    haloG.fillColor = new Color(72, 62, 38, 24);
+    haloG.ellipse(0, 0, size * 0.43, size * 0.10); haloG.fill();
+    root.addChild(halo);
+
+    const art = new Node('Art');
+    art.layer = this.node.layer;
+    art.addComponent(UITransform).setContentSize(size, size);
+    const sprite = art.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    root.addChild(art);
+
+    const fallback = new Node('FallbackArt');
+    fallback.layer = this.node.layer;
+    fallback.addComponent(UITransform).setContentSize(size, size);
+    this.drawCampaignUpgradeIcon(fallback.addComponent(Graphics), id, size * 0.34);
+    root.addChild(fallback);
+
+    this.loadCampaignUpgradeIconAtlas((atlas) => {
+      if (!root.isValid || !atlas) return;
+      const frame = this.campaignUpgradeIconFrame(atlas, id);
+      if (!frame) return;
+      sprite.spriteFrame = frame;
+      if (fallback.isValid) fallback.destroy();
+    });
+    return root;
+  }
+
+  private drawCampaignUpgradeIcon(g: Graphics, id: CampaignUpgradeId, r: number) {
+    const dark = new Color(54, 53, 42, 255);
+    const mid = new Color(100, 96, 70, 255);
+    g.strokeColor = dark;
+    g.fillColor = mid;
+    g.lineWidth = Math.max(3, r * 0.07);
+    if (id === 'commander_cupola') {
+      g.circle(0, -r * 0.15, r * 0.62); g.stroke();
+      g.rect(-r * 0.20, r * 0.08, r * 0.40, r * 0.62); g.fill(); g.stroke();
+      g.rect(-r * 0.62, r * 0.42, r * 1.24, r * 0.34); g.fill(); g.stroke();
+    } else if (id === 'improved_optics') {
+      g.circle(0, 0, r * 0.74); g.stroke();
+      g.circle(0, 0, r * 0.24); g.stroke();
+      g.moveTo(-r, 0); g.lineTo(r, 0); g.moveTo(0, -r); g.lineTo(0, r); g.stroke();
+    } else if (id === 'wet_ammo_rack') {
+      g.rect(-r * 0.80, -r * 0.70, r * 1.60, r * 1.40); g.stroke();
+      for (let i = -2; i <= 2; i++) { g.rect(i * r * 0.27 - r * 0.08, -r * 0.52, r * 0.16, r * 1.04); g.fill(); }
+    } else if (id === 'spall_liner') {
+      g.moveTo(0, r); g.lineTo(r * 0.78, r * 0.48); g.lineTo(r * 0.60, -r * 0.58);
+      g.lineTo(0, -r); g.lineTo(-r * 0.60, -r * 0.58); g.lineTo(-r * 0.78, r * 0.48); g.close(); g.stroke();
+      g.moveTo(-r * 0.45, 0); g.lineTo(r * 0.45, 0); g.stroke();
+    } else if (id === 'automatic_extinguisher') {
+      g.roundRect(-r * 0.42, -r * 0.72, r * 0.84, r * 1.35, r * 0.18); g.fill(); g.stroke();
+      g.rect(-r * 0.18, r * 0.63, r * 0.36, r * 0.25); g.fill();
+      g.moveTo(r * 0.18, r * 0.78); g.lineTo(r * 0.72, r * 0.62); g.lineTo(r * 0.82, r * 0.22); g.stroke();
+    } else if (id === 'side_skirts') {
+      g.rect(-r * 0.95, -r * 0.52, r * 1.90, r * 1.04); g.stroke();
+      for (let i = -2; i <= 2; i++) { g.moveTo(i * r * 0.36, -r * 0.50); g.lineTo(i * r * 0.36, r * 0.50); }
+      g.stroke();
+    } else if (id === 'wide_tracks') {
+      g.roundRect(-r, -r * 0.58, r * 2, r * 1.16, r * 0.40); g.stroke();
+      for (let i = -3; i <= 3; i++) { g.moveTo(i * r * 0.27, -r * 0.52); g.lineTo(i * r * 0.27, r * 0.52); }
+      g.stroke();
+      g.circle(-r * 0.48, 0, r * 0.27); g.circle(r * 0.48, 0, r * 0.27); g.stroke();
+    } else if (id === 'improved_transmission') {
+      g.circle(0, 0, r * 0.62); g.stroke();
+      g.circle(0, 0, r * 0.22); g.stroke();
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        g.moveTo(Math.cos(a) * r * 0.62, Math.sin(a) * r * 0.62);
+        g.lineTo(Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95);
+      }
+      g.stroke();
+    } else if (id === 'smoke_launcher') {
+      g.rect(-r * 0.82, -r * 0.62, r * 1.64, r * 0.42); g.fill(); g.stroke();
+      g.circle(-r * 0.48, r * 0.32, r * 0.32); g.circle(0, r * 0.52, r * 0.40); g.circle(r * 0.52, r * 0.30, r * 0.34); g.stroke();
+    } else {
+      g.circle(-r * 0.55, 0, r * 0.35); g.circle(r * 0.55, 0, r * 0.35); g.stroke();
+      g.moveTo(-r * 0.90, 0); g.bezierCurveTo(-r * 0.78, r, r * 0.78, r, r * 0.90, 0); g.stroke();
+      g.rect(-r * 0.14, -r * 0.62, r * 0.28, r * 0.72); g.fill();
+    }
+  }
+
+  private selectCampaignUpgradeCandidate(index: number) {
+    if (!this.campaignUpgradeChoiceRoot || index < 0 || index >= this.campaignUpgradeCandidates.length) return;
+    this.campaignUpgradeSelectedIndex = index;
+    this.campaignUpgradeChoiceCards.forEach((card, i) => card.redraw(i === index));
+  }
+
+  private confirmCampaignUpgradeChoice() {
+    if (!this.campaignUpgradeChoiceRoot || !this.mission) return;
+    const id = this.campaignUpgradeCandidates[this.campaignUpgradeSelectedIndex];
+    if (!id || this.campaignUpgradeIds.includes(id)) return;
+    this.campaignUpgradeIds.push(id);
+    this.campaignUpgradeChosenSegments.add(this.activeCampaignSegmentIndex);
+    applyCampaignUpgradesToSherman(this.mission.sherman, this.campaignUpgradeIds);
+    this.battleLogI18n('campaignUpgrade.acquiredLog', { name: t(campaignUpgradeDefinition(id).nameKey) });
+    this.closeCampaignUpgradeDetail();
+    this.campaignUpgradeChoiceRoot.destroy();
+    this.campaignUpgradeChoiceRoot = null;
+    this.campaignUpgradeChoiceCards = [];
+    this.refreshCampaignUpgradeStatusSlots();
+    this.refreshPlayerVisibility();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.writeCampaignSegmentCheckpoint();
+  }
+
+  private buildCampaignUpgradeCompactSlot(
+    parent: Node,
+    id: CampaignUpgradeId | undefined,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): Node {
+    const slot = new Node(id ? `UpgradeSlot_${id}` : 'UpgradeSlot_Empty');
+    slot.layer = this.node.layer;
+    slot.addComponent(UITransform).setContentSize(w, h);
+    slot.setPosition(x, y, 0);
+    const g = slot.addComponent(Graphics);
+    g.fillColor = id ? new Color(67, 63, 43, 255) : new Color(25, 28, 22, 240);
+    g.strokeColor = id ? new Color(210, 175, 79, 255) : new Color(97, 88, 57, 200);
+    g.lineWidth = id ? 2 : 1;
+    g.rect(-w / 2, -h / 2, w, h); g.fill(); g.stroke();
+    g.strokeColor = new Color(222, 195, 116, id ? 105 : 50);
+    g.lineWidth = 1;
+    g.rect(-w / 2 + 4, -h / 2 + 4, w - 8, h - 8); g.stroke();
+    if (id) {
+      this.buildCampaignUpgradeIconNode(slot, id, 0, 2, Math.min(w, h) - 5);
+      slot.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+        playUiClick();
+        this.openCampaignUpgradeDetail(id);
+        event.propagationStopped = true;
+      }, this);
+    } else {
+      g.fillColor = new Color(116, 102, 62, 120);
+      g.moveTo(0, 12); g.lineTo(5, 4); g.lineTo(14, 4); g.lineTo(7, -2);
+      g.lineTo(10, -12); g.lineTo(0, -6); g.lineTo(-10, -12); g.lineTo(-7, -2);
+      g.lineTo(-14, 4); g.lineTo(-5, 4); g.close(); g.fill();
+    }
+    parent.addChild(slot);
+    return slot;
+  }
+
+  private refreshCampaignUpgradeStatusSlots() {
+    const root = this.campaignUpgradeStatusRoot;
+    if (!root?.isValid) return;
+    for (const child of [...root.children]) child.destroy();
+    this.campaignUpgradeStatusSlots = [];
+    for (let i = 0; i < 3; i++) {
+      const slot = this.buildCampaignUpgradeCompactSlot(
+        root,
+        this.campaignUpgradeIds[i],
+        (i - 1) * 64,
+        -24,
+        56,
+        52,
+      );
+      this.campaignUpgradeStatusSlots.push(slot);
+    }
+  }
+
+  private openCampaignUpgradeDetail(id: CampaignUpgradeId) {
+    if (this.campaignUpgradeDetailRoot?.isValid) return;
+    const root = new Node('CampaignUpgradeDetail');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    root.addComponent(BlockInputEvents);
+    this.node.addChild(root);
+    root.setSiblingIndex(this.node.children.length - 1);
+    this.campaignUpgradeDetailRoot = root;
+
+    const backdrop = new Node('Backdrop');
+    backdrop.layer = this.node.layer;
+    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const bd = backdrop.addComponent(Graphics);
+    bd.fillColor = new Color(0, 0, 0, 180);
+    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H); bd.fill();
+    backdrop.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+      this.closeCampaignUpgradeDetail();
+      event.propagationStopped = true;
+    }, this);
+    root.addChild(backdrop);
+
+    const cardW = Math.min(520, CANVAS_W - 180);
+    const cardH = Math.min(570, CANVAS_H - 90);
+    this.buildCampaignUpgradeCard(root, campaignUpgradeDefinition(id), 0, 0, cardW, cardH, false);
+    const close = this.makeBattleRectButton(root, cardW / 2 - 18, cardH / 2 - 18, 58, 58,
+      MODAL_CLOSE_BG, () => this.closeCampaignUpgradeDetail());
+    const closeLabel = this.makeBattleModalLabel(close.node, '✕', 0, 0, 52, 52, 30, HUD_TEXT_COLOR);
+    this.mirrorBattleModalButtonLabel(closeLabel, () => this.closeCampaignUpgradeDetail());
+  }
+
+  private closeCampaignUpgradeDetail() {
+    if (this.campaignUpgradeDetailRoot?.isValid) this.campaignUpgradeDetailRoot.destroy();
+    this.campaignUpgradeDetailRoot = null;
   }
 
   private debugSkipCampaignSegment() {
@@ -3182,6 +3766,9 @@ export class BattleScene extends Component {
     this.missionId = data.id;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng);
+    if (this.campaignUpgradesEnabled()) {
+      applyCampaignUpgradesToSherman(this.mission.sherman, this.campaignUpgradeIds);
+    }
     this.mapPanEnabled = this.campaignRuntime ? false : data.allowMapPan === true || data.cols > 8 || data.rows > 6;
     this.mapPanMoved = false;
     this.mapPanDistance = 0;
@@ -3607,6 +4194,8 @@ export class BattleScene extends Component {
         this.refreshPhaseUI();
         this.updateHUD();
         this.redraw();
+        if (this.campaignUpgradesEnabled()) this.openCampaignUpgradeChoiceForCurrentSegment();
+        else this.writeCampaignSegmentCheckpoint();
       },
     };
   }
@@ -3876,7 +4465,7 @@ export class BattleScene extends Component {
         theater: this.mission.data.theater,
         smokeHexes: this.mission.smokeHexes,
         weather: this.currentWeather(),
-        hitThresholdModifier: this.selectedGunHitThresholdModifier,
+        hitThresholdModifier: this.campaignMainGunHitThresholdModifier(),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       };
       if (!canAttack(ctx).ok) continue;
@@ -4135,22 +4724,22 @@ export class BattleScene extends Component {
     n.setPosition(c.x, c.y, 0);
     n.setSiblingIndex(0);
     g.clear();
+    const isFootUnit = this.activeActingUnitIsFoot(unit);
     const base = this.activeActingUnitFrameColor(unit);
     const size = this.hexSize - 1;
     g.strokeColor = new Color(base.r, base.g, base.b, 220);
     g.lineWidth = 4;
-    if (this.activeActingUnitIsFoot(unit)) {
-      this.drawSegmentedHexOutlineOn(g, 0, 0, size, 0.22, 0.78);
+    if (isFootUnit) {
+      // 六个角各自连成实线；缺口位于每条边的正中，而非六角顶点。
+      this.drawHexCornerBracketsOn(g, 0, 0, size, 0.36);
     } else {
       this.drawHexOutlineOn(g, 0, 0, size);
     }
+    // 步兵使用单层纯色角标，避免内侧暗线让分段框显得未对齐。
+    if (isFootUnit) return;
     g.strokeColor = new Color(0, 0, 0, 120);
     g.lineWidth = 1.25;
-    if (this.activeActingUnitIsFoot(unit)) {
-      this.drawSegmentedHexOutlineOn(g, 0, 0, size - 3, 0.34, 0.66);
-    } else {
-      this.drawHexOutlineOn(g, 0, 0, size - 3);
-    }
+    this.drawHexOutlineOn(g, 0, 0, size - 3);
   }
 
   /** 命中概率分档配色：成功率越高越绿，越低越红 */
@@ -6106,6 +6695,7 @@ export class BattleScene extends Component {
   }
 
   update(dt: number) {
+    if (this.campaignUpgradeChoiceRoot || this.campaignUpgradeDetailRoot) return;
     this.advanceTurnTransition(dt);
     this.advanceStukaFlyover(dt);
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
@@ -7517,6 +8107,33 @@ export class BattleScene extends Component {
     g.stroke();
   }
 
+  /** Draw six connected corner brackets, leaving a gap at the midpoint of every hex edge. */
+  private drawHexCornerBracketsOn(g: Graphics, cx: number, cy: number, size: number, cornerLength: number) {
+    const points: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (-30 + 60 * i) * Math.PI / 180;
+      points.push({
+        x: cx + size * Math.cos(angle),
+        y: cy + size * Math.sin(angle),
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      const prev = points[(i + 5) % 6];
+      const corner = points[i];
+      const next = points[(i + 1) % 6];
+      g.moveTo(
+        corner.x + (prev.x - corner.x) * cornerLength,
+        corner.y + (prev.y - corner.y) * cornerLength,
+      );
+      g.lineTo(corner.x, corner.y);
+      g.lineTo(
+        corner.x + (next.x - corner.x) * cornerLength,
+        corner.y + (next.y - corner.y) * cornerLength,
+      );
+    }
+    g.stroke();
+  }
+
   private drawSegmentedHexOutline(cx: number, cy: number, size: number, fromT: number, toT: number) {
     const g = this.g!;
     this.drawSegmentedHexOutlineOn(g, cx, cy, size, fromT, toT);
@@ -8416,13 +9033,12 @@ export class BattleScene extends Component {
     };
   }
 
-  private atGunCrewFormationOffsets(gun: Unit): Array<{ ox: number; oy: number }> {
-    const facing = gun.facing ?? 0;
-    const next = this.project(neighbor(gun.pos, facing).q, neighbor(gun.pos, facing).r);
+  private atGunCrewFormationOffsets(
+    gun: Unit,
+    facingLerp?: DirectionLerp | null,
+  ): Array<{ ox: number; oy: number }> {
     const origin = this.project(gun.pos.q, gun.pos.r);
-    const len = Math.hypot(next.x - origin.x, next.y - origin.y) || 1;
-    const ux = (next.x - origin.x) / len;
-    const uy = (next.y - origin.y) / len;
+    const { ux, uy } = this.topDownForwardVec(gun, origin, facingLerp);
     const rx = -uy;
     const ry = ux;
     // The supplied reference places the crew on the PNG's right-hand side as
@@ -8445,8 +9061,17 @@ export class BattleScene extends Component {
     const c = this.anim?.unit === gun
       ? this.interpolatedPos(gun)
       : this.project(gun.pos.q, gun.pos.r);
-    const offsets = this.atGunCrewFormationOffsets(gun);
-    this.drawInfantry(this.atGunCrewProxy(gun), c.x, c.y, offsets);
+    const facingLerp: DirectionLerp | null = this.anim?.unit === gun && this.anim.kind === 'turn'
+      ? {
+        from: this.anim.turnFrom!,
+        to: this.anim.turnTo!,
+        t: this.anim.t,
+      }
+      : null;
+    const offsets = this.atGunCrewFormationOffsets(gun, facingLerp);
+    const forward = this.topDownForwardVec(gun, c, facingLerp);
+    const visualAngle = Math.atan2(forward.uy, forward.ux) * 180 / Math.PI + 90;
+    this.drawInfantry(this.atGunCrewProxy(gun), c.x, c.y, offsets, visualAngle);
   }
 
   /**
@@ -8488,9 +9113,10 @@ export class BattleScene extends Component {
     cx: number,
     cy: number,
     customOffsets?: Array<{ ox: number; oy: number }>,
+    customVisualAngle?: number,
   ) {
     const g = this.g!;
-    const visualAngle = this.infantryVisualAngle(u);
+    const visualAngle = customVisualAngle ?? this.infantryVisualAngle(u);
 
     if (u.destroyed) return;
 
@@ -9397,7 +10023,8 @@ export class BattleScene extends Component {
     const W = 240;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
-    const H = GameSession.gameMode === 'hardcore' ? 334 : 312;
+    const showCampaignUpgrades = GameSession.gameMode === 'hardcore' && GameSession.isCampaign;
+    const H = showCampaignUpgrades ? 430 : GameSession.gameMode === 'hardcore' ? 334 : 312;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
     const x = CANVAS_W * 0.5 - W * 0.5 - 10;
@@ -9445,10 +10072,22 @@ export class BattleScene extends Component {
       t('status.crew.4'),
       t('status.crew.5'),
     ];
+    const crewLeftX = -W / 2 + 20;
+    const crewIconSize = 18;
+    const crewLabelX = crewLeftX + 25;
     this.statusCrewLabels = [];
     for (let i = 0; i < crewNames.length; i++) {
       const rowY = crewFirstY - i * CREW_GAP;
-      const crewLeft = this.makeLeftLabel(panel, crewNames[i], -W / 2 + 20, rowY, 116, 22, 18, STATUS_LABEL_COLOR);
+      const iconNode = new Node(`CrewIcon${i + 1}`);
+      iconNode.layer = this.node.layer;
+      iconNode.addComponent(UITransform).setContentSize(crewIconSize, crewIconSize);
+      iconNode.setPosition(crewLeftX + crewIconSize / 2, rowY, 0);
+      const icon = iconNode.addComponent(Sprite);
+      icon.sizeMode = Sprite.SizeMode.CUSTOM;
+      panel.addChild(iconNode);
+      this.assignCrewStatusIcon(icon, iconNode, i + 1);
+
+      const crewLeft = this.makeLeftLabel(panel, crewNames[i], crewLabelX, rowY, 84, 22, 18, STATUS_LABEL_COLOR);
       this.statusCrewLeftLabels.push(crewLeft);
       const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 88, 22, 18, STATUS_VALUE_OK);
       this.statusCrewLabels.push(val);
@@ -9476,6 +10115,30 @@ export class BattleScene extends Component {
         case 'mobility': this.statusMobility = val; break;
         case 'radio':    this.statusRadio = val; break;
       }
+    }
+
+    if (showCampaignUpgrades) {
+      const lastCrewY = crewFirstY - (crewNames.length - 1) * CREW_GAP;
+      const upgradeSepY = lastCrewY - 20;
+      bg.strokeColor = new Color(145, 138, 100, 190);
+      bg.lineWidth = 1;
+      bg.moveTo(-W / 2 + 16, upgradeSepY);
+      bg.lineTo(W / 2 - 16, upgradeSepY);
+      bg.stroke();
+
+      const upgradeRoot = new Node('CampaignUpgradeStatus');
+      upgradeRoot.layer = this.node.layer;
+      upgradeRoot.addComponent(UITransform).setContentSize(W - 20, 98);
+      upgradeRoot.setPosition(0, upgradeSepY - 52, 0);
+      panel.addChild(upgradeRoot);
+      this.campaignUpgradeStatusRoot = upgradeRoot;
+      this.campaignUpgradeStatusTitleLabel = this.makeCenteredLabel(panel, t('campaignUpgrade.acquiredTitle'),
+        0, upgradeSepY - 28, W - 28, 24, 18, STATUS_TITLE_COLOR);
+      this.refreshCampaignUpgradeStatusSlots();
+    } else {
+      this.campaignUpgradeStatusRoot = null;
+      this.campaignUpgradeStatusTitleLabel = null;
+      this.campaignUpgradeStatusSlots = [];
     }
   }
 
@@ -10651,6 +11314,9 @@ export class BattleScene extends Component {
       hatchOpen: hatchOpenRaw,
       crew,
       commanderBonusWithoutOpenHatch: modeConfig.commanderBonusWithoutOpenHatch,
+      externalBonus: this.campaignUpgradesEnabled()
+        ? campaignUpgradeDiceBonus(this.campaignUpgradeIds, terrain, subPhase)
+        : 0,
     });
     const pips = rollActionDice(this.rng, count);
     this.phaseDice = pips.map((_, i) => ({ pip: ((i * 2) % 6) + 1, used: false }));
@@ -10899,7 +11565,8 @@ export class BattleScene extends Component {
     const hasDoubles = this.findDoublesPartner(idx) >= 0;
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
-      if (a === 'drive' && !hasDoubles && !this.driveActionUnavailable(+1)) {
+      if (a === 'drive' && !hasDoubles && !this.campaignUpgradeActive('improved_transmission')
+        && !this.driveActionUnavailable(+1)) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, +1);
         return;
@@ -10964,6 +11631,8 @@ export class BattleScene extends Component {
 
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
+      const transmissionTurnsDrive = a === 'drive'
+        && this.campaignUpgradeActive('improved_transmission');
       if (a === 'turn') {
         addItem(t('action.turnCW'), PHASE_BTN_MOVE,
           () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable());
@@ -10973,6 +11642,12 @@ export class BattleScene extends Component {
         // GDD §3.6：点数 5 / 6 只能前进，不再提供后退选项
         addItem(t('action.advance'), PHASE_BTN_MOVE,
           () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
+        if (transmissionTurnsDrive) {
+          addItem(t('action.turnCW'), PHASE_BTN_MOVE,
+            () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable());
+          addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
+            () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable());
+        }
       } else if (a === 'reverse') {
         // GDD §3.6：点数 1 → 后退 1 格
         addItem(t('action.reverse'), PHASE_BTN_MOVE,
@@ -10984,7 +11659,9 @@ export class BattleScene extends Component {
           addItem(t('action.doublesDriverAdvance'), DIE_ACTION_DOUBLES,
             () => this.tryDoublesDriverAdvance(idx), this.driveActionUnavailable(+1, 'driver'));
         }
-        if (a !== 'turn') {
+        // 改进变速箱已让本颗前进骰免费转向时，不再显示需要额外消耗
+        // 同点骰的副驾驶转向，避免同一效果出现两组重复按钮。
+        if (a !== 'turn' && !transmissionTurnsDrive) {
           addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
             () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'));
           addItem(t('action.doublesCoDriverTurnCCW'), DIE_ACTION_DOUBLES,
@@ -11057,6 +11734,10 @@ export class BattleScene extends Component {
             if (repairable.length === 0) {
               addItem(t('action.repair'), PHASE_BTN_MISC, () => {}, t('floater.noRepair'));
             }
+            if (this.campaignUpgradeActive('automatic_extinguisher')) {
+              addItem(t('action.fireSuppress'), PHASE_BTN_MISC, () => this.tryFireSuppress(idx),
+                (sherman.fireLevel ?? 0) > 0 ? null : t('floater.noFire'));
+            }
           }
           break;
         case 'smoke_or_repair':
@@ -11064,7 +11745,9 @@ export class BattleScene extends Component {
           const smokeBlocked = !sherman ? t('attack.reason.unknown')
             : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoSmoke')
               : this.hasSmokeAt(sherman.pos) ? t('floater.alreadySmoked') : null;
-          addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), smokeBlocked);
+          if (this.campaignSmokeUnlocked()) {
+            addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), smokeBlocked);
+          }
           const smokeRepairable = sherman ? repairableComponentsFor(GameSession.gameMode)
             .filter((component) => component.isDamaged(sherman)) : [];
           for (const component of smokeRepairable) {
@@ -11073,6 +11756,10 @@ export class BattleScene extends Component {
           }
           if (sherman && smokeRepairable.length === 0) {
             addItem(t('action.repair'), PHASE_BTN_MISC, () => {}, t('floater.noRepair'));
+          }
+          if (sherman && this.campaignUpgradeActive('automatic_extinguisher')) {
+            addItem(t('action.fireSuppress'), PHASE_BTN_MISC, () => this.tryFireSuppress(idx),
+              (sherman.fireLevel ?? 0) > 0 ? null : t('floater.noFire'));
           }
           break;
         case 'fire_suppress':
@@ -11582,7 +12269,10 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
-    if (classifyMiscDie(slot.pip) !== 'fire_suppress') return;
+    const miscAction = classifyMiscDie(slot.pip);
+    const extinguisherRepairDie = this.campaignUpgradeActive('automatic_extinguisher')
+      && (miscAction === 'repair' || miscAction === 'smoke_or_repair');
+    if (miscAction !== 'fire_suppress' && !extinguisherRepairDie) return;
 
     const sherman = this.mission.sherman;
     const lvl = sherman.fireLevel ?? 0;
@@ -11763,6 +12453,7 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
     if (classifyMiscDie(slot.pip) !== 'smoke_or_repair') return;
+    if (!this.campaignSmokeUnlocked()) return;
     const s = this.mission.sherman;
     if (tileForbidsSmokeOrConcealment(this.mission.map.get(s.pos))) {
       this.closeDiePopover();
@@ -12873,6 +13564,81 @@ export class BattleScene extends Component {
     return { h: hMax };
   }
 
+  private assignCrewStatusIcon(sprite: Sprite, node: Node, slot: number): void {
+    const index = slot - 1;
+    const cached = this.crewStatusIconFrames[index];
+    if (cached) {
+      sprite.spriteFrame = cached;
+      return;
+    }
+    const path = CREW_STATUS_ICON_PATHS[index];
+    if (!path) return;
+    resources.load(path, SpriteFrame, (err, sf) => {
+      if (err || !sf) {
+        console.warn(`[BattleScene] crew status icon load failed (slot ${slot}):`, err);
+        return;
+      }
+      this.crewStatusIconFrames[index] = sf;
+      if (node.isValid) sprite.spriteFrame = sf;
+    });
+  }
+
+  private tileInspectCrewSlotAlive(u: Unit, slot: number): boolean {
+    const crew = u.crew;
+    if (!crew) return true;
+    switch (slot) {
+      case 1: return crew.commander;
+      case 2: return crew.loader;
+      case 3: return crew.gunner;
+      case 4: return crew.driver;
+      case 5: return crew.coDriver;
+      default: return true;
+    }
+  }
+
+  private addTileInspectCrewRow(
+    parent: Node, u: Unit, leftX: number, topY: number,
+  ): number {
+    const slots = u.stats.crewMembers;
+    if (slots.length === 0) return 0;
+
+    const iconSize = 24;
+    const iconGap = 8;
+    const rowH = 26;
+    const startX = leftX;
+
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      const iconNode = new Node(`TileInspectCrewIcon${slot}`);
+      iconNode.layer = this.node.layer;
+      iconNode.addComponent(UITransform).setContentSize(iconSize, iconSize);
+      iconNode.setPosition(startX + iconSize * 0.5 + i * (iconSize + iconGap), topY - rowH * 0.5, 0);
+      const icon = iconNode.addComponent(Sprite);
+      icon.sizeMode = Sprite.SizeMode.CUSTOM;
+      parent.addChild(iconNode);
+      this.assignCrewStatusIcon(icon, iconNode, slot);
+
+      if (!this.tileInspectCrewSlotAlive(u, slot)) {
+        const slashNode = new Node(`TileInspectCrewDeadSlash${slot}`);
+        slashNode.layer = this.node.layer;
+        slashNode.addComponent(UITransform).setContentSize(iconSize, iconSize);
+        const slash = slashNode.addComponent(Graphics);
+        slash.strokeColor = new Color(85, 18, 18, 235);
+        slash.lineWidth = 5;
+        slash.moveTo(-8, 8);
+        slash.lineTo(8, -8);
+        slash.stroke();
+        slash.strokeColor = new Color(235, 62, 62, 255);
+        slash.lineWidth = 3;
+        slash.moveTo(-8, 8);
+        slash.lineTo(8, -8);
+        slash.stroke();
+        iconNode.addChild(slashNode);
+      }
+    }
+    return rowH;
+  }
+
   private fillTileInspectScrollContent(
     content: Node, innerW: number, tile: Tile, padL: number,
   ): { totalH: number; lowest: number } {
@@ -12934,10 +13700,10 @@ export class BattleScene extends Component {
       const { h } = this.makeTileScrollText(content, x0, y, textW, title, 17);
       y = y - h - 8;
 
+      const crewRowH = this.addTileInspectCrewRow(content, u, x0, y);
+      if (crewRowH > 0) y = y - crewRowH - 8;
+
       if (isFootUnit(u)) {
-        // 徒步类（步兵 / 军官）：无装甲 / 穿甲数据表，仅显示提示
-        const { h: footH } = this.makeTileScrollText(content, x0, y, textW, t('tileInspect.infantryNoTable'), 15);
-        y = y - footH - gapL;
         if (showEffectiveRange) {
           const { h: rangeH } = this.makeTileScrollText(
             content, x0, y, textW, t('tileInspect.effectiveRange', { n: u.stats.effectiveRange }), 15,
@@ -14001,6 +14767,9 @@ export class BattleScene extends Component {
   /** 语言切换后刷新战斗 HUD 内所有固定文案（不重建节点） */
   private refreshBattleStaticI18n() {
     if (this.statusPanelTitleLabel) this.statusPanelTitleLabel.string = t('status.panelTitle');
+    if (this.campaignUpgradeStatusTitleLabel) {
+      this.campaignUpgradeStatusTitleLabel.string = t('campaignUpgrade.acquiredTitle');
+    }
     const bodyKeys = [
       'status.row.loaded',
       'status.row.turret',
@@ -15093,7 +15862,7 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
-      hitThresholdModifier: this.selectedGunHitThresholdModifier,
+      hitThresholdModifier: this.campaignMainGunHitThresholdModifier(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
@@ -16790,6 +17559,7 @@ export class BattleScene extends Component {
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
     return this.turnTransition !== null || this.campaignTransitionActive || this.campaignPanAnim !== null
+      || this.campaignUpgradeChoiceRoot !== null || this.campaignUpgradeDetailRoot !== null
       || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null

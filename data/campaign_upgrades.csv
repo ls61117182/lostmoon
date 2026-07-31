@@ -1,0 +1,11 @@
+﻿id,nameKey,descriptionKey,interiorVisionBonus,gunnerVisionBonus,hitThresholdModifier,ignoreDestroyed,ignoreCrewCheck,repairDiceCanFireSuppress,armorFrontSideBonus,armorRearSideBonus,mudAttackDiceBonus,mudMovementDiceBonus,mudMiscDiceBonus,driveDiceCanTurn,unlocksSmoke,miscDiceBonus
+commander_cupola,campaignUpgrade.commanderCupola.name,campaignUpgrade.commanderCupola.description,1,0,0,0,0,0,0,0,0,0,0,0,0,0
+improved_optics,campaignUpgrade.improvedOptics.name,campaignUpgrade.improvedOptics.description,0,1,-1,0,0,0,0,0,0,0,0,0,0,0
+wet_ammo_rack,campaignUpgrade.wetAmmoRack.name,campaignUpgrade.wetAmmoRack.description,0,0,0,1,0,0,0,0,0,0,0,0,0,0
+spall_liner,campaignUpgrade.spallLiner.name,campaignUpgrade.spallLiner.description,0,0,0,0,1,0,0,0,0,0,0,0,0,0
+automatic_extinguisher,campaignUpgrade.automaticExtinguisher.name,campaignUpgrade.automaticExtinguisher.description,0,0,0,0,0,1,0,0,0,0,0,0,0,0
+side_skirts,campaignUpgrade.sideSkirts.name,campaignUpgrade.sideSkirts.description,0,0,0,0,0,0,1,1,0,0,0,0,0,0
+wide_tracks,campaignUpgrade.wideTracks.name,campaignUpgrade.wideTracks.description,0,0,0,0,0,0,0,0,1,1,1,0,0,0
+improved_transmission,campaignUpgrade.improvedTransmission.name,campaignUpgrade.improvedTransmission.description,0,0,0,0,0,0,0,0,0,0,0,1,0,0
+smoke_launcher,campaignUpgrade.smokeLauncher.name,campaignUpgrade.smokeLauncher.description,0,0,0,0,0,0,0,0,0,0,0,0,1,0
+intercom,campaignUpgrade.intercom.name,campaignUpgrade.intercom.description,0,0,0,0,0,0,0,0,0,0,0,0,0,1

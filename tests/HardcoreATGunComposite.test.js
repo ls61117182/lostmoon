@@ -30,8 +30,9 @@ assert.match(scene, /private applyDiceShowDestroyedVisual[\s\S]*?show\.mg[\s\S]*
 assert.match(scene, /private captureAbandonedATGunsAt[\s\S]*?gun\.faction = infantry\.faction[\s\S]*?infantry\.attachedToATGunId = gun\.id[\s\S]*?rehomeCapturedATGun\(gun\)/, 'entering infantry should take control and transfer the gun to its side');
 assert.match(scene, /GameSession\.gameMode === 'hardcore' && isControlledATGun\(u\)[\s\S]*?drawATGunCrewMaybeAnim\(u\)/, 'hardcore rendering should add three operator infantry to controlled guns');
 assert.match(scene, /\{ forward: this\.hexSize \* 0\.47, side: -this\.hexSize \* 0\.43 \}[\s\S]*?\{ forward: this\.hexSize \* 0\.82, side: 0 \}[\s\S]*?\{ forward: this\.hexSize \* 0\.47, side: this\.hexSize \* 0\.43 \}/, 'AT-gun crew should occupy the reference image side of the gun in an upper-right, far-right, lower-right triangle');
-assert.match(scene, /const forwardShift = this\.hexSize \* 0\.15;[\s\S]*?forward \* crewSide \+ forwardShift/, 'the complete AT-gun crew formation should sit 15% of a hex farther forward');
-assert.match(scene, /private drawATGunCrewMaybeAnim\(gun: Unit\)[\s\S]*?this\.atGunCrewFormationOffsets\(gun\)/, 'live crew rendering and crew blood decals should share one formation');
+assert.match(scene, /const forwardShift = this\.hexSize \* 0\.25;[\s\S]*?forward \* crewSide \+ forwardShift/, 'the complete AT-gun crew formation should retain its tuned forward offset');
+assert.match(scene, /private atGunCrewFormationOffsets[\s\S]*?facingLerp\?: DirectionLerp[\s\S]*?this\.topDownForwardVec\(gun, origin, facingLerp\)/, 'AT-gun crew formation should use the same interpolated facing basis as the gun');
+assert.match(scene, /private drawATGunCrewMaybeAnim\(gun: Unit\)[\s\S]*?this\.anim\.kind === 'turn'[\s\S]*?this\.atGunCrewFormationOffsets\(gun, facingLerp\)[\s\S]*?this\.topDownForwardVec\(gun, c, facingLerp\)[\s\S]*?drawInfantry\([^;]+visualAngle\)/, 'live crew positions and sprite angles should share the gun turn interpolation');
 
 for (const field of ['atGunCrewAlive', 'atGunCrewKind', 'atGunCrewTargetSize', 'atGunCrewGeneration', 'atGunControllerUnitId', 'attachedToATGunId']) {
   assert(save.includes(`${field}:`), `save snapshots should capture ${field}`);

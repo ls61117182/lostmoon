@@ -10,6 +10,7 @@ const DATA_DIR = path.join(ROOT, 'data');
 
 const CONFIG_TABLES = {
   'attack_direction_table.csv': 'tools/buildAttackDirectionDB.js',
+  'campaign_upgrades.csv': 'tools/buildCampaignUpgradeDB.js',
   'damage_table.csv': 'tools/buildDamageTableDB.js',
   'enemy_ai_dice.csv': 'tools/buildEnemyAIDB.js',
   'enemy_ai_table.csv': 'tools/buildEnemyAIDB.js',

@@ -48,9 +48,12 @@ assert.match(
   'turn-end adjacent infantry volleys should retain their attacker for visual facing',
 );
 
-const drawInfantry = battleScene.match(/private\s+drawInfantry\s*\(u:\s*Unit,[\s\S]*?\n  }\n\n/);
+const drawInfantry = battleScene.match(/private\s+drawInfantry\s*\(\s*u:\s*Unit,[\s\S]*?\n  }\n\n/);
 assert(drawInfantry, 'drawInfantry() should be found');
-assert(drawInfantry[0].includes('const visualAngle = this.infantryVisualAngle(u)'));
+assert(
+  drawInfantry[0].includes('const visualAngle = customVisualAngle ?? this.infantryVisualAngle(u)'),
+  'ordinary infantry should retain its visual facing while composite units may provide an interpolated angle',
+);
 assert(drawInfantry[0].includes('slot.node.angle = visualAngle'), 'officer and squad sprites should use visualAngle');
 assert.strictEqual(
   (drawInfantry[0].match(/slot\.node\.angle = visualAngle/g) || []).length,

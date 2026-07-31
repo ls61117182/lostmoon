@@ -274,6 +274,12 @@ export interface Unit {
   interiorVisionRange?: number;
   radioDamaged?: boolean;   // 无线电损坏；缺省 false 即完好
   crew?: ShermanCrew;       // 坦克单位五乘员；非坦克无乘员
+  /** 当前加载实例已应用的硬核战役强化；用于防止刷新时重复叠加永久数值。 */
+  campaignUpgradeIds?: string[];
+  /** 被击穿后忽略“摧毁”伤害结果，但不重新查找其它结果。 */
+  ignoreDestroyedDamage?: boolean;
+  /** 被击穿后忽略“乘员阵亡”伤害结果，但不重新查找其它结果。 */
+  ignoreCrewCheckDamage?: boolean;
   /** Hardcore AT gun: whether its three-man operator group is alive and controlling it. */
   atGunCrewAlive?: boolean;
   /** Infantry visuals used by the AT-gun operator group. */

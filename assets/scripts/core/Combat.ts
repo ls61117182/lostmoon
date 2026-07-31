@@ -420,6 +420,11 @@ function damageEffectStepFrom(target: Unit, effect: DamageTableEffect): DamageEf
   };
 }
 
+function isDamageEffectSuppressed(target: Unit, effect: DamageEffect): boolean {
+  return (effect === 'destroyed' && target.ignoreDestroyedDamage === true)
+    || (effect === 'crewCheck' && target.ignoreCrewCheckDamage === true);
+}
+
 function resolveDamageTableEffects(
   target: Unit,
   targetClass: DamageTargetClass,
@@ -429,7 +434,14 @@ function resolveDamageTableEffects(
   const entry = DAMAGE_TABLE[targetClass][damageCheckType][die];
   for (const group of entry.groups) {
     const applicable = group.filter(effect => isEffectApplicable(target, effect));
-    if (applicable.length > 0) return applicable.map(effect => damageEffectStepFrom(target, effect));
+    // A protected result is cancelled in-place: do not fall through to a later
+    // group, because wet racks / spall liners explicitly do not reroll or seek
+    // the next executable damage action.
+    if (applicable.length > 0) {
+      return applicable
+        .map(effect => damageEffectStepFrom(target, effect))
+        .filter(step => !isDamageEffectSuppressed(target, step.effect));
+    }
   }
   return [];
 }
@@ -483,13 +495,16 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const stagedDamageEffects = stagedDamageDie !== undefined && targetClass
     ? resolveDamageTableEffects(target, targetClass, damageTable, stagedDamageDie)
     : undefined;
-  const stagedDamageEffect = stagedDamageEffects
+  const rawStagedDamageEffect = stagedDamageEffects
     ? primaryDamageEffect(stagedDamageEffects)
     : (stagedDamageDie !== undefined
       ? (pacific && protagonistTarget
         ? resolvePacificShermanDamageEffect(stagedDamageDie, damageTable)
         : resolveDamageEffect(target, stagedDamageDie, protagonistTarget, damageTable))
       : undefined);
+  const stagedDamageEffect = rawStagedDamageEffect && isDamageEffectSuppressed(target, rawStagedDamageEffect)
+    ? undefined
+    : rawStagedDamageEffect;
   const tableCrewCheck = stagedDamageEffects?.some(step => step.effect === 'crewCheck' && !!step.crewPriority?.length) ?? false;
   const legacyCrewCheck = protagonistTarget && damagePossible && stagedDamageEffect === 'crewCheck' && !tableCrewCheck;
   let stagedCrewCheck: CrewDeathResult | undefined;
@@ -528,6 +543,20 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   }
 
   if (directDestroyByTargetClass || directDestroyOnBurningTank || (pacific && !protagonistTarget && !targetClass)) {
+    if (isDamageEffectSuppressed(target, 'destroyed')) {
+      return {
+        dice: [d1, d2], roll, threshold,
+        hit: true,
+        armorFace: face, armor, penetration: pen,
+        damageCheckType,
+        penDie, penDice, penThreshold, penetrated,
+        damageEffects: [],
+        stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
+        commanderKilledByHitDoubles,
+        protagonistTarget,
+        statusChange: 'none',
+      };
+    }
     return {
       dice: [d1, d2], roll, threshold,
       hit: true,
@@ -545,8 +574,22 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
   // 第三段：伤害检定（§3.4 Step 3；Pacific 主角使用 M4 Damage 表）
   const damageDie = stagedDamageDie!;
-  const damageEffect = stagedDamageEffect!;
-  const damageEffects = stagedDamageEffects ?? [{ effect: damageEffect }];
+  const damageEffect = stagedDamageEffect;
+  const damageEffects = stagedDamageEffects ?? (damageEffect ? [{ effect: damageEffect }] : []);
+  if (!damageEffect && damageEffects.length === 0) {
+    return {
+      dice: [d1, d2], roll, threshold,
+      hit: true,
+      armorFace: face, armor, penetration: pen,
+      damageCheckType,
+      penDie, penDice, penThreshold, penetrated,
+      damageDie, damageEffects,
+      stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
+      commanderKilledByHitDoubles,
+      protagonistTarget,
+      statusChange: 'none',
+    };
+  }
   const statusChange: HitStatusChange = damageEffect === 'destroyed' ? 'destroyed' : 'damaged';
 
   // 兼容旧式 crewCheck：需要时才携带乘员检定结果。
