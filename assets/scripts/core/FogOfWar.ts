@@ -1,4 +1,4 @@
-import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionStep, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
+import { axialAdd, HexMap, axialEquals, axialToPixel, diagonalFlankFireDirectionTo, fireDirectionStep, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
 import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
@@ -129,16 +129,30 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
 }
 
 /**
- * Return the current halfway turret direction when `target` is one of the
- * selected, visible flank hexes added by closed-hatch gunner sight.
+ * Return the current halfway turret direction when `target` is on the selected
+ * flank path. Hatch state changes how sight is acquired, not which currently
+ * aimed flank hexes may be attacked.
  */
 export function diagonalGunnerRuleDirectionForVisibleHex(
   map: HexMap,
   unit: Unit,
   target: Axial,
+  weather?: WeatherType,
 ): FireDirection | null {
+  if (!isTankUnit(unit) || unit.stats.visionType !== 'turreted') return null;
   const openHatch = unit.crew?.commander !== false && unit.hatchOpen === true;
-  if (!isTankUnit(unit) || openHatch || unit.stats.visionType !== 'turreted') return null;
+  if (openHatch) {
+    // Commander sight can reveal either flank without a prior recon turn. Let
+    // the target choose the halfway direction, just as an axis target rotates
+    // the turret automatically before firing.
+    const direction = diagonalFlankFireDirectionTo(unit.pos, target);
+    if (direction === null) return null;
+    if (hexDistance(unit.pos, target) > currentVisionRange(unit, weather)
+      || !hasDirectionalFogLineOfSight(map, unit.pos, target)) return null;
+    return diagonalGunnerClickPreference(map, unit, direction, target) !== null
+      ? direction
+      : null;
+  }
   const direction = unit.turretFacing ?? unit.facing;
   if (direction === null || !isDiagonalFireDirection(direction as FireDirection)) return null;
   if (fireDirectionTo(unit.pos, target) === direction) return null;

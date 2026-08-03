@@ -193,6 +193,7 @@ import { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } from './WeatherVisual';
 import type { RainVisualSample } from './WeatherVisual';
 import { infantrySpriteAngle, infantrySquadOffsets, infantryVisualDirection } from './InfantryVisualFacing';
 import { orderMachineGunBurstEndpointsByLateralOffset } from './MachineGunBurstOrder';
+import { clampMachineGunTracerTail, machineGunBurstStartPoint } from './MachineGunBurstGeometry';
 import {
   MAIN_GUN_RECOIL_BACK_TIME,
   MAIN_GUN_RECOIL_RETURN_TIME,
@@ -561,7 +562,7 @@ type DirectionLerp = {
   toVisualTarget?: Axial;
 };
 
-type Phase = 'player' | 'ally' | 'enemy';
+type Phase = 'player' | 'fireCheck' | 'ally' | 'enemy';
 
 /**
  * 玩家回合内的细分状态机：
@@ -1367,6 +1368,8 @@ export class BattleScene extends Component {
   private movementDone: boolean = false;
   private attackDone: boolean = false;
   private miscDone: boolean = false;
+  /** 防止 busy 期间为同一自动阶段切换启动多条逐帧重试链。 */
+  private pendingAutoEnterPhase: 'movement' | 'attack' | 'misc' | null = null;
   private hatchChangedThisTurn: boolean = false;
   /** 当前子阶段（movement/attack）手上的骰子；回到 choose 时清空 */
   private phaseDice: DieSlot[] = [];
@@ -1553,6 +1556,8 @@ export class BattleScene extends Component {
   private diceTitleLabel: Label | null = null;
   /** 点击某颗骰子时弹出的动作菜单；每次弹出都重建 */
   private diePopover: Node | null = null;
+  /** 当前动作菜单所属的骰子下标；用于再次点击同一颗骰子时切换收起。 */
+  private diePopoverDieIdx: number = -1;
   /** 攻击掷骰动画面板；非 null 时锁定所有输入 */
   private diceShow: DiceShow | null = null;
   /** 回合结束事件：主骰 →（若有）额外掷骰各一段动画 → 完整说明，确认后 apply */
@@ -1589,7 +1594,7 @@ export class BattleScene extends Component {
     adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
   } | null = null;
   private turnEndUnitSeq = 0;
-  /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续敌方阶段 */
+  /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续友方/敌方阶段 */
   private fireCheckEventUI: {
     root: Node;
     stage: 'roll' | 'hold';
@@ -1603,6 +1608,7 @@ export class BattleScene extends Component {
     bodyText: string;
     ruleModalRoot: Node | null;
     apply: () => void;
+    onComplete: () => void;
   } | null = null;
   private usCasualtyEventUI: {
     root: Node;
@@ -3133,7 +3139,7 @@ export class BattleScene extends Component {
       missionId: this.missionId,
       mission: this.mission,
       turn: this.turn,
-      phase: this.phase === 'ally' ? 'enemy' : this.phase,
+      phase: this.phase === 'player' ? 'player' : 'enemy',
       movesLeft: this.movementDone ? 0 : 2,
       attacksLeft: this.attackDone ? 0 : 1,
       miscDone: this.miscDone,
@@ -5430,6 +5436,19 @@ export class BattleScene extends Component {
     return false;
   }
 
+  /** Hardcore: an enemy tank sharing this squad's hex becomes its visual focus. */
+  private enemyTankSharingInfantryHex(u: Unit): Unit | null {
+    if (GameSession.gameMode !== 'hardcore' || !isFootUnit(u)) return null;
+    return this.allUnits().find(o =>
+      o !== u
+      && !o.destroyed
+      && isTankUnit(o)
+      && o.faction !== u.faction
+      && o.pos.q === u.pos.q
+      && o.pos.r === u.pos.r
+    ) ?? null;
+  }
+
   private clearInfantryBloodDecals(): void {
     for (const node of this.infantryBloodDecalNodes) {
       if (node.isValid) node.destroy();
@@ -5829,7 +5848,7 @@ export class BattleScene extends Component {
     if (len <= 1) return;
     const ux = dx / len;
     const uy = dy / len;
-    const start = this.machineGunStartPoint(a, ux, uy);
+    const start = machineGunBurstStartPoint(a, ux, uy, this.hexSize);
     const targetInset = Math.max(8, this.hexSize * 0.16);
 
     const n = new Node('MachineGunBurst');
@@ -5858,14 +5877,6 @@ export class BattleScene extends Component {
     };
     this.drawMachineGunBurst(burst, 0);
     this.machineGunBursts.push(burst);
-  }
-
-  private machineGunStartPoint(c: { x: number; y: number }, ux: number, uy: number): { x: number; y: number } {
-    const dist = Math.max(12, this.hexSize * 0.46);
-    return {
-      x: c.x + ux * dist,
-      y: c.y + uy * dist,
-    };
   }
 
   private spawnProjectileTrace(attacker: Unit | null, target: Unit | null, report?: AttackReport) {
@@ -6370,19 +6381,22 @@ export class BattleScene extends Component {
       const headX = b.startX + shotDx * travel;
       const headY = b.startY + shotDy * travel;
       const tail = this.hexSize * (0.54 + r1 * 0.36);
+      const distanceFromMuzzle = shotLen * travel;
+      const glowTail = clampMachineGunTracerTail(tail * 1.08, distanceFromMuzzle);
+      const coreTail = clampMachineGunTracerTail(tail, distanceFromMuzzle);
       const fade = Math.max(0, Math.min(1, (1 - shotP) / 0.55));
       const alpha = Math.round(255 * Math.min(1, shotP * 7) * fade);
       if (alpha <= 0) continue;
 
       g.lineWidth = Math.max(2.2, this.hexSize * 0.038);
       g.strokeColor = new Color(255, 186, 44, Math.round(alpha * 0.72));
-      g.moveTo(headX - shotUx * tail * 1.08, headY - shotUy * tail * 1.08);
+      g.moveTo(headX - shotUx * glowTail, headY - shotUy * glowTail);
       g.lineTo(headX + shotUx * this.hexSize * 0.04, headY + shotUy * this.hexSize * 0.04);
       g.stroke();
 
       g.lineWidth = Math.max(1.4, this.hexSize * 0.022);
       g.strokeColor = new Color(255, 244, 150, alpha);
-      g.moveTo(headX - shotUx * tail, headY - shotUy * tail);
+      g.moveTo(headX - shotUx * coreTail, headY - shotUy * coreTail);
       g.lineTo(headX, headY);
       g.stroke();
 
@@ -9253,6 +9267,7 @@ export class BattleScene extends Component {
     // 当本格仍有非摧毁的车辆类单位时，把 3 个士兵从 0.27·hexSize 散开到 0.58·hexSize，
     // 让出格心给车辆显示，3 人各自朝顶 / 右下 / 左下方向退到格内切圆附近（仍保留三角阵相对关系）。
     const coLocateOtherUnit = this.infantrySharesHexWithOtherUnit(u);
+    const coLocatedEnemyTank = this.enemyTankSharingInfantryHex(u);
 
     // 等边三角形布局（顶点朝上）：3 个士兵中心位于半径 ringR 的小圆周上，间隔 120°
     //   位置 0（Infantry01，主图）：顶（cy + ringR）
@@ -9281,7 +9296,11 @@ export class BattleScene extends Component {
       ut.setContentSize(tw, th);
       const off = offsets[i];
       slot.node.setPosition(cx + off.ox, cy + off.oy, 0);
-      slot.node.angle = visualAngle;
+      // In a shared enemy-tank hex, each dispersed soldier independently faces
+      // inward toward the tank at the hex center.
+      slot.node.angle = coLocatedEnemyTank
+        ? Math.atan2(-off.oy, -off.ox) * 180 / Math.PI + 90
+        : visualAngle;
       slot.node.setScale(1, 1, 1);
       slot.node.active = true;
     }
@@ -10391,7 +10410,9 @@ export class BattleScene extends Component {
     this.refreshWeatherHud();
 
     if (this.hudLabel) {
-      if (this.phase === 'ally') {
+      if (this.phase === 'fireCheck') {
+        this.hudLabel.string = t('hud.fireCheckPhase', { n: this.turn });
+      } else if (this.phase === 'ally') {
         this.hudLabel.string = t('hud.allyTurn', { n: this.turn });
       } else if (this.phase === 'enemy') {
         this.hudLabel.string = t('hud.enemyTurn', { n: this.turn });
@@ -10543,11 +10564,11 @@ export class BattleScene extends Component {
 
   /**
    * 根据当前子状态算出右下角按钮的显示文字与配色：
-   *   - 杂项子阶段内 →「结束回合」强调色（结束杂项并进入敌方）
+   *   - 杂项子阶段内 →「结束回合」强调色（结束杂项并进入着火检定）
    *   - 移动 / 攻击子阶段 →「下一阶段」（提前结束本子阶段）
    *   - 选择阶段且 A+B 已完成、杂项未自动触发前 →「下一阶段」（与自动进杂项并存，作补点）
    *   - 其余玩家选择阶段 →「下一阶段」（蓝）
-   *   - 敌方阶段 →「敌方回合中」
+   *   - 着火/友方/敌方阶段 → 显示对应的进行中状态
    */
   private isPvpWaitingForRemoteAction(): boolean {
     return GameSession.isPvp && this.phase !== 'player' && this.outcome === 'ongoing';
@@ -10555,6 +10576,7 @@ export class BattleScene extends Component {
 
   private computeAdvanceButton(): { label: string; urgent: boolean; disabled?: boolean } {
     if (this.isPvpWaitingForRemoteAction()) return { label: t('btn.waitingOpponent'), urgent: false, disabled: true };
+    if (this.phase === 'fireCheck') return { label: t('btn.fireCheckRunning'), urgent: false, disabled: true };
     if (this.phase === 'ally') return { label: t('btn.allyTurnRunning'), urgent: false };
     if (this.phase === 'enemy') return { label: t('btn.enemyTurnRunning'), urgent: false };
     if (this.playerStep === 'misc') return { label: t('btn.endTurn'), urgent: true };
@@ -11003,18 +11025,15 @@ export class BattleScene extends Component {
     // 点击骰子后弹出的菜单，状态变化时（比如骰子被消耗）一并关闭
     if (!inBattle || this.playerStep === 'choose') this.closeDiePopover();
 
-    // A+B 均已完成且尚未进杂项：同步进杂项（非 busy）；避免 scheduleOnce(0) 晚一帧导致选择条闪屏
+    // A+B 均已完成且尚未进杂项：空闲时同步进入，busy 时持续等到当前结算结束。
     if (pendingMiscAuto) {
       if (!this.isBusy()) {
         this.enterPhaseIfChoose('misc');
         return;
       }
-      this.scheduleOnce(() => {
-        if (this.phase !== 'player' || this.outcome !== 'ongoing') return;
-        if (this.playerStep !== 'choose') return;
-        if (!this.movementDone || !this.attackDone || this.miscDone) return;
-        this.enterPhaseIfChoose('misc');
-      }, 0);
+      // 对子主炮会在结算面板仍处于 busy 时一次消耗最后两颗骰子。
+      // 此时单帧重试很容易早于面板关闭，导致移动/攻击均完成后卡在 choose。
+      this.autoEnterPhaseWhenReady('misc');
     }
   }
 
@@ -11432,7 +11451,7 @@ export class BattleScene extends Component {
 
   /**
    * 结束当前子阶段（movement / attack / misc），回到 choose；
-   * 若结束的是杂项阶段 → 直接进入敌方阶段。
+   * 若结束的是杂项阶段 → 进入着火检定，再依次进入友方（若有）与敌方阶段。
    * 若结束的是移动或攻击：另一翼未完成则下一帧自动进入该翼；两翼均完成则由 refreshPhaseUI 自动进杂项。
    */
   private endCurrentSubPhase() {
@@ -11453,7 +11472,7 @@ export class BattleScene extends Component {
         this.submitPvpTurnEnd();
         return;
       }
-      this.beginAllyPhase();
+      this.beginFireCheckPhase();
       return;
     }
     this.playerStep = 'choose';
@@ -11480,19 +11499,31 @@ export class BattleScene extends Component {
     }
   }
 
-  private autoEnterPhaseWhenReady(which: 'movement' | 'attack' | 'misc', attempts = 0) {
-    this.scheduleOnce(() => {
-      if (this.phase !== 'player' || this.outcome !== 'ongoing') return;
-      if (this.playerStep !== 'choose') return;
-      if (which === 'movement' && this.movementDone) return;
-      if (which === 'attack' && this.attackDone) return;
-      if (which === 'misc' && (this.miscDone || !this.movementDone || !this.attackDone)) return;
-      if (this.isBusy()) {
-        if (attempts < 60) this.autoEnterPhaseWhenReady(which, attempts + 1);
+  private autoEnterPhaseWhenReady(which: 'movement' | 'attack' | 'misc') {
+    if (this.pendingAutoEnterPhase === which) return;
+    this.pendingAutoEnterPhase = which;
+    const retry = () => {
+      if (this.pendingAutoEnterPhase !== which) return;
+      if (this.phase !== 'player' || this.outcome !== 'ongoing') {
+        this.pendingAutoEnterPhase = null;
         return;
       }
+      const noLongerNeeded = this.playerStep !== 'choose'
+        || (which === 'movement' && this.movementDone)
+        || (which === 'attack' && this.attackDone)
+        || (which === 'misc' && (this.miscDone || !this.movementDone || !this.attackDone));
+      if (noLongerNeeded) {
+        this.pendingAutoEnterPhase = null;
+        return;
+      }
+      if (this.isBusy()) {
+        this.scheduleOnce(retry, 0);
+        return;
+      }
+      this.pendingAutoEnterPhase = null;
       this.enterPhaseIfChoose(which);
-    }, 0);
+    };
+    this.scheduleOnce(retry, 0);
   }
 
   /**
@@ -11633,6 +11664,10 @@ export class BattleScene extends Component {
     if (this.playerStep !== 'movement'
       && this.playerStep !== 'attack'
       && this.playerStep !== 'misc') return;
+    if (this.diePopover && this.diePopoverDieIdx === idx) {
+      this.closeDiePopover();
+      return;
+    }
     const slot = this.phaseDice[idx];
     if (slot && this.selectedGunDieIdx >= 0 && this.selectedGunDieIdx !== idx) {
       const selectedSlot = this.phaseDice[this.selectedGunDieIdx];
@@ -11690,6 +11725,7 @@ export class BattleScene extends Component {
       this.diePopover.destroy();
       this.diePopover = null;
     }
+    this.diePopoverDieIdx = -1;
   }
 
   /**
@@ -11916,7 +11952,7 @@ export class BattleScene extends Component {
       lab.overflow = Label.Overflow.SHRINK;
       lab.string = this.fitTextForLabel(lab, it.text, ITEM_W);
       btn.addChild(tn);
-      // 不满足条件的选项仅作为状态提示展示：置灰且不注册点击事件。
+      // 不满足条件的选项保持置灰且不可执行；点击时在按钮上方提示具体原因。
       if (!it.unavailableReason) {
         bindButtonPressScale(btn);
         btn.on(Node.EventType.TOUCH_END, () => {
@@ -11924,14 +11960,20 @@ export class BattleScene extends Component {
           it.onClick();
         }, this);
       } else {
+        bindButtonPressScale(btn);
         // 灰色项不可执行，但仍需吞掉触摸，避免点按穿透到下方的地图格。
         const swallowTouch = (event: EventTouch) => { event.propagationStopped = true; };
         btn.on(Node.EventType.TOUCH_START, swallowTouch, this);
-        btn.on(Node.EventType.TOUCH_END, swallowTouch, this);
+        btn.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+          event.propagationStopped = true;
+          playUiClick();
+          this.showDieActionUnavailable(it.unavailableReason!, btn);
+        }, this);
       }
       panel.addChild(btn);
     }
     this.diePopover = panel;
+    this.diePopoverDieIdx = idx;
   }
 
   // ---------- 移动阶段动作 ----------
@@ -12882,7 +12924,7 @@ export class BattleScene extends Component {
 
   /**
    * 右下角按钮点击：
-   *   - 移动 / 攻击 / 杂项子阶段内 → endCurrentSubPhase（杂项结束会进敌方）
+   *   - 移动 / 攻击 / 杂项子阶段内 → endCurrentSubPhase（杂项结束会进着火检定）
    *   - 选择阶段且 A+B 已完成、杂项未开始 → 手动进入杂项（与自动进杂项二选一即可）
    */
   private onAdvanceClicked() {
@@ -12955,12 +12997,17 @@ export class BattleScene extends Component {
       if (isFootUnit(target) || target.kind === 'truck') continue;
       const d = hexDistance(actor.pos, target.pos);
       if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && d > currentVisionRange(actor, this.currentWeather())) continue;
-      if (adjacentOnly && d !== 1) continue;
+      const sameHexInfantryTankAttack = GameSession.gameMode === 'hardcore'
+        && isFootUnit(actor)
+        && isTankUnit(target)
+        && d === 0;
+      if (adjacentOnly && d !== 1 && !sameHexInfantryTankAttack) continue;
       if (!canAttack({
         attacker: actor,
         target,
         map,
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
+        sameHexInfantryTankAttack,
       }).ok) continue;
       const priority = aiTargetPriority(target, missionTargets);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
@@ -13030,6 +13077,33 @@ export class BattleScene extends Component {
       return;
     }
     this.beginAllyPhaseAfterTransition();
+  }
+
+  /** 玩家行动结束后的独立着火检定阶段；完成后才进入友方/敌方行动。 */
+  private beginFireCheckPhase() {
+    if (!this.mission) return;
+    this.phase = 'fireCheck';
+    this.playerStep = 'choose';
+    this.phaseDice = [];
+    this.clearGunSelection();
+    this.closeDiePopover();
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.startFireCheckFlow(() => this.continueAfterPlayerFireCheck());
+  }
+
+  private continueAfterPlayerFireCheck() {
+    if (!this.mission) return;
+    this.outcome = this.computeOutcome();
+    this.updateOutcomeOverlay();
+    if (this.outcome !== 'ongoing') {
+      this.refreshPhaseUI();
+      this.updateHUD();
+      this.redraw();
+      return;
+    }
+    this.beginAllyPhase();
   }
 
   private beginAllyPhaseAfterTransition() {
@@ -13170,12 +13244,11 @@ export class BattleScene extends Component {
         new Color(200, 200, 220, 255), { size: 20, dur: 0.8, rise: 22 });
       this.battleLog(`[Phase④] smoke cleared at (${pos.q},${pos.r})`);
     }
-    // §2.1 阶段⑤：着火程度检定（有 UI 时异步，无火则直接进入后续）
-    this.startFireCheckFlowAndContinue();
+    this.continueEnemyPhase();
   }
 
-  /** 阶段⑤ 之后：胜负判定 → 建敌方顺序 → 首辆敌坦回合 */
-  private continueEnemyPhaseAfterFireCheck() {
+  /** 敌方转场之后：胜负判定 → 建敌方顺序 → 首辆敌坦回合 */
+  private continueEnemyPhase() {
     if (!this.mission) return;
     this.outcome = this.computeOutcome();
     this.updateOutcomeOverlay();
@@ -13217,12 +13290,12 @@ export class BattleScene extends Component {
   /**
    * §2.1 阶段⑤：无着火则直接 continue；否则预掷全部 d6、弹面板，确认后再写回谢尔曼并 continue。
    */
-  private startFireCheckFlowAndContinue() {
+  private startFireCheckFlow(onComplete: () => void) {
     if (!this.mission) return;
     const s = this.mission.sherman;
     const nSnap = s.fireLevel ?? 0;
     if (nSnap <= 0 || s.destroyed) {
-      this.continueEnemyPhaseAfterFireCheck();
+      onComplete();
       return;
     }
     this.battleLog(`[Phase⑤] 着火检定 ×${nSnap}（面板）`);
@@ -13230,7 +13303,7 @@ export class BattleScene extends Component {
       new Color(255, 180, 80, 255), { size: 22, dur: 1.0, rise: 28 });
     const prep = this.prepareFireCheckSteps(nSnap);
     if (prep.steps.length === 0 || prep.allDice.length === 0) {
-      this.continueEnemyPhaseAfterFireCheck();
+      onComplete();
       return;
     }
     const bodyText = this.formatFireCheckBodyText(prep.steps, prep.pendingFire, nSnap);
@@ -13259,6 +13332,7 @@ export class BattleScene extends Component {
       introParams,
       bodyText,
       ruleModalRoot: null,
+      onComplete,
       apply: () => {
         let pendingFire = 0;
         for (const st of prep.steps) {
@@ -15622,13 +15696,38 @@ export class BattleScene extends Component {
       if (isTankUnit(mover) && occupant.kind === 'at_gun') {
         return isControlledATGun(occupant) && mover.faction === occupant.faction;
       }
+      // Enemy infantry no longer blocks a tank from entering its hex.
+      if (isTankUnit(mover) && isFootUnit(occupant)) return false;
     }
     // Tanks and other vehicle-like units may enter same-faction foot-unit hexes.
     if (!isFootUnit(mover) && isFootUnit(occupant) && mover.faction === occupant.faction) return false;
     return true;
   }
 
-  /** Hardcore: a tank entering an enemy/neutral AT-gun hex destroys gun and crew. */
+  /** Restore a controlled AT-gun crew as an ordinary infantry unit in the gun's hex. */
+  private releaseATGunCrew(gun: Unit): Unit | null {
+    if (!this.mission || !isControlledATGun(gun)) return null;
+    const crewFaction = gun.faction;
+    let infantry = this.atGunController(gun);
+    if (infantry) {
+      infantry.pos = { ...gun.pos };
+      infantry.facing = gun.facing;
+      infantry.attachedToATGunId = undefined;
+      infantry.destroyed = false;
+    } else {
+      infantry = this.atGunCrewProxy(gun);
+      infantry.id = `${gun.id}:released:${gun.atGunCrewGeneration ?? 0}`;
+      const side = isFriendlyFaction(crewFaction) ? this.mission.allies : this.mission.enemies;
+      side.push(infantry);
+    }
+    gun.atGunCrewAlive = false;
+    gun.atGunControllerUnitId = undefined;
+    gun.faction = 'neutral';
+    gun.visionRange = 0;
+    return infantry;
+  }
+
+  /** Hardcore: a tank entering an enemy/neutral AT-gun hex destroys only the gun. */
   private crushEnemyATGunsAt(mover: Unit): void {
     if (GameSession.gameMode !== 'hardcore' || !isTankUnit(mover)) return;
     for (const unit of this.allUnits()) {
@@ -15638,7 +15737,7 @@ export class BattleScene extends Component {
         || (isControlledATGun(unit) && unit.faction === mover.faction)
         || unit.pos.q !== mover.pos.q
         || unit.pos.r !== mover.pos.r) continue;
-      if (isControlledATGun(unit)) this.killATGunCrew(unit);
+      if (isControlledATGun(unit)) this.releaseATGunCrew(unit);
       unit.destroyed = true;
       this.registerDestroyWreckVisual(unit);
       this.spawnFloater(unit.pos.q, unit.pos.r, t('floater.crushed'),
@@ -15796,13 +15895,15 @@ export class BattleScene extends Component {
       return;
     }
     const sherman = this.mission.sherman;
-    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(this.mission.map, sherman, target.pos);
+    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(this.mission.map, sherman, target.pos, this.currentWeather());
     const to = flankDirection ?? fireDirectionTo(sherman.pos, target.pos) ?? approximateFireDirection(sherman.pos, target.pos);
+    const currentRuleFacing = (sherman.turretFacing ?? sherman.facing ?? to) as FireDirection;
+    const preserveRuleFacing = flankDirection !== null && currentRuleFacing === flankDirection;
     this.startShermanTurretAimDirection(
       to,
       onDone,
       flankDirection !== null ? target.pos : undefined,
-      flankDirection !== null,
+      preserveRuleFacing,
     );
   }
 
@@ -15863,25 +15964,26 @@ export class BattleScene extends Component {
       return;
     }
     const flankDirection = this.mission
-      ? diagonalGunnerRuleDirectionForVisibleHex(this.mission.map, enemy, target.pos)
+      ? diagonalGunnerRuleDirectionForVisibleHex(this.mission.map, enemy, target.pos, this.currentWeather())
       : null;
     const to = flankDirection ?? fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
     const from = (this.enemyTurretFacing.get(enemy.id) ?? enemy.turretFacing ?? enemy.facing ?? to) as FireDirection;
     const visualTarget = flankDirection !== null ? target.pos : undefined;
+    const preserveRuleFacing = flankDirection !== null && from === flankDirection;
     const sameVisualTarget = visualTarget && enemy.turretVisualTarget
       && axialEquals(visualTarget, enemy.turretVisualTarget);
     if (from === to && ((!visualTarget && !enemy.turretVisualTarget) || sameVisualTarget)) {
       this.enemyTurretFacing.set(enemy.id, to);
-      if (flankDirection === null) enemy.turretFacing = to;
+      if (!preserveRuleFacing) enemy.turretFacing = to;
       enemy.turretVisualTarget = visualTarget ? { ...visualTarget } : undefined;
       this.redraw();
       onDone();
       return;
     }
-    if (flankDirection === null && from !== to) enemy.previousTurretFacing = from;
-    if (flankDirection === null) enemy.diagonalGunnerSidePreference = undefined;
+    if (!preserveRuleFacing && from !== to) enemy.previousTurretFacing = from;
+    if (!preserveRuleFacing) enemy.diagonalGunnerSidePreference = undefined;
     if (!this.enemySupportsSplitTurret(enemy)) {
-      if (flankDirection === null) {
+      if (!preserveRuleFacing) {
         this.enemyTurretFacing.set(enemy.id, to);
         enemy.turretFacing = to;
       }
@@ -15899,7 +16001,7 @@ export class BattleScene extends Component {
       onDone,
       fromVisualTarget: enemy.turretVisualTarget ? { ...enemy.turretVisualTarget } : undefined,
       toVisualTarget: visualTarget ? { ...visualTarget } : undefined,
-      preserveRuleFacing: flankDirection !== null,
+      preserveRuleFacing,
     };
     this.redraw();
   }
@@ -16129,6 +16231,7 @@ export class BattleScene extends Component {
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+      sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
@@ -18007,7 +18110,7 @@ export class BattleScene extends Component {
       console.error('[FireCheck] apply failed', e);
     }
     this.destroyFireCheckEventUI();
-    this.continueEnemyPhaseAfterFireCheck();
+    ui.onComplete();
   }
 
   private destroyUsCasualtyEventUI() {
@@ -18438,6 +18541,7 @@ export class BattleScene extends Component {
         return `turnend_${this.turnEndUnitSeq}`;
       },
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+      sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
       weather: this.currentWeather(),
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);

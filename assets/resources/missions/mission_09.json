@@ -75,10 +75,10 @@
   "enemies": [
     { "kind": "tiger", "faction": "german" },
     { "kind": "panzer4", "faction": "german" },
-    { "kind": "infantry", "faction": "german", "at": { "col": 2, "row": 0 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 1, "row": 2 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 2 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 2, "row": 5 }, "facing": 0 }
+    { "kind": "infantry", "faction": "german", "at": { "col": 2, "row": 0 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 1, "row": 2 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 2 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 2, "row": 5 }, "facing": 3 }
   ],
   "objective": {
     "type": "destroy_kind_evac",

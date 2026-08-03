@@ -27,6 +27,12 @@ assert.match(
 
 assert.match(
   source,
+  /if\s*\(attackOrMisc\s*&&\s*this\.hasTurretReconGunSelection\(\)\s*&&\s*!this\.isCommanderHatchOpen\(\)\)/,
+  'opening the hatch must continue to disable fog-tile turret rotation',
+);
+
+assert.match(
+  source,
   /tryAimShermanTurretAtFogTile\(aimDirection,\s*target\.pos,\s*mgSel\)/,
   'fog-tile aiming should preserve whether the selected die is a machine gun',
 );
@@ -47,6 +53,12 @@ assert.match(
   source,
   /private\s+mgActionUnavailable[\s\S]*?if\s*\(GameSession\.gameMode\s*===\s*'hardcore'\)\s*return\s+null;/,
   'hardcore machine-gun dice should stay available without an infantry target for fog-tile turret aiming',
+);
+
+assert.match(
+  source,
+  /const\s+currentRuleFacing\s*=\s*\(sherman\.turretFacing\s*\?\?\s*sherman\.facing\s*\?\?\s*to\)[\s\S]*?const\s+preserveRuleFacing\s*=\s*flankDirection\s*!==\s*null\s*&&\s*currentRuleFacing\s*===\s*flankDirection[\s\S]*?this\.startShermanTurretAimDirection\([\s\S]*?preserveRuleFacing/,
+  'an open-hatch flank attack from another facing must rotate the rules-facing turret before visual target aiming',
 );
 
 console.log('BattleScene hardcore machine-gun direction tests passed');

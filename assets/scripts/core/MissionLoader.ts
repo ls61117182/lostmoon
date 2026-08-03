@@ -461,7 +461,7 @@ function resolveEnemyDicePlacements(
       if (cellsByRid.has(rid)) {
         throw new Error(`任务 ${data.id}：重复的援军编号 rid=${rid}（全图须唯一）`);
       }
-      const facing = (tile.reinforceFacing ?? tile.enemyStartFacing ?? 0) as Direction;
+      const facing = (tile.reinforceFacing ?? tile.enemyStartFacing ?? 3) as Direction;
       cellsByRid.set(rid, { pos: tile.pos, facing });
     }
   }

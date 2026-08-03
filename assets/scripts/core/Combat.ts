@@ -138,13 +138,15 @@ export interface AttackContext {
   unitDamageTargetClass?: boolean;
   /** Hardcore rule: a controlled AT gun exposes its three-man operator group to MG fire. */
   atGunCrewTargets?: boolean;
+  /** Hardcore rule: infantry may attack an enemy tank sharing its hex. */
+  sameHexInfantryTankAttack?: boolean;
 }
 
 /** Rules-facing firing direction. Flank targets retain the current halfway turret direction. */
 export function attackFireDirection(ctx: AttackContext): FireDirection | null {
   const { attacker, target, map } = ctx;
   if (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted') {
-    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos);
+    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather);
     if (flankDirection !== null) return flankDirection;
     return fireDirectionTo(attacker.pos, target.pos);
   }
@@ -226,10 +228,20 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (isFootUnit(target)) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
-  if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
+  const sameHexInfantryTankAttack = ctx.sameHexInfantryTankAttack === true
+    && isFootUnit(attacker)
+    && isTankUnit(target)
+    && attacker.faction !== target.faction
+    && hexDistance(attacker.pos, target.pos) === 0;
+  if (hexDistance(attacker.pos, target.pos) === 0 && !sameHexInfantryTankAttack) {
+    return { ok: false, reason: 'attack.reason.overlap' };
+  }
+  // A same-hex infantry attack has no firing ray to validate. Its hit and
+  // penetration calculations still use the normal breakdown, where distance is 0.
+  if (sameHexInfantryTankAttack) return { ok: true };
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
   const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos)
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
@@ -493,7 +505,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, attacker, target.pos)
+    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, attacker, target.pos, ctx.weather)
     : null;
   const directionRule = flankDirection !== null
     ? attackDirectionRuleFromFireDirection(target, flankDirection)
@@ -922,7 +934,7 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos)
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
@@ -1010,7 +1022,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const hitProb = probHit2d6(hb.threshold);
 
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos)
+    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather)
     : null;
   const directionRule = flankDirection !== null
     ? attackDirectionRuleFromFireDirection(ctx.target, flankDirection)

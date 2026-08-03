@@ -17,8 +17,8 @@ assert.match(
 
 assert.match(
   source,
-  /private crushEnemyATGunsAt\(mover: Unit\)[\s\S]*?GameSession\.gameMode !== 'hardcore' \|\| !isTankUnit\(mover\)[\s\S]*?unit\.kind !== 'at_gun'[\s\S]*?isControlledATGun\(unit\) && unit\.faction === mover\.faction[\s\S]*?this\.killATGunCrew\(unit\)[\s\S]*?unit\.destroyed = true/,
-  'only tanks should destroy enemy/neutral AT guns on arrival, including their crew',
+  /private crushEnemyATGunsAt\(mover: Unit\)[\s\S]*?GameSession\.gameMode !== 'hardcore' \|\| !isTankUnit\(mover\)[\s\S]*?unit\.kind !== 'at_gun'[\s\S]*?isControlledATGun\(unit\) && unit\.faction === mover\.faction[\s\S]*?this\.releaseATGunCrew\(unit\)[\s\S]*?unit\.destroyed = true/,
+  'only tanks should destroy enemy/neutral AT guns on arrival while releasing a living crew',
 );
 
 console.log('BattleScene hardcore AT-gun overrun tests passed');

@@ -55,10 +55,10 @@ assert(
   'ordinary infantry should retain its visual facing while composite units may provide an interpolated angle',
 );
 assert(drawInfantry[0].includes('slot.node.angle = visualAngle'), 'officer and squad sprites should use visualAngle');
-assert.strictEqual(
-  (drawInfantry[0].match(/slot\.node\.angle = visualAngle/g) || []).length,
-  2,
-  'both the officer sprite and the infantry squad loop should apply visualAngle',
+assert.match(
+  drawInfantry[0],
+  /slot\.node\.angle = coLocatedEnemyTank[\s\S]*?: visualAngle/,
+  'squad sprites should retain visualAngle except when individually facing a same-hex enemy tank',
 );
 
 const inspect = battleScene.match(/private\s+paintTileInspectUnitPreview\s*\([\s\S]*?\n  }\n\n/);

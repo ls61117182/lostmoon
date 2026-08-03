@@ -74,12 +74,12 @@
     "facing": 0
   },
   "enemies": [
-    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 2 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 2 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 3 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 3 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 3 }, "facing": 0 },
-    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 4 }, "facing": 0 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 2 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 2 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 3 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 3 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 3 }, "facing": 3 },
+    { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 4 }, "facing": 3 },
     { "kind": "panzer4", "faction": "german" },
     { "kind": "panzer4", "faction": "german" }
   ],

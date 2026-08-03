@@ -33,6 +33,7 @@ export interface TurnEndApplyContext {
   rng: RNG;
   nextEnemyId: () => string;
   effectiveRangePenetration?: boolean;
+  sameHexInfantryTankAttack?: boolean;
   weather?: WeatherType;
 }
 
@@ -322,12 +323,13 @@ function cloneUnitForSim(u: Unit): Unit {
  * 与原先「确认后再掷骰」等价 RNG，仅在克隆谢尔曼上演练 applyAttack 以保持顺序与终止条件。
  */
 /** 是否存在与谢尔曼六角相邻的存活敌军步兵（事件触发时用于文案：无相邻则无射击条件） */
-function hasInfantryAdjacentToSherman(mission: LoadedMission): boolean {
+function hasInfantryAdjacentToSherman(mission: LoadedMission, includeSameHex = false): boolean {
   const sh = mission.sherman;
   if (sh.destroyed) return false;
   // 步兵 / 军官都计入「相邻徒步单位」 —— 任务 8 起军官在相邻齐射事件中与步兵同等参与。
   return mission.enemies.some(
-    e => !e.destroyed && isFootUnit(e) && hexDistance(e.pos, sh.pos) === 1,
+    e => !e.destroyed && isFootUnit(e)
+      && (hexDistance(e.pos, sh.pos) === 1 || (includeSameHex && hexDistance(e.pos, sh.pos) === 0)),
   );
 }
 
@@ -335,6 +337,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   mission: LoadedMission,
   rng: RNG,
   effectiveRangePenetration = false,
+  sameHexInfantryTankAttack = false,
   weather: WeatherType | undefined = mission.data.weather,
 ): {
   volleys: AdjacentInfantryVolleyPreview[];
@@ -349,12 +352,21 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   const simTarget = cloneUnitForSim(sh);
   // 任务 8 起：军官与步兵同属「徒步类」，相邻齐射时也参与。
   const infs = mission.enemies.filter(
-    e => !e.destroyed && isFootUnit(e) && hexDistance(e.pos, sh.pos) === 1,
+    e => !e.destroyed && isFootUnit(e)
+      && (hexDistance(e.pos, sh.pos) === 1 || (sameHexInfantryTankAttack && hexDistance(e.pos, sh.pos) === 0)),
   );
 
   for (const inf of infs) {
     if (simTarget.destroyed) break;
-    const ctx = { attacker: inf, target: simTarget, map: mission.map, smokeHexes: mission.smokeHexes, effectiveRangePenetration, weather };
+    const ctx = {
+      attacker: inf,
+      target: simTarget,
+      map: mission.map,
+      smokeHexes: mission.smokeHexes,
+      effectiveRangePenetration,
+      sameHexInfantryTankAttack,
+      weather,
+    };
     if (canAttack(ctx).ok) {
       const rep = rollAttack(ctx, rng);
       volleys.push({ report: rep, attackerId: inf.id, attackerKind: inf.kind });
@@ -387,7 +399,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
       crewCheck,
       statusChange: damageEffect === 'destroyed' ? 'destroyed' : 'damaged',
     };
-    volleys.push({ report: rep, attackerKind: inf.kind });
+    volleys.push({ report: rep, attackerId: inf.id, attackerKind: inf.kind });
     applyAttack(simTarget, rep);
   }
 
@@ -577,11 +589,11 @@ export function prepareTurnEndEvent(
     }
     case 'adjacent_infantry_fire': {
       const { volleys } = simulateAdjacentInfantryVolleysForTurnEnd(
-        mission, rng, ctx.effectiveRangePenetration, ctx.weather,
+        mission, rng, ctx.effectiveRangePenetration, ctx.sameHexInfantryTankAttack, ctx.weather,
       );
       const reports = volleys.map(v => v.report);
       const bodyKey =
-        !sh.destroyed && !hasInfantryAdjacentToSherman(mission)
+        !sh.destroyed && !hasInfantryAdjacentToSherman(mission, ctx.sameHexInfantryTankAttack)
           ? 'turnEnd.adjacent.noTarget'
           : 'turnEnd.adjacent';
       return {

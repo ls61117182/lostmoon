@@ -181,3 +181,45 @@ console.log('All six diagonal flank rotation targets passed');
 }
 
 console.log('Diagonal clicked-flank preference tests passed');
+
+{
+  const map = fieldMap();
+  const openHatchTank = tank(0);
+  openHatchTank.hatchOpen = true;
+  openHatchTank.turretFacing = 0;
+  openHatchTank.diagonalGunnerSidePreference = 1;
+  const flankTarget = {
+    id: 'open-hatch-flank', kind: 'panzer4', faction: 'german', pos: { q: 2, r: 1 }, facing: 0,
+    stats: { size: 4, armorFront: 10, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, penetration: 2, effectiveRange: 2 },
+  };
+  const ctx = {
+    attacker: openHatchTank,
+    target: flankTarget,
+    map,
+    expandedTurretDirections: true,
+    directionalDamageCheck: true,
+  };
+  assert.strictEqual(canAttack(ctx).ok, true, 'an open-hatch tank must be able to attack a visible flank even when the other flank was selected');
+  assert.strictEqual(attackFireDirection(ctx), 6, 'an open-hatch flank attack must derive and use its halfway turret direction');
+
+  const infantry = {
+    ...flankTarget,
+    id: 'open-hatch-infantry',
+    kind: 'german_infantry',
+    stats: { ...flankTarget.stats, size: 2 },
+  };
+  assert.strictEqual(
+    canMGAttack({ attacker: openHatchTank, target: infantry, map, expandedTurretDirections: true }).ok,
+    true,
+    'open-hatch machine-gun attacks must allow the same selected flank hexes',
+  );
+
+  const closedHatchTank = { ...openHatchTank, hatchOpen: false };
+  assert.strictEqual(
+    canAttack({ ...ctx, attacker: closedHatchTank }).ok,
+    false,
+    'closing the hatch must restore the selected single-flank gunner-vision restriction',
+  );
+}
+
+console.log('Open-hatch diagonal flank attack tests passed');
