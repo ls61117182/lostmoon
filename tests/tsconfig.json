@@ -1,0 +1,14 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "../temp/declarations/jsb",
+      "../temp/declarations/cc.custom-macro",
+      "../temp/declarations/cc",
+      "../temp/declarations/cc.env"
+    ]
+  },
+  "include": ["./**/*.ts"],
+  "exclude": []
+}

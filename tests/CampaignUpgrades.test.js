@@ -19,7 +19,12 @@ assert(scene.includes('campaignMainGunHitThresholdModifier()'), 'improved optics
 assert(scene.includes("campaignUpgradeActive('automatic_extinguisher')"), 'repair dice should support the extinguisher');
 assert(scene.includes("campaignUpgradeActive('improved_transmission')"), 'advance dice should support transmission turns');
 assert(scene.includes("a !== 'turn' && !transmissionTurnsDrive"), 'transmission turns should replace duplicate same-pip turn actions');
-assert(scene.includes('campaignSmokeUnlocked()'), 'campaign smoke should be gated by the launcher upgrade');
+assert(scene.includes("classifyMiscDie(pip) === 'smoke_or_repair'"), 'the base smoke die should remain initially available');
+assert(scene.includes('pip !== 2 && pip !== 4')
+  && scene.includes("campaignUpgradeActive('smoke_launcher')")
+  && scene.includes("campaignUpgradeDefinition('smoke_launcher').smokeOnMiscPips2And4"),
+  'the smoke launcher should add smoke to misc pips 2 and 4');
+assert(!scene.includes('campaignSmokeUnlocked()'), 'the base smoke action should no longer be upgrade-gated');
 assert(scene.includes('campaignUpgradeDiceBonus('), 'wide tracks and intercom should feed the action dice pool');
 assert(scene.includes('upgrade_icons_atlas_v1/spriteFrame'), 'upgrade cards should load the illustrated icon atlas');
 assert(fs.existsSync(path.join(root, 'assets/resources/textures/ui/campaign_upgrades/upgrade_icons_atlas_v1.png')),

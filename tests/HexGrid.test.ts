@@ -2,14 +2,14 @@
  * HexGrid 单元测试示例。
  *
  * 注意：这个文件**不能**放在 assets/ 下，因为 Cocos Creator 会把
- * 资源目录里的所有 .ts 当游戏脚本编译，从而在运行时报
- * `ReferenceError: describe is not defined`（运行时没有 Jest）。
+ * 资源目录里的所有 .ts 当作游戏脚本编译。
  *
- * 运行方式（需先安装依赖）：
- *   npm i -D typescript ts-node jest @types/jest ts-jest
- *   npx ts-jest config:init
- *   npx jest
+ * 测试使用 Node 内置的 assert，不依赖 Jest 或 Jest 全局类型。
  */
+
+declare function require(name: string): any;
+
+const assert = require('assert');
 
 import {
   HEX_DIRECTIONS,
@@ -24,7 +24,7 @@ import {
   offsetToAxial,
   rotateDirection,
 } from '../assets/scripts/core/HexGrid';
-import { Direction, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
+import { Direction, FireDirection, Unit, effectiveDiceTerrain, tileHasBridge } from '../assets/scripts/core/types';
 import { terrainMoveCost, tileMoveCost } from '../assets/scripts/core/MoveCost';
 import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentVisionRange, fogOfWarEnabled, hasFogLineOfSight, hasRadioReceive, hasRadioTransmit, isWithinOwnVisionRange } from '../assets/scripts/core/FogOfWar';
 import { getGameModeConfig } from '../assets/scripts/core/GameMode';
@@ -39,68 +39,79 @@ const rngFrom = (...values): RNG => {
   return { d6: () => queue.shift() ?? 1 } as unknown as RNG;
 };
 
-describe('HexGrid 基础运算', () => {
-  test('距离：原点到自身 = 0', () => {
-    expect(hexDistance({ q: 0, r: 0 }, { q: 0, r: 0 })).toBe(0);
-  });
+{
+// group: 'HexGrid 基础运算'
+  {
+    // test: '距离：原点到自身 = 0'
+    assert.strictEqual(hexDistance({ q: 0, r: 0 }, { q: 0, r: 0 }), 0);
+  };
 
-  test('距离：6 方向相邻 = 1', () => {
+  {
+    // test: '距离：6 方向相邻 = 1'
     for (const d of HEX_DIRECTIONS) {
-      expect(hexDistance({ q: 0, r: 0 }, d)).toBe(1);
+      assert.strictEqual(hexDistance({ q: 0, r: 0 }, d), 1);
     }
-  });
+  };
 
-  test('邻居取回再算距离 = 1', () => {
+  {
+    // test: '邻居取回再算距离 = 1'
     const origin = { q: 2, r: -1 };
     for (let dir = 0 as Direction; dir < 6; dir = (dir + 1) as Direction) {
       const n = neighbor(origin, dir);
-      expect(hexDistance(origin, n)).toBe(1);
+      assert.strictEqual(hexDistance(origin, n), 1);
     }
-  });
+  };
 
-  test('Offset ↔ Axial 来回转换', () => {
+  {
+    // test: 'Offset ↔ Axial 来回转换'
     for (let row = 0; row < 9; row++) {
       for (let col = 0; col < 7; col++) {
         const ax = offsetToAxial({ col, row });
         const back = axialToOffset(ax);
-        expect(back).toEqual({ col, row });
+        assert.deepStrictEqual(back, { col, row });
       }
     }
-  });
+  };
 
-  test('rotateDirection 顺时针旋转', () => {
-    expect(rotateDirection(0, 1)).toBe(1);
-    expect(rotateDirection(0, 6)).toBe(0);
-    expect(rotateDirection(0, -1)).toBe(5);
-    expect(rotateDirection(3, 3)).toBe(0);
-  });
+  {
+    // test: 'rotateDirection 顺时针旋转'
+    assert.strictEqual(rotateDirection(0, 1), 1);
+    assert.strictEqual(rotateDirection(0, 6), 0);
+    assert.strictEqual(rotateDirection(0, -1), 5);
+    assert.strictEqual(rotateDirection(3, 3), 0);
+  };
 
-  test('directionTo 同直线时返回方向，否则 null', () => {
+  {
+    // test: 'directionTo 同直线时返回方向，否则 null'
     const o = { q: 0, r: 0 };
-    expect(directionTo(o, { q: 3, r: 0 })).toBe(0);
-    expect(directionTo(o, { q: 0, r: 3 })).toBe(1);
-    expect(directionTo(o, { q: -3, r: 3 })).toBe(2);
-    expect(directionTo(o, { q: 1, r: 2 })).toBeNull();
-  });
+    assert.strictEqual(directionTo(o, { q: 3, r: 0 }), 0);
+    assert.strictEqual(directionTo(o, { q: 0, r: 3 }), 1);
+    assert.strictEqual(directionTo(o, { q: -3, r: 3 }), 2);
+    assert.strictEqual(directionTo(o, { q: 1, r: 2 }), null);
+  };
 
-  test('hexLine 包含两端点', () => {
+  {
+    // test: 'hexLine 包含两端点'
     const line = hexLine({ q: 0, r: 0 }, { q: 3, r: 0 });
-    expect(line.length).toBe(4);
-    expect(axialEquals(line[0], { q: 0, r: 0 })).toBe(true);
-    expect(axialEquals(line[3], { q: 3, r: 0 })).toBe(true);
-  });
-});
+    assert.strictEqual(line.length, 4);
+    assert.strictEqual(axialEquals(line[0], { q: 0, r: 0 }), true);
+    assert.strictEqual(axialEquals(line[3], { q: 3, r: 0 }), true);
+  };
+};
 
-describe('HexMap 视线 / 树篱', () => {
-  test('林地阻挡视线', () => {
+{
+// group: 'HexMap 视线 / 树篱'
+  {
+    // test: '林地阻挡视线'
     const map = new HexMap(5, 1);
     for (let q = 0; q < 5; q++) {
       map.set({ pos: { q, r: 0 }, terrain: q === 2 ? 'forest' : 'field' });
     }
-    expect(map.hasLineOfSight({ q: 0, r: 0 }, { q: 4, r: 0 })).toBe(false);
-  });
+    assert.strictEqual(map.hasLineOfSight({ q: 0, r: 0 }, { q: 4, r: 0 }), false);
+  };
 
-  test('两端是林地不算阻挡（只算路径中间）', () => {
+  {
+    // test: '两端是林地不算阻挡（只算路径中间）'
     const map = new HexMap(5, 1);
     for (let q = 0; q < 5; q++) {
       map.set({
@@ -108,10 +119,11 @@ describe('HexMap 视线 / 树篱', () => {
         terrain: (q === 0 || q === 4) ? 'forest' : 'field',
       });
     }
-    expect(map.hasLineOfSight({ q: 0, r: 0 }, { q: 4, r: 0 })).toBe(true);
-  });
+    assert.strictEqual(map.hasLineOfSight({ q: 0, r: 0 }, { q: 4, r: 0 }), true);
+  };
 
-  test('countHedgesAlong：紧挨攻击者格的树篱不计（编码在攻击者格指向邻格）', () => {
+  {
+    // test: 'countHedgesAlong：紧挨攻击者格的树篱不计（编码在攻击者格指向邻格）'
     const map = new HexMap(3, 1);
     map.set({
       pos: { q: 0, r: 0 },
@@ -120,10 +132,11 @@ describe('HexMap 视线 / 树篱', () => {
     });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'field' });
     map.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
-    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 })).toBe(0);
-  });
+    assert.strictEqual(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 }), 0);
+  };
 
-  test('countHedgesAlong：紧挨攻击者格的树篱不计（编码在邻格指回攻击者方向）', () => {
+  {
+    // test: 'countHedgesAlong：紧挨攻击者格的树篱不计（编码在邻格指回攻击者方向）'
     const map = new HexMap(3, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
     map.set({
@@ -132,10 +145,11 @@ describe('HexMap 视线 / 树篱', () => {
       hedges: [false, false, false, true, false, false], // 邻格西向（指回攻击者）树篱
     });
     map.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
-    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 })).toBe(0);
-  });
+    assert.strictEqual(map.countHedgesAlong({ q: 0, r: 0 }, { q: 2, r: 0 }), 0);
+  };
 
-  test('countHedgesAlong：路径中段树篱仍按 1 计，且任一侧编码都识别', () => {
+  {
+    // test: 'countHedgesAlong：路径中段树篱仍按 1 计，且任一侧编码都识别'
     // (1,0).hedges[0]: 1↔2 之间的树篱编码在 (1,0) 指向 (2,0)
     const map1 = new HexMap(4, 1);
     map1.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
@@ -146,7 +160,7 @@ describe('HexMap 视线 / 树篱', () => {
     });
     map1.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
     map1.set({ pos: { q: 3, r: 0 }, terrain: 'field' });
-    expect(map1.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 0 })).toBe(1);
+    assert.strictEqual(map1.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 0 }), 1);
 
     // (2,0).hedges[3]: 同一物理边在 (2,0) 指向 (1,0) 一侧编码
     const map2 = new HexMap(4, 1);
@@ -158,10 +172,11 @@ describe('HexMap 视线 / 树篱', () => {
       hedges: [false, false, false, true, false, false],
     });
     map2.set({ pos: { q: 3, r: 0 }, terrain: 'field' });
-    expect(map2.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 0 })).toBe(1);
-  });
+    assert.strictEqual(map2.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 0 }), 1);
+  };
 
-  test('countHedgesAlong：相邻目标（路径仅 1 段）→ 紧挨攻击者一律不计', () => {
+  {
+    // test: 'countHedgesAlong：相邻目标（路径仅 1 段）→ 紧挨攻击者一律不计'
     const map = new HexMap(2, 1);
     map.set({
       pos: { q: 0, r: 0 },
@@ -173,11 +188,12 @@ describe('HexMap 视线 / 树篱', () => {
       terrain: 'field',
       hedges: [false, false, false, true, false, false],
     });
-    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(0);
-  });
-});
+    assert.strictEqual(map.countHedgesAlong({ q: 0, r: 0 }, { q: 1, r: 0 }), 0);
+  };
+};
 
-describe('Effective range penetration', () => {
+{
+// group: 'Effective range penetration'
   const unitAt = (id: string, q: number, penetration: number, effectiveRange: number): Unit => ({
     id,
     kind: 'panzer4',
@@ -200,10 +216,12 @@ describe('Effective range penetration', () => {
       visionType: 'turreted',
       visionRange: 4,
       hasRadio: true,
+      crewMembers: [],
     },
   });
 
-  test('顶部扩一行并切换 odd-r 基准后，旧格子保持统一平移', () => {
+  {
+    // test: '顶部扩一行并切换 odd-r 基准后，旧格子保持统一平移'
     for (const oldParity of [0, 1] as const) {
       const newParity = (oldParity === 0 ? 1 : 0) as 0 | 1;
       const originBefore = offsetToAxial({ col: 0, row: 0 }, oldParity);
@@ -213,58 +231,64 @@ describe('Effective range penetration', () => {
         for (let col = 0; col < 12; col++) {
           const before = offsetToAxial({ col, row }, oldParity);
           const after = offsetToAxial({ col, row: row + 1 }, newParity);
-          expect(after).toEqual({ q: before.q + delta.q, r: before.r + delta.r });
-          expect(axialToOffset(after, newParity)).toEqual({ col, row: row + 1 });
+          assert.deepStrictEqual(after, { q: before.q + delta.q, r: before.r + delta.r });
+          assert.deepStrictEqual(axialToOffset(after, newParity), { col, row: row + 1 });
         }
       }
     }
-  });
+  };
 
-  test('does not decay within range, then loses one per extra hex down to zero', () => {
+  {
+    // test: 'does not decay within range, then loses one per extra hex down to zero'
     const attacker = unitAt('attacker', 0, 3, 4);
-    expect(effectivePenetration(attacker, unitAt('target', 4, 0, 4), true)).toBe(3);
-    expect(effectivePenetration(attacker, unitAt('target', 5, 0, 4), true)).toBe(2);
-    expect(effectivePenetration(attacker, unitAt('target', 9, 0, 4), true)).toBe(0);
-    expect(attacker.stats.penetration).toBe(3);
-  });
+    assert.strictEqual(effectivePenetration(attacker, unitAt('target', 4, 0, 4), true), 3);
+    assert.strictEqual(effectivePenetration(attacker, unitAt('target', 5, 0, 4), true), 2);
+    assert.strictEqual(effectivePenetration(attacker, unitAt('target', 9, 0, 4), true), 0);
+    assert.strictEqual(attacker.stats.penetration, 3);
+  };
 
-  test('breakdown reports adjacent range as distance 1 while applying no range penalty', () => {
+  {
+    // test: 'breakdown reports adjacent range as distance 1 while applying no range penalty'
     const attacker = unitAt('attacker', 0, 3, 4);
-    expect(effectivePenetrationBreakdown(attacker, unitAt('target', 1, 0, 4), true)).toEqual({
+    assert.deepStrictEqual(effectivePenetrationBreakdown(attacker, unitAt('target', 1, 0, 4), true), {
       basePenetration: 3,
       effectiveRange: 4,
       distance: 1,
       rangePenalty: 0,
       penetration: 3,
     });
-  });
+  };
 
-  test('classic mode keeps base penetration beyond effective range', () => {
+  {
+    // test: 'classic mode keeps base penetration beyond effective range'
     const attacker = unitAt('attacker', 0, 3, 4);
-    expect(effectivePenetration(attacker, unitAt('target', 9, 0, 4), false)).toBe(3);
-  });
+    assert.strictEqual(effectivePenetration(attacker, unitAt('target', 9, 0, 4), false), 3);
+  };
 
-  test('attack preview uses the temporary decayed value', () => {
+  {
+    // test: 'attack preview uses the temporary decayed value'
     const attacker = unitAt('attacker', 0, 3, 4);
     const target = unitAt('target', 5, 0, 4);
     const map = new HexMap(6, 1);
     for (let q = 0; q <= 5; q++) map.set({ pos: { q, r: 0 }, terrain: 'field' });
-    expect(previewAttack({ attacker, target, map, effectiveRangePenetration: true }).pen.penetration).toBe(2);
-    expect(attacker.stats.penetration).toBe(3);
-  });
+    assert.strictEqual(previewAttack({ attacker, target, map, effectiveRangePenetration: true }).pen.penetration, 2);
+    assert.strictEqual(attacker.stats.penetration, 3);
+  };
 
-  test('attack report uses the temporary value without mutating base penetration', () => {
+  {
+    // test: 'attack report uses the temporary value without mutating base penetration'
     const attacker = unitAt('attacker', 0, 3, 4);
     const target = unitAt('target', 5, 0, 4);
     const map = new HexMap(6, 1);
     for (let q = 0; q <= 5; q++) map.set({ pos: { q, r: 0 }, terrain: 'field' });
     const report = rollAttack({ attacker, target, map, effectiveRangePenetration: true }, new RNG(12345));
-    expect(report.penetration).toBe(2);
-    expect(attacker.stats.penetration).toBe(3);
-  });
-});
+    assert.strictEqual(report.penetration, 2);
+    assert.strictEqual(attacker.stats.penetration, 3);
+  };
+};
 
-describe('Hardcore twelve-direction turret fire', () => {
+{
+// group: 'Hardcore twelve-direction turret fire'
   const tankAt = (id: string, q: number, r: number, facing: Direction = 0): Unit => ({
     id,
     kind: 'panzer4',
@@ -287,6 +311,7 @@ describe('Hardcore twelve-direction turret fire', () => {
       visionType: 'turreted',
       visionRange: 6,
       hasRadio: true,
+      crewMembers: [],
     },
   });
 
@@ -298,28 +323,31 @@ describe('Hardcore twelve-direction turret fire', () => {
     return map;
   };
 
-  test('recognizes all six halfway rays and keeps shortest hex distance', () => {
+  {
+    // test: 'recognizes all six halfway rays and keeps shortest hex distance'
     const targets = [
       { q: 2, r: 2 }, { q: -2, r: 4 }, { q: -4, r: 2 },
       { q: -2, r: -2 }, { q: 2, r: -4 }, { q: 4, r: -2 },
     ];
     targets.forEach((target, i) => {
-      expect(fireDirectionTo({ q: 0, r: 0 }, target)).toBe(6 + i);
-      expect(hexDistance({ q: 0, r: 0 }, target)).toBe(4);
+      assert.strictEqual(fireDirectionTo({ q: 0, r: 0 }, target), 6 + i);
+      assert.strictEqual(hexDistance({ q: 0, r: 0 }, target), 4);
     });
-  });
+  };
 
-  test('halfway target is legal only with the hardcore expansion', () => {
+  {
+    // test: 'halfway target is legal only with the hardcore expansion'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
     const map = fieldMap(0, 1);
-    expect(canAttack({ attacker, target, map }).ok).toBe(false);
-    expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
+    assert.strictEqual(canAttack({ attacker, target, map }).ok, false);
+    assert.strictEqual(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok, true);
     attacker.stats = { ...attacker.stats, visionType: 'fixed' };
-    expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(false);
-  });
+    assert.strictEqual(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok, false);
+  };
 
-  test('StuG III fixed gun may only fire along the hull facing', () => {
+  {
+    // test: 'StuG III fixed gun may only fire along the hull facing'
     const attacker = tankAt('attacker', 0, 0);
     attacker.kind = 'stug3';
     attacker.stats = { ...attacker.stats, visionType: 'fixed' };
@@ -328,63 +356,68 @@ describe('Hardcore twelve-direction turret fire', () => {
     const diagonal = tankAt('diagonal', 1, 1);
     const map = fieldMap(0, 2);
 
-    expect(canAttack({ attacker, target: forward, map }).ok).toBe(true);
-    expect(canAttack({ attacker, target: flank, map })).toEqual({
+    assert.strictEqual(canAttack({ attacker, target: forward, map }).ok, true);
+    assert.deepStrictEqual(canAttack({ attacker, target: flank, map }), {
       ok: false,
       reason: 'attack.reason.fixedGunFacing',
     });
-    expect(canAttack({ attacker, target: diagonal, map, expandedTurretDirections: true })).toEqual({
+    assert.deepStrictEqual(canAttack({ attacker, target: diagonal, map, expandedTurretDirections: true }), {
       ok: false,
       reason: 'attack.reason.notStraight',
     });
-  });
+  };
 
-  test('hardcore halfway main gun fire ignores a single flanking LoS blocker', () => {
+  {
+    // test: 'hardcore halfway main gun fire ignores a single flanking LoS blocker'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
     const map = fieldMap(0, 1);
     map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
 
-    expect(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
-  });
+    assert.strictEqual(canAttack({ attacker, target, map, expandedTurretDirections: true }).ok, true);
+  };
 
-  test('hardcore halfway main gun fire is blocked by both flanking LoS blockers', () => {
+  {
+    // test: 'hardcore halfway main gun fire is blocked by both flanking LoS blockers'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
     const map = fieldMap(0, 1);
     map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
     map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
 
-    expect(canAttack({ attacker, target, map, expandedTurretDirections: true })).toEqual({
+    assert.deepStrictEqual(canAttack({ attacker, target, map, expandedTurretDirections: true }), {
       ok: false,
       reason: 'attack.reason.blocked',
     });
-  });
+  };
 
-  test('halfway machine-gun target is legal only with the hardcore expansion', () => {
+  {
+    // test: 'halfway machine-gun target is legal only with the hardcore expansion'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
     target.kind = 'infantry';
     const map = fieldMap(0, 1);
 
-    expect(canMGAttack({ attacker, target, map })).toEqual({
+    assert.deepStrictEqual(canMGAttack({ attacker, target, map }), {
       ok: false,
       reason: 'attack.reason.notStraight',
     });
-    expect(canMGAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
-  });
+    assert.strictEqual(canMGAttack({ attacker, target, map, expandedTurretDirections: true }).ok, true);
+  };
 
-  test('hardcore halfway machine-gun fire ignores a single flanking LoS blocker', () => {
+  {
+    // test: 'hardcore halfway machine-gun fire ignores a single flanking LoS blocker'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
     target.kind = 'infantry';
     const map = fieldMap(0, 1);
     map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
 
-    expect(canMGAttack({ attacker, target, map, expandedTurretDirections: true }).ok).toBe(true);
-  });
+    assert.strictEqual(canMGAttack({ attacker, target, map, expandedTurretDirections: true }).ok, true);
+  };
 
-  test('hardcore halfway machine-gun fire is blocked by both flanking LoS blockers', () => {
+  {
+    // test: 'hardcore halfway machine-gun fire is blocked by both flanking LoS blockers'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
     target.kind = 'infantry';
@@ -392,13 +425,14 @@ describe('Hardcore twelve-direction turret fire', () => {
     map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
     map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
 
-    expect(canMGAttack({ attacker, target, map, expandedTurretDirections: true })).toEqual({
+    assert.deepStrictEqual(canMGAttack({ attacker, target, map, expandedTurretDirections: true }), {
       ok: false,
       reason: 'attack.reason.blocked',
     });
-  });
+  };
 
-  test('incoming-fire angles use the CSV armor and damage-check direction table', () => {
+  {
+    // test: 'incoming-fire angles use the CSV armor and damage-check direction table'
     const target = tankAt('target', 0, 0, 0);
     const cases = [
       { pos: { q: 1, r: 0 }, angle: 0, armor: 'front', damage: 'front' },
@@ -415,20 +449,21 @@ describe('Hardcore twelve-direction turret fire', () => {
       { pos: { q: -1, r: 0 }, angle: 180, armor: 'rear', damage: 'rear' },
     ] as const;
     for (const c of cases) {
-      expect(incomingAngleFrom(target, c.pos)).toBe(c.angle);
+      assert.strictEqual(incomingAngleFrom(target, c.pos), c.angle);
       const rule = attackDirectionRuleFrom(target, c.pos);
-      expect(rule.armorFace).toBe(c.armor);
-      expect(rule.damageCheckType).toBe(c.damage);
-      expect(armorFaceFrom(target, c.pos)).toBe(c.armor);
+      assert.strictEqual(rule.armorFace, c.armor);
+      assert.strictEqual(rule.damageCheckType, c.damage);
+      assert.strictEqual(armorFaceFrom(target, c.pos), c.armor);
     }
-  });
+  };
 
-  test('attack reports use direction-specific damage tables only when hardcore enables them', () => {
+  {
+    // test: 'attack reports use direction-specific damage tables only when hardcore enables them'
     const attacker = tankAt('attacker', 0, 1);
     const target = tankAt('target', 0, 0, 0);
     const map = fieldMap(0, 1);
     const classicReport = rollAttack({ attacker, target, map, expandedTurretDirections: true }, new RNG(12345));
-    expect(classicReport.damageCheckType).toBeUndefined();
+    assert.strictEqual(classicReport.damageCheckType, undefined);
     const hardcoreReport = rollAttack({
       attacker,
       target,
@@ -436,10 +471,11 @@ describe('Hardcore twelve-direction turret fire', () => {
       expandedTurretDirections: true,
       directionalDamageCheck: true,
     }, new RNG(12345));
-    expect(hardcoreReport.damageCheckType).toBe('right');
-  });
+    assert.strictEqual(hardcoreReport.damageCheckType, 'right');
+  };
 
-  test('hardcore table applies combined fire and crew effects to non-protagonist tanks', () => {
+  {
+    // test: 'hardcore table applies combined fire and crew effects to non-protagonist tanks'
     const attacker = tankAt('attacker', 1, -1);
     const target = tankAt('target', 0, 0, 0);
     target.crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
@@ -456,18 +492,19 @@ describe('Hardcore twelve-direction turret fire', () => {
     }, rng);
     applyAttack(target, report);
 
-    expect(report.damageCheckType).toBe('left');
-    expect(report.damageEffects?.map(e => e.effect)).toEqual(['fire', 'crewCheck']);
-    expect(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot).toBe(3);
-    expect(target.fireLevel).toBe(1);
-    expect(target.crew!.gunner).toBe(false);
-    expect(report.commanderKilledByHitDoubles).toBe(true);
-    expect(target.crew!.commander).toBe(false);
-    expect(target.hatchOpen).toBe(false);
-    expect(target.damaged).toBeFalsy();
-  });
+    assert.strictEqual(report.damageCheckType, 'left');
+    assert.deepStrictEqual(report.damageEffects?.map(e => e.effect), ['fire', 'crewCheck']);
+    assert.strictEqual(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot, 3);
+    assert.strictEqual(target.fireLevel, 1);
+    assert.strictEqual(target.crew!.gunner, false);
+    assert.strictEqual(report.commanderKilledByHitDoubles, true);
+    assert.strictEqual(target.crew!.commander, false);
+    assert.strictEqual(target.hatchOpen, false);
+    assert.ok(!(target.damaged));
+  };
 
-  test('hardcore burning non-protagonist tank is destroyed by the next penetration', () => {
+  {
+    // test: 'hardcore burning non-protagonist tank is destroyed by the next penetration'
     const attacker = tankAt('attacker', 0, -1);
     const target = tankAt('target', 0, 0, 0);
     target.fireLevel = 1;
@@ -483,12 +520,13 @@ describe('Hardcore twelve-direction turret fire', () => {
     }, rng);
     applyAttack(target, report);
 
-    expect(report.damageEffect).toBe('destroyed');
-    expect(report.damageDie).toBeUndefined();
-    expect(target.destroyed).toBe(true);
-  });
+    assert.strictEqual(report.damageEffect, 'destroyed');
+    assert.strictEqual(report.damageDie, undefined);
+    assert.strictEqual(target.destroyed, true);
+  };
 
-  test('hardcore destroyed damage target class skips damage dice after penetration', () => {
+  {
+    // test: 'hardcore destroyed damage target class skips damage dice after penetration'
     const attacker = tankAt('attacker', 1, 0);
     const target = tankAt('target', 0, 0, 0);
     target.kind = 'type97';
@@ -506,13 +544,14 @@ describe('Hardcore twelve-direction turret fire', () => {
     }, rngFrom(6, 6, 6, 6, 1));
     applyAttack(target, report);
 
-    expect(report.damageEffect).toBe('destroyed');
-    expect(report.damageDie).toBeUndefined();
-    expect(report.stagedDamageDie).toBeUndefined();
-    expect(target.destroyed).toBe(true);
-  });
+    assert.strictEqual(report.damageEffect, 'destroyed');
+    assert.strictEqual(report.damageDie, undefined);
+    assert.strictEqual(report.stagedDamageDie, undefined);
+    assert.strictEqual(target.destroyed, true);
+  };
 
-  test('configured damage target class is ignored when the hardcore mode flag is off', () => {
+  {
+    // test: 'configured damage target class is ignored when the hardcore mode flag is off'
     const attacker = tankAt('attacker', 1, 0);
     const target = tankAt('target', 0, 0, 0);
     target.kind = 'type97';
@@ -530,13 +569,14 @@ describe('Hardcore twelve-direction turret fire', () => {
     }, rngFrom(6, 6, 6, 6, 1));
     applyAttack(target, report);
 
-    expect(report.damageDie).toBe(1);
-    expect(report.damageEffect).toBe('fire');
-    expect(target.destroyed).toBeFalsy();
-    expect(target.fireLevel).toBe(1);
-  });
+    assert.strictEqual(report.damageDie, 1);
+    assert.strictEqual(report.damageEffect, 'fire');
+    assert.ok(!(target.destroyed));
+    assert.strictEqual(target.fireLevel, 1);
+  };
 
-  test('hardcore protagonist right-side crew priority skips dead gunner before commander', () => {
+  {
+    // test: 'hardcore protagonist right-side crew priority skips dead gunner before commander'
     const attacker = tankAt('attacker', 0, 1);
     const target = tankAt('target', 0, 0, 0);
     target.kind = 'sherman';
@@ -553,15 +593,16 @@ describe('Hardcore twelve-direction turret fire', () => {
     }, rngFrom(6, 6, 6, 6, 6));
     applyAttack(target, report);
 
-    expect(report.damageCheckType).toBe('right');
-    expect(report.stagedCrewCheck).toBeUndefined();
-    expect(report.crewCheck).toBeUndefined();
-    expect(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot).toBe(4);
-    expect(target.crew!.driver).toBe(false);
-    expect(target.crew!.commander).toBe(true);
-  });
+    assert.strictEqual(report.damageCheckType, 'right');
+    assert.strictEqual(report.stagedCrewCheck, undefined);
+    assert.strictEqual(report.crewCheck, undefined);
+    assert.strictEqual(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot, 4);
+    assert.strictEqual(target.crew!.driver, false);
+    assert.strictEqual(target.crew!.commander, true);
+  };
 
-  test('hardcore protagonist rear damage prioritizes radio before immobilization and fire', () => {
+  {
+    // test: 'hardcore protagonist rear damage prioritizes radio before immobilization and fire'
     const attacker = tankAt('attacker', -1, 0);
     const target = tankAt('target', 0, 0, 0);
     target.kind = 'sherman';
@@ -579,22 +620,23 @@ describe('Hardcore twelve-direction turret fire', () => {
 
     const reportRadio = rollAttack(ctx, rngFrom(6, 6, 6, 6, 4));
     applyAttack(target, reportRadio);
-    expect(reportRadio.damageCheckType).toBe('rear');
-    expect(target.radioDamaged).toBe(true);
-    expect(target.paralyzed).toBeFalsy();
-    expect(target.fireLevel ?? 0).toBe(0);
+    assert.strictEqual(reportRadio.damageCheckType, 'rear');
+    assert.strictEqual(target.radioDamaged, true);
+    assert.ok(!(target.paralyzed));
+    assert.strictEqual(target.fireLevel ?? 0, 0);
 
     const reportParalyzed = rollAttack(ctx, rngFrom(6, 6, 6, 6, 4));
     applyAttack(target, reportParalyzed);
-    expect(target.paralyzed).toBe(true);
-    expect(target.fireLevel ?? 0).toBe(0);
-  });
+    assert.strictEqual(target.paralyzed, true);
+    assert.strictEqual(target.fireLevel ?? 0, 0);
+  };
 
-  test('fire check table profiles resolve classic Europe, classic Pacific, and hardcore outcomes', () => {
-    expect(fireCheckProfileFor('classic', 'europe')).toBe('classic_europe');
-    expect(fireCheckProfileFor('classic', 'pacific')).toBe('classic_pacific');
-    expect(fireCheckProfileFor('hardcore', 'europe')).toBe('hardcore');
-    expect([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('classic_europe', die))).toEqual([
+  {
+    // test: 'fire check table profiles resolve classic Europe, classic Pacific, and hardcore outcomes'
+    assert.strictEqual(fireCheckProfileFor('classic', 'europe'), 'classic_europe');
+    assert.strictEqual(fireCheckProfileFor('classic', 'pacific'), 'classic_pacific');
+    assert.strictEqual(fireCheckProfileFor('hardcore', 'europe'), 'hardcore');
+    assert.deepStrictEqual([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('classic_europe', die)), [
       'destroyed',
       'crewCheck',
       'fire',
@@ -602,7 +644,7 @@ describe('Hardcore twelve-direction turret fire', () => {
       'turret',
       'paralyzed',
     ]);
-    expect([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('classic_pacific', die))).toEqual([
+    assert.deepStrictEqual([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('classic_pacific', die)), [
       'destroyed',
       'crewCheck',
       'fire',
@@ -610,7 +652,7 @@ describe('Hardcore twelve-direction turret fire', () => {
       'paralyzed',
       'none',
     ]);
-    expect([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('hardcore', die))).toEqual([
+    assert.deepStrictEqual([1, 2, 3, 4, 5, 6].map(die => resolveFireCheckEffect('hardcore', die)), [
       'destroyed',
       'crewCheck',
       'fire',
@@ -618,11 +660,12 @@ describe('Hardcore twelve-direction turret fire', () => {
       'paralyzed',
       'none',
     ]);
-    expect(resolveFireCheckLowest('classic_europe', [6, 5, 4, 3]).effect).toBe('fire');
-    expect(resolveFireCheckLowest('classic_pacific', [6, 5, 4]).effect).toBe('turret');
-  });
+    assert.strictEqual(resolveFireCheckLowest('classic_europe', [6, 5, 4, 3]).effect, 'fire');
+    assert.strictEqual(resolveFireCheckLowest('classic_pacific', [6, 5, 4]).effect, 'turret');
+  };
 
-  test('halfway ray counts both bordering hedge paths, divides by two and floors', () => {
+  {
+    // test: 'halfway ray counts both bordering hedge paths, divides by two and floors'
     const map = fieldMap(0, 3);
     const hedgeEdges: Array<[{ q: number; r: number }, Direction]> = [
       [{ q: 1, r: 0 }, 1],
@@ -636,21 +679,99 @@ describe('Hardcore twelve-direction turret fire', () => {
       tile.hedges = [false, false, false, false, false, false];
       tile.hedges[direction] = true;
     }
-    expect(map.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 3 })).toBe(2);
-  });
+    assert.strictEqual(map.countHedgesAlong({ q: 0, r: 0 }, { q: 3, r: 3 }), 2);
+  };
 
-  test('closed turret vision follows a selected halfway ray', () => {
+  {
+    // test: 'closed turret vision follows a selected halfway ray'
     const unit = tankAt('attacker', 0, 0);
     unit.turretFacing = 6;
     unit.visionRange = 4;
     const map = fieldMap(-1, 3);
     const visible = computeUnitVisibleHexes(map, unit);
-    expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(true);
-    expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(true);
-    expect(visible.has(HexMap.keyOf({ q: 3, r: 3 }))).toBe(false);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 1 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 2 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 3, r: 3 })), false);
+  };
 
-  test('closed turret halfway fog ignores a single flanking blocker', () => {
+  {
+    // test: 'closed halfway gunner sight fills one contiguous side through range five'
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.previousTurretFacing = 0;
+    unit.gunnerVisionRange = 5;
+    const visible = computeUnitVisibleHexes(fieldMap(-1, 4), unit);
+
+    for (const pos of [{ q: 1, r: 0 }, { q: 1, r: 1 }, { q: 2, r: 1 }, { q: 2, r: 2 }, { q: 3, r: 2 }]) {
+      assert.strictEqual(visible.has(HexMap.keyOf(pos)), true);
+    }
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 2 })), false);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 3 })), false);
+  };
+
+  {
+    // test: 'closed halfway gunner sight chooses the clear adjacent side'
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.gunnerVisionRange = 5;
+    const map = fieldMap(-1, 4);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+
+    const visible = computeUnitVisibleHexes(map, unit);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 2 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 1 })), false);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 2 })), true);
+  };
+
+  {
+    // test: 'closed halfway gunner sight uses the distance-three pair when adjacent sides are clear'
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.gunnerVisionRange = 5;
+    const map = fieldMap(-1, 4);
+    map.set({ pos: { q: 2, r: 1 }, terrain: 'rocky' });
+
+    const visible = computeUnitVisibleHexes(map, unit);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 2 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 1 })), false);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 2 })), true);
+  };
+
+  {
+    // test: 'blockers on opposite side levels hide the distance-four center hex'
+    const unit = tankAt('attacker', 0, 0);
+    unit.turretFacing = 6;
+    unit.gunnerVisionRange = 5;
+    const map = fieldMap(-1, 4);
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+    map.set({ pos: { q: 1, r: 2 }, terrain: 'field', hasBuilding: true });
+
+    const visible = computeUnitVisibleHexes(map, unit);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 1 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 2 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 2 })), false);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 3 })), false);
+  };
+
+  {
+    // test: 'symmetric halfway sight prefers the side nearer the previous turret facing'
+    const fromAxisZero = tankAt('attacker', 0, 0);
+    fromAxisZero.turretFacing = 6;
+    fromAxisZero.previousTurretFacing = 0;
+    fromAxisZero.gunnerVisionRange = 5;
+    const fromAxisOne = { ...fromAxisZero, previousTurretFacing: 1 as FireDirection };
+    const map = fieldMap(-1, 4);
+
+    const leftVisible = computeUnitVisibleHexes(map, fromAxisZero);
+    const rightVisible = computeUnitVisibleHexes(map, fromAxisOne);
+    assert.strictEqual(leftVisible.has(HexMap.keyOf({ q: 2, r: 1 })), true);
+    assert.strictEqual(leftVisible.has(HexMap.keyOf({ q: 1, r: 2 })), false);
+    assert.strictEqual(rightVisible.has(HexMap.keyOf({ q: 2, r: 1 })), false);
+    assert.strictEqual(rightVisible.has(HexMap.keyOf({ q: 1, r: 2 })), true);
+  };
+
+  {
+    // test: 'closed turret halfway fog ignores a single flanking blocker'
     const unit = tankAt('attacker', 0, 0);
     unit.turretFacing = 6;
     unit.visionRange = 4;
@@ -658,11 +779,12 @@ describe('Hardcore twelve-direction turret fire', () => {
     map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
 
     const visible = computeUnitVisibleHexes(map, unit);
-    expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(true);
-    expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(true);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 1 })), true);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 2 })), true);
+  };
 
-  test('closed turret halfway fog requires both flanking blockers to stop vision', () => {
+  {
+    // test: 'closed turret halfway fog requires both flanking blockers to stop vision'
     const unit = tankAt('attacker', 0, 0);
     unit.turretFacing = 6;
     unit.visionRange = 4;
@@ -671,45 +793,48 @@ describe('Hardcore twelve-direction turret fire', () => {
     map.set({ pos: { q: 0, r: 1 }, terrain: 'forest' });
 
     const visible = computeUnitVisibleHexes(map, unit);
-    expect(visible.has(HexMap.keyOf({ q: 1, r: 1 }))).toBe(false);
-    expect(visible.has(HexMap.keyOf({ q: 2, r: 2 }))).toBe(false);
-  });
-});
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 1, r: 1 })), false);
+    assert.strictEqual(visible.has(HexMap.keyOf({ q: 2, r: 2 })), false);
+  };
+};
 
-describe('战争迷雾玩家视野', () => {
-  test('经典与硬核模式启用各自规则差异', () => {
-    expect(fogOfWarEnabled('classic')).toBe(false);
-    expect(fogOfWarEnabled('hardcore')).toBe(true);
-    expect(getGameModeConfig('classic').aiMainGunFallbackToMG).toBe(false);
-    expect(getGameModeConfig('hardcore').aiMainGunFallbackToMG).toBe(true);
-    expect(getGameModeConfig('classic').precisionFire).toBe(false);
-    expect(getGameModeConfig('hardcore').precisionFire).toBe(true);
-    expect(getGameModeConfig('classic').commanderBonusWithoutOpenHatch).toBe(false);
-    expect(getGameModeConfig('hardcore').commanderBonusWithoutOpenHatch).toBe(true);
-    expect(getGameModeConfig('classic').miscCloseHatchWithDoubles).toBe(false);
-    expect(getGameModeConfig('hardcore').miscCloseHatchWithDoubles).toBe(true);
-    expect(getGameModeConfig('classic').effectiveRangePenetration).toBe(false);
-    expect(getGameModeConfig('hardcore').effectiveRangePenetration).toBe(true);
-    expect(getGameModeConfig('classic').directionalDamageCheck).toBe(false);
-    expect(getGameModeConfig('hardcore').directionalDamageCheck).toBe(true);
-    expect(getGameModeConfig('classic').unitDamageTargetClass).toBe(false);
-    expect(getGameModeConfig('hardcore').unitDamageTargetClass).toBe(true);
-    expect(getGameModeConfig('classic').radioVisionSharing).toBe(false);
-    expect(getGameModeConfig('hardcore').radioVisionSharing).toBe(true);
-  });
+{
+// group: '战争迷雾玩家视野'
+  {
+    // test: '经典与硬核模式启用各自规则差异'
+    assert.strictEqual(fogOfWarEnabled('classic'), false);
+    assert.strictEqual(fogOfWarEnabled('hardcore'), true);
+    assert.strictEqual(getGameModeConfig('classic').aiMainGunFallbackToMG, false);
+    assert.strictEqual(getGameModeConfig('hardcore').aiMainGunFallbackToMG, true);
+    assert.strictEqual(getGameModeConfig('classic').precisionFire, false);
+    assert.strictEqual(getGameModeConfig('hardcore').precisionFire, true);
+    assert.strictEqual(getGameModeConfig('classic').commanderBonusWithoutOpenHatch, false);
+    assert.strictEqual(getGameModeConfig('hardcore').commanderBonusWithoutOpenHatch, true);
+    assert.strictEqual(getGameModeConfig('classic').miscCloseHatchWithDoubles, false);
+    assert.strictEqual(getGameModeConfig('hardcore').miscCloseHatchWithDoubles, true);
+    assert.strictEqual(getGameModeConfig('classic').effectiveRangePenetration, false);
+    assert.strictEqual(getGameModeConfig('hardcore').effectiveRangePenetration, true);
+    assert.strictEqual(getGameModeConfig('classic').directionalDamageCheck, false);
+    assert.strictEqual(getGameModeConfig('hardcore').directionalDamageCheck, true);
+    assert.strictEqual(getGameModeConfig('classic').unitDamageTargetClass, false);
+    assert.strictEqual(getGameModeConfig('hardcore').unitDamageTargetClass, true);
+    assert.strictEqual(getGameModeConfig('classic').radioVisionSharing, false);
+    assert.strictEqual(getGameModeConfig('hardcore').radioVisionSharing, true);
+  };
 
-  test('硬核车长关舱时仅为移动和攻击阶段提供额外骰', () => {
+  {
+    // test: '硬核车长关舱时仅为移动和攻击阶段提供额外骰'
     const crew = { commander: true, loader: true, gunner: true, driver: true, coDriver: true };
     const hardcoreBonus = getGameModeConfig('hardcore').commanderBonusWithoutOpenHatch;
-    expect(actionDicePool({ subPhase: 'movement', terrain: 'road', hatchOpen: false, crew,
-      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(5);
-    expect(actionDicePool({ subPhase: 'attack', terrain: 'road', hatchOpen: false, crew,
-      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(5);
-    expect(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: false, crew,
-      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(1);
-    expect(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: true, crew,
-      commanderBonusWithoutOpenHatch: hardcoreBonus })).toBe(2);
-  });
+    assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'road', hatchOpen: false, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus }), 5);
+    assert.strictEqual(actionDicePool({ subPhase: 'attack', terrain: 'road', hatchOpen: false, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus }), 5);
+    assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: false, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: true, crew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus }), 2);
+  };
 
   const addRect = (map: HexMap, cols: number, rows: number) => {
     for (let row = 0; row < rows; row++) {
@@ -731,25 +856,27 @@ describe('战争迷雾玩家视野', () => {
     crew: { commander: true, loader: true, gunner: true, driver: true, coDriver: true },
   });
 
-  test('hardcore AI tanks only open a commander hatch when their faction has none open, unless on fire', () => {
+  {
+    // test: 'hardcore AI tanks only open a commander hatch when their faction has none open, unless on fire'
     const protagonist = shermanAt(2, 2, 0, false);
     const ally = { ...shermanAt(3, 2, 0, false), id: 'ally', kind: 'sherman76' as const };
     const enemy = { ...shermanAt(4, 2, 0, false), id: 'enemy', kind: 'panzer4' as const, faction: 'german' as const };
 
-    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'classic')).toBe(false);
-    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(true);
+    assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'classic'), false);
+    assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore'), true);
 
     protagonist.hatchOpen = true;
-    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(false);
+    assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore'), false);
 
     ally.fireLevel = 1;
-    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(true);
+    assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore'), true);
 
     ally.crew!.commander = false;
-    expect(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore')).toBe(false);
-  });
+    assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore'), false);
+  };
 
-  test('精确射击只在最终命中阈值上应用 -2', () => {
+  {
+    // test: '精确射击只在最终命中阈值上应用 -2'
     const map = new HexMap(5, 5);
     addRect(map, 5, 5);
     const attacker = shermanAt(2, 2, 0, false);
@@ -762,10 +889,11 @@ describe('战争迷雾玩家视野', () => {
     };
     const normal = hitThreshold({ attacker, target, map });
     const precision = hitThreshold({ attacker, target, map, hitThresholdModifier: -2 });
-    expect(precision).toBe(normal - 2);
-  });
+    assert.strictEqual(precision, normal - 2);
+  };
 
-  test('rain weather increases hit threshold by one', () => {
+  {
+    // test: 'rain weather increases hit threshold by one'
     const map = new HexMap(5, 5);
     addRect(map, 5, 5);
     const attacker = shermanAt(2, 2, 0, false);
@@ -778,10 +906,11 @@ describe('战争迷雾玩家视野', () => {
     };
     const clear = hitThreshold({ attacker, target, map });
     const rain = hitThreshold({ attacker, target, map, weather: 'rain' });
-    expect(rain).toBe(clear + 1);
-  });
+    assert.strictEqual(rain, clear + 1);
+  };
 
-  test('关舱：六个相邻格可见，远处仅沿炮塔方向形成射线', () => {
+  {
+    // test: '关舱：六个相邻格可见，远处仅沿炮塔方向形成射线'
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(2, 3, 0, false);
@@ -792,28 +921,30 @@ describe('战争迷雾玩家视野', () => {
     map.set({ pos: blocker, terrain: 'forest' });
 
     const visible = computePlayerVisibleHexes(map, sherman);
-    expect(visible.has(HexMap.keyOf(blocker))).toBe(true);
-    expect(visible.has(HexMap.keyOf(behind))).toBe(false);
-    expect(visible.has(HexMap.keyOf(bodyForward2))).toBe(false);
+    assert.strictEqual(visible.has(HexMap.keyOf(blocker)), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(behind)), false);
+    assert.strictEqual(visible.has(HexMap.keyOf(bodyForward2)), false);
     for (let direction = 0; direction < 6; direction++) {
-      expect(visible.has(HexMap.keyOf(neighbor(sherman.pos, direction as Direction)))).toBe(true);
+      assert.strictEqual(visible.has(HexMap.keyOf(neighbor(sherman.pos, direction as Direction))), true);
     }
-  });
+  };
 
-  test('开舱：半径四格无遮挡目标可见，五格非正前方目标不可见', () => {
+  {
+    // test: '开舱：半径四格无遮挡目标可见，五格非正前方目标不可见'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(4, 4, 0, true);
     const visible = computePlayerVisibleHexes(map, sherman);
     const radius4 = { q: sherman.pos.q + 2, r: sherman.pos.r + 2 };
     const radius5 = { q: sherman.pos.q + 2, r: sherman.pos.r + 3 };
-    expect(hexDistance(sherman.pos, radius4)).toBe(4);
-    expect(hexDistance(sherman.pos, radius5)).toBe(5);
-    expect(visible.has(HexMap.keyOf(radius4))).toBe(true);
-    expect(visible.has(HexMap.keyOf(radius5))).toBe(false);
-  });
+    assert.strictEqual(hexDistance(sherman.pos, radius4), 4);
+    assert.strictEqual(hexDistance(sherman.pos, radius5), 5);
+    assert.strictEqual(visible.has(HexMap.keyOf(radius4)), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(radius5)), false);
+  };
 
-  test('开舱：夹角方向半径视野忽略单侧阻挡格', () => {
+  {
+    // test: '开舱：夹角方向半径视野忽略单侧阻挡格'
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(2, 2, 0, true);
@@ -822,10 +953,11 @@ describe('战争迷雾玩家视野', () => {
     map.set({ pos: blocker, terrain: 'forest' });
 
     const visible = computePlayerVisibleHexes(map, sherman);
-    expect(visible.has(HexMap.keyOf(target))).toBe(true);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(target)), true);
+  };
 
-  test('开舱：夹角方向半径视野需要两侧阻挡格同时存在才遮挡', () => {
+  {
+    // test: '开舱：夹角方向半径视野需要两侧阻挡格同时存在才遮挡'
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(2, 2, 0, true);
@@ -836,10 +968,11 @@ describe('战争迷雾玩家视野', () => {
     map.set({ pos: blockerB, terrain: 'forest' });
 
     const visible = computePlayerVisibleHexes(map, sherman);
-    expect(visible.has(HexMap.keyOf(target))).toBe(false);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(target)), false);
+  };
 
-  test('当前视野属性同时限制开舱半径与正前方直线', () => {
+  {
+    // test: '当前视野属性同时限制开舱半径与正前方直线'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(3, 4, 0, true);
@@ -849,23 +982,25 @@ describe('战争迷雾玩家视野', () => {
     const offAxis3 = { q: sherman.pos.q, r: sherman.pos.r + 3 };
     const visible = computePlayerVisibleHexes(map, sherman);
 
-    expect(currentVisionRange(sherman)).toBe(2);
-    expect(visible.has(HexMap.keyOf(forward2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(forward3))).toBe(false);
-    expect(visible.has(HexMap.keyOf(offAxis3))).toBe(false);
-  });
+    assert.strictEqual(currentVisionRange(sherman), 2);
+    assert.strictEqual(visible.has(HexMap.keyOf(forward2)), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(forward3)), false);
+    assert.strictEqual(visible.has(HexMap.keyOf(offAxis3)), false);
+  };
 
-  test('rain weather reduces vision with closed-hatch minimum one', () => {
+  {
+    // test: 'rain weather reduces vision with closed-hatch minimum one'
     const open = shermanAt(3, 4, 0, true);
     open.visionRange = 4;
-    expect(currentVisionRange(open, 'rain')).toBe(3);
+    assert.strictEqual(currentVisionRange(open, 'rain'), 3);
 
     const closed = shermanAt(3, 4, 0, false);
     closed.visionRange = 1;
-    expect(currentVisionRange(closed, 'rain')).toBe(1);
-  });
+    assert.strictEqual(currentVisionRange(closed, 'rain'), 1);
+  };
 
-  test('关舱时炮塔方向视野不得超过当前视野属性', () => {
+  {
+    // test: '关舱时炮塔方向视野不得超过当前视野属性'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(3, 4, 0, false);
@@ -876,23 +1011,25 @@ describe('战争迷雾玩家视野', () => {
     const bodyForward2 = neighbor(neighbor(sherman.pos, 0), 0);
     const visible = computePlayerVisibleHexes(map, sherman);
 
-    expect(visible.has(HexMap.keyOf(turret2))).toBe(true);
-    expect(visible.has(HexMap.keyOf(turret3))).toBe(false);
-    expect(visible.has(HexMap.keyOf(bodyForward2))).toBe(false);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(turret2)), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(turret3)), false);
+    assert.strictEqual(visible.has(HexMap.keyOf(bodyForward2)), false);
+  };
 
-  test('own vision range blocks turret vision turn beyond configured distance', () => {
+  {
+    // test: 'own vision range blocks turret vision turn beyond configured distance'
     const unit = shermanAt(0, 0, 0, false);
     unit.stats = { ...unit.stats, visionType: 'turreted', visionRange: 4 };
     unit.visionRange = undefined;
     const inRange = shermanAt(4, 0, 3, false);
     const outOfRange = shermanAt(5, 0, 3, false);
 
-    expect(isWithinOwnVisionRange(unit, inRange)).toBe(true);
-    expect(isWithinOwnVisionRange(unit, outOfRange)).toBe(false);
-  });
+    assert.strictEqual(isWithinOwnVisionRange(unit, inRange), true);
+    assert.strictEqual(isWithinOwnVisionRange(unit, outOfRange), false);
+  };
 
-  test('中心点几何连线：{4,1} 建筑遮挡 {2,3} 到 {5,0}/{6,0}', () => {
+  {
+    // test: '中心点几何连线：{4,1} 建筑遮挡 {2,3} 到 {5,0}/{6,0}'
     const map = new HexMap(8, 6);
     addRect(map, 8, 6);
     const from = offsetToAxial({ col: 2, row: 3 });
@@ -901,12 +1038,13 @@ describe('战争迷雾玩家视野', () => {
     const targetB = offsetToAxial({ col: 6, row: 0 });
     map.set({ pos: building, terrain: 'field', hasBuilding: true });
 
-    expect(hasFogLineOfSight(map, from, building)).toBe(true);
-    expect(hasFogLineOfSight(map, from, targetA)).toBe(false);
-    expect(hasFogLineOfSight(map, from, targetB)).toBe(false);
-  });
+    assert.strictEqual(hasFogLineOfSight(map, from, building), true);
+    assert.strictEqual(hasFogLineOfSight(map, from, targetA), false);
+    assert.strictEqual(hasFogLineOfSight(map, from, targetB), false);
+  };
 
-  test('车长阵亡时即使 hatchOpen=true 也按关舱视野计算', () => {
+  {
+    // test: '车长阵亡时即使 hatchOpen=true 也按关舱视野计算'
     const map = new HexMap(7, 7);
     addRect(map, 7, 7);
     const sherman = shermanAt(3, 3, 0, true);
@@ -914,11 +1052,12 @@ describe('战争迷雾玩家视野', () => {
     const rearAdjacent = neighbor(sherman.pos, 2);
     const rearDistance2 = neighbor(neighbor(sherman.pos, 2), 2);
     const visible = computePlayerVisibleHexes(map, sherman);
-    expect(visible.has(HexMap.keyOf(rearAdjacent))).toBe(true);
-    expect(visible.has(HexMap.keyOf(rearDistance2))).toBe(false);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(rearAdjacent)), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(rearDistance2)), false);
+  };
 
-  test('有炮塔单位：周围一格可见，远处只沿炮塔方向看到配置距离', () => {
+  {
+    // test: '有炮塔单位：周围一格可见，远处只沿炮塔方向看到配置距离'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const unit = shermanAt(4, 4, 0, false);
@@ -926,34 +1065,37 @@ describe('战争迷雾玩家视野', () => {
     unit.turretFacing = 1;
     unit.visionRange = undefined;
     const visible = computeUnitVisibleHexes(map, unit);
-    expect(visible.has(HexMap.keyOf(neighbor(unit.pos, 2)))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 2), 2)))).toBe(false);
-    expect(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 1), 1)))).toBe(true);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(unit.pos, 2))), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 2), 2))), false);
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 1), 1))), true);
+  };
 
-  test('无炮塔单位：只沿车体朝向看到配置距离', () => {
+  {
+    // test: '无炮塔单位：只沿车体朝向看到配置距离'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const unit = shermanAt(4, 4, 0, false);
     unit.stats = { ...unit.stats, visionType: 'fixed', visionRange: 4 };
     unit.visionRange = undefined;
     const visible = computeUnitVisibleHexes(map, unit);
-    expect(visible.has(HexMap.keyOf(neighbor(unit.pos, 0)))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(unit.pos, 1)))).toBe(false);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(unit.pos, 0))), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(unit.pos, 1))), false);
+  };
 
-  test('步兵单位：不依赖朝向，视野固定为周围两格', () => {
+  {
+    // test: '步兵单位：不依赖朝向，视野固定为周围两格'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const unit = shermanAt(4, 4, 0, false);
     unit.facing = null;
     unit.stats = { ...unit.stats, visionType: 'infantry', visionRange: 4 };
     const visible = computeUnitVisibleHexes(map, unit);
-    expect(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 2), 2)))).toBe(true);
-    expect(visible.has(HexMap.keyOf(neighbor(neighbor(neighbor(unit.pos, 2), 2), 2)))).toBe(false);
-  });
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(neighbor(unit.pos, 2), 2))), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(neighbor(neighbor(neighbor(unit.pos, 2), 2), 2))), false);
+  };
 
-  test('玩家只获得存活队友所在格，不获得队友周围或朝向视野', () => {
+  {
+    // test: '玩家只获得存活队友所在格，不获得队友周围或朝向视野'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(1, 4, 0, false);
@@ -964,13 +1106,14 @@ describe('战争迷雾玩家视野', () => {
     const allyForward = neighbor(ally.pos, 1);
     const visible = computePlayerVisibleHexes(map, sherman, [ally]);
 
-    expect(visible.has(HexMap.keyOf(ally.pos))).toBe(true);
-    expect(visible.has(HexMap.keyOf(allyForward))).toBe(false);
+    assert.strictEqual(visible.has(HexMap.keyOf(ally.pos)), true);
+    assert.strictEqual(visible.has(HexMap.keyOf(allyForward)), false);
     ally.destroyed = true;
-    expect(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(ally.pos))).toBe(false);
-  });
+    assert.strictEqual(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(ally.pos)), false);
+  };
 
-  test('hardcore radio shares friendly transmitter vision', () => {
+  {
+    // test: 'hardcore radio shares friendly transmitter vision'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const sherman = shermanAt(1, 4, 0, false);
@@ -980,11 +1123,12 @@ describe('战争迷雾玩家视野', () => {
     ally.turretFacing = 1;
     const allyForward = neighbor(ally.pos, 1);
 
-    expect(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(allyForward))).toBe(false);
-    expect(computePlayerVisibleHexes(map, sherman, [ally], true).has(HexMap.keyOf(allyForward))).toBe(true);
-  });
+    assert.strictEqual(computePlayerVisibleHexes(map, sherman, [ally]).has(HexMap.keyOf(allyForward)), false);
+    assert.strictEqual(computePlayerVisibleHexes(map, sherman, [ally], true).has(HexMap.keyOf(allyForward)), true);
+  };
 
-  test('tank radio receive only requires intact radio while transmit requires commander', () => {
+  {
+    // test: 'tank radio receive only requires intact radio while transmit requires commander'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const receiver = shermanAt(1, 4, 0, false);
@@ -993,34 +1137,36 @@ describe('战争迷雾玩家视野', () => {
     sender.turretFacing = 1;
     const senderForward = neighbor(sender.pos, 1);
 
-    expect(hasRadioReceive(receiver)).toBe(true);
-    expect(hasRadioTransmit(sender)).toBe(true);
-    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(true);
+    assert.strictEqual(hasRadioReceive(receiver), true);
+    assert.strictEqual(hasRadioTransmit(sender), true);
+    assert.strictEqual(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward)), true);
 
     receiver.crew!.coDriver = false;
-    expect(hasRadioReceive(receiver)).toBe(true);
-    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(true);
+    assert.strictEqual(hasRadioReceive(receiver), true);
+    assert.strictEqual(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward)), true);
 
     sender.crew!.commander = false;
-    expect(hasRadioTransmit(sender)).toBe(false);
-    expect(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward))).toBe(false);
-  });
+    assert.strictEqual(hasRadioTransmit(sender), false);
+    assert.strictEqual(computeRadioSharedVisibleHexes(map, receiver, [sender]).has(HexMap.keyOf(senderForward)), false);
+  };
 
-  test('non-tank intact radio can both receive and transmit', () => {
+  {
+    // test: 'non-tank intact radio can both receive and transmit'
     const infantry = shermanAt(4, 4, 0, false);
     infantry.kind = 'infantry';
     infantry.facing = null;
     infantry.crew = undefined;
     infantry.stats = { ...infantry.stats, visionType: 'infantry', visionRange: 2 };
 
-    expect(hasRadioReceive(infantry)).toBe(true);
-    expect(hasRadioTransmit(infantry)).toBe(true);
+    assert.strictEqual(hasRadioReceive(infantry), true);
+    assert.strictEqual(hasRadioTransmit(infantry), true);
     infantry.radioDamaged = true;
-    expect(hasRadioReceive(infantry)).toBe(false);
-    expect(hasRadioTransmit(infantry)).toBe(false);
-  });
+    assert.strictEqual(hasRadioReceive(infantry), false);
+    assert.strictEqual(hasRadioTransmit(infantry), false);
+  };
 
-  test('non-radio infantry shares sight only with a friendly tank in the same hex', () => {
+  {
+    // test: 'non-radio infantry shares sight only with a friendly tank in the same hex'
     const map = new HexMap(9, 9);
     addRect(map, 9, 9);
     const receiver = shermanAt(2, 4, 0, false);
@@ -1036,91 +1182,100 @@ describe('战争迷雾玩家视野', () => {
     const remoteTank = shermanAt(7, 4, 0, false);
     remoteTank.id = 'remote';
 
-    expect(computeRadioSharedVisibleHexes(map, receiver, [infantry]).has(HexMap.keyOf(infantrySight))).toBe(true);
-    expect(computeRadioSharedVisibleHexes(map, remoteTank, [receiver, infantry]).has(HexMap.keyOf(infantrySight))).toBe(false);
-  });
-});
+    assert.strictEqual(computeRadioSharedVisibleHexes(map, receiver, [infantry]).has(HexMap.keyOf(infantrySight)), true);
+    assert.strictEqual(computeRadioSharedVisibleHexes(map, remoteTank, [receiver, infantry]).has(HexMap.keyOf(infantrySight)), false);
+  };
+};
 
-describe('GDD §3.2 桥梁规则', () => {
-  test('tileHasBridge：仅水域 + 配置 bridgeEnds 才算桥梁', () => {
-    expect(tileHasBridge({ pos: { q: 0, r: 0 }, terrain: 'water' })).toBe(false);
-    expect(tileHasBridge({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] })).toBe(true);
+{
+// group: 'GDD §3.2 桥梁规则'
+  {
+    // test: 'tileHasBridge：仅水域 + 配置 bridgeEnds 才算桥梁'
+    assert.strictEqual(tileHasBridge({ pos: { q: 0, r: 0 }, terrain: 'water' }), false);
+    assert.strictEqual(tileHasBridge({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] }), true);
     // 公路 / 田地等基底就算误填 bridgeEnds 也不算桥梁（MissionLoader 会先抛错，这里只是 helper 兜底）
-    expect(tileHasBridge({ pos: { q: 0, r: 0 }, terrain: 'road', bridgeEnds: [0, 3] } as never)).toBe(false);
-  });
+    assert.strictEqual(tileHasBridge({ pos: { q: 0, r: 0 }, terrain: 'road', bridgeEnds: [0, 3] } as never), false);
+  };
 
-  test('effectiveDiceTerrain：水域+桥梁 → road；其他原样', () => {
-    expect(effectiveDiceTerrain({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] }))
-      .toBe('road');
-    expect(effectiveDiceTerrain({ pos: { q: 0, r: 0 }, terrain: 'water' })).toBe('water');
-    expect(effectiveDiceTerrain({ pos: { q: 0, r: 0 }, terrain: 'mud' })).toBe('mud');
-  });
+  {
+    // test: 'effectiveDiceTerrain：水域+桥梁 → road；其他原样'
+    assert.strictEqual(effectiveDiceTerrain({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] }), 'road');
+    assert.strictEqual(effectiveDiceTerrain({ pos: { q: 0, r: 0 }, terrain: 'water' }), 'water');
+    assert.strictEqual(effectiveDiceTerrain({ pos: { q: 0, r: 0 }, terrain: 'mud' }), 'mud');
+  };
 
-  test('tileMoveCost：桥梁 cost 同公路（=1，水域=Infinity）', () => {
-    expect(terrainMoveCost('water')).toBe(Infinity);
-    expect(tileMoveCost({ pos: { q: 0, r: 0 }, terrain: 'water' })).toBe(Infinity);
-    expect(tileMoveCost({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] })).toBe(1);
-    expect(tileMoveCost({ pos: { q: 0, r: 0 }, terrain: 'road' })).toBe(1);
-  });
+  {
+    // test: 'tileMoveCost：桥梁 cost 同公路（=1，水域=Infinity）'
+    assert.strictEqual(terrainMoveCost('water'), Infinity);
+    assert.strictEqual(tileMoveCost({ pos: { q: 0, r: 0 }, terrain: 'water' }), Infinity);
+    assert.strictEqual(tileMoveCost({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] }), 1);
+    assert.strictEqual(tileMoveCost({ pos: { q: 0, r: 0 }, terrain: 'road' }), 1);
+  };
 
-  test('canTankEnter：水域不可入；水域+桥梁可入', () => {
+  {
+    // test: 'canTankEnter：水域不可入；水域+桥梁可入'
     const map = new HexMap(2, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'water' });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
-    expect(map.canTankEnter({ q: 0, r: 0 })).toBe(false);
-    expect(map.canTankEnter({ q: 1, r: 0 })).toBe(true);
-  });
+    assert.strictEqual(map.canTankEnter({ q: 0, r: 0 }), false);
+    assert.strictEqual(map.canTankEnter({ q: 1, r: 0 }), true);
+  };
 
-  test('canTankCrossEdge：邻格 → 桥梁，进入方向必须命中桥端', () => {
+  {
+    // test: 'canTankCrossEdge：邻格 → 桥梁，进入方向必须命中桥端'
     // (0,0)=field, (1,0)=water+bridge[0=E, 3=W]
     // 从 (0,0) 进入 (1,0)：dir(B→A) = 3 (W) ∈ [0,3] → 允许
     const map = new HexMap(2, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(true);
-  });
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 }), true);
+  };
 
-  test('canTankCrossEdge：邻格 → 桥梁，方向不在桥端 → 拒绝', () => {
+  {
+    // test: 'canTankCrossEdge：邻格 → 桥梁，方向不在桥端 → 拒绝'
     // 桥梁两端 [1=SE, 4=NW]：从 W 邻居 (0,0) 进入 (1,0)，dir(B→A)=3 不在端内 → 拒绝
     const map = new HexMap(2, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'water', bridgeEnds: [1, 4] });
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(false);
-  });
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 }), false);
+  };
 
-  test('canTankCrossEdge：桥梁 → 邻格，出方向必须命中桥端', () => {
+  {
+    // test: 'canTankCrossEdge：桥梁 → 邻格，出方向必须命中桥端'
     // (0,0)=water+bridge[0=E, 3=W], (1,0)=field
     // 从 (0,0) 出向 (1,0)：dir(A→B)=0 ∈ [0,3] → 允许
     const map = new HexMap(2, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'field' });
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(true);
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 }), true);
     // 反之试一个不在端内的方向（向 SE 邻居走）：场上没那格 → 不可入兜底
     map.set({ pos: { q: 0, r: 1 }, terrain: 'field' });
-    expect(directionTo({ q: 0, r: 0 }, { q: 0, r: 1 })).toBe(1);
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 0, r: 1 })).toBe(false);
-  });
+    assert.strictEqual(directionTo({ q: 0, r: 0 }, { q: 0, r: 1 }), 1);
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 0, r: 1 }), false);
+  };
 
-  test('canTankCrossEdge：相邻两座桥相连 → 两端方向必须同时对齐', () => {
+  {
+    // test: 'canTankCrossEdge：相邻两座桥相连 → 两端方向必须同时对齐'
     // (0,0)=water+bridge[0,3], (1,0)=water+bridge[0,3] —— 两座桥沿 E-W 轴相连，物理边方向 0/3 双侧都覆盖
     const map = new HexMap(3, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
     map.set({ pos: { q: 2, r: 0 }, terrain: 'field' });
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(true);
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 }), true);
 
     // (1,0) 改为 [1,4]：物理边 0/3 不在 (1,0) 桥端内 → 拒绝
     map.set({ pos: { q: 1, r: 0 }, terrain: 'water', bridgeEnds: [1, 4] });
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(false);
-  });
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 }), false);
+  };
 
-  test('canTankCrossEdge：非桥梁场景退化为 canTankEnter（不会误拒）', () => {
+  {
+    // test: 'canTankCrossEdge：非桥梁场景退化为 canTankEnter（不会误拒）'
     const map = new HexMap(3, 1);
     map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
     map.set({ pos: { q: 1, r: 0 }, terrain: 'road' });
     map.set({ pos: { q: 2, r: 0 }, terrain: 'forest' });
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 })).toBe(true);
-    expect(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 2, r: 0 })).toBe(false); // 距离 = 2，越界
-    expect(map.canTankCrossEdge({ q: 1, r: 0 }, { q: 2, r: 0 })).toBe(false); // 林地拒入
-  });
-});
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 1, r: 0 }), true);
+    assert.strictEqual(map.canTankCrossEdge({ q: 0, r: 0 }, { q: 2, r: 0 }), false); // 距离 = 2，越界
+    assert.strictEqual(map.canTankCrossEdge({ q: 1, r: 0 }, { q: 2, r: 0 }), false); // 林地拒入
+  };
+};

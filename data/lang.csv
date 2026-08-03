@@ -122,6 +122,7 @@ die.hint.conceal,隐蔽,Conceal
 die.hint.gunOrLoad,炮/填,Gun/Load
 die.hint.driverTurnOrDrive,驾:转/进,Driver:Turn/Advance
 die.hint.smokeOrRepair,烟/修,Sm/Re
+die.hint.smokeOrMG,烟/机,Sm/MG
 die.hint.codriverMG,副机枪,Co-MG
 die.hint.none,—,—
 action.turnCW,↻ 顺时针 60°,↻ CW 60°
@@ -635,6 +636,6 @@ campaignUpgrade.wideTracks.description,位于泥地时，攻击、移动、杂�
 campaignUpgrade.improvedTransmission.name,改进变速箱,Improved Transmission
 campaignUpgrade.improvedTransmission.description,所有“前进”行动骰都可改为执行“转向”,Any Advance action die may be used to Turn instead.
 campaignUpgrade.smokeLauncher.name,烟幕发射器,Smoke Launcher
-campaignUpgrade.smokeLauncher.description,解锁“烟雾弹”动作,Unlocks the Smoke action.
+campaignUpgrade.smokeLauncher.description,杂项阶段的2、4点增加“烟雾弹”功能,Misc dice showing 2 or 4 also gain the Smoke action.
 campaignUpgrade.intercom.name,车内通话器,Intercom
 campaignUpgrade.intercom.description,杂项阶段骰子数量 +1,Misc phase dice +1.

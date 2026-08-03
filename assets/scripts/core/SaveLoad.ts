@@ -28,6 +28,9 @@ interface UnitSnapshot {
   r: number;
   facing: Direction | null;
   turretFacing?: FireDirection;
+  previousTurretFacing?: FireDirection;
+  diagonalGunnerSidePreference?: FireDirection;
+  turretVisualTarget?: { q: number; r: number };
   damaged?: boolean;
   destroyed?: boolean;
   /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
@@ -108,6 +111,9 @@ function captureUnit(u: Unit): UnitSnapshot {
     r: u.pos.r,
     facing: u.facing,
     turretFacing: u.turretFacing,
+    previousTurretFacing: u.previousTurretFacing,
+    diagonalGunnerSidePreference: u.diagonalGunnerSidePreference,
+    turretVisualTarget: u.turretVisualTarget ? { ...u.turretVisualTarget } : undefined,
     damaged: u.damaged,
     destroyed: u.destroyed,
     fireLevel: u.fireLevel,
@@ -146,6 +152,9 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   live.pos = { q: s.q, r: s.r };
   live.facing = s.facing;
   live.turretFacing = savedTurretFacing(s.turretFacing, s.facing);
+  live.previousTurretFacing = savedTurretFacing(s.previousTurretFacing, s.facing);
+  live.diagonalGunnerSidePreference = savedTurretFacing(s.diagonalGunnerSidePreference, null);
+  live.turretVisualTarget = s.turretVisualTarget ? { ...s.turretVisualTarget } : undefined;
   live.damaged = s.damaged ?? false;
   live.destroyed = s.destroyed ?? false;
   if (s.smoked !== undefined) live.smoked = s.smoked;
@@ -293,6 +302,9 @@ export function applySave(
   mission.enemies.push(...extraEnemies);
   mission.sherman.facing = save.sherman.facing;
   mission.sherman.turretFacing = savedTurretFacing(save.sherman.turretFacing, save.sherman.facing);
+  mission.sherman.previousTurretFacing = savedTurretFacing(save.sherman.previousTurretFacing, save.sherman.facing);
+  mission.sherman.diagonalGunnerSidePreference = savedTurretFacing(save.sherman.diagonalGunnerSidePreference, null);
+  mission.sherman.turretVisualTarget = save.sherman.turretVisualTarget ? { ...save.sherman.turretVisualTarget } : undefined;
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
   mission.sherman.damaged = false;
   mission.sherman.destroyed = save.sherman.destroyed ?? false;

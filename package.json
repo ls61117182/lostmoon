@@ -8,10 +8,12 @@
     "start": "node server/server.js",
     "server": "node server/server.js",
     "normalize-tanks": "node tools/normalizeTankSprites.cjs",
-    "audit-tanks": "node tools/auditTankPngWhite.cjs"
+    "audit-tanks": "node tools/auditTankPngWhite.cjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:tests": "tsc --noEmit -p tests/tsconfig.json"
   },
   "devDependencies": {
     "sharp": "^0.33.5",
-    "typescript": "^6.0.3"
+    "typescript": "5.8.2"
   }
 }

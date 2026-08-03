@@ -24,7 +24,7 @@ export interface CampaignUpgradeDefinition {
   ignoreCrewCheck: boolean;
   repairDiceCanFireSuppress: boolean;
   driveDiceCanTurn: boolean;
-  unlocksSmoke: boolean;
+  smokeOnMiscPips2And4: boolean;
 }
 
 export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
@@ -45,7 +45,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "improved_optics",
@@ -64,7 +64,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "wet_ammo_rack",
@@ -83,7 +83,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "spall_liner",
@@ -102,7 +102,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: true,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "automatic_extinguisher",
@@ -121,7 +121,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: true,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "side_skirts",
@@ -140,7 +140,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "wide_tracks",
@@ -159,7 +159,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "improved_transmission",
@@ -178,7 +178,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: true,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
   {
     id: "smoke_launcher",
@@ -197,7 +197,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: true,
+    smokeOnMiscPips2And4: true,
   },
   {
     id: "intercom",
@@ -216,7 +216,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
     driveDiceCanTurn: false,
-    unlocksSmoke: false,
+    smokeOnMiscPips2And4: false,
   },
 ];
 

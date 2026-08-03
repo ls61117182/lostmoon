@@ -16,6 +16,9 @@ export interface PvpBattleUnitSnapshot {
   pos: { q: number; r: number };
   facing: Direction | null;
   turretFacing?: FireDirection | null;
+  previousTurretFacing?: FireDirection | null;
+  diagonalGunnerSidePreference?: FireDirection | null;
+  turretVisualTarget?: { q: number; r: number } | null;
   destroyed?: boolean;
   damaged?: boolean;
   loaded?: boolean;

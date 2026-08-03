@@ -47,5 +47,10 @@ assert.match(
   /const enter = 0\.12, hold = 1\.2, leave = 0\.13/,
   'banner enter and leave animations should be twice as fast without changing hold time',
 );
+assert.match(
+  source,
+  /this\.mission\.enemies\.find\(unit => !unit\.destroyed\)\?\.faction\s*\?\?\s*this\.mission\.enemies\[0\]\?\.faction\s*\?\?\s*\(this\.mission\.data\.theater === 'pacific' \? 'japanese' : 'german'\)/,
+  'an enemy transition must retain the mission faction when no enemy unit is alive',
+);
 
 console.log('BattleScene turn-transition tests passed');

@@ -62,7 +62,9 @@ import {
   HexMap,
   axialToPixel,
   axialAdd,
+  axialEquals,
   approximateFireDirection,
+  diagonalFlankFireDirectionTo,
   directionTo,
   fireDirectionTo,
   fireDirectionVector,
@@ -87,6 +89,7 @@ import type { DamageTableEffect, DamageTargetClass } from '../core/DamageTableDB
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest, FireCheckEffect } from '../core/FireCheck';
 import { RNG } from '../core/Dice';
 import { t, setLang, getLang, LangCode } from '../core/Lang';
+import { bindButtonPressScale } from './ButtonFeedback';
 import {
   actionFor,
   actionForHardcoreTankDie,
@@ -110,7 +113,7 @@ import {
 } from '../core/EnemyAI';
 import type { CrewSlot } from '../core/EnemyAIDB';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { computePlayerVisibleHexes, currentVisionRange, fogOfWarEnabled, isUnitInVision, isWithinOwnVisionRange } from '../core/FogOfWar';
+import { computePlayerVisibleHexes, currentGunnerVisionRange, currentVisionRange, diagonalGunnerClickPreference, diagonalGunnerRuleDirectionForVisibleHex, fogOfWarEnabled, isUnitInVision, isWithinOwnVisionRange } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
@@ -515,6 +518,9 @@ interface TurretAimAnim {
   t: number;
   dur: number;
   onDone: () => void;
+  fromVisualTarget?: Axial;
+  toVisualTarget?: Axial;
+  preserveRuleFacing?: boolean;
 }
 
 interface CampaignPanAnim {
@@ -546,7 +552,14 @@ const CAMPAIGN_UPGRADE_ICON_ORDER: readonly CampaignUpgradeId[] = [
   'intercom',
 ];
 
-type DirectionLerp = { from: FireDirection; to: FireDirection; t: number; angular?: boolean };
+type DirectionLerp = {
+  from: FireDirection;
+  to: FireDirection;
+  t: number;
+  angular?: boolean;
+  fromVisualTarget?: Axial;
+  toVisualTarget?: Axial;
+};
 
 type Phase = 'player' | 'ally' | 'enemy';
 
@@ -2759,6 +2772,7 @@ export class BattleScene extends Component {
         if (oldTurret !== undefined && nextTurret !== undefined && oldTurret !== nextTurret && this.enemySupportsSplitTurret(unit)) {
           const from = (((oldTurret % 12) + 12) % 12) as FireDirection;
           const to = (((nextTurret % 12) + 12) % 12) as FireDirection;
+          unit.previousTurretFacing = from;
           unit.turretFacing = from;
           if (unit === this.mission.sherman) {
             this.shermanTurretFacing = from;
@@ -2789,6 +2803,15 @@ export class BattleScene extends Component {
     const turretFacing = src.turretFacing == null
       ? (facing ?? undefined)
       : (((src.turretFacing % 12) + 12) % 12) as FireDirection;
+    const previousTurretFacing = src.previousTurretFacing == null
+      ? (facing ?? undefined)
+      : (((src.previousTurretFacing % 12) + 12) % 12) as FireDirection;
+    const diagonalGunnerSidePreference = src.diagonalGunnerSidePreference == null
+      ? undefined
+      : (((src.diagonalGunnerSidePreference % 12) + 12) % 12) as FireDirection;
+    const turretVisualTarget = src.turretVisualTarget == null
+      ? undefined
+      : { q: Number(src.turretVisualTarget.q), r: Number(src.turretVisualTarget.r) };
     return {
       id: src.id,
       kind: src.kind,
@@ -2796,6 +2819,9 @@ export class BattleScene extends Component {
       pos: { q: Number(src.pos?.q ?? 0), r: Number(src.pos?.r ?? 0) },
       facing,
       turretFacing,
+      previousTurretFacing,
+      diagonalGunnerSidePreference,
+      turretVisualTarget,
       stats,
       damaged: !!src.damaged,
       destroyed: !!src.destroyed,
@@ -2826,6 +2852,9 @@ export class BattleScene extends Component {
       pos: { q: unit.pos.q, r: unit.pos.r },
       facing: unit.facing,
       turretFacing: unit.turretFacing,
+      previousTurretFacing: unit.previousTurretFacing,
+      diagonalGunnerSidePreference: unit.diagonalGunnerSidePreference,
+      turretVisualTarget: unit.turretVisualTarget ? { ...unit.turretVisualTarget } : undefined,
       destroyed: !!unit.destroyed,
       damaged: !!unit.damaged,
       loaded: !!unit.loaded,
@@ -2868,6 +2897,9 @@ export class BattleScene extends Component {
         r: unit.pos.r,
         facing: unit.facing,
         turretFacing: unit.turretFacing,
+        previousTurretFacing: unit.previousTurretFacing,
+        diagonalGunnerSidePreference: unit.diagonalGunnerSidePreference,
+        turretVisualTarget: unit.turretVisualTarget ? { ...unit.turretVisualTarget } : undefined,
         destroyed: !!unit.destroyed,
         damaged: !!unit.damaged,
         loaded: !!unit.loaded,
@@ -3137,8 +3169,12 @@ export class BattleScene extends Component {
       + campaignUpgradeHitThresholdModifier(this.campaignUpgradeIds);
   }
 
-  private campaignSmokeUnlocked(): boolean {
-    return !this.campaignUpgradesEnabled() || this.campaignUpgradeActive('smoke_launcher');
+  /** 烟雾弹初始可由杂项 3 点使用；烟幕发射器再把该动作扩展到 2、4 点。 */
+  private miscDieCanDeploySmoke(pip: number): boolean {
+    if (classifyMiscDie(pip) === 'smoke_or_repair') return true;
+    if (pip !== 2 && pip !== 4) return false;
+    return this.campaignUpgradeActive('smoke_launcher')
+      && campaignUpgradeDefinition('smoke_launcher').smokeOnMiscPips2And4;
   }
 
   private resetCampaignUpgradeRuntime() {
@@ -3395,6 +3431,7 @@ export class BattleScene extends Component {
     card.addChild(body);
 
     card.on(Node.EventType.TOUCH_START, (event: EventTouch) => { event.propagationStopped = true; }, this);
+    bindButtonPressScale(card);
     card.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
       if (onSelect) {
         playUiClick();
@@ -3583,6 +3620,7 @@ export class BattleScene extends Component {
     g.rect(-w / 2 + 4, -h / 2 + 4, w - 8, h - 8); g.stroke();
     if (id) {
       this.buildCampaignUpgradeIconNode(slot, id, 0, 2, Math.min(w, h) - 5);
+      bindButtonPressScale(slot);
       slot.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
         playUiClick();
         this.openCampaignUpgradeDetail(id);
@@ -4315,8 +4353,8 @@ export class BattleScene extends Component {
     if (!this.mission || !fogOfWarEnabled(GameSession.gameMode) || this.isCommanderHatchOpen()) return null;
     if (this.isHexVisible(pos)) return null;
     const sherman = this.mission.sherman;
-    if (hexDistance(sherman.pos, pos) > currentVisionRange(sherman, this.currentWeather())) return null;
-    return fireDirectionTo(sherman.pos, pos);
+    if (hexDistance(sherman.pos, pos) > currentGunnerVisionRange(sherman)) return null;
+    return fireDirectionTo(sherman.pos, pos) ?? diagonalFlankFireDirectionTo(sherman.pos, pos);
   }
 
   private hasTurretReconGunSelection(): boolean {
@@ -6737,10 +6775,11 @@ export class BattleScene extends Component {
         this.redraw();
         return;
       }
-      if (a.unit === this.mission?.sherman) {
+      a.unit.turretVisualTarget = a.toVisualTarget ? { ...a.toVisualTarget } : undefined;
+      if (!a.preserveRuleFacing && a.unit === this.mission?.sherman) {
         this.shermanTurretFacing = a.to;
         a.unit.turretFacing = a.to;
-      } else if (this.enemySupportsSplitTurret(a.unit)) {
+      } else if (!a.preserveRuleFacing && this.enemySupportsSplitTurret(a.unit)) {
         this.enemyTurretFacing.set(a.unit.id, a.to);
         a.unit.turretFacing = a.to;
       }
@@ -6800,6 +6839,15 @@ export class BattleScene extends Component {
     const anim = this.anim;
     const finishedUnit = anim.unit;
     if (anim.kind === 'move') {
+      // turretVisualTarget stores an absolute hex only so the renderer can derive
+      // an exact visual angle. Move it together with the unit to preserve that
+      // world-space heading after movement finishes.
+      if (finishedUnit.turretVisualTarget) {
+        finishedUnit.turretVisualTarget = {
+          q: finishedUnit.turretVisualTarget.q + (anim.toQ - anim.fromQ),
+          r: finishedUnit.turretVisualTarget.r + (anim.toR - anim.fromR),
+        };
+      }
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
       this.crushEnemyATGunsAt(finishedUnit);
       this.captureAbandonedATGunsAt(finishedUnit);
@@ -6831,9 +6879,15 @@ export class BattleScene extends Component {
       });
     }
     if (anim.kind === 'turn' && finishedUnit === this.mission?.sherman && finishedUnit.facing !== null) {
+      finishedUnit.previousTurretFacing = finishedUnit.turretFacing ?? anim.turnFrom;
+      finishedUnit.diagonalGunnerSidePreference = undefined;
+      finishedUnit.turretVisualTarget = undefined;
       this.shermanTurretFacing = finishedUnit.facing;
       finishedUnit.turretFacing = finishedUnit.facing;
     } else if (anim.kind === 'turn' && this.enemySupportsSplitTurret(finishedUnit) && finishedUnit.facing !== null) {
+      finishedUnit.previousTurretFacing = finishedUnit.turretFacing ?? anim.turnFrom;
+      finishedUnit.diagonalGunnerSidePreference = undefined;
+      finishedUnit.turretVisualTarget = undefined;
       this.enemyTurretFacing.set(finishedUnit.id, finishedUnit.facing);
       finishedUnit.turretFacing = finishedUnit.facing;
     }
@@ -8648,8 +8702,12 @@ export class BattleScene extends Component {
       if (!facingLerp.angular) {
         return this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
       }
-      const a = this.directionScreenAngle(u.pos, c, facingLerp.from);
-      const b = this.directionScreenAngle(u.pos, c, facingLerp.to);
+      const a = facingLerp.fromVisualTarget
+        ? this.targetScreenAngle(u.pos, facingLerp.fromVisualTarget)
+        : this.directionScreenAngle(u.pos, c, facingLerp.from);
+      const b = facingLerp.toVisualTarget
+        ? this.targetScreenAngle(u.pos, facingLerp.toVisualTarget)
+        : this.directionScreenAngle(u.pos, c, facingLerp.to);
       let d = b - a;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
@@ -8672,6 +8730,12 @@ export class BattleScene extends Component {
     const aimed = axialAdd(pos, fireDirectionVector(dir));
     const np = this.project(aimed.q, aimed.r);
     return Math.atan2(np.y - origin.y, np.x - origin.x);
+  }
+
+  private targetScreenAngle(pos: Axial, target: Axial): number {
+    const origin = this.project(pos.q, pos.r);
+    const aimed = this.project(target.q, target.r);
+    return Math.atan2(aimed.y - origin.y, aimed.x - origin.x);
   }
 
   private updateShermanTopSprite(
@@ -8770,6 +8834,8 @@ export class BattleScene extends Component {
         to: this.turretAimAnim.to,
         t: easeInOutCubic(Math.min(1, Math.max(0, this.turretAimAnim.t))),
         angular: true,
+        fromVisualTarget: this.turretAimAnim.fromVisualTarget,
+        toVisualTarget: this.turretAimAnim.toVisualTarget,
       };
     }
 
@@ -8781,6 +8847,7 @@ export class BattleScene extends Component {
           to: facing as FireDirection,
           t: 1,
           angular: true,
+          toVisualTarget: u.turretVisualTarget,
         };
       }
       const from = (this.shermanTurretFacing ?? u.turretFacing ?? (this.anim.kind === 'turn' ? this.anim.turnFrom : u.facing)) as FireDirection;
@@ -8808,6 +8875,7 @@ export class BattleScene extends Component {
       to: facing,
       t: 1,
       angular: true,
+      toVisualTarget: u.turretVisualTarget,
     };
   }
 
@@ -8818,6 +8886,8 @@ export class BattleScene extends Component {
         to: this.turretAimAnim.to,
         t: easeInOutCubic(Math.min(1, Math.max(0, this.turretAimAnim.t))),
         angular: true,
+        fromVisualTarget: this.turretAimAnim.fromVisualTarget,
+        toVisualTarget: this.turretAimAnim.toVisualTarget,
       };
     }
 
@@ -8829,6 +8899,7 @@ export class BattleScene extends Component {
           to: facing,
           t: 1,
           angular: true,
+          toVisualTarget: u.turretVisualTarget,
         };
       }
       const stored = this.enemyTurretFacing.get(u.id);
@@ -8852,7 +8923,7 @@ export class BattleScene extends Component {
 
     const facing = this.enemyTurretFacing.get(u.id) ?? u.turretFacing;
     if (facing === undefined) return null;
-    return { from: facing, to: facing, t: 1, angular: true };
+    return { from: facing, to: facing, t: 1, angular: true, toVisualTarget: u.turretVisualTarget };
   }
 
   private enemySupportsSplitTurret(u: Unit): boolean {
@@ -9379,6 +9450,7 @@ export class BattleScene extends Component {
     btn.addChild(txtNode);
     this.endTurnLabel = txt;
 
+    bindButtonPressScale(btn);
     btn.on(Node.EventType.TOUCH_END, this.onAdvanceClicked, this);
     this.node.addChild(btn);
     this.endTurnBtn = btn;
@@ -9991,6 +10063,7 @@ export class BattleScene extends Component {
     txt.string = text;
     btn.addChild(txtNode);
 
+    bindButtonPressScale(btn);
     btn.on(Node.EventType.TOUCH_END, () => {
       playUiClick();
       onClick();
@@ -10761,6 +10834,7 @@ export class BattleScene extends Component {
       tx.overflow = Label.Overflow.SHRINK;
       tx.string = this.fitEnglishText(text, W, tx.fontSize);
       b.addChild(txtNode);
+      bindButtonPressScale(b, b, () => !this.disabledPhaseButtons.has(b));
       b.on(Node.EventType.TOUCH_END, () => {
         if (this.disabledPhaseButtons.has(b)) return;
         playUiClick();
@@ -10880,6 +10954,7 @@ export class BattleScene extends Component {
       slot.addChild(hintNode);
 
       const idx = i;
+      bindButtonPressScale(slot);
       slot.on(Node.EventType.TOUCH_END, () => this.onClickDie(idx), this);
       this.diceTrayRoot.addChild(slot);
 
@@ -11216,11 +11291,17 @@ export class BattleScene extends Component {
       const m = classifyMiscDie(pip);
       switch (m) {
         case 'fire_suppress':         return { text: t('die.hint.fireSuppress'),      color: DIE_HINT_GREEN };
-        case 'repair':                return { text: t('die.hint.repair'),            color: DIE_HINT_GREEN };
+        case 'repair':                return {
+          text: this.miscDieCanDeploySmoke(pip) ? t('die.hint.smokeOrRepair') : t('die.hint.repair'),
+          color: DIE_HINT_GREEN,
+        };
         case 'smoke_or_repair':       return { text: t('die.hint.smokeOrRepair'),     color: DIE_HINT_GREEN };
         case 'driver_turn_or_drive':  return { text: t('die.hint.driverTurnOrDrive'), color: DIE_HINT_GREEN };
         case 'gunner_gun_or_reload':  return { text: t('die.hint.gunOrLoad'),         color: DIE_HINT_RED   };
-        case 'codriver_mg':           return { text: t('die.hint.codriverMG'),        color: DIE_HINT_GREY  };
+        case 'codriver_mg':           return {
+          text: this.miscDieCanDeploySmoke(pip) ? t('die.hint.smokeOrMG') : t('die.hint.codriverMG'),
+          color: DIE_HINT_GREY,
+        };
         case 'concealment':           return { text: t('die.hint.conceal'),           color: DIE_HINT_GREY  };
         default:                      return { text: t('die.hint.none'),              color: DIE_HINT_GREY  };
       }
@@ -11524,6 +11605,13 @@ export class BattleScene extends Component {
     return hasTarget ? null : t('floater.noInfantry');
   }
 
+  private smokeActionUnavailable(): string | null {
+    if (!this.mission) return t('attack.reason.unknown');
+    const { map, sherman } = this.mission;
+    if (tileForbidsSmokeOrConcealment(map.get(sherman.pos))) return t('floater.beachNoSmoke');
+    return this.hasSmokeAt(sherman.pos) ? t('floater.alreadySmoked') : null;
+  }
+
   private showDieActionUnavailable(reason: string, anchor?: Node) {
     if (!this.mission) return;
     if (anchor) {
@@ -11584,7 +11672,7 @@ export class BattleScene extends Component {
         return;
       }
     } else if (this.playerStep === 'misc') {
-      // 杂项阶段 6 点 = 灭火，无分支 → 直接执行。
+      // 杂项阶段 1 点 = 灭火，无分支 → 直接执行。
       // 但若有同点搭档（= 可走"隐蔽"对子动作），则改走 popover 让玩家选择。
       const m = classifyMiscDie(slot.pip);
       if (m === 'fire_suppress' && !hasDoubles && (this.mission?.sherman.fireLevel ?? 0) > 0) {
@@ -11700,19 +11788,22 @@ export class BattleScene extends Component {
       const sherman = this.mission ? this.mission.sherman : null;
       switch (m) {
         case 'gunner_gun_or_reload':
-          // 1 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
+          // 6 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
           addItem(t('action.reload'), PHASE_BTN_ATTACK,
             () => this.tryReload(idx), this.reloadActionUnavailable('loader'));
           addItem(t(fireActionKey), PHASE_BTN_ATTACK,
             () => this.selectGunDie(idx), this.gunActionUnavailable('gunner'));
           break;
         case 'codriver_mg':
-          // 2 点 C 列：副驾驶机枪射击步兵
+          // 4 点 C 列：副驾驶机枪射击步兵；烟幕发射器可追加烟雾弹。
           addItem(t('action.fireMGCoDriver'), PHASE_BTN_ATTACK,
             () => this.selectMGDie(idx), this.mgActionUnavailable('coDriver'));
+          if (this.miscDieCanDeploySmoke(slot.pip)) {
+            addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), this.smokeActionUnavailable());
+          }
           break;
         case 'driver_turn_or_drive':
-          // 3 点 C 列：驾驶员转向 / 前进
+          // 5 点 C 列：驾驶员转向 / 前进
           addItem(t('action.turnCW'), PHASE_BTN_MOVE,
             () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable('driver'));
           addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
@@ -11721,8 +11812,11 @@ export class BattleScene extends Component {
             () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1, 'driver'));
           break;
         case 'repair':
-          // 4 点 C 列：修复任一受损的已配置部件；无可修复内容时保留浅灰提示项。
+          // 2 点 C 列：修复任一受损的已配置部件；烟幕发射器可追加烟雾弹。
           if (sherman) {
+            if (this.miscDieCanDeploySmoke(slot.pip)) {
+              addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), this.smokeActionUnavailable());
+            }
             const repairBlocked = tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos))
               ? t('floater.beachNoRepair') : null;
             const repairable = repairableComponentsFor(GameSession.gameMode)
@@ -11741,13 +11835,8 @@ export class BattleScene extends Component {
           }
           break;
         case 'smoke_or_repair':
-          // 5 点 C 列：烟雾 / 修复（所有已配置的受损部件）
-          const smokeBlocked = !sherman ? t('attack.reason.unknown')
-            : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoSmoke')
-              : this.hasSmokeAt(sherman.pos) ? t('floater.alreadySmoked') : null;
-          if (this.campaignSmokeUnlocked()) {
-            addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), smokeBlocked);
-          }
+          // 3 点 C 列：烟雾 / 修复（所有已配置的受损部件）；烟雾弹初始可用。
+          addItem(t('action.smoke'), PHASE_BTN_MISC, () => this.trySmoke(idx), this.smokeActionUnavailable());
           const smokeRepairable = sherman ? repairableComponentsFor(GameSession.gameMode)
             .filter((component) => component.isDamaged(sherman)) : [];
           for (const component of smokeRepairable) {
@@ -11763,7 +11852,7 @@ export class BattleScene extends Component {
           }
           break;
         case 'fire_suppress':
-          // 6 点 C 列：灭火（着火程度 -1）—— 正常走 onClickDie 直接执行；
+          // 1 点 C 列：灭火（着火程度 -1）—— 正常走 onClickDie 直接执行；
           // 若 popover 被触发（比如玩家通过其他途径），这里兜底给一个按钮
           addItem(t('action.fireSuppress'), PHASE_BTN_MISC, () => this.tryFireSuppress(idx),
             (sherman?.fireLevel ?? 0) > 0 ? null : t('floater.noFire'));
@@ -11829,6 +11918,7 @@ export class BattleScene extends Component {
       btn.addChild(tn);
       // 不满足条件的选项仅作为状态提示展示：置灰且不注册点击事件。
       if (!it.unavailableReason) {
+        bindButtonPressScale(btn);
         btn.on(Node.EventType.TOUCH_END, () => {
           playUiClick();
           it.onClick();
@@ -12163,9 +12253,9 @@ export class BattleScene extends Component {
    *
    * 合法骰面：
    *   - 攻击阶段：pip ∈ {3, 4}（classifyAttackDie == 'mg'）
-   *   - 杂项阶段：pip == 2（classifyMiscDie == 'codriver_mg'，副驾驶机枪）
+   *   - 杂项阶段：pip == 4（classifyMiscDie == 'codriver_mg'，副驾驶机枪）
    *
-   * 乘员约束：攻击阶段 3/4 点机枪 **不** 因乘员阵亡禁用；杂项阶段 2 点「副驾驶机枪」需副驾驶存活。
+   * 乘员约束：攻击阶段 3/4 点机枪 **不** 因乘员阵亡禁用；杂项阶段 4 点「副驾驶机枪」需副驾驶存活。
    */
   private selectMGDie(dieIdx: number) {
     const slot = this.phaseDice[dieIdx];
@@ -12444,7 +12534,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 烟雾（杂项 5 点 smoke_or_repair 的烟雾支）：
+   * 烟雾（杂项 3 点初始可用；烟幕发射器强化后也可由 2、4 点使用）：
    * 消耗该骰；在谢尔曼当前格放置烟雾 —— 下一次攻击该格内单位的命中检定 +1。
    * 烟雾在下一次"阶段①（玩家回合开始时）"自动消散。
    */
@@ -12452,8 +12542,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || this.playerStep !== 'misc') return;
-    if (classifyMiscDie(slot.pip) !== 'smoke_or_repair') return;
-    if (!this.campaignSmokeUnlocked()) return;
+    if (!this.miscDieCanDeploySmoke(slot.pip)) return;
     const s = this.mission.sherman;
     if (tileForbidsSmokeOrConcealment(this.mission.map.get(s.pos))) {
       this.closeDiePopover();
@@ -13061,7 +13150,12 @@ export class BattleScene extends Component {
       this.submitPvpTurnEnd();
       return;
     }
-    const faction = this.mission.enemies.find(unit => !unit.destroyed)?.faction ?? 'german';
+    // Keep the mission's enemy identity after the last unit is destroyed. Some
+    // objectives continue into an evacuation turn, so a live-unit-only lookup
+    // must not fall back from Japanese to German during the transition banner.
+    const faction = this.mission.enemies.find(unit => !unit.destroyed)?.faction
+      ?? this.mission.enemies[0]?.faction
+      ?? (this.mission.data.theater === 'pacific' ? 'japanese' : 'german');
     this.showTurnTransition(faction, 'enemy', () => this.beginEnemyPhaseAfterTransition());
   }
 
@@ -14680,6 +14774,7 @@ export class BattleScene extends Component {
       drawFieldPanel(g, w, h, c, opts?.border ? BATTLE_MODAL_LEVEL_BORDER : BATTLE_MODAL_DIVIDER, STATUS_TITLE_COLOR);
     };
     redraw(color);
+    bindButtonPressScale(n);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       playUiClick();
       onClick();
@@ -14716,6 +14811,7 @@ export class BattleScene extends Component {
     };
     redraw(SETTINGS_ICON_BG);
     this.makeBattleModalLabel(n, iconText, 0, 0, r * 2, r * 2, r + 2, HUD_TEXT_COLOR);
+    bindButtonPressScale(n);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       playUiClick();
       onClick();
@@ -14848,6 +14944,8 @@ export class BattleScene extends Component {
    * 在文字节点上镜像挂一次相同回调。
    */
   private mirrorBattleModalButtonLabel(label: Label, onClick: () => void) {
+    const button = label.node.parent;
+    if (button) bindButtonPressScale(label.node, button);
     label.node.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       onClick();
       ev.propagationStopped = true;
@@ -15619,7 +15717,8 @@ export class BattleScene extends Component {
     const mgSel = this.selectedMGDieIdx >= 0;
 
     if (attackOrMisc && this.hasTurretReconGunSelection() && !this.isCommanderHatchOpen()) {
-      const direction = fireDirectionTo(this.mission.sherman.pos, target.pos);
+      const direction = fireDirectionTo(this.mission.sherman.pos, target.pos)
+        ?? diagonalFlankFireDirectionTo(this.mission.sherman.pos, target.pos);
       if (direction === null) {
         this.showGunAimWarning('attack.reason.cannotTurnDirection');
         return;
@@ -15630,7 +15729,7 @@ export class BattleScene extends Component {
           this.showGunAimWarning('attack.reason.turretAimRange');
           return;
         }
-        this.tryAimShermanTurretAtFogTile(aimDirection, mgSel);
+        this.tryAimShermanTurretAtFogTile(aimDirection, target.pos, mgSel);
         return;
       }
     }
@@ -15663,12 +15762,18 @@ export class BattleScene extends Component {
       new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
   }
 
-  private tryAimShermanTurretAtFogTile(direction: FireDirection, useMG = false) {
+  private tryAimShermanTurretAtFogTile(direction: FireDirection, targetPos: Axial, useMG = false) {
     const dieIdx = useMG ? this.selectedMGDieIdx : this.selectedGunDieIdx;
     if (!this.mission || dieIdx < 0) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     const doublesPartnerIdx = useMG ? -1 : this.selectedGunDoublesIdx;
+    const clickedSidePreference = diagonalGunnerClickPreference(
+      this.mission.map,
+      this.mission.sherman,
+      direction,
+      targetPos,
+    );
     this.startShermanTurretAimDirection(direction, () => {
       slot.used = true;
       if (doublesPartnerIdx >= 0) {
@@ -15680,7 +15785,7 @@ export class BattleScene extends Component {
       this.updateHUD();
       this.redraw();
       this.autoEndPhaseIfDone();
-    });
+    }, undefined, false, clickedSidePreference ?? undefined);
     this.updateHUD();
     this.redraw();
   }
@@ -15691,27 +15796,49 @@ export class BattleScene extends Component {
       return;
     }
     const sherman = this.mission.sherman;
-    const to = fireDirectionTo(sherman.pos, target.pos) ?? approximateFireDirection(sherman.pos, target.pos);
-    this.startShermanTurretAimDirection(to, onDone);
+    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(this.mission.map, sherman, target.pos);
+    const to = flankDirection ?? fireDirectionTo(sherman.pos, target.pos) ?? approximateFireDirection(sherman.pos, target.pos);
+    this.startShermanTurretAimDirection(
+      to,
+      onDone,
+      flankDirection !== null ? target.pos : undefined,
+      flankDirection !== null,
+    );
   }
 
-  private startShermanTurretAimDirection(to: FireDirection, onDone: () => void) {
+  private startShermanTurretAimDirection(
+    to: FireDirection,
+    onDone: () => void,
+    visualTarget?: Axial,
+    preserveRuleFacing = false,
+    diagonalSidePreference?: FireDirection,
+  ) {
     if (!this.mission) {
       onDone();
       return;
     }
     const sherman = this.mission.sherman;
     const from = (this.shermanTurretFacing ?? sherman.turretFacing ?? sherman.facing ?? to) as FireDirection;
-    if (from === to) {
+    const sameVisualTarget = visualTarget && sherman.turretVisualTarget
+      && axialEquals(visualTarget, sherman.turretVisualTarget);
+    if (!preserveRuleFacing) sherman.diagonalGunnerSidePreference = diagonalSidePreference;
+    if (from === to && ((!visualTarget && !sherman.turretVisualTarget) || sameVisualTarget)) {
       this.shermanTurretFacing = to;
-      sherman.turretFacing = to;
+      if (!preserveRuleFacing) sherman.turretFacing = to;
+      sherman.turretVisualTarget = visualTarget ? { ...visualTarget } : undefined;
       this.redraw();
       onDone();
       return;
     }
+    if (!preserveRuleFacing && from !== to) {
+      sherman.previousTurretFacing = from;
+    }
     if (!this.enemySupportsSplitTurret(sherman)) {
-      this.shermanTurretFacing = to;
-      sherman.turretFacing = to;
+      if (!preserveRuleFacing) {
+        this.shermanTurretFacing = to;
+        sherman.turretFacing = to;
+      }
+      sherman.turretVisualTarget = visualTarget ? { ...visualTarget } : undefined;
       this.redraw();
       onDone();
       return;
@@ -15723,6 +15850,9 @@ export class BattleScene extends Component {
       t: 0,
       dur: 0.22,
       onDone,
+      fromVisualTarget: sherman.turretVisualTarget ? { ...sherman.turretVisualTarget } : undefined,
+      toVisualTarget: visualTarget ? { ...visualTarget } : undefined,
+      preserveRuleFacing,
     };
     this.redraw();
   }
@@ -15732,18 +15862,30 @@ export class BattleScene extends Component {
       onDone();
       return;
     }
-    const to = fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
+    const flankDirection = this.mission
+      ? diagonalGunnerRuleDirectionForVisibleHex(this.mission.map, enemy, target.pos)
+      : null;
+    const to = flankDirection ?? fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
     const from = (this.enemyTurretFacing.get(enemy.id) ?? enemy.turretFacing ?? enemy.facing ?? to) as FireDirection;
-    if (from === to) {
+    const visualTarget = flankDirection !== null ? target.pos : undefined;
+    const sameVisualTarget = visualTarget && enemy.turretVisualTarget
+      && axialEquals(visualTarget, enemy.turretVisualTarget);
+    if (from === to && ((!visualTarget && !enemy.turretVisualTarget) || sameVisualTarget)) {
       this.enemyTurretFacing.set(enemy.id, to);
-      enemy.turretFacing = to;
+      if (flankDirection === null) enemy.turretFacing = to;
+      enemy.turretVisualTarget = visualTarget ? { ...visualTarget } : undefined;
       this.redraw();
       onDone();
       return;
     }
+    if (flankDirection === null && from !== to) enemy.previousTurretFacing = from;
+    if (flankDirection === null) enemy.diagonalGunnerSidePreference = undefined;
     if (!this.enemySupportsSplitTurret(enemy)) {
-      this.enemyTurretFacing.set(enemy.id, to);
-      enemy.turretFacing = to;
+      if (flankDirection === null) {
+        this.enemyTurretFacing.set(enemy.id, to);
+        enemy.turretFacing = to;
+      }
+      enemy.turretVisualTarget = visualTarget ? { ...visualTarget } : undefined;
       this.redraw();
       onDone();
       return;
@@ -15755,6 +15897,9 @@ export class BattleScene extends Component {
       t: 0,
       dur: 0.22,
       onDone,
+      fromVisualTarget: enemy.turretVisualTarget ? { ...enemy.turretVisualTarget } : undefined,
+      toVisualTarget: visualTarget ? { ...visualTarget } : undefined,
+      preserveRuleFacing: flankDirection !== null,
     };
     this.redraw();
   }
@@ -16368,6 +16513,7 @@ export class BattleScene extends Component {
     g.circle(0, 0, size * 0.42);
     g.stroke();
     const lab = this.makeBattleModalLabel(btn, '?', 0, 0, size, size, 24, new Color(48, 255, 72, 255));
+    bindButtonPressScale(btn);
     btn.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       playUiClick();
       onClick();

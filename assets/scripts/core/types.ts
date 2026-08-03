@@ -255,6 +255,12 @@ export interface Unit {
   facing: Direction | null;
   /** Independent turret direction; defaults to facing for turreted vehicles. */
   turretFacing?: FireDirection;
+  /** Direction occupied immediately before the latest turret turn; used to break symmetric sight-path ties. */
+  previousTurretFacing?: FireDirection;
+  /** Player-selected flank for the current diagonal gunner sight path. */
+  diagonalGunnerSidePreference?: FireDirection;
+  /** Visual-only aim point for flank attacks; rules continue to use turretFacing. */
+  turretVisualTarget?: Axial;
   stats: UnitStats;
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2

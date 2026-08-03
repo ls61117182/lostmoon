@@ -27,8 +27,14 @@ assert.match(
 
 assert.match(
   source,
-  /tryAimShermanTurretAtFogTile\(aimDirection,\s*mgSel\)/,
+  /tryAimShermanTurretAtFogTile\(aimDirection,\s*target\.pos,\s*mgSel\)/,
   'fog-tile aiming should preserve whether the selected die is a machine gun',
+);
+
+assert.match(
+  source,
+  /private\s+tryAimShermanTurretAtFogTile\(direction:\s*FireDirection,\s*targetPos:\s*Axial,\s*useMG\s*=\s*false\)[\s\S]*?this\.startShermanTurretAimDirection\(direction,\s*\(\)\s*=>\s*\{[\s\S]*?\},\s*undefined,\s*false,\s*clickedSidePreference\s*\?\?\s*undefined\);/,
+  'fog-tile turret rotation must use the selected rules direction without visually aiming at the clicked flank hex',
 );
 
 assert.match(

@@ -134,6 +134,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'die.hint.gunOrLoad': { zh: "炮/填", en: "Gun/Load" },
   'die.hint.driverTurnOrDrive': { zh: "驾:转/进", en: "Driver:Turn/Advance" },
   'die.hint.smokeOrRepair': { zh: "烟/修", en: "Sm/Re" },
+  'die.hint.smokeOrMG': { zh: "烟/机", en: "Sm/MG" },
   'die.hint.codriverMG': { zh: "副机枪", en: "Co-MG" },
   'die.hint.none': { zh: "—", en: "—" },
   'action.turnCW': { zh: "↻ 顺时针 60°", en: "↻ CW 60°" },
@@ -647,7 +648,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'campaignUpgrade.improvedTransmission.name': { zh: "改进变速箱", en: "Improved Transmission" },
   'campaignUpgrade.improvedTransmission.description': { zh: "所有“前进”行动骰都可改为执行“转向”", en: "Any Advance action die may be used to Turn instead." },
   'campaignUpgrade.smokeLauncher.name': { zh: "烟幕发射器", en: "Smoke Launcher" },
-  'campaignUpgrade.smokeLauncher.description': { zh: "解锁“烟雾弹”动作", en: "Unlocks the Smoke action." },
+  'campaignUpgrade.smokeLauncher.description': { zh: "杂项阶段的2、4点增加“烟雾弹”功能", en: "Misc dice showing 2 or 4 also gain the Smoke action." },
   'campaignUpgrade.intercom.name': { zh: "车内通话器", en: "Intercom" },
   'campaignUpgrade.intercom.description': { zh: "杂项阶段骰子数量 +1", en: "Misc phase dice +1." },
 };

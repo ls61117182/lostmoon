@@ -19,7 +19,7 @@ const NUMBER_FIELDS = [
 ];
 const BOOLEAN_FIELDS = [
   'ignoreDestroyed', 'ignoreCrewCheck', 'repairDiceCanFireSuppress',
-  'driveDiceCanTurn', 'unlocksSmoke',
+  'driveDiceCanTurn', 'smokeOnMiscPips2And4',
 ];
 const REQUIRED_HEADERS = ['id', 'nameKey', 'descriptionKey', ...NUMBER_FIELDS, ...BOOLEAN_FIELDS];
 

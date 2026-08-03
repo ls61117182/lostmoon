@@ -55,6 +55,7 @@ import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
 import { isFootKind, isTankKind } from '../core/types';
 import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
+import { bindButtonPressScale } from './ButtonFeedback';
 import {
   SPLIT_TANK_KINDS,
   TANK_VISUAL_KINDS,
@@ -4290,6 +4291,7 @@ export class MainMenuScene extends Component {
     };
     redraw(color);
 
+    bindButtonPressScale(n);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       playUiClick();
       onClick();
@@ -4330,6 +4332,7 @@ export class MainMenuScene extends Component {
 
     const label = this.makeLabel(n, iconText, 0, 0, r * 2, r * 2, r + 2, TEXT_PRIMARY);
 
+    bindButtonPressScale(n);
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       playUiClick();
       onClick();

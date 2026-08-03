@@ -57,7 +57,7 @@ export type MoveDieAction = MoveDieActionDB;
  *   - 'gun'    → 主炮射击（必须已装填）
  *
  * `'gunner_gun_or_reload'` 代表"炮手主炮射击 / 装填手装填（二选一）"：
- *   - 在杂项阶段 1 点时由 `classifyMiscDie` 返回（单骰消费）；
+ *   - 在杂项阶段 6 点时由 `classifyMiscDie` 返回（单骰消费）；
  *   - 在攻击阶段对子时由 BattleScene 动态追加"装填手装填（+同点骰）"
  *     和"炮手主炮射击（+同点骰）"两项，消耗 2 颗骰。
  */
@@ -67,12 +67,12 @@ export type AttackDieAction = AttackDieActionDB;
  * 杂项阶段骰面含义（见 `data/player_action_table.csv` misc 列）。
  *
  * MVP 实际消费：
- *   - 'gunner_gun_or_reload' (1)：炮手主炮射击 / 装填手装填，二选一弹窗
- *   - 'codriver_mg'          (2)：副驾驶机枪射击相邻步兵（MVP 步兵未实装，占位跳过）
- *   - 'driver_turn_or_drive' (3)：驾驶员 转向 / 前进，弹窗 3 选项
- *   - 'repair'               (4)：修复炮塔或机动（两者都有则弹窗二选一）
- *   - 'smoke_or_repair'      (5)：烟雾 / 修复，二选一（烟雾系统 MVP 未实装，仅弹占位浮字）
- *   - 'fire_suppress'        (6)：着火程度 -1
+ *   - 'fire_suppress'        (1)：着火程度 -1
+ *   - 'repair'               (2)：修复炮塔或机动（两者都有则弹窗二选一）
+ *   - 'smoke_or_repair'      (3)：烟雾 / 修复，二选一
+ *   - 'codriver_mg'          (4)：副驾驶机枪射击相邻步兵
+ *   - 'driver_turn_or_drive' (5)：驾驶员 转向 / 前进，弹窗 3 选项
+ *   - 'gunner_gun_or_reload' (6)：炮手主炮射击 / 装填手装填，二选一弹窗
  *   - 'concealment'   (doubles)：隐蔽 —— 由 BattleScene 在检测到任意同点搭档时
  *                                  动态追加"进入隐蔽（+同点骰）"菜单项，消耗 2 颗骰
  *

@@ -1,6 +1,6 @@
-import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection } from './HexGrid';
+import { axialAdd, HexMap, axialEquals, axialToPixel, fireDirectionStep, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
+import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
 
 const GEOMETRY_HEX_SIZE = 1;
@@ -109,6 +109,10 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
     const rayVector = fireDirectionVector(sightFacing as FireDirection);
     const fireDirection = sightFacing as FireDirection;
     const diagonalRay = isDiagonalFireDirection(fireDirection);
+    if (tank && !openHatch && diagonalRay) {
+      addClosedTankDiagonalGunnerVision(map, unit, fireDirection, gunnerVisionRange, add);
+      return visible;
+    }
     let p = axialAdd(unit.pos, rayVector);
     while (hexDistance(unit.pos, p) <= gunnerVisionRange && map.has(p)) {
       if (diagonalRay) {
@@ -122,6 +126,158 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
   }
 
   return visible;
+}
+
+/**
+ * Return the current halfway turret direction when `target` is one of the
+ * selected, visible flank hexes added by closed-hatch gunner sight.
+ */
+export function diagonalGunnerRuleDirectionForVisibleHex(
+  map: HexMap,
+  unit: Unit,
+  target: Axial,
+): FireDirection | null {
+  const openHatch = unit.crew?.commander !== false && unit.hatchOpen === true;
+  if (!isTankUnit(unit) || openHatch || unit.stats.visionType !== 'turreted') return null;
+  const direction = unit.turretFacing ?? unit.facing;
+  if (direction === null || !isDiagonalFireDirection(direction as FireDirection)) return null;
+  if (fireDirectionTo(unit.pos, target) === direction) return null;
+  let found = false;
+  addClosedTankDiagonalGunnerVision(
+    map,
+    unit,
+    direction as FireDirection,
+    currentGunnerVisionRange(unit),
+    (pos) => { if (map.has(pos) && axialEquals(pos, target)) found = true; },
+  );
+  return found ? direction as FireDirection : null;
+}
+
+/**
+ * When manually rotating onto a halfway ray, let a reachable clicked flank hex
+ * choose which contiguous side is shown. The target endpoint may itself block
+ * vision; only blockers earlier on the clicked path invalidate the preference.
+ */
+export function diagonalGunnerClickPreference(
+  map: HexMap,
+  unit: Unit,
+  fireDirection: FireDirection,
+  target: Axial,
+): Direction | null {
+  if (!isDiagonalFireDirection(fireDirection)) return null;
+  const diagonalIndex = fireDirection - 6;
+  const a = diagonalIndex as Direction;
+  const b = ((diagonalIndex + 1) % 6) as Direction;
+  const rayVector = fireDirectionVector(fireDirection);
+  const range = currentGunnerVisionRange(unit);
+  let aOpen = true;
+  let bOpen = true;
+  let current = unit.pos;
+
+  for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
+    const aPos = neighbor(current, a);
+    const bPos = neighbor(current, b);
+    const clickedSide = axialEquals(target, aPos) ? a : axialEquals(target, bPos) ? b : null;
+    if (clickedSide !== null) {
+      const clickedPathOpen = clickedSide === a ? aOpen : bOpen;
+      return clickedPathOpen && map.has(target) ? clickedSide : null;
+    }
+
+    if (diagonalFlankBlocked(map, aPos)) aOpen = false;
+    if (diagonalFlankBlocked(map, bPos)) bOpen = false;
+
+    const evenDistance = oddDistance + 1;
+    if (evenDistance > range || (!aOpen && !bOpen)) return null;
+    const center = axialAdd(current, rayVector);
+    const centerTile = map.get(center);
+    if (!centerTile || map.lineOfSightBlockedByTile(centerTile)) return null;
+    current = center;
+  }
+  return null;
+}
+
+/**
+ * A halfway gunner ray has two alternating, contiguous paths around it. Only
+ * one path contributes odd-distance hexes. Earlier flank pairs have priority;
+ * when they match, the next pair is inspected. Even-distance center hexes stay
+ * visible while at least one complete flank path remains unobstructed.
+ */
+function addClosedTankDiagonalGunnerVision(
+  map: HexMap,
+  unit: Unit,
+  fireDirection: FireDirection,
+  range: number,
+  add: (pos: Axial) => void,
+): void {
+  const diagonalIndex = fireDirection - 6;
+  const a = diagonalIndex as Direction;
+  const b = ((diagonalIndex + 1) % 6) as Direction;
+  const rayVector = fireDirectionVector(fireDirection);
+  const chosen = chooseDiagonalGunnerSide(map, unit, fireDirection, range, a, b, rayVector);
+  let aOpen = true;
+  let bOpen = true;
+  let current = unit.pos;
+
+  for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
+    const aPos = neighbor(current, a);
+    const bPos = neighbor(current, b);
+    const chosenOpen = chosen === a ? aOpen : bOpen;
+    if (chosenOpen) add(chosen === a ? aPos : bPos);
+
+    if (diagonalFlankBlocked(map, aPos)) aOpen = false;
+    if (diagonalFlankBlocked(map, bPos)) bOpen = false;
+
+    const evenDistance = oddDistance + 1;
+    if (evenDistance > range || (!aOpen && !bOpen)) break;
+    const center = axialAdd(current, rayVector);
+    if (!map.has(center)) break;
+    add(center);
+    const centerTile = map.get(center)!;
+    if (map.lineOfSightBlockedByTile(centerTile)) break;
+    current = center;
+  }
+}
+
+function chooseDiagonalGunnerSide(
+  map: HexMap,
+  unit: Unit,
+  fireDirection: FireDirection,
+  range: number,
+  a: Direction,
+  b: Direction,
+  rayVector: Axial,
+): Direction {
+  const clickedPreference = unit.diagonalGunnerSidePreference;
+  if (clickedPreference === a || clickedPreference === b) return clickedPreference;
+
+  let current = unit.pos;
+  for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
+    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a));
+    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b));
+    if (aBlocked !== bBlocked) return aBlocked ? b : a;
+    if (aBlocked) break;
+
+    const evenDistance = oddDistance + 1;
+    if (evenDistance > range) break;
+    const center = axialAdd(current, rayVector);
+    const centerTile = map.get(center);
+    if (!centerTile || map.lineOfSightBlockedByTile(centerTile)) break;
+    current = center;
+  }
+
+  const previous = unit.previousTurretFacing ?? unit.facing ?? fireDirection;
+  return clockStepDistance(fireDirectionStep(previous), fireDirectionStep(a))
+    <= clockStepDistance(fireDirectionStep(previous), fireDirectionStep(b)) ? a : b;
+}
+
+function diagonalFlankBlocked(map: HexMap, pos: Axial): boolean {
+  const tile = map.get(pos);
+  return !tile || map.lineOfSightBlockedByTile(tile);
+}
+
+function clockStepDistance(a: number, b: number): number {
+  const delta = Math.abs(a - b) % 12;
+  return Math.min(delta, 12 - delta);
 }
 
 export function hasRadioReceive(unit: Unit): boolean {

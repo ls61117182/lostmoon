@@ -219,6 +219,29 @@ export function fireDirectionTo(from: Axial, to: Axial): FireDirection | null {
   return null;
 }
 
+/**
+ * Recognize an odd-distance flank hex beside one of the six halfway rays.
+ * Exact axis/halfway-ray targets deliberately return null and keep their
+ * existing firing direction.
+ */
+export function diagonalFlankFireDirectionTo(from: Axial, to: Axial): FireDirection | null {
+  if (fireDirectionTo(from, to) !== null) return null;
+  const distance = hexDistance(from, to);
+  if (distance < 1 || distance % 2 === 0) return null;
+  const centerSteps = (distance - 1) / 2;
+  for (let i = 0; i < 6; i++) {
+    const ray = HEX_DIAGONAL_DIRECTIONS[i];
+    const center = {
+      q: from.q + ray.q * centerSteps,
+      r: from.r + ray.r * centerSteps,
+    };
+    const a = neighbor(center, i as Direction);
+    const b = neighbor(center, ((i + 1) % 6) as Direction);
+    if (axialEquals(to, a) || axialEquals(to, b)) return (i + 6) as FireDirection;
+  }
+  return null;
+}
+
 /** Closest of the twelve turret directions, used only as a visual/AI fallback. */
 export function approximateFireDirection(from: Axial, to: Axial): FireDirection {
   const exact = fireDirectionTo(from, to);

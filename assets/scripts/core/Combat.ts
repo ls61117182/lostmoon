@@ -31,7 +31,8 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { Axial, CrewSlot, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
+import { Axial, CrewSlot, FireDirection, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
@@ -139,6 +140,17 @@ export interface AttackContext {
   atGunCrewTargets?: boolean;
 }
 
+/** Rules-facing firing direction. Flank targets retain the current halfway turret direction. */
+export function attackFireDirection(ctx: AttackContext): FireDirection | null {
+  const { attacker, target, map } = ctx;
+  if (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted') {
+    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos);
+    if (flankDirection !== null) return flankDirection;
+    return fireDirectionTo(attacker.pos, target.pos);
+  }
+  return directionTo(attacker.pos, target.pos);
+}
+
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
 export interface EffectivePenetrationBreakdown {
   basePenetration: number;
@@ -216,18 +228,19 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.overlap' };
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
-  const fireDir = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
-    ? fireDirectionTo(attacker.pos, target.pos)
-    : directionTo(attacker.pos, target.pos);
+  const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos)
+    : null;
+  const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
   if (isForwardOnlyGun(attacker) && attacker.facing !== fireDir) {
     return { ok: false, reason: 'attack.reason.fixedGunFacing' };
   }
-  const hasSight = ctx.expandedTurretDirections
+  const hasSight = flankDirection !== null || (ctx.expandedTurretDirections
     && attacker.stats.visionType === 'turreted'
     && isDiagonalFireDirection(fireDir)
     ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir)
-    : map.hasLineOfSight(attacker.pos, target.pos);
+    : map.hasLineOfSight(attacker.pos, target.pos));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
@@ -358,6 +371,15 @@ export function attackDirectionRuleFrom(target: Unit, attackerPos: Axial): Attac
   return ATTACK_DIRECTION_RULES[angle] ?? ATTACK_DIRECTION_RULES[0];
 }
 
+export function attackDirectionRuleFromFireDirection(target: Unit, fireDirection: FireDirection): AttackDirectionRule {
+  if (target.facing === null) return ATTACK_DIRECTION_RULES[0];
+  const incomingStep = (fireDirectionStep(fireDirection) + 6) % 12;
+  const diff = (incomingStep - target.facing * 2 + 12) % 12;
+  const clockwiseAngle = diff * 30;
+  const angle = clockwiseAngle <= 180 ? clockwiseAngle : clockwiseAngle - 360;
+  return ATTACK_DIRECTION_RULES[angle] ?? ATTACK_DIRECTION_RULES[0];
+}
+
 export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
   return attackDirectionRuleFrom(target, attackerPos).armorFace;
 }
@@ -470,7 +492,12 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const hit = roll >= threshold;
   const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
-  const directionRule = attackDirectionRuleFrom(target, attacker.pos);
+  const flankDirection = ctx.expandedTurretDirections
+    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, attacker, target.pos)
+    : null;
+  const directionRule = flankDirection !== null
+    ? attackDirectionRuleFromFireDirection(target, flankDirection)
+    : attackDirectionRuleFrom(target, attacker.pos);
   const face = directionRule.armorFace;
   const damageCheckType = ctx.directionalDamageCheck ? directionRule.damageCheckType : undefined;
   const damageTable = damageCheckType ?? 'front';
@@ -894,13 +921,14 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(target);
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
-  const fireDir = ctx.expandedTurretDirections
-    ? fireDirectionTo(attacker.pos, target.pos)
-    : directionTo(attacker.pos, target.pos);
+  const flankDirection = ctx.expandedTurretDirections
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos)
+    : null;
+  const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
-  const hasSight = ctx.expandedTurretDirections && isDiagonalFireDirection(fireDir)
+  const hasSight = flankDirection !== null || (ctx.expandedTurretDirections && isDiagonalFireDirection(fireDir)
     ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir)
-    : map.hasLineOfSight(attacker.pos, target.pos);
+    : map.hasLineOfSight(attacker.pos, target.pos));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
@@ -981,7 +1009,12 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const hb = hitBreakdown(ctx);
   const hitProb = probHit2d6(hb.threshold);
 
-  const directionRule = attackDirectionRuleFrom(ctx.target, ctx.attacker.pos);
+  const flankDirection = ctx.expandedTurretDirections
+    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos)
+    : null;
+  const directionRule = flankDirection !== null
+    ? attackDirectionRuleFromFireDirection(ctx.target, flankDirection)
+    : attackDirectionRuleFrom(ctx.target, ctx.attacker.pos);
   const face = directionRule.armorFace;
   const armor = armorValue(ctx.target, face);
   const pen = effectivePenetration(ctx.attacker, ctx.target, ctx.effectiveRangePenetration);
