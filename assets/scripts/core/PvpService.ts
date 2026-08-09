@@ -5,7 +5,7 @@ import {
   PvpParity,
   PvpSessionConfig,
 } from './PvpConfig';
-import type { Direction, FireDirection, ShermanCrew, UnitKind } from './types';
+import type { CrewLevels, Direction, FireDirection, ShermanCrew, UnitKind, UnitLevel } from './types';
 
 export interface PvpBattleUnitSnapshot {
   id: string;
@@ -33,6 +33,8 @@ export interface PvpBattleUnitSnapshot {
   gunnerVisionRange?: number;
   interiorVisionRange?: number;
   crew?: ShermanCrew;
+  unitLevel?: UnitLevel;
+  crewLevels?: CrewLevels;
 }
 
 export interface PvpBattleSnapshot {

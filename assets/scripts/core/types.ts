@@ -109,7 +109,7 @@ export function isFriendlyFaction(faction: Faction): boolean {
   return faction === 'usa' || faction === 'soviet';
 }
 
-export type Theater = 'europe' | 'pacific';
+export type Theater = 'europe' | 'pacific' | 'north_africa' | 'soviet';
 export type WeatherType = 'clear' | 'rain';
 
 export type UnitKind =
@@ -241,6 +241,18 @@ export interface UnitStats {
   crewMembers: CrewSlot[];   // 单位乘员槽位：1=车长, 2=装填手, 3=炮手, 4=驾驶员, 5=副驾驶
 }
 
+/** 非玩家单位等级；玩家控制坦克不使用整车等级。 */
+export type UnitLevel = 'recruit' | 'veteran' | 'elite';
+
+/** 玩家坦克五名乘员的独立等级。非玩家坦克通过单位等级即时继承，不单独配置。 */
+export interface CrewLevels {
+  commander: UnitLevel;
+  loader: UnitLevel;
+  gunner: UnitLevel;
+  driver: UnitLevel;
+  coDriver: UnitLevel;
+}
+
 /** 玩家车辆默认车长开舱观察范围；后续天气等系统可修改 Unit.visionRange。 */
 export const DEFAULT_VISION_RANGE = 4;
 export const DEFAULT_GUNNER_VISION_RANGE = 4;
@@ -262,6 +274,10 @@ export interface Unit {
   /** Visual-only aim point for flank attacks; rules continue to use turretFacing. */
   turretVisualTarget?: Axial;
   stats: UnitStats;
+  /** 非玩家单位等级；旧存档或缺省值按 recruit 处理。 */
+  unitLevel?: UnitLevel;
+  /** 玩家坦克独立乘员等级；非玩家坦克应通过 crewLevelFor() 继承 unitLevel。 */
+  crewLevels?: CrewLevels;
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
@@ -376,6 +392,10 @@ export interface MissionObjective {
 export interface UnitPlacement {
   kind: UnitKind;
   faction?: Faction;
+  /** 非玩家单位等级；缺省为 recruit。 */
+  unitLevel?: UnitLevel;
+  /** 玩家坦克各乘员独立等级；各槽位缺省为 recruit。非玩家单位忽略此字段。 */
+  crewLevels?: Partial<CrewLevels>;
   /** Offset 坐标；若关卡 `enemyStartByDice` 则可省略（步兵→rid 链，坦克等→eid 链）；谢尔曼在 `shermanStartByDice` 时亦可省略 */
   at?: Offset;
   /** 与 `at` 同：谢尔曼在 `shermanStartByDice` 时由格上 `ef` 写入 */

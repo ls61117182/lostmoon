@@ -30,6 +30,16 @@ function loadSaveLoad() {
     };
     if (id === './UnitDB') return { getUnitStats: () => ({ faction: 'usa' }) };
     if (id === './HexGrid') return { HexMap: { keyOf: (p) => `${p.q},${p.r}` } };
+    if (id === './UnitLevel') return {
+      normalizeUnitLevel: (value) => value === 'veteran' || value === 'elite' ? value : 'recruit',
+      normalizePlayerCrewLevels: (value = {}) => ({
+        commander: value.commander === 'veteran' || value.commander === 'elite' ? value.commander : 'recruit',
+        loader: value.loader === 'veteran' || value.loader === 'elite' ? value.loader : 'recruit',
+        gunner: value.gunner === 'veteran' || value.gunner === 'elite' ? value.gunner : 'recruit',
+        driver: value.driver === 'veteran' || value.driver === 'elite' ? value.driver : 'recruit',
+        coDriver: value.coDriver === 'veteran' || value.coDriver === 'elite' ? value.coDriver : 'recruit',
+      }),
+    };
     return {};
   };
   new Function('require', 'module', 'exports', js)(req, mod, mod.exports);

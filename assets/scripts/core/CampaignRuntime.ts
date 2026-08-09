@@ -55,6 +55,7 @@ function translatePlacement(p: UnitPlacement, data: MissionData, segment: Campai
   const out: UnitPlacement = { ...p };
   if (p.at) out.at = translateOffset(p.at, data, segment);
   if (p.crew) out.crew = { ...p.crew };
+  if (p.crewLevels) out.crewLevels = { ...p.crewLevels };
   if (p.startEids) out.startEids = p.startEids.slice();
   if (p.startRids) out.startRids = p.startRids.slice();
   return out;
@@ -349,6 +350,11 @@ export function carryShermanToNextSegment(current: UnitPlacement, nextTemplate: 
     facing: current.facing ?? nextTemplate.facing,
     turretFacing: current.turretFacing ?? nextTemplate.turretFacing,
     crew: current.crew ? { ...current.crew } : nextTemplate.crew ? { ...nextTemplate.crew } : undefined,
+    crewLevels: current.crewLevels
+      ? { ...current.crewLevels }
+      : nextTemplate.crewLevels
+        ? { ...nextTemplate.crewLevels }
+        : undefined,
     loaded: current.loaded === true,
     hatchOpen: current.hatchOpen === true,
   };

@@ -93,7 +93,7 @@ import { bindButtonPressScale } from './ButtonFeedback';
 import {
   actionFor,
   actionForHardcoreTankDie,
-  aiTargetPriority,
+  aiTargetPriorityForActor,
   AI_DICE_COUNT,
   aiColumnFor,
   AIActionEntry,
@@ -180,7 +180,7 @@ import {
 import type { CampaignUpgradeDefinition, CampaignUpgradeId } from '../core/CampaignUpgrade';
 import { getGameModeConfig } from '../core/GameMode';
 import { firstDamagedRepairableComponent, repairableComponentById, repairableComponentsFor, RepairableComponentId } from '../core/RepairableComponents';
-import { shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
+import { commanderHatchVisualState, shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
 import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
 import { factionUiFor } from '../core/FactionUI';
@@ -219,6 +219,8 @@ import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
 import { readCampaignCheckpoint, writeCampaignCheckpoint } from '../core/CampaignCheckpointStore';
 import {
   SPLIT_TANK_KINDS,
+  EMPTY_COMMANDER_HATCH_SPRITE_SIZE,
+  SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
   SplitTankKind,
   SplitTankGeometryConfig,
   SplitTankVisualConfig,
@@ -229,6 +231,7 @@ import {
   splitTankVisualConfigOf,
   tankVisualAssetConfigOf,
   tankVisualConfigOf,
+  emptyCommanderHatchScaleOf,
 } from '../core/TankVisualDB';
 import {
   INFANTRY_VISUAL_KINDS,
@@ -254,6 +257,7 @@ import {
   playUiClick,
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel, visualFireEffectLevel } from '../core/UnitVisualState';
+import { crewLevelFor, normalizePlayerCrewLevels, normalizeUnitLevel, unitLevelOf } from '../core/UnitLevel';
 import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, MissionData, neutralizeUncrewedTank, restoreFullTankCrew, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
@@ -779,6 +783,19 @@ interface MuzzleFlash {
   dur: number;
 }
 
+interface MuzzleSmoke {
+  node: Node;
+  g: Graphics;
+  x: number;
+  y: number;
+  ux: number;
+  uy: number;
+  size: number;
+  t: number;
+  dur: number;
+  seed: number;
+}
+
 interface MainGunRecoilState {
   elapsed: number;
   ux: number;
@@ -1159,6 +1176,10 @@ const UNIT_NAME_TEXT_ALLIED = new Color(200, 230, 255, 255);
 const UNIT_NAME_TEXT_GERMAN = new Color(255, 220, 200, 255);
 const UNIT_NAME_TEXT_DEAD   = new Color(180, 180, 180, 220);
 const UNIT_NAME_OUTLINE     = new Color(  0,   0,   0, 220);
+/** 同格单位名称逐行向下排列，间距与名称 Label 的完整高度一致，给描边留足空间。 */
+const UNIT_NAME_ROW_GAP = 22;
+const UNIT_RANK_GOLD        = new Color(255, 205,  24, 255);
+const UNIT_RANK_OUTLINE     = new Color( 20,  16,   8, 255);
 // 可攻击目标（视线中、非摧毁敌方）高亮
 const ATTACKABLE_COLOR = new Color(255,  60,  60, 255);
 
@@ -1296,6 +1317,7 @@ export class BattleScene extends Component {
   private shermanCommanderHatchSprite: Sprite | null = null;
   private shermanCommanderHatchSpriteNode: Node | null = null;
   private shermanCommanderHatchSpriteFrame: SpriteFrame | null = null;
+  private emptyCommanderHatchSpriteFrame: SpriteFrame | null = null;
   /** Keyed by the commander SpriteFrame path from units.csv, not by faction or tank kind. */
   private commanderHatchSpriteFrames: Record<string, SpriteFrame> = {};
   private splitTankSprites: Partial<Record<SplitTankKind, SplitTankSpriteAssets>> = {};
@@ -1515,6 +1537,8 @@ export class BattleScene extends Component {
   // 战报浮字池：挂在 mapNode 下，随 update() 上浮 + 渐隐自毁
   private floaters: Floater[] = [];
   private muzzleFlashes: MuzzleFlash[] = [];
+  private muzzleSmokes: MuzzleSmoke[] = [];
+  private muzzleSmokeSerial = 0;
   private projectileTraces: ProjectileTrace[] = [];
   private machineGunBursts: MachineGunBurst[] = [];
   private mainGunRecoils = new Map<string, MainGunRecoilState>();
@@ -1860,6 +1884,14 @@ export class BattleScene extends Component {
       (sf) => {
         this.shermanCommanderHatchSpriteFrame = sf;
         if (this.shermanCommanderHatchSprite) this.shermanCommanderHatchSprite.spriteFrame = sf;
+      },
+    );
+
+    this.loadSpriteFrame(
+      'textures/units/sherman_commander_hatch_open_dead/spriteFrame',
+      '[BattleScene] empty commander hatch sprite load failed; open hatches will be hidden after commander death:',
+      (sf) => {
+        this.emptyCommanderHatchSpriteFrame = sf;
       },
     );
 
@@ -2407,6 +2439,8 @@ export class BattleScene extends Component {
       crew: role === 'protagonist'
         ? { commander: true, loader: true, gunner: true, driver: true, coDriver: true }
         : undefined,
+      crewLevels: role === 'protagonist' ? normalizePlayerCrewLevels() : undefined,
+      unitLevel: role === 'support' ? 'recruit' : undefined,
     };
   }
 
@@ -2911,6 +2945,8 @@ export class BattleScene extends Component {
       crew: src.role === 'protagonist'
         ? (src.crew ?? { commander: true, loader: true, gunner: true, driver: true, coDriver: true })
         : undefined,
+      crewLevels: src.role === 'protagonist' ? normalizePlayerCrewLevels(src.crewLevels) : undefined,
+      unitLevel: src.role === 'support' ? normalizeUnitLevel(src.unitLevel) : undefined,
     };
   }
 
@@ -2941,6 +2977,8 @@ export class BattleScene extends Component {
       gunnerVisionRange: unit.gunnerVisionRange ?? unit.stats.gunnerVisionRange,
       interiorVisionRange: unit.interiorVisionRange ?? unit.stats.interiorVisionRange,
       crew: unit.crew,
+      crewLevels: role === 'protagonist' ? normalizePlayerCrewLevels(unit.crewLevels) : undefined,
+      unitLevel: role === 'support' ? unitLevelOf(unit) : undefined,
     };
   }
 
@@ -2986,6 +3024,8 @@ export class BattleScene extends Component {
         gunnerVisionRange: unit.gunnerVisionRange ?? 0,
         interiorVisionRange: unit.interiorVisionRange ?? 0,
         crew: unit.crew,
+        crewLevels: unit.crewLevels ? normalizePlayerCrewLevels(unit.crewLevels) : undefined,
+        unitLevel: unit.crewLevels ? undefined : unitLevelOf(unit),
       })),
       smokeHexes: this.mission ? Array.from(this.mission.smokeHexes).sort() : [],
       smokeHexOwners: this.pvpSmokeHexOwnersForSubmit(),
@@ -3163,6 +3203,7 @@ export class BattleScene extends Component {
       facing: s.facing ?? undefined,
       turretFacing: this.shermanTurretFacing ?? s.turretFacing ?? undefined,
       crew: s.crew ? { ...s.crew } : undefined,
+      crewLevels: s.crewLevels ? { ...s.crewLevels } : undefined,
       loaded: s.loaded === true,
       hatchOpen: s.hatchOpen === true,
     };
@@ -3234,6 +3275,11 @@ export class BattleScene extends Component {
 
   private campaignUpgradeActive(id: CampaignUpgradeId): boolean {
     return this.campaignUpgradesEnabled() && hasCampaignUpgrade(this.campaignUpgradeIds, id);
+  }
+
+  private campaignMovementDiceCanReverseDirection(): boolean {
+    return this.campaignUpgradeActive('improved_transmission')
+      && campaignUpgradeDefinition('improved_transmission').movementDiceCanReverseDirection;
   }
 
   private campaignMainGunHitThresholdModifier(): number {
@@ -3927,6 +3973,7 @@ export class BattleScene extends Component {
     this.transientFogRevealKeys.clear();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.clearMuzzleSmokes();
     this.clearProjectileTraces();
     this.clearMachineGunBursts();
     this.clearDestroyWreckVisuals();
@@ -4177,10 +4224,10 @@ export class BattleScene extends Component {
     for (const u of units) {
       if (!u.destroyed) this.drawUnitMaybeAnim(u);
     }
-    // Controlled AT guns are a composite: gun sprite first, then the three
-    // operator infantry sprites using the controlling faction's visuals.
+    // Controlled AT guns are always rendered as a composite: gun sprite first,
+    // then the three operator infantry sprites using the controlling faction's visuals.
     for (const u of units) {
-      if (GameSession.gameMode === 'hardcore' && isControlledATGun(u)) this.drawATGunCrewMaybeAnim(u);
+      if (isControlledATGun(u)) this.drawATGunCrewMaybeAnim(u);
     }
     this.g = g;
     this.placeUnitEffectLayerAboveUnits();
@@ -4197,14 +4244,10 @@ export class BattleScene extends Component {
     for (const a of this.mission.allies) this.spawnStatusBadgesIfAny(a);
     for (const e of enemies) this.spawnStatusBadgesIfAny(e);
 
-    // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …），残骸名先画，活动单位名后画。
+    // 7. 单位名字常驻文字（"谢尔曼" / "虎式" …）。同格时按玩家、友方、敌方，
+    //    各阵营内坦克（及其他非徒步单位）优先于步兵，逐行向下排列。
     this.clearNameLabels();
-    for (const u of units) {
-      if (u.destroyed) this.spawnUnitNameLabel(u);
-    }
-    for (const u of units) {
-      if (!u.destroyed) this.spawnUnitNameLabel(u);
-    }
+    this.spawnUnitNameLabels(units);
 
     // 8. 任务目标进度（击毁计数等）随地图状态变，与 redraw 同步以免 HUD 漏刷
     this.refreshObjectiveHud();
@@ -5081,12 +5124,31 @@ export class BattleScene extends Component {
    * 在单位格子正下方挂一条单位名字（"谢尔曼" / "虎式" …），常驻显示。
    * 状态图标在格心下约 hex*0.56；已毁短标签约 hex*0.65；名字在其下，偏移 `UNIT_NAME_OFFSET_HEX`×hex。
    */
-  private spawnUnitNameLabel(u: Unit) {
-    if (!this.mapNode) return;
-    if (isAttachedATGunCrew(u) || isAbandonedATGun(u)) return;
-    if (!this.isUnitVisible(u)) return;
-    if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return;
-    if (u.destroyed && this.hasLiveUnitOnSameTile(u)) return;
+  private spawnUnitNameLabels(units: Unit[]) {
+    const priority = (u: Unit): number => {
+      const side = u === this.mission?.sherman ? 0 : isFriendlyFaction(u.faction) ? 1 : 2;
+      const unitType = isFootUnit(u) ? 1 : 0;
+      return side * 2 + unitType;
+    };
+    const ordered = units
+      .map((unit, index) => ({ unit, index }))
+      .sort((a, b) => priority(a.unit) - priority(b.unit) || a.index - b.index);
+    const rowsByTile = new Map<string, number>();
+
+    for (const { unit } of ordered) {
+      const tileKey = HexMap.keyOf(unit.pos);
+      const row = rowsByTile.get(tileKey) ?? 0;
+      if (this.spawnUnitNameLabel(unit, row)) rowsByTile.set(tileKey, row + 1);
+    }
+  }
+
+  /** 生成单个名称；返回是否实际显示，以免隐藏单位占用同格名称行。 */
+  private spawnUnitNameLabel(u: Unit, row: number): boolean {
+    if (!this.mapNode) return false;
+    if (isAttachedATGunCrew(u) || isAbandonedATGun(u)) return false;
+    if (!this.isUnitVisible(u)) return false;
+    if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return false;
+    if (u.destroyed && this.hasLiveUnitOnSameTile(u)) return false;
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
@@ -5121,9 +5183,69 @@ export class BattleScene extends Component {
     const isPvpAiUnit = GameSession.isPvp && u !== this.mission?.sherman && u !== this.pvpOpponentProtagonist();
     const isPvpOpponentHero = GameSession.isPvp && u === this.pvpOpponentProtagonist();
     l.string = `${t(`unit.name.${u.kind}`)}${isPvpOpponentHero ? ' 主角' : isPvpAiUnit ? ' AI' : ''}`;
+    this.drawUnitRankMarker(n, l.string, unitLevelOf(u));
     // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字（UNIT_NAME_OFFSET_HEX×hex）
-    n.setPosition(c.x, c.y - this.hexSize * UNIT_NAME_OFFSET_HEX, 0);
+    n.setPosition(c.x, c.y - this.hexSize * UNIT_NAME_OFFSET_HEX - row * UNIT_NAME_ROW_GAP, 0);
     n.active = true;
+    return true;
+  }
+
+  /** 在单位名称左侧绘制高对比倒 V 军衔杠：老兵 1 道，王牌 3 道。 */
+  private drawUnitRankMarker(
+    nameNode: Node,
+    displayName: string,
+    level: 'recruit' | 'veteran' | 'elite',
+  ) {
+    let marker = nameNode.getChildByName('UnitRankMarker');
+    if (!marker) {
+      marker = new Node('UnitRankMarker');
+      marker.layer = this.node.layer;
+      marker.addComponent(UITransform).setContentSize(16, 16);
+      marker.addComponent(Graphics);
+      nameNode.addChild(marker);
+    }
+    const g = marker.getComponent(Graphics)!;
+    g.clear();
+    marker.active = level !== 'recruit';
+    if (!marker.active) return;
+
+    // 中文按全角、英文按半角估算名字宽度，使图标紧贴名称左侧。
+    const estimatedTextWidth = Array.from(displayName).reduce(
+      (sum, ch) => sum + (/^[\x00-\x7F]$/.test(ch) ? 8 : 16),
+      0,
+    );
+    // Label 字形的视觉中心略低于节点几何中心；标志下移 2 px 与文字中线对齐。
+    marker.setPosition(-Math.min(80, estimatedTextWidth) * 0.5 - 10, -2, 0);
+
+    const drawChevron = (cy: number) => {
+      g.fillColor = UNIT_RANK_OUTLINE;
+      g.moveTo(-7, cy + 3);
+      g.lineTo(0, cy - 2);
+      g.lineTo(7, cy + 3);
+      g.lineTo(7, cy);
+      g.lineTo(0, cy - 5);
+      g.lineTo(-7, cy);
+      g.close();
+      g.fill();
+
+      g.fillColor = UNIT_RANK_GOLD;
+      g.moveTo(-5, cy + 2);
+      g.lineTo(0, cy - 1);
+      g.lineTo(5, cy + 2);
+      g.lineTo(5, cy + 1);
+      g.lineTo(0, cy - 3);
+      g.lineTo(-5, cy + 1);
+      g.close();
+      g.fill();
+    };
+
+    if (level === 'veteran') {
+      drawChevron(2);
+    } else {
+      drawChevron(6);
+      drawChevron(2);
+      drawChevron(-2);
+    }
   }
 
   private hasLiveUnitOnSameTile(u: Unit): boolean {
@@ -5889,6 +6011,39 @@ export class BattleScene extends Component {
     this.muzzleFlashes.push(flash);
   }
 
+  /** 主炮开火后的短促炮口白烟：先沿炮管喷出，再分裂膨胀并淡出。 */
+  private spawnMuzzleSmoke(attacker: Unit | null, target: Unit | null) {
+    if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
+    if (!this.isUnitVisible(attacker)) return;
+    const pos = this.muzzleFlashPosition(attacker, target);
+    if (!pos) return;
+
+    const n = new Node('MuzzleSmoke');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(1, 1);
+    ut.setAnchorPoint(0.5, 0.5);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    n.setPosition(pos.x, pos.y, 0);
+    n.setSiblingIndex(this.mapNode.children.length - 1);
+
+    const smoke: MuzzleSmoke = {
+      node: n,
+      g,
+      x: pos.x,
+      y: pos.y,
+      ux: pos.ux,
+      uy: pos.uy,
+      size: Math.max(10, this.hexSize * 0.24),
+      t: 0,
+      dur: 1.2,
+      seed: this.hashStringToSeed(`muzzle-smoke:${attacker.id}:${target.id}:${this.muzzleSmokeSerial++}`),
+    };
+    this.drawMuzzleSmoke(smoke, 0);
+    this.muzzleSmokes.push(smoke);
+  }
+
   private playAttackFireCue(
     attacker: Unit | null,
     target: Unit | null,
@@ -5910,6 +6065,7 @@ export class BattleScene extends Component {
       this.firedAttackCueReports.add(report);
     }
     this.startMainGunRecoil(attacker, target);
+    this.spawnMuzzleSmoke(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
     this.spawnProjectileTrace(attacker, target, report);
     playConfiguredAttackSound(attackSound);
@@ -6288,6 +6444,80 @@ export class BattleScene extends Component {
   private clearMuzzleFlashes() {
     for (const f of this.muzzleFlashes) f.node.destroy();
     this.muzzleFlashes.length = 0;
+  }
+
+  private advanceMuzzleSmokes(dt: number) {
+    for (let i = this.muzzleSmokes.length - 1; i >= 0; i--) {
+      const smoke = this.muzzleSmokes[i];
+      smoke.t += dt;
+      const p = Math.min(smoke.t / smoke.dur, 1);
+      if (p >= 1) {
+        smoke.node.destroy();
+        this.muzzleSmokes.splice(i, 1);
+        continue;
+      }
+      this.drawMuzzleSmoke(smoke, p);
+    }
+  }
+
+  private drawMuzzleSmoke(smoke: MuzzleSmoke, p: number) {
+    const g = smoke.g;
+    g.clear();
+
+    const ux = smoke.ux;
+    const uy = smoke.uy;
+    const rx = uy;
+    const ry = -ux;
+    const burst = 1 - Math.pow(1 - Math.min(1, p / 0.20), 3);
+    const drift = 1 - Math.pow(1 - p, 2);
+    const fade = p < 0.18 ? 1 : Math.pow(Math.max(0, 1 - (p - 0.18) / 0.82), 1.28);
+    const baseAlpha = Math.round(176 * fade);
+
+    // 开火后的最初一瞬保留一条高压烟柱，让白烟与短暂炮口焰自然衔接。
+    if (p < 0.24) {
+      const plumeAlpha = Math.round(116 * (1 - p / 0.24));
+      const length = smoke.size * (0.72 + burst * 0.92);
+      const width = smoke.size * (0.16 + burst * 0.18);
+      g.fillColor = new Color(232, 231, 219, plumeAlpha);
+      g.moveTo(-ux * smoke.size * 0.10 + rx * width, -uy * smoke.size * 0.10 + ry * width);
+      g.lineTo(ux * length + rx * width * 0.42, uy * length + ry * width * 0.42);
+      g.lineTo(ux * length - rx * width * 0.42, uy * length - ry * width * 0.42);
+      g.lineTo(-ux * smoke.size * 0.10 - rx * width, -uy * smoke.size * 0.10 - ry * width);
+      g.close();
+      g.fill();
+    }
+
+    const puffCount = 6;
+    for (let i = 0; i < puffCount; i++) {
+      const forwardRand = this.seededUnit(smoke.seed, i * 5);
+      const sideRand = this.seededUnit(smoke.seed, i * 5 + 1) - 0.5;
+      const sizeRand = this.seededUnit(smoke.seed, i * 5 + 2);
+      const riseRand = this.seededUnit(smoke.seed, i * 5 + 3);
+      const shadeRand = this.seededUnit(smoke.seed, i * 5 + 4);
+      const stagger = i / (puffCount - 1);
+      const forward = smoke.size * (0.14 + stagger * 0.72 + forwardRand * 0.28) * (0.32 + drift * 1.12);
+      const side = smoke.size * sideRand * (0.18 + drift * 0.72);
+      const rise = smoke.size * (0.05 + riseRand * 0.18) * drift;
+      const x = ux * forward + rx * side;
+      const y = uy * forward + ry * side + rise;
+      const radius = smoke.size * (0.17 + sizeRand * 0.10) * (0.70 + burst * 1.65 + p * 0.45);
+      const shade = Math.round(178 + shadeRand * 22);
+
+      g.fillColor = new Color(shade - 20, shade - 19, shade - 24, Math.round(baseAlpha * 0.34));
+      g.circle(x + radius * 0.08, y - radius * 0.10, radius * 1.08);
+      g.fill();
+      g.fillColor = new Color(shade + 32, shade + 32, shade + 24, Math.round(baseAlpha * 0.68));
+      g.circle(x, y, radius);
+      g.fill();
+      g.fillColor = new Color(248, 246, 232, Math.round(baseAlpha * 0.42));
+      g.circle(x - radius * 0.24, y + radius * 0.26, radius * 0.55);
+      g.fill();
+    }
+  }
+
+  private clearMuzzleSmokes() {
+    for (const smoke of this.muzzleSmokes) smoke.node.destroy();
+    this.muzzleSmokes.length = 0;
   }
 
   private advanceProjectileTraces(dt: number) {
@@ -6865,6 +7095,7 @@ export class BattleScene extends Component {
     // 浮字和移动动画独立推进：读档/胜负已决时也要让残留浮字自然淡出
     if (this.floaters.length > 0) this.advanceFloaters(dt);
     if (this.muzzleFlashes.length > 0) this.advanceMuzzleFlashes(dt);
+    if (this.muzzleSmokes.length > 0) this.advanceMuzzleSmokes(dt);
     if (this.projectileTraces.length > 0) this.advanceProjectileTraces(dt);
     if (this.machineGunBursts.length > 0) this.advanceMachineGunBursts(dt);
     if (this.mainGunRecoils.size > 0) this.advanceMainGunRecoils(dt);
@@ -9015,9 +9246,11 @@ export class BattleScene extends Component {
     bodyFacingLerp?: DirectionLerp | null,
     turretFacingLerp?: DirectionLerp | null,
   ) {
-    const sf = this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? ''];
-    const commanderAlive = u.crew?.commander !== false;
-    if (!sf || !u.hatchOpen || !commanderAlive) {
+    const visualState = commanderHatchVisualState(u);
+    const sf = visualState === 'empty'
+      ? this.emptyCommanderHatchSpriteFrame
+      : this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? ''];
+    if (!sf || visualState === 'hidden') {
       slot.node.active = false;
       return;
     }
@@ -9060,7 +9293,9 @@ export class BattleScene extends Component {
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
     this.applyTankConcealmentOpacity(sp, u);
-    const size = cfg.commanderHatchScale * turretScale;
+    const size = visualState === 'empty'
+      ? this.emptyCommanderHatchDisplaySize(kind)
+      : cfg.commanderHatchScale * turretScale;
     const ut = node.getComponent(UITransform)!;
     ut.setContentSize(size, size);
     ut.setAnchorPoint(0.5, 0.5);
@@ -9184,9 +9419,11 @@ export class BattleScene extends Component {
   private updateShermanCommanderHatchSprite(u: Unit) {
     const node = this.shermanCommanderHatchSpriteNode;
     const sp = this.shermanCommanderHatchSprite;
-    const sf = this.shermanCommanderHatchSpriteFrame;
-    const commanderAlive = u.crew?.commander !== false;
-    if (!node || !sp || !sf || !u.hatchOpen || !commanderAlive) {
+    const visualState = commanderHatchVisualState(u);
+    const sf = visualState === 'empty'
+      ? this.emptyCommanderHatchSpriteFrame
+      : this.shermanCommanderHatchSpriteFrame;
+    if (!node || !sp || !sf || visualState === 'hidden') {
       if (node) node.active = false;
       return;
     }
@@ -9198,7 +9435,9 @@ export class BattleScene extends Component {
     const turretScale = bodyScale * cfg.turretScale;
     const hatchSpriteX = cfg.commanderHatchSpriteX;
     const hatchSpriteY = cfg.commanderHatchSpriteY;
-    const size = cfg.commanderHatchScale * turretScale;
+    const size = visualState === 'empty'
+      ? this.emptyCommanderHatchDisplaySize('sherman')
+      : cfg.commanderHatchScale * turretScale;
 
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -9215,6 +9454,27 @@ export class BattleScene extends Component {
     // Sherman turret art faces left, so compensate by -90° inside the turret.
     node.angle = -90;
     node.active = true;
+  }
+
+  /**
+   * Preserve Sherman's approved empty-hatch size, then scale every other tank
+   * by its complete commander-overlay transform (hull fit, turret, trim and
+   * commander-specific scale), rather than by commanderHatchScale alone.
+   */
+  private emptyCommanderHatchDisplaySize(kind: SplitTankKind): number {
+    const shermanVisual = splitTankVisualConfigOf('sherman');
+    const shermanGeometry = splitTankGeometryConfigOf('sherman');
+    const shermanFit = this.hexSize * 1.8 * shermanVisual.hullFitScale;
+    const shermanBodyScale = shermanFit
+      / (Math.max(shermanGeometry.topTrim.w, shermanGeometry.topTrim.h) || 1);
+    const shermanTurretScale = shermanBodyScale * shermanVisual.turretScale;
+    const relativeEmptyScale = emptyCommanderHatchScaleOf(
+      kind,
+      SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
+    );
+    return EMPTY_COMMANDER_HATCH_SPRITE_SIZE
+      * relativeEmptyScale
+      * shermanTurretScale;
   }
 
   private currentShermanTurretLerp(u: Unit): DirectionLerp | null {
@@ -9433,9 +9693,12 @@ export class BattleScene extends Component {
         const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
         const turretFacingLerp = this.currentEnemyTurretLerp(u) ?? facingLerp;
         this.applySplitTankTurretSprite(turretSlot, u, u.kind, c, facingLerp, turretFacingLerp);
-        if (u.hatchOpen
-            && u.crew?.commander !== false
-            && this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? '']
+        const hatchVisualState = commanderHatchVisualState(u);
+        const hatchSpriteFrame = hatchVisualState === 'empty'
+          ? this.emptyCommanderHatchSpriteFrame
+          : this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? ''];
+        if (hatchVisualState !== 'hidden'
+            && hatchSpriteFrame
             && this.commanderHatchPoolNext < this.commanderHatchSpritePool.length) {
           const commanderSlot = this.commanderHatchSpritePool[this.commanderHatchPoolNext++];
           this.applySplitTankCommanderHatchSprite(
@@ -10735,25 +10998,29 @@ export class BattleScene extends Component {
       }
     }
 
-    // 乘员：车长行显示舱盖三态，其余乘员显示存活 / 阵亡。
+    // 乘员：车长行显示舱盖三态，其余乘员显示存活 / 阵亡；所有行同时显示独立等级。
     const crew = s.crew;
     const crewFlags: boolean[] = crew
       ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
       : [true, true, true, true, true];
+    const crewSlots = ['commander', 'loader', 'gunner', 'driver', 'coDriver'] as const;
 
     for (let i = 0; i < this.statusCrewLabels.length; i++) {
       const lab = this.statusCrewLabels[i];
+      const level = t(`unit.level.${crewLevelFor(s, crewSlots[i]!)}`);
       if (s.destroyed) {
-        lab.string = t('status.val.crewDead');
+        lab.string = t('status.val.crewDeadLevel', { level });
         lab.color = STATUS_VALUE_DEAD;
       } else if (i === 0 && crewFlags[i]) {
-        lab.string = s.hatchOpen ? t('status.val.hatchOpen') : t('status.val.hatchClosed');
+        lab.string = s.hatchOpen
+          ? t('status.val.hatchOpenLevel', { level })
+          : t('status.val.hatchClosedLevel', { level });
         lab.color = s.hatchOpen ? STATUS_VALUE_WARN : STATUS_VALUE_DOWN;
       } else if (!crewFlags[i]) {
-        lab.string = t('status.val.crewDead');
+        lab.string = t('status.val.crewDeadLevel', { level });
         lab.color = STATUS_VALUE_DEAD;
       } else {
-        lab.string = t('status.val.crewAlive');
+        lab.string = t('status.val.crewAliveLevel', { level });
         lab.color = STATUS_VALUE_OK;
       }
     }
@@ -11148,6 +11415,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.clearMuzzleSmokes();
     this.clearProjectileTraces();
     // 隐藏胜负覆盖层与按钮（loadAndDraw 内部 updateOutcomeOverlay 也会再做一次保险）
     if (this.outcomeLabel) this.outcomeLabel.node.active = false;
@@ -12109,13 +12377,14 @@ export class BattleScene extends Component {
     const hasDoubles = this.findDoublesPartner(idx) >= 0;
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
-      if (a === 'drive' && !hasDoubles && !this.campaignUpgradeActive('improved_transmission')
+      if (a === 'drive' && !hasDoubles && !this.campaignMovementDiceCanReverseDirection()
         && !this.driveActionUnavailable(+1)) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, +1);
         return;
       }
-      if (a === 'reverse' && !hasDoubles && !this.driveActionUnavailable(-1)) {
+      if (a === 'reverse' && !hasDoubles && !this.campaignMovementDiceCanReverseDirection()
+        && !this.driveActionUnavailable(-1)) {
         this.closeDiePopover();
         this.tryDriveSherman(idx, -1);
         return;
@@ -12176,37 +12445,35 @@ export class BattleScene extends Component {
 
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
-      const transmissionTurnsDrive = a === 'drive'
-        && this.campaignUpgradeActive('improved_transmission');
+      const transmissionAllowsBothDirections = (a === 'drive' || a === 'reverse')
+        && this.campaignMovementDiceCanReverseDirection();
       if (a === 'turn') {
         addItem(t('action.turnCW'), PHASE_BTN_MOVE,
           () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable());
         addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
           () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable());
       } else if (a === 'drive') {
-        // GDD §3.6：点数 5 / 6 只能前进，不再提供后退选项
         addItem(t('action.advance'), PHASE_BTN_MOVE,
           () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
-        if (transmissionTurnsDrive) {
-          addItem(t('action.turnCW'), PHASE_BTN_MOVE,
-            () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable());
-          addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
-            () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable());
+        if (transmissionAllowsBothDirections) {
+          addItem(t('action.reverse'), PHASE_BTN_MOVE,
+            () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1));
         }
       } else if (a === 'reverse') {
-        // GDD §3.6：点数 1 → 后退 1 格
         addItem(t('action.reverse'), PHASE_BTN_MOVE,
           () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1));
+        if (transmissionAllowsBothDirections) {
+          addItem(t('action.advance'), PHASE_BTN_MOVE,
+            () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
+        }
       }
       // §3.6 A 列对子：驾驶员前进 / 副驾驶 ↻ 60° / 副驾驶 ↺ 60°
       if (hasDoublesPartner) {
-        if (a !== 'drive') {
+        if (a !== 'drive' && !transmissionAllowsBothDirections) {
           addItem(t('action.doublesDriverAdvance'), DIE_ACTION_DOUBLES,
             () => this.tryDoublesDriverAdvance(idx), this.driveActionUnavailable(+1, 'driver'));
         }
-        // 改进变速箱已让本颗前进骰免费转向时，不再显示需要额外消耗
-        // 同点骰的副驾驶转向，避免同一效果出现两组重复按钮。
-        if (a !== 'turn' && !transmissionTurnsDrive) {
+        if (a !== 'turn') {
           addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
             () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'));
           addItem(t('action.doublesCoDriverTurnCCW'), DIE_ACTION_DOUBLES,
@@ -12411,9 +12678,7 @@ export class BattleScene extends Component {
     if (!slot || slot.used) return;
     if (this.playerStep === 'movement') {
       const action = classifyMoveDie(slot.pip);
-      const transmissionTurn = action === 'drive'
-        && this.campaignUpgradeActive('improved_transmission');
-      if (action !== 'turn' && !transmissionTurn) return;
+      if (action !== 'turn') return;
     } else if (this.playerStep === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'driver_turn_or_drive') return;
     } else {
@@ -12474,9 +12739,9 @@ export class BattleScene extends Component {
     if (!slot || slot.used) return;
     if (this.playerStep === 'movement') {
       const act = classifyMoveDie(slot.pip);
-      if (act === 'drive' && dirSign !== +1) return;
-      if (act === 'reverse' && dirSign !== -1) return;
       if (act !== 'drive' && act !== 'reverse') return;
+      const nativeDirection = act === 'drive' ? +1 : -1;
+      if (dirSign !== nativeDirection && !this.campaignMovementDiceCanReverseDirection()) return;
     } else if (this.playerStep === 'misc') {
       // 杂项阶段 driver_turn_or_drive (die=3) 只允许前进 1 格
       if (classifyMiscDie(slot.pip) !== 'driver_turn_or_drive') return;
@@ -13437,7 +13702,7 @@ export class BattleScene extends Component {
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         sameHexInfantryTankAttack,
       }).ok) continue;
-      const priority = aiTargetPriority(target, missionTargets);
+      const priority = aiTargetPriorityForActor(actor, target, missionTargets);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
         bestPriority = priority;
         bestDist = d;
@@ -13467,7 +13732,7 @@ export class BattleScene extends Component {
       if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
       if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) continue;
       if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore' }).ok) continue;
-      const priority = aiTargetPriority(target, missionTargets);
+      const priority = aiTargetPriorityForActor(actor, target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
         bestPriority = priority;
@@ -13901,7 +14166,6 @@ export class BattleScene extends Component {
           switch (slot) {
             case 1:
               s.crew.commander = false;
-              if (s.kind === 'sherman') s.hatchOpen = false;
               break;
             case 2: s.crew.loader = false;    break;
             case 3: s.crew.gunner = false;    break;
@@ -15591,6 +15855,7 @@ export class BattleScene extends Component {
     this.closeDiePopover();
     this.clearFloaters();
     this.clearMuzzleFlashes();
+    this.clearMuzzleSmokes();
     this.clearProjectileTraces();
     this.transientFogRevealKeys.clear();
     this.clearDestroyWreckVisuals();

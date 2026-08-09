@@ -81,8 +81,8 @@
     }
   ],
   "enemies": [
-    { "kind": "panzer4", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" }
+    { "kind": "panzer4", "faction": "german", "unitLevel": "veteran" },
+    { "kind": "panzer4", "faction": "german", "unitLevel": "elite" }
   ],
   "objective": {
     "type": "destroy_kind_evac",

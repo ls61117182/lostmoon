@@ -42,7 +42,8 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
 
@@ -171,6 +172,23 @@ export function aiTargetPriority(u: Unit, missionTargets: readonly Unit[]): numb
   return isFootUnit(u) ? 2 : 1;
 }
 
+/**
+ * 目标优先级按行动单位阵营与等级决定：
+ * - 敌方新兵 / 老兵：所有敌对单位同级，只比较距离；
+ * - 敌方王牌：主角优先，其余单位同级再比较距离；
+ * - 友军 AI：保留任务目标与单位类别优先级。
+ */
+export function aiTargetPriorityForActor(
+  actor: Unit,
+  target: Unit,
+  missionTargets: readonly Unit[],
+): number {
+  if (!isFriendlyFaction(actor.faction)) {
+    return unitLevelOf(actor) === 'elite' && missionTargets.includes(target) ? 0 : 1;
+  }
+  return aiTargetPriority(target, missionTargets);
+}
+
 export function isAIActorUnit(u: Unit): boolean {
   return !u.destroyed
     && !isAbandonedATGun(u)
@@ -191,14 +209,14 @@ export function currentTargetFor(
     && !isAbandonedATGun(u)
     && !isAttachedATGunCrew(u)
     && u.faction !== actor.faction
-    && (u.kind !== 'truck' || missionTargets.includes(u)),
+    && (!isFriendlyFaction(actor.faction) || u.kind !== 'truck' || missionTargets.includes(u)),
   );
   if (hostile.length === 0) return null;
   let bestPriority = Infinity;
   let bestDist = Infinity;
   const tied: Unit[] = [];
   for (const u of hostile) {
-    const priority = aiTargetPriority(u, missionTargets);
+    const priority = aiTargetPriorityForActor(actor, u, missionTargets);
     const d = hexDistance(actor.pos, u.pos);
     if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
       bestPriority = priority;

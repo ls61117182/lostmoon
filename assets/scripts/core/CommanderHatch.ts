@@ -1,6 +1,17 @@
 import { GameMode } from './GameMode';
 import { isTankUnit, Unit } from './types';
 
+export type CommanderHatchVisualState = 'hidden' | 'occupied' | 'empty';
+
+/**
+ * Visual-only hatch state. An open hatch remains visible after the commander
+ * dies, but uses the empty-hatch sprite instead of the occupied commander art.
+ */
+export function commanderHatchVisualState(unit: Unit): CommanderHatchVisualState {
+  if (unit.destroyed || !isTankUnit(unit) || unit.hatchOpen !== true) return 'hidden';
+  return unit.crew?.commander === false ? 'empty' : 'occupied';
+}
+
 /**
  * Hardcore AI tank hatch rule. Only the protagonist may be controlled by the
  * player, so every other living tank decides its hatch state at action start.

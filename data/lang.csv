@@ -102,6 +102,13 @@ status.val.paralyzed,瘫痪,Immobilized
 status.val.normal,正常,Normal
 status.val.crewDead,阵亡,KIA
 status.val.crewAlive,存活,Alive
+unit.level.recruit,新兵,Recruit
+unit.level.veteran,老兵,Veteran
+unit.level.elite,王牌,Elite
+status.val.crewDeadLevel,阵亡 · {level},KIA · {level}
+status.val.crewAliveLevel,存活 · {level},Alive · {level}
+status.val.hatchOpenLevel,打开舱盖 · {level},PU · {level}
+status.val.hatchClosedLevel,关闭舱盖 · {level},BU · {level}
 dice.tray.move,移动阶段骰子（点骰子选择动作）,Move Phase Dice (tap a die to act)
 dice.tray.attack,攻击阶段骰子（点骰子选择动作）,Attack Phase Dice (tap a die to act)
 dice.tray.misc,杂项阶段骰子（点骰子选择动作）,Misc Phase Dice (tap a die to act)
@@ -368,6 +375,8 @@ level.10.title,只是路过：城镇,Just Passing Through: Town
 level.11.title,钢铁角斗士,Steel Gladiator
 level.12.title,猎杀虎式Ⅱ,Hunt the Tiger II
 level.test.title,测试关卡,Test Mission
+level.test.random.europe.title,随机关卡（欧洲战场）,Random Mission (Europe)
+level.test.random.pacific.title,随机关卡（太平洋战场）,Random Mission (Pacific)
 level.custom.editor.title,关卡编辑器,Level Editor
 level.custom.mission.title,自定义关卡,Custom Mission
 levelEditor.placeholder.body,关卡编辑器入口已创建，编辑器功能正在接入中。当前不会再进入无响应的测试场景。下一步将实现地图、单位、目标和事件编辑界面。,"The level editor entry is ready, and the editor UI is being connected. It will no longer open the unresponsive test scene. Next up: map, unit, objective, and event editing."
@@ -636,7 +645,7 @@ campaignUpgrade.sideSkirts.description,前侧装甲、后侧装甲各 +1,Front-s
 campaignUpgrade.wideTracks.name,宽履带,Wide Tracks
 campaignUpgrade.wideTracks.description,位于泥地时，攻击、移动、杂项阶段骰子数量各 +1,"While in mud, attack, movement, and misc dice each +1."
 campaignUpgrade.improvedTransmission.name,改进变速箱,Improved Transmission
-campaignUpgrade.improvedTransmission.description,所有“前进”行动骰都可改为执行“转向”,Any Advance action die may be used to Turn instead.
+campaignUpgrade.improvedTransmission.description,后退行动骰增加“前进”功能，前进行动骰增加“后退”功能,"Reverse action dice gain Advance, and Advance action dice gain Reverse."
 campaignUpgrade.smokeLauncher.name,烟幕发射器,Smoke Launcher
 campaignUpgrade.smokeLauncher.description,杂项阶段的2、4点增加“烟雾弹”功能,Misc dice showing 2 or 4 also gain the Smoke action.
 campaignUpgrade.intercom.name,车内通话器,Intercom

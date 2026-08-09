@@ -499,7 +499,7 @@ const rngFrom = (...values): RNG => {
     assert.strictEqual(target.crew!.gunner, false);
     assert.strictEqual(report.commanderKilledByHitDoubles, true);
     assert.strictEqual(target.crew!.commander, false);
-    assert.strictEqual(target.hatchOpen, false);
+    assert.strictEqual(target.hatchOpen, true);
     assert.ok(!(target.damaged));
   };
 

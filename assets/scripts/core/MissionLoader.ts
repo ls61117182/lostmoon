@@ -29,6 +29,7 @@ import {
 } from './types';
 import { getUnitStats } from './UnitDB';
 import { RNG } from './Dice';
+import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 
 /** TileDef 简写（不含已废弃的整格 b）→ TerrainType */
 const TERRAIN_MAP = {
@@ -334,12 +335,10 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       }
       const slot = diceList[di++]!;
       const merged: UnitPlacement = {
-        kind: p.kind,
-        faction: p.faction,
+        // 随机出生只替换位置与朝向；等级、乘员、初始状态等其它配置必须完整保留。
+        ...p,
         at: slot.at,
         facing: slot.facing,
-        // 保留 placement 上其它「与位置无关」的状态位，避免因 dice 模式丢失
-        paralyzed: p.paralyzed,
       };
       return makeUnit(`enemy_${i}`, merged, rowParityOffset);
     }
@@ -665,6 +664,8 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     gunnerVisionRange: stats.gunnerVisionRange,
     interiorVisionRange: stats.interiorVisionRange,
   };
+  if (id === 'sherman_player') u.crewLevels = normalizePlayerCrewLevels(p.crewLevels);
+  else u.unitLevel = normalizeUnitLevel(p.unitLevel);
   if (u.kind === 'at_gun') {
     const crewKind = infantryKindForFaction(u.faction);
     const crewStats = getUnitStats(crewKind, currentMissionTheater ?? 'europe');

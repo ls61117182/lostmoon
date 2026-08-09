@@ -28,11 +28,12 @@ export interface LevelMeta {
   titleKey: string;
   /** MissionData.id 字段值；用于把战斗存档和关卡对应起来 */
   missionId: string;
-  entryKind?: 'mission' | 'campaign' | 'editor' | 'custom';
+  entryKind?: 'mission' | 'campaign' | 'editor' | 'custom' | 'random';
   campaignId?: string;
   customPackageId?: string;
   titleOverride?: string;
   badgeOverride?: string;
+  randomTheater?: 'europe' | 'pacific';
 }
 
 export interface ChapterMeta {
@@ -121,6 +122,14 @@ export const CHAPTERS: ChapterMeta[] = [
     subtitleKey: 'chapter.test.subtitle',
     levels: [
       { chapterId: 'test', id: 0, missionPath: 'missions/mission_test', titleKey: 'level.test.title', missionId: 'mission_test' },
+      {
+        chapterId: 'test', id: 1, missionPath: '', titleKey: 'level.test.random.europe.title',
+        missionId: 'random_europe', entryKind: 'random', randomTheater: 'europe', badgeOverride: 'RE',
+      },
+      {
+        chapterId: 'test', id: 2, missionPath: '', titleKey: 'level.test.random.pacific.title',
+        missionId: 'random_pacific', entryKind: 'random', randomTheater: 'pacific', badgeOverride: 'RP',
+      },
     ],
   },
   {

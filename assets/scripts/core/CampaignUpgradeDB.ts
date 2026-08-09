@@ -23,7 +23,7 @@ export interface CampaignUpgradeDefinition {
   ignoreDestroyed: boolean;
   ignoreCrewCheck: boolean;
   repairDiceCanFireSuppress: boolean;
-  driveDiceCanTurn: boolean;
+  movementDiceCanReverseDirection: boolean;
   smokeOnMiscPips2And4: boolean;
 }
 
@@ -44,7 +44,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -63,7 +63,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -82,7 +82,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: true,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -101,7 +101,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: true,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -120,7 +120,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: true,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -139,7 +139,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -158,7 +158,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -177,7 +177,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: true,
+    movementDiceCanReverseDirection: true,
     smokeOnMiscPips2And4: false,
   },
   {
@@ -196,7 +196,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: true,
   },
   {
@@ -215,7 +215,7 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     ignoreDestroyed: false,
     ignoreCrewCheck: false,
     repairDiceCanFireSuppress: false,
-    driveDiceCanTurn: false,
+    movementDiceCanReverseDirection: false,
     smokeOnMiscPips2And4: false,
   },
 ];

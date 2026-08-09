@@ -560,7 +560,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   let stagedCrewCheck: CrewDeathResult | undefined;
   if (legacyCrewCheck) {
     const crewTarget = commanderKilledByHitDoubles && target.crew
-      ? { ...target, hatchOpen: false, crew: { ...target.crew, commander: false } }
+      ? { ...target, crew: { ...target.crew, commander: false } }
       : target;
     stagedCrewCheck = resolveCrewCheck(crewTarget, rng);
   }
@@ -810,7 +810,6 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
         const slot = step.crewSlot ?? firstAliveCrewSlot(target, step.crewPriority);
         if (slot !== null && target.crew) {
           killCrewSlot(target.crew, slot);
-          if (slot === 1 && protagonistTarget) target.hatchOpen = false;
         }
       }
       break;
@@ -829,7 +828,6 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
 export function applyAttack(target: Unit, report: AttackReport): void {
   if (report.hit && report.commanderKilledByHitDoubles && target.crew?.commander) {
     target.crew.commander = false;
-    target.hatchOpen = false;
   }
   if (!report.hit) {
     neutralizeUncrewedTank(target);
@@ -847,7 +845,6 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       if (step.effect === 'crewCheck' && !step.crewPriority?.length) {
         if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
           killCrewSlot(target.crew, report.crewCheck.slot);
-          if (report.crewCheck.slot === 1 && protagonistTarget) target.hatchOpen = false;
         }
         continue;
       }
@@ -887,9 +884,6 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       if (markHullDamaged) target.damaged = true;
       if (report.crewCheck && report.crewCheck.slot !== null && target.crew) {
         killCrewSlot(target.crew, report.crewCheck.slot);
-        if (report.crewCheck.slot === 1 && protagonistTarget) {
-          target.hatchOpen = false;
-        }
       }
       break;
   }

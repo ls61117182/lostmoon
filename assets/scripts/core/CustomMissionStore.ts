@@ -4,6 +4,7 @@ import type { TurnEndEventRow } from './TurnEndEventDB';
 export const CUSTOM_MISSION_INDEX_KEY = 'lone_sherman_custom_mission_index_v1';
 export const CUSTOM_MISSION_KEY_PREFIX = 'lone_sherman_custom_mission_';
 export const CUSTOM_MISSION_MAX_SLOTS = 10;
+const transientPackages = new Map<string, CustomMissionPackage>();
 
 export interface CustomMissionPackage {
   schemaVersion: 1;
@@ -94,15 +95,29 @@ function indexEntryFor(id: string, pkg: CustomMissionPackage): CustomMissionInde
   };
 }
 
+function normalizePackage(pkg: CustomMissionPackage): CustomMissionPackage {
+  return {
+    ...pkg,
+    schemaVersion: 1,
+    savedAt: Date.now(),
+    editorVersion: pkg.editorVersion || '1',
+    source: pkg.source || 'player',
+    turnEndEvents: Array.isArray(pkg.turnEndEvents) ? pkg.turnEndEvents : [],
+  };
+}
+
 export const CustomMissionStore = {
   list(): CustomMissionIndexEntry[] {
     return readIndex().sort((a, b) => b.savedAt - a.savedAt).slice(0, CUSTOM_MISSION_MAX_SLOTS);
   },
 
   load(id: string): CustomMissionPackage | null {
+    const normalizedId = normalizePackageId(id);
+    const transient = transientPackages.get(normalizedId);
+    if (transient) return transient;
     if (!hasLocalStorage()) return null;
     try {
-      const raw = localStorage.getItem(packageKey(normalizePackageId(id)));
+      const raw = localStorage.getItem(packageKey(normalizedId));
       if (!raw) return null;
       const parsed = JSON.parse(raw) as CustomMissionPackage;
       if (parsed.schemaVersion !== 1 || !parsed.mission || !Array.isArray(parsed.turnEndEvents)) {
@@ -116,15 +131,7 @@ export const CustomMissionStore = {
 
   save(id: string, pkg: CustomMissionPackage): string {
     const normalizedId = normalizePackageId(id);
-    const now = Date.now();
-    const normalizedPkg: CustomMissionPackage = {
-      ...pkg,
-      schemaVersion: 1,
-      savedAt: now,
-      editorVersion: pkg.editorVersion || '1',
-      source: pkg.source || 'player',
-      turnEndEvents: Array.isArray(pkg.turnEndEvents) ? pkg.turnEndEvents : [],
-    };
+    const normalizedPkg = normalizePackage(pkg);
     if (hasLocalStorage()) {
       const current = readIndex();
       const isNew = !current.some(entry => entry.id === normalizedId);
@@ -139,9 +146,24 @@ export const CustomMissionStore = {
     return normalizedId;
   },
 
-  remove(id: string): void {
-    if (!hasLocalStorage()) return;
+  /**
+   * 保存运行时生成的临时关卡包，但不写入“我的关卡”索引，也不占用 10 个玩家关卡槽位。
+   * 固定 id 可被下一次生成覆盖，BattleScene 仍通过普通 custom source 加载，因此事件表与存档链无需分叉。
+   */
+  saveTransient(id: string, pkg: CustomMissionPackage): string {
     const normalizedId = normalizePackageId(id);
+    const normalizedPkg = normalizePackage(pkg);
+    transientPackages.set(normalizedId, normalizedPkg);
+    if (hasLocalStorage()) {
+      localStorage.setItem(packageKey(normalizedId), JSON.stringify(normalizedPkg));
+    }
+    return normalizedId;
+  },
+
+  remove(id: string): void {
+    const normalizedId = normalizePackageId(id);
+    transientPackages.delete(normalizedId);
+    if (!hasLocalStorage()) return;
     localStorage.removeItem(packageKey(normalizedId));
     writeIndex(readIndex().filter(entry => entry.id !== normalizedId));
   },

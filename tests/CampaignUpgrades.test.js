@@ -17,11 +17,12 @@ assert(scene.includes('openCampaignUpgradeDetail(id)'), 'acquired upgrade slots 
 assert(scene.includes('campaignUpgradeStatusRoot'), 'Sherman status should expose acquired upgrades');
 assert(scene.includes('campaignMainGunHitThresholdModifier()'), 'improved optics should modify main-gun attacks');
 assert(scene.includes("campaignUpgradeActive('automatic_extinguisher')"), 'repair dice should support the extinguisher');
-assert(scene.includes("campaignUpgradeActive('improved_transmission')"), 'advance dice should support transmission turns');
-assert(scene.includes("const transmissionTurn = action === 'drive'")
-  && scene.includes("if (action !== 'turn' && !transmissionTurn) return;"),
-  'transmission turn buttons must pass the turn action execution guard');
-assert(scene.includes("a !== 'turn' && !transmissionTurnsDrive"), 'transmission turns should replace duplicate same-pip turn actions');
+assert(scene.includes("const transmissionAllowsBothDirections = (a === 'drive' || a === 'reverse')")
+  && scene.includes("if (dirSign !== nativeDirection && !this.campaignMovementDiceCanReverseDirection()) return;")
+  && scene.includes("campaignUpgradeDefinition('improved_transmission').movementDiceCanReverseDirection"),
+  'improved transmission should let advance and reverse dice move in either direction');
+assert(scene.includes("if (action !== 'turn') return;"),
+  'improved transmission should no longer let advance dice execute turn actions');
 assert(scene.includes("classifyMiscDie(pip) === 'smoke_or_repair'"), 'the base smoke die should remain initially available');
 assert(scene.includes('pip !== 2 && pip !== 4')
   && scene.includes("campaignUpgradeActive('smoke_launcher')")

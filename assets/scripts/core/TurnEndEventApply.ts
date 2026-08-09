@@ -26,7 +26,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Faction, isFootUnit, neutralizeUncrewedTank, Offset, Unit, UnitKind, WeatherType } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, isFootKind, isFootUnit, neutralizeUncrewedTank, Offset, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -158,6 +158,16 @@ function findTileByEnemyStartId(mission: LoadedMission, eid: number) {
     if (t.enemyStartId === eid) return t;
   }
   return null;
+}
+
+export function spawnMarkerKindForMission(
+  missionId: string,
+  unitKind: UnitKind,
+  legacyNonFootMarker: 'eid' | 'rid' = 'eid',
+): 'eid' | 'rid' {
+  if (isFootKind(unitKind)) return 'rid';
+  if (missionId.startsWith('random_') && (unitKind === 'at_gun' || unitKind === 'heavy_artillery')) return 'rid';
+  return missionId.startsWith('random_') ? 'eid' : legacyNonFootMarker;
 }
 
 function unitAt(mission: LoadedMission, pos: { q: number; r: number }): Unit | null {
@@ -522,7 +532,6 @@ export function prepareTurnEndEvent(
         apply: () => {
           if (!willKill || !sh.crew) return;
           sh.crew.commander = false;
-          sh.hatchOpen = false;
           neutralizeUncrewedTank(sh);
         },
       };
@@ -652,22 +661,22 @@ export function prepareTurnEndEvent(
       };
     }
     case 'panzer3_spawn': {
-      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
+      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer3', 'eid'), requireReinforcementSide(row));
     }
     case 'type97_spawn': {
-      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, 'rid', requireReinforcementSide(row));
+      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type97', 'rid'), requireReinforcementSide(row));
     }
     case 'type95_spawn': {
-      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, 'rid', requireReinforcementSide(row));
+      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type95', 'rid'), requireReinforcementSide(row));
     }
     case 'panzer4_spawn': {
-      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
+      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer4', 'eid'), requireReinforcementSide(row));
     }
     case 'tiger_spawn': {
-      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
+      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'tiger', 'eid'), requireReinforcementSide(row));
     }
     case 'sherman_spawn': {
-      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams, 'eid', requireReinforcementSide(row));
+      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'sherman', 'eid'), requireReinforcementSide(row));
     }
     case 'german_truck_move': {
       const path = ctx.mission.data.truckPath;

@@ -11,6 +11,8 @@ export type TankVisualKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' |
 export type SplitTankKind = Extract<UnitKind, 'sherman' | 'sherman76' | 't34' | 'tiger' | 'tigerking' | 'panzer4' | 'panzer3' | 'type97' | 'type95' | 'type4'>;
 export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
 export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
+export const EMPTY_COMMANDER_HATCH_SPRITE_SIZE = 20;
+export const SHERMAN_EMPTY_COMMANDER_HATCH_SCALE = 0.5;
 
 export interface TankVisualAssetConfig {
   topSpritePath: string;
@@ -189,4 +191,36 @@ export function splitTankVisualConfigOf(kind: SplitTankKind): SplitTankVisualCon
 
 export function splitTankGeometryConfigOf(kind: SplitTankKind): SplitTankGeometryConfig {
   return SPLIT_TANK_GEOMETRY_CONFIG[kind];
+}
+
+/**
+ * Commander overlay scale after all tank-specific source-space transforms.
+ * The common hex-size factor is intentionally omitted because it cancels when
+ * comparing two tank kinds.
+ */
+export function commanderHatchRenderedScaleCoefficient(kind: SplitTankKind): number {
+  const visual = splitTankVisualConfigOf(kind);
+  const geometry = splitTankGeometryConfigOf(kind);
+  return commanderHatchRenderedScaleCoefficientForConfig(visual, geometry);
+}
+
+export function commanderHatchRenderedScaleCoefficientForConfig(
+  visual: Pick<SplitTankVisualConfig, 'commanderHatchScale' | 'hullFitScale' | 'turretScale'>,
+  geometry: Pick<SplitTankGeometryConfig, 'topTrim'>,
+): number {
+  const sourceMax = Math.max(geometry.topTrim.w, geometry.topTrim.h) || 1;
+  return visual.commanderHatchScale
+    * visual.hullFitScale
+    * visual.turretScale
+    / sourceMax;
+}
+
+/** Scale a shared empty-hatch sprite relative to Sherman's approved value. */
+export function emptyCommanderHatchScaleOf(
+  kind: SplitTankKind,
+  shermanEmptyScale = SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
+): number {
+  const shermanScale = commanderHatchRenderedScaleCoefficient('sherman');
+  if (shermanScale <= 0) return shermanEmptyScale;
+  return shermanEmptyScale * commanderHatchRenderedScaleCoefficient(kind) / shermanScale;
 }

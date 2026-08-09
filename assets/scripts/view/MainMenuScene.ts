@@ -36,6 +36,11 @@ import {
 import type { PvpFactionConfig, PvpFactionId, PvpMatchMode, PvpSessionConfig } from '../core/PvpConfig';
 import { PvpService, PvpServerEvent, PvpServerPlayer } from '../core/PvpService';
 import { CustomMissionStore } from '../core/CustomMissionStore';
+import {
+  generateRandomMissionPackage,
+  RANDOM_MISSION_TRANSIENT_IDS,
+} from '../core/RandomMissionGenerator';
+import type { RandomMissionTheater } from '../core/RandomMissionGenerator';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import {
   CHAPTERS,
@@ -51,18 +56,28 @@ import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
 import { normalizeWeather } from '../core/Weather';
+import { normalizeUnitLevel } from '../core/UnitLevel';
 import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
+import {
+  ACTIVE_TERRAIN_CATEGORIES,
+  ActiveTerrainCategory,
+  activeTerrainCategoryForTheater,
+  terrainCategoryForCode,
+} from '../core/TerrainCatalog';
 import { isFootKind, isTankKind } from '../core/types';
-import type { MissionData, MissionObjective, TileDef, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import type { MissionData, MissionObjective, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
   SPLIT_TANK_KINDS,
+  EMPTY_COMMANDER_HATCH_SPRITE_SIZE,
+  SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
   TANK_VISUAL_KINDS,
   SplitTankKind,
   TankVisualKind,
   splitTankGeometryConfigOf,
   splitTankVisualConfigOf,
+  commanderHatchRenderedScaleCoefficientForConfig,
   tankVisualAssetConfigOf,
   tankVisualConfigOf,
 } from '../core/TankVisualDB';
@@ -1140,7 +1155,8 @@ export class MainMenuScene extends Component {
       const meta = levels[i];
       const btn = this.levelBtns[i];
       if (!meta || !btn) continue;
-      const unlocked = MenuProgress.isUnlocked(meta.id, meta.chapterId);
+      const unlocked = meta.entryKind === 'random'
+        || MenuProgress.isUnlocked(meta.id, meta.chapterId);
       const completed = MenuProgress.isCompleted(meta.id, meta.chapterId);
 
       const color = !unlocked
@@ -1171,7 +1187,7 @@ export class MainMenuScene extends Component {
   }
 
   private onClickLevel(meta: LevelMeta) {
-    if (!MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
+    if (meta.entryKind !== 'random' && !MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
       console.log('[Menu] 关卡未解锁:', meta.id);
       return;
     }
@@ -1187,6 +1203,24 @@ export class MainMenuScene extends Component {
       }
       GameSession.selectCustomMission(meta.customPackageId);
       this.loadBattleScene();
+      return;
+    }
+    if (meta.entryKind === 'random') {
+      if (!meta.randomTheater) {
+        console.warn('[Menu] random mission entry missing theater:', meta.id);
+        return;
+      }
+      try {
+        const pkg = generateRandomMissionPackage(meta.randomTheater, Date.now());
+        const packageId = CustomMissionStore.saveTransient(
+          RANDOM_MISSION_TRANSIENT_IDS[meta.randomTheater],
+          pkg,
+        );
+        GameSession.selectCustomMission(packageId);
+        this.loadBattleScene();
+      } catch (error) {
+        console.error('[Menu] random mission generation failed:', meta.randomTheater, error);
+      }
       return;
     }
     if (meta.entryKind === 'campaign') {
@@ -1278,9 +1312,10 @@ export class MainMenuScene extends Component {
     let dragMode: 'body' | 'turret' | null = null;
     let lastPivot = { x: 0, y: 0 };
     let showMuzzleFlash = false;
-    let showCommanderHatch = false;
+    let commanderHatchState: 'closed' | 'open' | 'open-dead' = 'closed';
     let showDestroyed = false;
     const commanderHatchFrames: Record<string, SpriteFrame | null> = {};
+    let emptyCommanderHatchFrame: SpriteFrame | null = null;
     const tankButtons: ButtonRefs[] = [];
     const debugColumnY = -30;
     const debugColumnH = 604;
@@ -1370,6 +1405,14 @@ export class MainMenuScene extends Component {
         refreshPreview();
       });
     }
+    resources.load(
+      'textures/units/sherman_commander_hatch_open_dead/spriteFrame',
+      SpriteFrame,
+      (err, sf) => {
+        if (!err && sf) emptyCommanderHatchFrame = sf;
+        refreshPreview();
+      },
+    );
 
     const stage = new Node('TankVisualDebugStage');
     stage.layer = this.node.layer;
@@ -1404,11 +1447,16 @@ export class MainMenuScene extends Component {
     flashBtn.label = this.makeLabel(flashBtn.node, '炮口火焰', 0, 0, 126, 22, 15, TEXT_PRIMARY);
 
     const hatchBtn = this.makeRectButton(stage, 74, 248, 150, 30, MODE_BTN_IDLE, () => {
-      showCommanderHatch = !showCommanderHatch;
+      commanderHatchState = commanderHatchState === 'closed'
+        ? 'open'
+        : commanderHatchState === 'open'
+          ? 'open-dead'
+          : 'closed';
       refreshHatchButton();
       refreshPreview();
     });
-    hatchBtn.label = this.makeLabel(hatchBtn.node, '打开舱盖', 0, 0, 126, 22, 15, TEXT_PRIMARY);
+    hatchBtn.label = this.makeLabel(hatchBtn.node, '关舱', 0, 0, 138, 22, 15, TEXT_PRIMARY);
+    hatchBtn.label.overflow = Label.Overflow.SHRINK;
 
     const destroyedBtn = this.makeRectButton(stage, -92, 248, 150, 30, MODE_BTN_IDLE, () => {
       showDestroyed = !showDestroyed;
@@ -1579,10 +1627,15 @@ export class MainMenuScene extends Component {
     }
 
     function refreshHatchButton() {
-      hatchBtn.redraw(showCommanderHatch ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: showCommanderHatch });
+      const active = commanderHatchState !== 'closed';
+      hatchBtn.redraw(active ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: active });
       if (hatchBtn.label) {
-        hatchBtn.label.string = showCommanderHatch ? '关闭舱盖' : '打开舱盖';
-        hatchBtn.label.color = showCommanderHatch ? TEXT_TITLE : TEXT_PRIMARY;
+        hatchBtn.label.string = commanderHatchState === 'closed'
+          ? '关舱'
+          : commanderHatchState === 'open'
+            ? '开舱'
+            : '开舱但车长阵亡';
+        hatchBtn.label.color = active ? TEXT_TITLE : TEXT_PRIMARY;
       }
     }
 
@@ -1853,11 +1906,33 @@ export class MainMenuScene extends Component {
           anchorY,
           'turret',
         );
-        const commanderHatchFrame = commanderHatchFrames[getUnitStats(selectedKind).commanderSpritePath ?? ''];
-        if (showCommanderHatch && commanderHatchFrame && draft.commanderHatchScale > 0) {
+        const occupiedCommanderHatchFrame = commanderHatchFrames[getUnitStats(selectedKind).commanderSpritePath ?? ''];
+        const commanderHatchFrame = commanderHatchState === 'open-dead'
+          ? emptyCommanderHatchFrame
+          : occupiedCommanderHatchFrame;
+        if (commanderHatchState !== 'closed' && commanderHatchFrame && draft.commanderHatchScale > 0) {
           // Keep this transform identical to BattleScene: the hatch is at (31, 6)
           // in the source turret and rotates around the same turret pivot.
-          const commanderSize = draft.commanderHatchScale * turretScale;
+          let commanderSize = draft.commanderHatchScale * turretScale;
+          if (commanderHatchState === 'open-dead') {
+            const shermanDraft = drafts.sherman!;
+            const shermanGeometry = splitTankGeometryConfigOf('sherman');
+            const currentCoefficient = commanderHatchRenderedScaleCoefficientForConfig(draft, geometry);
+            const shermanCoefficient = commanderHatchRenderedScaleCoefficientForConfig(
+              shermanDraft,
+              shermanGeometry,
+            );
+            const relativeEmptyScale = shermanCoefficient > 0
+              ? SHERMAN_EMPTY_COMMANDER_HATCH_SCALE * currentCoefficient / shermanCoefficient
+              : SHERMAN_EMPTY_COMMANDER_HATCH_SCALE;
+            const shermanFit = hexR * 1.8 * Math.max(0.001, shermanDraft.hullFitScale);
+            const shermanBodyScale = shermanFit
+              / (Math.max(shermanGeometry.topTrim.w, shermanGeometry.topTrim.h) || 1);
+            const shermanTurretScale = shermanBodyScale * Math.max(0.001, shermanDraft.turretScale);
+            commanderSize = EMPTY_COMMANDER_HATCH_SPRITE_SIZE
+              * relativeEmptyScale
+              * shermanTurretScale;
+          }
           const localX = (draft.commanderHatchSpriteX - pivot.spriteX) * turretScale;
           const localY = (pivot.spriteY - draft.commanderHatchSpriteY) * turretScale;
           const turretAngle = (turret.deg + 180) * Math.PI / 180;
@@ -2591,6 +2666,7 @@ export class MainMenuScene extends Component {
     const defaultEnemy = (): UnitPlacement => ({
       kind: 'panzer4',
       faction: 'german',
+      unitLevel: 'recruit',
       at: { col: 6, row: 2 },
       facing: 3,
     });
@@ -2607,6 +2683,7 @@ export class MainMenuScene extends Component {
     let draftAllowMapPan = !!existingPackage?.mission.allowMapPan;
     let draftTruckPath = cloneJson(existingPackage?.mission.truckPath ?? []);
     let draftWeather: WeatherType = normalizeWeather(existingPackage?.mission.weather);
+    let draftTerrainCategory: ActiveTerrainCategory = activeTerrainCategoryForTheater(existingPackage?.mission.theater);
     let editorTab: 'terrain' | 'tile' | 'mission' | 'units' = 'terrain';
     let unitKindPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
     let unitRandomPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
@@ -2637,7 +2714,7 @@ export class MainMenuScene extends Component {
     const saveButtonX = panelW / 2 - footerRightInset - saveButtonW / 2;
     const exportButtonX = saveButtonX - saveButtonW / 2 - footerButtonGap - exportButtonW / 2;
     const deleteButtonX = exportButtonX - exportButtonW / 2 - footerButtonGap - deleteButtonW / 2;
-    const leftControlsRight = -190;
+    const leftControlsRight = -10;
     const rightActionsLeft = deleteButtonX - deleteButtonW / 2;
     const currentLabelPadding = 12;
     const currentLabelX = (leftControlsRight + rightActionsLeft) / 2;
@@ -2732,11 +2809,18 @@ export class MainMenuScene extends Component {
       next.sort((a, b) => a - b);
       return next.length ? next : undefined;
     };
+    const unitLevels: UnitLevel[] = ['recruit', 'veteran', 'elite'];
+    const unitLevelLabels: Record<UnitLevel, string> = {
+      recruit: '新兵',
+      veteran: '老兵',
+      elite: '王牌',
+    };
     const unitSummary = (unit: UnitPlacement) => {
-      if (unit.startEids?.length) return `${unitKindLabels[unit.kind]} eid${unit.startEids.join(',')}`;
-      if (unit.startRids?.length) return `${unitKindLabels[unit.kind]} rid${unit.startRids.join(',')}`;
+      const level = unitLevelLabels[normalizeUnitLevel(unit.unitLevel)];
+      if (unit.startEids?.length) return `${level} ${unitKindLabels[unit.kind]} eid${unit.startEids.join(',')}`;
+      if (unit.startRids?.length) return `${level} ${unitKindLabels[unit.kind]} rid${unit.startRids.join(',')}`;
       const at = unit.at ? `${unit.at.col},${unit.at.row}` : '骰子';
-      return `${unitKindLabels[unit.kind]} ${at} f${unit.facing ?? '-'}`;
+      return `${level} ${unitKindLabels[unit.kind]} ${at} f${unit.facing ?? '-'}`;
     };
     const refreshDraftForNewMission = () => {
       draftBaseMission = {};
@@ -2753,16 +2837,17 @@ export class MainMenuScene extends Component {
       draftAllowMapPan = false;
       draftTruckPath = [];
       draftWeather = 'clear';
+      draftTerrainCategory = 'europe';
       draftRowParityOffset = 0;
       titleInput = null;
       descInput = null;
     };
 
-    const toolButtons: ButtonRefs[] = [];
+    const toolButtons: Array<{ button: ButtonRefs; tool: TerrainTool }> = [];
     const refreshToolButtons = () => {
-      for (let j = 0; j < toolButtons.length; j++) {
-        if (toolButtons[j]!.node.isValid) {
-          toolButtons[j]!.redraw(terrainTools[j] === selectedTool ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, { border: true });
+      for (const item of toolButtons) {
+        if (item.button.node.isValid) {
+          item.button.redraw(item.tool === selectedTool ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, { border: true });
         }
       }
     };
@@ -2899,15 +2984,25 @@ export class MainMenuScene extends Component {
 
         if (editorTab === 'terrain') {
           this.makeLabel(propRoot, selectedTool ? `当前刷子：${t(selectedTool.key)}` : '选择地形刷子', 0, 184, 300, 28, 17, TEXT_TITLE);
-          this.makeLabel(propRoot, '选中刷子后点击左侧格子进行绘制；再次点击可取消。', 0, 152, 310, 34, 13, TEXT_SUBTITLE);
-          for (let i = 0; i < terrainTools.length; i++) {
-            const tool = terrainTools[i]!;
+          this.makeLabel(propRoot, '先选择战场分类，再选择地形刷子。', 0, 154, 310, 28, 13, TEXT_SUBTITLE);
+          for (let i = 0; i < ACTIVE_TERRAIN_CATEGORIES.length; i++) {
+            const category = ACTIVE_TERRAIN_CATEGORIES[i]!;
+            addPlainBtn(category.label[getLang()], -78 + i * 156, 122, 144, 30, category.id === draftTerrainCategory, () => {
+              draftTerrainCategory = category.id;
+              selectedTool = null;
+            }, 14);
+          }
+          const visibleTerrainTools = terrainTools.filter(tool =>
+            tool.code === null || terrainCategoryForCode(tool.code) === draftTerrainCategory,
+          );
+          for (let i = 0; i < visibleTerrainTools.length; i++) {
+            const tool = visibleTerrainTools[i]!;
             const toolCol = i % 3;
             const toolRow = Math.floor(i / 3);
             const btn = this.makeRectButton(
               propRoot,
               -104 + toolCol * 104,
-              104 - toolRow * 42,
+              78 - toolRow * 42,
               94,
               32,
               tool === selectedTool ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
@@ -2918,9 +3013,9 @@ export class MainMenuScene extends Component {
             );
             const label = this.makeLabel(btn.node, t(tool.key), 0, 0, 86, 30, 14, TEXT_PRIMARY);
             label.overflow = Label.Overflow.SHRINK;
-            toolButtons.push(btn);
+            toolButtons.push({ button: btn, tool });
           }
-          this.makeLabel(propRoot, '地图可拖动；滚轮或双指缩放。', 0, -92, 300, 24, 13, TEXT_SUBTITLE);
+          this.makeLabel(propRoot, '地图可拖动；滚轮或双指缩放。', 0, -84, 300, 24, 13, TEXT_SUBTITLE);
           return;
         }
 
@@ -3008,7 +3103,7 @@ export class MainMenuScene extends Component {
             draftEnemies.push({ ...defaultEnemy(), at: selectedOffset() });
           }, 12);
           addPlainBtn('新增友军', 104, 18, 82, 24, false, () => {
-            draftAllies.push({ kind: 'sherman', faction: 'usa', at: selectedOffset(), facing: 0 });
+            draftAllies.push({ kind: 'sherman', faction: 'usa', unitLevel: 'recruit', at: selectedOffset(), facing: 0 });
           }, 12);
           const allUnits = [
             ...draftEnemies.map((unit, index) => ({ unit, index, group: 'enemy' as const })),
@@ -3021,24 +3116,28 @@ export class MainMenuScene extends Component {
           for (let i = 0; i < units.length; i++) {
             const item = units[i]!;
             const y = -14 - i * 30;
-            addPlainBtn(unitSummary(item.unit), -66, y, 112, 24, true, () => {
+            addPlainBtn(unitSummary(item.unit), -72, y, 104, 24, true, () => {
               item.unit.at = selectedOffset();
               delete item.unit.startEids;
               delete item.unit.startRids;
             }, 10);
-            addPlainBtn('类', 12, y, 32, 24, !!(unitKindPickerTarget && unitKindPickerTarget.group === item.group && unitKindPickerTarget.index === item.index), () => {
+            addPlainBtn('类', -6, y, 28, 24, !!(unitKindPickerTarget && unitKindPickerTarget.group === item.group && unitKindPickerTarget.index === item.index), () => {
               unitRandomPickerTarget = null;
               unitKindPickerTarget = { group: item.group, index: item.index };
             }, 12);
-            addPlainBtn(item.group === 'enemy' ? '随' : '-', 48, y, 32, 24, !!(unitRandomPickerTarget && unitRandomPickerTarget.group === item.group && unitRandomPickerTarget.index === item.index), () => {
+            const currentLevel = normalizeUnitLevel(item.unit.unitLevel);
+            addPlainBtn(unitLevelLabels[currentLevel], 26, y, 36, 24, currentLevel !== 'recruit', () => {
+              item.unit.unitLevel = cycleIn(unitLevels, currentLevel, 'recruit');
+            }, 10);
+            addPlainBtn(item.group === 'enemy' ? '随' : '-', 57, y, 26, 24, !!(unitRandomPickerTarget && unitRandomPickerTarget.group === item.group && unitRandomPickerTarget.index === item.index), () => {
               if (item.group !== 'enemy') return;
               unitKindPickerTarget = null;
               unitRandomPickerTarget = { group: item.group, index: item.index };
             }, 12);
-            addPlainBtn('向', 84, y, 32, 24, false, () => {
+            addPlainBtn('向', 83, y, 26, 24, false, () => {
               item.unit.facing = cycleFacing(item.unit.facing) as UnitPlacement['facing'];
             }, 12);
-            addPlainBtn('删', 120, y, 32, 24, false, () => {
+            addPlainBtn('删', 109, y, 26, 24, false, () => {
               unitKindPickerTarget = null;
               unitRandomPickerTarget = null;
               if (item.group === 'ally') draftAllies.splice(item.index, 1);
@@ -3817,6 +3916,11 @@ export class MainMenuScene extends Component {
       if (importPickerRoot && importPickerRoot.isValid) importPickerRoot.destroy();
       importPickerRoot = null;
     };
+    let randomPickerRoot: Node | null = null;
+    const closeRandomPicker = () => {
+      if (randomPickerRoot && randomPickerRoot.isValid) randomPickerRoot.destroy();
+      randomPickerRoot = null;
+    };
     let weatherPickerRoot: Node | null = null;
     const closeWeatherPicker = () => {
       if (weatherPickerRoot && weatherPickerRoot.isValid) weatherPickerRoot.destroy();
@@ -3901,26 +4005,32 @@ export class MainMenuScene extends Component {
       }
       weatherPickerRoot.setSiblingIndex(panel.children.length - 1);
     };
-    const applyImportedMission = (mission: MissionData, meta: LevelMeta) => {
+    const applyMissionToDraft = (
+      mission: MissionData,
+      turnEndEvents: ReadonlyArray<TurnEndEventRow>,
+      fallbackName: string,
+      statusText: (name: string) => string,
+    ) => {
       captureMissionFields();
       draftBaseMission = cloneJson(mission);
       rows = Math.max(1, mission.rows || 6);
       cols = Math.max(1, mission.cols || 8);
       draftRowParityOffset = mission.rowParityOffset === 1 ? 1 : 0;
       draftTiles = this.cloneEditorTiles(mission.tiles, rows, cols);
-      draftName = mission.name || t(meta.titleKey) || meta.missionId;
+      draftName = mission.name || fallbackName || mission.id;
       draftDescription = mission.description || draftName;
       draftObjective = cloneJson(mission.objective ?? { type: 'destroy_all_enemies' });
       draftSherman = cloneJson(mission.sherman ?? defaultSherman());
       draftAllies = cloneJson(mission.allies ?? []);
       draftEnemies = cloneJson(mission.enemies ?? [defaultEnemy()]);
-      draftTurnEndEvents = [];
+      draftTurnEndEvents = cloneJson([...turnEndEvents]);
       draftEnemyStartByDice = !!mission.enemyStartByDice;
       draftShermanStartByDice = !!mission.shermanStartByDice;
       draftEnemyDiceEidMax = mission.enemyDiceEidMax;
       draftAllowMapPan = !!mission.allowMapPan;
       draftTruckPath = cloneJson(mission.truckPath ?? []);
       draftWeather = normalizeWeather(mission.weather);
+      draftTerrainCategory = activeTerrainCategoryForTheater(mission.theater);
       selectedRow = 0;
       selectedCol = 0;
       for (let row = 0; row < rows; row++) {
@@ -3941,7 +4051,114 @@ export class MainMenuScene extends Component {
       rebuildGrid(true);
       refreshSelection();
       refreshCurrentLabel();
-      statusLabel.string = `已导入：${draftName}。点击保存后写入当前关卡。`;
+      statusLabel.string = statusText(draftName);
+    };
+    const applyImportedMission = (mission: MissionData, meta: LevelMeta) => {
+      applyMissionToDraft(
+        mission,
+        [],
+        t(meta.titleKey) || meta.missionId,
+        name => `已导入：${name}。点击保存后写入当前关卡。`,
+      );
+    };
+    const openRandomMissionPicker = () => {
+      closeRandomPicker();
+      closeImportPicker();
+      closeWeatherPicker();
+      let selectedTheater: RandomMissionTheater = draftTerrainCategory === 'pacific' ? 'pacific' : 'europe';
+      let landingBattle = true;
+
+      randomPickerRoot = new Node('LevelEditorRandomMissionPicker');
+      randomPickerRoot.layer = this.node.layer;
+      randomPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
+      randomPickerRoot.setPosition(0, 0, 0);
+      const backdrop = randomPickerRoot.addComponent(Graphics);
+      backdrop.fillColor = new Color(0, 0, 0, 150);
+      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+      backdrop.fill();
+      randomPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+        closeRandomPicker();
+        ev.propagationStopped = true;
+      }, this);
+      panel.addChild(randomPickerRoot);
+
+      const pickerW = 580;
+      const pickerH = 390;
+      const picker = new Node('RandomMissionOptionPanel');
+      picker.layer = this.node.layer;
+      picker.addComponent(UITransform).setContentSize(pickerW, pickerH);
+      picker.setPosition(0, 0, 0);
+      const pickerBg = picker.addComponent(Graphics);
+      drawFieldPanel(pickerBg, pickerW, pickerH, new Color(31, 38, 32, 252), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      picker.on(Node.EventType.TOUCH_START, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+      picker.on(Node.EventType.TOUCH_END, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+      randomPickerRoot.addChild(picker);
+
+      this.makeLabel(picker, t('levelEditor.random.title'), 0, 148, 300, 36, 27, TEXT_TITLE);
+      const hint = this.makeLabel(picker, t('levelEditor.random.hint'), 0, 112, 500, 24, 15, TEXT_SUBTITLE);
+      hint.overflow = Label.Overflow.SHRINK;
+      const closeBtn = this.makeRectButton(picker, 252, 158, 38, 34, MODAL_CLOSE_BG, () => closeRandomPicker());
+      this.makeLabel(closeBtn.node, 'X', 0, 0, 30, 30, 17, TEXT_PRIMARY);
+
+      let refreshOptions = () => {};
+      const europeBtn = this.makeRectButton(picker, -132, 55, 238, 62, BTN_LEVEL_UNLOCKED, () => {
+        selectedTheater = 'europe';
+        refreshOptions();
+      });
+      this.makeLabel(europeBtn.node, t('levelEditor.random.europe'), 0, 0, 220, 30, 19, TEXT_PRIMARY);
+      const pacificBtn = this.makeRectButton(picker, 132, 55, 238, 62, BTN_LEVEL_UNLOCKED, () => {
+        selectedTheater = 'pacific';
+        refreshOptions();
+      });
+      this.makeLabel(pacificBtn.node, t('levelEditor.random.pacific'), 0, 0, 220, 30, 19, TEXT_PRIMARY);
+
+      const landingBtn = this.makeRectButton(picker, 0, -25, 360, 46, BTN_LEVEL_LOCKED, () => {
+        if (selectedTheater !== 'pacific') return;
+        landingBattle = !landingBattle;
+        refreshOptions();
+      });
+      const landingLabel = this.makeLabel(landingBtn.node, '', 0, 0, 330, 28, 17, TEXT_PRIMARY);
+      const landingHint = this.makeLabel(picker, t('levelEditor.random.landingHint'), 0, -65, 500, 40, 13, TEXT_SUBTITLE);
+      landingHint.enableWrapText = true;
+      landingHint.overflow = Label.Overflow.SHRINK;
+
+      refreshOptions = () => {
+        europeBtn.redraw(selectedTheater === 'europe' ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, { border: true });
+        pacificBtn.redraw(selectedTheater === 'pacific' ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, { border: true });
+        landingBtn.redraw(
+          selectedTheater !== 'pacific'
+            ? BTN_LEVEL_LOCKED
+            : landingBattle ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
+          { border: true },
+        );
+        landingLabel.string = `${selectedTheater === 'pacific' && landingBattle ? '✓' : '□'} ${t('levelEditor.random.landing')}`;
+      };
+      refreshOptions();
+
+      const errorLabel = this.makeLabel(picker, '', 0, -103, 460, 24, 13, new Color(220, 124, 106, 255));
+      const generateBtn = this.makeRectButton(picker, 0, -145, 210, 50, BTN_CONTINUE, () => {
+        try {
+          const pkg = generateRandomMissionPackage(
+            selectedTheater,
+            Date.now(),
+            selectedTheater === 'pacific'
+              ? { pacificBattleType: landingBattle ? 'landing' : 'inland' }
+              : {},
+          );
+          closeRandomPicker();
+          applyMissionToDraft(
+            pkg.mission,
+            pkg.turnEndEvents,
+            pkg.mission.id,
+            name => t('levelEditor.random.generated', { name }),
+          );
+        } catch (error) {
+          console.warn('[LevelEditor] random mission generation failed:', error);
+          errorLabel.string = t('levelEditor.random.failed');
+        }
+      });
+      this.makeLabel(generateBtn.node, t('levelEditor.random.confirm'), 0, 0, 190, 34, 19, TEXT_PRIMARY);
+      randomPickerRoot.setSiblingIndex(panel.children.length - 1);
     };
     const openImportMissionPicker = () => {
       closeImportPicker();
@@ -4150,6 +4367,8 @@ export class MainMenuScene extends Component {
     this.makeLabel(nextBtn.node, t('levelEditor.workspace.next'), 0, 0, 78, 40, 15, TEXT_PRIMARY);
     const importBtn = this.makeRectButton(panel, -250, footerY, 120, 40, BTN_LEVEL_UNLOCKED, () => openImportMissionPicker());
     this.makeLabel(importBtn.node, '导入关卡', 0, 0, 112, 40, 15, TEXT_PRIMARY);
+    const randomBtn = this.makeRectButton(panel, -100, footerY, 168, 40, BTN_LEVEL_COMPLETED, () => openRandomMissionPicker());
+    this.makeLabel(randomBtn.node, t('levelEditor.workspace.random'), 0, 0, 158, 40, 15, TEXT_PRIMARY);
 
     const buildTurnEndEvents = (missionId: string): TurnEndEventRow[] =>
       draftTurnEndEvents.map(ev => ({
@@ -4158,10 +4377,12 @@ export class MainMenuScene extends Component {
         sumMax: Math.max(2, Math.min(12, ev.sumMax)),
         diceCount: ev.diceCount || 2,
         effectType: ev.effectType,
+        ...(ev.reinforcementSide ? { reinforcementSide: ev.reinforcementSide } : {}),
       }));
     const buildDraftMission = (id: string, oldPkg: ReturnType<typeof CustomMissionStore.load> | null, fallbackName: string): MissionData => {
       captureMissionFields();
-      const missionId = oldPkg?.mission.id ?? id;
+      const randomGeneratedId = draftBaseMission.id?.startsWith('random_') ? draftBaseMission.id : undefined;
+      const missionId = oldPkg?.mission.id ?? randomGeneratedId ?? id;
       const sherman = cloneJson(draftSherman);
       if (draftShermanStartByDice) {
         delete sherman.at;
@@ -4172,6 +4393,7 @@ export class MainMenuScene extends Component {
         id: missionId,
         name: draftName || fallbackName,
         description: draftDescription || draftName || fallbackName,
+        theater: draftTerrainCategory,
         cols,
         rows,
         tiles: cloneJson(draftTiles) as MissionData['tiles'],
