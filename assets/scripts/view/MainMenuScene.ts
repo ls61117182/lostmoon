@@ -1282,6 +1282,8 @@ export class MainMenuScene extends Component {
     let showDestroyed = false;
     const commanderHatchFrames: Record<string, SpriteFrame | null> = {};
     const tankButtons: ButtonRefs[] = [];
+    const debugColumnY = -30;
+    const debugColumnH = 604;
 
     const makeDraft = (kind: TankVisualKind): TankVisualDebugDraft => {
       const top = tankVisualConfigOf(kind);
@@ -1371,10 +1373,10 @@ export class MainMenuScene extends Component {
 
     const stage = new Node('TankVisualDebugStage');
     stage.layer = this.node.layer;
-    stage.addComponent(UITransform).setContentSize(660, 604);
-    stage.setPosition(-292.5, -30, 0);
+    stage.addComponent(UITransform).setContentSize(660, debugColumnH);
+    stage.setPosition(-292.5, debugColumnY, 0);
     const stageG = stage.addComponent(Graphics);
-    drawFieldPanel(stageG, 660, 604, new Color(26, 32, 28, 238), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    drawFieldPanel(stageG, 660, debugColumnH, new Color(26, 32, 28, 238), MODAL_PANEL_BORDER, MENU_DIVIDER);
     panel.addChild(stage);
 
     const previewRoot = new Node('TankVisualPreview');
@@ -1417,20 +1419,53 @@ export class MainMenuScene extends Component {
 
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
-    listPanel.addComponent(UITransform).setContentSize(255, 400);
-    listPanel.setPosition(495, 102, 0);
+    listPanel.addComponent(UITransform).setContentSize(255, debugColumnH);
+    listPanel.setPosition(495, debugColumnY, 0);
     const listG = listPanel.addComponent(Graphics);
-    drawFieldPanel(listG, 255, 400, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    drawFieldPanel(listG, 255, debugColumnH, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
     panel.addChild(listPanel);
-    this.makeLabel(listPanel, '坦克列表', 0, 170, 180, 28, 20, TEXT_TITLE);
+    this.makeLabel(listPanel, '坦克列表', 0, debugColumnH / 2 - 26, 180, 28, 20, TEXT_TITLE);
+
+    const tankListViewportW = 230;
+    const tankListViewportH = 528;
+    const tankListViewport = new Node('TankVisualKindViewport');
+    tankListViewport.layer = this.node.layer;
+    tankListViewport.addComponent(UITransform).setContentSize(tankListViewportW, tankListViewportH);
+    tankListViewport.setPosition(0, -15, 0);
+    tankListViewport.addComponent(Mask);
+    listPanel.addChild(tankListViewport);
+
+    const tankListScroll = tankListViewport.addComponent(ScrollView);
+    tankListScroll.horizontal = false;
+    tankListScroll.vertical = true;
+    tankListScroll.inertia = true;
+    tankListScroll.brake = 0.55;
+    tankListScroll.bounceDuration = 0.2;
+    tankListScroll.cancelInnerEvents = false;
+    tankListScroll.horizontalScrollBar = null;
+    tankListScroll.verticalScrollBar = null;
+
+    const tankListColumns = 2;
+    const tankListButtonW = 104;
+    const tankListButtonH = 38;
+    const tankListColumnGap = 12;
+    const tankListRowGap = 9;
+    const tankListRowStride = tankListButtonH + tankListRowGap;
+    const tankListRows = Math.ceil(TANK_VISUAL_KINDS.length / tankListColumns);
+    const tankListContentH = Math.max(tankListViewportH, tankListRows * tankListRowStride + 16);
+    const tankListContent = new Node('TankVisualKindContent');
+    tankListContent.layer = this.node.layer;
+    tankListContent.addComponent(UITransform).setContentSize(tankListViewportW, tankListContentH);
+    tankListViewport.addChild(tankListContent);
+    tankListScroll.content = tankListContent;
 
     for (let i = 0; i < TANK_VISUAL_KINDS.length; i++) {
       const kind = TANK_VISUAL_KINDS[i]!;
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = -58 + col * 116;
-      const y = 126 - row * 47;
-      const btn = this.makeRectButton(listPanel, x, y, 104, 38, BTN_LEVEL_UNLOCKED, () => {
+      const col = i % tankListColumns;
+      const row = Math.floor(i / tankListColumns);
+      const x = -(tankListButtonW + tankListColumnGap) / 2 + col * (tankListButtonW + tankListColumnGap);
+      const y = tankListContentH / 2 - tankListButtonH / 2 - 8 - row * tankListRowStride;
+      const btn = this.makeRectButton(tankListContent, x, y, tankListButtonW, tankListButtonH, BTN_LEVEL_UNLOCKED, () => {
         selectedKind = kind;
         bodyAngleDeg = 0;
         turretAngleDeg = 0;
@@ -1444,13 +1479,14 @@ export class MainMenuScene extends Component {
       btn.label.overflow = Label.Overflow.SHRINK;
       tankButtons.push(btn);
     }
+    tankListScroll.scrollToTop(0);
 
     const propsPanel = new Node('TankVisualParams');
     propsPanel.layer = this.node.layer;
-    propsPanel.addComponent(UITransform).setContentSize(305, 604);
-    propsPanel.setPosition(210, -30, 0);
+    propsPanel.addComponent(UITransform).setContentSize(305, debugColumnH);
+    propsPanel.setPosition(210, debugColumnY, 0);
     const propsG = propsPanel.addComponent(Graphics);
-    drawFieldPanel(propsG, 305, 604, new Color(28, 34, 29, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+    drawFieldPanel(propsG, 305, debugColumnH, new Color(28, 34, 29, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
     panel.addChild(propsPanel);
 
     const fieldDefs: Array<{ key: TankVisualDebugKey; label: string }> = [
@@ -2134,11 +2170,7 @@ export class MainMenuScene extends Component {
     root.addChild(placeholderNode);
 
     const edit = root.addComponent(EditBox);
-    edit.fontSize = 18;
-    edit.fontColor = TEXT_PRIMARY;
     edit.placeholder = placeholder;
-    edit.placeholderFontSize = 16;
-    edit.placeholderFontColor = TEXT_DISABLED;
     edit.string = initial;
     textLabel.string = initial;
     edit.maxLength = 24;
@@ -2596,12 +2628,27 @@ export class MainMenuScene extends Component {
       }
     }
 
+    const footerY = -panelH / 2 + 62;
+    const footerButtonGap = 12;
+    const footerRightInset = 30;
+    const deleteButtonW = 140;
+    const exportButtonW = 112;
+    const saveButtonW = 210;
+    const saveButtonX = panelW / 2 - footerRightInset - saveButtonW / 2;
+    const exportButtonX = saveButtonX - saveButtonW / 2 - footerButtonGap - exportButtonW / 2;
+    const deleteButtonX = exportButtonX - exportButtonW / 2 - footerButtonGap - deleteButtonW / 2;
+    const leftControlsRight = -190;
+    const rightActionsLeft = deleteButtonX - deleteButtonW / 2;
+    const currentLabelPadding = 12;
+    const currentLabelX = (leftControlsRight + rightActionsLeft) / 2;
+    const currentLabelW = rightActionsLeft - leftControlsRight - currentLabelPadding * 2;
+
     this.makeLabel(panel, '地图编辑区', -545, contentY - 8, 150, 34, 17, TEXT_TITLE);
     const currentLabel = this.makeLabel(panel, '',
-      -250, -panelH / 2 + 42, 140, 26, 14, TEXT_SUBTITLE);
+      currentLabelX, footerY, currentLabelW, 30, 14, TEXT_SUBTITLE);
     currentLabel.overflow = Label.Overflow.SHRINK;
     const statusLabel = this.makeLabel(panel, '',
-      panelW / 2 - 190, -panelH / 2 + 82, 340, 38, 14, TEXT_SUBTITLE);
+      panelW / 2 - 190, footerY + 44, 340, 38, 14, TEXT_SUBTITLE);
     statusLabel.overflow = Label.Overflow.RESIZE_HEIGHT;
     statusLabel.enableWrapText = true;
 
@@ -4057,7 +4104,7 @@ export class MainMenuScene extends Component {
     const footer = new Node('EditorFooter');
     footer.layer = this.node.layer;
     footer.addComponent(UITransform).setContentSize(panelW - 40, 58);
-    footer.setPosition(0, -322, 0);
+    footer.setPosition(0, footerY, 0);
     const footerGraphics = footer.addComponent(Graphics);
     footerGraphics.fillColor = new Color(24, 30, 24, 245);
     footerGraphics.roundRect(-panelW / 2 + 20, -29, panelW - 40, 58, 6);
@@ -4069,7 +4116,7 @@ export class MainMenuScene extends Component {
     panel.addChild(footer);
     currentLabel.node.setSiblingIndex(panel.children.length - 1);
 
-    const newBtn = this.makeRectButton(panel, -565, -322, 124, 40, BTN_LEVEL_UNLOCKED, () => {
+    const newBtn = this.makeRectButton(panel, -565, footerY, 124, 40, BTN_LEVEL_UNLOCKED, () => {
       editingPackageId = null;
       rows = 6;
       cols = 8;
@@ -4097,11 +4144,11 @@ export class MainMenuScene extends Component {
         : 0;
       this.openLevelEditorWorkspace(list[nextIndex]!.id);
     };
-    const prevBtn = this.makeRectButton(panel, -455, -322, 82, 40, BTN_LEVEL_UNLOCKED, () => switchMission(-1));
+    const prevBtn = this.makeRectButton(panel, -455, footerY, 82, 40, BTN_LEVEL_UNLOCKED, () => switchMission(-1));
     this.makeLabel(prevBtn.node, t('levelEditor.workspace.prev'), 0, 0, 78, 40, 15, TEXT_PRIMARY);
-    const nextBtn = this.makeRectButton(panel, -365, -322, 82, 40, BTN_LEVEL_UNLOCKED, () => switchMission(1));
+    const nextBtn = this.makeRectButton(panel, -365, footerY, 82, 40, BTN_LEVEL_UNLOCKED, () => switchMission(1));
     this.makeLabel(nextBtn.node, t('levelEditor.workspace.next'), 0, 0, 78, 40, 15, TEXT_PRIMARY);
-    const importBtn = this.makeRectButton(panel, -250, -322, 120, 40, BTN_LEVEL_UNLOCKED, () => openImportMissionPicker());
+    const importBtn = this.makeRectButton(panel, -250, footerY, 120, 40, BTN_LEVEL_UNLOCKED, () => openImportMissionPicker());
     this.makeLabel(importBtn.node, '导入关卡', 0, 0, 112, 40, 15, TEXT_PRIMARY);
 
     const buildTurnEndEvents = (missionId: string): TurnEndEventRow[] =>
@@ -4179,7 +4226,7 @@ export class MainMenuScene extends Component {
       return ok;
     };
 
-    const exportBtn = this.makeRectButton(panel, 150, -322, 112, 40, BTN_LEVEL_UNLOCKED, () => {
+    const exportBtn = this.makeRectButton(panel, exportButtonX, footerY, exportButtonW, 40, BTN_LEVEL_UNLOCKED, () => {
       const list = CustomMissionStore.list();
       const n = Math.min(list.length + 1, 10);
       const id = editingPackageId ?? `custom_export_${Date.now()}`;
@@ -4193,7 +4240,7 @@ export class MainMenuScene extends Component {
     });
     this.makeLabel(exportBtn.node, '导出JSON', 0, 0, 104, 40, 15, TEXT_PRIMARY);
 
-    const saveBtn = this.makeRectButton(panel, 340, -322, 210, 44, BTN_CONTINUE, () => {
+    const saveBtn = this.makeRectButton(panel, saveButtonX, footerY, saveButtonW, 44, BTN_CONTINUE, () => {
       try {
         const list = CustomMissionStore.list();
         const isNew = !editingPackageId;
@@ -4221,7 +4268,7 @@ export class MainMenuScene extends Component {
     });
     this.makeLabel(saveBtn.node, t('levelEditor.workspace.save'), 0, 0, 202, 44, 17, TEXT_PRIMARY);
 
-    const deleteBtn = this.makeRectButton(panel, 10, -322, 140, 40, MODAL_CLOSE_BG, () => {
+    const deleteBtn = this.makeRectButton(panel, deleteButtonX, footerY, deleteButtonW, 40, MODAL_CLOSE_BG, () => {
       if (!editingPackageId) {
         statusLabel.string = t('levelEditor.workspace.deleteUnsaved');
         return;

@@ -15,6 +15,7 @@ import {
   infantryKindForFaction,
   isFootKind,
   isTankKind,
+  neutralizeUncrewedTank,
   MissionData,
   Offset,
   TerrainType,
@@ -704,6 +705,7 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     // Preserve explicit mission placement values, while keeping the player's
     // default open hatch across every game mode.
     u.hatchOpen = p.hatchOpen ?? id === 'sherman_player';
+    neutralizeUncrewedTank(u);
   }
   if (p.kind === 'sherman') {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;

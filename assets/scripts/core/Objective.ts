@@ -1,6 +1,6 @@
 import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
-import { Axial, Direction, isAbandonedATGun, MissionObjective, tileHasBridge, UnitKind } from './types';
+import { Axial, Direction, isAbandonedATGun, isAbandonedTank, MissionObjective, tileHasBridge, UnitKind } from './types';
 
 export interface ShermanEvacDriveOptions {
   canExitTo?: (to: Axial) => boolean;
@@ -22,7 +22,7 @@ export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 
 /** 判断当前任务状态：胜 / 负 / 进行中 */
 export function checkOutcome(mission: LoadedMission): MissionOutcome {
-  if (mission.sherman.destroyed) return 'defeat';
+  if (mission.sherman.destroyed || isAbandonedTank(mission.sherman)) return 'defeat';
   if (mission.truckEscapeDefeat) return 'defeat';
   const usLimit = mission.data.usCasualtyLimit ?? 0;
   if (usLimit > 0 && (mission.usCasualties ?? 0) > usLimit) return 'defeat';
@@ -33,11 +33,11 @@ export function checkOutcome(mission: LoadedMission): MissionOutcome {
 /** 指定种类的敌方单位是否已全部被摧毁 */
 export function allEnemiesOfKindDestroyed(mission: LoadedMission, kind: UnitKind): boolean {
   const group = mission.enemies.filter(e => e.kind === kind);
-  return group.length > 0 && group.every(e => e.destroyed || isAbandonedATGun(e));
+  return group.length > 0 && group.every(e => e.destroyed || isAbandonedATGun(e) || isAbandonedTank(e));
 }
 
 export function liveEnemyCount(mission: LoadedMission): number {
-  return mission.enemies.filter(e => !e.destroyed && !isAbandonedATGun(e)).length;
+  return mission.enemies.filter(e => !e.destroyed && !isAbandonedATGun(e) && !isAbandonedTank(e)).length;
 }
 
 /**
@@ -75,7 +75,7 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
       return mission.enemies.length > 0 && liveEnemyCount(mission) === 0;
     case 'destroy_kind': {
       const group = mission.enemies.filter(e => e.kind === obj.kind);
-      return group.length > 0 && group.every(e => e.destroyed || isAbandonedATGun(e));
+      return group.length > 0 && group.every(e => e.destroyed || isAbandonedATGun(e) || isAbandonedTank(e));
     }
     case 'destroy_kind_evac': {
       if (!obj.evacAt || obj.evacExitDir === undefined) return false;

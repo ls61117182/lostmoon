@@ -91,7 +91,7 @@ function csvCell(value) {
 }
 
 function rowsToCsv(rows) {
-  return rows.map(row => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  return rows.map(row => row.map(csvCell).join(',')).join('\n') + '\n';
 }
 
 function normalizeFile(filePath, rows, sourceInfo, toolName) {
@@ -106,6 +106,19 @@ function normalizeFile(filePath, rows, sourceInfo, toolName) {
     `[${toolName}] normalized ${path.basename(filePath)} `
     + `(${sourceInfo.encoding}, ${sourceInfo.delimiterName} -> UTF-8 BOM, comma CSV)`,
   );
+}
+
+/**
+ * Configuration tables may put a localized field-description row directly
+ * below the machine-readable header. It is documentation, not runtime data.
+ * Keep it in the CSV during normalization, but hide it from every generator.
+ */
+function withoutLocalizedDescriptionRow(rows) {
+  if (rows.length < 2) return rows;
+  const firstCell = String(rows[1]?.[0] ?? '').trim();
+  const isLocalizedDescription = /[\u3400-\u9fff]/.test(firstCell)
+    && !/^[a-z][a-z0-9_.-]*$/i.test(firstCell);
+  return isLocalizedDescription ? [rows[0], ...rows.slice(2)] : rows;
 }
 
 function readCsvRowsSmart(filePath, opts = {}) {
@@ -124,9 +137,10 @@ function readCsvRowsSmart(filePath, opts = {}) {
     encoding: decoded.encoding,
     delimiterName: parsed.name,
   }, toolName);
-  return rows;
+  return withoutLocalizedDescriptionRow(rows);
 }
 
 module.exports = {
   readCsvRowsSmart,
+  withoutLocalizedDescriptionRow,
 };

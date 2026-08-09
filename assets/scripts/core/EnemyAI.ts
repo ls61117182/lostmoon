@@ -42,7 +42,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isAbandonedATGun, isAttachedATGunCrew, isFootUnit, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
 
 // ---------- 行动分类 ----------
 
@@ -174,6 +174,7 @@ export function aiTargetPriority(u: Unit, missionTargets: readonly Unit[]): numb
 export function isAIActorUnit(u: Unit): boolean {
   return !u.destroyed
     && !isAbandonedATGun(u)
+    && !isAbandonedTank(u)
     && !isAttachedATGunCrew(u)
     && u.kind !== 'truck'
     && (!isFootUnit(u) || u.kind === 'japanese_infantry' || u.kind === 'american_infantry');

@@ -32,7 +32,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
-import { Axial, CrewSlot, FireDirection, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { Axial, CrewSlot, FireDirection, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, neutralizeUncrewedTank, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
@@ -228,11 +228,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (isFootUnit(target)) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
-  const sameHexInfantryTankAttack = ctx.sameHexInfantryTankAttack === true
-    && isFootUnit(attacker)
-    && isTankUnit(target)
-    && attacker.faction !== target.faction
-    && hexDistance(attacker.pos, target.pos) === 0;
+  const sameHexInfantryTankAttack = isSameHexInfantryTankAttack(ctx);
   if (hexDistance(attacker.pos, target.pos) === 0 && !sameHexInfantryTankAttack) {
     return { ok: false, reason: 'attack.reason.overlap' };
   }
@@ -300,7 +296,8 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const pacific = isPacificCombat(ctx);
   const trees = pacific ? countPacificTreesAlong(ctx) : 0;
   const includeRearArc = opts.includeRearArc ?? true;
-  const rearArc = includeRearArc && pacific && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
+  const rearArc = includeRearArc && pacific && isTankUnit(attacker)
+    && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
   const frontArcModifier = opts.frontArcModifier ?? 0;
   const actionModifier = ctx.hitThresholdModifier ?? 0;
   const weather = weatherHitThresholdModifier(ctx.weather);
@@ -390,6 +387,25 @@ export function attackDirectionRuleFromFireDirection(target: Unit, fireDirection
   const clockwiseAngle = diff * 30;
   const angle = clockwiseAngle <= 180 ? clockwiseAngle : clockwiseAngle - 360;
   return ATTACK_DIRECTION_RULES[angle] ?? ATTACK_DIRECTION_RULES[0];
+}
+
+function isSameHexInfantryTankAttack(ctx: AttackContext): boolean {
+  return ctx.sameHexInfantryTankAttack === true
+    && isFootUnit(ctx.attacker)
+    && isTankUnit(ctx.target)
+    && ctx.attacker.faction !== ctx.target.faction
+    && hexDistance(ctx.attacker.pos, ctx.target.pos) === 0;
+}
+
+function attackDirectionRuleFor(ctx: AttackContext): AttackDirectionRule {
+  // Infantry sharing a tank's hex attacks it from its vulnerable rear.
+  if (isSameHexInfantryTankAttack(ctx)) return ATTACK_DIRECTION_RULES[180];
+  const flankDirection = ctx.expandedTurretDirections
+    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather)
+    : null;
+  return flankDirection !== null
+    ? attackDirectionRuleFromFireDirection(ctx.target, flankDirection)
+    : attackDirectionRuleFrom(ctx.target, ctx.attacker.pos);
 }
 
 export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
@@ -504,12 +520,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const hit = roll >= threshold;
   const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
-  const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, attacker, target.pos, ctx.weather)
-    : null;
-  const directionRule = flankDirection !== null
-    ? attackDirectionRuleFromFireDirection(target, flankDirection)
-    : attackDirectionRuleFrom(target, attacker.pos);
+  const directionRule = attackDirectionRuleFor(ctx);
   const face = directionRule.armorFace;
   const damageCheckType = ctx.directionalDamageCheck ? directionRule.damageCheckType : undefined;
   const damageTable = damageCheckType ?? 'front';
@@ -820,8 +831,14 @@ export function applyAttack(target: Unit, report: AttackReport): void {
     target.crew.commander = false;
     target.hatchOpen = false;
   }
-  if (!report.hit) return;
-  if (!report.penetrated) return;
+  if (!report.hit) {
+    neutralizeUncrewedTank(target);
+    return;
+  }
+  if (!report.penetrated) {
+    neutralizeUncrewedTank(target);
+    return;
+  }
   const effect = report.damageEffect;
   const protagonistTarget = report.protagonistTarget ?? target.kind === 'sherman';
   const markHullDamaged = !protagonistTarget;
@@ -836,12 +853,14 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       }
       applyDamageEffectStep(target, step, protagonistTarget);
     }
+    neutralizeUncrewedTank(target);
     return;
   }
   // 历史分支（未带 damageEffect 的旧 report）：按 statusChange 走二段式
   if (!effect) {
     if (report.statusChange === 'destroyed') target.destroyed = true;
     else if (report.statusChange === 'damaged' && markHullDamaged) target.damaged = true;
+    neutralizeUncrewedTank(target);
     return;
   }
   switch (effect) {
@@ -874,6 +893,7 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       }
       break;
   }
+  neutralizeUncrewedTank(target);
 }
 
 /** 一步到位：掷骰 + 写入。无需动画时（如自动测试）使用。 */
@@ -1021,12 +1041,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const hb = hitBreakdown(ctx);
   const hitProb = probHit2d6(hb.threshold);
 
-  const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather)
-    : null;
-  const directionRule = flankDirection !== null
-    ? attackDirectionRuleFromFireDirection(ctx.target, flankDirection)
-    : attackDirectionRuleFrom(ctx.target, ctx.attacker.pos);
+  const directionRule = attackDirectionRuleFor(ctx);
   const face = directionRule.armorFace;
   const armor = armorValue(ctx.target, face);
   const pen = effectivePenetration(ctx.attacker, ctx.target, ctx.effectiveRangePenetration);

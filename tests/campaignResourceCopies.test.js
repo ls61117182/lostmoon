@@ -27,12 +27,37 @@ function campaignPath(id) {
   return `assets/resources/missions/campaign_pacific/${id}.json`;
 }
 
+function normalizedTileGrid(mission) {
+  return Array.from({ length: mission.rows }, (_, row) =>
+    Array.from({ length: mission.cols }, (_, col) => mission.tiles[row]?.[col] ?? null));
+}
+
+const terrainCustomizedCampaigns = new Set([
+  'campaign_tarawa_red_beach_1_01',
+  'campaign_tarawa_red_beach_1_02',
+]);
+
 for (const [sourceId, campaignId] of copies) {
   const source = readJson(`assets/resources/missions/${sourceId}.json`);
   const copy = readJson(campaignPath(campaignId));
   assert.strictEqual(copy.id, campaignId, `${campaignId} should have independent id`);
   assert.strictEqual(copy.theater, 'pacific', `${campaignId} should stay pacific`);
-  assert.deepStrictEqual(copy.tiles, source.tiles, `${campaignId} should start from copied terrain`);
+  assert.strictEqual(copy.tiles.length, copy.rows, `${campaignId} tile rows should match rows`);
+  assert(copy.tiles.every(row => row.length <= copy.cols), `${campaignId} tile columns should fit cols`);
+  if (terrainCustomizedCampaigns.has(campaignId)) {
+    const displayOnlyTiles = copy.tiles.flat().filter(tile => tile?.disp === 1 || tile?.disp === true);
+    assert(displayOnlyTiles.length > 0, `${campaignId} should retain its campaign-only scenery tiles`);
+    assert(
+      displayOnlyTiles.every(tile => tile.eid === undefined && tile.rid === undefined),
+      `${campaignId} scenery tiles must not contain active unit start markers`,
+    );
+  } else {
+    assert.deepStrictEqual(
+      normalizedTileGrid(copy),
+      normalizedTileGrid(source),
+      `${campaignId} should retain copied terrain`,
+    );
+  }
   assert.deepStrictEqual(copy.objective, source.objective, `${campaignId} should start from copied objective`);
   assert.strictEqual(copy.eventTableId, source.eventTableId, `${campaignId} should initially reuse event table id`);
 }

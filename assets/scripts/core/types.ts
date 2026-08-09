@@ -312,6 +312,40 @@ export interface ShermanCrew {
   coDriver: boolean;    // 5
 }
 
+/** A tank with no surviving crew remains on the map as an abandoned vehicle. */
+export function hasLivingTankCrew(u: Pick<Unit, 'kind' | 'crew'>): boolean {
+  if (!isTankKind(u.kind) || !u.crew) return false;
+  return u.crew.commander
+    || u.crew.loader
+    || u.crew.gunner
+    || u.crew.driver
+    || u.crew.coDriver;
+}
+
+export function isAbandonedTank(u: Pick<Unit, 'kind' | 'crew' | 'destroyed'>): boolean {
+  return isTankKind(u.kind) && !u.destroyed && !hasLivingTankCrew(u);
+}
+
+/** Keep the crew-loss state transition consistent for player and AI tanks. */
+export function neutralizeUncrewedTank(u: Unit): boolean {
+  if (!isAbandonedTank(u)) return false;
+  u.faction = 'neutral';
+  u.hatchOpen = false;
+  u.visionRange = 0;
+  return true;
+}
+
+export function restoreFullTankCrew(u: Unit): void {
+  if (!isTankKind(u.kind)) return;
+  u.crew = {
+    commander: true,
+    loader: true,
+    gunner: true,
+    driver: true,
+    coDriver: true,
+  };
+}
+
 // ---------- 任务 ----------
 export type ObjectiveType =
   | 'destroy_all_enemies'   // 击毁所有当前存活敌军单位（含增援）

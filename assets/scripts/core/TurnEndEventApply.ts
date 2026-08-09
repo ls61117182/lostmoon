@@ -26,7 +26,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Faction, isFootUnit, Offset, Unit, UnitKind, WeatherType } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, isFootUnit, neutralizeUncrewedTank, Offset, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -523,6 +523,7 @@ export function prepareTurnEndEvent(
           if (!willKill || !sh.crew) return;
           sh.crew.commander = false;
           sh.hatchOpen = false;
+          neutralizeUncrewedTank(sh);
         },
       };
     }

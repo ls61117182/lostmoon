@@ -98,7 +98,7 @@ const carried = runtime.carryShermanToNextSegment({
   at: { col: 9, row: 9 },
   facing: 5,
   turretFacing: 7,
-  crew: { commander: false, loader: true, gunner: true, driver: true, coDriver: false },
+  crew: { commander: false, loader: true, gunner: false, driver: true, coDriver: false },
   fireLevel: 3,
   paralyzed: true,
   turretDamaged: true,
@@ -110,7 +110,7 @@ const carried = runtime.carryShermanToNextSegment({
 assert.deepStrictEqual(carried.at, { col: 1, row: 1 });
 assert.strictEqual(carried.loaded, true);
 assert.strictEqual(carried.hatchOpen, true);
-assert.deepStrictEqual(carried.crew, { commander: false, loader: true, gunner: true, driver: true, coDriver: false });
+assert.deepStrictEqual(carried.crew, { commander: false, loader: true, gunner: false, driver: true, coDriver: false });
 assert.strictEqual(carried.fireLevel, undefined);
 assert.strictEqual(carried.paralyzed, undefined);
 assert.strictEqual(carried.turretDamaged, undefined);

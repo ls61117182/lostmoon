@@ -27,6 +27,33 @@ assert(
   'the retry must not expire while a matching-dice result panel is waiting for manual confirmation',
 );
 
+const usePhaseDice = battleScene.match(/private\s+usePhaseDice\s*\([^)]*\)\s*{[\s\S]*?\n  }\n\n  \/\*\*/);
+assert(usePhaseDice, 'BattleScene.usePhaseDice() should centralize player action-die consumption');
+assert(
+  usePhaseDice[0].includes('!this.phaseDice.some(die => !die.used)'),
+  'phase exhaustion must be based on whether any unused die remains',
+);
+assert(
+  usePhaseDice[0].includes('this.pendingAutoEndStep = this.playerStep'),
+  'using the last unused die should defer phase completion until the action finishes',
+);
+
+const completePhaseDiceAction = battleScene.match(/private\s+completePhaseDiceAction\s*\(\)\s*{[\s\S]*?\n  }\n\n  \/\/ ----------/);
+assert(completePhaseDiceAction, 'BattleScene.completePhaseDiceAction() should be found');
+assert(
+  completePhaseDiceAction[0].includes('this.phaseDice.some(die => !die.used)'),
+  'action completion should re-check for unused dice before advancing',
+);
+assert(
+  completePhaseDiceAction[0].includes('this.autoEndPhaseIfDone();'),
+  'an action that consumed the last unused die should advance the phase when it completes',
+);
+
+assert(
+  !/\b(?:slot|partner|capturedSlot|p)\.used\s*=\s*true/.test(battleScene),
+  'player action dice should be consumed through usePhaseDice() instead of direct writes',
+);
+
 assert(
   endCurrentSubPhase[0].includes('this.autoEnterPhaseWhenReady(next);'),
   'endCurrentSubPhase() should use the retrying helper instead of a one-shot scheduleOnce() when the scene is busy',

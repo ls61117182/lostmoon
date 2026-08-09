@@ -1,7 +1,7 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
 import type { ATGunCrewKind, Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind } from './types';
-import { isTankKind } from './types';
+import { isTankKind, neutralizeUncrewedTank } from './types';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
 import { HexMap } from './HexGrid';
@@ -149,6 +149,7 @@ function savedTurretFacing(value: unknown, fallback: Direction | null): FireDire
 }
 
 function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
+  live.faction = s.faction ?? live.stats.faction;
   live.pos = { q: s.q, r: s.r };
   live.facing = s.facing;
   live.turretFacing = savedTurretFacing(s.turretFacing, s.facing);
@@ -157,15 +158,18 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   live.turretVisualTarget = s.turretVisualTarget ? { ...s.turretVisualTarget } : undefined;
   live.damaged = s.damaged ?? false;
   live.destroyed = s.destroyed ?? false;
-  if (s.smoked !== undefined) live.smoked = s.smoked;
-  if (s.fireLevel !== undefined) live.fireLevel = s.fireLevel;
-  if (s.turretDamaged !== undefined) live.turretDamaged = s.turretDamaged;
-  if (s.paralyzed !== undefined) live.paralyzed = s.paralyzed;
-  if (s.loaded !== undefined) live.loaded = s.loaded;
+  // A snapshot is authoritative. JSON.stringify omits properties whose value is
+  // undefined, so retaining the live value here leaks damage acquired after a
+  // checkpoint (notably when retrying a campaign segment).
+  live.smoked = s.smoked ?? false;
+  live.fireLevel = s.fireLevel ?? 0;
+  live.turretDamaged = s.turretDamaged ?? false;
+  live.paralyzed = s.paralyzed ?? false;
+  live.loaded = s.loaded ?? false;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
   if (s.gunnerVisionRange !== undefined) live.gunnerVisionRange = s.gunnerVisionRange;
   if (s.interiorVisionRange !== undefined) live.interiorVisionRange = s.interiorVisionRange;
-  if (s.radioDamaged !== undefined) live.radioDamaged = s.radioDamaged;
+  live.radioDamaged = s.radioDamaged ?? false;
   if (s.crew) live.crew = { ...s.crew };
   if (s.atGunCrewAlive !== undefined) live.atGunCrewAlive = s.atGunCrewAlive;
   if (s.atGunCrewKind !== undefined) live.atGunCrewKind = s.atGunCrewKind;
@@ -174,6 +178,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   live.atGunControllerUnitId = s.atGunControllerUnitId;
   live.attachedToATGunId = s.attachedToATGunId;
   live.hatchOpen = s.hatchOpen === true && live.crew?.commander !== false;
+  neutralizeUncrewedTank(live);
 }
 
 function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMission['data']['theater']): Unit {
@@ -308,6 +313,7 @@ export function applySave(
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
   mission.sherman.damaged = false;
   mission.sherman.destroyed = save.sherman.destroyed ?? false;
+  mission.sherman.faction = save.sherman.faction ?? mission.sherman.stats.faction;
   for (let i = 0; i < save.enemies.length; i++) {
     const s = save.enemies[i];
     const live = mission.enemies[i];
@@ -324,15 +330,19 @@ export function applySave(
   if (save.version >= 3) {
     const sh = mission.sherman;
     const ss = save.sherman;
-    if (ss.fireLevel !== undefined) sh.fireLevel = ss.fireLevel;
-    if (ss.turretDamaged !== undefined) sh.turretDamaged = ss.turretDamaged;
-    if (ss.paralyzed !== undefined) sh.paralyzed = ss.paralyzed;
-    if (ss.loaded !== undefined) sh.loaded = ss.loaded;
+    // Restore defaults as well as explicit truthy damage. Campaign checkpoints
+    // are JSON-round-tripped, which removes undefined clean-state properties.
+    sh.fireLevel = ss.fireLevel ?? 0;
+    sh.turretDamaged = ss.turretDamaged ?? false;
+    sh.paralyzed = ss.paralyzed ?? false;
+    sh.loaded = ss.loaded ?? false;
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
     if (ss.visionRange !== undefined) sh.visionRange = ss.visionRange;
     if (ss.gunnerVisionRange !== undefined) sh.gunnerVisionRange = ss.gunnerVisionRange;
     if (ss.interiorVisionRange !== undefined) sh.interiorVisionRange = ss.interiorVisionRange;
+    sh.radioDamaged = ss.radioDamaged ?? false;
     if (ss.crew) sh.crew = { ...ss.crew };
+    neutralizeUncrewedTank(sh);
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
     mission.shermanEvacuated = save.shermanEvacuated ?? false;
     mission.truckEscapeDefeat = save.truckEscapeDefeat ?? false;

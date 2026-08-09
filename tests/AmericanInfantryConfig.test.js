@@ -1,17 +1,26 @@
 const fs = require('fs');
 const assert = require('assert');
+const path = require('path');
+const { readCsvRowsSmart } = require('../tools/csvSmart');
 
 const read = (path) => fs.readFileSync(path, 'utf8');
 const battleScene = read('assets/scripts/view/BattleScene.ts');
 const enemyAI = read('assets/scripts/core/EnemyAI.ts');
 const types = read('assets/scripts/core/types.ts');
 const mainMenu = read('assets/scripts/view/MainMenuScene.ts');
-const unitsCsv = read('data/units.csv');
 const legacyDiceCsv = read('data/enemy_ai_dice.csv');
 const legacyTableCsv = read('data/enemy_ai_table.csv');
 const hardcoreTableCsv = read('data/enemy_hardcore_tank_action_table.csv');
 const langCsv = read('data/lang.csv');
 const infantryVisuals = read('data/infantry_visuals.csv');
+
+function readCsvRecords(file, requiredHeaders) {
+  const rows = readCsvRowsSmart(path.resolve(file), { requiredHeaders, toolName: 'AmericanInfantryConfig.test' });
+  const headers = rows[0].map((cell) => cell.trim().replace(/^\uFEFF/, ''));
+  return rows.slice(1).map((row) => Object.fromEntries(
+    headers.map((header, index) => [header, (row[index] ?? '').trim()]),
+  ));
+}
 
 for (const index of [1, 2, 3]) {
   const png = `assets/resources/textures/units/AmericanInfantry0${index}.png`;
@@ -29,10 +38,44 @@ assert.match(
   /isFootKind[\s\S]*kind === 'american_infantry'/,
   'American infantry should use shared foot-unit rules',
 );
-assert.match(
-  unitsCsv,
-  /^american_infantry,美军步兵,usa,2,0,0,0,0,3,2,1,3,1,,,,infantry,destroyed,0,attack=american_infantry1\|move=american_infantry1\|misc=american_infantry1,,/m,
-  'units.csv should own the US American infantry stats and independent action table',
+const americanInfantry = readCsvRecords('data/units.csv', [
+  'unitKind', 'faction', 'size', 'penetration', 'effectiveRange', 'usCasualtyDice',
+  'visionRange', 'gunnerVisionRange', 'interiorVisionRange', 'hasRadio',
+  'visionType', 'damageTargetClass', 'infantryTankCoordination', 'action_table',
+]).find((row) => row.unitKind === 'american_infantry');
+assert(americanInfantry, 'units.csv should define american_infantry');
+assert.deepStrictEqual(
+  {
+    faction: americanInfantry.faction,
+    size: americanInfantry.size,
+    penetration: americanInfantry.penetration,
+    effectiveRange: americanInfantry.effectiveRange,
+    usCasualtyDice: americanInfantry.usCasualtyDice,
+    visionRange: americanInfantry.visionRange,
+    gunnerVisionRange: americanInfantry.gunnerVisionRange,
+    interiorVisionRange: americanInfantry.interiorVisionRange,
+    hasRadio: americanInfantry.hasRadio,
+    visionType: americanInfantry.visionType,
+    damageTargetClass: americanInfantry.damageTargetClass,
+    infantryTankCoordination: americanInfantry.infantryTankCoordination,
+    action_table: americanInfantry.action_table,
+  },
+  {
+    faction: 'usa',
+    size: '2',
+    penetration: '3',
+    effectiveRange: '2',
+    usCasualtyDice: '1',
+    visionRange: '3',
+    gunnerVisionRange: '4',
+    interiorVisionRange: '1',
+    hasRadio: '1',
+    visionType: 'infantry',
+    damageTargetClass: 'destroyed',
+    infantryTankCoordination: '0',
+    action_table: 'attack=american_infantry1|move=american_infantry1|misc=american_infantry1',
+  },
+  'units.csv should own the latest American infantry stats and independent action table',
 );
 assert.match(legacyDiceCsv, /^american_infantry,3,/m, 'American infantry should roll three legacy AI dice');
 assert.match(langCsv, /^unit\.name\.american_infantry,美军步兵,American Infantry$/m);
@@ -75,6 +118,11 @@ assert(priorityBody.indexOf('hasBuilding') < priorityBody.indexOf("terrain === '
 assert(priorityBody.indexOf("terrain === 'forest'") < priorityBody.indexOf("terrain === 'trees'"));
 
 assert.match(mainMenu, /american_infantry:\s*'US Inf'/);
-assert.match(mainMenu, /const allyKinds: UnitKind\[\] = \[[^\]]*'american_infantry'/);
+assert.match(mainMenu, /const allUnitKinds = getAllUnitKinds\(\);/);
+assert.match(
+  mainMenu,
+  /const allyKinds = allUnitKinds\.filter\(kind => getUnitStats\(kind\)\.faction === 'usa' \|\| getUnitStats\(kind\)\.faction === 'soviet'\);/,
+  'mission editor should derive allied units from the latest UnitDB factions',
+);
 
 console.log('American infantry configuration test passed');

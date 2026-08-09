@@ -11,7 +11,6 @@ export interface LangEntry {
 }
 
 export const LANG_DB: Record<string, LangEntry> = {
-  '键': { zh: "中文", en: "英文" },
   'dmg.effect.destroyed': { zh: "摧毁", en: "Destroyed" },
   'dmg.effect.damaged': { zh: "受损", en: "Damaged" },
   'dmg.effect.fire': { zh: "起火 +1", en: "On Fire +1" },

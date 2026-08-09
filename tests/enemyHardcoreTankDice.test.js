@@ -1,17 +1,15 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const { readCsvRowsSmart } = require('../tools/csvSmart');
 
 const root = path.resolve(__dirname, '..');
 
 function readCsv(file) {
-  const text = fs.readFileSync(path.join(root, file), 'utf8').trim();
-  const [headerLine, ...lines] = text.split(/\r?\n/);
-  const headers = headerLine.replace(/^\uFEFF/, '').split(',');
-  return lines.map((line) => {
-    const cells = line.split(',');
-    return Object.fromEntries(headers.map((h, i) => [h, cells[i] ?? '']));
-  });
+  const rows = readCsvRowsSmart(path.join(root, file), { toolName: 'enemyHardcoreTankDice.test' });
+  const headers = rows[0].map(cell => cell.trim().replace(/^\uFEFF/, ''));
+  return rows.slice(1).map((cells) =>
+    Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? ''])));
 }
 
 const unitRows = readCsv('data/units.csv');

@@ -10,7 +10,7 @@ require.extensions['.ts'] = (module, filename) => {
 };
 
 const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
-const { canAttack, canMGAttack, hitBreakdown } = require('../assets/scripts/core/Combat.ts');
+const { canAttack, canMGAttack, hitBreakdown, previewAttack, rollAttack } = require('../assets/scripts/core/Combat.ts');
 
 const map = new HexMap(2, 2);
 map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
@@ -53,6 +53,13 @@ const hardcoreContext = {
 };
 assert.strictEqual(canAttack(hardcoreContext).ok, true, 'hardcore infantry should attack a same-hex enemy tank');
 assert.strictEqual(hitBreakdown(hardcoreContext).distance, 0, 'same-hex infantry attacks should use distance 0');
+const preview = previewAttack(hardcoreContext);
+assert.strictEqual(preview.pen.armorFace, 'rear', 'same-hex infantry attack previews should target rear armor');
+assert.strictEqual(preview.pen.armor, tank.stats.armorRear, 'the preview should use the target tank rear armor value');
+const report = rollAttack({ ...hardcoreContext, directionalDamageCheck: true }, { d6: () => 6 });
+assert.strictEqual(report.armorFace, 'rear', 'same-hex infantry attacks should resolve against rear armor');
+assert.strictEqual(report.armor, tank.stats.armorRear, 'penetration should use the target tank rear armor value');
+assert.strictEqual(report.damageCheckType, 'rear', 'directional damage should treat the attack as coming from the rear');
 assert.strictEqual(
   canAttack({ ...hardcoreContext, target: { ...tank, faction: infantry.faction } }).ok,
   false,

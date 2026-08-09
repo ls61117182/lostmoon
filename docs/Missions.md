@@ -384,7 +384,7 @@ row6:    ·     r↗S    f      f      f      f      ·
 |---|---|---|
 | 数据来源 | `data/units.csv` 第 7 行（`size=0`，无装甲，`penetration=1`） | `data/units.csv` 第 8 行（与 `'infantry'` 数值完全一致） |
 | 出生方式 | 关卡 JSON 直接 `at` / `enemyStartByDice` 走 `rid` 链 / 回合结束 `infantry_spawn` 事件 | 关卡 JSON 直接 `at`（`enemyStartByDice` 走 `rid` 链亦可，但本关用固定坐标） |
-| 攻击 / 移动规则 | `isFootKind` / `isFootUnit` 通用判定：仅可被机枪打、不参与坦克 AI；占格按阵营判定，己方坦克可与己方徒步单位叠格，敌对坦克不可进入其所在格 | 同左 |
+| 攻击 / 移动规则 | `isFootKind` / `isFootUnit` 通用判定：仅可被机枪打、不参与坦克 AI；经典模式按阵营判定占格，硬核模式下敌方坦克也可进入徒步单位所在格，并触发 GDD §3.2 / §3.4 的同格战斗规则 | 同左 |
 | 视觉 | 普通步兵小人 | 同步兵小人 + **红色光环**（`OFFICER_HALO_STROKE`）+ 所在格红色 hex 边框（`drawOfficerTileHighlights`） |
 | 关卡目标关联 | `destroy_kind_evac kind='infantry'`：所有步兵 destroyed 才算前置达成 | `destroy_kind_evac kind='officer'`：所有军官 destroyed 才算前置达成 —— 与 spawn 出来的步兵互不影响 |
 
