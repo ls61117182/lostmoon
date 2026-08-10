@@ -27,7 +27,7 @@ export interface RandomMissionGenerationOptions {
   pacificBattleType?: 'landing' | 'inland';
 }
 
-export const RANDOM_MISSION_GENERATOR_VERSION = '19';
+export const RANDOM_MISSION_GENERATOR_VERSION = '20';
 export const RANDOM_MISSION_TRANSIENT_IDS: Record<RandomMissionTheater, string> = {
   europe: 'generated_random_europe',
   pacific: 'generated_random_pacific',
@@ -1189,7 +1189,7 @@ function generateAttempt(
   const missionId = `random_${theater}_${seed >>> 0}`;
   const turnEndEvents = buildTurnEndEvents(missionId, theater, objectiveRoll, enemies, rng);
   if (!findTankPath(layout.tiles, START, EVAC)) throw new Error('final terrain disconnected player route');
-  if (tankReachableShare(layout.tiles, START) < 0.8) throw new Error('less than 80% of passable tiles are player-connected');
+  if (tankReachableShare(layout.tiles, START) < 1) throw new Error('not all passable tiles are player-connected');
   placeSpawnMarkers(layout.tiles, rng, markerReserved);
   bindPacificGunPlacements(enemies, layout.tiles, rng);
 

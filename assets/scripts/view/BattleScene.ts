@@ -246,6 +246,7 @@ import {
   stopBgm,
   stopBattleSfx,
   playCannonReload,
+  playCommanderHatch,
   playConfiguredAttackSound,
   playDiceRoll,
   playMgFire,
@@ -2729,6 +2730,7 @@ export class BattleScene extends Component {
       q?: number;
       r?: number;
       repairTarget?: RepairableComponentId;
+      open?: boolean;
       hit?: boolean;
       effect?: { hit?: boolean; effect?: string };
     };
@@ -2825,8 +2827,13 @@ export class BattleScene extends Component {
       }
       case 'hatch_close': {
         const p = atQr(unit);
+        playCommanderHatch(false);
         this.spawnFloater(p.q, p.r, t('floater.hatchClosedByDice'),
           new Color(200, 220, 240, 255), { size: 22, dur: 0.9, rise: 24 });
+        return;
+      }
+      case 'hatch_toggle': {
+        playCommanderHatch(details.open === true);
         return;
       }
       default:
@@ -12010,9 +12017,17 @@ export class BattleScene extends Component {
       return;
     }
     s.hatchOpen = !s.hatchOpen;
+    playCommanderHatch(s.hatchOpen);
     this.hatchChangedThisTurn = true;
     this.battleLogI18n('battleLog.hatch', {
       stateKey: s.hatchOpen ? 'status.val.hatchOpen' : 'status.val.hatchClosed',
+    });
+    this.sendPvpActionResult('hatch_toggle', {
+      type: 'hatch_toggle',
+      unitId: s.id,
+      q: s.pos.q,
+      r: s.pos.r,
+      open: s.hatchOpen,
     });
     this.refreshStatusPanel();
     this.refreshPhaseUI();
@@ -13368,6 +13383,7 @@ export class BattleScene extends Component {
     }
     if (!this.consumeDoubles(dieIdx)) return;
     s.hatchOpen = false;
+    playCommanderHatch(false);
     this.closeDiePopover();
     this.battleLogI18n('battleLog.hatch', { stateKey: 'status.val.hatchClosed' });
     this.spawnFloater(s.pos.q, s.pos.r, t('floater.hatchClosedByDice'),
@@ -13684,12 +13700,16 @@ export class BattleScene extends Component {
     let bestPriority = Infinity;
     let bestDist = Infinity;
     const tied: Unit[] = [];
+    const hardcoreInfantry = this.isHardcoreInfantryActor(actor);
     for (const target of this.aiTargetsFor(actor)) {
       if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
+      if (hardcoreInfantry && isAbandonedTank(target)) continue;
       if (target.faction === actor.faction) continue;
-      if (isFootUnit(target) || target.kind === 'truck') continue;
+      if (!hardcoreInfantry && (isFootUnit(target) || target.kind === 'truck')) continue;
       const d = hexDistance(actor.pos, target.pos);
-      if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && d > currentVisionRange(actor, this.currentWeather())) continue;
+      if (!hardcoreInfantry
+        && !getGameModeConfig(GameSession.gameMode).radioVisionSharing
+        && d > currentVisionRange(actor, this.currentWeather())) continue;
       const sameHexInfantryTankAttack = GameSession.gameMode === 'hardcore'
         && isFootUnit(actor)
         && isTankUnit(target)
@@ -13757,6 +13777,7 @@ export class BattleScene extends Component {
 
   private canAIMainGunResolveSelectedTarget(actor: Unit, target: Unit): boolean {
     if (!this.mission) return false;
+    if (this.isHardcoreInfantryActor(actor)) return true;
     const radioVisionSharing = getGameModeConfig(GameSession.gameMode).radioVisionSharing;
     if (isUnitInVision(this.mission.map, actor, target, this.aiFriendliesFor(actor), radioVisionSharing, this.currentWeather())) return true;
     return actor.stats.visionType === 'turreted' && isWithinOwnVisionRange(actor, target, this.currentWeather());
@@ -13764,7 +13785,8 @@ export class BattleScene extends Component {
 
   private beginAllyPhase() {
     if (!this.mission) return;
-    const aiCandidates = this.mission.allies.filter(isAIActorUnit);
+    const aiCandidates = this.mission.allies.filter(unit =>
+      isAIActorUnit(unit, GameSession.gameMode === 'hardcore'));
     if (aiCandidates.length === 0) {
       this.beginEnemyPhase();
       return;
@@ -13801,7 +13823,8 @@ export class BattleScene extends Component {
 
   private beginAllyPhaseAfterTransition() {
     if (!this.mission) return;
-    const aiCandidates = this.mission.allies.filter(isAIActorUnit);
+    const hardcoreInfantry = GameSession.gameMode === 'hardcore';
+    const aiCandidates = this.mission.allies.filter(unit => isAIActorUnit(unit, hardcoreInfantry));
     this.phase = 'ally';
     this.aiSide = 'ally';
     this.outcome = this.computeOutcome();
@@ -13817,6 +13840,7 @@ export class BattleScene extends Component {
       this.mission.enemies,
       aiCandidates.length > 0 ? this.aiMissionTargetsFor(aiCandidates[0]) : [],
       this.rng,
+      hardcoreInfantry,
     );
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -13846,12 +13870,14 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     this.phase = 'enemy';
     this.aiSide = 'german';
-    const aiCandidates = this.mission.enemies.filter(isAIActorUnit);
+    const hardcoreInfantry = GameSession.gameMode === 'hardcore';
+    const aiCandidates = this.mission.enemies.filter(unit => isAIActorUnit(unit, hardcoreInfantry));
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       [this.mission.sherman, ...this.mission.allies],
       [this.mission.sherman],
       this.rng,
+      hardcoreInfantry,
     );
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -13953,13 +13979,15 @@ export class BattleScene extends Component {
       this.redraw();
       return;
     }
-    // 徒步类（步兵 / 军官）无俯视图 AI；卡车仅在回合结束事件 german_truck_move 中沿路移动，不参与敌方阶段掷骰
-    const aiCandidates = this.mission.enemies.filter(isAIActorUnit);
+    // 硬核模式步兵使用无骰攻击/移动 AI；军官仍不行动。卡车只由回合结束事件移动。
+    const hardcoreInfantry = GameSession.gameMode === 'hardcore';
+    const aiCandidates = this.mission.enemies.filter(unit => isAIActorUnit(unit, hardcoreInfantry));
     this.enemyOrder = selectAIOrder(
       aiCandidates,
       [this.mission.sherman, ...this.mission.allies],
       [this.mission.sherman],
       this.rng,
+      hardcoreInfantry,
     );
     this.enemyIndex = 0;
     this.enemyDice = [];
@@ -15911,6 +15939,16 @@ export class BattleScene extends Component {
     const tile = this.mission.map.get(enemy.pos);
     const terrain = effectiveDiceTerrain(tile);
     this.enemyAICol = aiColumnFor(enemy, terrain);
+    if (this.isHardcoreInfantryActor(enemy)) {
+      this.enemyDice = [];
+      this.enemyDiceTypes = [];
+      this.enemyDiceUsed = [];
+      this.enemyDiceResolvedActions = [];
+      this.enemyDiceExecOrder = [];
+      this.destroyEnemyDiceTray();
+      this.runHardcoreInfantryTurn(enemy);
+      return;
+    }
     if (this.usesHardcoreTankDice(enemy)) {
       const dice = rollHardcoreTankAIDice(this.rng, enemy, terrain);
       this.enemyDice = dice.map(d => d.pip);
@@ -15932,6 +15970,26 @@ export class BattleScene extends Component {
     if (!this.enemyDiceSortAnim) this.runNextEnemyStep();
   }
 
+  /** Hardcore infantry performs exactly one deterministic attack-or-move action without rolling AI dice. */
+  private runHardcoreInfantryTurn(infantry: Unit) {
+    const attackTarget = this.selectAIShootTarget(infantry, true);
+    if (attackTarget && this.canAIMainGunResolveSelectedTarget(infantry, attackTarget)) {
+      this.enemyDidActThisTurn = true;
+      this.battleLog(`[AI] ${unitDisplayName(infantry.kind)} 无需掷骰：射程内有目标，执行攻击`);
+      if (this.executeEnemyAction(infantry, 'shoot') === 'animating') return;
+    } else {
+      const destination = this.findInfantryAIMove(infantry);
+      if (destination) {
+        this.enemyDidActThisTurn = true;
+        this.battleLog(`[AI] ${unitDisplayName(infantry.kind)} 无需掷骰：射程内无目标，执行移动`);
+        if (this.executeEnemyAction(infantry, 'infantry_move') === 'animating') return;
+      }
+    }
+    this.clearActiveActingUnit(infantry);
+    this.enemyIndex++;
+    this.beginCurrentEnemyTurn();
+  }
+
   /** Applies the hardcore-only AI commander hatch rule before this tank acts. */
   private updateNonPlayerTankCommanderHatch(unit: Unit) {
     if (!this.mission) return;
@@ -15944,6 +16002,8 @@ export class BattleScene extends Component {
     );
     if (unit.hatchOpen === nextOpen) return;
     unit.hatchOpen = nextOpen;
+    // 音效不受迷雾可见性影响：未发现的坦克切换舱盖也能被听见。
+    playCommanderHatch(nextOpen);
     this.redraw();
   }
 
@@ -16259,11 +16319,13 @@ export class BattleScene extends Component {
   }
 
   private findInfantryAIMove(enemy: Unit): Axial | null {
-    if (!this.mission
-      || (enemy.kind !== 'japanese_infantry' && enemy.kind !== 'american_infantry')) return null;
-    const target = this.currentAITarget(enemy);
+    if (!this.mission || !isFootUnit(enemy) || enemy.kind === 'officer') return null;
+    const target = this.nearestInfantryAITarget(enemy);
     if (!target) return null;
     const currentDist = hexDistance(enemy.pos, target.pos);
+    const currentTile = this.mission.map.get(enemy.pos);
+    if (!currentTile) return null;
+    const currentPriority = this.infantryMoveHexPriority(enemy, enemy.pos, currentTile);
     const occupied = this.buildOccupiedSet(enemy);
     let best: Axial | null = null;
     let bestPriority = Infinity;
@@ -16277,11 +16339,12 @@ export class BattleScene extends Component {
       if (tile.terrain === 'beach' || tile.terrain === 'deep_water') continue;
       const d = hexDistance(n, target.pos);
       if (d >= currentDist) continue;
-      const priority = enemy.kind === 'american_infantry'
-        ? this.americanInfantryMovePriority(enemy, n, tile)
-        : this.japaneseInfantryMovePriority(tile);
-      const canShareFriendlyTank = enemy.kind === 'american_infantry' && priority === 0;
-      if (occupied.has(`${n.q},${n.r}`) && !canShareFriendlyTank) continue;
+      const priority = this.infantryAIMovePriority(enemy, n, tile);
+      if (priority === null) continue;
+      // Lower values are higher priority. Infantry never leaves its current
+      // priority tier for a worse destination, even when that would approach.
+      if (priority > currentPriority) continue;
+      if (occupied.has(`${n.q},${n.r}`) && !this.canInfantryEnterPriorityOccupiedHex(enemy, n)) continue;
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
         bestPriority = priority;
         bestDist = d;
@@ -16296,23 +16359,82 @@ export class BattleScene extends Component {
     return best ? { ...best } : null;
   }
 
-  private japaneseInfantryMovePriority(tile: Tile): number {
-    if (tile.terrain === 'rocky') return 0;
-    if (tile.hasBuilding) return 1;
-    if (tile.terrain === 'trees') return 2;
-    return 3;
+  private isHardcoreInfantryActor(unit: Unit): boolean {
+    return GameSession.gameMode === 'hardcore'
+      && isFootUnit(unit)
+      && unit.kind !== 'officer';
   }
 
-  private americanInfantryMovePriority(enemy: Unit, pos: Axial, tile: Tile): number {
+  private nearestInfantryAITarget(enemy: Unit): Unit | null {
+    const candidates = this.aiTargetsFor(enemy).filter(unit =>
+      !unit.destroyed
+      && !isAbandonedATGun(unit)
+      && !isAbandonedTank(unit)
+      && !isAttachedATGunCrew(unit),
+    );
+    if (candidates.length === 0) return null;
+    let bestDistance = Infinity;
+    const tied: Unit[] = [];
+    for (const candidate of candidates) {
+      const distance = hexDistance(enemy.pos, candidate.pos);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        tied.length = 0;
+        tied.push(candidate);
+      } else if (distance === bestDistance) {
+        tied.push(candidate);
+      }
+    }
+    return tied.length === 1 ? tied[0] : tied[this.rng.intRange(0, tied.length - 1)];
+  }
+
+  /**
+   * Lower numbers win: neutral AT gun > friendly tank > rocky/building/forest
+   * (same tier) > trees > other safe traversable terrain. Ordinary terrain next
+   * to hostile infantry is excluded entirely; priority terrain remains legal.
+   */
+  private infantryAIMovePriority(enemy: Unit, pos: Axial, tile: Tile): number | null {
+    const priority = this.infantryMoveHexPriority(enemy, pos, tile);
+    if (priority < 4) return priority;
+
+    const adjacentToHostileInfantry = neighbors(pos).some(adjacent =>
+      this.allUnits().some(unit =>
+        !unit.destroyed
+        && unit.kind !== 'officer'
+        && isFootUnit(unit)
+        && isFriendlyFaction(unit.faction) !== isFriendlyFaction(enemy.faction)
+        && unit.pos.q === adjacent.q
+        && unit.pos.r === adjacent.r,
+      ),
+    );
+    return adjacentToHostileInfantry ? null : priority;
+  }
+
+  /** Raw priority for both the current hex and destinations; lower is better. */
+  private infantryMoveHexPriority(enemy: Unit, pos: Axial, tile: Tile): number {
     const occupants = this.allUnits().filter(u =>
       u !== enemy && !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r,
     );
-    if (occupants.length > 0
-      && occupants.every(u => u.faction === enemy.faction && isTankUnit(u))) return 0;
-    if (tile.hasBuilding) return 1;
-    if (tile.terrain === 'forest') return 2;
+    if (occupants.some(u => u.kind === 'at_gun' && u.faction === 'neutral')) return 0;
+    const sameSide = (unit: Unit) => unit.faction !== 'neutral'
+      && isFriendlyFaction(unit.faction) === isFriendlyFaction(enemy.faction);
+    if (occupants.some(u => isTankUnit(u) && sameSide(u))) return 1;
+    if (tile.terrain === 'rocky' || tile.hasBuilding || tile.terrain === 'forest') return 2;
     if (tile.terrain === 'trees') return 3;
     return 4;
+  }
+
+  private canInfantryEnterPriorityOccupiedHex(enemy: Unit, pos: Axial): boolean {
+    const occupants = this.allUnits().filter(unit =>
+      unit !== enemy && !unit.destroyed && unit.pos.q === pos.q && unit.pos.r === pos.r,
+    );
+    return occupants.every(unit =>
+      !this.isBlockingMoveOccupant(enemy, unit)
+      || (unit.kind === 'at_gun' && unit.faction === 'neutral')
+      || (isTankUnit(unit)
+        && unit.faction !== 'neutral'
+        && isFriendlyFaction(unit.faction) === isFriendlyFaction(enemy.faction)),
+    );
   }
 
   private clearAIMoveState(unit?: Unit | null) {
@@ -16896,7 +17018,8 @@ export class BattleScene extends Component {
       return false;
     }
 
-    if (!isUnitInVision(map, enemy, target, this.aiFriendliesFor(enemy), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) {
+    if (!this.isHardcoreInfantryActor(enemy)
+      && !isUnitInVision(map, enemy, target, this.aiFriendliesFor(enemy), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather())) {
       if (enemy.stats.visionType !== 'turreted') return false;
       if (!isWithinOwnVisionRange(enemy, target, this.currentWeather())) {
         if (!opts.adjacentOnly && getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG) {

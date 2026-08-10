@@ -126,7 +126,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 1, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -138,7 +138,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   german_infantry: { // 德军步兵 - 德军步兵；保留 infantry 作为旧关卡兼容配置
     faction: "german",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 1, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -150,7 +150,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   soviet_infantry: { // 苏军步兵 - 苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
     faction: "soviet",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 1, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: false,
     moveSound: "",
     attackSound: "",
@@ -226,7 +226,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   japanese_infantry: { // 日本步兵 - Pacific: Japanese Infantry; no radio
     faction: "japanese",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 1, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: false,
     moveSound: "",
     attackSound: "",
@@ -239,7 +239,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   american_infantry: { // 美军步兵 - US AI support infantry; equipped with radio
     faction: "usa",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 2, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, penetration: 3, effectiveRange: 1, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",

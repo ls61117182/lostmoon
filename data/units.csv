@@ -9,15 +9,15 @@ panzer4,四号坦克,german,4,11,10,9,8,2,2,0,4,4,1,1,audio/tank_move,audio/cann
 stug3,三号突击炮,german,5,11,10,9,8,2,2,0,4,4,1,1,audio/tank_move,audio/cannon_fire,,fixed,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4,突击炮；暂复制四号坦克数据；固定主炮仅能攻击正前方
 panzer3,三号坦克,german,5,10,9,8,7,1,2,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,次级敌方坦克
 truck,卡车,german,3,2,2,2,2,0,0,0,4,4,1,1,audio/tank_move,,,fixed,destroyed,0,,4,占位 - 后续按特殊规则结算
-infantry,步兵,german,2,0,0,0,0,3,2,0,3,4,1,1,,,,infantry,destroyed,0,,,占位 - 仅事件中作为攻击方
-german_infantry,德军步兵,german,2,0,0,0,0,3,2,0,3,4,1,1,,,,infantry,destroyed,0,,,德军步兵；保留 infantry 作为旧关卡兼容配置
-soviet_infantry,苏军步兵,soviet,2,0,0,0,0,3,2,0,3,4,1,0,,,,infantry,destroyed,0,,,苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
+infantry,步兵,german,2,0,0,0,0,3,1,0,3,4,1,1,,,,infantry,destroyed,0,,,占位 - 仅事件中作为攻击方
+german_infantry,德军步兵,german,2,0,0,0,0,3,1,0,3,4,1,1,,,,infantry,destroyed,0,,,德军步兵；保留 infantry 作为旧关卡兼容配置
+soviet_infantry,苏军步兵,soviet,2,0,0,0,0,3,1,0,3,4,1,0,,,,infantry,destroyed,0,,,苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
 officer,军官,german,0,0,0,0,0,1,2,0,3,4,1,1,,,,infantry,destroyed,0,,,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
 type95,九五式轻战车,japanese,4,11,10,9,8,0,2,1,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Pacific D11: Type 95 Ha-Go
 type97,九七式中战车,japanese,4,9,8,8,7,1,2,1,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Pacific: Type 97 Chi-Ha
 type4,四式中战车,japanese,4,11,10,9,8,2,2,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,暂按四号坦克战斗参数配置
 at_gun,反坦克炮,japanese,5,8,8,7,6,2,2,1,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,Pacific: AT Gun
-japanese_infantry,日本步兵,japanese,2,0,0,0,0,3,2,1,3,4,1,0,,,,infantry,destroyed,0,attack=japanese_infantry1|move=japanese_infantry1|misc=japanese_infantry1,,Pacific: Japanese Infantry; no radio
-american_infantry,美军步兵,usa,2,0,0,0,0,3,2,1,3,4,1,1,,,,infantry,destroyed,0,attack=american_infantry1|move=american_infantry1|misc=american_infantry1,,US AI support infantry; equipped with radio
+japanese_infantry,日本步兵,japanese,2,0,0,0,0,3,1,1,3,4,1,0,,,,infantry,destroyed,0,attack=japanese_infantry1|move=japanese_infantry1|misc=japanese_infantry1,,Pacific: Japanese Infantry; no radio
+american_infantry,美军步兵,usa,2,0,0,0,0,3,1,1,3,4,1,1,,,,infantry,destroyed,0,attack=american_infantry1|move=american_infantry1|misc=american_infantry1,,US AI support infantry; equipped with radio
 heavy_artillery,重炮,japanese,4,10,9,7,6,4,4,2,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,Pacific: Heavy Artillery
 german_heavy_artillery,重炮,german,4,10,9,7,6,4,4,2,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,German heavy-artillery bunker; stats and AI mirror Japanese Heavy Artillery

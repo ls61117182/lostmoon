@@ -215,6 +215,7 @@ export type AttackDenyReason =
   | 'attack.reason.notStraight'
   | 'attack.reason.fixedGunFacing'
   | 'attack.reason.blocked'
+  | 'attack.reason.outOfRange'
   | 'attack.reason.turretDamaged';
 
 function isForwardOnlyGun(unit: Unit): boolean {
@@ -225,16 +226,27 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
-  if (isFootUnit(target)) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
+  const infantryAttack = isFootUnit(attacker);
+  if (isFootUnit(target) && !infantryAttack) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   const sameHexInfantryTankAttack = isSameHexInfantryTankAttack(ctx);
-  if (hexDistance(attacker.pos, target.pos) === 0 && !sameHexInfantryTankAttack) {
+  const distance = hexDistance(attacker.pos, target.pos);
+  if (distance === 0 && !sameHexInfantryTankAttack) {
     return { ok: false, reason: 'attack.reason.overlap' };
   }
   // A same-hex infantry attack has no firing ray to validate. Its hit and
   // penetration calculations still use the normal breakdown, where distance is 0.
   if (sameHexInfantryTankAttack) return { ok: true };
+  // Hardcore infantry fire is omnidirectional and range-limited by units.csv.
+  // Keep a one-hex fallback for old/custom unit records that omit the field.
+  if (infantryAttack) {
+    const range = Math.max(1, attacker.stats.effectiveRange ?? 1);
+    if (distance > range) return { ok: false, reason: 'attack.reason.outOfRange' };
+    return map.hasLineOfSight(attacker.pos, target.pos)
+      ? { ok: true }
+      : { ok: false, reason: 'attack.reason.blocked' };
+  }
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
   const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
     ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather)

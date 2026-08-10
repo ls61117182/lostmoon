@@ -101,6 +101,11 @@ function assertTankRoute(loaded, mission) {
     }
   }
   assert(seen.has(`${exit.q},${exit.r}`), `${mission.id}: player route must reach the exit`);
+  for (const tile of loaded.map.all()) {
+    if (!loaded.map.canTankEnter(tile.pos)) continue;
+    assert(seen.has(`${tile.pos.q},${tile.pos.r}`),
+      `${mission.id}: every tank-passable tile must connect to the player start region`);
+  }
 }
 
 function tileAt(mission, pos) {

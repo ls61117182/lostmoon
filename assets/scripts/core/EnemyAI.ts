@@ -189,13 +189,16 @@ export function aiTargetPriorityForActor(
   return aiTargetPriority(target, missionTargets);
 }
 
-export function isAIActorUnit(u: Unit): boolean {
+export function isAIActorUnit(u: Unit, includeHardcoreInfantry = false): boolean {
   return !u.destroyed
     && !isAbandonedATGun(u)
     && !isAbandonedTank(u)
     && !isAttachedATGunCrew(u)
     && u.kind !== 'truck'
-    && (!isFootUnit(u) || u.kind === 'japanese_infantry' || u.kind === 'american_infantry');
+    && (!isFootUnit(u)
+      || u.kind === 'japanese_infantry'
+      || u.kind === 'american_infantry'
+      || (includeHardcoreInfantry && u.kind !== 'officer'));
 }
 
 export function currentTargetFor(
@@ -235,8 +238,9 @@ export function selectAIOrder(
   potentialTargets: Unit[],
   missionTargets: readonly Unit[],
   rng: RNG,
+  includeHardcoreInfantry = false,
 ): Unit[] {
-  const alive = actors.filter(isAIActorUnit);
+  const alive = actors.filter(unit => isAIActorUnit(unit, includeHardcoreInfantry));
   const withKey = alive.map(e => ({
     e,
     target: currentTargetFor(e, potentialTargets, missionTargets, rng),

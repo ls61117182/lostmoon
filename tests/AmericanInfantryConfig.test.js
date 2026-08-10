@@ -64,7 +64,7 @@ assert.deepStrictEqual(
     faction: 'usa',
     size: '2',
     penetration: '3',
-    effectiveRange: '2',
+    effectiveRange: '1',
     usCasualtyDice: '1',
     visionRange: '3',
     gunnerVisionRange: '4',
@@ -106,16 +106,19 @@ assert(
 
 const move = battleScene.match(/private\s+findInfantryAIMove\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
 assert(move, 'findInfantryAIMove() should handle both AI infantry kinds');
-assert(move[0].includes("enemy.kind !== 'american_infantry'"));
+assert(move[0].includes("enemy.kind === 'officer'"));
+assert(move[0].includes('!isFootUnit(enemy)'));
 assert(move[0].includes('if (d >= currentDist) continue'));
-assert(move[0].includes('this.americanInfantryMovePriority'));
+assert(move[0].includes('this.infantryAIMovePriority'));
 
-const priority = battleScene.match(/private\s+americanInfantryMovePriority\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
-assert(priority, 'American infantry should have a separate movement priority');
+const priority = battleScene.match(/private\s+infantryMoveHexPriority\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
+assert(priority, 'Hardcore infantry should use the shared movement priority');
 const priorityBody = priority[0];
-assert(priorityBody.indexOf('isTankUnit') < priorityBody.indexOf('hasBuilding'));
-assert(priorityBody.indexOf('hasBuilding') < priorityBody.indexOf("terrain === 'forest'"));
+assert(priorityBody.indexOf("kind === 'at_gun'") < priorityBody.indexOf('isTankUnit'));
+assert(priorityBody.indexOf('isTankUnit') < priorityBody.indexOf("terrain === 'rocky'"));
+assert.match(priorityBody, /terrain === 'rocky' \|\| tile\.hasBuilding \|\| tile\.terrain === 'forest'\) return 2/);
 assert(priorityBody.indexOf("terrain === 'forest'") < priorityBody.indexOf("terrain === 'trees'"));
+assert.match(battleScene, /private\s+infantryAIMovePriority[\s\S]*?adjacentToHostileInfantry/);
 
 assert.match(mainMenu, /american_infantry:\s*'US Inf'/);
 assert.match(mainMenu, /const allUnitKinds = getAllUnitKinds\(\);/);

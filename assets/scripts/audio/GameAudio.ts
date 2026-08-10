@@ -22,6 +22,8 @@ export const AudioKeys = {
   stukaFlyover: 'audio/stuka',
   /** 主炮装填完成（玩家消耗装填骰 / 对子装填手） */
   cannonReload: 'audio/cannon_reload',
+  commanderHatchOpen: 'audio/hatch_open',
+  commanderHatchClose: 'audio/hatch_close',
 } as const;
 
 const clipCache = new Map<string, AudioClip>();
@@ -264,4 +266,9 @@ export function playStukaFlyover(): void {
 /** 装填：相对默认 SFX 约 +150%（2.5×），上限同步放宽 */
 export function playCannonReload(): void {
   playSfxKey(AudioKeys.cannonReload, 2.5, 2.5);
+}
+
+/** 仅在舱盖状态实际切换时播放；车长阵亡本身不应调用此接口。 */
+export function playCommanderHatch(open: boolean): void {
+  playSfxKey(open ? AudioKeys.commanderHatchOpen : AudioKeys.commanderHatchClose);
 }
