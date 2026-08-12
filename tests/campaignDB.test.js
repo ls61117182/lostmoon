@@ -39,8 +39,12 @@ assertContains('assets/scripts/core/CampaignDB.ts', "titleKey: 'campaign.tarawaR
 assertContains('assets/scripts/core/CampaignDB.ts', "id: 'saipan'");
 assertContains('assets/scripts/core/CampaignDB.ts', "id: 'tarawa_red_beach_2'");
 assertContains('assets/scripts/core/CampaignDB.ts', "id: 'peleliu'");
+assertContains('assets/scripts/core/CampaignDB.ts', "RANDOM_ISLAND_CAMPAIGN_ID = 'random_island'");
+assertContains('assets/scripts/core/CampaignDB.ts', 'createRandomIslandCampaign');
 assertContains('assets/scripts/core/LevelDB.ts', "id: CAMPAIGN_CHAPTER_ID");
 assertContains('assets/scripts/core/LevelDB.ts', "entryKind: 'campaign'");
+assertContains('assets/scripts/core/LevelDB.ts', 'alwaysUnlocked: !!campaign.generator');
+assertContains('assets/scripts/view/MainMenuScene.ts', 'meta.alwaysUnlocked === true');
 assertContains('assets/scripts/core/GameSession.ts', 'selectCampaign(levelId: number, campaignId: string)');
 assertContains('assets/scripts/core/GameSession.ts', 'get isCampaign()');
 assertContains('assets/scripts/view/MainMenuScene.ts', "meta.entryKind === 'campaign'");

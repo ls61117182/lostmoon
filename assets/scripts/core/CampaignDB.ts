@@ -1,6 +1,7 @@
 import type { ChapterId } from './LevelDB';
 
 export const CAMPAIGN_CHAPTER_ID = 'campaign' as const;
+export const RANDOM_ISLAND_CAMPAIGN_ID = 'random_island' as const;
 
 export interface CampaignSegmentDefinition {
   id: string;
@@ -17,6 +18,28 @@ export interface CampaignDefinition {
   transitionSeconds: number;
   stitchDirection: 'horizontal';
   segments: CampaignSegmentDefinition[];
+  generator?: 'pacific_random_island';
+}
+
+export function createRandomIslandCampaign(generatedMissionIds: readonly string[]): CampaignDefinition {
+  if (generatedMissionIds.length !== 3) {
+    throw new Error(`Random Island requires exactly 3 generated missions, got ${generatedMissionIds.length}`);
+  }
+  return {
+    id: RANDOM_ISLAND_CAMPAIGN_ID,
+    order: 5,
+    levelId: 5,
+    titleKey: 'campaign.randomIsland.title',
+    missionId: 'campaign_random_island',
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    generator: 'pacific_random_island',
+    segments: generatedMissionIds.map((missionId, index) => ({
+      id: `campaign_random_island_${index + 1}_${missionId}`,
+      missionPath: '',
+      sourcePacificMissionId: missionId,
+    })),
+  };
 }
 
 export const CAMPAIGNS: CampaignDefinition[] = [
@@ -76,10 +99,21 @@ export const CAMPAIGNS: CampaignDefinition[] = [
       { id: 'campaign_peleliu_03', missionPath: 'missions/campaign_pacific/campaign_peleliu_03', sourcePacificMissionId: 'mission_pacific_12' },
     ],
   },
+  {
+    id: RANDOM_ISLAND_CAMPAIGN_ID,
+    order: 5,
+    levelId: 5,
+    titleKey: 'campaign.randomIsland.title',
+    missionId: 'campaign_random_island',
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    generator: 'pacific_random_island',
+    segments: [],
+  },
 ];
 
 export function getCampaign(id: string): CampaignDefinition | undefined {
-  return CAMPAIGNS.find(campaign => campaign.id === id);
+  return CAMPAIGNS.find(candidate => candidate.id === id);
 }
 
 export function isCampaignChapter(chapterId: ChapterId): boolean {

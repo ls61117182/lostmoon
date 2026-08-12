@@ -65,7 +65,7 @@ import {
   terrainCategoryForCode,
 } from '../core/TerrainCatalog';
 import { isFootKind, isTankKind } from '../core/types';
-import type { MissionData, MissionObjective, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
+import type { MissionData, MissionObjective, SeasonType, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
@@ -1155,7 +1155,8 @@ export class MainMenuScene extends Component {
       const meta = levels[i];
       const btn = this.levelBtns[i];
       if (!meta || !btn) continue;
-      const unlocked = meta.entryKind === 'random'
+      const unlocked = meta.alwaysUnlocked === true
+        || meta.entryKind === 'random'
         || MenuProgress.isUnlocked(meta.id, meta.chapterId);
       const completed = MenuProgress.isCompleted(meta.id, meta.chapterId);
 
@@ -1187,7 +1188,7 @@ export class MainMenuScene extends Component {
   }
 
   private onClickLevel(meta: LevelMeta) {
-    if (meta.entryKind !== 'random' && !MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
+    if (!meta.alwaysUnlocked && meta.entryKind !== 'random' && !MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
       console.log('[Menu] 关卡未解锁:', meta.id);
       return;
     }
@@ -1211,9 +1212,13 @@ export class MainMenuScene extends Component {
         return;
       }
       try {
-        const pkg = generateRandomMissionPackage(meta.randomTheater, Date.now());
+        const pkg = generateRandomMissionPackage(meta.randomTheater, Date.now(), {
+          season: meta.randomSeason,
+        });
         const packageId = CustomMissionStore.saveTransient(
-          RANDOM_MISSION_TRANSIENT_IDS[meta.randomTheater],
+          meta.randomSeason === 'winter'
+            ? `${RANDOM_MISSION_TRANSIENT_IDS[meta.randomTheater]}_winter`
+            : RANDOM_MISSION_TRANSIENT_IDS[meta.randomTheater],
           pkg,
         );
         GameSession.selectCustomMission(packageId);
@@ -2634,6 +2639,11 @@ export class MainMenuScene extends Component {
       trees: 'textures/terrain/pacific_trees/spriteFrame',
       beach: 'textures/terrain/pacific_water/spriteFrame',
       rocky: 'textures/terrain/pacific_rocks/spriteFrame',
+      road_snow: 'textures/terrain/terrain_road_snow/spriteFrame',
+      field_snow: 'textures/terrain/terrain_field_snow/spriteFrame',
+      mud_snow: 'textures/terrain/terrain_mud_snow/spriteFrame',
+      forest_snow: 'textures/terrain/terrain_forest_snow/spriteFrame',
+      water_snow: 'textures/terrain/terrain_water_snow/spriteFrame',
     };
     const weatherOptions: EditorWeatherOption[] = [
       { id: 'clear', label: '无', desc: '不使用天气修正' },
@@ -2683,6 +2693,7 @@ export class MainMenuScene extends Component {
     let draftAllowMapPan = !!existingPackage?.mission.allowMapPan;
     let draftTruckPath = cloneJson(existingPackage?.mission.truckPath ?? []);
     let draftWeather: WeatherType = normalizeWeather(existingPackage?.mission.weather);
+    let draftSeason: SeasonType = existingPackage?.mission.season === 'winter' ? 'winter' : 'summer';
     let draftTerrainCategory: ActiveTerrainCategory = activeTerrainCategoryForTheater(existingPackage?.mission.theater);
     let editorTab: 'terrain' | 'tile' | 'mission' | 'units' = 'terrain';
     let unitKindPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
@@ -2767,13 +2778,13 @@ export class MainMenuScene extends Component {
     const allUnitKinds = getAllUnitKinds();
     const enemyKinds = allUnitKinds.filter(kind => getUnitStats(kind).faction !== 'usa' && getUnitStats(kind).faction !== 'soviet');
     const allyKinds = allUnitKinds.filter(kind => getUnitStats(kind).faction === 'usa' || getUnitStats(kind).faction === 'soviet');
-    const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge', 'destroy_truck'];
+    const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge'];
     const objectiveTypeLabels: Record<MissionObjective['type'], string> = {
       destroy_all_enemies: '击毁所有单位',
       destroy_kind: '歼灭指定单位',
       destroy_kind_evac: '歼灭后撤离',
       exit_from_edge: '从边缘撤离',
-      destroy_truck: '摧毁卡车',
+      destroy_truck: '摧毁卡车后撤离（旧）',
     };
     const eventEffects: TurnEndEffectType[] = [
       'none',
@@ -2837,6 +2848,7 @@ export class MainMenuScene extends Component {
       draftAllowMapPan = false;
       draftTruckPath = [];
       draftWeather = 'clear';
+      draftSeason = 'summer';
       draftTerrainCategory = 'europe';
       draftRowParityOffset = 0;
       titleInput = null;
@@ -2854,8 +2866,17 @@ export class MainMenuScene extends Component {
 
     const colorForTile = (tile: EditorTile) =>
       terrainTools.find(tool => tool.code === (tile?.t ?? null))?.color ?? terrainTools[1]!.color;
-    const spriteKeyForTile = (tile: EditorTile) =>
-      terrainTools.find(tool => tool.code === (tile?.t ?? null))?.spriteKey ?? null;
+    const spriteKeyForTile = (tile: EditorTile) => {
+      const key = terrainTools.find(tool => tool.code === (tile?.t ?? null))?.spriteKey ?? null;
+      if (!key || draftSeason !== 'winter' || draftTerrainCategory !== 'europe') return key;
+      return ['road', 'field', 'mud', 'forest', 'water'].includes(key) ? `${key}_snow` : key;
+    };
+    const terrainToolLabel = (tool: TerrainTool) => {
+      if (tool.code && draftSeason === 'winter' && draftTerrainCategory === 'europe') {
+        return t(`${tool.key}_snow`);
+      }
+      return t(tool.key);
+    };
     const normalizeFlags = (raw: string | undefined) =>
       /^[01]{6}$/.test(raw ?? '') ? raw! : '000000';
     const isDisplayOnlyEditorTile = (tile: EditorTile) =>
@@ -2983,12 +3004,13 @@ export class MainMenuScene extends Component {
         }
 
         if (editorTab === 'terrain') {
-          this.makeLabel(propRoot, selectedTool ? `当前刷子：${t(selectedTool.key)}` : '选择地形刷子', 0, 184, 300, 28, 17, TEXT_TITLE);
+          this.makeLabel(propRoot, selectedTool ? `当前刷子：${terrainToolLabel(selectedTool)}` : '选择地形刷子', 0, 184, 300, 28, 17, TEXT_TITLE);
           this.makeLabel(propRoot, '先选择战场分类，再选择地形刷子。', 0, 154, 310, 28, 13, TEXT_SUBTITLE);
           for (let i = 0; i < ACTIVE_TERRAIN_CATEGORIES.length; i++) {
             const category = ACTIVE_TERRAIN_CATEGORIES[i]!;
             addPlainBtn(category.label[getLang()], -78 + i * 156, 122, 144, 30, category.id === draftTerrainCategory, () => {
               draftTerrainCategory = category.id;
+              if (category.id !== 'europe') draftSeason = 'summer';
               selectedTool = null;
             }, 14);
           }
@@ -3011,7 +3033,7 @@ export class MainMenuScene extends Component {
                 refreshPropertyPanel();
               },
             );
-            const label = this.makeLabel(btn.node, t(tool.key), 0, 0, 86, 30, 14, TEXT_PRIMARY);
+            const label = this.makeLabel(btn.node, terrainToolLabel(tool), 0, 0, 86, 30, 14, TEXT_PRIMARY);
             label.overflow = Label.Overflow.SHRINK;
             toolButtons.push({ button: btn, tool });
           }
@@ -3029,8 +3051,11 @@ export class MainMenuScene extends Component {
           addPlainBtn(objectiveTypeLabels[draftObjective.type], 0, 76, 220, 28, true, () => {
             draftObjective = { type: cycleIn(objectiveTypes, draftObjective.type, 'destroy_all_enemies') };
           }, 13);
-          addPlainBtn(`天气：${weatherLabel(draftWeather)}`, 0, 42, 180, 26, draftWeather !== 'clear', () => {
+          addPlainBtn(`天气：${weatherLabel(draftWeather)}`, -62, 42, 112, 26, draftWeather !== 'clear', () => {
             openWeatherPicker();
+          }, 12);
+          addPlainBtn(`季节：${draftSeason === 'winter' ? '冬季' : '夏季'}`, 62, 42, 112, 26, draftSeason === 'winter', () => {
+            if (draftTerrainCategory === 'europe') draftSeason = draftSeason === 'winter' ? 'summer' : 'winter';
           }, 12);
           addPlainBtn(`战斗中拖动地图 ${draftAllowMapPan ? '开' : '关'}`, 0, 10, 180, 26, draftAllowMapPan, () => {
             draftAllowMapPan = !draftAllowMapPan;
@@ -3686,6 +3711,7 @@ export class MainMenuScene extends Component {
       };
       const drawTileOverlays = (tile: EditorTile) => {
         if (!tile) return;
+        const winter = draftSeason === 'winter' && draftTerrainCategory === 'europe';
         if (isDisplayOnlyEditorTile(tile)) {
           outlineGraphics.fillColor = DISPLAY_ONLY_EDITOR_SHADE;
           for (let i = 0; i < 6; i++) {
@@ -3699,7 +3725,7 @@ export class MainMenuScene extends Component {
           outlineGraphics.fill();
         }
         const rd = normalizeFlags(tile.rd);
-        outlineGraphics.strokeColor = new Color(238, 212, 154, 240);
+        outlineGraphics.strokeColor = winter ? new Color(220, 231, 234, 245) : new Color(238, 212, 154, 240);
         outlineGraphics.lineWidth = 4;
         for (let i = 0; i < 6; i++) {
           if (rd[i] !== '1') continue;
@@ -3719,7 +3745,7 @@ export class MainMenuScene extends Component {
           }
         }
         const hedge = normalizeFlags(tile.h);
-        outlineGraphics.strokeColor = new Color(73, 123, 53, 255);
+        outlineGraphics.strokeColor = winter ? new Color(124, 94, 66, 255) : new Color(73, 123, 53, 255);
         outlineGraphics.lineWidth = 5;
         for (let i = 0; i < 6; i++) {
           if (hedge[i] !== '1') continue;
@@ -3745,7 +3771,7 @@ export class MainMenuScene extends Component {
           outlineGraphics.stroke();
         }
         if (tile.bd === 1) {
-          outlineGraphics.fillColor = new Color(92, 68, 44, 245);
+          outlineGraphics.fillColor = winter ? new Color(225, 235, 238, 250) : new Color(92, 68, 44, 245);
           outlineGraphics.rect(-8, -7, 16, 14);
           outlineGraphics.fill();
         }
@@ -4030,6 +4056,9 @@ export class MainMenuScene extends Component {
       draftAllowMapPan = !!mission.allowMapPan;
       draftTruckPath = cloneJson(mission.truckPath ?? []);
       draftWeather = normalizeWeather(mission.weather);
+      draftSeason = mission.season === 'winter' && activeTerrainCategoryForTheater(mission.theater) === 'europe'
+        ? 'winter'
+        : 'summer';
       draftTerrainCategory = activeTerrainCategoryForTheater(mission.theater);
       selectedRow = 0;
       selectedCol = 0;
@@ -4420,6 +4449,8 @@ export class MainMenuScene extends Component {
       else delete mission.enemyDiceEidMax;
       if (draftWeather === 'rain') mission.weather = draftWeather;
       else delete mission.weather;
+      if (draftSeason === 'winter' && draftTerrainCategory === 'europe') mission.season = 'winter';
+      else delete mission.season;
       return mission;
     };
 

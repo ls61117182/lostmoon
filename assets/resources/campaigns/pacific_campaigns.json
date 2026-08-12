@@ -39,6 +39,18 @@
         "missions/campaign_pacific/campaign_peleliu_03"
       ],
       "transitionSeconds": 2
+    },
+    {
+      "id": "random_island",
+      "title": "随机岛屿",
+      "generator": "pacific_random_island",
+      "segmentGeneration": [
+        { "theater": "pacific", "pacificBattleType": "landing", "objectiveKinds": ["direct_evac", "target_evac"], "enemyThreatPoints": 10 },
+        { "theater": "pacific", "pacificBattleType": "inland", "objectiveKinds": ["direct_evac", "target_evac"], "enemyThreatPoints": 13 },
+        { "theater": "pacific", "pacificBattleType": "inland", "objectiveKinds": ["destroy_all"], "enemyThreatPoints": 16 }
+      ],
+      "segmentCount": 3,
+      "transitionSeconds": 2
     }
   ]
 }

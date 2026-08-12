@@ -16,6 +16,7 @@ import type {
   MissionData,
   MissionObjective,
   Offset,
+  SeasonType,
   TileDef,
   TruckPathEntry,
   UnitKind,
@@ -23,11 +24,18 @@ import type {
 } from './types';
 
 export type RandomMissionTheater = 'europe' | 'pacific';
+export type RandomMissionObjectiveKind = 'destroy_all' | 'target_evac' | 'direct_evac';
 export interface RandomMissionGenerationOptions {
   pacificBattleType?: 'landing' | 'inland';
+  /** Visual-only season; winter is currently supported by European terrain. */
+  season?: SeasonType;
+  /** Restrict objective generation to these kinds; one is chosen uniformly. */
+  objectiveKinds?: readonly RandomMissionObjectiveKind[];
+  /** Require the initial enemy roster to have exactly this many threat points. */
+  enemyThreatPoints?: number;
 }
 
-export const RANDOM_MISSION_GENERATOR_VERSION = '20';
+export const RANDOM_MISSION_GENERATOR_VERSION = '23';
 export const RANDOM_MISSION_TRANSIENT_IDS: Record<RandomMissionTheater, string> = {
   europe: 'generated_random_europe',
   pacific: 'generated_random_pacific',
@@ -557,7 +565,11 @@ function sampleEuropeCounts(rng: RNG): { water: number; forest: number; mud: num
   throw new Error('unable to sample European terrain counts');
 }
 
-function generateEuropeLayout(rng: RNG, exactRoadCellCount?: number): GeneratedLayout {
+function generateEuropeLayout(
+  rng: RNG,
+  exactRoadCellCount?: number,
+  minimumRoadStartDistance?: number,
+): GeneratedLayout {
   const counts = sampleEuropeCounts(rng);
   const tiles = blankTiles('f');
   const reserved = new Set([key(START), key(EVAC)]);
@@ -594,15 +606,26 @@ function generateEuropeLayout(rng: RNG, exactRoadCellCount?: number): GeneratedL
 
   const roadEndpoints = roadCandidates.filter(pos => isBoundary(pos) && !reserved.has(key(pos)));
   if (roadEndpoints.length < 2) throw new Error('not enough European road endpoints');
-  const roadStart = rng.pick(roadEndpoints);
-  const distantEndpoints = roadEndpoints.filter(pos =>
-    key(pos) !== key(roadStart)
-    && hexDistance(offsetToAxial(roadStart), offsetToAxial(pos)) >= 4
-    && (exactRoadCellCount === undefined
-      || hexDistance(offsetToAxial(roadStart), offsetToAxial(pos)) + 1 <= exactRoadCellCount),
-  );
-  if (distantEndpoints.length === 0) throw new Error('no distant European road endpoint');
-  const roadEnd = rng.pick(distantEndpoints);
+  const endpointPairs: Array<readonly [Offset, Offset]> = [];
+  for (let first = 0; first < roadEndpoints.length; first++) {
+    for (let second = first + 1; second < roadEndpoints.length; second++) {
+      const a = roadEndpoints[first]!;
+      const b = roadEndpoints[second]!;
+      const endpointDistance = hexDistance(offsetToAxial(a), offsetToAxial(b));
+      if (endpointDistance < 4) continue;
+      if (exactRoadCellCount !== undefined && endpointDistance + 1 > exactRoadCellCount) continue;
+      if (minimumRoadStartDistance !== undefined) {
+        const fartherFromPlayer = Math.max(
+          hexDistance(offsetToAxial(START), offsetToAxial(a)),
+          hexDistance(offsetToAxial(START), offsetToAxial(b)),
+        );
+        if (fartherFromPlayer <= minimumRoadStartDistance) continue;
+      }
+      endpointPairs.push([a, b]);
+    }
+  }
+  if (endpointPairs.length === 0) throw new Error('no valid European road endpoint pair');
+  const [roadStart, roadEnd] = rng.pick(endpointPairs);
 
   let roadPath: Offset[] | null = bridge
     ? findSmoothRoadPath([...roadCandidates, bridge], roadStart, roadEnd, rng, key(bridge), exactRoadCellCount)
@@ -816,32 +839,49 @@ function placeHedges(tiles: Array<Array<TileDef | null>>, rng: RNG, count: numbe
   }
 }
 
-function rollObjective(theater: RandomMissionTheater, rng: RNG): ObjectiveRoll {
-  const roll = rng.intRange(1, 100);
-  if (theater === 'europe') {
-    if (roll <= 40) return { kind: 'destroy_all', objective: { type: 'destroy_all_enemies' } };
-    if (roll <= 60) {
-      return {
-        kind: 'target_evac',
-        objective: { type: 'destroy_kind_evac', evacAt: cloneOffset(EVAC), evacExitDir: 0 },
-      };
-    }
-    if (roll <= 90) {
-      return { kind: 'direct_evac', objective: { type: 'destroy_kind_evac', evacAt: cloneOffset(EVAC), evacExitDir: 0 } };
-    }
-    return { kind: 'truck', objective: { type: 'destroy_truck' } };
-  }
-  if (roll <= 45) return { kind: 'destroy_all', objective: { type: 'destroy_all_enemies' } };
-  if (roll <= 65) {
-    return {
-      kind: 'target_evac',
-      objective: { type: 'destroy_kind_evac', evacAt: cloneOffset(EVAC), evacExitDir: 0 },
-    };
-  }
-  return { kind: 'direct_evac', objective: { type: 'destroy_kind_evac', evacAt: cloneOffset(EVAC), evacExitDir: 0 } };
+function objectiveForKind(kind: RandomMissionObjectiveKind): ObjectiveRoll {
+  if (kind === 'destroy_all') return { kind, objective: { type: 'destroy_all_enemies' } };
+  return {
+    kind,
+    objective: { type: 'destroy_kind_evac', evacAt: cloneOffset(EVAC), evacExitDir: 0 },
+  };
 }
 
-function enemyBudget(_theater: RandomMissionTheater, _objective: ObjectiveRoll): EnemyBudget {
+function rollObjective(
+  theater: RandomMissionTheater,
+  rng: RNG,
+  allowedKinds?: readonly RandomMissionObjectiveKind[],
+): ObjectiveRoll {
+  if (allowedKinds?.length) return objectiveForKind(rng.pick(allowedKinds));
+  const roll = rng.intRange(1, 100);
+  if (theater === 'europe') {
+    if (roll <= 40) return objectiveForKind('destroy_all');
+    if (roll <= 60) return objectiveForKind('target_evac');
+    if (roll <= 90) return objectiveForKind('direct_evac');
+    return {
+      kind: 'truck',
+      objective: {
+        type: 'destroy_kind_evac',
+        kind: 'truck',
+        evacAt: cloneOffset(EVAC),
+        evacExitDir: 0,
+      },
+    };
+  }
+  if (roll <= 45) return objectiveForKind('destroy_all');
+  if (roll <= 65) return objectiveForKind('target_evac');
+  return objectiveForKind('direct_evac');
+}
+
+function enemyBudget(
+  _theater: RandomMissionTheater,
+  _objective: ObjectiveRoll,
+  exactThreatPoints?: number,
+): EnemyBudget {
+  if (exactThreatPoints != null) {
+    const points = Math.max(1, Math.trunc(exactThreatPoints));
+    return { min: points, max: points };
+  }
   return { min: 10, max: 12 };
 }
 
@@ -882,8 +922,13 @@ function selectHighValueTarget(
   };
 }
 
-function buildEnemyRoster(theater: RandomMissionTheater, objective: ObjectiveRoll, rng: RNG): UnitPlacement[] {
-  const budget = enemyBudget(theater, objective);
+function buildEnemyRoster(
+  theater: RandomMissionTheater,
+  objective: ObjectiveRoll,
+  rng: RNG,
+  exactThreatPoints?: number,
+): UnitPlacement[] {
+  const budget = enemyBudget(theater, objective, exactThreatPoints);
   const pool: WeightedKind[] = theater === 'europe'
     ? [
       { kind: 'infantry', weight: 5, threat: 1 },
@@ -1008,6 +1053,23 @@ function heavyArtilleryLineClear(
   return true;
 }
 
+function heavyArtilleryAttackableCellCount(
+  tiles: Array<Array<TileDef | null>>,
+  pos: Offset,
+  facing: Direction,
+): number {
+  let count = 0;
+  let current = offsetNeighbor(pos, facing);
+  while (isActive(current)) {
+    const tile = tileAt(tiles, current);
+    if (!tile) break;
+    if (tile.t === 'F' || tile.t === 'T' || tile.t === 'H' || tile.bd === 1) break;
+    if (tile.t !== 'dw' && (tile.t !== 'w' || !!tile.br)) count++;
+    current = offsetNeighbor(current, facing);
+  }
+  return count;
+}
+
 function liesOnForwardRay(from: Offset, facing: Direction, target: Offset): boolean {
   let current = offsetNeighbor(from, facing);
   while (isActive(current)) {
@@ -1036,12 +1098,13 @@ function bindPacificGunPlacements(
     const candidateIndex = available.findIndex(pos => {
       const facing = (useDirectionThree ? 3 : (pos.row < ROWS / 2 ? 2 : 4)) as Direction;
       return heavyArtilleryLineClear(tiles, pos, facing)
+        && heavyArtilleryAttackableCellCount(tiles, pos, facing) >= 3
         && placedArtillery.every(placed =>
           !liesOnForwardRay(pos, facing, placed.pos)
           && !liesOnForwardRay(placed.pos, placed.facing, pos),
         );
     });
-    if (candidateIndex < 0) throw new Error('no heavy artillery position has a clear firing line');
+    if (candidateIndex < 0) throw new Error('no heavy artillery position has at least three attackable cells');
     const pos = available.splice(candidateIndex, 1)[0]!;
     unit.at = cloneOffset(pos);
     unit.facing = (useDirectionThree ? 3 : (pos.row < ROWS / 2 ? 2 : 4)) as Direction;
@@ -1157,12 +1220,20 @@ function enforceEventThreatBudget(
   }
 }
 
-function buildTruckPath(layout: GeneratedLayout): TruckPathEntry[] {
+function buildTruckPath(layout: GeneratedLayout, minimumStartDistance: number): TruckPathEntry[] {
   if (!layout.roadExitDirs || layout.roadPath.length < 2) throw new Error('truck mission requires a complete road');
-  return layout.roadPath.map((pos, index) => ({
+  const firstDistance = hexDistance(offsetToAxial(START), offsetToAxial(layout.roadPath[0]!));
+  const lastDistance = hexDistance(offsetToAxial(START), offsetToAxial(layout.roadPath[layout.roadPath.length - 1]!));
+  if (Math.max(firstDistance, lastDistance) <= minimumStartDistance) {
+    throw new Error('truck mission road has no sufficiently distant starting endpoint');
+  }
+  const reverse = lastDistance > firstDistance;
+  const path = reverse ? layout.roadPath.slice().reverse() : layout.roadPath;
+  const exitDir = reverse ? layout.roadExitDirs[0] : layout.roadExitDirs[1];
+  return path.map((pos, index) => ({
     col: pos.col,
     row: pos.row,
-    ...(index === layout.roadPath.length - 1 ? { exitDir: layout.roadExitDirs![1] } : {}),
+    ...(index === path.length - 1 ? { exitDir } : {}),
   }));
 }
 
@@ -1172,21 +1243,26 @@ function generateAttempt(
   options: RandomMissionGenerationOptions,
 ): CustomMissionPackage {
   const rng = new RNG(seed);
-  const objectiveRoll = rollObjective(theater, rng);
+  const objectiveRoll = rollObjective(theater, rng, options.objectiveKinds);
   const layout = theater === 'europe'
-    ? generateEuropeLayout(rng, objectiveRoll.kind === 'truck' ? 8 : undefined)
+    ? generateEuropeLayout(
+      rng,
+      objectiveRoll.kind === 'truck' ? 8 : undefined,
+      objectiveRoll.kind === 'truck' ? 6 : undefined,
+    )
     : generatePacificLayout(rng, options.pacificBattleType);
-  const enemies = buildEnemyRoster(theater, objectiveRoll, rng);
+  const enemies = buildEnemyRoster(theater, objectiveRoll, rng, options.enemyThreatPoints);
   selectHighValueTarget(theater, objectiveRoll, enemies, rng);
   let truckPath: TruckPathEntry[] | undefined;
   const markerReserved = new Set<string>();
   if (objectiveRoll.kind === 'truck') {
-    truckPath = buildTruckPath(layout);
+    truckPath = buildTruckPath(layout, 6);
     const truckStart = cloneOffset(truckPath[0]!);
     markerReserved.add(key(truckStart));
     enemies.unshift({ kind: 'truck', faction: 'german', at: truckStart });
   }
   const missionId = `random_${theater}_${seed >>> 0}`;
+  const winter = theater === 'europe' && options.season === 'winter';
   const turnEndEvents = buildTurnEndEvents(missionId, theater, objectiveRoll, enemies, rng);
   if (!findTankPath(layout.tiles, START, EVAC)) throw new Error('final terrain disconnected player route');
   if (tankReachableShare(layout.tiles, START) < 1) throw new Error('not all passable tiles are player-connected');
@@ -1195,9 +1271,12 @@ function generateAttempt(
 
   const mission: MissionData = {
     id: missionId,
-    name: theater === 'europe' ? `随机关卡（欧洲）#${seed >>> 0}` : `随机关卡（太平洋）#${seed >>> 0}`,
+    name: theater === 'europe'
+      ? `随机关卡（欧洲${winter ? '冬季' : ''}）#${seed >>> 0}`
+      : `随机关卡（太平洋）#${seed >>> 0}`,
     description: `由随机关卡生成器 v${RANDOM_MISSION_GENERATOR_VERSION} 生成；seed=${seed >>> 0}`,
     theater,
+    ...(winter ? { season: 'winter' as const } : {}),
     cols: COLS,
     rows: ROWS,
     enemyStartByDice: true,
@@ -1218,7 +1297,10 @@ function generateAttempt(
     source: 'developer',
     mission,
     turnEndEvents,
-    editor: { notes: `generatorVersion=${RANDOM_MISSION_GENERATOR_VERSION};seed=${seed >>> 0}`, tags: ['random', theater] },
+    editor: {
+      notes: `generatorVersion=${RANDOM_MISSION_GENERATOR_VERSION};seed=${seed >>> 0}`,
+      tags: ['random', theater, ...(winter ? ['winter'] : [])],
+    },
   };
 }
 

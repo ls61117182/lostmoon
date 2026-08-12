@@ -23,6 +23,11 @@ assert.match(closeWithDoubles[0], /s\.hatchOpen = false;\s*playCommanderHatch\(f
 
 const updateAiHatch = battleScene.match(/private updateNonPlayerTankCommanderHatch[\s\S]*?\n  }/);
 assert.ok(updateAiHatch, 'non-player hatch update handler should exist');
+assert.match(
+  updateAiHatch[0],
+  /if \(unit\.crew\?\.commander === false\) return;/,
+  'a dead non-player commander must preserve the existing hatch state without playing audio',
+);
 assert.match(updateAiHatch[0], /unit\.hatchOpen = nextOpen;[\s\S]*?playCommanderHatch\(nextOpen\);/);
 assert.doesNotMatch(updateAiHatch[0], /isUnitVisible|isHexVisible/, 'fog must not suppress enemy hatch audio');
 

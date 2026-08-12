@@ -86,15 +86,15 @@ assert.match(
   'BattleScene should have a separate occlusion graphics layer for buildings/tree fallback above blood decals',
 );
 const layerSetup = battleScene.match(
-  /const\s+gNode\s*=\s*new Node\('MapGraphics'\);[\s\S]*?this\.node\.addChild\(gNode\);[\s\S]*?const\s+bloodDecalNode\s*=\s*new Node\('InfantryBloodDecals'\);[\s\S]*?const\s+unitMaskNode\s*=\s*new Node\('VisibleUnitMask'\);[\s\S]*?unitMaskNode\.addChild\(bloodDecalNode\);[\s\S]*?const\s+unitContentNode\s*=\s*new Node\('UnitContent'\);/,
+  /const\s+gNode\s*=\s*new Node\('MapGraphics'\);[\s\S]*?const\s+trackMaskNode\s*=\s*new Node\('VisibleTrackMask'\);[\s\S]*?trackMaskNode\.addChild\(tankTrackNode\);[\s\S]*?const\s+bloodDecalNode\s*=\s*new Node\('InfantryBloodDecals'\);[\s\S]*?trackMaskNode\.addChild\(bloodDecalNode\);[\s\S]*?const\s+occlusionNode\s*=\s*new Node\('MapOcclusion'\);/,
 );
 assert(
   layerSetup,
-  'blood decal layer should be inside the visible-unit mask and below unit content',
+  'blood decals should render above tank tracks and below the building/tree occlusion layer',
 );
 assert(
-  /unitMaskNode\.addChild\(bloodDecalNode\)/.test(battleScene),
-  'blood decal layer should use the same visibility mask as destroyed tanks',
+  /trackMaskNode\.addChild\(bloodDecalNode\)/.test(battleScene),
+  'blood decal layer should use the terrain-level visibility mask',
 );
 assert.match(
   battleScene,

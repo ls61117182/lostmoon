@@ -77,6 +77,9 @@ export interface TurnEndPrepared {
   tankReinforceMove?: TurnEndTankReinforceMove;
   /** 相邻步兵集火：由 BattleScene 在主骰后串联完整攻击骰面板（命中→穿甲→伤害），确认后再 apply */
   adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
+  /** 狙击事件满足击杀条件时，记录实际拥有对谢尔曼视线的射手单位。 */
+  sniperAttackerId?: string;
+  sniperWillKill?: boolean;
 }
 
 function turnEndDamageResultParams(
@@ -135,15 +138,15 @@ function buildStukaExtraDicePhases(sim: {
   return out;
 }
 
-function shermanLosToAnyInfantry(mission: LoadedMission): boolean {
+function findShermanLosInfantry(mission: LoadedMission): Unit | null {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
     // 「徒步类」单位都纳入狙击手视线检查。
     if (e.destroyed || !isFootUnit(e)) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
-    if (mission.map.hasLineOfSight(e.pos, sh.pos)) return true;
+    if (mission.map.hasLineOfSight(e.pos, sh.pos)) return e;
   }
-  return false;
+  return null;
 }
 
 function findTileByReinforceId(mission: LoadedMission, rid: number) {
@@ -523,12 +526,15 @@ export function prepareTurnEndEvent(
       };
     }
     case 'sniper': {
-      const los = shermanLosToAnyInfantry(mission);
+      const sniper = findShermanLosInfantry(mission);
+      const los = sniper !== null;
       const hatch = !!sh.hatchOpen && !!sh.crew?.commander;
       const willKill = hatch && los && !!sh.crew?.commander;
       return {
         bodyKey: willKill ? 'turnEnd.sniper.kia' : 'turnEnd.sniper.safe',
         bodyParams: { ...baseParams, los: los ? 1 : 0, hatch: hatch ? 1 : 0 },
+        sniperAttackerId: willKill ? sniper?.id : undefined,
+        sniperWillKill: willKill,
         apply: () => {
           if (!willKill || !sh.crew) return;
           sh.crew.commander = false;

@@ -17,7 +17,10 @@ require.extensions['.ts'] = (module, filename) => {
 };
 
 try {
-  const { commanderHatchVisualState } = require('../assets/scripts/core/CommanderHatch.ts');
+  const {
+    commanderHatchVisualState,
+    shouldNonPlayerTankOpenCommanderHatch,
+  } = require('../assets/scripts/core/CommanderHatch.ts');
   const { applyAttack } = require('../assets/scripts/core/Combat.ts');
   const {
     SPLIT_TANK_KINDS,
@@ -72,6 +75,46 @@ try {
   assert.strictEqual(closedHatchTarget.crew.commander, false);
   assert.strictEqual(closedHatchTarget.hatchOpen, false);
   assert.strictEqual(commanderHatchVisualState(closedHatchTarget), 'hidden');
+
+  const protagonist = { kind: 'sherman', faction: 'usa', destroyed: false };
+  const deadCommanderOpenTank = {
+    kind: 'tiger',
+    faction: 'german',
+    destroyed: false,
+    hatchOpen: true,
+    crew: { commander: false },
+    fireLevel: 0,
+  };
+  const nextGermanTank = {
+    kind: 'panzer4',
+    faction: 'german',
+    destroyed: false,
+    hatchOpen: false,
+    crew: { commander: true },
+    fireLevel: 0,
+  };
+  assert.strictEqual(
+    shouldNonPlayerTankOpenCommanderHatch(
+      nextGermanTank,
+      [deadCommanderOpenTank, nextGermanTank],
+      protagonist,
+      'hardcore',
+    ),
+    true,
+    'an open hatch with a dead commander must not reserve the faction commander slot',
+  );
+
+  deadCommanderOpenTank.crew.commander = true;
+  assert.strictEqual(
+    shouldNonPlayerTankOpenCommanderHatch(
+      nextGermanTank,
+      [deadCommanderOpenTank, nextGermanTank],
+      protagonist,
+      'hardcore',
+    ),
+    false,
+    'a living open-hatch commander must still reserve the faction commander slot',
+  );
 
   const expectedEmptyScales = {
     sherman: 0.5,

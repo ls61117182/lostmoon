@@ -24,6 +24,9 @@ interface RawSegmentOffset {
   r: number;
 }
 
+const DEFAULT_CAMPAIGN_EVAC_AT: Offset = { col: 7, row: 2 };
+const DEFAULT_CAMPAIGN_EVAC_EXIT_DIR: Direction = 0;
+
 export interface StitchedCampaignData {
   campaign: CampaignDefinition;
   data: MissionData;
@@ -56,6 +59,9 @@ function translatePlacement(p: UnitPlacement, data: MissionData, segment: Campai
   if (p.at) out.at = translateOffset(p.at, data, segment);
   if (p.crew) out.crew = { ...p.crew };
   if (p.crewLevels) out.crewLevels = { ...p.crewLevels };
+  if (p.crewSkills) out.crewSkills = Object.fromEntries(
+    Object.entries(p.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+  );
   if (p.startEids) out.startEids = p.startEids.slice();
   if (p.startRids) out.startRids = p.startRids.slice();
   return out;
@@ -153,10 +159,12 @@ function translateTruckPath(data: MissionData, segment: CampaignSegmentRuntime):
   return data.truckPath?.map(p => ({ ...p, ...translateOffset(p, data, segment)! }));
 }
 
-function campaignExitTarget(data: MissionData, segmentOffset: RawSegmentOffset): Axial | null {
-  const evacAt = data.objective.evacAt;
-  const evacExitDir = data.objective.evacExitDir;
-  if (!evacAt || evacExitDir == null) return null;
+function campaignExitTarget(data: MissionData, segmentOffset: RawSegmentOffset): Axial {
+  const hasSpecifiedExit = !!data.objective.evacAt && data.objective.evacExitDir != null;
+  const evacAt = hasSpecifiedExit ? data.objective.evacAt! : DEFAULT_CAMPAIGN_EVAC_AT;
+  const evacExitDir = hasSpecifiedExit
+    ? data.objective.evacExitDir!
+    : DEFAULT_CAMPAIGN_EVAC_EXIT_DIR;
   const globalEvacAt = axialAdd(offsetToAxial(evacAt, localRowParity(data)), segmentOffset);
   return neighbor(globalEvacAt, evacExitDir as Direction);
 }
@@ -172,8 +180,7 @@ function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntim
     const prev = missions[i - 1]!;
     const current = missions[i]!;
     const prevOffset = rawOffsets[i - 1]!;
-    const exitTarget = campaignExitTarget(prev, prevOffset)
-      ?? axialAdd(offsetToAxial({ col: prev.cols, row: 0 }, localRowParity(prev)), prevOffset);
+    const exitTarget = campaignExitTarget(prev, prevOffset);
     const entry = segmentEntryAnchor(current);
     rawOffsets.push({
       q: exitTarget.q - entry.q,
@@ -354,6 +361,11 @@ export function carryShermanToNextSegment(current: UnitPlacement, nextTemplate: 
       ? { ...current.crewLevels }
       : nextTemplate.crewLevels
         ? { ...nextTemplate.crewLevels }
+        : undefined,
+    crewSkills: current.crewSkills
+      ? Object.fromEntries(Object.entries(current.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]))
+      : nextTemplate.crewSkills
+        ? Object.fromEntries(Object.entries(nextTemplate.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]))
         : undefined,
     loaded: current.loaded === true,
     hatchOpen: current.hatchOpen === true,

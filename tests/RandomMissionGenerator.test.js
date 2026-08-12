@@ -16,6 +16,7 @@ require.extensions['.ts'] = function transpileTypeScript(module, filename) {
 
 const { generateRandomMissionPackage } = require('../assets/scripts/core/RandomMissionGenerator.ts');
 const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
+const { checkOutcome } = require('../assets/scripts/core/Objective.ts');
 const { spawnMarkerKindForMission } = require('../assets/scripts/core/TurnEndEventApply.ts');
 const battleSceneSource = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
 const { RNG } = require('../assets/scripts/core/Dice.ts');
@@ -61,6 +62,35 @@ for (let seed = 1; seed <= 30; seed++) {
     `${landing.id}: forced landing battle must contain 5..13 beach cells`);
   assert.strictEqual(beachCount(inland), 0, `${inland.id}: forced inland battle cannot contain beach cells`);
 }
+
+const forcedDirectEvac = generateRandomMissionPackage('pacific', 101, {
+  objectiveKinds: ['direct_evac'],
+}).mission.objective;
+assert.strictEqual(forcedDirectEvac.type, 'destroy_kind_evac');
+assert.strictEqual(forcedDirectEvac.kind, undefined);
+assert.deepStrictEqual(forcedDirectEvac.evacAt, { col: 7, row: 2 });
+assert.strictEqual(forcedDirectEvac.evacExitDir, 0);
+
+const forcedTargetEvac = generateRandomMissionPackage('pacific', 102, {
+  objectiveKinds: ['target_evac'],
+}).mission.objective;
+assert.strictEqual(forcedTargetEvac.type, 'destroy_kind_evac');
+assert(forcedTargetEvac.kind, 'forced target evacuation must select an enemy kind');
+assert.deepStrictEqual(forcedTargetEvac.evacAt, { col: 7, row: 2 });
+assert.strictEqual(forcedTargetEvac.evacExitDir, 0);
+
+const forcedDestroyAll = generateRandomMissionPackage('pacific', 103, {
+  objectiveKinds: ['destroy_all'],
+  enemyThreatPoints: 16,
+});
+assert.strictEqual(forcedDestroyAll.mission.objective.type, 'destroy_all_enemies');
+assert.strictEqual(
+  forcedDestroyAll.mission.enemies.reduce((sum, enemy) => sum + threatByKind[enemy.kind], 0),
+  16,
+  'forced initial enemy threat budget must be exact',
+);
+assert(!forcedDestroyAll.turnEndEvents.some(row => row.effectType.endsWith('_spawn')),
+  'forced destroy-all objective must not generate reinforcements');
 
 function countTiles(mission) {
   const counts = {};
@@ -346,7 +376,7 @@ function assertPacificTerrainRules(mission, stats) {
 
 function assertHighValueTarget(mission) {
   const target = mission.objective.kind;
-  if (!target) return;
+  if (!target || target === 'truck') return;
   const counts = new Map();
   for (const enemy of mission.enemies) counts.set(enemy.kind, (counts.get(enemy.kind) ?? 0) + 1);
   const kinds = [...counts.keys()].filter(kind => threatByKind[kind]);
@@ -437,6 +467,8 @@ for (const theater of ['europe', 'pacific']) {
       if (gun.facing === 3) gunFacingThree++;
       if (gun.kind === 'heavy_artillery') {
         let current = adjacentOffset(gun.at, gun.facing);
+        let attackableCells = 0;
+        let lineBlocked = false;
         while (tileAt(mission, current)) {
           const tile = tileAt(mission, current);
           assert.notStrictEqual(tile.t, 'H', `${mission.id}: heavy artillery line cannot contain rocky high ground`);
@@ -444,11 +476,17 @@ for (const theater of ['europe', 'pacific']) {
           assert(!mission.enemies.some(enemy => enemy !== gun && enemy.kind === 'heavy_artillery'
             && enemy.at?.col === current.col && enemy.at?.row === current.row),
           `${mission.id}: heavy artillery line cannot contain another heavy artillery unit`);
+          if (!lineBlocked) {
+            if (tile.t === 'F' || tile.t === 'T' || tile.t === 'H' || tile.bd === 1) lineBlocked = true;
+            else if (tile.t !== 'dw' && (tile.t !== 'w' || tile.br)) attackableCells++;
+          }
           current = adjacentOffset(current, gun.facing);
         }
+        assert(attackableCells >= 3,
+          `${mission.id}: initial heavy artillery needs at least three attackable cells`);
       }
     }
-    assert(['destroy_all_enemies', 'destroy_kind_evac', 'destroy_truck'].includes(objective.type));
+    assert(['destroy_all_enemies', 'destroy_kind_evac'].includes(objective.type));
     if (objective.type === 'destroy_kind_evac') {
       assert.deepStrictEqual(objective.evacAt, { col: 7, row: 2 });
       assert.strictEqual(objective.evacExitDir, 0);
@@ -458,17 +496,31 @@ for (const theater of ['europe', 'pacific']) {
       }
     }
     assertHighValueTarget(mission);
-    if (objective.type === 'destroy_truck') {
+    if (objective.type === 'destroy_kind_evac' && objective.kind === 'truck') {
       assert.strictEqual(theater, 'europe');
+      assert.deepStrictEqual(objective.evacAt, { col: 7, row: 2 });
+      assert.strictEqual(objective.evacExitDir, 0);
       assert(mission.enemies.some(enemy => enemy.kind === 'truck' && enemy.at));
       assert.strictEqual(mission.truckPath?.length, 8,
         `${mission.id}: truck interception road must be exactly 8 cells long`);
+      assert(hexDistance(offsetToAxial({ col: 0, row: 3 }), offsetToAxial(mission.truckPath[0])) > 6,
+        `${mission.id}: truck starting position must be more than six cells from the player start`);
       assert(pkg.turnEndEvents.some(row => row.effectType === 'german_truck_move'));
     }
 
     assertEventTable(pkg);
     assertRidPriority(pkg);
     const loaded = loadMission(mission, new RNG(seed));
+    if (objective.type === 'destroy_kind_evac' && objective.kind === 'truck') {
+      const truck = loaded.enemies.find(enemy => enemy.kind === 'truck');
+      assert(truck, `${mission.id}: truck objective must load a truck`);
+      truck.destroyed = true;
+      assert.strictEqual(checkOutcome(loaded), 'ongoing',
+        `${mission.id}: destroying the truck alone must not win the mission`);
+      loaded.shermanEvacuated = true;
+      assert.strictEqual(checkOutcome(loaded), 'victory',
+        `${mission.id}: destroying the truck and evacuating must win the mission`);
+    }
     for (const gun of loaded.enemies.filter(enemy => enemy.kind === 'at_gun')) {
       assert.strictEqual(gun.atGunCrewAlive, true, `${mission.id}: AT gun must load as a controlled composite unit`);
       assert.strictEqual(gun.atGunCrewKind, 'japanese_infantry', `${mission.id}: AT gun needs its embedded Japanese crew`);

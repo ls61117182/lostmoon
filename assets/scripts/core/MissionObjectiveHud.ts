@@ -148,11 +148,19 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
     case 'destroy_truck': {
       const { cur, total } = truckProgress(mission);
       const done = total > 0 && mission.enemies.filter(e => e.kind === 'truck').every(e => e.destroyed);
-      return withUsCasualties([{
-        displayIndex: 1,
-        state: done ? 'done' : 'active',
-        template: { key: 'destroyTruck', cur, total },
-      }]);
+      const evacDone = !!mission.shermanEvacuated;
+      return withUsCasualties([
+        {
+          displayIndex: 1,
+          state: done ? 'done' : 'active',
+          template: { key: 'destroyTruck', cur, total },
+        },
+        {
+          displayIndex: 2,
+          state: !done ? 'locked' : evacDone ? 'done' : 'active',
+          template: { key: 'evacFromMark' },
+        },
+      ]);
     }
     case 'exit_from_edge': {
       return withUsCasualties([{

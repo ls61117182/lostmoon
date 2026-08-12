@@ -12,7 +12,7 @@
  *           SW(2)  SE(1)
  */
 
-import { Axial, Direction, FireDirection, Offset, Tile, tileHasBridge } from './types';
+import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBridge } from './types';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -356,10 +356,18 @@ export class HexMap {
    * 注意：本函数**只**校验目标格本身是否「物理上能站」。是否能从某条边跨入桥梁格、
    * 是否能从桥梁格沿某条边跨出，需另用 `canTankCrossEdge` 做边向校验。
    */
-  canTankEnter(p: Axial): boolean {
+  /** Common unit-entry rules that apply regardless of unit kind. */
+  canUnitEnter(p: Axial, faction?: Faction): boolean {
     const t = this.get(p);
     if (!t) return false;
     if (t.displayOnly) return false;
+    if (faction === 'japanese' && (t.terrain === 'beach' || t.terrain === 'deep_water')) return false;
+    return true;
+  }
+
+  canTankEnter(p: Axial, faction?: Faction): boolean {
+    if (!this.canUnitEnter(p, faction)) return false;
+    const t = this.get(p)!;
     if (t.terrain === 'forest' || t.terrain === 'rocky') return false;
     if (t.terrain === 'water' || t.terrain === 'deep_water') return tileHasBridge(t);
     return true;
@@ -385,9 +393,9 @@ export class HexMap {
    *
    * 不在桥梁场景下，本函数行为退化为 `canTankEnter(to) && from-to 相邻`，与旧逻辑一致。
    */
-  canTankCrossEdge(from: Axial, to: Axial, opts: { ignoreBreakwater?: boolean } = {}): boolean {
+  canTankCrossEdge(from: Axial, to: Axial, opts: { ignoreBreakwater?: boolean; faction?: Faction } = {}): boolean {
     if (hexDistance(from, to) !== 1) return false;
-    if (!this.canTankEnter(to)) return false;
+    if (!this.canTankEnter(to, opts.faction)) return false;
     if (!opts.ignoreBreakwater && this.hasBreakwaterBetween(from, to)) return false;
     const tFrom = this.get(from);
     const tTo = this.get(to);

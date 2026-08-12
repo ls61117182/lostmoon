@@ -644,6 +644,12 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
   const stats = getUnitStats(p.kind, currentMissionTheater ?? 'europe');
   // 旧关卡 JSON 以 allied 记录美军单位；运行时迁移为新的精确阵营，保持旧任务可加载。
   const placementFaction = p.faction === ('allied' as unknown as Faction) ? 'usa' : p.faction;
+  // AT guns share one generic UnitDB profile whose historical default is Japanese.
+  // For placements without an explicit faction, infer the owning enemy faction from
+  // the mission theater so European guns do not incorrectly receive Japanese crews.
+  const defaultFaction = p.kind === 'at_gun'
+    ? (currentMissionTheater === 'pacific' ? 'japanese' : 'german')
+    : stats.faction;
   /** 朝向仅 0..5（E…NE）。关卡 JSON 误填 6 或负数时归一，避免 neighbor → axialAdd 读 undefined.q 崩溃。 */
   let facingNorm: Direction | null = p.facing ?? null;
   if (facingNorm !== null) {
@@ -653,7 +659,7 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
   const u: Unit = {
     id,
     kind: p.kind,
-    faction: placementFaction ?? stats.faction,
+    faction: placementFaction ?? defaultFaction,
     pos: offsetToAxial(p.at, rowParityOffset),
     facing: facingNorm,
     stats,
@@ -664,6 +670,11 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     gunnerVisionRange: stats.gunnerVisionRange,
     interiorVisionRange: stats.interiorVisionRange,
   };
+  if (p.crewSkills) {
+    u.crewSkills = Object.fromEntries(
+      Object.entries(p.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+    );
+  }
   if (id === 'sherman_player') u.crewLevels = normalizePlayerCrewLevels(p.crewLevels);
   else u.unitLevel = normalizeUnitLevel(p.unitLevel);
   if (u.kind === 'at_gun') {

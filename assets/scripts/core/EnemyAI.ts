@@ -281,7 +281,10 @@ export function decideEnemyTurn(
   const canEnterFront = (d: Direction) => {
     const p = neighbor(enemy.pos, d);
     // 桥梁边向（GDD §3.2）：通过 canTankCrossEdge 同时校验「水域+桥梁可入」与「方向落在桥端」。
-    if (!map.canTankCrossEdge(enemy.pos, p, { ignoreBreakwater: enemy.faction === 'japanese' })) return false;
+    if (!map.canTankCrossEdge(enemy.pos, p, {
+      ignoreBreakwater: enemy.faction === 'japanese',
+      faction: enemy.faction,
+    })) return false;
     if (occupied.has(`${p.q},${p.r}`)) return false;
     return true;
   };
@@ -382,7 +385,10 @@ export function canExecuteAction(
       if (enemy.paralyzed) return false;
       if (enemy.facing === null) return false;
       const to = neighbor(enemy.pos, enemy.facing);
-      if (!map.canTankCrossEdge(enemy.pos, to, { ignoreBreakwater: enemy.faction === 'japanese' })) return false;
+      if (!map.canTankCrossEdge(enemy.pos, to, {
+        ignoreBreakwater: enemy.faction === 'japanese',
+        faction: enemy.faction,
+      })) return false;
       if (occupied.has(`${to.q},${to.r}`)) return false;
       const tile = map.get(to);
       return !!tile?.hasBuilding;
@@ -398,7 +404,10 @@ export function canExecuteAction(
         : rotateDirection(enemy.facing, 3);
       const to = neighbor(enemy.pos, dir);
       // 桥梁边向（GDD §3.2）：水域+桥梁可入需 dir 落在 br 端；非桥梁场景 canTankCrossEdge 行为退化为 canTankEnter。
-      if (!map.canTankCrossEdge(enemy.pos, to, { ignoreBreakwater: enemy.faction === 'japanese' })) return false;
+      if (!map.canTankCrossEdge(enemy.pos, to, {
+        ignoreBreakwater: enemy.faction === 'japanese',
+        faction: enemy.faction,
+      })) return false;
       if (occupied.has(`${to.q},${to.r}`)) return false;
       // 终点格的移动成本不看上限（AI 回合没有"移动力"概念），只要能进就算可执行
       const tile = map.get(to);
@@ -436,7 +445,10 @@ export function decideEnemyMove(
   let bestCost = Infinity;
 
   for (const n of neighbors(enemy.pos)) {
-    if (!map.canTankCrossEdge(enemy.pos, n, { ignoreBreakwater: enemy.faction === 'japanese' })) continue;
+    if (!map.canTankCrossEdge(enemy.pos, n, {
+      ignoreBreakwater: enemy.faction === 'japanese',
+      faction: enemy.faction,
+    })) continue;
     if (occupied.has(`${n.q},${n.r}`)) continue;
     const tile = map.get(n);
     if (!tile) continue;

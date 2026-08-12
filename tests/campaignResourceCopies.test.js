@@ -63,11 +63,27 @@ for (const [sourceId, campaignId] of copies) {
 }
 
 const campaigns = readJson('assets/resources/campaigns/pacific_campaigns.json');
-assert.strictEqual(campaigns.campaigns.length, 4, 'campaign resource should define four campaigns');
+assert.strictEqual(campaigns.campaigns.length, 5, 'campaign resource should define five campaigns');
 assert.deepStrictEqual(
-  campaigns.campaigns.map(c => c.title),
+  campaigns.campaigns.slice(0, 4).map(c => c.title),
   ['塔拉瓦红滩1', '塞班岛', '塔拉瓦红滩2', '贝里琉'],
 );
+const randomIsland = campaigns.campaigns[4];
+assert.strictEqual(randomIsland.id, 'random_island');
+assert.strictEqual(randomIsland.title, '随机岛屿');
+assert.deepStrictEqual(
+  randomIsland.segmentGeneration.map(segment => segment.pacificBattleType),
+  ['landing', 'inland', 'inland'],
+);
+assert.deepStrictEqual(
+  randomIsland.segmentGeneration.map(segment => segment.objectiveKinds),
+  [['direct_evac', 'target_evac'], ['direct_evac', 'target_evac'], ['destroy_all']],
+);
+assert.deepStrictEqual(
+  randomIsland.segmentGeneration.map(segment => segment.enemyThreatPoints),
+  [10, 13, 16],
+);
+assert.strictEqual(randomIsland.segmentCount, 3);
 
 const lang = fs.readFileSync(path.join(repo, 'data/lang.csv'), 'utf8');
 for (const key of [
@@ -77,6 +93,7 @@ for (const key of [
   'campaign.saipan.title',
   'campaign.tarawaRedBeach2.title',
   'campaign.peleliu.title',
+  'campaign.randomIsland.title',
 ]) {
   assert(lang.includes(key), `data/lang.csv should contain ${key}`);
 }

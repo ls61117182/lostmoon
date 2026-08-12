@@ -26,7 +26,7 @@ function loadTsModule(rel) {
   return mod.exports;
 }
 
-const { isShermanEvacDrive } = loadTsModule('assets/scripts/core/Objective.ts');
+const { checkOutcome, isShermanEvacDrive } = loadTsModule('assets/scripts/core/Objective.ts');
 const { offsetToAxial, neighbor } = loadTsModule('assets/scripts/core/HexGrid.ts');
 
 function makeMission(hasTargetTile) {
@@ -58,5 +58,32 @@ assert.strictEqual(
   true,
   'campaign transition can treat the next segment entry tile as an evac target',
 );
+
+function makeLegacyTruckMission(truckDestroyed, shermanEvacuated = false) {
+  const legacyEvac = offsetToAxial({ col: 7, row: 2 }, 0);
+  return {
+    map: {
+      get: (pos) => pos.q === legacyEvac.q && pos.r === legacyEvac.r
+        ? { pos: legacyEvac, terrain: 'field' }
+        : undefined,
+      has: (pos) => pos.q === legacyEvac.q && pos.r === legacyEvac.r,
+    },
+    sherman: { destroyed: false },
+    enemies: [{ kind: 'truck', destroyed: truckDestroyed }],
+    data: { rowParityOffset: 0, objective: { type: 'destroy_truck' } },
+    shermanEvacuated,
+    truckEscapeDefeat: false,
+    usCasualties: 0,
+  };
+}
+
+const legacyFrom = offsetToAxial({ col: 7, row: 2 }, 0);
+const legacyTo = neighbor(legacyFrom, 0);
+assert.strictEqual(isShermanEvacDrive(makeLegacyTruckMission(false), legacyFrom, 0, 1, legacyTo), false);
+assert.strictEqual(isShermanEvacDrive(makeLegacyTruckMission(true), legacyFrom, 0, 1, legacyTo), true);
+assert.strictEqual(checkOutcome(makeLegacyTruckMission(true)), 'ongoing',
+  'legacy truck objectives must not win immediately after the truck is destroyed');
+assert.strictEqual(checkOutcome(makeLegacyTruckMission(true, true)), 'victory',
+  'legacy truck objectives win only after the Sherman evacuates');
 
 console.log('objective evac drive tests passed');

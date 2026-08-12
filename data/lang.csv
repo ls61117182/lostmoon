@@ -105,6 +105,10 @@ status.val.crewAlive,存活,Alive
 unit.level.recruit,新兵,Recruit
 unit.level.veteran,老兵,Veteran
 unit.level.elite,王牌,Elite
+crew.skill.calm.name,沉着,Composed
+crew.skill.calm.description,受到过攻击也不会失去下一次伏击资格,Incoming attacks do not prevent the next ambush
+crew.skill.ambushMaster.name,伏击大师,Ambush Master
+crew.skill.ambushMaster.description,伏击时命中所需点数额外 -1,Ambush attacks reduce the hit threshold by 1 more
 status.val.crewDeadLevel,阵亡 · {level},KIA · {level}
 status.val.crewAliveLevel,存活 · {level},Alive · {level}
 status.val.hatchOpenLevel,打开舱盖 · {level},PU · {level}
@@ -154,6 +158,7 @@ floater.noFacing,未定朝向,No Facing
 floater.blockedTerrain,地形阻挡,Blocked Terrain
 floater.enemyBlock,敌方占据,Enemy Blocks
 floater.crushed,碾压,Overrun
+floater.ambush,伏击,Ambush
 floater.smoke,烟雾,Smoke
 floater.repair,修复,Repair
 floater.repairAndFire,修复并灭火,Repair/Fire
@@ -211,6 +216,7 @@ dice.panel.outcomeMGKill,步兵击毙,Infantry Down
 dice.panel.hitYes,命中,Hit
 dice.panel.hitNo,未命中,Miss
 dice.panel.hitDoublesCommanderKia,命中骰对子：车长阵亡,Hit doubles: Commander KIA
+dice.rule.hitDoublesCommanderKiaHint,同点数命中时会造成开舱状态的车长阵亡,Matching hit dice kill an open-hatch commander.
 dice.panel.penMustPen,必穿 (≤0),Auto-Pen (≤0)
 dice.panel.penNeed,需 ≥{n},Need ≥{n}
 dice.panel.penYes,击穿,Penetrate
@@ -232,6 +238,11 @@ dice.rule.smoke,烟雾,Smoke
 dice.rule.concealed,隐蔽,Concealment
 dice.rule.trees,树林,Trees
 dice.rule.rearArc,后方射界,Rear Arc
+dice.rule.frontArc,正面射界,Front Arc
+dice.rule.precisionFire,精确射击,Precision Fire
+dice.rule.ambush,伏击,Ambush
+dice.rule.infantryTankCoordination,步坦协同,Infantry-Tank Coordination
+dice.rule.atGunCrewTarget,反坦克炮乘员目标,AT Gun Crew Target
 dice.rule.attackModifier,射击修正,Attack Modifier
 dice.rule.penNeed,击穿所需,Required Roll
 dice.rule.die,骰子,Die
@@ -377,6 +388,7 @@ level.12.title,猎杀虎式Ⅱ,Hunt the Tiger II
 level.test.title,测试关卡,Test Mission
 level.test.random.europe.title,随机关卡（欧洲战场）,Random Mission (Europe)
 level.test.random.pacific.title,随机关卡（太平洋战场）,Random Mission (Pacific)
+level.test.random.europe_winter.title,随机关卡（欧洲冬季）,Random Mission (European Winter)
 level.custom.editor.title,关卡编辑器,Level Editor
 level.custom.mission.title,自定义关卡,Custom Mission
 levelEditor.placeholder.body,关卡编辑器入口已创建，编辑器功能正在接入中。当前不会再进入无响应的测试场景。下一步将实现地图、单位、目标和事件编辑界面。,"The level editor entry is ready, and the editor UI is being connected. It will no longer open the unresponsive test scene. Next up: map, unit, objective, and event editing."
@@ -403,6 +415,11 @@ terrain.field,田野,Field
 terrain.mud,泥地,Mud
 terrain.forest,森林,Forest
 terrain.water,水域,Water
+terrain.road_snow,公路（积雪）,Road (Snow)
+terrain.field_snow,田野（积雪）,Field (Snow)
+terrain.mud_snow,泥地（积雪）,Mud (Snow)
+terrain.forest_snow,森林（积雪）,Forest (Snow)
+terrain.water_snow,水域（积雪）,Water (Snow)
 tileInspect.title,格子介绍,Tile info
 tileInspect.building,建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。,Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile.
 tileInspect.rules.forest,森林：谢尔曼与德军坦克不可进入；步兵可进入；遮挡视线。,Forest: Sherman and German tanks cannot enter; infantry can enter; blocks line of sight.
@@ -623,6 +640,7 @@ campaign.tarawaRedBeach1.title,塔拉瓦红滩1,Tarawa Red Beach 1
 campaign.saipan.title,塞班岛,Saipan
 campaign.tarawaRedBeach2.title,塔拉瓦红滩2,Tarawa Red Beach 2
 campaign.peleliu.title,贝里琉,Peleliu
+campaign.randomIsland.title,随机岛屿,Random Island
 battleLog.campaign.advance,推进至下一阶段：{name},Advancing to next operation: {name}
 campaignUpgrade.selectTitle,选择战役强化,Choose Campaign Upgrade
 campaignUpgrade.selectSubtitle,选择 1 项强化，效果将在本战役持续生效,Choose 1 upgrade for the rest of this campaign

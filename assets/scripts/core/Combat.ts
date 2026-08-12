@@ -32,6 +32,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
+import { markAmbushTargeted } from './Ambush';
 import { Axial, CrewSlot, FireDirection, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, neutralizeUncrewedTank, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 
@@ -85,6 +86,10 @@ export interface AttackReport {
   roll: number;
   threshold: number;
   hit: boolean;
+  /** 攻击发生时锁定的基础命中分解，避免 UI 受结算后的状态变化影响。 */
+  hitBreakdown?: HitBreakdown;
+  /** UI 命中详情中的具名修正；每个实际因素单独一项。 */
+  hitModifiers?: HitThresholdModifierDetail[];
   /** 命中分段：以下字段仅在 hit=true 时有值 */
   armorFace?: ArmorFace;
   armor?: number;
@@ -128,6 +133,8 @@ export interface AttackContext {
   protagonist?: Unit;
   /** Action-specific modifier applied to the final hit threshold; precision fire uses -2. */
   hitThresholdModifier?: number;
+  /** 与 hitThresholdModifier 对应的逐项展示明细；不重复参与数值计算。 */
+  hitThresholdModifiers?: HitThresholdModifierDetail[];
   /** Hardcore rule: penetration decays beyond the attacker's configured effective range. */
   effectiveRangePenetration?: boolean;
   /** Hardcore rule: turreted main guns may use the six halfway firing rays. */
@@ -140,6 +147,11 @@ export interface AttackContext {
   atGunCrewTargets?: boolean;
   /** Hardcore rule: infantry may attack an enemy tank sharing its hex. */
   sameHexInfantryTankAttack?: boolean;
+}
+
+export interface HitThresholdModifierDetail {
+  labelKey: string;
+  value: number;
 }
 
 /** Rules-facing firing direction. Flank targets retain the current halfway turret direction. */
@@ -292,6 +304,7 @@ export interface HitBreakdown {
   threshold: number;    // base modifiers + theater/arc modifiers + actionModifier
   trees?: number;
   rearArc?: number;
+  frontArc?: number;
   actionModifier?: number;
   weather?: number;
 }
@@ -314,7 +327,7 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const actionModifier = ctx.hitThresholdModifier ?? 0;
   const weather = weatherHitThresholdModifier(ctx.weather);
   return {
-    size, distance, hedges, building, smoke, concealed, trees, rearArc, actionModifier, weather,
+    size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather,
     threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc
       + frontArcModifier + actionModifier + weather,
   };
@@ -528,8 +541,10 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const d1 = rng.d6();
   const d2 = rng.d6();
   const roll = d1 + d2;
-  const threshold = hitThreshold(ctx);
+  const lockedHitBreakdown = hitBreakdown(ctx);
+  const threshold = lockedHitBreakdown.threshold;
   const hit = roll >= threshold;
+  const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
   const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
 
   const directionRule = attackDirectionRuleFor(ctx);
@@ -579,7 +594,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
   if (!hit) {
     return {
-      dice: [d1, d2], roll, threshold, hit: false,
+      dice: [d1, d2], roll, threshold, hit: false, hitBreakdown: lockedHitBreakdown, hitModifiers,
       armorFace: face, armor, penetration: pen,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated,
@@ -592,7 +607,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
   if (!penetrated) {
     return {
-      dice: [d1, d2], roll, threshold,
+      dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
       armorFace: face, armor, penetration: pen,
       damageCheckType,
@@ -607,7 +622,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   if (directDestroyByTargetClass || directDestroyOnBurningTank || (pacific && !protagonistTarget && !targetClass)) {
     if (isDamageEffectSuppressed(target, 'destroyed')) {
       return {
-        dice: [d1, d2], roll, threshold,
+        dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
         hit: true,
         armorFace: face, armor, penetration: pen,
         damageCheckType,
@@ -620,7 +635,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       };
     }
     return {
-      dice: [d1, d2], roll, threshold,
+      dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
       armorFace: face, armor, penetration: pen,
       damageCheckType,
@@ -640,7 +655,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const damageEffects = stagedDamageEffects ?? (damageEffect ? [{ effect: damageEffect }] : []);
   if (!damageEffect && damageEffects.length === 0) {
     return {
-      dice: [d1, d2], roll, threshold,
+      dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
       armorFace: face, armor, penetration: pen,
       damageCheckType,
@@ -658,7 +673,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const crewCheck = damageEffect === 'crewCheck' ? stagedCrewCheck : undefined;
 
   return {
-    dice: [d1, d2], roll, threshold,
+    dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
     hit: true,
     armorFace: face, armor, penetration: pen,
     damageCheckType,
@@ -838,6 +853,7 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
  * 着火用 fireLevel，炮塔 / 瘫痪 / 乘员等有独立字段。
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
+  markAmbushTargeted(target);
   if (report.hit && report.commanderKilledByHitDoubles && target.crew?.commander) {
     target.crew.commander = false;
   }
@@ -914,7 +930,7 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 // §3.6 行动表 B 列 3/4 + C 列 2：机枪射击步兵。
 // 乘员门控在 BattleScene.selectMGDie：B 列机枪不因乘员阵亡禁用；C 列副驾驶机枪需副驾驶存活。
 // 相对主炮攻击的差异：
-//   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵），且必须在同一直线可视范围内
+//   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵），且必须在 2 格内的同一直线可视范围内
 //   - 单段 1d6 检定：点数 ≥ 命中公式 = 命中；命中即直接击毙（徒步单位无装甲）
 //   - 吃距离 / 树篱 / 建筑 / 烟雾 / 隐蔽修正；目标在正面时命中所需 -1
 //   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
@@ -923,6 +939,9 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
 /** 旧版机枪固定阈值；保留导出以兼容外部引用。 */
 export const MG_HIT_THRESHOLD = 7;
+
+/** 所有坦克机枪的最大射程（格）。 */
+export const MG_MAX_RANGE = 2;
 
 export type MGDenyReason =
   | 'attack.reason.selfFire'
@@ -958,7 +977,8 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(target);
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
-  if (hexDistance(attacker.pos, target.pos) === 0) return { ok: false, reason: 'attack.reason.mgRange' };
+  const distance = hexDistance(attacker.pos, target.pos);
+  if (distance === 0 || distance > MG_MAX_RANGE) return { ok: false, reason: 'attack.reason.mgRange' };
   const flankDirection = ctx.expandedTurretDirections
     ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather)
     : null;
@@ -978,9 +998,19 @@ export interface MGReport {
   roll: number;
   threshold: number;
   hit: boolean;
+  hitBreakdown?: HitBreakdown;
+  hitModifiers?: HitThresholdModifierDetail[];
 }
 
 export function mgHitThreshold(ctx: AttackContext): number {
+  const base = mgHitBreakdown(ctx);
+  const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
+  return base.threshold
+    + mgTankCoordinationModifier(ctx)
+    + (atGunCrewTarget ? 1 : 0);
+}
+
+export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
   const frontArcModifier = isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0;
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
   const hitContext = atGunCrewTarget
@@ -995,16 +1025,27 @@ export function mgHitThreshold(ctx: AttackContext): number {
         },
       }
     : ctx;
-  return hitThreshold(hitContext, { includeRearArc: false, frontArcModifier })
-    + mgTankCoordinationModifier(ctx)
-    + (atGunCrewTarget ? 1 : 0);
+  return hitBreakdown(hitContext, { includeRearArc: false, frontArcModifier });
 }
 
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
   const d1 = rng.d6();
   const roll = d1;
   const threshold = mgHitThreshold(ctx);
-  return { dice: [d1, 0], hitDiceCount: 1, hitBonus: 0, roll, threshold, hit: roll >= threshold };
+  return {
+    dice: [d1, 0], hitDiceCount: 1, hitBonus: 0, roll, threshold, hit: roll >= threshold,
+    hitBreakdown: mgHitBreakdown(ctx),
+    hitModifiers: mgHitThresholdModifierDetails(ctx),
+  };
+}
+
+export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
+  const details = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item })) ?? [];
+  const coordination = mgTankCoordinationModifier(ctx);
+  const atGunCrew = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target) ? 1 : 0;
+  if (coordination) details.push({ labelKey: 'dice.rule.infantryTankCoordination', value: coordination });
+  if (atGunCrew) details.push({ labelKey: 'dice.rule.atGunCrewTarget', value: atGunCrew });
+  return details;
 }
 
 export function maxMGHitRoll(ctx: AttackContext): number {
@@ -1013,6 +1054,7 @@ export function maxMGHitRoll(ctx: AttackContext): number {
 
 /** 写入机枪攻击结果：命中 = 目标直接击毙。 */
 export function applyMGAttack(target: Unit, report: MGReport): void {
+  markAmbushTargeted(target);
   if (!report.hit) return;
   if (isControlledATGun(target)) {
     target.atGunCrewAlive = false;

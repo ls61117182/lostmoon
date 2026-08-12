@@ -1,6 +1,6 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import type { ATGunCrewKind, CrewLevels, Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind, UnitLevel } from './types';
+import type { ATGunCrewKind, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind, UnitLevel } from './types';
 import { isTankKind, neutralizeUncrewedTank } from './types';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
@@ -16,8 +16,9 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  *   2: 追加 attacksLeft + 每个单位的 damaged/destroyed 状态（战斗系统）
  *   3: 追加玩家子阶段 / 本阶段骰子 / 谢尔曼与敌军的战术字段（装填、舱盖、乘员、烟雾等）
  *   6: 追加非玩家单位等级与玩家独立乘员等级
+ *   7: 追加乘员技能与伏击跨回合状态
  */
-const SAVE_VERSION = 6 as const;
+const SAVE_VERSION = 7 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -50,6 +51,10 @@ interface UnitSnapshot {
   crew?: ShermanCrew;
   unitLevel?: UnitLevel;
   crewLevels?: CrewLevels;
+  crewSkills?: CrewSkills;
+  ambushAttackedSinceTurnEnd?: boolean;
+  ambushReadyThisTurn?: boolean;
+  ambushActedThisTurn?: boolean;
   atGunCrewAlive?: boolean;
   atGunCrewKind?: ATGunCrewKind;
   atGunCrewTargetSize?: number;
@@ -59,7 +64,7 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 5 | 4 | 3 | 2;
+  version: typeof SAVE_VERSION | 6 | 5 | 4 | 3 | 2;
   /** v5: selected rule profile; older saves resume as classic. */
   gameMode?: GameMode;
   missionId: string;
@@ -132,6 +137,12 @@ function captureUnit(u: Unit): UnitSnapshot {
     crew: u.crew ? { ...u.crew } : undefined,
     unitLevel: u.unitLevel,
     crewLevels: u.crewLevels ? { ...u.crewLevels } : undefined,
+    crewSkills: u.crewSkills ? Object.fromEntries(
+      Object.entries(u.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+    ) : undefined,
+    ambushAttackedSinceTurnEnd: u.ambushAttackedSinceTurnEnd,
+    ambushReadyThisTurn: u.ambushReadyThisTurn,
+    ambushActedThisTurn: u.ambushActedThisTurn,
     atGunCrewAlive: u.atGunCrewAlive,
     atGunCrewKind: u.atGunCrewKind,
     atGunCrewTargetSize: u.atGunCrewTargetSize,
@@ -182,6 +193,12 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   } else {
     live.unitLevel = normalizeUnitLevel(s.unitLevel ?? live.unitLevel);
   }
+  if (s.crewSkills) live.crewSkills = Object.fromEntries(
+    Object.entries(s.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+  );
+  live.ambushAttackedSinceTurnEnd = s.ambushAttackedSinceTurnEnd ?? false;
+  live.ambushReadyThisTurn = s.ambushReadyThisTurn ?? false;
+  live.ambushActedThisTurn = s.ambushActedThisTurn ?? false;
   if (s.atGunCrewAlive !== undefined) live.atGunCrewAlive = s.atGunCrewAlive;
   if (s.atGunCrewKind !== undefined) live.atGunCrewKind = s.atGunCrewKind;
   if (s.atGunCrewTargetSize !== undefined) live.atGunCrewTargetSize = s.atGunCrewTargetSize;
@@ -274,7 +291,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -354,6 +371,12 @@ export function applySave(
     sh.radioDamaged = ss.radioDamaged ?? false;
     if (ss.crew) sh.crew = { ...ss.crew };
     sh.crewLevels = normalizePlayerCrewLevels(ss.crewLevels ?? sh.crewLevels);
+    if (ss.crewSkills) sh.crewSkills = Object.fromEntries(
+      Object.entries(ss.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+    );
+    sh.ambushAttackedSinceTurnEnd = ss.ambushAttackedSinceTurnEnd ?? false;
+    sh.ambushReadyThisTurn = ss.ambushReadyThisTurn ?? false;
+    sh.ambushActedThisTurn = ss.ambushActedThisTurn ?? false;
     neutralizeUncrewedTank(sh);
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
     mission.shermanEvacuated = save.shermanEvacuated ?? false;

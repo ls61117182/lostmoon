@@ -1,6 +1,35 @@
-import type { MissionSource } from './CustomMissionStore';
+import type { CustomMissionPackage, MissionSource } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode } from './GameMode';
 import type { PvpSessionConfig } from './PvpConfig';
+import { createRandomIslandCampaign, getCampaign, RANDOM_ISLAND_CAMPAIGN_ID } from './CampaignDB';
+import type { CampaignDefinition } from './CampaignDB';
+import { generateRandomMissionPackage } from './RandomMissionGenerator';
+
+export function createRandomIslandPackages(seed: number = Date.now()): CustomMissionPackage[] {
+  const baseSeed = (seed >>> 0) || 1;
+  const seeds = [
+    baseSeed,
+    (baseSeed + 0x9e3779b9) >>> 0,
+    (baseSeed + 0x3c6ef372) >>> 0,
+  ];
+  return [
+    generateRandomMissionPackage('pacific', seeds[0], {
+      pacificBattleType: 'landing',
+      objectiveKinds: ['direct_evac', 'target_evac'],
+      enemyThreatPoints: 10,
+    }),
+    generateRandomMissionPackage('pacific', seeds[1], {
+      pacificBattleType: 'inland',
+      objectiveKinds: ['direct_evac', 'target_evac'],
+      enemyThreatPoints: 13,
+    }),
+    generateRandomMissionPackage('pacific', seeds[2], {
+      pacificBattleType: 'inland',
+      objectiveKinds: ['destroy_all'],
+      enemyThreatPoints: 16,
+    }),
+  ];
+}
 
 export interface GameSessionState {
   /** Resource path under assets/resources, without extension. */
@@ -18,6 +47,10 @@ export interface GameSessionState {
   /** Open the PVP selection dialog once after the main menu scene loads. */
   openPvpSelectionOnMenu: boolean;
   selectedCampaignId: string | null;
+  /** Resolved campaign run; random campaign stages stay fixed for this session. */
+  selectedCampaign: CampaignDefinition | null;
+  /** In-memory generated missions and event tables for Random Island. */
+  selectedCampaignPackages: CustomMissionPackage[] | null;
 }
 
 const DEFAULT_MISSION_PATH = 'missions/mission_01';
@@ -31,6 +64,8 @@ const DEFAULT_STATE: GameSessionState = {
   pvpSession: null,
   openPvpSelectionOnMenu: false,
   selectedCampaignId: null,
+  selectedCampaign: null,
+  selectedCampaignPackages: null,
 };
 
 const state: GameSessionState = { ...DEFAULT_STATE };
@@ -45,6 +80,8 @@ export const GameSession = {
   get openPvpSelectionOnMenu() { return state.openPvpSelectionOnMenu; },
   get isPvp() { return !!state.pvpSession?.active; },
   get selectedCampaignId() { return state.selectedCampaignId; },
+  get selectedCampaign() { return state.selectedCampaign; },
+  get selectedCampaignPackages() { return state.selectedCampaignPackages; },
   get isCampaign() { return !!state.selectedCampaignId; },
 
   setGameMode(mode: GameMode) {
@@ -54,6 +91,8 @@ export const GameSession = {
   startPvpBattle(session: PvpSessionConfig) {
     state.pvpSession = { ...session, active: true };
     state.selectedCampaignId = null;
+    state.selectedCampaign = null;
+    state.selectedCampaignPackages = null;
     state.gameMode = 'hardcore';
     state.selectedLevelId = -1;
     state.selectedMissionPath = session.missionPath;
@@ -80,6 +119,8 @@ export const GameSession = {
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
+    state.selectedCampaign = null;
+    state.selectedCampaignPackages = null;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = missionPath;
     state.selectedMissionSource = { type: 'resource', missionPath };
@@ -90,6 +131,8 @@ export const GameSession = {
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
+    state.selectedCampaign = null;
+    state.selectedCampaignPackages = null;
     state.selectedLevelId = -1;
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'custom', packageId };
@@ -100,6 +143,8 @@ export const GameSession = {
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
+    state.selectedCampaign = null;
+    state.selectedCampaignPackages = null;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = missionPath;
     state.selectedMissionSource = { type: 'resource', missionPath };
@@ -110,6 +155,8 @@ export const GameSession = {
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
+    state.selectedCampaign = null;
+    state.selectedCampaignPackages = null;
     state.selectedLevelId = -1;
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'custom', packageId };
@@ -117,13 +164,23 @@ export const GameSession = {
   },
 
   selectCampaign(levelId: number, campaignId: string) {
+    const generatedPackages = campaignId === RANDOM_ISLAND_CAMPAIGN_ID
+      ? createRandomIslandPackages()
+      : null;
+    const campaign = generatedPackages
+      ? createRandomIslandCampaign(generatedPackages.map(pkg => pkg.mission.id))
+      : getCampaign(campaignId);
+    if (!campaign) return false;
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedLevelId = levelId;
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'resource', missionPath: '' };
     state.selectedCampaignId = campaignId;
+    state.selectedCampaign = campaign;
+    state.selectedCampaignPackages = generatedPackages;
     state.resumeFromSave = false;
+    return true;
   },
 
   clearResumeFlag() {
@@ -139,5 +196,7 @@ export const GameSession = {
     state.pvpSession = DEFAULT_STATE.pvpSession;
     state.openPvpSelectionOnMenu = DEFAULT_STATE.openPvpSelectionOnMenu;
     state.selectedCampaignId = DEFAULT_STATE.selectedCampaignId;
+    state.selectedCampaign = DEFAULT_STATE.selectedCampaign;
+    state.selectedCampaignPackages = DEFAULT_STATE.selectedCampaignPackages;
   },
 };

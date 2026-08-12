@@ -15,8 +15,8 @@ export function commanderHatchVisualState(unit: Unit): CommanderHatchVisualState
 /**
  * Hardcore AI tank hatch rule. Only the protagonist may be controlled by the
  * player, so every other living tank decides its hatch state at action start.
- * An existing open hatch on a destroyed tank does not reserve the faction's
- * commander slot.
+ * An existing open hatch on a destroyed tank or a tank whose commander is
+ * dead does not reserve the faction's living commander slot.
  */
 export function shouldNonPlayerTankOpenCommanderHatch(
   unit: Unit,
@@ -36,6 +36,7 @@ export function shouldNonPlayerTankOpenCommanderHatch(
     && !other.destroyed
     && other.faction === unit.faction
     && isTankUnit(other)
+    && other.crew?.commander !== false
     && other.hatchOpen === true,
   );
 }

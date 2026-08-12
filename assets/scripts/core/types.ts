@@ -111,6 +111,8 @@ export function isFriendlyFaction(faction: Faction): boolean {
 
 export type Theater = 'europe' | 'pacific' | 'north_africa' | 'soviet';
 export type WeatherType = 'clear' | 'rain';
+/** Visual season only. Terrain rules continue to use the original terrain type. */
+export type SeasonType = 'summer' | 'winter';
 
 export type UnitKind =
   | 'sherman'
@@ -253,6 +255,10 @@ export interface CrewLevels {
   coDriver: UnitLevel;
 }
 
+/** 可配置在任一乘员槽位上的技能；只有该乘员存活时技能才生效。 */
+export type CrewSkillId = 'calm' | 'ambush_master';
+export type CrewSkills = Partial<Record<keyof ShermanCrew, CrewSkillId[]>>;
+
 /** 玩家车辆默认车长开舱观察范围；后续天气等系统可修改 Unit.visionRange。 */
 export const DEFAULT_VISION_RANGE = 4;
 export const DEFAULT_GUNNER_VISION_RANGE = 4;
@@ -278,6 +284,14 @@ export interface Unit {
   unitLevel?: UnitLevel;
   /** 玩家坦克独立乘员等级；非玩家坦克应通过 crewLevelFor() 继承 unitLevel。 */
   crewLevels?: CrewLevels;
+  /** 各乘员拥有的技能；非玩家坦克也可由关卡配置。 */
+  crewSkills?: CrewSkills;
+  /** 伏击窗口内（上次自身行动结束后）是否成为过攻击目标。 */
+  ambushAttackedSinceTurnEnd?: boolean;
+  /** 本次自身行动开始时锁定的伏击资格。 */
+  ambushReadyThisTurn?: boolean;
+  /** 本次自身行动是否已攻击、移动或转向。 */
+  ambushActedThisTurn?: boolean;
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
@@ -368,7 +382,7 @@ export type ObjectiveType =
   | 'destroy_kind'          // 摧毁某种单位
   | 'destroy_kind_evac'     // 先歼指定种类（`kind` 或 `kinds`）再撤离；若二者皆省略则仅撤离（驶出地图即胜）
   | 'exit_from_edge'        // 从某方向移出地图
-  | 'destroy_truck';        // 摧毁卡车（任务 5 特殊）
+  | 'destroy_truck';        // 旧格式兼容：摧毁卡车后撤离；缺省撤离点为 {7,2}、方向 0
 
 export interface MissionObjective {
   type: ObjectiveType;
@@ -383,9 +397,9 @@ export interface MissionObjective {
   destroyAllEnemiesBeforeEvac?: boolean;
   /** exit_from_edge 用：箭头方向（Direction） */
   exitDirection?: Direction;
-  /** destroy_kind_evac：撤离六角格（offset）；谢尔曼在此格且目标格无地形时，沿 evacExitDir 前进或反向后退离场 */
+  /** destroy_kind_evac / 旧 destroy_truck：撤离六角格（offset）；谢尔曼在此格且目标格无地形时，沿 evacExitDir 前进或反向后退离场 */
   evacAt?: Offset;
-  /** destroy_kind_evac：驶出地图的六向（0=E … 5=NE），须与「前进」或「后退」的位移方向一致 */
+  /** destroy_kind_evac / 旧 destroy_truck：驶出地图的六向（0=E … 5=NE），须与「前进」或「后退」的位移方向一致 */
   evacExitDir?: Direction;
 }
 
@@ -396,6 +410,8 @@ export interface UnitPlacement {
   unitLevel?: UnitLevel;
   /** 玩家坦克各乘员独立等级；各槽位缺省为 recruit。非玩家单位忽略此字段。 */
   crewLevels?: Partial<CrewLevels>;
+  /** 坦克乘员技能；键为乘员岗位，值为该乘员的技能列表。 */
+  crewSkills?: CrewSkills;
   /** Offset 坐标；若关卡 `enemyStartByDice` 则可省略（步兵→rid 链，坦克等→eid 链）；谢尔曼在 `shermanStartByDice` 时亦可省略 */
   at?: Offset;
   /** 与 `at` 同：谢尔曼在 `shermanStartByDice` 时由格上 `ef` 写入 */
@@ -433,6 +449,8 @@ export interface MissionData {
   name: string;
   description: string;
   theater?: Theater;
+  /** Visual season. Omitted missions use summer; winter currently skins European terrain only. */
+  season?: SeasonType;
   /** Fixed weather for the mission. Omitted missions use clear weather. */
   weather?: WeatherType;
   /** 地图列数 / 行数（offset） */

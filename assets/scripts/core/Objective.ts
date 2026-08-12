@@ -56,13 +56,18 @@ export function isShermanEvacDrive(
   options: ShermanEvacDriveOptions = {},
 ): boolean {
   const obj = mission.data.objective;
-  if (obj.type !== 'destroy_kind_evac') return false;
-  if (!obj.evacAt || obj.evacExitDir === undefined) return false;
-  if (!destroyKindEvacPrereqMet(mission, obj)) return false;
-  const ev = offsetToAxial(obj.evacAt, mission.data.rowParityOffset === 1 ? 1 : 0);
+  const legacyTruckObjective = obj.type === 'destroy_truck';
+  if (obj.type !== 'destroy_kind_evac' && !legacyTruckObjective) return false;
+  const evacAt = obj.evacAt ?? (legacyTruckObjective ? { col: 7, row: 2 } : undefined);
+  const evacExitDir = obj.evacExitDir ?? (legacyTruckObjective ? 0 : undefined);
+  if (!evacAt || evacExitDir === undefined) return false;
+  if (legacyTruckObjective) {
+    if (!allEnemiesOfKindDestroyed(mission, 'truck')) return false;
+  } else if (!destroyKindEvacPrereqMet(mission, obj)) return false;
+  const ev = offsetToAxial(evacAt, mission.data.rowParityOffset === 1 ? 1 : 0);
   if (from.q !== ev.q || from.r !== ev.r) return false;
   const driveDir = (dirSign === 1 ? facing : rotateDirection(facing, 3)) as number;
-  if (driveDir !== obj.evacExitDir) return false;
+  if (driveDir !== evacExitDir) return false;
   // 撤离格若是桥梁，驶出方向须落在桥端两方向之一
   const fromTile = mission.map.get(from);
   if (tileHasBridge(fromTile) && !fromTile!.bridgeEnds!.includes(driveDir as Direction)) return false;
@@ -86,9 +91,7 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
       // MVP 未实现：按位置判定谢尔曼是否到达指定边
       return false;
     case 'destroy_truck':
-      return mission.enemies
-        .filter(e => e.kind === 'truck')
-        .every(e => e.destroyed);
+      return allEnemiesOfKindDestroyed(mission, 'truck') && !!mission.shermanEvacuated;
     default:
       return false;
   }

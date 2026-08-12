@@ -406,6 +406,22 @@ const rngFrom = (...values): RNG => {
   };
 
   {
+    // test: 'tank machine guns can fire at range 2 but not range 3'
+    const attacker = tankAt('attacker', 0, 0);
+    const target = tankAt('target', 2, 0);
+    target.kind = 'infantry';
+    const map = fieldMap(0, 3);
+
+    assert.strictEqual(canMGAttack({ attacker, target, map }).ok, true);
+
+    target.pos = { q: 3, r: 0 };
+    assert.deepStrictEqual(canMGAttack({ attacker, target, map }), {
+      ok: false,
+      reason: 'attack.reason.mgRange',
+    });
+  };
+
+  {
     // test: 'hardcore halfway machine-gun fire ignores a single flanking LoS blocker'
     const attacker = tankAt('attacker', 0, 0);
     const target = tankAt('target', 1, 1);
@@ -1219,6 +1235,24 @@ const rngFrom = (...values): RNG => {
     map.set({ pos: { q: 1, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
     assert.strictEqual(map.canTankEnter({ q: 0, r: 0 }), false);
     assert.strictEqual(map.canTankEnter({ q: 1, r: 0 }), true);
+  };
+
+  {
+    // test: 'Japanese units cannot enter beach or deep-water hexes'
+    const map = new HexMap(3, 1);
+    map.set({ pos: { q: 0, r: 0 }, terrain: 'deep_water' });
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'beach' });
+    map.set({ pos: { q: 2, r: 0 }, terrain: 'clear' });
+
+    assert.strictEqual(map.canUnitEnter({ q: 0, r: 0 }, 'japanese'), false);
+    assert.strictEqual(map.canUnitEnter({ q: 1, r: 0 }, 'japanese'), false);
+    assert.strictEqual(map.canUnitEnter({ q: 2, r: 0 }, 'japanese'), true);
+    assert.strictEqual(map.canUnitEnter({ q: 1, r: 0 }, 'usa'), true);
+    assert.strictEqual(map.canTankCrossEdge(
+      { q: 2, r: 0 },
+      { q: 1, r: 0 },
+      { faction: 'japanese', ignoreBreakwater: true },
+    ), false);
   };
 
   {

@@ -180,4 +180,44 @@ assert.throws(
   /overlapping effective tiles.*configuration is invalid/,
 );
 
+function defaultExitTestTiles(terrain) {
+  const tiles = Array.from({ length: 6 }, () => Array.from({ length: 8 }, () => null));
+  tiles[3][0] = { t: terrain };
+  tiles[2][7] = { t: terrain };
+  return tiles;
+}
+
+const defaultExitFirst = {
+  id: 'default_exit_first',
+  name: 'Default exit first',
+  description: '',
+  theater: 'pacific',
+  cols: 8,
+  rows: 6,
+  tiles: defaultExitTestTiles('c'),
+  sherman: { kind: 'sherman', faction: 'usa', at: { col: 0, row: 3 }, facing: 0 },
+  enemies: [],
+  objective: { type: 'destroy_all_enemies' },
+};
+const defaultExitSecond = {
+  ...defaultExitFirst,
+  id: 'default_exit_second',
+  name: 'Default exit second',
+  tiles: defaultExitTestTiles('a'),
+};
+const defaultExitCampaign = overlapCampaign('default_exit');
+const defaultExitStitched = runtime.stitchCampaignMissions(defaultExitCampaign, [defaultExitFirst, defaultExitSecond]);
+const firstRuntime = defaultExitStitched.segments[0];
+const defaultExitAxial = loadTsModule('assets/scripts/core/HexGrid.ts').axialAdd(
+  loadTsModule('assets/scripts/core/HexGrid.ts').offsetToAxial({ col: 7, row: 2 }, 0),
+  { q: firstRuntime.axialQOffset, r: firstRuntime.axialROffset },
+);
+const expectedEntryAxial = loadTsModule('assets/scripts/core/HexGrid.ts').neighbor(defaultExitAxial, 0);
+const actualEntryAxial = loadTsModule('assets/scripts/core/HexGrid.ts').offsetToAxial(
+  defaultExitStitched.segmentMissionData[1].sherman.at,
+  0,
+);
+assert.deepStrictEqual(actualEntryAxial, expectedEntryAxial,
+  'a non-evacuation mission should stitch its successor from (7,2) direction 0');
+
 console.log('campaign runtime tests passed');

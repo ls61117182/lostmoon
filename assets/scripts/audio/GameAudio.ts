@@ -17,6 +17,8 @@ export const AudioKeys = {
   tankManeuver: 'audio/tank_move',
   cannonFire: 'audio/cannon_fire',
   mgFire: 'audio/mg_fire',
+  infantryAttack: 'audio/infantry_attack',
+  sniperFire: 'audio/sniper_fire',
   tankHitRicochet: 'audio/tank_hit_ricochet',
   tankHitPenetration: 'audio/tank_hit_penetration',
   stukaFlyover: 'audio/stuka',
@@ -248,6 +250,15 @@ export function playCannonFire(): void {
 
 export function playMgFire(): void {
   playSfxKey(AudioKeys.mgFire);
+}
+
+/** Three-rifle infantry volley used only when one foot squad attacks another. */
+export function playInfantryAttack(): void {
+  playSfxKey(AudioKeys.infantryAttack);
+}
+
+export function playSniperFire(): void {
+  playSfxKey(AudioKeys.sniperFire);
 }
 
 export function playTankHitRicochet(): void {

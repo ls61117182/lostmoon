@@ -14,6 +14,7 @@ import { LangCode } from './Lang';
 import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode, isGameMode } from './GameMode';
 import { CAMPAIGNS, CAMPAIGN_CHAPTER_ID } from './CampaignDB';
+import type { SeasonType } from './types';
 
 export type ChapterId = string;
 
@@ -34,6 +35,10 @@ export interface LevelMeta {
   titleOverride?: string;
   badgeOverride?: string;
   randomTheater?: 'europe' | 'pacific';
+  /** Optional visual season for a generated random mission. */
+  randomSeason?: SeasonType;
+  /** Menu entry bypasses chapter progression and is immediately playable. */
+  alwaysUnlocked?: boolean;
 }
 
 export interface ChapterMeta {
@@ -113,6 +118,7 @@ export const CHAPTERS: ChapterMeta[] = [
         missionId: campaign.missionId,
         entryKind: 'campaign' as const,
         campaignId: campaign.id,
+        alwaysUnlocked: !!campaign.generator,
       })),
   },
   {
@@ -129,6 +135,10 @@ export const CHAPTERS: ChapterMeta[] = [
       {
         chapterId: 'test', id: 2, missionPath: '', titleKey: 'level.test.random.pacific.title',
         missionId: 'random_pacific', entryKind: 'random', randomTheater: 'pacific', badgeOverride: 'RP',
+      },
+      {
+        chapterId: 'test', id: 3, missionPath: '', titleKey: 'level.test.random.europe_winter.title',
+        missionId: 'random_europe_winter', entryKind: 'random', randomTheater: 'europe', randomSeason: 'winter', badgeOverride: 'RW',
       },
     ],
   },
@@ -163,7 +173,8 @@ export function getImportableMissionLevels(): LevelMeta[] {
   const campaignSegments: LevelMeta[] = [];
   for (const campaign of CAMPAIGNS
     .slice()
-    .sort((a, b) => a.order - b.order)) {
+    .sort((a, b) => a.order - b.order)
+    .filter(campaign => !campaign.generator)) {
     campaignSegments.push(...campaign.segments.map((segment, index) => ({
       chapterId: CAMPAIGN_CHAPTER_ID,
       id: campaign.levelId * 10 + index + 1,

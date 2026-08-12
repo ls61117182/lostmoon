@@ -83,7 +83,7 @@ import {
   rollActionDice,
 } from '../core/ActionDice';
 import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, hitBreakdown, hitThreshold, maxMGHitRoll, mgHitThreshold, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
+import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, hitBreakdown, hitThreshold, maxMGHitRoll, mgHitBreakdown, mgHitThreshold, mgHitThresholdModifierDetails, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack } from '../core/Combat';
 import { DAMAGE_TABLE } from '../core/DamageTableDB';
 import type { DamageTableEffect, DamageTargetClass } from '../core/DamageTableDB';
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest, FireCheckEffect } from '../core/FireCheck';
@@ -249,7 +249,9 @@ import {
   playCommanderHatch,
   playConfiguredAttackSound,
   playDiceRoll,
+  playInfantryAttack,
   playMgFire,
+  playSniperFire,
   playTankHitPenetration,
   playTankHitRicochet,
   playStukaFlyover,
@@ -259,6 +261,7 @@ import {
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel, visualFireEffectLevel } from '../core/UnitVisualState';
 import { crewLevelFor, normalizePlayerCrewLevels, normalizeUnitLevel, unitLevelOf } from '../core/UnitLevel';
+import { ambushHitThresholdModifier, ambushHitThresholdModifierDetails, beginAmbushTurn, endAmbushTurn, markAmbushAction, markAmbushTargeted } from '../core/Ambush';
 import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, MissionData, neutralizeUncrewedTank, restoreFullTankCrew, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
@@ -672,6 +675,8 @@ interface DiceShow {
   fireEffectPlayed: boolean;
   attacker: Unit | null;
   target: Unit | null;
+  /** Snapshot before attack resolution, so a doubles kill cannot erase the exposed-commander hint. */
+  targetCommanderExposed: boolean;
   onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
   onHold: (() => void) | null;
   requireManualClose: boolean;
@@ -842,6 +847,38 @@ interface MachineGunBurst {
   hit: boolean;
 }
 
+interface InfantryBulletLane {
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+}
+
+interface InfantryBulletVolley {
+  node: Node;
+  g: Graphics;
+  lanes: readonly InfantryBulletLane[];
+  ux: number;
+  uy: number;
+  t: number;
+  dur: number;
+}
+
+interface SniperBulletTrace {
+  node: Node;
+  g: Graphics;
+  startX: number;
+  startY: number;
+  targetX: number;
+  targetY: number;
+  ux: number;
+  uy: number;
+  t: number;
+  dur: number;
+  impacted: boolean;
+  onImpact: () => void;
+}
+
 interface UnitEffectVisual {
   unit: Unit;
   seed: number;
@@ -868,6 +905,13 @@ const TERRAIN_COLORS: Record<TerrainType, Color> = {
   beach:    new Color(220, 202, 154, 255),
   rocky:    new Color(120, 118, 112, 255),
   airstrip: new Color(210, 188, 132, 255),
+};
+const WINTER_TERRAIN_COLORS: Partial<Record<TerrainType, Color>> = {
+  road: new Color(205, 208, 204, 255),
+  field: new Color(225, 234, 231, 255),
+  mud: new Color(176, 174, 170, 255),
+  forest: new Color(210, 211, 204, 255),
+  water: new Color(178, 204, 220, 255),
 };
 const TANK_TRACK_COLORS: Record<Exclude<TankTrackStyle, 'none'>, Color> = {
   strong: new Color(18, 16, 13, 78),
@@ -954,6 +998,9 @@ const BUILDING_SHADE_PALETTE: ReadonlyArray<Color> = BUILDING_ROOF_PALETTE.map(
 );
 /** 瓦楞 / 椽口阴影线色：黑棕 + 较低 alpha，避免在浅色屋顶上过分扎眼 */
 const BUILDING_RIB_STROKE = new Color(35, 28, 22, 170);
+const WINTER_BUILDING_ROOF = new Color(226, 235, 238, 255);
+const WINTER_BUILDING_SHADE = new Color(188, 205, 214, 255);
+const WINTER_BUILDING_RIDGE = new Color(250, 253, 255, 255);
 /** 桥梁叠加（GDD §3.2，绘制于水域格之上）：棕色桥体 + 与公路等宽的浅色路面 */
 const BRIDGE_PLANK_FILL   = new Color(128,  92,  58, 255);
 const BRIDGE_PLANK_OUTLINE= new Color( 76,  61,  42, 220);
@@ -965,6 +1012,8 @@ const BRIDGE_RAIL_STROKE  = new Color( 72,  50,  32, 255);
  */
 const ROAD_PATH_FILL      = new Color(212, 200, 178, 255);
 const ROAD_PATH_OUTLINE   = new Color( 60,  44,  26, 255);
+const WINTER_ROAD_PATH_FILL = new Color(205, 211, 212, 255);
+const WINTER_ROAD_PATH_OUTLINE = new Color(92, 98, 98, 255);
 const AIRSTRIP_FILL       = new Color(200, 196, 178, 255);
 const AIRSTRIP_OUTLINE    = new Color(112, 104,  86, 235);
 const DEEP_WATER_LIGHT    = new Color(190, 214, 214, 70);
@@ -979,6 +1028,9 @@ const BREAKWATER_LIGHT    = new Color(166, 154, 128, 255);
 const ROAD_GRIT_LIGHT     = new Color(238, 225, 195, 120);
 const ROAD_GRIT_MID       = new Color(220, 208, 178, 110);
 const ROAD_GRIT_DARK      = new Color(195, 182, 158, 130);
+const WINTER_ROAD_GRIT_LIGHT = new Color(244, 249, 250, 150);
+const WINTER_ROAD_GRIT_MID = new Color(208, 220, 224, 125);
+const WINTER_ROAD_GRIT_DARK = new Color(166, 180, 184, 115);
 /**
  * 水陆河岸过渡（仅在水域格内沿"非水域邻格"方向画的内偏移沙带）：双层条带形成由水→陆的渐变错觉
  * - 外层：略深米褐贴近水侧
@@ -986,6 +1038,8 @@ const ROAD_GRIT_DARK      = new Color(195, 182, 158, 130);
  */
 const WATER_BANK_OUTER    = new Color(168, 142,  92, 230);
 const WATER_BANK_INNER    = new Color(214, 196, 152, 235);
+const WINTER_WATER_BANK_OUTER = new Color(176, 195, 202, 230);
+const WINTER_WATER_BANK_INNER = new Color(220, 232, 235, 238);
 
 const FACTION_COLORS: Record<Faction, Color> = {
   usa: new Color( 60, 160,  80, 255),
@@ -1143,6 +1197,13 @@ const CREW_STATUS_ICON_PATHS = [
   'textures/ui/crew_icons_source_split/crew_icon_04_steering/spriteFrame',
   'textures/ui/crew_icons_source_split/crew_icon_05_radio/spriteFrame',
 ] as const;
+const CREW_RANK_ICON_PATHS = {
+  veteran: 'textures/ui/unit_ranks/rank_veteran_32/spriteFrame',
+  elite: 'textures/ui/unit_ranks/rank_elite_32/spriteFrame',
+} as const;
+const CREW_STATUS_NORMAL_COLOR = new Color(245, 245, 238, 255);
+const CREW_STATUS_HATCH_OPEN_COLOR = new Color(40, 255, 80, 255);
+const CREW_STATUS_DEAD_COLOR = new Color(125, 125, 125, 220);
 
 // 掷骰结果展示时序（秒）；骰面转动统一使用 DICE_ROLL_DUR。
 const DICE_HIT_SHOW_DUR   = 0.6;
@@ -1305,9 +1366,11 @@ export class BattleScene extends Component {
     rocky: null,
     airstrip: null,
   };
+  private winterTerrainSpriteFrames: Partial<Record<TerrainType, SpriteFrame | null>> = {};
   private terrainSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private terrainSpritePoolNext = 0;
   private treeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
+  private winterTreeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private foliageSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private foliageSpritePoolNext = 0;
   private shermanSpriteNode: Node | null = null;
@@ -1542,6 +1605,8 @@ export class BattleScene extends Component {
   private muzzleSmokeSerial = 0;
   private projectileTraces: ProjectileTrace[] = [];
   private machineGunBursts: MachineGunBurst[] = [];
+  private infantryBulletVolleys: InfantryBulletVolley[] = [];
+  private sniperBulletTraces: SniperBulletTrace[] = [];
   private mainGunRecoils = new Map<string, MainGunRecoilState>();
   private firedAttackCueReports = new WeakSet<AttackReport>();
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
@@ -1639,6 +1704,7 @@ export class BattleScene extends Component {
     stage:
       | 'roll_primary'
       | 'wait_after_primary'
+      | 'pause_for_sniper'
       | 'pause_before_adjacent_dice'
       | 'roll_extra'
       | 'wait_after_extra'
@@ -1665,6 +1731,10 @@ export class BattleScene extends Component {
     tankReinforceMove?: TurnEndTankReinforceMove;
     /** 相邻步兵集火：主骰走后串联主炮同款 DiceShow，再显示正文与确认 */
     adjacentInfantryVolleys?: AdjacentInfantryVolleyPreview[];
+    sniperAttackerId?: string;
+    sniperWillKill?: boolean;
+    sniperRevealKey?: string;
+    effectApplied?: boolean;
   } | null = null;
   private turnEndUnitSeq = 0;
   /** §2.1 阶段⑤ 着火检定：播 d6 动画 + 说明，确认后写回状态再继续友方/敌方阶段 */
@@ -1703,13 +1773,19 @@ export class BattleScene extends Component {
   private statusTurret: Label | null = null;   // 完好 / 受损
   private statusMobility: Label | null = null; // 正常 / 痛痪
   private statusRadio: Label | null = null;
-  private statusCrewLabels: Label[] = [];      // 5 个乘员值标签（车长..副驾驶）
+  private statusCrewIcons: Sprite[] = [];
+  private statusCrewDeadMarkers: Node[] = [];
+  private statusCrewRankNodes: Node[] = [];
+  private statusCrewRankIcons: Sprite[] = [];
   /** 状态面板固定文案（切语言时刷新） */
   private statusPanelTitleLabel: Label | null = null;
   private statusBodyLeftLabels: Label[] = [];
   private statusCrewTitleLabel: Label | null = null;
-  private statusCrewLeftLabels: Label[] = [];
   private crewStatusIconFrames: Array<SpriteFrame | null> = [null, null, null, null, null];
+  private crewStatusRankFrames: { veteran: SpriteFrame | null; elite: SpriteFrame | null } = {
+    veteran: null,
+    elite: null,
+  };
   /** 底部阶段条按钮文字 */
   private chooseMoveLabel: Label | null = null;
   private chooseAttackLabel: Label | null = null;
@@ -1978,6 +2054,10 @@ export class BattleScene extends Component {
     bloodDecalNode.layer = this.node.layer;
     bloodDecalNode.addComponent(UITransform).setContentSize(1280, 720);
     this.infantryBloodDecalLayerNode = bloodDecalNode;
+    // Blood is a ground decal: render it above roads/tracks, but below the
+    // later MapOcclusion layer that contains buildings and forest canopies.
+    // Reusing the track visibility mask also keeps it hidden by fog.
+    trackMaskNode.addChild(bloodDecalNode);
 
     const occlusionNode = new Node('MapOcclusion');
     occlusionNode.layer = this.node.layer;
@@ -2023,10 +2103,6 @@ export class BattleScene extends Component {
     unitMask.type = Mask.Type.GRAPHICS_STENCIL;
     this.unitVisibilityMaskNode = unitMaskNode;
     this.unitVisibilityMaskGraphics = unitMask.subComp as Graphics;
-
-    // Blood decals share the destroyed-tank visibility mask: they are hidden
-    // in fog and return only when their hex becomes visible again.
-    unitMaskNode.addChild(bloodDecalNode);
 
     const unitContentNode = new Node('UnitContent');
     unitContentNode.layer = this.node.layer;
@@ -2198,6 +2274,14 @@ export class BattleScene extends Component {
         this.treeSpriteFrames[idx] = sf;
         this.redraw();
       });
+      resources.load(`textures/terrain/${name}_snow/spriteFrame`, SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] winter tree sprite load failed (${name}_snow), fallback to summer tree:`, err);
+          return;
+        }
+        this.winterTreeSpriteFrames[idx] = sf;
+        this.redraw();
+      });
     });
 
     // 3.x 动态加载 SpriteFrame 必须指向图片子资源路径 …/spriteFrame（见官方「动态加载资源」）
@@ -2220,6 +2304,23 @@ export class BattleScene extends Component {
           return;
         }
         this.terrainSpriteFrames[terrain] = sf;
+        this.redraw();
+      });
+    });
+    const winterTerrainPaths: Partial<Record<TerrainType, string>> = {
+      road: 'textures/terrain/terrain_road_snow/spriteFrame',
+      field: 'textures/terrain/terrain_field_snow/spriteFrame',
+      mud: 'textures/terrain/terrain_mud_snow/spriteFrame',
+      forest: 'textures/terrain/terrain_forest_snow/spriteFrame',
+      water: 'textures/terrain/terrain_water_snow/spriteFrame',
+    };
+    (Object.keys(winterTerrainPaths) as TerrainType[]).forEach((terrain) => {
+      resources.load(winterTerrainPaths[terrain]!, SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] winter terrain sprite load failed (${terrain}), fallback to summer terrain:`, err);
+          return;
+        }
+        this.winterTerrainSpriteFrames[terrain] = sf;
         this.redraw();
       });
     });
@@ -2768,8 +2869,7 @@ export class BattleScene extends Component {
         const hit = details.hit === true || details.report?.hit === true;
         this.setInfantryVisualFacing(attacker, target.pos);
         this.redraw();
-        this.spawnMachineGunBurst(attacker, target, hit);
-        playMgFire();
+        this.playMachineGunFireCue(attacker, target, hit);
         this.spawnFloater(target.pos.q, target.pos.r, hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss'),
           hit ? new Color(255, 120, 120, 255) : new Color(220, 220, 220, 255),
           { size: 32, dur: hit ? 1.0 : 0.9, rise: hit ? 48 : 44 });
@@ -2783,8 +2883,7 @@ export class BattleScene extends Component {
         const hit = details.effect?.hit === true;
         this.setInfantryVisualFacing(attacker, target.pos);
         this.redraw();
-        this.spawnMachineGunBurst(attacker, target, hit);
-        playMgFire();
+        this.playMachineGunFireCue(attacker, target, hit);
         const effect = details.effect?.effect;
         const text = effect === 'destroyed'
           ? t('dmg.outcome.destroyed')
@@ -2953,6 +3052,12 @@ export class BattleScene extends Component {
         ? (src.crew ?? { commander: true, loader: true, gunner: true, driver: true, coDriver: true })
         : undefined,
       crewLevels: src.role === 'protagonist' ? normalizePlayerCrewLevels(src.crewLevels) : undefined,
+      crewSkills: src.crewSkills ? Object.fromEntries(
+        Object.entries(src.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+      ) : undefined,
+      ambushAttackedSinceTurnEnd: !!src.ambushAttackedSinceTurnEnd,
+      ambushReadyThisTurn: !!src.ambushReadyThisTurn,
+      ambushActedThisTurn: !!src.ambushActedThisTurn,
       unitLevel: src.role === 'support' ? normalizeUnitLevel(src.unitLevel) : undefined,
     };
   }
@@ -2985,6 +3090,12 @@ export class BattleScene extends Component {
       interiorVisionRange: unit.interiorVisionRange ?? unit.stats.interiorVisionRange,
       crew: unit.crew,
       crewLevels: role === 'protagonist' ? normalizePlayerCrewLevels(unit.crewLevels) : undefined,
+      crewSkills: unit.crewSkills ? Object.fromEntries(
+        Object.entries(unit.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+      ) : undefined,
+      ambushAttackedSinceTurnEnd: unit.ambushAttackedSinceTurnEnd,
+      ambushReadyThisTurn: unit.ambushReadyThisTurn,
+      ambushActedThisTurn: unit.ambushActedThisTurn,
       unitLevel: role === 'support' ? unitLevelOf(unit) : undefined,
     };
   }
@@ -3032,6 +3143,10 @@ export class BattleScene extends Component {
         interiorVisionRange: unit.interiorVisionRange ?? 0,
         crew: unit.crew,
         crewLevels: unit.crewLevels ? normalizePlayerCrewLevels(unit.crewLevels) : undefined,
+        crewSkills: unit.crewSkills,
+        ambushAttackedSinceTurnEnd: unit.ambushAttackedSinceTurnEnd,
+        ambushReadyThisTurn: unit.ambushReadyThisTurn,
+        ambushActedThisTurn: unit.ambushActedThisTurn,
         unitLevel: unit.crewLevels ? undefined : unitLevelOf(unit),
       })),
       smokeHexes: this.mission ? Array.from(this.mission.smokeHexes).sort() : [],
@@ -3161,7 +3276,7 @@ export class BattleScene extends Component {
 
   private loadSelectedCampaignFromSession() {
     const campaignId = GameSession.selectedCampaignId;
-    const campaign = campaignId ? getCampaign(campaignId) : undefined;
+    const campaign = GameSession.selectedCampaign ?? (campaignId ? getCampaign(campaignId) : undefined);
     if (!campaign) {
       console.error('[BattleScene] campaign not found:', campaignId);
       return;
@@ -3170,19 +3285,36 @@ export class BattleScene extends Component {
     this.resetCampaignUpgradeRuntime();
 
     const loaded: MissionData[] = [];
+    const finishLoading = (eventProvider: TurnEndEventProvider) => {
+      this.campaignRuntime = stitchCampaignMissions(campaign, loaded);
+      this.activeCampaignSegmentIndex = 0;
+      this.campaignViewSegmentIndexOverride = null;
+      this.campaignTransitionActive = false;
+      this.campaignPanAnim = null;
+      this.missionSource = { type: 'resource', missionPath: campaign.segments[0]?.missionPath ?? '' };
+      this.turnEndEventProvider = eventProvider;
+      this.loadAndDraw(this.campaignRuntime.data);
+      this.applyCampaignSegmentView(0);
+      this.openCampaignUpgradeChoiceForCurrentSegment();
+    };
+
+    const generatedPackages = GameSession.selectedCampaignPackages;
+    if (generatedPackages) {
+      if (generatedPackages.length !== campaign.segments.length) {
+        console.error('[BattleScene] generated campaign package count mismatch:', generatedPackages.length);
+        return;
+      }
+      loaded.push(...generatedPackages.map(pkg => pkg.mission));
+      finishLoading(createCustomTurnEndEventProvider(
+        generatedPackages.flatMap(pkg => pkg.turnEndEvents),
+      ));
+      return;
+    }
+
     const loadNext = (index: number) => {
       const segment = campaign.segments[index];
       if (!segment) {
-        this.campaignRuntime = stitchCampaignMissions(campaign, loaded);
-        this.activeCampaignSegmentIndex = 0;
-        this.campaignViewSegmentIndexOverride = null;
-        this.campaignTransitionActive = false;
-        this.campaignPanAnim = null;
-        this.missionSource = { type: 'resource', missionPath: campaign.segments[0]?.missionPath ?? '' };
-        this.turnEndEventProvider = OfficialTurnEndEventProvider;
-        this.loadAndDraw(this.campaignRuntime.data);
-        this.applyCampaignSegmentView(0);
-        this.openCampaignUpgradeChoiceForCurrentSegment();
+        finishLoading(OfficialTurnEndEventProvider);
         return;
       }
       resources.load(segment.missionPath, JsonAsset, (err, asset) => {
@@ -3211,6 +3343,9 @@ export class BattleScene extends Component {
       turretFacing: this.shermanTurretFacing ?? s.turretFacing ?? undefined,
       crew: s.crew ? { ...s.crew } : undefined,
       crewLevels: s.crewLevels ? { ...s.crewLevels } : undefined,
+      crewSkills: s.crewSkills ? Object.fromEntries(
+        Object.entries(s.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+      ) : undefined,
       loaded: s.loaded === true,
       hatchOpen: s.hatchOpen === true,
     };
@@ -3292,6 +3427,20 @@ export class BattleScene extends Component {
   private campaignMainGunHitThresholdModifier(): number {
     return this.selectedGunHitThresholdModifier
       + campaignUpgradeHitThresholdModifier(this.campaignUpgradeIds);
+  }
+
+  /** 玩家主炮的命中修正逐项展示；总和与 campaignMainGunHitThresholdModifier + 伏击一致。 */
+  private playerMainGunHitThresholdModifierDetails() {
+    const details: Array<{ labelKey: string; value: number }> = [];
+    if (this.selectedGunHitThresholdModifier) {
+      details.push({ labelKey: 'dice.rule.precisionFire', value: this.selectedGunHitThresholdModifier });
+    }
+    const optics = campaignUpgradeHitThresholdModifier(this.campaignUpgradeIds);
+    if (optics) details.push({ labelKey: 'campaignUpgrade.improvedOptics.name', value: optics });
+    if (this.mission) {
+      details.push(...ambushHitThresholdModifierDetails(this.mission.sherman, GameSession.gameMode));
+    }
+    return details;
   }
 
   /** 烟雾弹初始可由杂项 3 点使用；烟幕发射器再把该动作扩展到 2、4 点。 */
@@ -3983,6 +4132,8 @@ export class BattleScene extends Component {
     this.clearMuzzleSmokes();
     this.clearProjectileTraces();
     this.clearMachineGunBursts();
+    this.clearInfantryBulletVolleys();
+    this.clearSniperBulletTraces();
     this.clearDestroyWreckVisuals();
     this.closeDiePopover();
     this.finalizeDiceShow(true);
@@ -4078,7 +4229,7 @@ export class BattleScene extends Component {
         continue;
       }
       if (t.terrain === 'field') {
-        this.drawHexFill(c.x, c.y, this.hexSize, TERRAIN_COLORS.field);
+        this.drawHexFill(c.x, c.y, this.hexSize, this.terrainColorFor('field'));
         this.drawFieldBrushOverlay(c.x, c.y, this.hexSize, t);
         continue;
       }
@@ -4086,7 +4237,7 @@ export class BattleScene extends Component {
         this.drawHexFill(c.x, c.y, this.hexSize, TERRAIN_COLORS.clear);
         continue;
       }
-      this.drawHexFill(c.x, c.y, this.hexSize, TERRAIN_COLORS[t.terrain]);
+      this.drawHexFill(c.x, c.y, this.hexSize, this.terrainColorFor(t.terrain));
     }
     g.lineWidth = 2;
     g.strokeColor = TILE_BORDER;
@@ -4115,7 +4266,7 @@ export class BattleScene extends Component {
     // 所有斑块按 axial 种子稳定（同格永不抖动），不影响其它地形。
     for (const t of tiles) {
       if (t.terrain !== 'mud') continue;
-      if (this.terrainSpriteFrames.mud) continue;
+      if (this.terrainSpriteFrameFor('mud')) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawMudOverlay(c.x, c.y, this.hexSize, t);
     }
@@ -4124,7 +4275,7 @@ export class BattleScene extends Component {
     // 让 road 格的非条带部分也有路面感，避免整片纯色像塑料。drawRoadOverlay 的方向条带叠在其上。
     for (const t of tiles) {
       if (t.terrain !== 'road') continue;
-      if (this.terrainSpriteFrames.road) continue;
+      if (this.terrainSpriteFrameFor('road')) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawRoadHexOverlay(c.x, c.y, this.hexSize, t);
     }
@@ -4631,7 +4782,9 @@ export class BattleScene extends Component {
         theater: this.mission.data.theater,
         smokeHexes: this.mission.smokeHexes,
         weather: this.currentWeather(),
-        hitThresholdModifier: this.campaignMainGunHitThresholdModifier(),
+        hitThresholdModifier: this.campaignMainGunHitThresholdModifier()
+          + ambushHitThresholdModifier(sherman, GameSession.gameMode),
+        hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       };
       if (!canAttack(ctx).ok) continue;
@@ -6062,20 +6215,34 @@ export class BattleScene extends Component {
       this.setInfantryVisualFacing(attacker, target.pos);
       this.redraw();
     }
-    if (mg) {
-      this.spawnMachineGunBurst(attacker, target, report?.hit === true);
-      playMgFire();
-      return;
-    }
     if (report) {
       if (this.firedAttackCueReports.has(report)) return;
       this.firedAttackCueReports.add(report);
+    }
+    if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isFootUnit(target)) {
+      this.spawnInfantryBulletVolley(attacker, target);
+      playInfantryAttack();
+      return;
+    }
+    if (mg) {
+      this.playMachineGunFireCue(attacker, target, report?.hit === true);
+      return;
     }
     this.startMainGunRecoil(attacker, target);
     this.spawnMuzzleSmoke(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
     this.spawnProjectileTrace(attacker, target, report);
     playConfiguredAttackSound(attackSound);
+  }
+
+  private playMachineGunFireCue(attacker: Unit | null, target: Unit | null, hit: boolean) {
+    if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isFootUnit(target)) {
+      this.spawnInfantryBulletVolley(attacker, target);
+      playInfantryAttack();
+      return;
+    }
+    this.spawnMachineGunBurst(attacker, target, hit);
+    playMgFire();
   }
 
   private startMainGunRecoil(attacker: Unit | null, target: Unit | null) {
@@ -6152,6 +6319,55 @@ export class BattleScene extends Component {
     };
     this.drawMachineGunBurst(burst, 0);
     this.machineGunBursts.push(burst);
+  }
+
+  /**
+   * Infantry-on-infantry fire: one lane starts at each rendered squad member.
+   * Giving every endpoint the same formation offset keeps all three trajectories
+   * exactly parallel while still landing inside the target hex.
+   */
+  private spawnInfantryBulletVolley(attacker: Unit | null, target: Unit | null) {
+    if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
+    if (!isFootUnit(attacker) || attacker.kind === 'officer' || !isFootUnit(target) || !this.isUnitVisible(attacker)) return;
+    const a = this.project(attacker.pos.q, attacker.pos.r);
+    const b = this.project(target.pos.q, target.pos.r);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len <= 1) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    const offsets = infantrySquadOffsets(this.hexSize, this.infantrySharesHexWithOtherUnit(attacker));
+    const muzzleForward = Math.max(5, this.hexSize * 0.10);
+    const targetInset = Math.max(8, this.hexSize * 0.16);
+    const lanes = offsets.map((offset) => ({
+      startX: a.x + offset.ox + ux * muzzleForward,
+      startY: a.y + offset.oy + uy * muzzleForward,
+      targetX: b.x + offset.ox - ux * targetInset,
+      targetY: b.y + offset.oy - uy * targetInset,
+    }));
+
+    const n = new Node('InfantryBulletVolley');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(1, 1);
+    ut.setAnchorPoint(0.5, 0.5);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    n.setPosition(0, 0, 0);
+    this.placeProjectileTraceNode(n);
+
+    const volley: InfantryBulletVolley = {
+      node: n,
+      g,
+      lanes,
+      ux,
+      uy,
+      t: 0,
+      dur: 0.48,
+    };
+    this.drawInfantryBulletVolley(volley, 0);
+    this.infantryBulletVolleys.push(volley);
   }
 
   private spawnProjectileTrace(attacker: Unit | null, target: Unit | null, report?: AttackReport) {
@@ -6776,6 +6992,192 @@ export class BattleScene extends Component {
     this.machineGunBursts.length = 0;
   }
 
+  private advanceInfantryBulletVolleys(dt: number) {
+    for (let i = this.infantryBulletVolleys.length - 1; i >= 0; i--) {
+      const volley = this.infantryBulletVolleys[i];
+      volley.t += dt;
+      const p = Math.min(volley.t / volley.dur, 1);
+      if (p >= 1) {
+        volley.node.destroy();
+        this.infantryBulletVolleys.splice(i, 1);
+        continue;
+      }
+      this.drawInfantryBulletVolley(volley, p);
+    }
+  }
+
+  private drawInfantryBulletVolley(volley: InfantryBulletVolley, p: number) {
+    const g = volley.g;
+    this.placeProjectileTraceNode(volley.node);
+    g.clear();
+
+    // Three short rounds per rifle make the supplied burst audio read clearly,
+    // while every round stays on its soldier's parallel lane.
+    for (let round = 0; round < 3; round++) {
+      const roundP = (p - round * 0.13) / 0.74;
+      if (roundP < 0 || roundP > 1) continue;
+      const travel = Math.min(1, roundP * 1.55);
+      const fade = Math.max(0, Math.min(1, (1 - roundP) / 0.32));
+      const alpha = Math.round(255 * Math.min(1, roundP * 10) * fade);
+      if (alpha <= 0) continue;
+
+      for (const lane of volley.lanes) {
+        const dx = lane.targetX - lane.startX;
+        const dy = lane.targetY - lane.startY;
+        const headX = lane.startX + dx * travel;
+        const headY = lane.startY + dy * travel;
+        const distanceFromMuzzle = Math.hypot(dx, dy) * travel;
+        const tail = clampMachineGunTracerTail(this.hexSize * 0.44, distanceFromMuzzle);
+
+        g.lineWidth = Math.max(2, this.hexSize * 0.032);
+        g.strokeColor = new Color(255, 178, 38, Math.round(alpha * 0.68));
+        g.moveTo(headX - volley.ux * tail * 1.15, headY - volley.uy * tail * 1.15);
+        g.lineTo(headX + volley.ux * this.hexSize * 0.035, headY + volley.uy * this.hexSize * 0.035);
+        g.stroke();
+
+        g.lineWidth = Math.max(1.2, this.hexSize * 0.018);
+        g.strokeColor = new Color(255, 246, 164, alpha);
+        g.moveTo(headX - volley.ux * tail, headY - volley.uy * tail);
+        g.lineTo(headX, headY);
+        g.stroke();
+      }
+    }
+  }
+
+  private clearInfantryBulletVolleys() {
+    for (const volley of this.infantryBulletVolleys) volley.node.destroy();
+    this.infantryBulletVolleys.length = 0;
+  }
+
+  private playTurnEndSniperShot(attacker: Unit, target: Unit, onImpact: () => void) {
+    this.setInfantryVisualFacing(attacker, target.pos);
+    this.redraw();
+    this.spawnSniperBulletTrace(attacker, target, onImpact);
+    playSniperFire();
+  }
+
+  /** One actual member of the triggering infantry squad fires one guaranteed-hit round. */
+  private spawnSniperBulletTrace(attacker: Unit, target: Unit, onImpact: () => void) {
+    if (!this.mapNode || attacker.destroyed || !isFootUnit(attacker)) return;
+    const a = this.project(attacker.pos.q, attacker.pos.r);
+    const b = this.project(target.pos.q, target.pos.r);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const len = Math.hypot(dx, dy);
+    if (len <= 1) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    const squadOffsets = infantrySquadOffsets(this.hexSize, this.infantrySharesHexWithOtherUnit(attacker));
+    const shooterIndex = this.hashStringToSeed(`sniper:${attacker.id}`) % squadOffsets.length;
+    const shooterOffset = attacker.kind === 'officer'
+      ? { ox: 0, oy: 0 }
+      : squadOffsets[shooterIndex];
+    const muzzleForward = Math.max(5, this.hexSize * 0.10);
+    const targetInset = Math.max(5, this.hexSize * 0.08);
+
+    const n = new Node('SniperBulletTrace');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(1, 1);
+    ut.setAnchorPoint(0.5, 0.5);
+    const g = n.addComponent(Graphics);
+    this.mapNode.addChild(n);
+    n.setPosition(0, 0, 0);
+    this.placeProjectileTraceNode(n);
+
+    const trace: SniperBulletTrace = {
+      node: n,
+      g,
+      startX: a.x + shooterOffset.ox + ux * muzzleForward,
+      startY: a.y + shooterOffset.oy + uy * muzzleForward,
+      targetX: b.x - ux * targetInset,
+      targetY: b.y - uy * targetInset,
+      ux,
+      uy,
+      t: 0,
+      dur: 0.56,
+      impacted: false,
+      onImpact,
+    };
+    this.drawSniperBulletTrace(trace, 0);
+    this.sniperBulletTraces.push(trace);
+  }
+
+  private advanceSniperBulletTraces(dt: number) {
+    for (let i = this.sniperBulletTraces.length - 1; i >= 0; i--) {
+      const trace = this.sniperBulletTraces[i];
+      trace.t += dt;
+      const p = Math.min(trace.t / trace.dur, 1);
+      if (!trace.impacted && p >= 0.68) {
+        trace.impacted = true;
+        trace.onImpact();
+      }
+      if (p >= 1) {
+        trace.node.destroy();
+        this.sniperBulletTraces.splice(i, 1);
+        continue;
+      }
+      this.drawSniperBulletTrace(trace, p);
+    }
+  }
+
+  private drawSniperBulletTrace(trace: SniperBulletTrace, p: number) {
+    const g = trace.g;
+    this.placeProjectileTraceNode(trace.node);
+    g.clear();
+    const flightEnd = 0.68;
+
+    if (p < flightEnd) {
+      const travel = p / flightEnd;
+      const headX = trace.startX + (trace.targetX - trace.startX) * travel;
+      const headY = trace.startY + (trace.targetY - trace.startY) * travel;
+      const distanceFromMuzzle = Math.hypot(trace.targetX - trace.startX, trace.targetY - trace.startY) * travel;
+      const tail = clampMachineGunTracerTail(this.hexSize * 0.72, distanceFromMuzzle);
+      const alpha = Math.round(255 * Math.min(1, travel * 10));
+
+      g.lineWidth = Math.max(2.6, this.hexSize * 0.042);
+      g.strokeColor = new Color(255, 154, 28, Math.round(alpha * 0.72));
+      g.moveTo(headX - trace.ux * tail * 1.18, headY - trace.uy * tail * 1.18);
+      g.lineTo(headX + trace.ux * this.hexSize * 0.05, headY + trace.uy * this.hexSize * 0.05);
+      g.stroke();
+      g.lineWidth = Math.max(1.4, this.hexSize * 0.021);
+      g.strokeColor = new Color(255, 250, 188, alpha);
+      g.moveTo(headX - trace.ux * tail, headY - trace.uy * tail);
+      g.lineTo(headX, headY);
+      g.stroke();
+
+      if (p < 0.12) {
+        const flash = 1 - p / 0.12;
+        g.fillColor = new Color(255, 230, 112, Math.round(230 * flash));
+        g.circle(trace.startX, trace.startY, this.hexSize * (0.06 + flash * 0.05));
+        g.fill();
+      }
+      return;
+    }
+
+    const impactP = (p - flightEnd) / (1 - flightEnd);
+    const alpha = Math.round(255 * (1 - impactP));
+    const nx = -trace.uy;
+    const ny = trace.ux;
+    g.fillColor = new Color(255, 238, 146, alpha);
+    g.circle(trace.targetX, trace.targetY, this.hexSize * (0.055 + impactP * 0.09));
+    g.fill();
+    for (let i = 0; i < 6; i++) {
+      const along = (i % 2 === 0 ? 1 : -1) * this.hexSize * (0.10 + impactP * 0.10);
+      const side = (i - 2.5) * this.hexSize * 0.025;
+      g.strokeColor = new Color(255, i % 2 === 0 ? 226 : 150, 66, alpha);
+      g.lineWidth = Math.max(1, this.hexSize * 0.015);
+      g.moveTo(trace.targetX, trace.targetY);
+      g.lineTo(trace.targetX + trace.ux * along + nx * side, trace.targetY + trace.uy * along + ny * side);
+      g.stroke();
+    }
+  }
+
+  private clearSniperBulletTraces() {
+    for (const trace of this.sniperBulletTraces) trace.node.destroy();
+    this.sniperBulletTraces.length = 0;
+  }
+
   private seededUnit(seed: number, index: number): number {
     let x = (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0;
     x ^= x >>> 16;
@@ -7105,6 +7507,8 @@ export class BattleScene extends Component {
     if (this.muzzleSmokes.length > 0) this.advanceMuzzleSmokes(dt);
     if (this.projectileTraces.length > 0) this.advanceProjectileTraces(dt);
     if (this.machineGunBursts.length > 0) this.advanceMachineGunBursts(dt);
+    if (this.infantryBulletVolleys.length > 0) this.advanceInfantryBulletVolleys(dt);
+    if (this.sniperBulletTraces.length > 0) this.advanceSniperBulletTraces(dt);
     if (this.mainGunRecoils.size > 0) this.advanceMainGunRecoils(dt);
     this.advanceUnitEffects(dt);
     if (GameSession.isPvp) this.advancePvpTurnTimer();
@@ -7182,6 +7586,8 @@ export class BattleScene extends Component {
       this.enemyDiceResultHold = null;
       this.refreshEnemyDiceTray();
       this.redraw();
+      const finished = this.enemyOrder[this.enemyIndex];
+      if (finished) endAmbushTurn(finished);
       this.enemyIndex++;
       this.beginCurrentEnemyTurn();
       return;
@@ -7353,7 +7759,7 @@ export class BattleScene extends Component {
 
   /** 绘制带自有格线的地形贴图；失败时调用方会走 Graphics 兜底。 */
   private drawTerrainTileSprite(cx: number, cy: number, size: number, terrain: TerrainType): boolean {
-    const sf = this.terrainSpriteFrames[terrain];
+    const sf = this.terrainSpriteFrameFor(terrain);
     if (!sf || this.terrainSpritePoolNext >= this.terrainSpritePool.length) return false;
     const slot = this.terrainSpritePool[this.terrainSpritePoolNext++];
     slot.sprite.spriteFrame = sf;
@@ -7364,6 +7770,29 @@ export class BattleScene extends Component {
     slot.node.setScale(1, 1, 1);
     slot.node.active = true;
     return true;
+  }
+
+  private usesWinterTerrainVisuals(): boolean {
+    const data = this.mission?.data;
+    return data?.season === 'winter' && (data.theater ?? 'europe') === 'europe';
+  }
+
+  private terrainSpriteFrameFor(terrain: TerrainType): SpriteFrame | null {
+    if (this.usesWinterTerrainVisuals()) {
+      return this.winterTerrainSpriteFrames[terrain] ?? this.terrainSpriteFrames[terrain];
+    }
+    return this.terrainSpriteFrames[terrain];
+  }
+
+  private terrainColorFor(terrain: TerrainType): Color {
+    return this.usesWinterTerrainVisuals()
+      ? (WINTER_TERRAIN_COLORS[terrain] ?? TERRAIN_COLORS[terrain])
+      : TERRAIN_COLORS[terrain];
+  }
+
+  private activeTreeSpriteFrames(): Array<SpriteFrame | null> {
+    if (!this.usesWinterTerrainVisuals()) return this.treeSpriteFrames;
+    return this.winterTreeSpriteFrames.some(Boolean) ? this.winterTreeSpriteFrames : this.treeSpriteFrames;
   }
 
   private drawHexFill(cx: number, cy: number, size: number, fill: Color) {
@@ -7623,20 +8052,32 @@ export class BattleScene extends Component {
   /** 单丛树冠：左下浅影 + 几层相叠的圆 */
   private drawOneTreeClump(x: number, y: number, r: number) {
     const g = this.g!;
+    const winter = this.usesWinterTerrainVisuals();
     const sh = r * 0.42;
     g.lineWidth = 0;
     g.fillColor = FOREST_SHADE;
     g.circle(x - sh, y - sh, r * 0.92);
     g.fill();
-    g.fillColor = FOREST_TREE_DARK;
+    g.fillColor = winter ? new Color(66, 47, 34, 255) : FOREST_TREE_DARK;
     g.circle(x - r * 0.1, y + r * 0.06, r);
     g.fill();
-    g.fillColor = FOREST_TREE_MID;
+    g.fillColor = winter ? new Color(102, 75, 52, 255) : FOREST_TREE_MID;
     g.circle(x + r * 0.2, y - r * 0.04, r * 0.8);
     g.fill();
-    g.fillColor = FOREST_TREE_LIGHT;
+    g.fillColor = winter ? new Color(145, 112, 78, 255) : FOREST_TREE_LIGHT;
     g.circle(x, y, r * 0.52);
     g.fill();
+    if (winter) {
+      g.fillColor = new Color(235, 242, 244, 225);
+      for (const fleck of [
+        { ox: -0.24, oy: 0.28, scale: 0.09 },
+        { ox: 0.08, oy: 0.31, scale: 0.07 },
+        { ox: 0.28, oy: 0.12, scale: 0.08 },
+      ]) {
+        g.circle(x + r * fleck.ox, y + r * fleck.oy, r * fleck.scale);
+        g.fill();
+      }
+    }
     g.lineWidth = 1;
   }
 
@@ -7842,7 +8283,7 @@ export class BattleScene extends Component {
       const c3 = rotate(-hw, hh);
 
       // (4-1) 屋顶底色：整张矩形铺满（亮坡视为屋顶基色）
-      g.fillColor = BUILDING_ROOF_PALETTE[b.colorIdx];
+      g.fillColor = this.usesWinterTerrainVisuals() ? WINTER_BUILDING_ROOF : BUILDING_ROOF_PALETTE[b.colorIdx];
       g.lineWidth = 0;
       g.moveTo(c0[0], c0[1]);
       g.lineTo(c1[0], c1[1]);
@@ -7855,7 +8296,7 @@ export class BattleScene extends Component {
       //       与上半幅形成「双坡屋顶俯视」的明暗对比，让矩形不再像扁箱子
       const cM0 = rotate(-hw, 0);
       const cM1 = rotate(hw, 0);
-      g.fillColor = BUILDING_SHADE_PALETTE[b.colorIdx];
+      g.fillColor = this.usesWinterTerrainVisuals() ? WINTER_BUILDING_SHADE : BUILDING_SHADE_PALETTE[b.colorIdx];
       g.moveTo(cM0[0], cM0[1]);
       g.lineTo(cM1[0], cM1[1]);
       g.lineTo(c2[0], c2[1]);
@@ -7892,7 +8333,7 @@ export class BattleScene extends Component {
       //       并稍超出 hw·0.96 端点，模拟屋脊金属脊瓦在山墙处的轻微外凸
       const ridgeA = rotate(-hw * 0.96, 0);
       const ridgeB = rotate(hw * 0.96, 0);
-      g.strokeColor = BUILDING_RIDGE_PALETTE[b.colorIdx];
+      g.strokeColor = this.usesWinterTerrainVisuals() ? WINTER_BUILDING_RIDGE : BUILDING_RIDGE_PALETTE[b.colorIdx];
       g.lineWidth = 1.5;
       g.moveTo(ridgeA[0], ridgeA[1]);
       g.lineTo(ridgeB[0], ridgeB[1]);
@@ -7912,6 +8353,7 @@ export class BattleScene extends Component {
    */
   private drawBridgeOverlay(cx: number, cy: number, size: number, ends: [Direction, Direction]) {
     const g = this.g!;
+    const winter = this.usesWinterTerrainVisuals();
     // 取两端方向对应的几何边中点（与 drawHedgeEdge 对边的端点定义同步）
     const mid = (axial: Direction): { x: number; y: number } => {
       const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axial];
@@ -7938,7 +8380,7 @@ export class BattleScene extends Component {
 
     g.lineWidth = 1.5;
     g.strokeColor = BRIDGE_PLANK_OUTLINE;
-    g.fillColor = BRIDGE_PLANK_FILL;
+    g.fillColor = winter ? WINTER_BUILDING_SHADE : BRIDGE_PLANK_FILL;
     g.moveTo(p0.x + nx * bridgeHalfW, p0.y + ny * bridgeHalfW);
     g.lineTo(p1.x + nx * bridgeHalfW, p1.y + ny * bridgeHalfW);
     g.lineTo(p1.x - nx * bridgeHalfW, p1.y - ny * bridgeHalfW);
@@ -7947,8 +8389,8 @@ export class BattleScene extends Component {
     g.fill();
     g.stroke();
 
-    g.fillColor = ROAD_PATH_FILL;
-    g.strokeColor = ROAD_PATH_OUTLINE;
+    g.fillColor = winter ? WINTER_ROAD_PATH_FILL : ROAD_PATH_FILL;
+    g.strokeColor = winter ? WINTER_ROAD_PATH_OUTLINE : ROAD_PATH_OUTLINE;
     g.lineWidth = 1.2;
     g.moveTo(p0.x + nx * roadHalfW, p0.y + ny * roadHalfW);
     g.lineTo(p1.x + nx * roadHalfW, p1.y + ny * roadHalfW);
@@ -8121,7 +8563,7 @@ export class BattleScene extends Component {
 
     // ---- 3) 先画整体（深度=totalDepth, inner color），再画外层（深度=outerDepth, outer color）覆盖外侧 ----
     g.lineWidth = 0;
-    g.fillColor = WATER_BANK_INNER;
+    g.fillColor = this.usesWinterTerrainVisuals() ? WINTER_WATER_BANK_INNER : WATER_BANK_INNER;
     for (let e = 0; e < 6; e++) {
       if (edgeType[e] !== 'land') continue;
       const poly = stripPolygon(e, totalDepth);
@@ -8130,7 +8572,7 @@ export class BattleScene extends Component {
       g.close();
       g.fill();
     }
-    g.fillColor = WATER_BANK_OUTER;
+    g.fillColor = this.usesWinterTerrainVisuals() ? WINTER_WATER_BANK_OUTER : WATER_BANK_OUTER;
     for (let e = 0; e < 6; e++) {
       if (edgeType[e] !== 'land') continue;
       const poly = stripPolygon(e, outerDepth);
@@ -8301,6 +8743,7 @@ export class BattleScene extends Component {
     tile: Tile,
   ) {
     const g = this.g!;
+    const winter = this.usesWinterTerrainVisuals();
     const dirCount = roads.reduce((n, b) => n + (b ? 1 : 0), 0);
     if (dirCount === 0) return;
 
@@ -8356,8 +8799,8 @@ export class BattleScene extends Component {
       g.fill();
     };
 
-    g.fillColor = ROAD_PATH_FILL;
-    g.strokeColor = ROAD_PATH_OUTLINE;
+    g.fillColor = winter ? WINTER_ROAD_PATH_FILL : ROAD_PATH_FILL;
+    g.strokeColor = winter ? WINTER_ROAD_PATH_OUTLINE : ROAD_PATH_OUTLINE;
 
     // ---- 1) 一次填充（halfW）：所有 through / half / 汇合圆 ----
     g.lineWidth = 0;
@@ -8459,7 +8902,9 @@ export class BattleScene extends Component {
         const px = pA.mx + ux * tt * len + nx * ss;
         const py = pA.my + uy * tt * len + ny * ss;
         const v = rng.next();
-        const col = v < 0.40 ? ROAD_GRIT_LIGHT : v < 0.85 ? ROAD_GRIT_MID : ROAD_GRIT_DARK;
+        const col = winter
+          ? (v < 0.40 ? WINTER_ROAD_GRIT_LIGHT : v < 0.85 ? WINTER_ROAD_GRIT_MID : WINTER_ROAD_GRIT_DARK)
+          : (v < 0.40 ? ROAD_GRIT_LIGHT : v < 0.85 ? ROAD_GRIT_MID : ROAD_GRIT_DARK);
         const rr = 0.5 + rng.next() * 1.4;
         g.fillColor = col;
         g.circle(px, py, rr);
@@ -8475,7 +8920,9 @@ export class BattleScene extends Component {
         const px = cx + r * Math.cos(a);
         const py = cy + r * Math.sin(a);
         const v = rng.next();
-        const col = v < 0.40 ? ROAD_GRIT_LIGHT : v < 0.85 ? ROAD_GRIT_MID : ROAD_GRIT_DARK;
+        const col = winter
+          ? (v < 0.40 ? WINTER_ROAD_GRIT_LIGHT : v < 0.85 ? WINTER_ROAD_GRIT_MID : WINTER_ROAD_GRIT_DARK)
+          : (v < 0.40 ? ROAD_GRIT_LIGHT : v < 0.85 ? ROAD_GRIT_MID : ROAD_GRIT_DARK);
         const rr = 1.0 + rng.next() * 1.4;
         g.fillColor = col;
         g.circle(px, py, rr);
@@ -8621,7 +9068,7 @@ export class BattleScene extends Component {
 
   private drawTreeSprite(cx: number, cy: number, hexSize: number, seed: number, scale: number): boolean {
     if (this.foliageSpritePoolNext >= this.foliageSpritePool.length) return false;
-    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    const frames = this.activeTreeSpriteFrames().filter((sf): sf is SpriteFrame => !!sf);
     if (frames.length === 0) return false;
     const rng = new RNG(seed || 1);
     const slot = this.foliageSpritePool[this.foliageSpritePoolNext++];
@@ -8648,6 +9095,7 @@ export class BattleScene extends Component {
   private drawHedgeTreeClump(x: number, y: number, r: number, rng?: RNG) {
     const g = this.g!;
     const local = rng ?? new RNG(1);
+    const winter = this.usesWinterTerrainVisuals();
     const sh = r * 0.24;
     g.lineWidth = 0;
     g.fillColor = HEDGE_SHADE;
@@ -8659,13 +9107,22 @@ export class BattleScene extends Component {
       const d = r * local.next() * 0.52;
       const rr = r * (0.42 + local.next() * 0.32);
       const roll = local.next();
-      g.fillColor = roll < 0.32 ? HEDGE_BUSH_DEEP : roll < 0.68 ? HEDGE_BUSH_DARK : HEDGE_BUSH_MID;
+      g.fillColor = winter
+        ? (roll < 0.32 ? new Color(61, 43, 31, 255) : roll < 0.68 ? new Color(91, 65, 45, 255) : new Color(126, 94, 64, 255))
+        : (roll < 0.32 ? HEDGE_BUSH_DEEP : roll < 0.68 ? HEDGE_BUSH_DARK : HEDGE_BUSH_MID);
       g.circle(x + Math.cos(a) * d, y + Math.sin(a) * d, rr);
       g.fill();
     }
-    g.fillColor = HEDGE_BUSH_LIGHT;
+    g.fillColor = winter ? new Color(160, 125, 86, 245) : HEDGE_BUSH_LIGHT;
     g.circle(x - r * 0.16, y + r * 0.18, r * (0.18 + local.next() * 0.10));
     g.fill();
+    if (winter && local.next() > 0.55) {
+      g.fillColor = new Color(235, 242, 244, 220);
+      g.circle(x - r * 0.20, y + r * 0.24, r * 0.07);
+      g.fill();
+      g.circle(x + r * 0.12, y + r * 0.28, r * 0.06);
+      g.fill();
+    }
     g.lineWidth = 1;
   }
 
@@ -10748,26 +11205,23 @@ export class BattleScene extends Component {
    *   │  机动    正常      │
    *   │  着火程度  2 / -   │
    *   │  ─────────────     │
-   *   │   乘员             │
-   *   │  ① 车长  打开/关闭  │  ← 与舱盖合并：阵亡显示「阵亡」；存活可点切换舱盖
-   *   │  ② 装填手 …        │
-   *   │  …                 │
+   *   │       乘员          │
+   *   │  ☆  ◉  ◇  ◯  ◌   │  ← 图标从左至右：车长、装填手、炮手、驾驶员、副驾驶
    *   └──────────────────┘
    *
-   * 每行左列 = 灰色固定名字，右列 = 根据数据着色的状态文字；
-   * refresh 时只改 string + color，不重建节点。
+   * 乘员等级显示在图标右下角；阵亡时图标灰化并覆盖红色斜杠；
+   * 车长开舱时其图标变绿。refresh 时只改节点状态，不重建节点。
    */
   private buildStatusPanel() {
     const W = 240;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
     const showCampaignUpgrades = GameSession.gameMode === 'hardcore' && GameSession.isCampaign;
-    const H = showCampaignUpgrades ? 430 : GameSession.gameMode === 'hardcore' ? 334 : 312;
+    const H = showCampaignUpgrades ? 340 : GameSession.gameMode === 'hardcore' ? 236 : 214;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
     const x = CANVAS_W * 0.5 - W * 0.5 - 10;
 
-    const CREW_GAP = 22;
     const BODY_GAP = 22;
     const innerTop = H / 2 - 8;
     const shermanTitleY = innerTop - 14;
@@ -10797,39 +11251,55 @@ export class BattleScene extends Component {
     this.statusPanel = panel;
 
     this.statusBodyLeftLabels = [];
-    this.statusCrewLeftLabels = [];
 
     // 1) 乘员区（在「谢尔曼状态」之下）
     this.statusCrewTitleLabel = this.makeCenteredLabel(panel, t('status.row.crewTitle'),
       0, crewTitleY, W - 20, 22, 18, STATUS_TITLE_COLOR);
 
-    const crewNames = [
-      t('status.crew.1'),
-      t('status.crew.2'),
-      t('status.crew.3'),
-      t('status.crew.4'),
-      t('status.crew.5'),
-    ];
-    const crewLeftX = -W / 2 + 20;
-    const crewIconSize = 18;
-    const crewLabelX = crewLeftX + 25;
-    this.statusCrewLabels = [];
-    for (let i = 0; i < crewNames.length; i++) {
-      const rowY = crewFirstY - i * CREW_GAP;
+    const crewIconSize = 38;
+    const crewIconGap = 6;
+    const crewRowW = crewIconSize * 5 + crewIconGap * 4;
+    const crewStartX = -crewRowW / 2 + crewIconSize / 2;
+    this.statusCrewIcons = [];
+    this.statusCrewDeadMarkers = [];
+    this.statusCrewRankNodes = [];
+    this.statusCrewRankIcons = [];
+    for (let i = 0; i < 5; i++) {
       const iconNode = new Node(`CrewIcon${i + 1}`);
       iconNode.layer = this.node.layer;
       iconNode.addComponent(UITransform).setContentSize(crewIconSize, crewIconSize);
-      iconNode.setPosition(crewLeftX + crewIconSize / 2, rowY, 0);
+      iconNode.setPosition(crewStartX + i * (crewIconSize + crewIconGap), crewFirstY, 0);
       const icon = iconNode.addComponent(Sprite);
       icon.sizeMode = Sprite.SizeMode.CUSTOM;
       panel.addChild(iconNode);
       this.assignCrewStatusIcon(icon, iconNode, i + 1);
+      this.statusCrewIcons.push(icon);
 
-      const crewLeft = this.makeLeftLabel(panel, crewNames[i], crewLabelX, rowY, 84, 22, 18, STATUS_LABEL_COLOR);
-      this.statusCrewLeftLabels.push(crewLeft);
-      const val = this.makeRightLabel(panel, t('status.val.crewAlive'), W / 2 - 20, rowY, 88, 22, 18, STATUS_VALUE_OK);
-      this.statusCrewLabels.push(val);
+      const deadMarker = this.addStatusCrewDeadMarker(iconNode, i + 1, crewIconSize);
+      deadMarker.active = false;
+      this.statusCrewDeadMarkers.push(deadMarker);
+
+      const rankNode = new Node(`CrewRank${i + 1}`);
+      rankNode.layer = this.node.layer;
+      rankNode.addComponent(UITransform).setContentSize(17, 17);
+      rankNode.setPosition(crewIconSize * 0.32, -crewIconSize * 0.32, 0);
+      const rankBg = rankNode.addComponent(Graphics);
+      rankBg.fillColor = new Color(48, 55, 38, 245);
+      rankBg.roundRect(-8.5, -8.5, 17, 17, 2);
+      rankBg.fill();
+      const rankSpriteNode = new Node('Icon');
+      rankSpriteNode.layer = this.node.layer;
+      rankSpriteNode.addComponent(UITransform).setContentSize(15, 15);
+      const rankSprite = rankSpriteNode.addComponent(Sprite);
+      rankSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      rankNode.addChild(rankSpriteNode);
+      iconNode.addChild(rankNode);
+      rankNode.active = false;
+      this.statusCrewRankNodes.push(rankNode);
+      this.statusCrewRankIcons.push(rankSprite);
+      deadMarker.setSiblingIndex(iconNode.children.length - 1);
     }
+    this.loadCrewStatusRankFrames();
 
     // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
     this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
@@ -10856,8 +11326,7 @@ export class BattleScene extends Component {
     }
 
     if (showCampaignUpgrades) {
-      const lastCrewY = crewFirstY - (crewNames.length - 1) * CREW_GAP;
-      const upgradeSepY = lastCrewY - 20;
+      const upgradeSepY = crewFirstY - crewIconSize / 2 - 20;
       bg.strokeColor = new Color(145, 138, 100, 190);
       bg.lineWidth = 1;
       bg.moveTo(-W / 2 + 16, upgradeSepY);
@@ -11005,31 +11474,30 @@ export class BattleScene extends Component {
       }
     }
 
-    // 乘员：车长行显示舱盖三态，其余乘员显示存活 / 阵亡；所有行同时显示独立等级。
+    // 乘员：纯图标状态。车长开舱为绿色，阵亡为灰色并带红色斜杠，等级在右下角。
     const crew = s.crew;
     const crewFlags: boolean[] = crew
       ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
       : [true, true, true, true, true];
     const crewSlots = ['commander', 'loader', 'gunner', 'driver', 'coDriver'] as const;
 
-    for (let i = 0; i < this.statusCrewLabels.length; i++) {
-      const lab = this.statusCrewLabels[i];
-      const level = t(`unit.level.${crewLevelFor(s, crewSlots[i]!)}`);
-      if (s.destroyed) {
-        lab.string = t('status.val.crewDeadLevel', { level });
-        lab.color = STATUS_VALUE_DEAD;
-      } else if (i === 0 && crewFlags[i]) {
-        lab.string = s.hatchOpen
-          ? t('status.val.hatchOpenLevel', { level })
-          : t('status.val.hatchClosedLevel', { level });
-        lab.color = s.hatchOpen ? STATUS_VALUE_WARN : STATUS_VALUE_DOWN;
-      } else if (!crewFlags[i]) {
-        lab.string = t('status.val.crewDeadLevel', { level });
-        lab.color = STATUS_VALUE_DEAD;
-      } else {
-        lab.string = t('status.val.crewAliveLevel', { level });
-        lab.color = STATUS_VALUE_OK;
-      }
+    for (let i = 0; i < this.statusCrewIcons.length; i++) {
+      const dead = s.destroyed || !crewFlags[i];
+      const hatchOpen = i === 0 && !dead && s.hatchOpen === true;
+      this.statusCrewIcons[i].color = dead
+        ? CREW_STATUS_DEAD_COLOR
+        : hatchOpen ? CREW_STATUS_HATCH_OPEN_COLOR : CREW_STATUS_NORMAL_COLOR;
+      if (this.statusCrewDeadMarkers[i]) this.statusCrewDeadMarkers[i].active = dead;
+
+      const level = crewLevelFor(s, crewSlots[i]!);
+      const rankNode = this.statusCrewRankNodes[i];
+      const rankIcon = this.statusCrewRankIcons[i];
+      if (!rankNode || !rankIcon) continue;
+      rankNode.active = level === 'veteran' || level === 'elite';
+      rankIcon.spriteFrame = level === 'veteran' || level === 'elite'
+        ? this.crewStatusRankFrames[level]
+        : null;
+      rankIcon.color = dead ? new Color(145, 145, 145, 230) : Color.WHITE;
     }
     this.refreshChooseHatchButton();
   }
@@ -12713,6 +13181,7 @@ export class BattleScene extends Component {
     const step = dirSign === 1 ? 1 : 5;
     const from = sherman.facing;
     const to = rotateDirection(from, step);
+    markAmbushAction(sherman);
     // §3.5 隐蔽：任何移动动作（转向 / 前进 / 后退）都会脱离隐蔽
     this.breakConcealment(sherman);
     this.usePhaseDice([dieIdx]);
@@ -12784,6 +13253,7 @@ export class BattleScene extends Component {
     if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) {
+      markAmbushAction(sherman);
       this.usePhaseDice([dieIdx]);
       this.closeDiePopover();
       this.breakConcealment(sherman);
@@ -12823,6 +13293,7 @@ export class BattleScene extends Component {
 
     this.usePhaseDice([dieIdx]);
     this.closeDiePopover();
+    markAmbushAction(sherman);
     // §3.5 隐蔽：前进 / 后退都会脱离隐蔽
     this.breakConcealment(sherman);
     this.anim = {
@@ -13178,6 +13649,8 @@ export class BattleScene extends Component {
     }
 
     const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), atGunCrewTargets: GameSession.gameMode === 'hardcore' };
+    markAmbushAction(sherman);
+    markAmbushTargeted(target);
     const maxRoll = maxMGHitRoll(ctx);
     const impossibleThreshold = mgHitThreshold(ctx);
     const impossible = maxRoll < impossibleThreshold;
@@ -13189,6 +13662,8 @@ export class BattleScene extends Component {
           roll: maxRoll,
           threshold: impossibleThreshold,
           hit: false,
+          hitBreakdown: mgHitBreakdown(ctx),
+          hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
       : rollMGAttack(ctx, this.rng);
     this.battleLogI18n('battleLog.combatMg', {
@@ -13201,8 +13676,7 @@ export class BattleScene extends Component {
     });
 
     if (impossible) {
-      this.spawnMachineGunBurst(sherman, target, false);
-      playMgFire();
+      this.playMachineGunFireCue(sherman, target, false);
       this.usePhaseDice([this.selectedMGDieIdx]);
       this.selectedMGDieIdx = -1;
       this.spawnFloater(target.pos.q, target.pos.r, t('dice.panel.outcomeMiss'),
@@ -13231,6 +13705,8 @@ export class BattleScene extends Component {
       roll: report.roll,
       threshold: report.threshold,
       hit: report.hit,
+      hitBreakdown: report.hitBreakdown,
+      hitModifiers: report.hitModifiers,
       statusChange: report.hit ? 'destroyed' : 'none',
     };
 
@@ -13490,6 +13966,7 @@ export class BattleScene extends Component {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) {
       if (!this.consumeDoubles(dieIdx)) return;
+      markAmbushAction(sherman);
       this.closeDiePopover();
       this.breakConcealment(sherman);
       this.anim = {
@@ -13527,6 +14004,7 @@ export class BattleScene extends Component {
 
     // 几何校验通过 → 消耗对子并开始前进动画
     if (!this.consumeDoubles(dieIdx)) return;
+    markAmbushAction(sherman);
     this.closeDiePopover();
     this.breakConcealment(sherman);
     this.anim = {
@@ -13568,6 +14046,7 @@ export class BattleScene extends Component {
     const step = dirSign === 1 ? 1 : 5;
     const from = sherman.facing;
     const to = rotateDirection(from, step);
+    markAmbushAction(sherman);
     this.breakConcealment(sherman);
     this.closeDiePopover();
     this.anim = {
@@ -13810,6 +14289,7 @@ export class BattleScene extends Component {
 
   private continueAfterPlayerFireCheck() {
     if (!this.mission) return;
+    endAmbushTurn(this.mission.sherman);
     this.outcome = this.computeOutcome();
     this.updateOutcomeOverlay();
     if (this.outcome !== 'ongoing') {
@@ -13922,6 +14402,7 @@ export class BattleScene extends Component {
     this.phaseDice = [];
     this.clearGunSelection();
     if (this.mission) {
+      beginAmbushTurn(this.mission.sherman, GameSession.gameMode);
       this.consumeLegacyUnitSmoke();
       for (const pos of this.clearSmokeByOwner('friendly')) {
         this.spawnFloater(pos.q, pos.r, t('floater.smokeCleared'),
@@ -14473,6 +14954,43 @@ export class BattleScene extends Component {
     });
   }
 
+  private loadCrewStatusRankFrames(): void {
+    (['veteran', 'elite'] as const).forEach((level) => {
+      if (this.crewStatusRankFrames[level]) return;
+      resources.load(CREW_RANK_ICON_PATHS[level], SpriteFrame, (err, sf) => {
+        if (err || !sf) {
+          console.warn(`[BattleScene] crew rank icon load failed (${level}):`, err);
+          return;
+        }
+        this.crewStatusRankFrames[level] = sf;
+        this.refreshStatusPanel();
+      });
+    });
+  }
+
+  /** One diagonal is deliberately used here to match the compact status-panel treatment. */
+  private addStatusCrewDeadMarker(iconNode: Node, slot: number, iconSize: number): Node {
+    const markerNode = new Node(`CrewDeadMarker${slot}`);
+    markerNode.layer = this.node.layer;
+    markerNode.addComponent(UITransform).setContentSize(iconSize, iconSize);
+    const marker = markerNode.addComponent(Graphics);
+    const half = iconSize * 0.48;
+
+    marker.strokeColor = new Color(55, 8, 8, 245);
+    marker.lineWidth = 5;
+    marker.moveTo(-half, half);
+    marker.lineTo(half, -half);
+    marker.stroke();
+
+    marker.strokeColor = new Color(245, 48, 48, 255);
+    marker.lineWidth = 2.5;
+    marker.moveTo(-half, half);
+    marker.lineTo(half, -half);
+    marker.stroke();
+    iconNode.addChild(markerNode);
+    return markerNode;
+  }
+
   private tileInspectCrewSlotAlive(u: Unit, slot: number): boolean {
     const crew = u.crew;
     if (!crew) return true;
@@ -14666,9 +15184,9 @@ export class BattleScene extends Component {
   private paintTileInspectPreview(g: Graphics, tile: Tile, cx: number, cy: number, hexR: number) {
     const oldG = this.g;
     this.g = g;
-    const hasTerrainSprite = !!this.terrainSpriteFrames[tile.terrain];
+    const hasTerrainSprite = !!this.terrainSpriteFrameFor(tile.terrain);
     if (!hasTerrainSprite) {
-      this.drawHexFill(cx, cy, hexR, tile.terrain === 'airstrip' ? TERRAIN_COLORS.clear : TERRAIN_COLORS[tile.terrain]);
+      this.drawHexFill(cx, cy, hexR, tile.terrain === 'airstrip' ? TERRAIN_COLORS.clear : this.terrainColorFor(tile.terrain));
       if (tile.terrain === 'field') this.drawFieldBrushOverlay(cx, cy, hexR, tile);
     }
     if (!hasTerrainSprite && tile.terrain !== 'deep_water') this.drawHexStroke(cx, cy, hexR);
@@ -14730,7 +15248,7 @@ export class BattleScene extends Component {
 
   private addTileInspectForestSprites(parent: Node, cx: number, cy: number, size: number, tile: Tile) {
     if (tile.terrain !== 'forest') return;
-    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    const frames = this.activeTreeSpriteFrames().filter((sf): sf is SpriteFrame => !!sf);
     if (frames.length === 0) return;
     const seedRaw =
       ((tile.pos.q | 0) * 92811 + (tile.pos.r | 0) * 6899 + 0x4f2a91) >>> 0;
@@ -14745,7 +15263,7 @@ export class BattleScene extends Component {
   }
 
   private addTileInspectTreeSprite(parent: Node, cx: number, cy: number, hexSize: number, seed: number, scale: number) {
-    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    const frames = this.activeTreeSpriteFrames().filter((sf): sf is SpriteFrame => !!sf);
     if (frames.length === 0) return;
     const rng = new RNG(seed || 1);
     const n = new Node('TileInspectTreeSprite');
@@ -14763,7 +15281,7 @@ export class BattleScene extends Component {
   }
 
   private addTileInspectHedgeSprites(parent: Node, cx: number, cy: number, size: number, tile: Tile) {
-    const frames = this.treeSpriteFrames.filter((sf): sf is SpriteFrame => !!sf);
+    const frames = this.activeTreeSpriteFrames().filter((sf): sf is SpriteFrame => !!sf);
     if (frames.length === 0) return;
     const dirs = this.tileInspectVisibleHedgeDirs(tile);
     const usedKeys = new Set<string>();
@@ -14829,7 +15347,7 @@ export class BattleScene extends Component {
   }
 
   private addTileInspectTerrainSprite(parent: Node, tile: Tile, cx: number, cy: number, hexR: number) {
-    const sf = this.terrainSpriteFrames[tile.terrain];
+    const sf = this.terrainSpriteFrameFor(tile.terrain);
     if (!sf) return;
     const n = new Node('TileInspectTerrainSprite');
     n.layer = this.node.layer;
@@ -14861,7 +15379,9 @@ export class BattleScene extends Component {
     this.addTileInspectForestSprites(preview, 0, hexCY, hexR, tile);
     this.addTileInspectHedgeSprites(preview, 0, hexCY, hexR, tile);
 
-    const baseTerrainName = t(`terrain.${tile.terrain}`);
+    const baseTerrainName = this.usesWinterTerrainVisuals() && ['road', 'field', 'mud', 'forest', 'water'].includes(tile.terrain)
+      ? t(`terrain.${tile.terrain}_snow`)
+      : t(`terrain.${tile.terrain}`);
     const titleStr = tileHasBridge(tile)
       ? `${baseTerrainName} + ${t('terrain.bridge')}`
       : baseTerrainName;
@@ -15688,10 +16208,6 @@ export class BattleScene extends Component {
       this.statusBodyLeftLabels[i].string = t(bodyKeys[i]);
     }
     if (this.statusCrewTitleLabel) this.statusCrewTitleLabel.string = t('status.row.crewTitle');
-    for (let i = 0; i < this.statusCrewLeftLabels.length; i++) {
-      const key = `status.crew.${i + 1}` as const;
-      this.statusCrewLeftLabels[i].string = t(key);
-    }
     if (this.chooseMoveLabel) this.chooseMoveLabel.string = this.fitTextForLabel(this.chooseMoveLabel, t('btn.movePhase'), 200);
     if (this.chooseAttackLabel) this.chooseAttackLabel.string = this.fitTextForLabel(this.chooseAttackLabel, t('btn.attackPhase'), 200);
     if (this.combatLogTitleLab) this.combatLogTitleLab.string = t('battleLog.title');
@@ -15934,6 +16450,7 @@ export class BattleScene extends Component {
     const enemy = this.enemyOrder[this.enemyIndex];
     this.enemyDidActThisTurn = false;
     this.clearAIMoveState();
+    beginAmbushTurn(enemy, GameSession.gameMode);
     this.setActiveActingUnit(enemy);
     this.updateNonPlayerTankCommanderHatch(enemy);
     const tile = this.mission.map.get(enemy.pos);
@@ -15985,6 +16502,7 @@ export class BattleScene extends Component {
         if (this.executeEnemyAction(infantry, 'infantry_move') === 'animating') return;
       }
     }
+    endAmbushTurn(infantry);
     this.clearActiveActingUnit(infantry);
     this.enemyIndex++;
     this.beginCurrentEnemyTurn();
@@ -15994,6 +16512,9 @@ export class BattleScene extends Component {
   private updateNonPlayerTankCommanderHatch(unit: Unit) {
     if (!this.mission) return;
     if (GameSession.gameMode !== 'hardcore' || unit === this.mission.sherman || !isTankUnit(unit)) return;
+    // 车长在开舱状态下阵亡后保留 hatchOpen，持续显示无车长的空舱盖图片。
+    // 这不是一次关舱动作，因此也不播放关舱音效。
+    if (unit.crew?.commander === false) return;
     const nextOpen = shouldNonPlayerTankOpenCommanderHatch(
       unit,
       this.allUnits(),
@@ -16045,6 +16566,7 @@ export class BattleScene extends Component {
           this.enemyDiceResultHold = { t: 0, dur: 1.0 };
           return;
         }
+        endAmbushTurn(enemy);
         this.enemyIndex++;
         this.beginCurrentEnemyTurn();
         return;
@@ -16188,6 +16710,7 @@ export class BattleScene extends Component {
         const step = decision === 'cw' ? 1 : 5;
         const from = enemy.facing;
         const to = rotateDirection(from, step);
+        markAmbushAction(enemy);
         // §3.5 隐蔽：坦克任何移动动作（转向 / 前进 / 后退）都会脱离隐蔽，与谢尔曼一致
         this.breakConcealment(enemy);
         if (this.isAIReverseMoveFilterEnabled()) {
@@ -16218,7 +16741,10 @@ export class BattleScene extends Component {
           ? enemy.facing
           : rotateDirection(enemy.facing, 3);
         const to = neighbor(enemy.pos, dir);
-        if (!this.canMoveToBattleTile(to)) return 'done';
+        // Recheck occupancy at execution time so a move selected earlier cannot
+        // enter a hex that is now held by a friendly controlled AT gun.
+        if (!this.canMoveToBattleTile(to) || this.findMoveBlocker(enemy, to) !== null) return 'done';
+        markAmbushAction(enemy);
         // §3.5 隐蔽：坦克前进 / 后退也会脱离隐蔽
         this.breakConcealment(enemy);
         if (this.isAIReverseMoveFilterEnabled()) {
@@ -16336,7 +16862,7 @@ export class BattleScene extends Component {
       const tile = this.mission.map.get(n);
       if (!tile) continue;
       if (!this.canMoveToBattleTile(n)) continue;
-      if (tile.terrain === 'beach' || tile.terrain === 'deep_water') continue;
+      if (!this.mission.map.canUnitEnter(n, enemy.faction)) continue;
       const d = hexDistance(n, target.pos);
       if (d >= currentDist) continue;
       const priority = this.infantryAIMovePriority(enemy, n, tile);
@@ -16529,7 +17055,7 @@ export class BattleScene extends Component {
       if (isFootUnit(mover) && isAbandonedATGun(occupant)) return false;
       // A tank can overrun an enemy or neutral AT gun, but never a friendly controlled one.
       if (isTankUnit(mover) && occupant.kind === 'at_gun') {
-        return isControlledATGun(occupant) && mover.faction === occupant.faction;
+        return isControlledATGun(occupant) && this.areUnitsOnSameSide(mover, occupant);
       }
       // Enemy infantry no longer blocks a tank from entering its hex.
       if (isTankUnit(mover) && isFootUnit(occupant)) return false;
@@ -16537,6 +17063,12 @@ export class BattleScene extends Component {
     // Tanks and other vehicle-like units may enter same-faction foot-unit hexes.
     if (!isFootUnit(mover) && isFootUnit(occupant) && mover.faction === occupant.faction) return false;
     return true;
+  }
+
+  private areUnitsOnSameSide(a: Unit, b: Unit): boolean {
+    return a.faction !== 'neutral'
+      && b.faction !== 'neutral'
+      && isFriendlyFaction(a.faction) === isFriendlyFaction(b.faction);
   }
 
   /** Restore a controlled AT-gun crew as an ordinary infantry unit in the gun's hex. */
@@ -16569,7 +17101,7 @@ export class BattleScene extends Component {
       if (unit === mover
         || unit.destroyed
         || unit.kind !== 'at_gun'
-        || (isControlledATGun(unit) && unit.faction === mover.faction)
+        || (isControlledATGun(unit) && this.areUnitsOnSameSide(mover, unit))
         || unit.pos.q !== mover.pos.q
         || unit.pos.r !== mover.pos.r) continue;
       if (isControlledATGun(unit)) this.releaseATGunCrew(unit);
@@ -16932,6 +17464,13 @@ export class BattleScene extends Component {
     // 先掷骰拿到确定结果，再让面板按这个结果播 2d6→1d6 两段动画；
     // 真正 applyAttack / 消耗骰子 / 推进胜负判定全部放到 onDone 里执行，
     // 这样动画过程中玩家看到的状态（骰子托盘 / 敌人图示）不会提前变。
+    const ambushModifier = ambushHitThresholdModifier(sherman, GameSession.gameMode);
+    markAmbushAction(sherman);
+    markAmbushTargeted(target);
+    if (ambushModifier < 0) {
+      this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.ambush'),
+        new Color(255, 220, 120, 255), { size: 32, dur: 1.0, rise: 44 });
+    }
     const report = rollAttack({
       attacker: sherman,
       target,
@@ -16941,7 +17480,8 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
-      hitThresholdModifier: this.campaignMainGunHitThresholdModifier(),
+      hitThresholdModifier: this.campaignMainGunHitThresholdModifier() + ambushModifier,
+      hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
@@ -17053,6 +17593,8 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
+      hitThresholdModifier: ambushHitThresholdModifier(enemy, GameSession.gameMode),
+      hitThresholdModifiers: ambushHitThresholdModifierDetails(enemy, GameSession.gameMode),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
@@ -17071,9 +17613,20 @@ export class BattleScene extends Component {
       this.enemyDiceUsed[precisionPartnerIdx] = true;
       this.refreshEnemyDiceTray();
     }
+    const ambushModifier = attackCtx.hitThresholdModifier;
+    markAmbushAction(enemy);
+    markAmbushTargeted(target);
+    if (ambushModifier < 0) {
+      this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.ambush'),
+        new Color(255, 220, 120, 255), { size: 32, dur: 1.0, rise: 44 });
+    }
     const report = rollAttack({
       ...attackCtx,
-      hitThresholdModifier: precisionFire ? -2 : 0,
+      hitThresholdModifier: attackCtx.hitThresholdModifier + (precisionFire ? -2 : 0),
+      hitThresholdModifiers: [
+        ...attackCtx.hitThresholdModifiers,
+        ...(precisionFire ? [{ labelKey: 'dice.rule.precisionFire', value: -2 }] : []),
+      ],
     }, this.rng);
     const enemyActor = !isFriendlyFaction(enemy.faction)
       ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
@@ -17190,6 +17743,7 @@ export class BattleScene extends Component {
       fireEffectPlayed: opts.fireEffectPlayed === true,
       attacker: opts.attacker ?? null,
       target: opts.target ?? null,
+      targetCommanderExposed: opts.target?.hatchOpen === true && opts.target.crew?.commander !== false,
       onDone,
       onHold: opts.onHold ?? null,
       requireManualClose: !!opts.requireManualClose,
@@ -17525,6 +18079,10 @@ export class BattleScene extends Component {
         this.makeBattleModalLabel(panel, spec.total[0], labelX, y, labelW, 30, 22, HUD_TEXT_COLOR);
         this.makeBattleModalLabel(panel, spec.total[1], valueX, y, valueW, 30, 22, HUD_TEXT_COLOR);
       }
+      if (spec.note) {
+        y -= 52;
+        this.makeBattleModalLabel(panel, spec.note, 0, y, spec.w - 34, 26, 16, HUD_TEXT_COLOR);
+      }
     }
 
     show.ruleModalRoot = root;
@@ -17536,12 +18094,14 @@ export class BattleScene extends Component {
     h: number;
     rows: Array<[string, string]>;
     total?: [string, string];
+    note?: string;
   } {
     const r = show.report;
     if (kind === 'hit') {
+      const showOpenHatchCommanderHint = show.targetCommanderExposed;
       const rows: Array<[string, string]> = [];
       if (show.attacker && show.target && this.mission) {
-        const base = hitBreakdown({
+        const base = r.hitBreakdown ?? hitBreakdown({
           attacker: show.attacker,
           target: show.target,
           map: this.mission.map,
@@ -17561,12 +18121,23 @@ export class BattleScene extends Component {
         add(t('dice.rule.concealed'), base.concealed);
         add(t('dice.rule.trees'), base.trees);
         add(t('dice.rule.rearArc'), base.rearArc);
+        add(t('dice.rule.frontArc'), base.frontArc);
         add(getLang() === 'zh' ? '雨天' : 'Rain', base.weather);
-        const modifier = r.threshold - base.threshold;
-        add(t('dice.rule.attackModifier'), modifier);
+        const namedModifiers = r.hitModifiers ?? [];
+        for (const modifier of namedModifiers) add(t(modifier.labelKey), modifier.value);
+        const namedTotal = namedModifiers.reduce((sum, modifier) => sum + modifier.value, 0);
+        const unexplainedModifier = r.threshold - (base.threshold - (base.actionModifier ?? 0)) - namedTotal;
+        add(t('dice.rule.attackModifier'), unexplainedModifier);
       }
       if (rows.length === 0) rows.push([t('dice.rule.hitNeedTitle'), String(r.threshold)]);
-      return { title: t('dice.rule.hitNeedTitle'), w: 410, h: 420, rows, total: [t('dice.rule.total'), String(r.threshold)] };
+      return {
+        title: t('dice.rule.hitNeedTitle'),
+        w: 410,
+        h: Math.max(420, 150 + rows.length * 38 + (showOpenHatchCommanderHint ? 58 : 0)),
+        rows,
+        total: [t('dice.rule.total'), String(r.threshold)],
+        note: showOpenHatchCommanderHint ? t('dice.rule.hitDoublesCommanderKiaHint') : undefined,
+      };
     }
     if (kind === 'pen') {
       const armor = r.armor ?? 0;
@@ -19135,17 +19706,21 @@ export class BattleScene extends Component {
       this.updateOutcomeOverlay();
       return;
     }
-    this.continueAfterPacificUsCasualtyCheck();
+    this.endEnemyPhase();
   }
 
   private destroyTurnEndEventUI() {
     const ui = this.turnEndEventUI;
     if (!ui) return;
     this.turnEndEventUI = null;
+    if (ui.sniperRevealKey) {
+      this.transientFogRevealKeys.delete(ui.sniperRevealKey);
+      this.redraw();
+    }
     if (ui.root.isValid) ui.root.destroy();
   }
 
-  /** 敌方阶段全部结束后：若有回合结束事件表则先播主骰与说明，否则直接进入下一玩家回合。 */
+  /** 敌方阶段全部结束后：先结算回合结束事件，再结算太平洋战场的美军伤亡。 */
   private maybeBeginTurnEndEventOrEndEnemyPhase() {
     if (GameSession.isPvp) {
       this.enterPvpWaitingForOpponent();
@@ -19162,21 +19737,22 @@ export class BattleScene extends Component {
       this.endEnemyPhase();
       return;
     }
-    if (this.beginPacificUsCasualtyCheckOrContinue()) return;
-    this.continueAfterPacificUsCasualtyCheck();
+    const mid = this.currentTurnEndMissionId();
+    if (this.turnEndEventProvider.has(mid)) {
+      this.startTurnEndEventFlow(mid);
+      return;
+    }
+    this.continueAfterTurnEndEvent();
   }
 
-  private continueAfterPacificUsCasualtyCheck() {
-    if (!this.mission) {
-      this.endEnemyPhase();
-      return;
+  private continueAfterTurnEndEvent() {
+    if (this.mission) {
+      this.outcome = this.computeOutcome();
+      this.updateOutcomeOverlay();
     }
-    const mid = this.currentTurnEndMissionId();
-    if (!this.turnEndEventProvider.has(mid)) {
+    if (this.outcome !== 'ongoing' || !this.beginPacificUsCasualtyCheckOrContinue()) {
       this.endEnemyPhase();
-      return;
     }
-    this.startTurnEndEventFlow(mid);
   }
 
   private beginPacificUsCasualtyCheckOrContinue(): boolean {
@@ -19242,6 +19818,8 @@ export class BattleScene extends Component {
     }
 
     const { map } = this.mission;
+    markAmbushAction(actor);
+    markAmbushTargeted(target);
     const ctx = {
       attacker: actor,
       target,
@@ -19263,6 +19841,8 @@ export class BattleScene extends Component {
           roll: maxRoll,
           threshold,
           hit: false,
+          hitBreakdown: mgHitBreakdown(ctx),
+          hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
       : rollMGAttack(ctx, this.rng);
     const actorLabel = !isFriendlyFaction(actor.faction)
@@ -19315,8 +19895,7 @@ export class BattleScene extends Component {
       const hiddenActor = !this.isUnitVisible(actor);
       if (hiddenActor) this.transientFogRevealKeys.add(revealKey);
       this.redraw();
-      this.spawnMachineGunBurst(actor, target, false);
-      playMgFire();
+      this.playMachineGunFireCue(actor, target, false);
       this.scheduleOnce(() => {
         if (hiddenActor) this.transientFogRevealKeys.delete(revealKey);
         finish();
@@ -19331,6 +19910,8 @@ export class BattleScene extends Component {
       roll: report.roll,
       threshold: report.threshold,
       hit: report.hit,
+      hitBreakdown: report.hitBreakdown,
+      hitModifiers: report.hitModifiers,
       statusChange: report.hit ? 'destroyed' : 'none',
     };
     this.startDiceShow(panelReport, actorLabel, targetLabel, finish, {
@@ -19353,7 +19934,7 @@ export class BattleScene extends Component {
     const row = this.turnEndEventProvider.rowForSum(missionId, sum);
     if (!row) {
       console.warn(`[TurnEnd] no row for mission=${missionId} sum=${sum}`);
-      this.endEnemyPhase();
+      this.continueAfterTurnEndEvent();
       return;
     }
     const ctx = {
@@ -19398,6 +19979,8 @@ export class BattleScene extends Component {
       germanTruckDefeatAfterExitMove: prepared.germanTruckDefeatAfterExitMove,
       tankReinforceMove: prepared.tankReinforceMove,
       adjacentInfantryVolleys: adjacentVolleys.length > 0 ? adjacentVolleys : undefined,
+      sniperAttackerId: prepared.sniperAttackerId,
+      sniperWillKill: prepared.sniperWillKill,
     };
     // Start after the event panel has been created; both sequences run in
     // parallel while the root-level UI remains above the battle presentation.
@@ -19646,6 +20229,7 @@ export class BattleScene extends Component {
     const ui = this.turnEndEventUI;
     if (!ui || ui.stage === 'hold') return;
     const PAUSE_AFTER_PRIMARY = 0.2;
+    const SNIPER_PRESENTATION_DUR = 0.72;
     const PAUSE_BEFORE_ADJACENT_DICE = 1.0;
     const PAUSE_AFTER_EXTRA = 0.35;
 
@@ -19663,6 +20247,33 @@ export class BattleScene extends Component {
       const s = ui.primaryDice.reduce((a, b) => a + b, 0);
       ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
       ui.bodyLabel.string = '';
+      if (ui.effectType === 'sniper' && ui.sniperWillKill && ui.sniperAttackerId && this.mission) {
+        const attacker = this.mission.enemies.find(unit => unit.id === ui.sniperAttackerId);
+        if (attacker && !attacker.destroyed) {
+          if (!this.isUnitVisible(attacker)) {
+            ui.sniperRevealKey = HexMap.keyOf(attacker.pos);
+            this.transientFogRevealKeys.add(ui.sniperRevealKey);
+          }
+          ui.root.active = false;
+          ui.stage = 'pause_for_sniper';
+          ui.t = 0;
+          this.playTurnEndSniperShot(attacker, this.mission.sherman, () => {
+            if (this.turnEndEventUI !== ui || ui.effectApplied) return;
+            try {
+              ui.apply();
+              ui.effectApplied = true;
+            } catch (e) {
+              console.error('[TurnEnd] sniper impact apply failed', e);
+            }
+            // The commander portrait/hatch visual changes on the impact frame,
+            // while the event panel remains available for acknowledgement.
+            this.refreshStatusPanel();
+            this.updateHUD();
+            this.redraw();
+          });
+          return;
+        }
+      }
       const hasAdjacentDice = (ui.adjacentInfantryVolleys?.length ?? 0) > 0;
       if (!ui.extraPhases.length && !hasAdjacentDice) {
         ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
@@ -19678,6 +20289,20 @@ export class BattleScene extends Component {
       }
       ui.stage = 'wait_after_primary';
       ui.t = 0;
+      return;
+    }
+
+    if (ui.stage === 'pause_for_sniper') {
+      ui.t += dt;
+      if (ui.t < SNIPER_PRESENTATION_DUR) return;
+      if (ui.sniperRevealKey) {
+        this.transientFogRevealKeys.delete(ui.sniperRevealKey);
+        ui.sniperRevealKey = undefined;
+        this.redraw();
+      }
+      ui.root.active = true;
+      ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
+      ui.stage = 'hold';
       return;
     }
 
@@ -19747,7 +20372,7 @@ export class BattleScene extends Component {
     const ui = this.turnEndEventUI;
     if (!ui || ui.stage !== 'hold') return;
     const sum = ui.primaryDice.reduce((a, b) => a + b, 0);
-    const applyFn = ui.apply;
+    const applyFn = ui.effectApplied ? () => {} : ui.apply;
     const truckSegments = ui.germanTruckMoveSegments;
     const tankReinforceMove = ui.tankReinforceMove;
     this.battleLog(
@@ -19771,7 +20396,7 @@ export class BattleScene extends Component {
         this.destroyTurnEndEventUI();
         this.refreshStatusPanel();
         this.redraw();
-        this.endEnemyPhase();
+        this.continueAfterTurnEndEvent();
         return;
       }
       const defeatAfterExitMove = !!ui.germanTruckDefeatAfterExitMove;
@@ -19785,7 +20410,7 @@ export class BattleScene extends Component {
         this.registerNewlyDestroyedSince(destroyedSnap);
         this.refreshStatusPanel();
         this.redraw();
-        this.endEnemyPhase();
+        this.continueAfterTurnEndEvent();
       };
       this.enqueueGermanTruckMoveAnims(truck, truckSegments, {
         markLastMoveTruckExitDefeat: defeatAfterExitMove,
@@ -19798,7 +20423,7 @@ export class BattleScene extends Component {
         this.destroyTurnEndEventUI();
         this.refreshStatusPanel();
         this.redraw();
-        this.endEnemyPhase();
+        this.continueAfterTurnEndEvent();
         return;
       }
       this.destroyTurnEndEventUI();
@@ -19814,14 +20439,14 @@ export class BattleScene extends Component {
         this.pendingAfterAnimChain = () => {
           this.refreshStatusPanel();
           this.redraw();
-          this.endEnemyPhase();
+          this.continueAfterTurnEndEvent();
         };
         this.enqueueTankReinforceMoveAnim(unit, tankReinforceMove);
         return;
       }
       this.refreshStatusPanel();
       this.redraw();
-      this.endEnemyPhase();
+      this.continueAfterTurnEndEvent();
       return;
     }
 
@@ -19834,7 +20459,7 @@ export class BattleScene extends Component {
     this.destroyTurnEndEventUI();
     this.refreshStatusPanel();
     this.redraw();
-    this.endEnemyPhase();
+    this.continueAfterTurnEndEvent();
   }
 
   private enqueueTankReinforceMoveAnim(unit: Unit, move: TurnEndTankReinforceMove) {
