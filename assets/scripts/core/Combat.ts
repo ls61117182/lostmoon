@@ -115,6 +115,8 @@ export interface AttackReport {
   crewCheck?: CrewDeathResult;
   /** Matching hit dice kill the commander of any open-hatch tank on a successful hit. */
   commanderKilledByHitDoubles?: boolean;
+  /** The hit doubles triggered, but a per-segment campaign shield absorbed the commander hit. */
+  commanderShieldBlocked?: boolean;
   /** 本次伤害是否按主角受伤表结算；用于 applyAttack 区分同型号队友。 */
   protagonistTarget?: boolean;
   statusChange: HitStatusChange;
@@ -235,7 +237,8 @@ export type AttackDenyReason =
   | 'attack.reason.fixedGunFacing'
   | 'attack.reason.blocked'
   | 'attack.reason.outOfRange'
-  | 'attack.reason.turretDamaged';
+  | 'attack.reason.turretDamaged'
+  | 'attack.reason.camouflageNet';
 
 function isForwardOnlyGun(unit: Unit): boolean {
   return unit.stats.visionType === 'fixed' || unit.kind === 'at_gun' || unit.kind === 'heavy_artillery';
@@ -262,6 +265,12 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   const sameHexInfantryTankAttack = isSameHexInfantryTankAttack(ctx);
   const distance = hexDistance(attacker.pos, target.pos);
+  if (target.hidden
+    && target.campaignHiddenCloseRangeUntargetable === true
+    && attacker.faction !== target.faction
+    && distance <= 2) {
+    return { ok: false, reason: 'attack.reason.camouflageNet' };
+  }
   if (distance === 0 && !sameHexInfantryTankAttack) {
     return { ok: false, reason: 'attack.reason.overlap' };
   }
@@ -571,7 +580,9 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const threshold = lockedHitBreakdown.threshold;
   const hit = roll >= threshold;
   const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
-  const commanderKilledByHitDoubles = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
+  const commanderDeathTriggered = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
+  const commanderShieldBlocked = commanderDeathTriggered && target.campaignCommanderShieldAvailable === true;
+  const commanderKilledByHitDoubles = commanderDeathTriggered && !commanderShieldBlocked;
 
   const directionRule = attackDirectionRuleFor(ctx);
   const face = directionRule.armorFace;
@@ -626,6 +637,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       penDie, penDice, penThreshold, penetrated,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles: false,
+      commanderShieldBlocked: false,
       protagonistTarget,
       statusChange: 'none',
     };
@@ -640,6 +652,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       penDie, penDice, penThreshold, penetrated,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
+      commanderShieldBlocked,
       protagonistTarget,
       statusChange: 'none',
     };
@@ -656,6 +669,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
         damageEffects: [],
         stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
         commanderKilledByHitDoubles,
+        commanderShieldBlocked,
         protagonistTarget,
         statusChange: 'none',
       };
@@ -670,6 +684,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       damageEffects: [{ effect: 'destroyed' }],
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
+      commanderShieldBlocked,
       protagonistTarget,
       statusChange: 'destroyed',
     };
@@ -689,6 +704,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       damageDie, damageEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
+      commanderShieldBlocked,
       protagonistTarget,
       statusChange: 'none',
     };
@@ -708,6 +724,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
     crewCheck,
     commanderKilledByHitDoubles,
+    commanderShieldBlocked,
     protagonistTarget,
     statusChange,
   };
@@ -853,7 +870,11 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
       target.turretDamaged = true;
       break;
     case 'paralyzed':
-      target.paralyzed = true;
+      if (target.campaignParalyzedProtectionAvailable === true) {
+        target.campaignParalyzedProtectionAvailable = false;
+      } else {
+        target.paralyzed = true;
+      }
       break;
     case 'radio':
       target.radioDamaged = true;
@@ -880,6 +901,9 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
   markAmbushTargeted(target);
+  if (report.hit && report.commanderShieldBlocked && target.campaignCommanderShieldAvailable === true) {
+    target.campaignCommanderShieldAvailable = false;
+  }
   if (report.hit && report.commanderKilledByHitDoubles && target.crew?.commander) {
     target.crew.commander = false;
   }
@@ -931,7 +955,11 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       break;
     case 'paralyzed':
       if (markHullDamaged) target.damaged = true;
-      target.paralyzed = true;
+      if (target.campaignParalyzedProtectionAvailable === true) {
+        target.campaignParalyzedProtectionAvailable = false;
+      } else {
+        target.paralyzed = true;
+      }
       break;
     case 'crewCheck':
       // §3.4 Step 3 d6=2：再掷 1d6 决定哪位乘员阵亡。crewCheck.slot === null 表示虚惊。

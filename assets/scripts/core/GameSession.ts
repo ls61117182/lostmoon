@@ -1,7 +1,13 @@
 import type { CustomMissionPackage, MissionSource } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode } from './GameMode';
 import type { PvpSessionConfig } from './PvpConfig';
-import { createRandomIslandCampaign, getCampaign, RANDOM_ISLAND_CAMPAIGN_ID } from './CampaignDB';
+import {
+  createRandomIslandCampaign,
+  createRandomSnowCampaign,
+  getCampaign,
+  RANDOM_ISLAND_CAMPAIGN_ID,
+  RANDOM_SNOW_CAMPAIGN_ID,
+} from './CampaignDB';
 import type { CampaignDefinition } from './CampaignDB';
 import { generateRandomMissionPackage } from './RandomMissionGenerator';
 
@@ -29,6 +35,16 @@ export function createRandomIslandPackages(seed: number = Date.now()): CustomMis
       enemyThreatPoints: 16,
     }),
   ];
+}
+
+export function createRandomSnowPackages(seed: number = Date.now()): CustomMissionPackage[] {
+  const baseSeed = (seed >>> 0) || 1;
+  const seeds = [baseSeed, (baseSeed + 0x9e3779b9) >>> 0, (baseSeed + 0x3c6ef372) >>> 0];
+  const weather = ['clear', 'light_snow', 'heavy_snow'] as const;
+  return seeds.map((missionSeed, index) => generateRandomMissionPackage('europe', missionSeed, {
+    season: 'winter',
+    weather: weather[((missionSeed ^ (index * 0x45d9f3b)) >>> 0) % weather.length],
+  }));
 }
 
 export interface GameSessionState {
@@ -166,9 +182,13 @@ export const GameSession = {
   selectCampaign(levelId: number, campaignId: string) {
     const generatedPackages = campaignId === RANDOM_ISLAND_CAMPAIGN_ID
       ? createRandomIslandPackages()
-      : null;
+      : campaignId === RANDOM_SNOW_CAMPAIGN_ID
+        ? createRandomSnowPackages()
+        : null;
     const campaign = generatedPackages
-      ? createRandomIslandCampaign(generatedPackages.map(pkg => pkg.mission.id))
+      ? campaignId === RANDOM_SNOW_CAMPAIGN_ID
+        ? createRandomSnowCampaign(generatedPackages.map(pkg => pkg.mission.id))
+        : createRandomIslandCampaign(generatedPackages.map(pkg => pkg.mission.id))
       : getCampaign(campaignId);
     if (!campaign) return false;
     state.pvpSession = null;

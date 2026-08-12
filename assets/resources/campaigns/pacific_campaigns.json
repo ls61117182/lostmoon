@@ -51,6 +51,17 @@
       ],
       "segmentCount": 3,
       "transitionSeconds": 2
+    },
+    {
+      "id": "random_snow",
+      "title": "随机雪地",
+      "generator": "europe_random_snow",
+      "season": "winter",
+      "weatherPool": ["clear", "light_snow", "heavy_snow"],
+      "segmentCount": 3,
+      "autoEvacAfterDestroyAll": true,
+      "usCasualtyPhase": false,
+      "transitionSeconds": 2
     }
   ]
 }

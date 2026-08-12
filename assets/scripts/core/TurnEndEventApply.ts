@@ -535,14 +535,22 @@ export function prepareTurnEndEvent(
       const sniper = findShermanLosInfantry(mission);
       const los = sniper !== null;
       const hatch = !!sh.hatchOpen && !!sh.crew?.commander;
-      const willKill = hatch && los && !!sh.crew?.commander;
+      const threatened = hatch && los && !!sh.crew?.commander;
+      const shielded = threatened && sh.campaignCommanderShieldAvailable === true;
+      const willKill = threatened && !shielded;
       return {
-        bodyKey: willKill ? 'turnEnd.sniper.kia' : 'turnEnd.sniper.safe',
+        bodyKey: shielded ? 'turnEnd.sniper.shielded' : willKill ? 'turnEnd.sniper.kia' : 'turnEnd.sniper.safe',
         bodyParams: { ...baseParams, los: los ? 1 : 0, hatch: hatch ? 1 : 0 },
-        sniperAttackerId: willKill ? sniper?.id : undefined,
-        sniperWillKill: willKill,
+        sniperAttackerId: threatened ? sniper?.id : undefined,
+        // This flag also drives the shot presentation; a blocked shot should still be shown.
+        sniperWillKill: threatened,
         apply: () => {
-          if (!willKill || !sh.crew) return;
+          if (!threatened || !sh.crew) return;
+          if (shielded && sh.campaignCommanderShieldAvailable === true) {
+            sh.campaignCommanderShieldAvailable = false;
+            return;
+          }
+          if (!willKill) return;
           sh.crew.commander = false;
           neutralizeUncrewedTank(sh);
         },
@@ -633,11 +641,14 @@ export function prepareTurnEndEvent(
     }
     case 'mechanical_failure': {
       const already = !!sh.paralyzed;
+      const protectedByUpgrade = !already && !sh.destroyed && sh.campaignMechanicalFailureImmune === true;
       return {
-        bodyKey: already ? 'turnEnd.mechanical.already' : 'turnEnd.mechanical.ok',
+        bodyKey: protectedByUpgrade
+          ? 'turnEnd.mechanical.protected'
+          : already ? 'turnEnd.mechanical.already' : 'turnEnd.mechanical.ok',
         bodyParams: baseParams,
         apply: () => {
-          if (sh.destroyed || sh.paralyzed) return;
+          if (sh.destroyed || sh.paralyzed || sh.campaignMechanicalFailureImmune === true) return;
           sh.paralyzed = true;
         },
       };
@@ -805,6 +816,13 @@ export function prepareTurnEndEvent(
           apply: () => {},
         };
       }
+      if (sh.campaignMineDamageImmune === true) {
+        return {
+          bodyKey: 'turnEnd.mine.protected',
+          bodyParams: baseParams,
+          apply: () => {},
+        };
+      }
       const penDie = rng.d6();
       const penTh = 4;
       const penetrated = penDie >= penTh;
@@ -854,6 +872,13 @@ export function prepareTurnEndEvent(
         return {
           bodyKey: 'turnEnd.clearMine.skip',
           bodyParams: { ...baseParams, onClear: onClear ? 1 : 0, paralyzed: sh.paralyzed ? 1 : 0 },
+          apply: () => {},
+        };
+      }
+      if (sh.campaignMineDamageImmune === true) {
+        return {
+          bodyKey: 'turnEnd.clearMine.protected',
+          bodyParams: baseParams,
           apply: () => {},
         };
       }

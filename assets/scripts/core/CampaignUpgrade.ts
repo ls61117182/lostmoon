@@ -42,10 +42,15 @@ export function campaignUpgradeDiceBonus(
   for (const id of ids) {
     const def = campaignUpgradeDefinition(id);
     if (phase === 'misc') bonus += def.miscDiceBonus;
-    if (terrain !== 'mud') continue;
-    if (phase === 'attack') bonus += def.mudAttackDiceBonus;
-    else if (phase === 'movement') bonus += def.mudMovementDiceBonus;
-    else bonus += def.mudMiscDiceBonus;
+    if (terrain === 'mud') {
+      if (phase === 'attack') bonus += def.mudAttackDiceBonus;
+      else if (phase === 'movement') bonus += def.mudMovementDiceBonus;
+      else bonus += def.mudMiscDiceBonus;
+    } else if (terrain === 'beach') {
+      if (phase === 'attack') bonus += def.beachAttackDiceBonus;
+      else if (phase === 'movement') bonus += def.beachMovementDiceBonus;
+      else bonus += def.beachMiscDiceBonus;
+    }
   }
   return bonus;
 }
@@ -64,11 +69,38 @@ export function applyCampaignUpgradesToSherman(sherman: Unit, ids: readonly Camp
     sherman.stats.armorRearSide += def.armorRearSideBonus;
     if (def.ignoreDestroyed) sherman.ignoreDestroyedDamage = true;
     if (def.ignoreCrewCheck) sherman.ignoreCrewCheckDamage = true;
+    if (def.mineDamageImmune) sherman.campaignMineDamageImmune = true;
+    if (def.hiddenCloseRangeUntargetable) sherman.campaignHiddenCloseRangeUntargetable = true;
+    if (def.mechanicalFailureImmune) sherman.campaignMechanicalFailureImmune = true;
+    if (def.ignoreFirstAttackParalyzedPerSegment) sherman.campaignParalyzedProtectionAvailable = true;
+    if (def.commanderShieldPerSegment) sherman.campaignCommanderShieldAvailable = true;
     applied.add(id);
   }
   sherman.campaignUpgradeIds = [...applied];
 }
 
+/** Restore per-segment charges when retrying from that segment's start checkpoint. */
+export function resetCampaignUpgradeSegmentCharges(sherman: Unit, ids: readonly CampaignUpgradeId[]): void {
+  if (ids.some(id => campaignUpgradeDefinition(id).ignoreFirstAttackParalyzedPerSegment)) {
+    sherman.campaignParalyzedProtectionAvailable = true;
+  }
+  if (ids.some(id => campaignUpgradeDefinition(id).commanderShieldPerSegment)) {
+    sherman.campaignCommanderShieldAvailable = true;
+  }
+}
+
 export function campaignUpgradeHitThresholdModifier(ids: readonly CampaignUpgradeId[]): number {
   return ids.reduce((sum, id) => sum + campaignUpgradeDefinition(id).hitThresholdModifier, 0);
+}
+
+/** Revive the first dead crew member in the campaign's canonical 1..5 order. */
+export function reviveFirstCampaignCrewMember(
+  sherman: { crew?: Partial<NonNullable<Unit['crew']>> },
+): keyof NonNullable<Unit['crew']> | null {
+  if (!sherman.crew) return null;
+  const order: Array<keyof NonNullable<Unit['crew']>> = ['commander', 'loader', 'gunner', 'driver', 'coDriver'];
+  const slot = order.find(candidate => sherman.crew?.[candidate] === false);
+  if (!slot) return null;
+  sherman.crew[slot] = true;
+  return slot;
 }

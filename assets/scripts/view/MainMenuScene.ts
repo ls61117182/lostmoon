@@ -2765,6 +2765,7 @@ export class MainMenuScene extends Component {
       t34: 'T-34/76',
       tiger: 'Tiger',
       tigerking: 'Tiger II',
+      panther: 'Panther G',
       panzer4: 'Pz IV',
       stug3: 'StuG III',
       panzer3: 'Pz III',
@@ -4873,6 +4874,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'tiger': return 'Tiger';
     case 'tigerking': return 'Tiger II';
     case 'maus': return '鼠式坦克';
+    case 'panther': return '豹式坦克';
     case 'panzer4': return 'Panzer IV';
     case 'panzer3': return 'Panzer III';
     case 'type97': return 'Type 97';

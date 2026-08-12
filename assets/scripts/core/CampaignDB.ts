@@ -2,6 +2,7 @@ import type { ChapterId } from './LevelDB';
 
 export const CAMPAIGN_CHAPTER_ID = 'campaign' as const;
 export const RANDOM_ISLAND_CAMPAIGN_ID = 'random_island' as const;
+export const RANDOM_SNOW_CAMPAIGN_ID = 'random_snow' as const;
 
 export interface CampaignSegmentDefinition {
   id: string;
@@ -18,7 +19,9 @@ export interface CampaignDefinition {
   transitionSeconds: number;
   stitchDirection: 'horizontal';
   segments: CampaignSegmentDefinition[];
-  generator?: 'pacific_random_island';
+  generator?: 'pacific_random_island' | 'europe_random_snow';
+  /** Destroy-all stages drive the Sherman to the standard exit before victory. */
+  autoEvacAfterDestroyAll?: boolean;
 }
 
 export function createRandomIslandCampaign(generatedMissionIds: readonly string[]): CampaignDefinition {
@@ -36,6 +39,28 @@ export function createRandomIslandCampaign(generatedMissionIds: readonly string[
     generator: 'pacific_random_island',
     segments: generatedMissionIds.map((missionId, index) => ({
       id: `campaign_random_island_${index + 1}_${missionId}`,
+      missionPath: '',
+      sourcePacificMissionId: missionId,
+    })),
+  };
+}
+
+export function createRandomSnowCampaign(generatedMissionIds: readonly string[]): CampaignDefinition {
+  if (generatedMissionIds.length !== 3) {
+    throw new Error(`Random Snow requires exactly 3 generated missions, got ${generatedMissionIds.length}`);
+  }
+  return {
+    id: RANDOM_SNOW_CAMPAIGN_ID,
+    order: 6,
+    levelId: 6,
+    titleKey: 'campaign.randomSnow.title',
+    missionId: 'campaign_random_snow',
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    generator: 'europe_random_snow',
+    autoEvacAfterDestroyAll: true,
+    segments: generatedMissionIds.map((missionId, index) => ({
+      id: `campaign_random_snow_${index + 1}_${missionId}`,
       missionPath: '',
       sourcePacificMissionId: missionId,
     })),
@@ -108,6 +133,18 @@ export const CAMPAIGNS: CampaignDefinition[] = [
     transitionSeconds: 2,
     stitchDirection: 'horizontal',
     generator: 'pacific_random_island',
+    segments: [],
+  },
+  {
+    id: RANDOM_SNOW_CAMPAIGN_ID,
+    order: 6,
+    levelId: 6,
+    titleKey: 'campaign.randomSnow.title',
+    missionId: 'campaign_random_snow',
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    generator: 'europe_random_snow',
+    autoEvacAfterDestroyAll: true,
     segments: [],
   },
 ];

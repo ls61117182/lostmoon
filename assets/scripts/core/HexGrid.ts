@@ -361,6 +361,10 @@ export class HexMap {
     const t = this.get(p);
     if (!t) return false;
     if (t.displayOnly) return false;
+    // Beach hexes are valid landing terrain for every American unit type.
+    // Keep this faction rule ahead of unit-specific movement checks so tanks,
+    // infantry, trucks, and any future USA units share the same permission.
+    if (faction === 'usa' && t.terrain === 'beach') return true;
     if (faction === 'japanese' && (t.terrain === 'beach' || t.terrain === 'deep_water')) return false;
     return true;
   }

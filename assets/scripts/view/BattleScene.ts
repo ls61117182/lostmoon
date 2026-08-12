@@ -176,6 +176,8 @@ import {
   campaignUpgradeHitThresholdModifier,
   drawCampaignUpgradeCandidates,
   hasCampaignUpgrade,
+  resetCampaignUpgradeSegmentCharges,
+  reviveFirstCampaignCrewMember,
 } from '../core/CampaignUpgrade';
 import type { CampaignUpgradeDefinition, CampaignUpgradeId } from '../core/CampaignUpgrade';
 import { getGameModeConfig } from '../core/GameMode';
@@ -597,6 +599,16 @@ const CAMPAIGN_UPGRADE_ICON_ORDER: readonly CampaignUpgradeId[] = [
   'improved_transmission',
   'smoke_launcher',
   'intercom',
+];
+
+const CAMPAIGN_UPGRADE_ICON_ORDER_V2: readonly CampaignUpgradeId[] = [
+  'ready_rack',
+  'mine_roller',
+  'camouflage_net',
+  'reinforced_transmission',
+  'commander_ballistic_shield',
+  'emergency_medical_kit',
+  'ammo_handling_optimization',
 ];
 
 type DirectionLerp = {
@@ -1482,6 +1494,7 @@ export class BattleScene extends Component {
   private campaignViewSegmentIndexOverride: number | null = null;
   private campaignTransitionActive = false;
   private campaignPanAnim: CampaignPanAnim | null = null;
+  private campaignAutoEvacActive = false;
   private campaignUpgradeIds: CampaignUpgradeId[] = [];
   private campaignUpgradeCandidates: CampaignUpgradeId[] = [];
   private campaignUpgradeChosenSegments = new Set<number>();
@@ -1495,6 +1508,10 @@ export class BattleScene extends Component {
   private campaignUpgradeIconAtlas: SpriteFrame | null = null;
   private campaignUpgradeIconAtlasLoading = false;
   private campaignUpgradeIconWaiters: Array<(atlas: SpriteFrame | null) => void> = [];
+  private campaignUpgradeIconAtlasV2: SpriteFrame | null = null;
+  private campaignUpgradeIconAtlasV2Loading = false;
+  private campaignUpgradeIconV2Waiters: Array<(atlas: SpriteFrame | null) => void> = [];
+  private retainedCampaignAttackDiePip: number | null = null;
   private offsetX = 0;
   private offsetY = 0;
   private mapPanEnabled = false;
@@ -3447,12 +3464,16 @@ export class BattleScene extends Component {
     if (!nextTemplate) return;
 
     const carriedSherman = this.currentShermanCampaignPlacement();
+    if (carriedSherman && this.campaignUpgradeActive('emergency_medical_kit')) {
+      reviveFirstCampaignCrewMember(carriedSherman);
+    }
     const nextData = this.cloneMissionData(nextTemplate);
     if (carriedSherman) {
       nextData.sherman = carryShermanToNextSegment(carriedSherman, nextData.sherman);
     }
 
     this.activeCampaignSegmentIndex = nextIndex;
+    this.retainedCampaignAttackDiePip = null;
     this.campaignTransitionActive = true;
     this.campaignViewSegmentIndexOverride = previousIndex;
     this.loadAndDraw(nextData);
@@ -3500,6 +3521,11 @@ export class BattleScene extends Component {
     return this.campaignUpgradesEnabled() && hasCampaignUpgrade(this.campaignUpgradeIds, id);
   }
 
+  private campaignReadyRackCanReloadShootingDice(): boolean {
+    return this.campaignUpgradeActive('ready_rack')
+      && campaignUpgradeDefinition('ready_rack').shootingDiceCanReload;
+  }
+
   private campaignMovementDiceCanReverseDirection(): boolean {
     return this.campaignUpgradeActive('improved_transmission')
       && campaignUpgradeDefinition('improved_transmission').movementDiceCanReverseDirection;
@@ -3541,6 +3567,7 @@ export class BattleScene extends Component {
     this.campaignUpgradeCandidates = [];
     this.campaignUpgradeChosenSegments.clear();
     this.campaignUpgradeSelectedIndex = 1;
+    this.retainedCampaignAttackDiePip = null;
     this.refreshCampaignUpgradeStatusSlots();
   }
 
@@ -3814,16 +3841,36 @@ export class BattleScene extends Component {
     });
   }
 
+  private loadCampaignUpgradeIconAtlasV2(onReady: (atlas: SpriteFrame | null) => void) {
+    if (this.campaignUpgradeIconAtlasV2?.isValid) {
+      onReady(this.campaignUpgradeIconAtlasV2);
+      return;
+    }
+    this.campaignUpgradeIconV2Waiters.push(onReady);
+    if (this.campaignUpgradeIconAtlasV2Loading) return;
+    this.campaignUpgradeIconAtlasV2Loading = true;
+    resources.load('textures/ui/campaign_upgrades/upgrade_icons_atlas_v2/spriteFrame', SpriteFrame, (err, atlas) => {
+      this.campaignUpgradeIconAtlasV2Loading = false;
+      this.campaignUpgradeIconAtlasV2 = !err && atlas ? atlas : null;
+      if (err || !atlas) console.warn('[CampaignUpgrade] extension icon atlas load failed:', err);
+      const waiters = this.campaignUpgradeIconV2Waiters.splice(0);
+      for (const waiter of waiters) waiter(this.campaignUpgradeIconAtlasV2);
+    });
+  }
+
   private campaignUpgradeIconFrame(atlas: SpriteFrame, id: CampaignUpgradeId): SpriteFrame | null {
-    const index = CAMPAIGN_UPGRADE_ICON_ORDER.indexOf(id);
+    const legacyIndex = CAMPAIGN_UPGRADE_ICON_ORDER.indexOf(id);
+    const extensionIndex = CAMPAIGN_UPGRADE_ICON_ORDER_V2.indexOf(id);
+    const index = legacyIndex >= 0 ? legacyIndex : extensionIndex;
     if (index < 0) return null;
     const texture = atlas.texture;
-    const cellW = texture.width / 5;
+    const columns = legacyIndex >= 0 ? 5 : 4;
+    const cellW = texture.width / columns;
     const cellH = texture.height / 2;
     const frame = new SpriteFrame();
     frame.reset({
       texture,
-      rect: new Rect((index % 5) * cellW, Math.floor(index / 5) * cellH, cellW, cellH),
+      rect: new Rect((index % columns) * cellW, Math.floor(index / columns) * cellH, cellW, cellH),
       originalSize: new Size(cellW, cellH),
     });
     return frame;
@@ -3864,7 +3911,10 @@ export class BattleScene extends Component {
     this.drawCampaignUpgradeIcon(fallback.addComponent(Graphics), id, size * 0.34);
     root.addChild(fallback);
 
-    this.loadCampaignUpgradeIconAtlas((atlas) => {
+    const loadAtlas = CAMPAIGN_UPGRADE_ICON_ORDER_V2.includes(id)
+      ? this.loadCampaignUpgradeIconAtlasV2.bind(this)
+      : this.loadCampaignUpgradeIconAtlas.bind(this);
+    loadAtlas((atlas) => {
       if (!root.isValid || !atlas) return;
       const frame = this.campaignUpgradeIconFrame(atlas, id);
       if (!frame) return;
@@ -3940,6 +3990,9 @@ export class BattleScene extends Component {
     this.campaignUpgradeIds.push(id);
     this.campaignUpgradeChosenSegments.add(this.activeCampaignSegmentIndex);
     applyCampaignUpgradesToSherman(this.mission.sherman, this.campaignUpgradeIds);
+    if (id === 'emergency_medical_kit' && this.activeCampaignSegmentIndex > 0) {
+      reviveFirstCampaignCrewMember(this.mission.sherman);
+    }
     this.battleLogI18n('campaignUpgrade.acquiredLog', { name: t(campaignUpgradeDefinition(id).nameKey) });
     this.closeCampaignUpgradeDetail();
     this.campaignUpgradeChoiceRoot.destroy();
@@ -4152,6 +4205,7 @@ export class BattleScene extends Component {
   }
 
   private loadAndDraw(data: MissionData) {
+    this.campaignAutoEvacActive = false;
     this.cancelPrecisionAimHold();
     this.infantryVisualFacing.clear();
     this.mainGunRecoils.clear();
@@ -8254,7 +8308,7 @@ export class BattleScene extends Component {
       });
       const blocked = !isEvacExit && (!tile
         || !this.canMoveToBattleTile(pos)
-        || !map.canTankCrossEdge(sherman.pos, pos) // 桥梁边向校验：水域+桥梁需 dir 落在 br 端，详见 GDD §3.2
+        || !map.canTankCrossEdge(sherman.pos, pos, { faction: sherman.faction }) // 桥梁边向校验：水域+桥梁需 dir 落在 br 端，详见 GDD §3.2
         || this.findMoveBlocker(sherman, pos) !== null);
       const p = this.project(pos.q, pos.r);
       this.g.strokeColor = blocked ? DRIVE_BLOCKED : c.color;
@@ -10016,6 +10070,17 @@ export class BattleScene extends Component {
       case 'maus': {
         const geometry = splitTankGeometryConfigOf('maus');
         const visual = splitTankVisualConfigOf('maus');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
+      case 'panther': {
+        const geometry = splitTankGeometryConfigOf('panther');
+        const visual = splitTankVisualConfigOf('panther');
         return {
           trimW: geometry.topTrim.w,
           trimH: geometry.topTrim.h,
@@ -12305,11 +12370,123 @@ export class BattleScene extends Component {
 
   private computeOutcome(): MissionOutcome {
     if (!this.mission) return 'ongoing';
-    if (!GameSession.isPvp) return checkOutcome(this.mission);
+    if (!GameSession.isPvp) {
+      const outcome = checkOutcome(this.mission);
+      if (outcome === 'victory'
+        && this.campaignRuntime?.campaign.autoEvacAfterDestroyAll
+        && this.mission.data.objective.type === 'destroy_all_enemies'
+        && !this.mission.shermanEvacuated) {
+        if (!this.campaignAutoEvacActive) {
+          this.campaignAutoEvacActive = true;
+          this.beginCampaignAutoEvac();
+        }
+        return 'ongoing';
+      }
+      return outcome;
+    }
     if (this.mission.sherman.destroyed) return 'defeat';
     const opponent = this.pvpOpponentProtagonist();
     if (opponent?.destroyed) return 'victory';
     return 'ongoing';
+  }
+
+  private campaignAutoEvacPath(target: Axial): Axial[] | null {
+    if (!this.mission) return null;
+    const { map, sherman } = this.mission;
+    const start = { ...sherman.pos };
+    const startKey = HexMap.keyOf(start);
+    const targetKey = HexMap.keyOf(target);
+    const queue: Axial[] = [start];
+    const previous = new Map<string, Axial | null>([[startKey, null]]);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (HexMap.keyOf(current) === targetKey) break;
+      for (let dir = 0; dir < 6; dir++) {
+        const next = neighbor(current, dir as Direction);
+        const key = HexMap.keyOf(next);
+        if (previous.has(key)) continue;
+        if (!this.canMoveToBattleTile(next)) continue;
+        if (!map.canTankCrossEdge(current, next, { faction: sherman.faction })) continue;
+        previous.set(key, current);
+        queue.push(next);
+      }
+    }
+    if (!previous.has(targetKey)) return null;
+    const reversed: Axial[] = [];
+    for (let cursor: Axial | null = target; cursor; cursor = previous.get(HexMap.keyOf(cursor)) ?? null) {
+      reversed.push(cursor);
+    }
+    return reversed.reverse();
+  }
+
+  private queueCampaignAutoEvacTurn(
+    queue: MoveAnim[],
+    unit: Unit,
+    pos: Axial,
+    from: Direction,
+    to: Direction,
+  ): Direction {
+    let facing = from;
+    while (facing !== to) {
+      const clockwise = (to - facing + 6) % 6;
+      const next = rotateDirection(facing, clockwise <= 3 ? 1 : -1);
+      queue.push({
+        unit, kind: 'turn', fromQ: pos.q, fromR: pos.r, toQ: pos.q, toR: pos.r,
+        t: 0, dur: Math.max(0.05, this.moveDuration), turnFrom: facing, turnTo: next,
+      });
+      facing = next;
+    }
+    return facing;
+  }
+
+  private beginCampaignAutoEvac() {
+    if (!this.mission || !this.campaignRuntime || !this.campaignAutoEvacActive) return;
+    const packageMission = GameSession.selectedCampaignPackages?.[this.activeCampaignSegmentIndex]?.mission;
+    const segment = this.campaignRuntime.segments[this.activeCampaignSegmentIndex];
+    if (!segment) return;
+    const localParity = packageMission?.rowParityOffset === 1 ? 1 : 0;
+    const target = axialAdd(
+      offsetToAxial({ col: 7, row: 2 }, localParity),
+      { q: segment.axialQOffset, r: segment.axialROffset },
+    );
+    const path = this.campaignAutoEvacPath(target);
+    if (!path) {
+      console.error('[Campaign] unable to find automatic evacuation route to (7,2)');
+      this.campaignAutoEvacActive = false;
+      return;
+    }
+
+    const sherman = this.mission.sherman;
+    sherman.paralyzed = false;
+    this.closeDiePopover();
+    this.clearGunSelection();
+    this.phaseDice = [];
+    this.battleLog('[Campaign] 目标完成，已自动修复行走机构并开始撤离');
+
+    const queue: MoveAnim[] = [];
+    let facing = sherman.facing ?? 0;
+    for (let index = 1; index < path.length; index++) {
+      const from = path[index - 1]!;
+      const to = path[index]!;
+      const direction = directionTo(from, to)!;
+      facing = this.queueCampaignAutoEvacTurn(queue, sherman, from, facing, direction);
+      queue.push({
+        unit: sherman, kind: 'move', fromQ: from.q, fromR: from.r, toQ: to.q, toR: to.r,
+        t: 0, dur: Math.max(0.05, this.moveDuration),
+      });
+    }
+    facing = this.queueCampaignAutoEvacTurn(queue, sherman, target, facing, 0);
+    void facing;
+    const exit = neighbor(target, 0);
+    queue.push({
+      unit: sherman, kind: 'move', fromQ: target.q, fromR: target.r, toQ: exit.q, toR: exit.r,
+      t: 0, dur: Math.max(0.05, this.moveDuration), evacExit: true,
+    });
+    this.animQueue = queue;
+    this.anim = this.animQueue.shift() ?? null;
+    this.refreshStatusPanel();
+    this.refreshPhaseUI();
+    this.redraw();
   }
 
   /** 胜负覆盖层：懒创建，仅在 outcome 非 ongoing 时显示，并联动"再来一局"按钮的可见性 */
@@ -12499,6 +12676,8 @@ export class BattleScene extends Component {
       this.restartMission();
       return;
     }
+    resetCampaignUpgradeSegmentCharges(this.mission.sherman, this.campaignUpgradeIds);
+    this.retainedCampaignAttackDiePip = null;
     this.restoreAppliedSave(result, true);
     this.battleLog(`[Campaign] === 从第 ${this.activeCampaignSegmentIndex + 1} 小关检查点重新挑战 ===`);
   }
@@ -13004,7 +13183,10 @@ export class BattleScene extends Component {
       const a = classifyAttackDie(pip);
       switch (a) {
         case 'reload': return { text: t('die.hint.reload'), color: DIE_HINT_RED };
-        case 'gun':    return { text: t('die.hint.gun'),    color: DIE_HINT_RED };
+        case 'gun':    return {
+          text: this.campaignReadyRackCanReloadShootingDice() ? t('die.hint.gunOrLoad') : t('die.hint.gun'),
+          color: DIE_HINT_RED,
+        };
         case 'mg':     return { text: t('die.hint.mg'),     color: DIE_HINT_GREY };
         default:       return { text: t('die.hint.none'),   color: DIE_HINT_GREY };
       }
@@ -13129,7 +13311,14 @@ export class BattleScene extends Component {
         ? campaignUpgradeDiceBonus(this.campaignUpgradeIds, terrain, subPhase)
         : 0,
     });
-    const pips = rollActionDice(this.rng, count);
+    const rolledPips = rollActionDice(this.rng, count);
+    const retainedAttackPip = subPhase === 'attack'
+      && this.campaignUpgradeActive('ammo_handling_optimization')
+      && campaignUpgradeDefinition('ammo_handling_optimization').carryLowestUnusedAttackDie
+      ? this.retainedCampaignAttackDiePip
+      : null;
+    const pips = retainedAttackPip == null ? rolledPips : [...rolledPips, retainedAttackPip];
+    if (subPhase === 'attack') this.retainedCampaignAttackDiePip = null;
     this.pendingAutoEndStep = null;
     this.phaseDice = pips.map((_, i) => ({ pip: ((i * 2) % 6) + 1, used: false }));
     this.clearGunSelection();
@@ -13169,6 +13358,12 @@ export class BattleScene extends Component {
   private endCurrentSubPhase() {
     const was = this.playerStep;
     const wasMisc = was === 'misc';
+    if (was === 'attack'
+      && this.campaignUpgradeActive('ammo_handling_optimization')
+      && campaignUpgradeDefinition('ammo_handling_optimization').carryLowestUnusedAttackDie) {
+      const unused = this.phaseDice.filter(slot => !slot.used).map(slot => slot.pip);
+      this.retainedCampaignAttackDiePip = unused.length > 0 ? Math.min(...unused) : null;
+    }
     if (was === 'movement') this.movementDone = true;
     else if (was === 'attack') this.attackDone = true;
     else if (was === 'misc') this.miscDone = true;
@@ -13335,7 +13530,10 @@ export class BattleScene extends Component {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) return null;
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
-    if (!map.get(to) || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
+    if (!map.get(to) || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, {
+      ignoreBreakwater: canCrossBreakwater,
+      faction: sherman.faction,
+    })) {
       return t('floater.blockedTerrain');
     }
     const blocker = this.findMoveBlocker(sherman, to);
@@ -13557,6 +13755,10 @@ export class BattleScene extends Component {
       } else if (a === 'gun') {
         addItem(t(fireActionKey), PHASE_BTN_ATTACK,
           () => this.selectGunDie(idx), this.gunActionUnavailable());
+        if (this.campaignReadyRackCanReloadShootingDice()) {
+          addItem(t('action.reload'), PHASE_BTN_ATTACK,
+            () => this.tryReload(idx), this.reloadActionUnavailable());
+        }
       } else if (a === 'mg') {
         addItem(t('action.fireMG'), PHASE_BTN_ATTACK,
           () => this.selectMGDie(idx), this.mgActionUnavailable());
@@ -13863,7 +14065,10 @@ export class BattleScene extends Component {
     const tile = map.get(to);
     // 桥梁规则（GDD §3.2）：水域+桥梁可入；入 / 出方向须落在 bridgeEnds 端，否则等同越水阻挡。
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
-    if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, { ignoreBreakwater: canCrossBreakwater })) {
+    if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, {
+      ignoreBreakwater: canCrossBreakwater,
+      faction: sherman.faction,
+    })) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
@@ -13919,7 +14124,8 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     if (this.playerStep === 'attack') {
-      if (classifyAttackDie(slot.pip) !== 'reload') return;
+      const action = classifyAttackDie(slot.pip);
+      if (action !== 'reload' && !(action === 'gun' && this.campaignReadyRackCanReloadShootingDice())) return;
     } else if (this.playerStep === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'gunner_gun_or_reload') return;
     } else {
@@ -14574,7 +14780,7 @@ export class BattleScene extends Component {
     }
     const tile = map.get(to);
     // 桥梁规则（GDD §3.2）：与单骰 drive 路径一致 —— 水域+桥梁需边向落在 bridgeEnds 端
-    if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to)) {
+    if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, { faction: sherman.faction })) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.blockedTerrain'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();

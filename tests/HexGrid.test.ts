@@ -1248,6 +1248,12 @@ const rngFrom = (...values): RNG => {
     assert.strictEqual(map.canUnitEnter({ q: 1, r: 0 }, 'japanese'), false);
     assert.strictEqual(map.canUnitEnter({ q: 2, r: 0 }, 'japanese'), true);
     assert.strictEqual(map.canUnitEnter({ q: 1, r: 0 }, 'usa'), true);
+    assert.strictEqual(map.canTankEnter({ q: 1, r: 0 }, 'usa'), true);
+    assert.strictEqual(map.canTankCrossEdge(
+      { q: 2, r: 0 },
+      { q: 1, r: 0 },
+      { faction: 'usa' },
+    ), true);
     assert.strictEqual(map.canTankCrossEdge(
       { q: 2, r: 0 },
       { q: 1, r: 0 },

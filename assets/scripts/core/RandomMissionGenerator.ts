@@ -21,6 +21,7 @@ import type {
   TruckPathEntry,
   UnitKind,
   UnitPlacement,
+  WeatherType,
 } from './types';
 
 export type RandomMissionTheater = 'europe' | 'pacific';
@@ -29,6 +30,8 @@ export interface RandomMissionGenerationOptions {
   pacificBattleType?: 'landing' | 'inland';
   /** Visual-only season; winter is currently supported by European terrain. */
   season?: SeasonType;
+  /** Fixed mission weather. */
+  weather?: WeatherType;
   /** Restrict objective generation to these kinds; one is chosen uniformly. */
   objectiveKinds?: readonly RandomMissionObjectiveKind[];
   /** Require the initial enemy roster to have exactly this many threat points. */
@@ -1277,6 +1280,7 @@ function generateAttempt(
     description: `由随机关卡生成器 v${RANDOM_MISSION_GENERATOR_VERSION} 生成；seed=${seed >>> 0}`,
     theater,
     ...(winter ? { season: 'winter' as const } : {}),
+    ...(options.weather && options.weather !== 'clear' ? { weather: options.weather } : {}),
     cols: COLS,
     rows: ROWS,
     enemyStartByDice: true,

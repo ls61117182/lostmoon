@@ -121,6 +121,7 @@ export type UnitKind =
   | 'tiger'
   | 'tigerking'
   | 'maus'
+  | 'panther'
   | 'panzer4'
   | 'stug3'
   | 'panzer3'
@@ -199,6 +200,7 @@ export function isTankKind(kind: UnitKind): boolean {
     || kind === 'tiger'
     || kind === 'tigerking'
     || kind === 'maus'
+    || kind === 'panther'
     || kind === 'panzer4'
     || kind === 'stug3'
     || kind === 'panzer3'
@@ -324,6 +326,16 @@ export interface Unit {
   ignoreDestroyedDamage?: boolean;
   /** 被击穿后忽略“乘员阵亡”伤害结果，但不重新查找其它结果。 */
   ignoreCrewCheckDamage?: boolean;
+  /** Campaign mine roller: all road/clear mine event damage is ignored. */
+  campaignMineDamageImmune?: boolean;
+  /** Campaign camouflage net: hidden unit cannot be targeted from range 0..2. */
+  campaignHiddenCloseRangeUntargetable?: boolean;
+  /** Campaign reinforced transmission: turn-end mechanical failure is ignored. */
+  campaignMechanicalFailureImmune?: boolean;
+  /** One-shot per-segment protection against a paralyzed result from applyAttack. */
+  campaignParalyzedProtectionAvailable?: boolean;
+  /** One-shot per-segment protection against doubles/sniper commander death. */
+  campaignCommanderShieldAvailable?: boolean;
   /** Hardcore AT gun: whether its three-man operator group is alive and controlling it. */
   atGunCrewAlive?: boolean;
   /** Infantry visuals used by the AT-gun operator group. */
