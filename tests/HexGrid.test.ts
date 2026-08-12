@@ -406,15 +406,15 @@ const rngFrom = (...values): RNG => {
   };
 
   {
-    // test: 'tank machine guns can fire at range 2 but not range 3'
+    // test: 'tank machine guns can fire at range 1 but not range 2'
     const attacker = tankAt('attacker', 0, 0);
-    const target = tankAt('target', 2, 0);
+    const target = tankAt('target', 1, 0);
     target.kind = 'infantry';
     const map = fieldMap(0, 3);
 
     assert.strictEqual(canMGAttack({ attacker, target, map }).ok, true);
 
-    target.pos = { q: 3, r: 0 };
+    target.pos = { q: 2, r: 0 };
     assert.deepStrictEqual(canMGAttack({ attacker, target, map }), {
       ok: false,
       reason: 'attack.reason.mgRange',

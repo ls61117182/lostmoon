@@ -18,12 +18,17 @@ require.extensions['.ts'] = (module, filename) => {
 
 try {
   const { RNG } = require('../assets/scripts/core/Dice.ts');
-  const { currentTargetFor } = require('../assets/scripts/core/EnemyAI.ts');
+  const { currentTargetFor, hardcoreTankAIDiceCount } = require('../assets/scripts/core/EnemyAI.ts');
   const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
   const {
     crewLevelFor,
     normalizePlayerCrewLevels,
     normalizeUnitLevel,
+    atGunActionDiceBonus,
+    infantryTurnActions,
+    nonPlayerTankDiceBonus,
+    unitLevelHitThresholdModifier,
+    unitLevelOf,
   } = require('../assets/scripts/core/UnitLevel.ts');
   const { captureSave, applySave } = require('../assets/scripts/core/SaveLoad.ts');
 
@@ -81,6 +86,40 @@ try {
   }
   assert.strictEqual(normalizeUnitLevel('invalid'), 'recruit');
 
+  actor.unitLevel = 'veteran';
+  assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 1, move: 1, misc: 0 });
+  actor.unitLevel = 'elite';
+  assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 2, move: 1, misc: 1 });
+  const recruitDice = hardcoreTankAIDiceCount({ ...actor, unitLevel: 'recruit' }, 'clear');
+  const eliteDice = hardcoreTankAIDiceCount(actor, 'clear');
+  assert.deepStrictEqual({
+    attack: eliteDice.attack - recruitDice.attack,
+    move: eliteDice.move - recruitDice.move,
+    misc: eliteDice.misc - recruitDice.misc,
+  }, { attack: 2, move: 1, misc: 1 });
+
+  const infantry = { ...actor, kind: 'german_infantry', crew: undefined, unitLevel: 'veteran' };
+  assert.deepStrictEqual(infantryTurnActions(infantry), ['attack_or_move', 'move']);
+  infantry.unitLevel = 'elite';
+  assert.deepStrictEqual(infantryTurnActions(infantry), ['attack_or_move', 'attack_or_move']);
+  const atGun = {
+    ...actor,
+    id: 'ranked-at-gun',
+    kind: 'at_gun',
+    crew: undefined,
+    unitLevel: undefined,
+    atGunCrewLevel: 'elite',
+    atGunCrewAlive: true,
+  };
+  assert.strictEqual(unitLevelOf(atGun), 'elite');
+  assert.strictEqual(atGunActionDiceBonus(atGun), 2);
+  assert.strictEqual(unitLevelHitThresholdModifier(atGun, nearbyAlly), -1);
+  assert.strictEqual(unitLevelHitThresholdModifier(infantry, nearbyAlly), 1);
+  assert.strictEqual(unitLevelHitThresholdModifier(nearbyAlly, infantry), 1);
+  assert.strictEqual(unitLevelHitThresholdModifier(actor, nearbyAlly), -1);
+  assert.strictEqual(unitLevelHitThresholdModifier(nearbyAlly, actor), 1);
+  actor.unitLevel = 'veteran';
+
   const testMissionData = JSON.parse(fs.readFileSync(
     'assets/resources/missions/mission_test.json',
     'utf8',
@@ -96,7 +135,7 @@ try {
     data: { theater: 'europe' },
     sherman: player,
     allies: [],
-    enemies: [actor],
+    enemies: [actor, atGun],
     smokeHexes: new Set(),
     smokeHexOwners: new Map(),
   };
@@ -115,10 +154,13 @@ try {
   })));
   player.crewLevels.commander = 'recruit';
   actor.unitLevel = 'recruit';
+  atGun.atGunCrewLevel = 'recruit';
   const restored = applySave(mission, 'unit_level_test', save);
   assert.strictEqual(restored.ok, true);
   assert.strictEqual(player.crewLevels.commander, 'elite');
   assert.strictEqual(actor.unitLevel, 'veteran');
+  assert.strictEqual(atGun.unitLevel, undefined);
+  assert.strictEqual(atGun.atGunCrewLevel, 'elite');
 
   console.log('unit level system tests passed');
 } finally {

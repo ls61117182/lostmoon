@@ -59,7 +59,12 @@ export function isWithinOwnVisionRange(observer: Unit, target: Unit, weather?: W
 }
 
 /** Runtime source of truth for the map coordinates visible to one unit. */
-export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: WeatherType): Set<string> {
+export function computeUnitVisibleHexes(
+  map: HexMap,
+  unit: Unit,
+  weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
+): Set<string> {
   const visible = new Set<string>();
   if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
   const add = (p: Axial) => {
@@ -67,6 +72,9 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
   };
 
   add(unit.pos);
+  // A unit inside smoke retains awareness of its own hex but contributes no
+  // direct vision beyond it. Radio-shared sight is merged by the caller.
+  if (smokeHexes?.has(HexMap.keyOf(unit.pos))) return visible;
   // Old tests/saves predate the config field; vehicle behavior remains turreted by default.
   const visionType = isControlledATGun(unit) ? 'infantry' : (unit.stats.visionType ?? 'turreted');
   const commanderAlive = unit.crew?.commander !== false;
@@ -76,14 +84,15 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
   if (openHatch) {
     for (const tile of map.all()) {
       if (hexDistance(unit.pos, tile.pos) > commanderVisionRange) continue;
-      if (hasDirectionalFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+      if (hasDirectionalFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
     }
   }
 
   if (visionType === 'infantry') {
     const infantryRange = isControlledATGun(unit) ? commanderVisionRange : 2;
     for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) <= infantryRange && hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+      if (hexDistance(unit.pos, tile.pos) <= infantryRange
+        && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
     }
     return visible;
   }
@@ -96,7 +105,7 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
     const interiorVisionRange = currentInteriorVisionRange(unit);
     for (const tile of map.all()) {
       if (hexDistance(unit.pos, tile.pos) <= interiorVisionRange
-        && hasFogLineOfSight(map, unit.pos, tile.pos)) add(tile.pos);
+        && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
     }
   }
 
@@ -110,16 +119,17 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
     const fireDirection = sightFacing as FireDirection;
     const diagonalRay = isDiagonalFireDirection(fireDirection);
     if (tank && !openHatch && diagonalRay) {
-      addClosedTankDiagonalGunnerVision(map, unit, fireDirection, gunnerVisionRange, add);
+      addClosedTankDiagonalGunnerVision(map, unit, fireDirection, gunnerVisionRange, add, smokeHexes);
       return visible;
     }
     let p = axialAdd(unit.pos, rayVector);
     while (hexDistance(unit.pos, p) <= gunnerVisionRange && map.has(p)) {
       if (diagonalRay) {
-        if (!map.hasDiagonalLineOfSight(unit.pos, p, fireDirection)) break;
+        if (!map.hasDiagonalLineOfSight(unit.pos, p, fireDirection, smokeHexes)) break;
       }
-      add(p);
       const tile = map.get(p)!;
+      if (smokeHexes?.has(HexMap.keyOf(p))) break;
+      add(p);
       if (map.lineOfSightBlockedByTile(tile)) break;
       p = axialAdd(p, rayVector);
     }
@@ -138,6 +148,7 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
   unit: Unit,
   target: Axial,
   weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
 ): FireDirection | null {
   if (!isTankUnit(unit) || unit.stats.visionType !== 'turreted') return null;
   const openHatch = unit.crew?.commander !== false && unit.hatchOpen === true;
@@ -148,8 +159,8 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
     const direction = diagonalFlankFireDirectionTo(unit.pos, target);
     if (direction === null) return null;
     if (hexDistance(unit.pos, target) > currentVisionRange(unit, weather)
-      || !hasDirectionalFogLineOfSight(map, unit.pos, target)) return null;
-    return diagonalGunnerClickPreference(map, unit, direction, target) !== null
+      || !hasDirectionalFogLineOfSight(map, unit.pos, target, smokeHexes)) return null;
+    return diagonalGunnerClickPreference(map, unit, direction, target, smokeHexes) !== null
       ? direction
       : null;
   }
@@ -163,6 +174,7 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
     direction as FireDirection,
     currentGunnerVisionRange(unit),
     (pos) => { if (map.has(pos) && axialEquals(pos, target)) found = true; },
+    smokeHexes,
   );
   return found ? direction as FireDirection : null;
 }
@@ -177,6 +189,7 @@ export function diagonalGunnerClickPreference(
   unit: Unit,
   fireDirection: FireDirection,
   target: Axial,
+  smokeHexes?: ReadonlySet<string>,
 ): Direction | null {
   if (!isDiagonalFireDirection(fireDirection)) return null;
   const diagonalIndex = fireDirection - 6;
@@ -194,17 +207,18 @@ export function diagonalGunnerClickPreference(
     const clickedSide = axialEquals(target, aPos) ? a : axialEquals(target, bPos) ? b : null;
     if (clickedSide !== null) {
       const clickedPathOpen = clickedSide === a ? aOpen : bOpen;
-      return clickedPathOpen && map.has(target) ? clickedSide : null;
+      return clickedPathOpen && map.has(target)
+        && !smokeHexes?.has(HexMap.keyOf(target)) ? clickedSide : null;
     }
 
-    if (diagonalFlankBlocked(map, aPos)) aOpen = false;
-    if (diagonalFlankBlocked(map, bPos)) bOpen = false;
+    if (diagonalFlankBlocked(map, aPos, smokeHexes)) aOpen = false;
+    if (diagonalFlankBlocked(map, bPos, smokeHexes)) bOpen = false;
 
     const evenDistance = oddDistance + 1;
     if (evenDistance > range || (!aOpen && !bOpen)) return null;
     const center = axialAdd(current, rayVector);
     const centerTile = map.get(center);
-    if (!centerTile || map.lineOfSightBlockedByTile(centerTile)) return null;
+    if (!centerTile || smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile)) return null;
     current = center;
   }
   return null;
@@ -222,12 +236,13 @@ function addClosedTankDiagonalGunnerVision(
   fireDirection: FireDirection,
   range: number,
   add: (pos: Axial) => void,
+  smokeHexes?: ReadonlySet<string>,
 ): void {
   const diagonalIndex = fireDirection - 6;
   const a = diagonalIndex as Direction;
   const b = ((diagonalIndex + 1) % 6) as Direction;
   const rayVector = fireDirectionVector(fireDirection);
-  const chosen = chooseDiagonalGunnerSide(map, unit, fireDirection, range, a, b, rayVector);
+  const chosen = chooseDiagonalGunnerSide(map, unit, fireDirection, range, a, b, rayVector, smokeHexes);
   let aOpen = true;
   let bOpen = true;
   let current = unit.pos;
@@ -236,17 +251,19 @@ function addClosedTankDiagonalGunnerVision(
     const aPos = neighbor(current, a);
     const bPos = neighbor(current, b);
     const chosenOpen = chosen === a ? aOpen : bOpen;
-    if (chosenOpen) add(chosen === a ? aPos : bPos);
+    const chosenPos = chosen === a ? aPos : bPos;
+    if (chosenOpen && !smokeHexes?.has(HexMap.keyOf(chosenPos))) add(chosenPos);
 
-    if (diagonalFlankBlocked(map, aPos)) aOpen = false;
-    if (diagonalFlankBlocked(map, bPos)) bOpen = false;
+    if (diagonalFlankBlocked(map, aPos, smokeHexes)) aOpen = false;
+    if (diagonalFlankBlocked(map, bPos, smokeHexes)) bOpen = false;
 
     const evenDistance = oddDistance + 1;
     if (evenDistance > range || (!aOpen && !bOpen)) break;
     const center = axialAdd(current, rayVector);
     if (!map.has(center)) break;
-    add(center);
     const centerTile = map.get(center)!;
+    if (smokeHexes?.has(HexMap.keyOf(center))) break;
+    add(center);
     if (map.lineOfSightBlockedByTile(centerTile)) break;
     current = center;
   }
@@ -260,14 +277,15 @@ function chooseDiagonalGunnerSide(
   a: Direction,
   b: Direction,
   rayVector: Axial,
+  smokeHexes?: ReadonlySet<string>,
 ): Direction {
   const clickedPreference = unit.diagonalGunnerSidePreference;
   if (clickedPreference === a || clickedPreference === b) return clickedPreference;
 
   let current = unit.pos;
   for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
-    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a));
-    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b));
+    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a), smokeHexes);
+    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b), smokeHexes);
     if (aBlocked !== bBlocked) return aBlocked ? b : a;
     if (aBlocked) break;
 
@@ -275,7 +293,7 @@ function chooseDiagonalGunnerSide(
     if (evenDistance > range) break;
     const center = axialAdd(current, rayVector);
     const centerTile = map.get(center);
-    if (!centerTile || map.lineOfSightBlockedByTile(centerTile)) break;
+    if (!centerTile || smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile)) break;
     current = center;
   }
 
@@ -284,9 +302,9 @@ function chooseDiagonalGunnerSide(
     <= clockStepDistance(fireDirectionStep(previous), fireDirectionStep(b)) ? a : b;
 }
 
-function diagonalFlankBlocked(map: HexMap, pos: Axial): boolean {
+function diagonalFlankBlocked(map: HexMap, pos: Axial, smokeHexes?: ReadonlySet<string>): boolean {
   const tile = map.get(pos);
-  return !tile || map.lineOfSightBlockedByTile(tile);
+  return !tile || smokeHexes?.has(HexMap.keyOf(pos)) === true || map.lineOfSightBlockedByTile(tile);
 }
 
 function clockStepDistance(a: number, b: number): number {
@@ -314,12 +332,18 @@ export function computeRadioSharedVisibleHexes(
   receiver: Unit,
   friendlies: readonly Unit[] = [],
   weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
 ): Set<string> {
-  const visible = computeUnitVisibleHexes(map, receiver, weather);
+  const visible = computeUnitVisibleHexes(map, receiver, weather, smokeHexes);
   if (hasRadioReceive(receiver)) {
     for (const friendly of friendlies) {
       if (friendly === receiver || !shareVisionFaction(friendly, receiver) || !hasRadioTransmit(friendly)) continue;
-      for (const key of computeUnitVisibleHexes(map, friendly, weather)) visible.add(key);
+      for (const key of computeUnitVisibleHexes(map, friendly, weather, smokeHexes)) {
+        // A friendly inside smoke directly knows only its own occupied hex.
+        // That local awareness is valid radio intelligence for teammates, even
+        // though nobody outside the smoke could reveal the hex by direct sight.
+        visible.add(key);
+      }
     }
   }
   // Non-radio infantry can brief only the tank occupying the same hex. Their
@@ -333,7 +357,9 @@ export function computeRadioSharedVisibleHexes(
         || friendly.stats.hasRadio !== false
         || !shareVisionFaction(friendly, receiver)
         || !axialEquals(friendly.pos, receiver.pos)) continue;
-      for (const key of computeUnitVisibleHexes(map, friendly, weather)) visible.add(key);
+      for (const key of computeUnitVisibleHexes(map, friendly, weather, smokeHexes)) {
+        if (!smokeHexes?.has(key)) visible.add(key);
+      }
     }
   }
   return visible;
@@ -346,12 +372,14 @@ export function computePlayerVisibleHexes(
   allies: readonly Unit[] = [],
   radioVisionSharing = false,
   weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
 ): Set<string> {
   const visible = radioVisionSharing
-    ? computeRadioSharedVisibleHexes(map, sherman, allies, weather)
-    : computeUnitVisibleHexes(map, sherman, weather);
+    ? computeRadioSharedVisibleHexes(map, sherman, allies, weather, smokeHexes)
+    : computeUnitVisibleHexes(map, sherman, weather, smokeHexes);
   for (const ally of allies) {
-    if (!ally.destroyed && map.has(ally.pos)) visible.add(HexMap.keyOf(ally.pos));
+    const key = HexMap.keyOf(ally.pos);
+    if (!ally.destroyed && map.has(ally.pos) && !smokeHexes?.has(key)) visible.add(key);
   }
   return visible;
 }
@@ -363,10 +391,11 @@ export function isUnitInVision(
   friendlies: readonly Unit[] = [],
   radioVisionSharing = false,
   weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
 ): boolean {
   const visible = radioVisionSharing
-    ? computeRadioSharedVisibleHexes(map, observer, friendlies, weather)
-    : computeUnitVisibleHexes(map, observer, weather);
+    ? computeRadioSharedVisibleHexes(map, observer, friendlies, weather, smokeHexes)
+    : computeUnitVisibleHexes(map, observer, weather, smokeHexes);
   return visible.has(HexMap.keyOf(target.pos));
 }
 
@@ -375,25 +404,38 @@ export function isUnitInVision(
  * observer and target centers is blocked when it intersects an intermediate
  * blocking hex. The endpoints themselves never block their own visibility.
  */
-export function hasFogLineOfSight(map: HexMap, from: Axial, to: Axial): boolean {
+export function hasFogLineOfSight(
+  map: HexMap,
+  from: Axial,
+  to: Axial,
+  smokeHexes?: ReadonlySet<string>,
+): boolean {
   if (axialEquals(from, to)) return true;
+  if (smokeHexes?.has(HexMap.keyOf(from)) || smokeHexes?.has(HexMap.keyOf(to))) return false;
   const a = axialToPixel(from, GEOMETRY_HEX_SIZE);
   const b = axialToPixel(to, GEOMETRY_HEX_SIZE);
   for (const tile of map.all()) {
     if (axialEquals(tile.pos, from) || axialEquals(tile.pos, to)) continue;
-    if (!map.lineOfSightBlockedByTile(tile)) continue;
+    if (!map.lineOfSightBlockedByTile(tile) && !smokeHexes?.has(HexMap.keyOf(tile.pos))) continue;
     const center = axialToPixel(tile.pos, GEOMETRY_HEX_SIZE);
     if (segmentIntersectsPointyHex(a, b, center, GEOMETRY_HEX_SIZE)) return false;
   }
   return true;
 }
 
-function hasDirectionalFogLineOfSight(map: HexMap, from: Axial, to: Axial): boolean {
+function hasDirectionalFogLineOfSight(
+  map: HexMap,
+  from: Axial,
+  to: Axial,
+  smokeHexes?: ReadonlySet<string>,
+): boolean {
+  if (!axialEquals(from, to)
+    && (smokeHexes?.has(HexMap.keyOf(from)) || smokeHexes?.has(HexMap.keyOf(to)))) return false;
   const fireDirection = fireDirectionTo(from, to);
   if (fireDirection !== null && isDiagonalFireDirection(fireDirection)) {
-    return map.hasDiagonalLineOfSight(from, to, fireDirection);
+    return map.hasDiagonalLineOfSight(from, to, fireDirection, smokeHexes);
   }
-  return hasFogLineOfSight(map, from, to);
+  return hasFogLineOfSight(map, from, to, smokeHexes);
 }
 
 function segmentIntersectsPointyHex(a: Point, b: Point, center: Point, size: number): boolean {

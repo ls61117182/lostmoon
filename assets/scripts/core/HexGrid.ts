@@ -427,11 +427,12 @@ export class HexMap {
    * 计算 from → to 之间是否有视线。
    * 规则：除起止格外，路径上任何阻挡视线的地形/建筑（中间格）会切断视线。
    */
-  hasLineOfSight(from: Axial, to: Axial): boolean {
+  hasLineOfSight(from: Axial, to: Axial, blockedHexes?: ReadonlySet<string>): boolean {
     const path = hexLine(from, to);
     for (let i = 1; i < path.length - 1; i++) {
       const t = this.get(path[i]);
       if (!t) return false;
+      if (blockedHexes?.has(HexMap.keyOf(path[i]))) return false;
       if (this.lineOfSightBlockedByTile(t)) return false;
     }
     return true;
@@ -441,7 +442,12 @@ export class HexMap {
    * Hardcore halfway rays pass between two adjacent hexes. For each such pair,
    * both flanking hexes must block LoS before the ray is considered blocked.
    */
-  hasDiagonalLineOfSight(from: Axial, to: Axial, fireDirection: FireDirection): boolean {
+  hasDiagonalLineOfSight(
+    from: Axial,
+    to: Axial,
+    fireDirection: FireDirection,
+    blockedHexes?: ReadonlySet<string>,
+  ): boolean {
     const diagonalIndex = fireDirection - 6;
     const a = diagonalIndex as Direction;
     const b = ((diagonalIndex + 1) % 6) as Direction;
@@ -452,14 +458,20 @@ export class HexMap {
     for (let step = 0; step < steps; step++) {
       const left = this.get(neighbor(current, a));
       const right = this.get(neighbor(current, b));
-      if (left && right && this.lineOfSightBlockedByTile(left) && this.lineOfSightBlockedByTile(right)) {
+      const leftBlocked = !!left && (this.lineOfSightBlockedByTile(left)
+        || blockedHexes?.has(HexMap.keyOf(left.pos)) === true);
+      const rightBlocked = !!right && (this.lineOfSightBlockedByTile(right)
+        || blockedHexes?.has(HexMap.keyOf(right.pos)) === true);
+      if (leftBlocked && rightBlocked) {
         return false;
       }
 
       current = axialAdd(current, rayVector);
       if (step < steps - 1) {
         const centerTile = this.get(current);
-        if (!centerTile || this.lineOfSightBlockedByTile(centerTile)) return false;
+        if (!centerTile
+          || blockedHexes?.has(HexMap.keyOf(centerTile.pos))
+          || this.lineOfSightBlockedByTile(centerTile)) return false;
       }
     }
 

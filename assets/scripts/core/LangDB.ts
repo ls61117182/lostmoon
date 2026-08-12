@@ -285,6 +285,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'unit.name.sherman76': { zh: "谢尔曼 76", en: "Sherman 76" },
   'unit.name.t34': { zh: "T-34/76", en: "T-34/76" },
   'unit.name.tiger': { zh: "虎式", en: "Tiger" },
+  'unit.name.maus': { zh: "鼠式坦克", en: "Panzer VIII Maus" },
   'unit.name.panzer4': { zh: "四号", en: "Panzer IV" },
   'unit.name.panzer3': { zh: "三号", en: "Panzer III" },
   'unit.name.truck': { zh: "卡车", en: "Truck" },
@@ -679,4 +680,9 @@ export const LANG_DB: Record<string, LangEntry> = {
   'campaignUpgrade.smokeLauncher.description': { zh: "杂项阶段的2、4点增加“烟雾弹”功能", en: "Misc dice showing 2 or 4 also gain the Smoke action." },
   'campaignUpgrade.intercom.name': { zh: "车内通话器", en: "Intercom" },
   'campaignUpgrade.intercom.description': { zh: "杂项阶段骰子数量 +1", en: "Misc phase dice +1." },
+  'preview.suppress': { zh: "压制", en: "SUPPRESS" },
+  'floater.suppressed': { zh: "压制！", en: "SUPPRESSED!" },
+  'floater.suppressionSkip': { zh: "受压制：跳过行动", en: "PINNED: ACTION SKIPPED" },
+  'battleLog.combat.suppressed': { zh: "{attacker} 主炮高爆弹压制了 {target}", en: "{attacker}'s main-gun HE shell suppressed {target}" },
+  'battleLog.combat.suppressionSkip': { zh: "{target} 受压制，本次行动跳过", en: "{target} is suppressed and forfeits this action" },
 };

@@ -2614,6 +2614,7 @@ export class MainMenuScene extends Component {
     type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null };
     type EditorCell = { redraw: (tile: EditorTile) => void; drawBoundary: () => void };
     type EditorWeatherOption = { id: WeatherType; label: string; desc: string };
+    type EditorSeasonOption = { id: SeasonType; label: string; desc: string };
 
     const terrainTools: TerrainTool[] = [
       { code: null, key: 'levelEditor.terrain.none', color: new Color(18, 24, 22, 120), spriteKey: null },
@@ -2648,9 +2649,17 @@ export class MainMenuScene extends Component {
     const weatherOptions: EditorWeatherOption[] = [
       { id: 'clear', label: '无', desc: '不使用天气修正' },
       { id: 'rain', label: '雨天', desc: '命中-1 / 视野-1' },
+      { id: 'light_snow', label: '小雪', desc: '轻度飘雪视觉效果' },
+      { id: 'heavy_snow', label: '大雪', desc: '三倍雪量 / 飘落速度+50%' },
     ];
     const weatherLabel = (weather: WeatherType) =>
       weatherOptions.find(option => option.id === weather)?.label ?? weatherOptions[0]!.label;
+    const seasonOptions: EditorSeasonOption[] = [
+      { id: 'summer', label: '夏季', desc: '使用标准地形外观' },
+      { id: 'winter', label: '冬季', desc: '欧洲战场使用积雪外观' },
+    ];
+    const seasonLabel = (season: SeasonType) =>
+      seasonOptions.find(option => option.id === season)?.label ?? seasonOptions[0]!.label;
 
     const spriteFrames: Record<string, SpriteFrame | null> = {};
     const cells: EditorCell[] = [];
@@ -2741,9 +2750,8 @@ export class MainMenuScene extends Component {
     statusLabel.enableWrapText = true;
 
     const refreshCurrentLabel = () => {
-      const pkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
       currentLabel.string = t('levelEditor.workspace.current', {
-        name: pkg?.mission.name || t('levelEditor.workspace.newDraft'),
+        name: draftName.trim() || t('levelEditor.workspace.newDraft'),
       });
     };
     const captureMissionFields = () => {
@@ -2767,6 +2775,7 @@ export class MainMenuScene extends Component {
       type95: 'Type95',
       type97: 'Type97',
       type4: 'Type 4 Chi-To',
+      maus: 'Panzer VIII Maus',
       at_gun: 'AT Gun',
       japanese_infantry: 'JP Inf',
       american_infantry: 'US Inf',
@@ -2827,7 +2836,7 @@ export class MainMenuScene extends Component {
       elite: '王牌',
     };
     const unitSummary = (unit: UnitPlacement) => {
-      const level = unitLevelLabels[normalizeUnitLevel(unit.unitLevel)];
+      const level = unitLevelLabels[normalizeUnitLevel(unit.kind === 'at_gun' ? (unit.atGunCrewLevel ?? unit.unitLevel) : unit.unitLevel)];
       if (unit.startEids?.length) return `${level} ${unitKindLabels[unit.kind]} eid${unit.startEids.join(',')}`;
       if (unit.startRids?.length) return `${level} ${unitKindLabels[unit.kind]} rid${unit.startRids.join(',')}`;
       const at = unit.at ? `${unit.at.col},${unit.at.row}` : '骰子';
@@ -3042,11 +3051,26 @@ export class MainMenuScene extends Component {
         }
 
         if (editorTab === 'mission') {
-          this.makeLabel(propRoot, '标题', -102, 150, 54, 22, 14, TEXT_TITLE);
-          titleInput = this.makeInputField(propRoot, 44, 150, 196, 30, '关卡标题', false, draftName);
+          this.makeLabel(propRoot, t('levelEditor.mission.name'), -102, 150, 82, 22, 14, TEXT_TITLE);
+          titleInput = this.makeInputField(
+            propRoot, 44, 150, 196, 30, t('levelEditor.mission.namePlaceholder'), false, draftName,
+          );
           titleInput.maxLength = 40;
-          this.makeLabel(propRoot, '描述', -102, 112, 54, 22, 14, TEXT_TITLE);
-          descInput = this.makeInputField(propRoot, 44, 112, 196, 30, '关卡描述', false, draftDescription);
+          titleInput.node.on('text-changed', (editBox: EditBox) => {
+            const name = editBox.string.trim();
+            if (name) draftName = name;
+            refreshCurrentLabel();
+          }, this);
+          titleInput.node.on('editing-did-ended', (editBox: EditBox) => {
+            const name = editBox.string.trim();
+            editBox.string = name || draftName;
+            if (name) draftName = name;
+            refreshCurrentLabel();
+          }, this);
+          this.makeLabel(propRoot, t('levelEditor.mission.description'), -102, 112, 82, 22, 14, TEXT_TITLE);
+          descInput = this.makeInputField(
+            propRoot, 44, 112, 196, 30, t('levelEditor.mission.descriptionPlaceholder'), false, draftDescription,
+          );
           descInput.maxLength = 80;
           addPlainBtn(objectiveTypeLabels[draftObjective.type], 0, 76, 220, 28, true, () => {
             draftObjective = { type: cycleIn(objectiveTypes, draftObjective.type, 'destroy_all_enemies') };
@@ -3054,8 +3078,8 @@ export class MainMenuScene extends Component {
           addPlainBtn(`天气：${weatherLabel(draftWeather)}`, -62, 42, 112, 26, draftWeather !== 'clear', () => {
             openWeatherPicker();
           }, 12);
-          addPlainBtn(`季节：${draftSeason === 'winter' ? '冬季' : '夏季'}`, 62, 42, 112, 26, draftSeason === 'winter', () => {
-            if (draftTerrainCategory === 'europe') draftSeason = draftSeason === 'winter' ? 'summer' : 'winter';
+          addPlainBtn(`季节：${seasonLabel(draftSeason)}`, 62, 42, 112, 26, draftSeason === 'winter', () => {
+            openSeasonPicker();
           }, 12);
           addPlainBtn(`战斗中拖动地图 ${draftAllowMapPan ? '开' : '关'}`, 0, 10, 180, 26, draftAllowMapPan, () => {
             draftAllowMapPan = !draftAllowMapPan;
@@ -3150,9 +3174,18 @@ export class MainMenuScene extends Component {
               unitRandomPickerTarget = null;
               unitKindPickerTarget = { group: item.group, index: item.index };
             }, 12);
-            const currentLevel = normalizeUnitLevel(item.unit.unitLevel);
-            addPlainBtn(unitLevelLabels[currentLevel], 26, y, 36, 24, currentLevel !== 'recruit', () => {
-              item.unit.unitLevel = cycleIn(unitLevels, currentLevel, 'recruit');
+            const currentLevel = normalizeUnitLevel(item.unit.kind === 'at_gun'
+              ? (item.unit.atGunCrewLevel ?? item.unit.unitLevel)
+              : item.unit.unitLevel);
+            addPlainBtn(`${item.unit.kind === 'at_gun' ? '兵' : ''}${unitLevelLabels[currentLevel]}`, 26, y, 36, 24, currentLevel !== 'recruit', () => {
+              const nextLevel = cycleIn(unitLevels, currentLevel, 'recruit');
+              if (item.unit.kind === 'at_gun') {
+                item.unit.atGunCrewLevel = nextLevel;
+                delete item.unit.unitLevel;
+              } else {
+                item.unit.unitLevel = nextLevel;
+                delete item.unit.atGunCrewLevel;
+              }
             }, 10);
             addPlainBtn(item.group === 'enemy' ? '随' : '-', 57, y, 26, 24, !!(unitRandomPickerTarget && unitRandomPickerTarget.group === item.group && unitRandomPickerTarget.index === item.index), () => {
               if (item.group !== 'enemy') return;
@@ -3218,8 +3251,18 @@ export class MainMenuScene extends Component {
                   24,
                   kind === targetUnit.kind ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
                   () => {
+                    const previousLevel = normalizeUnitLevel(targetUnit.kind === 'at_gun'
+                      ? targetUnit.atGunCrewLevel
+                      : targetUnit.unitLevel);
                     targetUnit.kind = kind;
                     targetUnit.faction = getUnitStats(kind).faction;
+                    if (kind === 'at_gun') {
+                      targetUnit.atGunCrewLevel = previousLevel;
+                      delete targetUnit.unitLevel;
+                    } else {
+                      targetUnit.unitLevel = previousLevel;
+                      delete targetUnit.atGunCrewLevel;
+                    }
                     unitKindPickerTarget = null;
                     redrawAllCells();
                     refreshPropertyPanel();
@@ -3952,8 +3995,14 @@ export class MainMenuScene extends Component {
       if (weatherPickerRoot && weatherPickerRoot.isValid) weatherPickerRoot.destroy();
       weatherPickerRoot = null;
     };
+    let seasonPickerRoot: Node | null = null;
+    const closeSeasonPicker = () => {
+      if (seasonPickerRoot && seasonPickerRoot.isValid) seasonPickerRoot.destroy();
+      seasonPickerRoot = null;
+    };
     const openWeatherPicker = () => {
       closeWeatherPicker();
+      closeSeasonPicker();
       const weatherColumns = 3;
       const weatherRows = 2;
       const pickerW = 420;
@@ -4030,6 +4079,74 @@ export class MainMenuScene extends Component {
         desc.overflow = Label.Overflow.SHRINK;
       }
       weatherPickerRoot.setSiblingIndex(panel.children.length - 1);
+    };
+    const openSeasonPicker = () => {
+      closeSeasonPicker();
+      closeWeatherPicker();
+      const pickerW = 360;
+      const pickerH = 210;
+      const buttonW = 140;
+      const buttonH = 64;
+
+      seasonPickerRoot = new Node('LevelEditorSeasonPicker');
+      seasonPickerRoot.layer = this.node.layer;
+      seasonPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
+      seasonPickerRoot.setPosition(0, 0, 0);
+      const backdrop = seasonPickerRoot.addComponent(Graphics);
+      backdrop.fillColor = new Color(0, 0, 0, 132);
+      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
+      backdrop.fill();
+      seasonPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
+        closeSeasonPicker();
+        ev.propagationStopped = true;
+      }, this);
+      panel.addChild(seasonPickerRoot);
+
+      const picker = new Node('SeasonOptionPanel');
+      picker.layer = this.node.layer;
+      picker.addComponent(UITransform).setContentSize(pickerW, pickerH);
+      picker.setPosition(0, -12, 0);
+      const pickerBg = picker.addComponent(Graphics);
+      drawFieldPanel(pickerBg, pickerW, pickerH, new Color(31, 38, 32, 250), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      picker.on(Node.EventType.TOUCH_START, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+      picker.on(Node.EventType.TOUCH_END, (ev: EventTouch) => { ev.propagationStopped = true; }, this);
+      seasonPickerRoot.addChild(picker);
+
+      this.makeLabel(picker, '季节', 0, 72, 150, 30, 24, TEXT_TITLE);
+      const hint = this.makeLabel(picker, '选择地形与环境的季节外观。', 0, 44, 280, 22, 14, TEXT_SUBTITLE);
+      hint.overflow = Label.Overflow.SHRINK;
+      const closeBtn = this.makeRectButton(picker, 150, 74, 32, 28, MODAL_CLOSE_BG, () => closeSeasonPicker());
+      this.makeLabel(closeBtn.node, 'X', 0, 0, 26, 22, 14, TEXT_PRIMARY);
+
+      for (let i = 0; i < seasonOptions.length; i++) {
+        const option = seasonOptions[i]!;
+        const active = option.id === draftSeason;
+        const unavailable = option.id === 'winter' && draftTerrainCategory !== 'europe';
+        const x = (i === 0 ? -1 : 1) * 78;
+        const btn = this.makeRectButton(
+          picker,
+          x,
+          -24,
+          buttonW,
+          buttonH,
+          unavailable ? BTN_LEVEL_LOCKED : active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
+          () => {
+            if (unavailable) return;
+            draftSeason = option.id;
+            closeSeasonPicker();
+            refreshPropertyPanel();
+            redrawAllCells();
+          },
+        );
+        const title = this.makeLabel(btn.node, option.label, 0, 11, buttonW - 12, 22, 17,
+          unavailable ? TEXT_DISABLED : TEXT_PRIMARY);
+        title.overflow = Label.Overflow.SHRINK;
+        const descText = unavailable ? '仅欧洲战场可用' : option.desc;
+        const desc = this.makeLabel(btn.node, descText, 0, -15, buttonW - 12, 22, 10,
+          unavailable ? TEXT_DISABLED : TEXT_SUBTITLE);
+        desc.overflow = Label.Overflow.SHRINK;
+      }
+      seasonPickerRoot.setSiblingIndex(panel.children.length - 1);
     };
     const applyMissionToDraft = (
       mission: MissionData,
@@ -4447,7 +4564,7 @@ export class MainMenuScene extends Component {
       else delete mission.shermanStartByDice;
       if (draftEnemyDiceEidMax !== undefined) mission.enemyDiceEidMax = draftEnemyDiceEidMax;
       else delete mission.enemyDiceEidMax;
-      if (draftWeather === 'rain') mission.weather = draftWeather;
+      if (draftWeather !== 'clear') mission.weather = draftWeather;
       else delete mission.weather;
       if (draftSeason === 'winter' && draftTerrainCategory === 'europe') mission.season = 'winter';
       else delete mission.season;
@@ -4755,6 +4872,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 't34': return 'T-34/76';
     case 'tiger': return 'Tiger';
     case 'tigerking': return 'Tiger II';
+    case 'maus': return '鼠式坦克';
     case 'panzer4': return 'Panzer IV';
     case 'panzer3': return 'Panzer III';
     case 'type97': return 'Type 97';

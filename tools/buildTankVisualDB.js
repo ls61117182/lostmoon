@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
-const SPLIT_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
+const SPLIT_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',
@@ -214,6 +214,8 @@ function build() {
   lines.push(`export type SplitTankKind = Extract<UnitKind, ${splitTankType}>;`);
   lines.push(`export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [${tankVisualKinds}];`);
   lines.push(`export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [${splitTankKinds}];`);
+  lines.push('export const EMPTY_COMMANDER_HATCH_SPRITE_SIZE = 20;');
+  lines.push('export const SHERMAN_EMPTY_COMMANDER_HATCH_SCALE = 0.5;');
   lines.push('');
   lines.push('export interface TankVisualAssetConfig {');
   lines.push('  topSpritePath: string;');
@@ -313,6 +315,32 @@ function build() {
   lines.push('');
   lines.push('export function splitTankGeometryConfigOf(kind: SplitTankKind): SplitTankGeometryConfig {');
   lines.push('  return SPLIT_TANK_GEOMETRY_CONFIG[kind];');
+  lines.push('}');
+  lines.push('');
+  lines.push('/** Commander overlay scale after all tank-specific source-space transforms. */');
+  lines.push('export function commanderHatchRenderedScaleCoefficient(kind: SplitTankKind): number {');
+  lines.push('  return commanderHatchRenderedScaleCoefficientForConfig(');
+  lines.push('    splitTankVisualConfigOf(kind),');
+  lines.push('    splitTankGeometryConfigOf(kind),');
+  lines.push('  );');
+  lines.push('}');
+  lines.push('');
+  lines.push('export function commanderHatchRenderedScaleCoefficientForConfig(');
+  lines.push("  visual: Pick<SplitTankVisualConfig, 'commanderHatchScale' | 'hullFitScale' | 'turretScale'>,");
+  lines.push("  geometry: Pick<SplitTankGeometryConfig, 'topTrim'>,");
+  lines.push('): number {');
+  lines.push('  const sourceMax = Math.max(geometry.topTrim.w, geometry.topTrim.h) || 1;');
+  lines.push('  return visual.commanderHatchScale * visual.hullFitScale * visual.turretScale / sourceMax;');
+  lines.push('}');
+  lines.push('');
+  lines.push('/** Scale a shared empty-hatch sprite relative to Sherman\'s approved value. */');
+  lines.push('export function emptyCommanderHatchScaleOf(');
+  lines.push('  kind: SplitTankKind,');
+  lines.push('  shermanEmptyScale = SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,');
+  lines.push('): number {');
+  lines.push("  const shermanScale = commanderHatchRenderedScaleCoefficient('sherman');");
+  lines.push('  if (shermanScale <= 0) return shermanEmptyScale;');
+  lines.push('  return shermanEmptyScale * commanderHatchRenderedScaleCoefficient(kind) / shermanScale;');
   lines.push('}');
   lines.push('');
 

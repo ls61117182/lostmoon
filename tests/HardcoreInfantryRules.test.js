@@ -31,14 +31,15 @@ assert.match(battleScene, /isFootUnit\(unit\)\s*&& unit\.kind !== 'officer'/,
   'all infantry nationalities, but not officers, should use the hardcore rule');
 
 assert.match(combat, /const infantryAttack = isFootUnit\(attacker\)/);
-assert.match(combat, /const range = Math\.max\(1, attacker\.stats\.effectiveRange \?\? 1\)/);
+assert.match(combat, /export function infantryAttackRange\(_target: Unit\): number[\s\S]*?return 1/);
+assert.match(combat, /const range = infantryAttackRange\(target\)/);
 assert.match(combat, /if \(distance > range\) return \{ ok: false, reason: 'attack\.reason\.outOfRange' \}/);
 assert.match(combat, /if \(isFootUnit\(target\) && !infantryAttack\)/,
   'infantry attacks should allow both tank and non-tank targets');
 
 for (const kind of ['infantry', 'german_infantry', 'soviet_infantry', 'japanese_infantry', 'american_infantry']) {
   assert.strictEqual(units.find(unit => unit.unitKind === kind)?.effectiveRange, '1',
-    `${kind} should default to one-hex attack range`);
+    `${kind} base range should remain one so rifle fire is not expanded`);
 }
 
 const priority = battleScene.match(/private\s+infantryMoveHexPriority\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
@@ -56,11 +57,11 @@ for (let i = 1; i < orderedRules.length; i++) {
 }
 assert.match(body, /terrain === 'rocky' \|\| tile\.hasBuilding \|\| tile\.terrain === 'forest'\) return 2/,
   'rocky, building, and forest hexes should share one priority tier');
-assert.match(battleScene, /if \(priority < 4\) return priority[\s\S]*?return adjacentToHostileInfantry \? null : priority/,
+assert.match(battleScene, /if \(priority < 4\) return priority[\s\S]*?!unit\.suppressed[\s\S]*?return adjacentToUnsuppressedHostileInfantry \? null : priority/,
   'only ordinary terrain should be rejected beside hostile infantry');
 assert.match(battleScene, /const currentPriority = this\.infantryMoveHexPriority\(enemy, enemy\.pos, currentTile\)/);
 assert.match(battleScene, /if \(priority > currentPriority\) continue/,
   'infantry must only move to an equal-or-higher-priority hex');
-assert.match(battleScene, /return adjacentToHostileInfantry \? null : priority/);
+assert.match(battleScene, /return adjacentToUnsuppressedHostileInfantry \? null : priority/);
 
 console.log('Hardcore infantry rules test passed');

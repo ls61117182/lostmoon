@@ -676,6 +676,7 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     );
   }
   if (id === 'sherman_player') u.crewLevels = normalizePlayerCrewLevels(p.crewLevels);
+  else if (u.kind === 'at_gun') u.atGunCrewLevel = normalizeUnitLevel(p.atGunCrewLevel ?? p.unitLevel);
   else u.unitLevel = normalizeUnitLevel(p.unitLevel);
   if (u.kind === 'at_gun') {
     const crewKind = infantryKindForFaction(u.faction);

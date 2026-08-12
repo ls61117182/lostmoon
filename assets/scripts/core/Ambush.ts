@@ -20,12 +20,14 @@ export function beginAmbushTurn(unit: Unit, mode: GameMode): void {
   unit.ambushActedThisTurn = false;
   unit.ambushReadyThisTurn = mode === 'hardcore'
     && !isFootUnit(unit)
+    && !unit.ambushObscuredSinceTurnEnd
     && (!unit.ambushAttackedSinceTurnEnd || hasLivingCrewSkill(unit, 'calm'));
 }
 
 /** 自身行动结束后开启下一次伏击的“未受攻击”观察窗口。 */
-export function endAmbushTurn(unit: Unit): void {
+export function endAmbushTurn(unit: Unit, obscuredBySmoke = false): void {
   unit.ambushAttackedSinceTurnEnd = false;
+  unit.ambushObscuredSinceTurnEnd = obscuredBySmoke;
   unit.ambushReadyThisTurn = false;
   unit.ambushActedThisTurn = false;
 }

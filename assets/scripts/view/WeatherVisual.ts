@@ -1,4 +1,6 @@
 export const RAIN_VISUAL_SLOT_COUNT = 96;
+export const LIGHT_SNOW_VISUAL_SLOT_COUNT = 180;
+export const HEAVY_SNOW_VISUAL_SLOT_COUNT = LIGHT_SNOW_VISUAL_SLOT_COUNT * 3;
 
 export type RainVisualPhase = 'idle' | 'fall' | 'splash';
 
@@ -17,6 +19,14 @@ export interface RainVisualSample {
   splashRayLength: number;
   splashRayCount: number;
   splashRotation: number;
+}
+
+export interface SnowVisualSample {
+  x: number;
+  y: number;
+  radius: number;
+  alpha: number;
+  depth: number;
 }
 
 const UINT32_RANGE = 0x100000000;
@@ -101,4 +111,32 @@ export function sampleRainVisual(
   }
 
   out.phase = 'idle';
+}
+
+/** Deterministic multi-depth snow sampled without allocating per frame. */
+export function sampleSnowVisual(
+  slot: number,
+  time: number,
+  width: number,
+  height: number,
+  out: SnowVisualSample,
+): void {
+  const safeSlot = Math.max(0, Math.floor(slot));
+  const safeTime = Math.max(0, time);
+  const depth = hash01(safeSlot, 0, 20);
+  const speed = lerp(34, 112, depth);
+  const driftSpeed = lerp(0.42, 0.88, hash01(safeSlot, 0, 21));
+  const phase = hash01(safeSlot, 0, 22) * TAU;
+  const travelHeight = height + 48;
+  const baseY = hash01(safeSlot, 0, 23) * travelHeight;
+  const fall = (baseY + safeTime * speed) % travelHeight;
+  const baseX = (hash01(safeSlot, 0, 24) - 0.5) * (width + 80);
+  const sway = Math.sin(safeTime * driftSpeed + phase) * lerp(10, 34, 1 - depth);
+  const wind = ((safeTime * lerp(8, 18, depth) + safeSlot * 3.7) % (width + 80)) * 0.08;
+
+  out.x = baseX + sway + wind;
+  out.y = height * 0.5 + 24 - fall;
+  out.radius = lerp(1.0, 4.6, depth * depth);
+  out.alpha = Math.round(lerp(105, 238, depth));
+  out.depth = depth;
 }

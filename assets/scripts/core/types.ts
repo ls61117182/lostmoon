@@ -110,7 +110,7 @@ export function isFriendlyFaction(faction: Faction): boolean {
 }
 
 export type Theater = 'europe' | 'pacific' | 'north_africa' | 'soviet';
-export type WeatherType = 'clear' | 'rain';
+export type WeatherType = 'clear' | 'rain' | 'light_snow' | 'heavy_snow';
 /** Visual season only. Terrain rules continue to use the original terrain type. */
 export type SeasonType = 'summer' | 'winter';
 
@@ -120,6 +120,7 @@ export type UnitKind =
   | 't34'
   | 'tiger'
   | 'tigerking'
+  | 'maus'
   | 'panzer4'
   | 'stug3'
   | 'panzer3'
@@ -197,6 +198,7 @@ export function isTankKind(kind: UnitKind): boolean {
     || kind === 't34'
     || kind === 'tiger'
     || kind === 'tigerking'
+    || kind === 'maus'
     || kind === 'panzer4'
     || kind === 'stug3'
     || kind === 'panzer3'
@@ -282,12 +284,16 @@ export interface Unit {
   stats: UnitStats;
   /** 非玩家单位等级；旧存档或缺省值按 recruit 处理。 */
   unitLevel?: UnitLevel;
+  /** 反坦克炮本身无等级；该字段记录当前操炮步兵的等级。 */
+  atGunCrewLevel?: UnitLevel;
   /** 玩家坦克独立乘员等级；非玩家坦克应通过 crewLevelFor() 继承 unitLevel。 */
   crewLevels?: CrewLevels;
   /** 各乘员拥有的技能；非玩家坦克也可由关卡配置。 */
   crewSkills?: CrewSkills;
   /** 伏击窗口内（上次自身行动结束后）是否成为过攻击目标。 */
   ambushAttackedSinceTurnEnd?: boolean;
+  /** 上次自身行动结束时是否处于烟雾中；烟雾会阻止下一回合取得伏击资格。 */
+  ambushObscuredSinceTurnEnd?: boolean;
   /** 本次自身行动开始时锁定的伏击资格。 */
   ambushReadyThisTurn?: boolean;
   /** 本次自身行动是否已攻击、移动或转向。 */
@@ -300,6 +306,8 @@ export interface Unit {
   paralyzed?: boolean;      // 痛痪
   hidden?: boolean;         // 隐蔽
   smoked?: boolean;         // 有烟雾掩护
+  /** Hardcore: the infantry must forfeit its next complete action, then this flag clears. */
+  suppressed?: boolean;
   loaded?: boolean;         // 主炮已装填
   hatchOpen?: boolean;      // 车长打开舱盖
   /** 当前车长开舱观察范围；可受车长装备、天气等效果修改。 */
@@ -408,6 +416,8 @@ export interface UnitPlacement {
   faction?: Faction;
   /** 非玩家单位等级；缺省为 recruit。 */
   unitLevel?: UnitLevel;
+  /** 反坦克炮的操炮步兵等级；仅 kind=at_gun 时使用，缺省为 recruit。 */
+  atGunCrewLevel?: UnitLevel;
   /** 玩家坦克各乘员独立等级；各槽位缺省为 recruit。非玩家单位忽略此字段。 */
   crewLevels?: Partial<CrewLevels>;
   /** 坦克乘员技能；键为乘员岗位，值为该乘员的技能列表。 */

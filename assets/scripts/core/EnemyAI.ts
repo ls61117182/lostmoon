@@ -43,7 +43,7 @@ import {
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
 import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
-import { unitLevelOf } from './UnitLevel';
+import { atGunActionDiceBonus, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
 
@@ -117,7 +117,7 @@ function crewAlive(unit: Unit, slot: 'commander' | 'loader' | 'gunner' | 'driver
 
 export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number; misc: number } {
   switch (unit.kind) {
-    case 'at_gun': return { attack: 2, move: 0, misc: 0 };
+    case 'at_gun': return { attack: 2 + atGunActionDiceBonus(unit), move: 0, misc: 0 };
     case 'japanese_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'american_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'heavy_artillery':
@@ -125,10 +125,11 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
   }
   const key = hardcoreTankDiceTerrain(terrain);
   const base = HARDCORE_TANK_AI_DICE_COUNT[key];
+  const rank = nonPlayerTankDiceBonus(unit);
   return {
-    attack: Math.max(0, base.attack),
-    move: Math.max(0, base.move + (crewAlive(unit, 'driver') ? 1 : 0)),
-    misc: Math.max(0, base.misc + (crewAlive(unit, 'commander') ? 1 : 0)),
+    attack: Math.max(0, base.attack + rank.attack),
+    move: Math.max(0, base.move + (crewAlive(unit, 'driver') ? 1 : 0) + rank.move),
+    misc: Math.max(0, base.misc + (crewAlive(unit, 'commander') ? 1 : 0) + rank.misc),
   };
 }
 

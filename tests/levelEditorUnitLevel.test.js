@@ -15,8 +15,8 @@ assert.match(
 );
 assert.match(
   menu,
-  /addPlainBtn\(unitLevelLabels\[currentLevel\][\s\S]*item\.unit\.unitLevel = cycleIn\(unitLevels, currentLevel, 'recruit'\)/,
-  'each non-player unit row must cycle and persist unitLevel',
+  /item\.unit\.kind === 'at_gun'[\s\S]*item\.unit\.atGunCrewLevel \?\? item\.unit\.unitLevel[\s\S]*item\.unit\.atGunCrewLevel = nextLevel[\s\S]*item\.unit\.unitLevel = nextLevel/,
+  'each row must persist unitLevel, while AT guns persist the controlling infantry level',
 );
 assert.match(
   menu,

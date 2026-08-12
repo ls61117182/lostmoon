@@ -35,6 +35,7 @@ import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
 import { markAmbushTargeted } from './Ambush';
 import { Axial, CrewSlot, FireDirection, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, neutralizeUncrewedTank, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
+import { unitLevelHitThresholdModifier } from './UnitLevel';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
 
@@ -147,6 +148,10 @@ export interface AttackContext {
   atGunCrewTargets?: boolean;
   /** Hardcore rule: infantry may attack an enemy tank sharing its hex. */
   sameHexInfantryTankAttack?: boolean;
+  /** Hardcore rule: a tank main gun may target infantry to suppress it. */
+  mainGunSuppressesInfantry?: boolean;
+  /** 命中等级规则区分主炮/步兵武器与机枪；缺省按主炮/普通攻击处理。 */
+  attackKind?: 'main' | 'mg';
 }
 
 export interface HitThresholdModifierDetail {
@@ -158,7 +163,9 @@ export interface HitThresholdModifierDetail {
 export function attackFireDirection(ctx: AttackContext): FireDirection | null {
   const { attacker, target, map } = ctx;
   if (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted') {
-    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather);
+    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(
+      map, attacker, target.pos, ctx.weather, ctx.smokeHexes,
+    );
     if (flankDirection !== null) return flankDirection;
     return fireDirectionTo(attacker.pos, target.pos);
   }
@@ -234,12 +241,23 @@ function isForwardOnlyGun(unit: Unit): boolean {
   return unit.stats.visionType === 'fixed' || unit.kind === 'at_gun' || unit.kind === 'heavy_artillery';
 }
 
+/** Infantry attacks are limited to an adjacent hex, including anti-tank attacks. */
+export function infantryAttackRange(_target: Unit): number {
+  return 1;
+}
+
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   const infantryAttack = isFootUnit(attacker);
-  if (isFootUnit(target) && !infantryAttack) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
+  const suppressionAttack = ctx.mainGunSuppressesInfantry === true
+    && isTankUnit(attacker)
+    && isFootUnit(target)
+    && target.kind !== 'officer';
+  if (isFootUnit(target) && !infantryAttack) {
+    if (!suppressionAttack) return { ok: false, reason: 'attack.reason.gunVsInfantry' };
+  }
   // §3.5 炮塔受损：主炮无法旋转 / 开火（MG 仍然可以，但本函数只用于主炮攻击路径）
   if (attacker.turretDamaged) return { ok: false, reason: 'attack.reason.turretDamaged' };
   const sameHexInfantryTankAttack = isSameHexInfantryTankAttack(ctx);
@@ -250,18 +268,24 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   // A same-hex infantry attack has no firing ray to validate. Its hit and
   // penetration calculations still use the normal breakdown, where distance is 0.
   if (sameHexInfantryTankAttack) return { ok: true };
-  // Hardcore infantry fire is omnidirectional and range-limited by units.csv.
-  // Keep a one-hex fallback for old/custom unit records that omit the field.
+  // Smoke fully obscures its hex. A unit inside it cannot aim outside, and a
+  // unit outside cannot aim into it. Same-hex infantry anti-tank attacks above
+  // remain legal because they require no view through the smoke screen.
+  if (ctx.smokeHexes?.has(HexMap.keyOf(attacker.pos))
+    || ctx.smokeHexes?.has(HexMap.keyOf(target.pos))) {
+    return { ok: false, reason: 'attack.reason.blocked' };
+  }
+  // Infantry weapons, including anti-tank launchers, are adjacent-hex attacks.
   if (infantryAttack) {
-    const range = Math.max(1, attacker.stats.effectiveRange ?? 1);
+    const range = infantryAttackRange(target);
     if (distance > range) return { ok: false, reason: 'attack.reason.outOfRange' };
-    return map.hasLineOfSight(attacker.pos, target.pos)
+    return map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes)
       ? { ok: true }
       : { ok: false, reason: 'attack.reason.blocked' };
   }
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
   const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather)
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
@@ -271,8 +295,8 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const hasSight = flankDirection !== null || (ctx.expandedTurretDirections
     && attacker.stats.visionType === 'turreted'
     && isDiagonalFireDirection(fireDir)
-    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir)
-    : map.hasLineOfSight(attacker.pos, target.pos));
+    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, ctx.smokeHexes)
+    : map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
@@ -307,6 +331,7 @@ export interface HitBreakdown {
   frontArc?: number;
   actionModifier?: number;
   weather?: number;
+  unitLevel?: number;
 }
 
 export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
@@ -326,10 +351,11 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const frontArcModifier = opts.frontArcModifier ?? 0;
   const actionModifier = ctx.hitThresholdModifier ?? 0;
   const weather = weatherHitThresholdModifier(ctx.weather);
+  const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
   return {
-    size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather,
+    size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
     threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc
-      + frontArcModifier + actionModifier + weather,
+      + frontArcModifier + actionModifier + weather + unitLevel,
   };
 }
 
@@ -941,7 +967,7 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 export const MG_HIT_THRESHOLD = 7;
 
 /** 所有坦克机枪的最大射程（格）。 */
-export const MG_MAX_RANGE = 2;
+export const MG_MAX_RANGE = 1;
 
 export type MGDenyReason =
   | 'attack.reason.selfFire'
@@ -979,14 +1005,18 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
   const distance = hexDistance(attacker.pos, target.pos);
   if (distance === 0 || distance > MG_MAX_RANGE) return { ok: false, reason: 'attack.reason.mgRange' };
+  if (ctx.smokeHexes?.has(HexMap.keyOf(attacker.pos))
+    || ctx.smokeHexes?.has(HexMap.keyOf(target.pos))) {
+    return { ok: false, reason: 'attack.reason.blocked' };
+  }
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather)
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
   const hasSight = flankDirection !== null || (ctx.expandedTurretDirections && isDiagonalFireDirection(fireDir)
-    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir)
-    : map.hasLineOfSight(attacker.pos, target.pos));
+    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, ctx.smokeHexes)
+    : map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
@@ -1025,7 +1055,7 @@ export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
         },
       }
     : ctx;
-  return hitBreakdown(hitContext, { includeRearArc: false, frontArcModifier });
+  return hitBreakdown({ ...hitContext, attackKind: 'mg' }, { includeRearArc: false, frontArcModifier });
 }
 
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {

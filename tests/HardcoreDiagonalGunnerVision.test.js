@@ -124,8 +124,8 @@ console.log('Hardcore diagonal gunner vision tests passed');
   const infantry = { ...redTarget, id: 'inf', kind: 'german_infantry', stats: { ...redTarget.stats, size: 2 } };
   assert.strictEqual(
     canMGAttack({ attacker, target: infantry, map: fieldMap(), expandedTurretDirections: true }).ok,
-    true,
-    'the selected visible flank must also be a legal MG target',
+    false,
+    'a visible flank two hexes away must remain outside the one-hex MG range',
   );
 }
 
@@ -210,8 +210,8 @@ console.log('Diagonal clicked-flank preference tests passed');
   };
   assert.strictEqual(
     canMGAttack({ attacker: openHatchTank, target: infantry, map, expandedTurretDirections: true }).ok,
-    true,
-    'open-hatch machine-gun attacks must allow the same selected flank hexes',
+    false,
+    'an open hatch must not extend the one-hex machine-gun range',
   );
 
   const closedHatchTank = { ...openHatchTank, hatchOpen: false };

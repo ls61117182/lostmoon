@@ -12,8 +12,8 @@ assert(
 
 assert(
   /type\s+EditorWeatherOption\s*=/.test(menu)
-    && /const\s+weatherOptions\s*:\s*EditorWeatherOption\[\]\s*=\s*\[[\s\S]*id:\s*'clear'[\s\S]*label:\s*'无'[\s\S]*id:\s*'rain'[\s\S]*label:\s*'雨天'/.test(menu),
-  'level editor should define expandable weather options with current clear and rain choices',
+    && /const\s+weatherOptions\s*:\s*EditorWeatherOption\[\]\s*=\s*\[[\s\S]*id:\s*'clear'[\s\S]*id:\s*'rain'[\s\S]*id:\s*'light_snow'[\s\S]*id:\s*'heavy_snow'/.test(menu),
+  'level editor should define clear, rain, light-snow, and heavy-snow weather choices',
 );
 
 assert(
@@ -46,8 +46,23 @@ assert(
 );
 
 assert(
-  /if\s*\(draftWeather\s*===\s*'rain'\)\s*mission\.weather\s*=\s*draftWeather;\s*else\s*delete\s+mission\.weather;/.test(menu),
-  'level editor should save rain weather and omit clear weather from mission JSON',
+  /if\s*\(draftWeather\s*!==\s*'clear'\)\s*mission\.weather\s*=\s*draftWeather;\s*else\s*delete\s+mission\.weather;/.test(menu),
+  'level editor should save non-clear weather and omit clear weather from mission JSON',
+);
+
+assert(
+  /const\s+seasonOptions\s*:\s*EditorSeasonOption\[\]\s*=\s*\[[\s\S]*id:\s*'summer'[\s\S]*id:\s*'winter'/.test(menu),
+  'level editor should expose explicit summer and winter season options',
+);
+assert(
+  /const\s+openSeasonPicker\s*=\s*\(\)\s*=>/.test(menu)
+    && /LevelEditorSeasonPicker/.test(menu)
+    && /draftSeason\s*=\s*option\.id/.test(menu),
+  'the season button should open a picker and apply the selected season',
+);
+assert(
+  /if\s*\(draftSeason\s*===\s*'winter'\s*&&\s*draftTerrainCategory\s*===\s*'europe'\)\s*mission\.season\s*=\s*'winter'/.test(menu),
+  'winter season should persist for European missions',
 );
 
 console.log('level editor weather test passed');

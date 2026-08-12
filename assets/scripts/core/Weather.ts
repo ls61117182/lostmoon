@@ -1,6 +1,6 @@
 import type { Unit } from './types';
 
-export type WeatherType = 'clear' | 'rain';
+export type WeatherType = 'clear' | 'rain' | 'light_snow' | 'heavy_snow';
 
 export interface WeatherRule {
   hitThresholdModifier: number;
@@ -10,10 +10,14 @@ export interface WeatherRule {
 const WEATHER_RULES: Record<WeatherType, WeatherRule> = {
   clear: { hitThresholdModifier: 0, visionRangeModifier: 0 },
   rain: { hitThresholdModifier: 1, visionRangeModifier: -1 },
+  // Snow is currently presentation-only. Its rule values intentionally remain
+  // neutral until weather gameplay is designed separately.
+  light_snow: { hitThresholdModifier: 0, visionRangeModifier: 0 },
+  heavy_snow: { hitThresholdModifier: 0, visionRangeModifier: 0 },
 };
 
 export function normalizeWeather(value: unknown): WeatherType {
-  return value === 'rain' ? 'rain' : 'clear';
+  return value === 'rain' || value === 'light_snow' || value === 'heavy_snow' ? value : 'clear';
 }
 
 export function weatherRule(weather: WeatherType | undefined | null): WeatherRule {

@@ -110,7 +110,7 @@ async function alphaBytes(file) {
 
   const editor = fs.readFileSync(path.join(root, 'assets/scripts/view/MainMenuScene.ts'), 'utf8');
   assert.match(editor, /mission\.season = 'winter'/);
-  assert.match(editor, /季节：\$\{draftSeason === 'winter' \? '冬季' : '夏季'\}/);
+  assert.match(editor, /季节：\$\{seasonLabel\(draftSeason\)\}/);
 
   const lang = fs.readFileSync(path.join(root, 'data/lang.csv'), 'utf8');
   for (const key of ['road', 'field', 'mud', 'forest', 'water']) {

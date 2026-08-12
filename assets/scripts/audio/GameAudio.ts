@@ -17,7 +17,11 @@ export const AudioKeys = {
   tankManeuver: 'audio/tank_move',
   cannonFire: 'audio/cannon_fire',
   mgFire: 'audio/mg_fire',
+  infantryMove1: 'audio/infantry_move_01',
+  infantryMove2: 'audio/infantry_move_02',
+  infantryMove3: 'audio/infantry_move_03',
   infantryAttack: 'audio/infantry_attack',
+  infantryAntiTankFire: 'audio/infantry_anti_tank_fire',
   sniperFire: 'audio/sniper_fire',
   tankHitRicochet: 'audio/tank_hit_ricochet',
   tankHitPenetration: 'audio/tank_hit_penetration',
@@ -252,9 +256,26 @@ export function playMgFire(): void {
   playSfxKey(AudioKeys.mgFire);
 }
 
+const INFANTRY_MOVE_KEYS = [
+  AudioKeys.infantryMove1,
+  AudioKeys.infantryMove2,
+  AudioKeys.infantryMove3,
+] as const;
+
+/** Play one randomly selected marching cue whenever a foot unit starts moving. */
+export function playInfantryMove(): void {
+  const index = Math.floor(Math.random() * INFANTRY_MOVE_KEYS.length);
+  playSfxKey(INFANTRY_MOVE_KEYS[index]);
+}
+
 /** Three-rifle infantry volley used only when one foot squad attacks another. */
 export function playInfantryAttack(): void {
   playSfxKey(AudioKeys.infantryAttack);
+}
+
+/** Compact launcher report for bazooka/Panzerschreck-style infantry attacks. */
+export function playInfantryAntiTankFire(): void {
+  playSfxKey(AudioKeys.infantryAntiTankFire);
 }
 
 export function playSniperFire(): void {

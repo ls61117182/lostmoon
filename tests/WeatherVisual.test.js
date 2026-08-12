@@ -17,7 +17,13 @@ const compiled = ts.transpileModule(source, {
 const loaded = { exports: {} };
 new Function('exports', 'module', compiled)(loaded.exports, loaded);
 
-const { RAIN_VISUAL_SLOT_COUNT, sampleRainVisual } = loaded.exports;
+const {
+  HEAVY_SNOW_VISUAL_SLOT_COUNT,
+  LIGHT_SNOW_VISUAL_SLOT_COUNT,
+  RAIN_VISUAL_SLOT_COUNT,
+  sampleRainVisual,
+  sampleSnowVisual,
+} = loaded.exports;
 assert.strictEqual(RAIN_VISUAL_SLOT_COUNT, 96, 'Rain should use a stronger fixed 96-slot budget');
 assert.strictEqual(typeof sampleRainVisual, 'function', 'sampleRainVisual() should be exported');
 
@@ -108,5 +114,38 @@ assert(
 assert(earlySplash && lateSplash, 'A splash should remain visible long enough to animate');
 assert(lateSplash.splashRadius > earlySplash.splashRadius, 'Splash radius should expand');
 assert(lateSplash.alpha < earlySplash.alpha, 'Splash opacity should fade');
+
+assert.strictEqual(LIGHT_SNOW_VISUAL_SLOT_COUNT, 180, 'Light snow should preserve the original slot budget');
+assert.strictEqual(HEAVY_SNOW_VISUAL_SLOT_COUNT, 540, 'Heavy snow should triple the light-snow slot budget');
+assert.strictEqual(typeof sampleSnowVisual, 'function', 'sampleSnowVisual() should be exported');
+const snowSample = (slot, time) => {
+  const out = { x: 0, y: 0, radius: 0, alpha: 0, depth: 0 };
+  sampleSnowVisual(slot, time, 1280, 720, out);
+  return out;
+};
+assert.deepStrictEqual(snowSample(12, 2.5), snowSample(12, 2.5), 'Snow sampling should be deterministic');
+const snowDepthBands = new Set();
+const snowPositions = new Set();
+for (let slot = 0; slot < LIGHT_SNOW_VISUAL_SLOT_COUNT; slot++) {
+  const current = snowSample(slot, 1.25);
+  snowDepthBands.add(Math.min(2, Math.floor(current.depth * 3)));
+  snowPositions.add(`${current.x.toFixed(1)},${current.y.toFixed(1)}`);
+  assert(current.radius >= 1 && current.radius <= 4.6, 'Snowflake radius should remain readable but restrained');
+  assert(current.alpha >= 105 && current.alpha <= 238, 'Snowflake opacity should reflect depth');
+}
+assert.strictEqual(snowDepthBands.size, 3, 'Heavy snow should contain far, middle, and near depth bands');
+assert(snowPositions.size > 160, 'Heavy snow slots should be spatially varied');
+assert.notDeepStrictEqual(snowSample(12, 1), snowSample(12, 2), 'Snowflakes should drift and fall over time');
+const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
+assert.match(
+  battleScene,
+  /const\s+slotCount\s*=\s*heavy\s*\?\s*HEAVY_SNOW_VISUAL_SLOT_COUNT\s*:\s*LIGHT_SNOW_VISUAL_SLOT_COUNT/,
+  'BattleScene should select twice as many particle slots for heavy snow',
+);
+assert.match(
+  battleScene,
+  /const\s+visualTime\s*=\s*this\.unitEffectTime\s*\*\s*\(heavy\s*\?\s*1\.5\s*:\s*1\)/,
+  'BattleScene should advance heavy snow at 1.5x the light-snow speed',
+);
 
 console.log('Weather visual lifecycle test passed');

@@ -63,4 +63,10 @@ const classic = unit();
 beginAmbushTurn(classic, 'classic');
 equal(ambushHitThresholdModifier(classic, 'classic'), 0, 'classic mode has no ambush');
 
+const smoked = unit();
+smoked.crewSkills = { commander: ['calm'] };
+endAmbushTurn(smoked, true);
+beginAmbushTurn(smoked, 'hardcore');
+equal(ambushHitThresholdModifier(smoked, 'hardcore'), 0, 'smoke at turn end prevents ambush even with calm');
+
 console.log('Ambush tests passed');

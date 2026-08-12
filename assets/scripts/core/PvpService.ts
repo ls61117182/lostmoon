@@ -34,6 +34,7 @@ export interface PvpBattleUnitSnapshot {
   interiorVisionRange?: number;
   crew?: ShermanCrew;
   unitLevel?: UnitLevel;
+  atGunCrewLevel?: UnitLevel;
   crewLevels?: CrewLevels;
   crewSkills?: CrewSkills;
   ambushAttackedSinceTurnEnd?: boolean;

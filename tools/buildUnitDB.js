@@ -27,7 +27,7 @@ const CREW_MEMBER_FIELD = 'crewMembers';
 const FACTIONS = ['usa', 'soviet', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
 const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
-const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);

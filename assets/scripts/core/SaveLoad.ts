@@ -38,6 +38,7 @@ interface UnitSnapshot {
   destroyed?: boolean;
   /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
   smoked?: boolean;
+  suppressed?: boolean;
   /** v3：仅谢尔曼 */
   fireLevel?: number;
   turretDamaged?: boolean;
@@ -50,9 +51,11 @@ interface UnitSnapshot {
   radioDamaged?: boolean;
   crew?: ShermanCrew;
   unitLevel?: UnitLevel;
+  atGunCrewLevel?: UnitLevel;
   crewLevels?: CrewLevels;
   crewSkills?: CrewSkills;
   ambushAttackedSinceTurnEnd?: boolean;
+  ambushObscuredSinceTurnEnd?: boolean;
   ambushReadyThisTurn?: boolean;
   ambushActedThisTurn?: boolean;
   atGunCrewAlive?: boolean;
@@ -136,11 +139,13 @@ function captureUnit(u: Unit): UnitSnapshot {
     radioDamaged: u.radioDamaged,
     crew: u.crew ? { ...u.crew } : undefined,
     unitLevel: u.unitLevel,
+    atGunCrewLevel: u.atGunCrewLevel,
     crewLevels: u.crewLevels ? { ...u.crewLevels } : undefined,
     crewSkills: u.crewSkills ? Object.fromEntries(
       Object.entries(u.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
     ) : undefined,
     ambushAttackedSinceTurnEnd: u.ambushAttackedSinceTurnEnd,
+    ambushObscuredSinceTurnEnd: u.ambushObscuredSinceTurnEnd,
     ambushReadyThisTurn: u.ambushReadyThisTurn,
     ambushActedThisTurn: u.ambushActedThisTurn,
     atGunCrewAlive: u.atGunCrewAlive,
@@ -150,6 +155,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     atGunControllerUnitId: u.atGunControllerUnitId,
     attachedToATGunId: u.attachedToATGunId,
     smoked: u.smoked,
+    suppressed: u.suppressed,
   };
 }
 
@@ -179,6 +185,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   // undefined, so retaining the live value here leaks damage acquired after a
   // checkpoint (notably when retrying a campaign segment).
   live.smoked = s.smoked ?? false;
+  live.suppressed = s.suppressed ?? false;
   live.fireLevel = s.fireLevel ?? 0;
   live.turretDamaged = s.turretDamaged ?? false;
   live.paralyzed = s.paralyzed ?? false;
@@ -190,6 +197,9 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
   if (s.crew) live.crew = { ...s.crew };
   if (live.id === 'sherman_player') {
     live.crewLevels = normalizePlayerCrewLevels(s.crewLevels ?? live.crewLevels);
+  } else if (live.kind === 'at_gun') {
+    live.atGunCrewLevel = normalizeUnitLevel(s.atGunCrewLevel ?? s.unitLevel ?? live.atGunCrewLevel);
+    live.unitLevel = undefined;
   } else {
     live.unitLevel = normalizeUnitLevel(s.unitLevel ?? live.unitLevel);
   }
@@ -197,6 +207,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
     Object.entries(s.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
   );
   live.ambushAttackedSinceTurnEnd = s.ambushAttackedSinceTurnEnd ?? false;
+  live.ambushObscuredSinceTurnEnd = s.ambushObscuredSinceTurnEnd ?? false;
   live.ambushReadyThisTurn = s.ambushReadyThisTurn ?? false;
   live.ambushActedThisTurn = s.ambushActedThisTurn ?? false;
   if (s.atGunCrewAlive !== undefined) live.atGunCrewAlive = s.atGunCrewAlive;
@@ -375,6 +386,7 @@ export function applySave(
       Object.entries(ss.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
     );
     sh.ambushAttackedSinceTurnEnd = ss.ambushAttackedSinceTurnEnd ?? false;
+    sh.ambushObscuredSinceTurnEnd = ss.ambushObscuredSinceTurnEnd ?? false;
     sh.ambushReadyThisTurn = ss.ambushReadyThisTurn ?? false;
     sh.ambushActedThisTurn = ss.ambushActedThisTurn ?? false;
     neutralizeUncrewedTank(sh);

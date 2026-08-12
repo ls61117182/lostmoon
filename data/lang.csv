@@ -274,6 +274,7 @@ unit.name.sherman,谢尔曼,Sherman
 unit.name.sherman76,谢尔曼 76,Sherman 76
 unit.name.t34,T-34/76,T-34/76
 unit.name.tiger,虎式,Tiger
+unit.name.maus,鼠式坦克,Panzer VIII Maus
 unit.name.panzer4,四号,Panzer IV
 unit.name.panzer3,三号,Panzer III
 unit.name.truck,卡车,Truck
@@ -668,3 +669,8 @@ campaignUpgrade.smokeLauncher.name,烟幕发射器,Smoke Launcher
 campaignUpgrade.smokeLauncher.description,杂项阶段的2、4点增加“烟雾弹”功能,Misc dice showing 2 or 4 also gain the Smoke action.
 campaignUpgrade.intercom.name,车内通话器,Intercom
 campaignUpgrade.intercom.description,杂项阶段骰子数量 +1,Misc phase dice +1.
+preview.suppress,压制,SUPPRESS
+floater.suppressed,压制！,SUPPRESSED!
+floater.suppressionSkip,受压制：跳过行动,PINNED: ACTION SKIPPED
+battleLog.combat.suppressed,{attacker} 主炮高爆弹压制了 {target},{attacker}'s main-gun HE shell suppressed {target}
+battleLog.combat.suppressionSkip,{target} 受压制，本次行动跳过,{target} is suppressed and forfeits this action

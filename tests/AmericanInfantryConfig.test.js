@@ -118,7 +118,7 @@ assert(priorityBody.indexOf("kind === 'at_gun'") < priorityBody.indexOf('isTankU
 assert(priorityBody.indexOf('isTankUnit') < priorityBody.indexOf("terrain === 'rocky'"));
 assert.match(priorityBody, /terrain === 'rocky' \|\| tile\.hasBuilding \|\| tile\.terrain === 'forest'\) return 2/);
 assert(priorityBody.indexOf("terrain === 'forest'") < priorityBody.indexOf("terrain === 'trees'"));
-assert.match(battleScene, /private\s+infantryAIMovePriority[\s\S]*?adjacentToHostileInfantry/);
+assert.match(battleScene, /private\s+infantryAIMovePriority[\s\S]*?adjacentToUnsuppressedHostileInfantry/);
 
 assert.match(mainMenu, /american_infantry:\s*'US Inf'/);
 assert.match(mainMenu, /const allUnitKinds = getAllUnitKinds\(\);/);

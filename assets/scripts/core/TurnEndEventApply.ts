@@ -18,6 +18,7 @@ import { RNG } from './Dice';
 import {
   approximateDirection,
   directionTo,
+  HexMap,
   hexDistance,
   neighbor,
   offsetToAxial,
@@ -386,6 +387,11 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
       applyAttack(simTarget, rep);
       continue;
     }
+    // The legacy adjacent-infantry fallback below bypasses normal attack
+    // geometry. Smoke at either endpoint must still forbid attacks between
+    // different hexes; same-hex infantry anti-tank attacks succeeded above.
+    if (mission.smokeHexes.has(HexMap.keyOf(inf.pos))
+      || mission.smokeHexes.has(HexMap.keyOf(simTarget.pos))) continue;
     const d1 = rng.d6();
     const d2 = rng.d6();
     const roll = d1 + d2;
