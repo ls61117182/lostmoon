@@ -171,8 +171,19 @@ function savedTurretFacing(value: unknown, fallback: Direction | null): FireDire
   return fallback ?? undefined;
 }
 
-function applyUnitSnapshot(live: Unit, s: UnitSnapshot): void {
-  live.faction = s.faction ?? live.stats.faction;
+function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFaction?: Faction): void {
+  const recoverLegacyCrewlessTankFaction = isTankKind(live.kind)
+    && !s.crew
+    && s.faction === 'neutral'
+    && legacyCrewlessTankFaction !== undefined;
+  // Older turn-end reinforcements were saved without a crew object. Once any
+  // attack passed through applyAttack(), that invalid state was neutralized.
+  // Loading then supplied a full default crew but retained the neutral faction,
+  // producing a crewed tank that its former allies could attack. The owning
+  // mission array is authoritative for this one inconsistent legacy shape.
+  live.faction = recoverLegacyCrewlessTankFaction
+    ? legacyCrewlessTankFaction
+    : (s.faction ?? live.stats.faction);
   live.pos = { q: s.q, r: s.r };
   live.facing = s.facing;
   live.turretFacing = savedTurretFacing(s.turretFacing, s.facing);
@@ -356,13 +367,17 @@ export function applySave(
   for (let i = 0; i < save.enemies.length; i++) {
     const s = save.enemies[i];
     const live = mission.enemies[i];
-    applyUnitSnapshot(live, s);
+    applyUnitSnapshot(
+      live,
+      s,
+      mission.data.theater === 'pacific' ? 'japanese' : 'german',
+    );
   }
   if (save.version >= 4 && save.allies) {
     for (let i = 0; i < save.allies.length; i++) {
       const s = save.allies[i];
       const live = mission.allies[i];
-      applyUnitSnapshot(live, s);
+      applyUnitSnapshot(live, s, mission.sherman.faction);
     }
   }
 

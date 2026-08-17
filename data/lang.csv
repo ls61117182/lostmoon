@@ -111,6 +111,10 @@ crew.skill.calm.name,沉着,Composed
 crew.skill.calm.description,受到过攻击也不会失去下一次伏击资格,Incoming attacks do not prevent the next ambush
 crew.skill.ambushMaster.name,伏击大师,Ambush Master
 crew.skill.ambushMaster.description,伏击时命中所需点数额外 -1,Ambush attacks reduce the hit threshold by 1 more
+crew.skill.openHatchObservation.name,开舱观察,Open-hatch Observation
+crew.skill.openHatchObservation.description,行动时可根据友方车长的开舱状态决定是否打开舱盖,May open the commander's hatch at action start based on friendly open-hatch observers
+crew.skill.useSmokeGrenade.name,使用烟雾弹,Use Smoke Grenades
+crew.skill.useSmokeGrenade.description,允许坦克施放烟雾弹,Allows the tank to deploy smoke grenades
 status.val.crewDeadLevel,阵亡 · {level},KIA · {level}
 status.val.crewAliveLevel,存活 · {level},Alive · {level}
 status.val.hatchOpenLevel,打开舱盖 · {level},PU · {level}
@@ -138,7 +142,7 @@ die.hint.gunOrLoad,炮/填,Gun/Load
 die.hint.driverTurnOrDrive,驾:转/进,Driver:Turn/Advance
 die.hint.smokeOrRepair,烟/修,Sm/Re
 die.hint.smokeOrMG,烟/机,Sm/MG
-die.hint.codriverMG,副机枪,Co-MG
+die.hint.codriverMG,机枪,MG
 die.hint.none,—,—
 action.turnCW,↻ 顺时针 60°,↻ CW 60°
 action.turnCCW,↺ 逆时针 60°,↺ CCW 60°
@@ -155,7 +159,7 @@ action.smoke,施放烟雾,Deploy Smoke
 action.concealment,进入隐蔽,Go Concealed
 action.codriverMG,副驾驶机枪,Co-driver MG
 action.fireMG,机枪扫射,Fire MG
-action.fireMGCoDriver,副驾驶机枪扫射,Co-driver Fire MG
+action.fireMGCoDriver,机枪扫射,Fire MG
 floater.noFacing,未定朝向,No Facing
 floater.blockedTerrain,地形阻挡,Blocked Terrain
 floater.enemyBlock,敌方占据,Enemy Blocks
@@ -204,10 +208,12 @@ attack.reason.notStraight,非六向直线,Not on Hex Axis
 attack.reason.notStraightHint,射击死角,Must be on hex axis
 attack.reason.cannotTurnDirection,不能转向该方向,Cannot turn in that direction
 attack.reason.turretAimRange,超出当前视野范围,Beyond current vision range
+attack.reason.turretTraverseSpeed,超出炮塔单次转向范围,Beyond this turret's traverse per action
 attack.reason.fixedGunFacing,固定炮只能沿当前朝向开火,Fixed gun can only fire forward
 attack.reason.blocked,无视线,No LOS
 attack.reason.turretDamaged,炮塔受损不能开火,Turret Damaged: Cannot Fire
 attack.reason.mgRange,机枪目标距离不合法,MG: Invalid Target Range
+attack.reason.mgDirection,目标不在航向机枪或同轴机枪的可射方向,Target is outside the hull and coaxial machine-gun directions
 attack.reason.notInfantry,机枪只能扫射步兵,MG: Target Must Be Infantry
 attack.reason.gunVsInfantry,主炮不瞄步兵，请改用机枪,Main gun ignores infantry; use MG
 attack.reason.camouflageNet,目标被近距伪装网完全遮蔽,Camouflage net prevents targeting at this range

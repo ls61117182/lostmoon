@@ -69,6 +69,15 @@ import type { MissionData, MissionObjective, SeasonType, TileDef, UnitKind, Unit
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
+  TANK_EXHAUST_LIFETIME_SCALE,
+  TANK_EXHAUST_RADIUS_SCALE,
+  tankExhaustPortWorldPosition,
+} from './TankEngineExhaust';
+import {
+  TANK_ENGINE_VIBRATION_DEFAULT_ENABLED,
+  tankEngineVibrationSample,
+} from './TankEngineVibration';
+import {
   SPLIT_TANK_KINDS,
   EMPTY_COMMANDER_HATCH_SPRITE_SIZE,
   SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
@@ -177,7 +186,12 @@ type TankVisualDebugKey =
   | 'muzzleSpriteY'
   | 'commanderHatchSpriteX'
   | 'commanderHatchSpriteY'
-  | 'commanderHatchScale';
+  | 'commanderHatchScale'
+  | 'exhaustPortCount'
+  | 'exhaustPort1Forward'
+  | 'exhaustPort1Right'
+  | 'exhaustPort2Forward'
+  | 'exhaustPort2Right';
 type TankVisualDebugDraft = Record<TankVisualDebugKey, number>;
 
 // ---------- 工具类型 ----------
@@ -1319,6 +1333,11 @@ export class MainMenuScene extends Component {
     let showMuzzleFlash = false;
     let commanderHatchState: 'closed' | 'open' | 'open-dead' = 'closed';
     let showDestroyed = false;
+    let engineVibrationEnabled = TANK_ENGINE_VIBRATION_DEFAULT_ENABLED;
+    let engineVibrationElapsed = 0;
+    let engineVibrationLayer: Node | null = null;
+    let exhaustPreviewGraphics: Graphics | null = null;
+    const debuggerRoot = this.modalRoot;
     const commanderHatchFrames: Record<string, SpriteFrame | null> = {};
     let emptyCommanderHatchFrame: SpriteFrame | null = null;
     const tankButtons: ButtonRefs[] = [];
@@ -1329,6 +1348,7 @@ export class MainMenuScene extends Component {
       const top = tankVisualConfigOf(kind);
       const split = splitKindSet.has(kind) ? splitTankVisualConfigOf(kind as SplitTankKind) : null;
       const geometry = splitKindSet.has(kind) ? splitTankGeometryConfigOf(kind as SplitTankKind) : null;
+      const exhaustPorts = top.exhaustPorts;
       return {
         fitScale: top.fitScale,
         offsetForward: top.offsetForward,
@@ -1350,6 +1370,11 @@ export class MainMenuScene extends Component {
         commanderHatchSpriteX: split?.commanderHatchSpriteX ?? 0,
         commanderHatchSpriteY: split?.commanderHatchSpriteY ?? 0,
         commanderHatchScale: split?.commanderHatchScale ?? 0,
+        exhaustPortCount: exhaustPorts.length,
+        exhaustPort1Forward: exhaustPorts[0]?.forward ?? 0,
+        exhaustPort1Right: exhaustPorts[0]?.right ?? 0,
+        exhaustPort2Forward: exhaustPorts[1]?.forward ?? 0,
+        exhaustPort2Right: exhaustPorts[1]?.right ?? 0,
       };
     };
 
@@ -1466,9 +1491,19 @@ export class MainMenuScene extends Component {
     const destroyedBtn = this.makeRectButton(stage, -92, 248, 150, 30, MODE_BTN_IDLE, () => {
       showDestroyed = !showDestroyed;
       refreshDestroyedButton();
+      refreshVibrationButton();
       refreshPreview();
     });
     destroyedBtn.label = this.makeLabel(destroyedBtn.node, '正常状态', 0, 0, 126, 22, 15, TEXT_PRIMARY);
+
+    const vibrationBtn = this.makeRectButton(stage, -250, 248, 140, 30, MODE_BTN_IDLE, () => {
+      engineVibrationEnabled = !engineVibrationEnabled;
+      engineVibrationElapsed = 0;
+      refreshVibrationButton();
+      applyEngineVibration();
+    });
+    vibrationBtn.label = this.makeLabel(vibrationBtn.node, '震动关闭', 0, 0, 126, 22, 14, TEXT_PRIMARY);
+    vibrationBtn.label.overflow = Label.Overflow.SHRINK;
 
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
@@ -1563,6 +1598,11 @@ export class MainMenuScene extends Component {
       { key: 'commanderHatchSpriteX', label: '车长舱口图X' },
       { key: 'commanderHatchSpriteY', label: '车长舱口图Y' },
       { key: 'commanderHatchScale', label: '车长图缩放' },
+      { key: 'exhaustPortCount', label: '排气口数量' },
+      { key: 'exhaustPort1Forward', label: '排气口1前后' },
+      { key: 'exhaustPort1Right', label: '排气口1右侧' },
+      { key: 'exhaustPort2Forward', label: '排气口2前后' },
+      { key: 'exhaustPort2Right', label: '排气口2右侧' },
     ];
 
     const inputViewport = new Node('TankVisualParamViewport');
@@ -1603,12 +1643,16 @@ export class MainMenuScene extends Component {
         const input = this.makeInputField(inputRoot, 58, y, 116, 30, '0', false, formatTankDebugNumber(draft[def.key]));
         input.maxLength = 12;
         const applyValue = (resetInvalid: boolean) => {
-          const n = Number(input.string.trim());
-          if (!Number.isFinite(n)) {
+          const parsed = Number(input.string.trim());
+          if (!Number.isFinite(parsed)) {
             if (resetInvalid) input.string = formatTankDebugNumber(draft[def.key]);
             return;
           }
+          const n = def.key === 'exhaustPortCount'
+            ? Math.max(0, Math.min(2, Math.round(parsed)))
+            : parsed;
           draft[def.key] = n;
+          if (resetInvalid) input.string = formatTankDebugNumber(n);
           refreshPreview();
         };
         input.node.on('editing-did-ended', () => applyValue(true), this);
@@ -1652,6 +1696,36 @@ export class MainMenuScene extends Component {
       }
     }
 
+    function refreshVibrationButton() {
+      const active = engineVibrationEnabled && !showDestroyed;
+      vibrationBtn.redraw(active ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: active });
+      if (vibrationBtn.label) {
+        vibrationBtn.label.string = showDestroyed
+          ? '击毁时停机'
+          : engineVibrationEnabled
+            ? '发动机震动'
+            : '震动关闭';
+        vibrationBtn.label.color = active ? TEXT_TITLE : (showDestroyed ? TEXT_DISABLED : TEXT_PRIMARY);
+      }
+    }
+
+    const applyEngineVibration = (dt = 0) => {
+      if (this.modalRoot !== debuggerRoot || !debuggerRoot?.isValid) {
+        this.unschedule(applyEngineVibration);
+        return;
+      }
+      engineVibrationElapsed += Math.max(0, dt);
+      if (!engineVibrationLayer?.isValid) return;
+      const sample = tankEngineVibrationSample(
+        engineVibrationElapsed,
+        bodyAngleDeg,
+        engineVibrationEnabled && !showDestroyed,
+      );
+      engineVibrationLayer.setPosition(sample.x, sample.y, 0);
+      engineVibrationLayer.angle = sample.angleDeg;
+      drawTankExhaustPreview();
+    };
+
     const normalizeAngleDeg = (deg: number) => {
       const n = deg % 360;
       return n < 0 ? n + 360 : n;
@@ -1667,6 +1741,46 @@ export class MainMenuScene extends Component {
         deg: normalizeAngleDeg(deg),
       };
     };
+    function debugExhaustPorts(draft: TankVisualDebugDraft) {
+      const count = Math.max(0, Math.min(2, Math.round(draft.exhaustPortCount)));
+      return [
+        { forward: draft.exhaustPort1Forward, right: draft.exhaustPort1Right },
+        { forward: draft.exhaustPort2Forward, right: draft.exhaustPort2Right },
+      ].slice(0, count);
+    }
+    function drawTankExhaustPreview() {
+      const g = exhaustPreviewGraphics;
+      if (!g) return;
+      g.clear();
+      if (showDestroyed) return;
+      const body = angleVec(bodyAngleDeg);
+      const ports = debugExhaustPorts(drafts[selectedKind]!);
+      for (let portIndex = 0; portIndex < ports.length; portIndex++) {
+        const origin = tankExhaustPortWorldPosition(
+          0,
+          0,
+          body.ux,
+          body.uy,
+          ports[portIndex]!,
+          hexR * Math.sqrt(3),
+        );
+        const rightX = body.uy;
+        const rightY = -body.ux;
+        for (let puff = 0; puff < 4; puff++) {
+          const cycle = (engineVibrationElapsed * 0.72 / TANK_EXHAUST_LIFETIME_SCALE + puff / 4) % 1;
+          const distance = hexR * (0.025 + cycle * 0.24);
+          const sway = Math.sin(cycle * Math.PI * 2 + portIndex * 1.7) * hexR * 0.018 * cycle;
+          const x = origin.x - body.ux * distance + rightX * sway;
+          const y = origin.y - body.uy * distance + rightY * sway + cycle * hexR * 0.012;
+          const radius = hexR * (0.016 + cycle * 0.030) * TANK_EXHAUST_RADIUS_SCALE;
+          const alpha = Math.round(96 * Math.pow(1 - cycle, 1.35));
+          const shade = Math.round(76 + cycle * 48);
+          g.fillColor = new Color(shade, shade, shade - 7, alpha);
+          g.circle(x, y, radius);
+          g.fill();
+        }
+      }
+    }
     const pointerLocal = (ev: EventTouch | EventMouse) => {
       const uiPos = ev.getUILocation();
       const ut = previewRoot.getComponent(UITransform)!;
@@ -1779,6 +1893,32 @@ export class MainMenuScene extends Component {
       n.on(Node.EventType.MOUSE_DOWN, (ev: EventMouse) => beginDrag('turret', ev), this);
       parent.addChild(n);
     };
+    const addExhaustPortDots = (parent: Node) => {
+      const body = angleVec(bodyAngleDeg);
+      const ports = debugExhaustPorts(drafts[selectedKind]!);
+      for (let i = 0; i < ports.length; i++) {
+        const p = tankExhaustPortWorldPosition(
+          0,
+          0,
+          body.ux,
+          body.uy,
+          ports[i]!,
+          hexR * Math.sqrt(3),
+        );
+        const n = new Node(`ExhaustPortDot_${i + 1}`);
+        n.layer = this.node.layer;
+        n.addComponent(UITransform).setContentSize(20, 20);
+        n.setPosition(p.x, p.y, 0);
+        const g = n.addComponent(Graphics);
+        g.fillColor = new Color(255, 155, 38, 245);
+        g.strokeColor = new Color(76, 38, 5, 255);
+        g.lineWidth = 2;
+        g.circle(0, 0, 4);
+        g.fill();
+        g.stroke();
+        parent.addChild(n);
+      }
+    };
     const addMuzzleFlash = (parent: Node, x: number, y: number, aim: { ux: number; uy: number }) => {
       const n = new Node('DebugMuzzleFlash');
       n.layer = this.node.layer;
@@ -1817,7 +1957,15 @@ export class MainMenuScene extends Component {
     function refreshPreview() {
       if (!previewRoot.isValid) return;
       previewRoot.removeAllChildren();
+      engineVibrationLayer = null;
+      exhaustPreviewGraphics = null;
       drawHex(previewRoot);
+      const exhaustPreviewNode = new Node('TankEngineExhaustPreview');
+      exhaustPreviewNode.layer = previewRoot.layer;
+      exhaustPreviewNode.addComponent(UITransform).setContentSize(hexR * 2.2, hexR * 2.2);
+      exhaustPreviewGraphics = exhaustPreviewNode.addComponent(Graphics);
+      previewRoot.addChild(exhaustPreviewNode);
+      drawTankExhaustPreview();
       const draft = drafts[selectedKind]!;
       const loaded = frames[selectedKind]!;
       const body = angleVec(bodyAngleDeg);
@@ -1871,6 +2019,10 @@ export class MainMenuScene extends Component {
       }
 
       if (splitKindSet.has(selectedKind) && loaded.hull && loaded.turret) {
+        const livingTankLayer = new Node('TankEngineVibrationPreview');
+        livingTankLayer.layer = previewRoot.layer;
+        previewRoot.addChild(livingTankLayer);
+        engineVibrationLayer = livingTankLayer;
         const kind = selectedKind as SplitTankKind;
         const geometry = splitTankGeometryConfigOf(kind);
         const topTrim = geometry.topTrim;
@@ -1898,9 +2050,9 @@ export class MainMenuScene extends Component {
           - turretR / (turretTrim.h * turretScale);
         lastPivot = { x: pivotX, y: pivotY };
 
-        addSprite(previewRoot, loaded.hull, topTrim.w * scale, topTrim.h * scale, baseX, baseY, body.deg + 180, 0.5, 0.5, 'body');
+        addSprite(livingTankLayer, loaded.hull, topTrim.w * scale, topTrim.h * scale, baseX, baseY, body.deg + 180, 0.5, 0.5, 'body');
         addSprite(
-          previewRoot,
+          livingTankLayer,
           loaded.turret,
           turretTrim.w * turretScale,
           turretTrim.h * turretScale,
@@ -1944,7 +2096,7 @@ export class MainMenuScene extends Component {
           const commanderX = pivotX + localX * Math.cos(turretAngle) - localY * Math.sin(turretAngle);
           const commanderY = pivotY + localX * Math.sin(turretAngle) + localY * Math.cos(turretAngle);
           addSprite(
-            previewRoot,
+            livingTankLayer,
             commanderHatchFrame,
             commanderSize,
             commanderSize,
@@ -1958,18 +2110,23 @@ export class MainMenuScene extends Component {
           const localY = (pivot.spriteY - draft.muzzleSpriteY) * turretScale + turretR;
           const right = { ux: turret.uy, uy: -turret.ux };
           addMuzzleFlash(
-            previewRoot,
+            livingTankLayer,
             pivotX + localX * (-turret.ux) + localY * right.ux,
             pivotY + localX * (-turret.uy) + localY * right.uy,
             turret,
           );
         }
+        addExhaustPortDots(previewRoot);
         addPivotDot(previewRoot, pivotX, pivotY);
-        statusLabel.string = '拆分车身/炮塔预览；粉色圆点为炮塔转轴。';
+        statusLabel.string = '粉色圆点为炮塔转轴；橙色圆点为发动机排气口。';
         return;
       }
 
       if (loaded.top) {
+        const livingTankLayer = new Node('TankEngineVibrationPreview');
+        livingTankLayer.layer = previewRoot.layer;
+        previewRoot.addChild(livingTankLayer);
+        engineVibrationLayer = livingTankLayer;
         const sf = loaded.top;
         const displayW = loaded.topW > 0 ? loaded.topW : sf.width;
         const displayH = loaded.topH > 0 ? loaded.topH : sf.height;
@@ -1983,7 +2140,7 @@ export class MainMenuScene extends Component {
         const baseX = f * body.ux + r * body.uy;
         const baseY = f * body.uy + r * (-body.ux);
         addSprite(
-          previewRoot,
+          livingTankLayer,
           sf,
           tw0 * k,
           th0 / k,
@@ -2002,15 +2159,16 @@ export class MainMenuScene extends Component {
             const localX = (draft.muzzleSpriteX - displayW / 2) * scaleX;
             const localY = (displayH / 2 - draft.muzzleSpriteY) * scaleY;
             addMuzzleFlash(
-              previewRoot,
+              livingTankLayer,
               baseX + localX * (-body.ux) + localY * right.ux,
               baseY + localX * (-body.uy) + localY * right.uy,
               body,
             );
           }
         }
+        addExhaustPortDots(previewRoot);
         addPivotDot(previewRoot, 0, 0);
-        statusLabel.string = '完整俯视图预览；该单位没有可旋转炮塔资源。';
+        statusLabel.string = '完整俯视图预览；橙色圆点为发动机排气口。';
         return;
       }
 
@@ -2021,8 +2179,10 @@ export class MainMenuScene extends Component {
     refreshFlashButton();
     refreshHatchButton();
     refreshDestroyedButton();
+    refreshVibrationButton();
     rebuildInputs();
     refreshPreview();
+    this.schedule(applyEngineVibration, 0);
   }
 
   private openLoginGate() {

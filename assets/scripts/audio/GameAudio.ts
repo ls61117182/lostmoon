@@ -15,6 +15,8 @@ export const AudioKeys = {
   diceRoll: 'audio/dice_roll',
   /** 坦克前进 / 后退 / 转向共用；动画期间循环播放，动作结束时由 `stopTankManeuver` 停止 */
   tankManeuver: 'audio/tank_move',
+  /** 炮塔独立转向；循环播放并由炮塔动画结束回调精确停止 */
+  turretTraverse: 'audio/tank_turret_rotate',
   cannonFire: 'audio/cannon_fire',
   mgFire: 'audio/mg_fire',
   infantryMove1: 'audio/infantry_move_01',
@@ -41,6 +43,9 @@ let bgmSource: AudioSource | null = null;
 let maneuverSource: AudioSource | null = null;
 /** 防止 `getClip` 晚于 `stopTankManeuver` 回调时误开播 */
 let maneuverPlayId = 0;
+let turretTraverseSource: AudioSource | null = null;
+/** 短转向可能先结束再完成异步加载；代次用于取消迟到的播放回调。 */
+let turretTraversePlayId = 0;
 let sfxPool: AudioSource[] = [];
 let sfxIdx = 0;
 let sfxPlayId = 0;
@@ -104,6 +109,12 @@ function ensureRoot(): void {
   maneuverSource.playOnAwake = false;
   maneuverSource.loop = true;
 
+  const turretTraverseN = new Node('TurretTraverse');
+  root.addChild(turretTraverseN);
+  turretTraverseSource = turretTraverseN.addComponent(AudioSource);
+  turretTraverseSource.playOnAwake = false;
+  turretTraverseSource.loop = true;
+
   refreshVolumes();
 }
 
@@ -113,6 +124,7 @@ function refreshVolumes(): void {
   const sfx = s.sfxVolume / 100;
   if (bgmSource) bgmSource.volume = bgm;
   if (maneuverSource) maneuverSource.volume = sfx;
+  if (turretTraverseSource) turretTraverseSource.volume = sfx;
   for (const a of sfxPool) a.volume = sfx;
 }
 
@@ -229,9 +241,31 @@ export function stopManeuverSound(): void {
   if (maneuverSource) maneuverSource.stop();
 }
 
+/** Start the dedicated looping turret motor cue; the animation must call the paired stop function. */
+export function startTurretTraverseSound(): void {
+  ensureRoot();
+  const s = MenuProgress.load();
+  if (s.sfxVolume <= 0) return;
+  const myId = ++turretTraversePlayId;
+  getClip(AudioKeys.turretTraverse, (clip) => {
+    if (myId !== turretTraversePlayId || !clip || !turretTraverseSource) return;
+    refreshVolumes();
+    turretTraverseSource.stop();
+    turretTraverseSource.clip = clip;
+    turretTraverseSource.loop = true;
+    turretTraverseSource.play();
+  });
+}
+
+export function stopTurretTraverseSound(): void {
+  turretTraversePlayId++;
+  if (turretTraverseSource) turretTraverseSource.stop();
+}
+
 export function stopBattleSfx(): void {
   sfxPlayId++;
   stopManeuverSound();
+  stopTurretTraverseSound();
   for (const a of sfxPool) a.stop();
 }
 

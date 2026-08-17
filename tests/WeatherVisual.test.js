@@ -147,5 +147,10 @@ assert.match(
   /const\s+visualTime\s*=\s*this\.unitEffectTime\s*\*\s*\(heavy\s*\?\s*1\.5\s*:\s*1\)/,
   'BattleScene should advance heavy snow at 1.5x the light-snow speed',
 );
+assert.match(
+  battleScene,
+  /const\s+flakeScale\s*=\s*heavy\s*\?\s*1\s*:\s*0\.7/,
+  'Light snow should render flakes at 70% of the heavy-snow size',
+);
 
 console.log('Weather visual lifecycle test passed');

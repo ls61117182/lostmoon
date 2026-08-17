@@ -1,5 +1,23 @@
 import { isFootUnit, isTankUnit, Unit } from './types';
 
+/**
+ * Pick the unit a main-gun hex click represents. A vehicle/gun in a hex shields
+ * co-located infantry from being selected for suppression. Input order remains
+ * the tie-breaker when a hex contains multiple targets of the same category.
+ */
+export function selectMainGunTargetsByHex(targets: readonly Unit[]): Unit[] {
+  const selected = new Map<string, Unit>();
+  for (const target of targets) {
+    if (target.destroyed) continue;
+    const key = `${target.pos.q},${target.pos.r}`;
+    const current = selected.get(key);
+    if (!current || (isFootUnit(current) && !isFootUnit(target))) {
+      selected.set(key, target);
+    }
+  }
+  return Array.from(selected.values());
+}
+
 /** Only ordinary infantry squads can be pinned by a hardcore tank main gun. */
 export function isMainGunSuppressionAttack(attacker: Unit, target: Unit, hardcore: boolean): boolean {
   return hardcore

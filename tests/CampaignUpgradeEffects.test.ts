@@ -28,6 +28,7 @@ function tank(id: string, faction: Unit['faction'], q = 0): Unit {
       armorRear: 8,
       penetration: 2,
       effectiveRange: 2,
+      turretTraverseSpeed: 6,
       usCasualtyDice: 0,
       visionRange: 4,
       gunnerVisionRange: 4,

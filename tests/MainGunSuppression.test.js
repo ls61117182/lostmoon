@@ -1,5 +1,15 @@
 const assert = require('assert');
 const fs = require('fs');
+const ts = require('typescript');
+
+require.extensions['.ts'] = (module, filename) => {
+  const output = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+    compilerOptions: { target: ts.ScriptTarget.ES2017, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  module._compile(output, filename);
+};
+
+const { selectMainGunTargetsByHex } = require('../assets/scripts/core/Suppression.ts');
 
 const combat = fs.readFileSync('assets/scripts/core/Combat.ts', 'utf8');
 const suppression = fs.readFileSync('assets/scripts/core/Suppression.ts', 'utf8');
@@ -13,6 +23,24 @@ assert.match(combat, /ctx\.mainGunSuppressesInfantry === true[\s\S]*?isTankUnit\
 assert.match(combat, /target\.kind !== 'officer'/);
 assert.match(suppression, /target\.suppressed = true/);
 assert.match(suppression, /unit\.suppressed = false/);
+
+const infantry = { id: 'infantry', kind: 'infantry', pos: { q: 2, r: 3 }, destroyed: false };
+const truck = { id: 'truck', kind: 'truck', pos: { q: 2, r: 3 }, destroyed: false };
+assert.deepStrictEqual(
+  selectMainGunTargetsByHex([infantry, truck]).map(target => target.id),
+  ['truck'],
+  'a co-located truck must replace infantry as the main-gun preview and click target',
+);
+assert.deepStrictEqual(
+  selectMainGunTargetsByHex([truck, infantry]).map(target => target.id),
+  ['truck'],
+  'main-gun target priority must not depend on mission unit order',
+);
+assert.deepStrictEqual(
+  selectMainGunTargetsByHex([infantry]).map(target => target.id),
+  ['infantry'],
+  'infantry remains suppressible when its hex contains no non-infantry target',
+);
 
 assert.match(battleScene, /isMainGunSuppressionAttack\(\s*sherman, target, GameSession\.gameMode === 'hardcore'/);
 assert.match(battleScene, /mainGunSuppressesInfantry: suppressionAttack/);
@@ -33,6 +61,10 @@ assert.match(battleScene, /if \(isTankUnit\(enemy\) && this\.selectAIMGTarget\(e
   'non-player tanks should use an in-range MG infantry target before the main gun');
 assert.match(battleScene, /isMainGunSuppressionAttack\(sherman, e,[\s\S]*?spawnSuppressionPreviewLabel/,
   'selecting a suppressible infantry target should show a suppression label in its hex');
+assert.match(battleScene, /private playerMainGunHexTargets\(\)[\s\S]*?selectMainGunTargetsByHex\(this\.playerMainGunTargets\(\)\)/,
+  'main-gun previews must use the shared per-hex target priority');
+assert.match(battleScene, /const mainGunTarget = selectMainGunTargetsByHex\(enemiesOnTile\)\[0\][\s\S]*?this\.tryAttack\(mainGunTarget!\)/,
+  'main-gun clicks must use the same per-hex target priority as previews');
 assert.match(battleScene, /l\.string = t\('preview\.suppress'\)/);
 assert.match(langCsv, /^preview\.suppress,压制,SUPPRESS$/m,
   'the suppression preview localization must live in the CSV source of truth');

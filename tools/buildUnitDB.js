@@ -18,7 +18,7 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
 
-const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'usCasualtyDice', 'visionRange'];
+const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'commanderSpritePath', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
@@ -269,6 +269,10 @@ function build() {
   for (const rec of records) {
     for (const f of NUM_FIELDS) intOrThrow(rec, f);
     for (const f of BONUS_FIELDS) intOrThrow(rec, f);
+    const turretTraverseSpeed = intOrThrow(rec, 'turretTraverseSpeed');
+    if (turretTraverseSpeed > 6) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: turretTraverseSpeed must be in range 0..6`);
+    }
   }
 
   const lines = [];
@@ -296,6 +300,7 @@ function build() {
       `armorRear: ${r.armorRear}, ` +
       `penetration: ${r.penetration}, ` +
       `effectiveRange: ${r.effectiveRange}, ` +
+      `turretTraverseSpeed: ${r.turretTraverseSpeed}, ` +
       `usCasualtyDice: ${r.usCasualtyDice}, ` +
       `visionRange: ${r.visionRange}, ` +
       `gunnerVisionRange: ${optionalInt(r, 'gunnerVisionRange', 4)}, ` +

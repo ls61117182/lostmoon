@@ -229,6 +229,8 @@ export interface UnitStats {
   armorRear: number;       // 后装甲
   penetration: number;     // 穿甲值
   effectiveRange: number;  // 有效射程；超出后每格使本次攻击穿甲值 -1
+  /** Maximum turret traverse per action, in 30-degree steps (0..6). */
+  turretTraverseSpeed: number;
   usCasualtyDice: number;
   moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
@@ -260,7 +262,7 @@ export interface CrewLevels {
 }
 
 /** 可配置在任一乘员槽位上的技能；只有该乘员存活时技能才生效。 */
-export type CrewSkillId = 'calm' | 'ambush_master';
+export type CrewSkillId = 'calm' | 'ambush_master' | 'open_hatch_observation' | 'use_smoke_grenade';
 export type CrewSkills = Partial<Record<keyof ShermanCrew, CrewSkillId[]>>;
 
 /** 玩家车辆默认车长开舱观察范围；后续天气等系统可修改 Unit.visionRange。 */

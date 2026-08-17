@@ -148,12 +148,48 @@ export interface AttackContext {
   unitDamageTargetClass?: boolean;
   /** Hardcore rule: a controlled AT gun exposes its three-man operator group to MG fire. */
   atGunCrewTargets?: boolean;
+  /** Hardcore rule: tank MG attacks must identify the hull or coaxial weapon being used. */
+  hardcoreTankMachineGuns?: boolean;
+  /** Weapon selected for this tank MG attack. */
+  tankMachineGun?: TankMachineGun;
+  /** The intact turret will reach the target direction before coaxial MG fire. */
+  tankMachineGunWillTraverse?: boolean;
   /** Hardcore rule: infantry may attack an enemy tank sharing its hex. */
   sameHexInfantryTankAttack?: boolean;
   /** Hardcore rule: a tank main gun may target infantry to suppress it. */
   mainGunSuppressesInfantry?: boolean;
   /** 命中等级规则区分主炮/步兵武器与机枪；缺省按主炮/普通攻击处理。 */
   attackKind?: 'main' | 'mg';
+}
+
+export type TankMachineGun = 'hull' | 'coaxial';
+
+export interface TankMachineGunSelection {
+  weapon: TankMachineGun;
+  /** Whether an intact turret should turn toward the target before firing. */
+  rotateTurret: boolean;
+}
+
+/** Select the fixed hull MG or turret coaxial MG under hardcore rules. */
+export function selectTankMachineGun(
+  attacker: Unit,
+  targetDirection: FireDirection,
+  turretCanReachTarget: boolean,
+): TankMachineGunSelection | null {
+  if (!isTankUnit(attacker) || attacker.facing === null) return null;
+  const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection;
+  const hullMachineGunOperational = attacker.crew?.coDriver !== false;
+  // When both weapons align, the fixed hull MG has priority only if its
+  // co-driver gunner is still alive.
+  if (hullMachineGunOperational && targetDirection === attacker.facing) {
+    return {
+      weapon: 'hull',
+      rotateTurret: !attacker.turretDamaged && turretFacing !== targetDirection,
+    };
+  }
+  if (turretFacing === targetDirection) return { weapon: 'coaxial', rotateTurret: false };
+  if (attacker.turretDamaged || !turretCanReachTarget) return null;
+  return { weapon: 'coaxial', rotateTurret: true };
 }
 
 export interface HitThresholdModifierDetail {
@@ -1003,7 +1039,8 @@ export type MGDenyReason =
   | 'attack.reason.mgRange'
   | 'attack.reason.notStraight'
   | 'attack.reason.blocked'
-  | 'attack.reason.notInfantry';
+  | 'attack.reason.notInfantry'
+  | 'attack.reason.mgDirection';
 
 function sameHex(a: Axial, b: Axial): boolean {
   return a.q === b.q && a.r === b.r;
@@ -1042,6 +1079,16 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
+  if (ctx.hardcoreTankMachineGuns && isTankUnit(attacker)) {
+    const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection | null;
+    if (!ctx.tankMachineGun
+      || (ctx.tankMachineGun === 'hull' && fireDir !== attacker.facing)
+      || (ctx.tankMachineGun === 'coaxial'
+        && fireDir !== turretFacing
+        && (attacker.turretDamaged || !ctx.tankMachineGunWillTraverse))) {
+      return { ok: false, reason: 'attack.reason.mgDirection' };
+    }
+  }
   const hasSight = flankDirection !== null || (ctx.expandedTurretDirections && isDiagonalFireDirection(fireDir)
     ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, ctx.smokeHexes)
     : map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes));
@@ -1069,7 +1116,9 @@ export function mgHitThreshold(ctx: AttackContext): number {
 }
 
 export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
-  const frontArcModifier = isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0;
+  const frontArcModifier = ctx.hardcoreTankMachineGuns && isTankUnit(ctx.attacker)
+    ? (ctx.tankMachineGun === 'hull' ? -1 : 0)
+    : (isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0);
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
   const hitContext = atGunCrewTarget
     ? {

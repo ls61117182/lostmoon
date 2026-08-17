@@ -1,4 +1,5 @@
 import { GameMode } from './GameMode';
+import { commanderHasSkill } from './UnitLevel';
 import { isTankUnit, Unit } from './types';
 
 export type CommanderHatchVisualState = 'hidden' | 'occupied' | 'empty';
@@ -10,6 +11,15 @@ export type CommanderHatchVisualState = 'hidden' | 'occupied' | 'empty';
 export function commanderHatchVisualState(unit: Unit): CommanderHatchVisualState {
   if (unit.destroyed || !isTankUnit(unit) || unit.hatchOpen !== true) return 'hidden';
   return unit.crew?.commander === false ? 'empty' : 'occupied';
+}
+
+/**
+ * “开舱观察”是非玩家车长主动开舱的前置技能。
+ * 关卡可显式授予该技能；未单独配置乘员等级的非玩家坦克，则由整车等级
+ * 决定默认技能：老兵与王牌车长拥有，新兵车长不拥有。
+ */
+export function hasOpenHatchObservationSkill(unit: Unit): boolean {
+  return commanderHasSkill(unit, 'open_hatch_observation');
 }
 
 /**
@@ -25,7 +35,7 @@ export function shouldNonPlayerTankOpenCommanderHatch(
   mode: GameMode,
 ): boolean {
   if (mode !== 'hardcore' || unit === protagonist || unit.destroyed || !isTankUnit(unit)
-    || unit.crew?.commander === false) {
+    || !hasOpenHatchObservationSkill(unit)) {
     return false;
   }
 

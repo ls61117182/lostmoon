@@ -39,11 +39,12 @@ import {
   hexDistance,
   neighbor,
   neighbors,
+  offsetToAxial,
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
-import { atGunActionDiceBonus, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
+import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { atGunActionDiceBonus, commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
 
@@ -234,6 +235,37 @@ export function currentTargetFor(
   return tied.length === 1 ? tied[0] : tied[rng.intRange(0, tied.length - 1)];
 }
 
+/** 固定地图出生格使用关卡 JSON 的 odd-r offset 坐标。 */
+export const PLAYER_SIDE_INITIAL_HEX: Readonly<Offset> = { col: 0, row: 3 };
+export const ENEMY_SIDE_INITIAL_HEX: Readonly<Offset> = { col: 7, row: 2 };
+
+/** 无可见合法目标时，非玩家单位转向对方阵营的固定出生格。 */
+export function fallbackAITurnTargetPosition(
+  actor: Unit,
+  rowParityOffset: 0 | 1 = 0,
+): Axial {
+  const target = isFriendlyFaction(actor.faction)
+    ? ENEMY_SIDE_INITIAL_HEX
+    : PLAYER_SIDE_INITIAL_HEX;
+  return offsetToAxial(target, rowParityOffset);
+}
+
+/**
+ * 转向专用当前目标：只在行动单位可见的合法敌对单位中沿用既有目标优先级；
+ * 若一个也没有，则返回对方阵营出生格，而不泄露地图迷雾中的单位位置。
+ */
+export function visibleAITurnTargetPositionFor(
+  actor: Unit,
+  candidates: Unit[],
+  missionTargets: readonly Unit[],
+  isVisible: (candidate: Unit) => boolean,
+  rng: RNG,
+  rowParityOffset: 0 | 1 = 0,
+): Axial {
+  const target = currentTargetFor(actor, candidates.filter(isVisible), missionTargets, rng);
+  return target?.pos ?? fallbackAITurnTargetPosition(actor, rowParityOffset);
+}
+
 export function selectAIOrder(
   actors: Unit[],
   potentialTargets: Unit[],
@@ -264,14 +296,14 @@ export type TurnDecision = 'stay' | 'cw' | 'ccw';
 /**
  * 五条优先级：见文件头注释。返回 'stay' / 'cw' / 'ccw'，调用方据此旋转 1 步（60°）。
  *
- * @param enemy     当前敌坦
- * @param sherman   谢尔曼
+ * @param enemy     当前非玩家单位
+ * @param target    转向逻辑使用的当前目标格
  * @param map       地图
  * @param occupied  其他已占格（不含 enemy 自身），用于判定"正前可通行"是否被堵
  */
 export function decideEnemyTurn(
   enemy: Unit,
-  sherman: Unit,
+  target: Axial,
   map: HexMap,
   occupied: Set<string>,
   rng?: RNG,
@@ -300,15 +332,15 @@ export function decideEnemyTurn(
     if (!cwOk && ccwOk) return 'ccw';
     if (cwOk && ccwOk) return randomTie && rng ? (rng.d6() <= 3 ? 'cw' : 'ccw') : 'cw';
     if (randomTie && rng) return rng.d6() <= 3 ? 'cw' : 'ccw';
-    return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
+    return pickShortestTurnTowards(facing, target, enemy.pos);
   };
 
-  const straightDir = directionTo(enemy.pos, sherman.pos);
+  const straightDir = directionTo(enemy.pos, target);
 
   // 规则 1/2/3：严格正对当前目标时，正前可通行或目标相邻都 stay；非相邻被挡才转向左右可通行的一侧。
   if (straightDir === facing) {
     if (canEnterFront(facing)) return 'stay';
-    return hexDistance(enemy.pos, sherman.pos) === 1 ? 'stay' : pickTurnToOpenFront(true);
+    return hexDistance(enemy.pos, target) === 1 ? 'stay' : pickTurnToOpenFront(true);
   }
 
   // 规则 4：当前目标在正后直线 + 正后可通行 → 朝"旋转后正前可通行"一侧转 1 步
@@ -318,7 +350,7 @@ export function decideEnemyTurn(
   }
 
   // 规则 5：朝 approximateDirection 方向最短旋转一步
-  return pickShortestTurnTowards(facing, sherman.pos, enemy.pos);
+  return pickShortestTurnTowards(facing, target, enemy.pos);
 }
 
 /** 辅助：朝 target 最短方向旋 1 步；仅严格正对时返回 stay，近似正对时仍会实际转向。 */
@@ -370,7 +402,10 @@ export function canExecuteAction(
     case 'none':   return false;
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
     case 'turn':   return !enemy.paralyzed;
-    case 'smoke':  return !enemy.smoked && !smokeHexes?.has(HexMap.keyOf(enemy.pos)) && !tileForbidsSmokeOrConcealment(currentTile);
+    case 'smoke':  return commanderHasSkill(enemy, 'use_smoke_grenade')
+      && !enemy.smoked
+      && !smokeHexes?.has(HexMap.keyOf(enemy.pos))
+      && !tileForbidsSmokeOrConcealment(currentTile);
     case 'repair': return crewAlive(enemy, 'commander') && (
       !!enemy.damaged
       || !!enemy.paralyzed

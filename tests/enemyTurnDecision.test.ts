@@ -40,7 +40,7 @@ function fieldMap(min: number, max: number): HexMap {
   const occupied = new Set<string>(['1,0']);
 
   assert.strictEqual(
-    decideEnemyTurn(enemy, target, fieldMap(-2, 2), occupied, { d6: () => 1 } as any),
+    decideEnemyTurn(enemy, target.pos, fieldMap(-2, 2), occupied, { d6: () => 1 } as any),
     'stay',
     'enemy should not turn when the current target blocks the adjacent front hex',
   );

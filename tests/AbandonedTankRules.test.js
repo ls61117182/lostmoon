@@ -92,6 +92,13 @@ try {
   assert.match(battleScene, /infantry\.destroyed = true/);
   assert.match(battleScene, /restoreFullTankCrew\(tank\)/);
   assert.match(battleScene, /this\.playerMainGunTargets\(\)/);
+  const aiTargetsFor = battleScene.match(/private aiTargetsFor\(actor: Unit\): Unit\[\] \{[\s\S]*?\n  \}/);
+  assert(aiTargetsFor, 'BattleScene.aiTargetsFor() should be found');
+  assert.match(
+    aiTargetsFor[0],
+    /sideTargets\.filter\(u => u !== actor && !isAbandonedTank\(u\)\)/,
+    'AI target lists must exclude abandoned tanks on both sides',
+  );
 
   console.log('abandoned tank rules test passed');
 } finally {

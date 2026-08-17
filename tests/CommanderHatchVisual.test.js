@@ -92,6 +92,7 @@ try {
     hatchOpen: false,
     crew: { commander: true },
     fireLevel: 0,
+    unitLevel: 'veteran',
   };
   assert.strictEqual(
     shouldNonPlayerTankOpenCommanderHatch(
@@ -114,6 +115,57 @@ try {
     ),
     false,
     'a living open-hatch commander must still reserve the faction commander slot',
+  );
+
+  deadCommanderOpenTank.hatchOpen = false;
+  nextGermanTank.unitLevel = 'recruit';
+  assert.strictEqual(
+    shouldNonPlayerTankOpenCommanderHatch(
+      nextGermanTank,
+      [deadCommanderOpenTank, nextGermanTank],
+      protagonist,
+      'hardcore',
+    ),
+    false,
+    'a recruit NPC commander must not open the hatch without the observation skill',
+  );
+
+  nextGermanTank.fireLevel = 1;
+  assert.strictEqual(
+    shouldNonPlayerTankOpenCommanderHatch(
+      nextGermanTank,
+      [deadCommanderOpenTank, nextGermanTank],
+      protagonist,
+      'hardcore',
+    ),
+    false,
+    'fire must not bypass the open-hatch observation skill requirement',
+  );
+
+  nextGermanTank.crewSkills = { commander: ['open_hatch_observation'] };
+  assert.strictEqual(
+    shouldNonPlayerTankOpenCommanderHatch(
+      nextGermanTank,
+      [deadCommanderOpenTank, nextGermanTank],
+      protagonist,
+      'hardcore',
+    ),
+    true,
+    'an explicitly skilled recruit commander may use the open-hatch rule',
+  );
+
+  nextGermanTank.fireLevel = 0;
+  delete nextGermanTank.crewSkills;
+  nextGermanTank.unitLevel = 'elite';
+  assert.strictEqual(
+    shouldNonPlayerTankOpenCommanderHatch(
+      nextGermanTank,
+      [deadCommanderOpenTank, nextGermanTank],
+      protagonist,
+      'hardcore',
+    ),
+    true,
+    'an elite NPC commander receives the observation skill by default',
   );
 
   const expectedEmptyScales = {

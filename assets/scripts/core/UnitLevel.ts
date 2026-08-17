@@ -1,5 +1,5 @@
 import { isFootUnit, isTankUnit } from './types';
-import type { CrewLevels, ShermanCrew, Unit, UnitLevel } from './types';
+import type { CrewLevels, CrewSkillId, ShermanCrew, Unit, UnitLevel } from './types';
 
 export const DEFAULT_UNIT_LEVEL: UnitLevel = 'recruit';
 
@@ -50,6 +50,22 @@ export function crewLevelFor(
     return normalizeUnitLevel(unit.crewLevels?.[slot]);
   }
   return unitLevelOf(unit);
+}
+
+const DEFAULT_RANKED_COMMANDER_SKILLS: readonly CrewSkillId[] = [
+  'open_hatch_observation',
+  'use_smoke_grenade',
+];
+
+/**
+ * 车长技能统一判定：显式配置始终有效；非玩家老兵/王牌坦克车长还会获得等级默认技能。
+ * 玩家乘员带有 crewLevels，不会仅因等级自动取得这些非玩家默认技能。
+ */
+export function commanderHasSkill(unit: Unit, skill: CrewSkillId): boolean {
+  if (!isTankUnit(unit) || unit.crew?.commander === false) return false;
+  if (unit.crewSkills?.commander?.includes(skill)) return true;
+  if (unit.crewLevels || !DEFAULT_RANKED_COMMANDER_SKILLS.includes(skill)) return false;
+  return crewLevelFor(unit, 'commander') !== 'recruit';
 }
 
 export interface RankedDiceBonus {

@@ -27,7 +27,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Faction, isFootKind, isFootUnit, neutralizeUncrewedTank, Offset, Unit, UnitKind, WeatherType } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, isFootKind, isFootUnit, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -311,14 +311,27 @@ function prepareTankSpawnEvent(
     apply: () => {
       if (!placed || !pos) return;
       const stats = getUnitStats(kind, mission.data.theater ?? 'europe');
-      addReinforcement(mission, {
+      const reinforcement: Unit = {
         id: unitId,
         kind,
         faction: reinforcementFaction(mission, side),
         pos: entry ? { ...entry.from } : { ...pos },
         facing: entry ? entry.facing : face,
         stats,
-      }, side);
+        hatchOpen: false,
+        visionRange: stats.visionRange,
+        gunnerVisionRange: stats.gunnerVisionRange,
+        interiorVisionRange: stats.interiorVisionRange,
+      };
+      if (stats.visionType === 'turreted' && reinforcement.facing !== null) {
+        reinforcement.turretFacing = reinforcement.facing;
+      }
+      // MissionLoader gives every scenario-start tank a full crew. Turn-end
+      // tanks must receive the same runtime initialization; otherwise the
+      // missing crew object makes isAbandonedTank() treat a fresh reinforcement
+      // as an empty vehicle and the next attack (including a miss) neutralizes it.
+      restoreFullTankCrew(reinforcement);
+      addReinforcement(mission, reinforcement, side);
     },
   };
 }

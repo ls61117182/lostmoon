@@ -209,6 +209,7 @@ const rngFrom = (...values): RNG => {
       armorRear: 7,
       penetration,
       effectiveRange,
+      turretTraverseSpeed: 6,
       usCasualtyDice: 0,
       moveSound: '',
       attackSound: '',
@@ -304,6 +305,7 @@ const rngFrom = (...values): RNG => {
       armorRear: 7,
       penetration: 3,
       effectiveRange: 4,
+      turretTraverseSpeed: 6,
       usCasualtyDice: 0,
       moveSound: '',
       attackSound: '',
@@ -873,10 +875,11 @@ const rngFrom = (...values): RNG => {
   });
 
   {
-    // test: 'hardcore AI tanks only open a commander hatch when their faction has none open, unless on fire'
+    // test: 'skilled hardcore AI commanders only open a hatch when their faction has none open, unless on fire'
     const protagonist = shermanAt(2, 2, 0, false);
     const ally = { ...shermanAt(3, 2, 0, false), id: 'ally', kind: 'sherman76' as const };
     const enemy = { ...shermanAt(4, 2, 0, false), id: 'enemy', kind: 'panzer4' as const, faction: 'german' as const };
+    ally.unitLevel = 'veteran';
 
     assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'classic'), false);
     assert.strictEqual(shouldNonPlayerTankOpenCommanderHatch(ally, [protagonist, ally, enemy], protagonist, 'hardcore'), true);
@@ -1259,6 +1262,20 @@ const rngFrom = (...values): RNG => {
       { q: 1, r: 0 },
       { faction: 'japanese', ignoreBreakwater: true },
     ), false);
+  };
+
+  {
+    // test: 'All factions reject water and deep water, while bridged water remains traversable'
+    const map = new HexMap(3, 1);
+    map.set({ pos: { q: 0, r: 0 }, terrain: 'water' });
+    map.set({ pos: { q: 1, r: 0 }, terrain: 'deep_water' });
+    map.set({ pos: { q: 2, r: 0 }, terrain: 'water', bridgeEnds: [0, 3] });
+
+    for (const faction of ['usa', 'soviet', 'german', 'japanese', 'neutral'] as const) {
+      assert.strictEqual(map.canUnitEnter({ q: 0, r: 0 }, faction), false);
+      assert.strictEqual(map.canUnitEnter({ q: 1, r: 0 }, faction), false);
+      assert.strictEqual(map.canUnitEnter({ q: 2, r: 0 }, faction), true);
+    }
   };
 
   {
