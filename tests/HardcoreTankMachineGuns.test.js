@@ -57,9 +57,14 @@ assert.deepStrictEqual(selectTankMachineGun(attacker, 0, false), {
 }, 'the hull MG fires forward even if the turret cannot finish rotating there');
 
 assert.deepStrictEqual(selectTankMachineGun({ ...attacker, turretFacing: 0 }, 0, true), {
-  weapon: 'hull',
+  weapon: 'both',
   rotateTurret: false,
-}, 'the hull MG has priority when hull and turret directions match');
+}, 'both machine guns fire when an intact turret is already aligned with the hull front');
+
+assert.deepStrictEqual(selectTankMachineGun(attacker, 0, true), {
+  weapon: 'both',
+  rotateTurret: true,
+}, 'both machine guns fire after an intact turret can finish aligning with the hull front');
 
 const noCoDriver = {
   ...attacker,
@@ -93,6 +98,10 @@ assert.deepStrictEqual(selectTankMachineGun({ ...attacker, turretDamaged: true }
   weapon: 'coaxial',
   rotateTurret: false,
 }, 'a damaged turret retains coaxial fire in its existing direction');
+assert.deepStrictEqual(selectTankMachineGun({ ...attacker, turretDamaged: true, turretFacing: 0 }, 0, true), {
+  weapon: 'hull',
+  rotateTurret: false,
+}, 'a damaged turret uses only the operational hull MG against a forward target');
 
 const frontTarget = infantryAt(1, 0);
 const rearTarget = infantryAt(-1, 0);
@@ -117,7 +126,28 @@ assert.strictEqual(canMGAttack({
   tankMachineGun: 'coaxial',
   tankMachineGunWillTraverse: true,
 }).ok, true, 'an intact turret may traverse the coaxial MG to a reachable target');
+assert.strictEqual(canMGAttack({
+  ...common,
+  attacker: { ...attacker, turretDamaged: true, turretFacing: 0 },
+  target: frontTarget,
+  tankMachineGun: 'hull',
+}).ok, true, 'a damaged turret does not block an operational hull MG firing forward');
+assert.deepStrictEqual(canMGAttack({
+  ...common,
+  attacker: { ...attacker, turretDamaged: true, turretFacing: 0 },
+  target: frontTarget,
+  tankMachineGun: 'both',
+}), {
+  ok: false,
+  reason: 'attack.reason.mgDirection',
+}, 'a damaged turret can never combine the coaxial MG with the hull MG');
 
+const bothNeed = mgHitThreshold({
+  ...common,
+  attacker: { ...attacker, turretFacing: 0 },
+  target: frontTarget,
+  tankMachineGun: 'both',
+});
 const hullNeed = mgHitThreshold({
   ...common,
   target: frontTarget,
@@ -128,7 +158,9 @@ const coaxialNeed = mgHitThreshold({
   target: rearTarget,
   tankMachineGun: 'coaxial',
 });
-assert.strictEqual(hullNeed, coaxialNeed - 1,
-  'only the hull MG receives the -1 hit-threshold effect');
+assert.strictEqual(hullNeed, coaxialNeed,
+  'hull-only and coaxial-only fire should use the same unmodified hit threshold');
+assert.strictEqual(bothNeed, hullNeed - 1,
+  'only combined hull and coaxial fire receives the -1 hit-threshold effect');
 
 console.log('Hardcore tank machine-gun tests passed');

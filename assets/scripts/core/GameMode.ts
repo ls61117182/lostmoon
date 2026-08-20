@@ -16,6 +16,8 @@ export interface GameModeConfig {
   expandedTurretDirections: boolean;
   /** Damage table selection may depend on incoming-fire direction. */
   directionalDamageCheck: boolean;
+  /** Turreted tanks add gun-mantlet armor against fire within +/-30 degrees of turret facing. */
+  gunMantletArmor: boolean;
   /** Unit damage target class comes from units.csv instead of hard-coded faction routing. */
   unitDamageTargetClass: boolean;
   /** Units with intact radios may receive vision from friendly radio transmitters. */
@@ -41,6 +43,7 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     effectiveRangePenetration: false,
     expandedTurretDirections: false,
     directionalDamageCheck: false,
+    gunMantletArmor: false,
     unitDamageTargetClass: false,
     radioVisionSharing: false,
     aiReverseMoveFilter: false,
@@ -57,6 +60,7 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     effectiveRangePenetration: true,
     expandedTurretDirections: true,
     directionalDamageCheck: true,
+    gunMantletArmor: true,
     unitDamageTargetClass: true,
     radioVisionSharing: true,
     aiReverseMoveFilter: true,

@@ -6,6 +6,7 @@ import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
 import { HexMap } from './HexGrid';
+import { AttackPositionMemory, cloneAttackPositionMemory } from './AttackPositionMemory';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = 'lone_sherman_save_v1';
@@ -17,8 +18,9 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  *   3: 追加玩家子阶段 / 本阶段骰子 / 谢尔曼与敌军的战术字段（装填、舱盖、乘员、烟雾等）
  *   6: 追加非玩家单位等级与玩家独立乘员等级
  *   7: 追加乘员技能与伏击跨回合状态
+ *   8: 追加本回合/上回合敌方最后攻击位置记忆
  */
-const SAVE_VERSION = 7 as const;
+const SAVE_VERSION = 8 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -67,7 +69,7 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 6 | 5 | 4 | 3 | 2;
+  version: typeof SAVE_VERSION | 7 | 6 | 5 | 4 | 3 | 2;
   /** v5: selected rule profile; older saves resume as classic. */
   gameMode?: GameMode;
   missionId: string;
@@ -97,6 +99,8 @@ export interface SaveData {
   truckEscapeDefeat?: boolean;
   /** Pacific: accumulated US casualties. */
   usCasualties?: number;
+  /** v8：供无可见目标时转向使用的跨回合攻击位置记忆。 */
+  attackPositionMemory?: AttackPositionMemory;
 }
 
 export interface SnapshotParams {
@@ -112,6 +116,7 @@ export interface SnapshotParams {
   playerStep: SavePlayerStep;
   hatchChangedThisTurn: boolean;
   phaseDice: Array<{ pip: number; used: boolean }>;
+  attackPositionMemory?: AttackPositionMemory;
 }
 
 function captureUnit(u: Unit): UnitSnapshot {
@@ -273,6 +278,7 @@ export function captureSave(p: SnapshotParams): SaveData {
     playerStep: p.playerStep,
     hatchChangedThisTurn: p.hatchChangedThisTurn,
     phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+    attackPositionMemory: cloneAttackPositionMemory(p.attackPositionMemory),
     sherman: {
       ...captureUnit(sh),
       damaged: false,
@@ -298,6 +304,7 @@ export interface ApplyResult {
   playerStep?: SavePlayerStep;
   hatchChangedThisTurn?: boolean;
   phaseDice?: Array<{ pip: number; used: boolean }>;
+  attackPositionMemory?: AttackPositionMemory;
   reason?: string;
 }
 
@@ -313,7 +320,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -443,6 +450,9 @@ export function applySave(
     phase: save.phase,
     movesLeft: save.movesLeft,
     attacksLeft: save.attacksLeft,
+    attackPositionMemory: save.version >= 8
+      ? cloneAttackPositionMemory(save.attackPositionMemory)
+      : cloneAttackPositionMemory(),
     ...(save.version >= 3
       ? {
         miscDone: save.miscDone ?? false,

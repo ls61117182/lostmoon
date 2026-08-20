@@ -100,6 +100,10 @@ async function audit(row) {
 
   if (images.hull || images.turret) {
     if (!images.hull || !images.turret) throw new Error(`${row.kind}: split tank requires both hull and turret`);
+    const splitPaths = [paths.top, paths.hull, paths.turret, paths.destroyed].map((value) => path.resolve(value).toLowerCase());
+    if (new Set(splitPaths).size !== splitPaths.length) {
+      throw new Error(`${row.kind}: split tank requires distinct top, hull, turret and destroyed PNG paths`);
+    }
     const topW = num(row, 'topTrimW');
     const topH = num(row, 'topTrimH');
     const turretW = num(row, 'turretTrimW');

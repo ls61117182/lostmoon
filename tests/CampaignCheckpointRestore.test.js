@@ -40,6 +40,12 @@ function loadSaveLoad() {
         coDriver: value.coDriver === 'veteran' || value.coDriver === 'elite' ? value.coDriver : 'recruit',
       }),
     };
+    if (id === './AttackPositionMemory') return {
+      cloneAttackPositionMemory: (value) => value ? JSON.parse(JSON.stringify(value)) : {
+        currentTurn: { friendly: undefined, enemy: undefined },
+        previousTurn: { friendly: undefined, enemy: undefined },
+      },
+    };
     return {};
   };
   new Function('require', 'module', 'exports', js)(req, mod, mod.exports);
@@ -83,6 +89,10 @@ const checkpoint = JSON.parse(JSON.stringify(captureSave({
   playerStep: 'choose',
   hatchChangedThisTurn: false,
   phaseDice: [],
+  attackPositionMemory: {
+    currentTurn: { friendly: { q: 4, r: 2 } },
+    previousTurn: { friendly: { q: 3, r: 1 } },
+  },
 })));
 
 sherman.fireLevel = 3;
@@ -102,5 +112,9 @@ assert.strictEqual(sherman.radioDamaged, false);
 assert.strictEqual(sherman.loaded, true);
 assert.strictEqual(sherman.hatchOpen, true);
 assert.strictEqual(sherman.crew.gunner, true);
+assert.deepStrictEqual(result.attackPositionMemory, {
+  currentTurn: { friendly: { q: 4, r: 2 } },
+  previousTurn: { friendly: { q: 3, r: 1 } },
+});
 
 console.log('campaign checkpoint restore tests passed');

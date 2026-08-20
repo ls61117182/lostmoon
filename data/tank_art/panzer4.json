@@ -1,0 +1,33 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "panzer4",
+  "notes": "Panzer IV Ausf. G selected split source; user reference is the geometry authority, generated hull and turret share the hull-calibrated source scale.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/panzer4g/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/panzer4g/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/panzer4g/destroyed-from-hull.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.12,
+    "outlinePixels": 1,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [650, 313],
+    "turretPivot": [834, 229],
+    "muzzle": [2, 219],
+    "commanderHatch": [932, 225]
+  }
+}

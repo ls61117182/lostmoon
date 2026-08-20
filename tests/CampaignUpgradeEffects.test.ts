@@ -63,6 +63,15 @@ function damageReport(effect: 'paralyzed'): AttackReport {
 }
 
 {
+  const sherman = tank('mantlet-upgrade', 'usa');
+  assert.strictEqual(sherman.stats.gunMantletArmor ?? 0, 0);
+  applyCampaignUpgradesToSherman(sherman, ['new_gun_mantlet']);
+  assert.strictEqual(sherman.stats.gunMantletArmor, 1);
+  applyCampaignUpgradesToSherman(sherman, ['new_gun_mantlet']);
+  assert.strictEqual(sherman.stats.gunMantletArmor, 1, 'persistent stat upgrades apply exactly once');
+}
+
+{
   const sherman = tank('sherman', 'usa');
   applyCampaignUpgradesToSherman(sherman, [
     'mine_roller',
@@ -71,7 +80,7 @@ function damageReport(effect: 'paralyzed'): AttackReport {
     'commander_ballistic_shield',
   ]);
   assert.strictEqual(sherman.campaignMineDamageImmune, true);
-  assert.strictEqual(sherman.campaignHiddenCloseRangeUntargetable, true);
+  assert.strictEqual(sherman.campaignHiddenLongRangeUntargetable, true);
   assert.strictEqual(sherman.campaignMechanicalFailureImmune, true);
 
   applyAttack(sherman, damageReport('paralyzed'));
@@ -100,9 +109,9 @@ function damageReport(effect: 'paralyzed'): AttackReport {
   }
   const target = tank('hidden-sherman', 'usa', 0);
   target.hidden = true;
-  target.campaignHiddenCloseRangeUntargetable = true;
-  assert.strictEqual(canAttack({ attacker: tank('near', 'japanese', 2), target, map }).ok, false);
-  assert.strictEqual(canAttack({ attacker: tank('far', 'japanese', 3), target, map }).ok, true);
+  target.campaignHiddenLongRangeUntargetable = true;
+  assert.strictEqual(canAttack({ attacker: tank('near', 'japanese', 2), target, map }).ok, true);
+  assert.strictEqual(canAttack({ attacker: tank('far', 'japanese', 3), target, map }).ok, false);
 }
 
 {

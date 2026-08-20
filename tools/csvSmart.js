@@ -141,6 +141,9 @@ function readCsvRowsSmart(filePath, opts = {}) {
 }
 
 module.exports = {
+  chooseParsedRows,
+  decodeTable,
+  rowsToCsv,
   readCsvRowsSmart,
   withoutLocalizedDescriptionRow,
 };

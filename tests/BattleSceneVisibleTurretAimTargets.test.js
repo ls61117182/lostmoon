@@ -117,8 +117,8 @@ assert.match(
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /const turretDamaged = this\.mission\.sherman\.turretDamaged === true;[\s\S]*?if \(!turretDamaged\) \{[\s\S]*?drawTurretAimHex[\s\S]*?turretDamaged \? 0 : this\.mission\.sherman\.stats\.turretTraverseSpeed/,
-  'a damaged turret must render no blue target hexes and pass zero speed to the all-gray angle ring',
+  /const turretDamaged = this\.mission\.sherman\.turretDamaged === true;[\s\S]*?if \(!turretDamaged \|\| machineGunRotationSelection\)[\s\S]*?if \(turretDamaged\)[\s\S]*?!legalWeaponTargetKeys\.has\(tileKey\)[\s\S]*?drawTurretAimHex[\s\S]*?turretDamaged \? 0 : this\.mission\.sherman\.stats\.turretTraverseSpeed/,
+  'a damaged turret should mark only legal fixed-direction MG targets while keeping the angle ring all gray',
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),

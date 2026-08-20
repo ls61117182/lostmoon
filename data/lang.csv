@@ -144,8 +144,8 @@ die.hint.smokeOrRepair,烟/修,Sm/Re
 die.hint.smokeOrMG,烟/机,Sm/MG
 die.hint.codriverMG,机枪,MG
 die.hint.none,—,—
-action.turnCW,↻ 顺时针 60°,↻ CW 60°
-action.turnCCW,↺ 逆时针 60°,↺ CCW 60°
+action.turnCW,↻ 60°,↻ 60°
+action.turnCCW,↺ 60°,↺ 60°
 action.advance,▲ 前进 1 格,▲ Advance 1
 action.reverse,▼ 后退 1 格,▼ Reverse 1
 action.reload,装填主炮,Reload Gun
@@ -195,8 +195,8 @@ floater.mgDice,机枪 1d6={sum},MG 1d6={sum}
 floater.roleUnavailable,{role}已阵亡，无法操作,{role} KIA: cannot act
 action.concealPair,隐蔽（+同点骰）,Go Concealed (+pair)
 action.doublesDriverAdvance,前进（+同点骰）,Driver Advance (+pair)
-action.doublesCoDriverTurnCW, ↻ 60°（+同点骰）,Co-driver ↻ 60° (+pair)
-action.doublesCoDriverTurnCCW, ↺ 60°（+同点骰）,Co-driver ↺ 60° (+pair)
+action.doublesCoDriverTurnCW,↻ 60°,↻ 60°
+action.doublesCoDriverTurnCCW,↺ 60°,↺ 60°
 action.doublesLoaderReload,装填（+同点骰）,Loader Reload (+pair)
 action.doublesGunnerFire,主炮射击（+同点骰）,Gunner Fire (+pair)
 action.precisionFire,精确射击（命中所需 -2）,Precision Fire (hit need -2)
@@ -216,7 +216,7 @@ attack.reason.mgRange,机枪目标距离不合法,MG: Invalid Target Range
 attack.reason.mgDirection,目标不在航向机枪或同轴机枪的可射方向,Target is outside the hull and coaxial machine-gun directions
 attack.reason.notInfantry,机枪只能扫射步兵,MG: Target Must Be Infantry
 attack.reason.gunVsInfantry,主炮不瞄步兵，请改用机枪,Main gun ignores infantry; use MG
-attack.reason.camouflageNet,目标被近距伪装网完全遮蔽,Camouflage net prevents targeting at this range
+attack.reason.camouflageNet,目标被远距伪装网完全遮蔽,Camouflage net prevents targeting at this range
 attack.reason.unknown,无法攻击,Cannot Attack
 preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
 dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}
@@ -262,10 +262,11 @@ dice.rule.effectiveRange,有效射程,Effective Range
 dice.rule.rangePenalty,射程衰减,Range Penalty
 dice.rule.actualPen,实际穿深,Actual Penetration
 dice.rule.armorLine,{face}装甲,{face} Armor
+dice.rule.gunMantletArmor,炮盾装甲值,Gun Mantlet Armor
 dice.rule.targetType,受击类型,Target Type
 dice.rule.currentTarget,当前目标,Current Target
 dice.rule.hitDirection,受击方向,Hit Direction
-dice.rule.faceFront,前侧,Front
+dice.rule.faceFront,前,Front
 dice.rule.faceRight,右侧,Right
 dice.rule.faceLeft,左侧,Left
 dice.rule.faceRear,后侧,Rear
@@ -285,7 +286,7 @@ unit.name.t34,T-34/76,T-34/76
 unit.name.tiger,虎式,Tiger
 unit.name.maus,鼠式坦克,Panzer VIII Maus
 unit.name.panther,豹式坦克,Panther G
-unit.name.panzer4,四号,Panzer IV
+unit.name.panzer4,四号坦克G型,Panzer IV Ausf. G
 unit.name.panzer3,三号,Panzer III
 unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
@@ -469,6 +470,7 @@ tileInspect.colFront,前装甲,Front
 tileInspect.colFrontSide,前侧装甲,Front side
 tileInspect.colRearSide,后侧装甲,Rear side
 tileInspect.colRear,后装甲,Rear
+tileInspect.colGunMantlet,炮盾装甲,Gun mantlet
 tileInspect.colPen,穿甲值,Pen.
 tileInspect.colEffectiveRange,有效射程,Eff. range
 tileInspect.effectiveRange,有效射程：{n},Effective range: {n}
@@ -692,6 +694,8 @@ campaignUpgrade.automaticExtinguisher.name,自动灭火器,Automatic Extinguishe
 campaignUpgrade.automaticExtinguisher.description,杂项阶段中，具有修复功能的骰子增加“灭火”选项,Repair-capable misc dice also gain a Fire Suppression option.
 campaignUpgrade.sideSkirts.name,裙板,Side Skirts
 campaignUpgrade.sideSkirts.description,前侧装甲、后侧装甲各 +1,Front-side and rear-side armor +1.
+campaignUpgrade.newGunMantlet.name,新型炮盾,New Gun Mantlet
+campaignUpgrade.newGunMantlet.description,炮盾装甲值 +1,Gun-mantlet armor +1.
 campaignUpgrade.wideTracks.name,宽履带,Wide Tracks
 campaignUpgrade.wideTracks.description,位于泥地或海滩时，攻击、移动、杂项阶段骰子数量各 +1,"While in mud or on a beach, attack, movement, and misc dice each +1."
 campaignUpgrade.improvedTransmission.name,改进变速箱,Improved Transmission
@@ -705,7 +709,7 @@ campaignUpgrade.readyRack.description,攻击阶段的5、6点射击骰也可以�
 campaignUpgrade.mineRoller.name,扫雷滚筒,Mine Roller
 campaignUpgrade.mineRoller.description,不再受到公路地雷或开阔地地雷事件的伤害。,Take no damage from road-mine or clear-mine events.
 campaignUpgrade.camouflageNet.name,伪装网,Camouflage Net
-campaignUpgrade.camouflageNet.description,处于隐蔽状态时，2格以内的敌人无法选择谢尔曼为攻击目标。,While concealed enemies within 2 hexes cannot target the Sherman.
+campaignUpgrade.camouflageNet.description,处于隐蔽状态时，2格以外的敌人无法选择谢尔曼为攻击目标。,"While concealed, enemies beyond 2 hexes cannot target the Sherman."
 campaignUpgrade.reinforcedTransmission.name,强化传动机构,Reinforced Transmission
 campaignUpgrade.reinforcedTransmission.description,免疫回合结束事件的机械故障；每小关第一次因攻击产生的瘫痪结果无效。,Ignore mechanical-failure events; the first attack-caused Immobilized result each segment is cancelled.
 campaignUpgrade.commanderBallisticShield.name,车长防弹护盾,Commander Ballistic Shield

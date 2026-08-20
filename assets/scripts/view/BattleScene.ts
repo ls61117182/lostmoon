@@ -205,8 +205,10 @@ import {
   TANK_EXHAUST_MAX_PARTICLES,
   TANK_EXHAUST_MOVING_RATE,
   TankExhaustParticle,
+  TankExhaustPoint,
   advanceTankExhaustParticle,
   resetTankExhaustParticle,
+  sampleTankExhaustTrailFractions,
   tankExhaustParticleAlpha,
   tankExhaustParticleRadius,
   tankExhaustPortWorldPosition,
@@ -291,6 +293,14 @@ import {
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel, visualFireEffectLevel } from '../core/UnitVisualState';
 import { commanderHasSkill, crewLevelFor, infantryTurnActions, normalizePlayerCrewLevels, normalizeUnitLevel, unitLevelOf } from '../core/UnitLevel';
+import {
+  advanceAttackPositionMemory,
+  AttackPositionMemory,
+  cloneAttackPositionMemory,
+  createAttackPositionMemory,
+  previousEnemyAttackPosition,
+  recordAttackPosition as recordAttackPositionForMemory,
+} from '../core/AttackPositionMemory';
 import { ambushHitThresholdModifier, ambushHitThresholdModifierDetails, beginAmbushTurn, endAmbushTurn, markAmbushAction, markAmbushTargeted } from '../core/Ambush';
 import { applyInfantrySuppression, consumeInfantrySuppression, isMainGunSuppressionAttack, selectMainGunTargetsByHex } from '../core/Suppression';
 import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, MissionData, neutralizeUncrewedTank, restoreFullTankCrew, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
@@ -392,6 +402,17 @@ interface EngineVibrationVisual {
   baseAngle: number;
   bodyAngleDeg: number;
   phaseOffset: number;
+}
+
+interface TankExhaustEmitterState {
+  idleAccumulator: number;
+  distanceRemainder: number;
+  movingSpacing: number;
+  wasMoving: boolean;
+  previousOrigins: TankExhaustPoint[];
+  currentOrigins: TankExhaustPoint[];
+  sampleFractions: number[];
+  spawnPoint: TankExhaustPoint;
 }
 
 const TIGER_SPLIT_VISUAL_CONFIG = splitTankVisualConfigOf('tiger');
@@ -665,6 +686,7 @@ const CAMPAIGN_UPGRADE_ICON_ORDER_V2: readonly CampaignUpgradeId[] = [
   'commander_ballistic_shield',
   'emergency_medical_kit',
   'ammo_handling_optimization',
+  'new_gun_mantlet',
 ];
 
 type DirectionLerp = {
@@ -1456,7 +1478,31 @@ export class BattleScene extends Component {
       moving: false,
     }),
   );
-  private tankExhaustEmitAccumulators = new Map<string, number>();
+  private tankExhaustEmitterStates = new Map<string, TankExhaustEmitterState>();
+  private tankExhaustLiveEmitterIds = new Set<string>();
+  private tankExhaustFreeIndices = Array.from(
+    { length: TANK_EXHAUST_MAX_PARTICLES },
+    (_, index) => TANK_EXHAUST_MAX_PARTICLES - 1 - index,
+  );
+  private tankExhaustDrawBuckets: number[][] = Array.from({ length: 16 }, () => []);
+  private tankExhaustRadiusCache = new Array<number>(TANK_EXHAUST_MAX_PARTICLES).fill(0);
+  private tankExhaustBodyColors: Color[] = Array.from({ length: 16 }, (_, index) => {
+    const shadeBucket = Math.floor(index / 4);
+    const alphaBucket = index % 4;
+    const shade = 78 + shadeBucket * 18;
+    return new Color(shade, shade, shade - 7, 16 + alphaBucket * 32);
+  });
+  private tankExhaustHighlightColors: Color[] = Array.from({ length: 16 }, (_, index) => {
+    const shadeBucket = Math.floor(index / 4);
+    const alphaBucket = index % 4;
+    const shade = 78 + shadeBucket * 18;
+    return new Color(
+      Math.min(170, shade + 22),
+      Math.min(168, shade + 20),
+      Math.min(160, shade + 13),
+      Math.round((16 + alphaBucket * 32) * 0.34),
+    );
+  });
   private tankExhaustSerial = 0;
   private tankTrackGraphics: Graphics | null = null;
   private tankTracks: TankTrackMove[] = [];
@@ -1638,6 +1684,7 @@ export class BattleScene extends Component {
 
   // 回合状态
   private turn: number = 1;
+  private attackPositionMemory: AttackPositionMemory = createAttackPositionMemory();
   private phase: Phase = 'player';
   /** 玩家回合内的子状态机（见 PlayerStep 注释） */
   private playerStep: PlayerStep = 'choose';
@@ -2135,7 +2182,7 @@ export class BattleScene extends Component {
     );
 
     const commanderHatchPaths = new Set(
-      SPLIT_TANK_KINDS
+      TANK_VISUAL_KINDS
         .map((kind) => getUnitStats(kind).commanderSpritePath ?? '')
         .filter((path) => !!path),
     );
@@ -3609,6 +3656,7 @@ export class BattleScene extends Component {
       playerStep: this.playerStep as SavePlayerStep,
       hatchChangedThisTurn: this.hatchChangedThisTurn,
       phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+      attackPositionMemory: this.attackPositionMemory,
       missionSource: this.missionSource,
     });
     try {
@@ -4350,6 +4398,7 @@ export class BattleScene extends Component {
 
     // 初始化回合状态
     this.turn = 1;
+    this.attackPositionMemory = createAttackPositionMemory();
     this.phase = 'player';
     this.playerStep = 'choose';
     this.movementDone = false;
@@ -5047,15 +5096,21 @@ export class BattleScene extends Component {
       const originKey = HexMap.keyOf(this.mission.sherman.pos);
       const reachableKeys = new Set<string>();
       const reachableTiles: Tile[] = [];
-      if (!turretDamaged) {
+      if (!turretDamaged || machineGunRotationSelection) {
         for (const tile of this.mission.map.all()) {
           if (this.isDeepShadowTile(tile)) continue;
           const tileKey = HexMap.keyOf(tile.pos);
           if (tileKey === originKey) continue;
-          const direction = this.isHexVisible(tile.pos)
-            ? this.visibleTurretAimDirection(tile.pos)
-            : this.fogTurretAimDirection(tile.pos);
-          if (direction === null) continue;
+          if (turretDamaged) {
+            // A damaged turret cannot rotate or reveal fog, but legal hull/coaxial
+            // targets in the two fixed directions remain clickable MG targets.
+            if (!legalWeaponTargetKeys.has(tileKey)) continue;
+          } else {
+            const direction = this.isHexVisible(tile.pos)
+              ? this.visibleTurretAimDirection(tile.pos)
+              : this.fogTurretAimDirection(tile.pos);
+            if (direction === null) continue;
+          }
           if (precisionGunSelection && !legalWeaponTargetKeys.has(tileKey)) continue;
           if (visibleEnemyKeys.has(tileKey)
             && !unloadedGunRotation
@@ -5876,25 +5931,22 @@ export class BattleScene extends Component {
     marker.setPosition(-Math.min(80, estimatedTextWidth) * 0.5 - 10, -2, 0);
 
     const drawChevron = (cy: number) => {
-      g.fillColor = UNIT_RANK_OUTLINE;
-      g.moveTo(-7, cy + 3);
-      g.lineTo(0, cy - 2);
-      g.lineTo(7, cy + 3);
-      g.lineTo(7, cy);
-      g.lineTo(0, cy - 5);
-      g.lineTo(-7, cy);
-      g.close();
-      g.fill();
+      const fillChevron = (centerX: number, centerY: number, halfWidth: number, color: Color) => {
+        const innerHalfWidth = halfWidth * 0.6;
+        g.fillColor = color;
+        g.moveTo(centerX - halfWidth, centerY - 2);
+        g.lineTo(centerX, centerY + 3);
+        g.lineTo(centerX + halfWidth, centerY - 2);
+        g.lineTo(centerX + innerHalfWidth, centerY - 2);
+        g.lineTo(centerX, centerY + 1);
+        g.lineTo(centerX - innerHalfWidth, centerY - 2);
+        g.close();
+        g.fill();
+      };
 
-      g.fillColor = UNIT_RANK_GOLD;
-      g.moveTo(-5, cy + 2);
-      g.lineTo(0, cy - 1);
-      g.lineTo(5, cy + 2);
-      g.lineTo(5, cy + 1);
-      g.lineTo(0, cy - 3);
-      g.lineTo(-5, cy + 1);
-      g.close();
-      g.fill();
+      // 黑色底与金色倒 V 同尺寸，仅向下偏移 1 px，形成垂直投影。
+      fillChevron(0, cy - 1, 5, UNIT_RANK_OUTLINE);
+      fillChevron(0, cy, 5, UNIT_RANK_GOLD);
     };
 
     if (level === 'veteran') {
@@ -6904,6 +6956,10 @@ export class BattleScene extends Component {
     this.muzzleSmokes.push(smoke);
   }
 
+  private rememberAttackPosition(attacker: Unit | null): void {
+    if (attacker) recordAttackPositionForMemory(this.attackPositionMemory, attacker);
+  }
+
   private playAttackFireCue(
     attacker: Unit | null,
     target: Unit | null,
@@ -6916,6 +6972,7 @@ export class BattleScene extends Component {
       if (this.firedAttackCueReports.has(report)) return;
       this.firedAttackCueReports.add(report);
     }
+    if (!mg) this.rememberAttackPosition(attacker);
     if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isTankUnit(target)) {
       // Face the squad toward the tank before selecting one member as the
       // launcher operator. The other two soldiers turn only; they do not fire.
@@ -6950,6 +7007,7 @@ export class BattleScene extends Component {
   }
 
   private playMachineGunFireCue(attacker: Unit | null, target: Unit | null, hit: boolean) {
+    this.rememberAttackPosition(attacker);
     if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isTankUnit(target)) {
       this.setInfantryVisualFacing(attacker, target.pos);
       this.redraw();
@@ -6967,6 +7025,7 @@ export class BattleScene extends Component {
   }
 
   private playHighExplosiveSuppressionCue(attacker: Unit, target: Unit) {
+    this.rememberAttackPosition(attacker);
     this.startMainGunRecoil(attacker, target);
     this.spawnMuzzleSmoke(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
@@ -8101,6 +8160,7 @@ export class BattleScene extends Component {
   }
 
   private playTurnEndSniperShot(attacker: Unit, target: Unit, onImpact: () => void) {
+    this.rememberAttackPosition(attacker);
     this.setInfantryVisualFacing(attacker, target.pos);
     this.redraw();
     this.spawnSniperBulletTrace(attacker, target, onImpact);
@@ -10329,105 +10389,226 @@ export class BattleScene extends Component {
 
   private clearTankEngineExhaust() {
     for (const particle of this.tankExhaustParticles) particle.active = false;
-    this.tankExhaustEmitAccumulators.clear();
+    this.tankExhaustEmitterStates.clear();
+    this.tankExhaustLiveEmitterIds.clear();
+    this.tankExhaustFreeIndices.length = 0;
+    for (let i = TANK_EXHAUST_MAX_PARTICLES - 1; i >= 0; i--) {
+      this.tankExhaustFreeIndices.push(i);
+    }
+    for (const bucket of this.tankExhaustDrawBuckets) bucket.length = 0;
     this.tankExhaustSerial = 0;
     this.tankExhaustGraphics?.clear();
   }
 
   private advanceTankEngineExhaust(dt: number) {
     const step = Math.max(0, dt);
-    for (const particle of this.tankExhaustParticles) {
+    for (let index = 0; index < this.tankExhaustParticles.length; index++) {
+      const particle = this.tankExhaustParticles[index]!;
+      if (!particle.active) continue;
       advanceTankExhaustParticle(particle, step);
+      if (!particle.active) this.tankExhaustFreeIndices.push(index);
     }
 
-    const liveEmitterIds = new Set<string>();
+    const liveEmitterIds = this.tankExhaustLiveEmitterIds;
+    liveEmitterIds.clear();
     if (this.mission) {
       // Avoid a large burst after a debugger pause or a slow loading frame.
       const emissionStep = Math.min(step, 0.12);
       for (const unit of this.allUnits()) {
         const config = tankVisualConfigOf(unit.kind);
+        let enabledPortCount = 0;
+        for (const port of config.exhaustPorts) {
+          if (port.forward !== 0) enabledPortCount++;
+        }
         if (unit.destroyed
           || isAbandonedTank(unit)
           || !unitKindHasEngineVibration(unit.kind)
-          || config.exhaustPorts.length === 0
+          || enabledPortCount === 0
           || !this.isUnitVisible(unit)) continue;
 
         liveEmitterIds.add(unit.id);
         const moving = this.anim?.unit === unit && this.anim.kind === 'move';
-        const rate = moving ? TANK_EXHAUST_MOVING_RATE : TANK_EXHAUST_IDLE_RATE;
-        const interval = 1 / rate;
-        let accumulator = this.tankExhaustEmitAccumulators.get(unit.id);
-        if (accumulator === undefined) {
-          accumulator = tankEngineVibrationPhaseOffset(unit.id) * interval;
+        let state = this.tankExhaustEmitterStates.get(unit.id);
+        if (!state) {
+          state = {
+            idleAccumulator: tankEngineVibrationPhaseOffset(unit.id) / TANK_EXHAUST_IDLE_RATE,
+            distanceRemainder: 0,
+            movingSpacing: this.hexSize * Math.sqrt(3) / Math.max(1, TANK_EXHAUST_MOVING_RATE * this.moveDuration),
+            wasMoving: false,
+            previousOrigins: [],
+            currentOrigins: [],
+            sampleFractions: [],
+            spawnPoint: { x: 0, y: 0 },
+          };
+          this.tankExhaustEmitterStates.set(unit.id, state);
         }
-        accumulator += emissionStep;
 
         const center = this.interpolatedPos(unit);
         const facingLerp: DirectionLerp | null = this.anim?.unit === unit && this.anim.kind === 'turn'
           ? { from: this.anim.turnFrom!, to: this.anim.turnTo!, t: this.anim.t }
           : null;
         const forward = this.topDownForwardVec(unit, center, facingLerp);
-        while (accumulator >= interval) {
-          accumulator -= interval;
-          // A firing cycle emits from every configured port at the same time.
-          for (const port of config.exhaustPorts) {
-            const particle = this.tankExhaustParticles.find(candidate => !candidate.active);
-            if (!particle) break;
-            const serial = this.tankExhaustSerial++;
-            const origin = tankExhaustPortWorldPosition(
-              center.x,
-              center.y,
+        let originIndex = 0;
+        for (const port of config.exhaustPorts) {
+          if (port.forward === 0) continue;
+          let origin = state.currentOrigins[originIndex];
+          if (!origin) {
+            origin = { x: 0, y: 0 };
+            state.currentOrigins[originIndex] = origin;
+          }
+          tankExhaustPortWorldPosition(
+            center.x,
+            center.y,
+            forward.ux,
+            forward.uy,
+            port,
+            this.hexSize * Math.sqrt(3),
+            origin,
+          );
+          originIndex++;
+        }
+        state.currentOrigins.length = originIndex;
+
+        const canInterpolate = state.previousOrigins.length === state.currentOrigins.length
+          && state.currentOrigins.length > 0;
+        const segmentLength = canInterpolate
+          ? Math.hypot(
+            state.currentOrigins[0]!.x - state.previousOrigins[0]!.x,
+            state.currentOrigins[0]!.y - state.previousOrigins[0]!.y,
+          )
+          : 0;
+
+        if (moving) {
+          const duration = Math.max(0.01, this.anim!.dur);
+          state.movingSpacing = this.hexSize * Math.sqrt(3)
+            / Math.max(1, TANK_EXHAUST_MOVING_RATE * duration);
+        }
+
+        if ((moving || state.wasMoving) && canInterpolate) {
+          state.distanceRemainder = sampleTankExhaustTrailFractions(
+            segmentLength,
+            state.movingSpacing,
+            state.distanceRemainder,
+            state.sampleFractions,
+          );
+          for (const fraction of state.sampleFractions) {
+            this.spawnTankExhaustCycle(
+              state.currentOrigins,
+              state.previousOrigins,
+              fraction,
               forward.ux,
               forward.uy,
-              port,
-              this.hexSize * Math.sqrt(3),
+              true,
+              state.spawnPoint,
             );
-            resetTankExhaustParticle(
-              particle,
-              origin,
+          }
+          state.idleAccumulator = 0;
+        } else if (!moving) {
+          const interval = 1 / TANK_EXHAUST_IDLE_RATE;
+          state.idleAccumulator += emissionStep;
+          while (state.idleAccumulator >= interval) {
+            state.idleAccumulator -= interval;
+            this.spawnTankExhaustCycle(
+              state.currentOrigins,
+              null,
+              1,
               forward.ux,
               forward.uy,
-              this.hexSize,
-              moving,
-              serial,
+              false,
+              state.spawnPoint,
             );
           }
         }
-        this.tankExhaustEmitAccumulators.set(unit.id, accumulator);
+        state.wasMoving = moving;
+        const previous = state.previousOrigins;
+        state.previousOrigins = state.currentOrigins;
+        state.currentOrigins = previous;
       }
     }
 
-    for (const unitId of Array.from(this.tankExhaustEmitAccumulators.keys())) {
-      if (!liveEmitterIds.has(unitId)) this.tankExhaustEmitAccumulators.delete(unitId);
+    for (const unitId of this.tankExhaustEmitterStates.keys()) {
+      if (!liveEmitterIds.has(unitId)) this.tankExhaustEmitterStates.delete(unitId);
     }
     this.drawTankEngineExhaust();
+  }
+
+  private spawnTankExhaustCycle(
+    currentOrigins: readonly TankExhaustPoint[],
+    previousOrigins: readonly TankExhaustPoint[] | null,
+    fraction: number,
+    forwardX: number,
+    forwardY: number,
+    moving: boolean,
+    spawnPoint: TankExhaustPoint,
+  ) {
+    if (this.tankExhaustFreeIndices.length < currentOrigins.length) return;
+    for (let portIndex = 0; portIndex < currentOrigins.length; portIndex++) {
+      const particleIndex = this.tankExhaustFreeIndices.pop();
+      if (particleIndex === undefined) return;
+      const current = currentOrigins[portIndex]!;
+      const previous = previousOrigins?.[portIndex];
+      if (previous) {
+        spawnPoint.x = previous.x + (current.x - previous.x) * fraction;
+        spawnPoint.y = previous.y + (current.y - previous.y) * fraction;
+      } else {
+        spawnPoint.x = current.x;
+        spawnPoint.y = current.y;
+      }
+      resetTankExhaustParticle(
+        this.tankExhaustParticles[particleIndex]!,
+        spawnPoint,
+        forwardX,
+        forwardY,
+        this.hexSize,
+        moving,
+        this.tankExhaustSerial++,
+      );
+    }
   }
 
   private drawTankEngineExhaust() {
     const g = this.tankExhaustGraphics;
     if (!g) return;
     g.clear();
-    for (const particle of this.tankExhaustParticles) {
+    for (const bucket of this.tankExhaustDrawBuckets) bucket.length = 0;
+    for (let particleIndex = 0; particleIndex < this.tankExhaustParticles.length; particleIndex++) {
+      const particle = this.tankExhaustParticles[particleIndex]!;
       if (!particle.active) continue;
       const alpha = tankExhaustParticleAlpha(particle);
       if (alpha <= 0) continue;
       const radius = tankExhaustParticleRadius(particle);
       const progress = Math.max(0, Math.min(1, particle.age / particle.lifetime));
       const shade = Math.min(142, Math.round(particle.shade + progress * 54));
-      g.fillColor = new Color(shade, shade, Math.max(0, shade - 7), alpha);
-      g.circle(particle.x, particle.y, radius);
+      const shadeBucket = Math.max(0, Math.min(3, Math.floor((shade - 69) / 19)));
+      const alphaBucket = Math.max(0, Math.min(3, Math.floor((alpha - 1) / 32)));
+      const bucketIndex = shadeBucket * 4 + alphaBucket;
+      this.tankExhaustRadiusCache[particleIndex] = radius;
+      this.tankExhaustDrawBuckets[bucketIndex]!.push(particleIndex);
+    }
+
+    for (let bucketIndex = 0; bucketIndex < this.tankExhaustDrawBuckets.length; bucketIndex++) {
+      const bucket = this.tankExhaustDrawBuckets[bucketIndex]!;
+      if (bucket.length === 0) continue;
+      g.fillColor = this.tankExhaustBodyColors[bucketIndex]!;
+      for (const particleIndex of bucket) {
+        const particle = this.tankExhaustParticles[particleIndex]!;
+        g.circle(particle.x, particle.y, this.tankExhaustRadiusCache[particleIndex]!);
+      }
       g.fill();
-      g.fillColor = new Color(
-        Math.min(170, shade + 22),
-        Math.min(168, shade + 20),
-        Math.min(160, shade + 13),
-        Math.round(alpha * 0.34),
-      );
-      g.circle(
-        particle.x - radius * 0.20,
-        particle.y + radius * 0.22,
-        radius * 0.56,
-      );
+    }
+    for (let bucketIndex = 0; bucketIndex < this.tankExhaustDrawBuckets.length; bucketIndex++) {
+      const bucket = this.tankExhaustDrawBuckets[bucketIndex]!;
+      if (bucket.length === 0) continue;
+      g.fillColor = this.tankExhaustHighlightColors[bucketIndex]!;
+      for (const particleIndex of bucket) {
+        const particle = this.tankExhaustParticles[particleIndex]!;
+        const radius = this.tankExhaustRadiusCache[particleIndex]!;
+        g.circle(
+          particle.x - radius * 0.20,
+          particle.y + radius * 0.22,
+          radius * 0.56,
+        );
+      }
       g.fill();
     }
   }
@@ -11040,6 +11221,79 @@ export class BattleScene extends Component {
     );
   }
 
+  /**
+   * Fixed-gun vehicles use one complete top sprite, so their commander overlay
+   * follows the body transform instead of a separately rotating turret.
+   */
+  private applyFixedTankCommanderHatchSprite(
+    slot: { node: Node; sprite: Sprite },
+    u: Unit,
+    c: { x: number; y: number },
+    displayW: number,
+    displayH: number,
+    facingLerp?: DirectionLerp | null,
+  ) {
+    const visualState = commanderHatchVisualState(u);
+    const sf = visualState === 'empty'
+      ? this.emptyCommanderHatchSpriteFrame
+      : this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? ''];
+    const cfg = tankVisualConfigOf(u.kind);
+    if (!sf || visualState === 'hidden' || cfg.commanderHatchScale <= 0) {
+      slot.node.active = false;
+      return;
+    }
+
+    const w = Math.max(1, displayW);
+    const h = Math.max(1, displayH);
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
+    const sourceScale = fit / Math.max(w, h);
+    const aspectScale = Math.sqrt(Math.max(1e-6, cfg.aspectRatioMul));
+    const scaleX = sourceScale * aspectScale;
+    const scaleY = sourceScale / aspectScale;
+    const body = this.topDownForwardVec(u, c, facingLerp);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const forwardOffset = cfg.offsetForward * offsetUnit;
+    const rightOffset = cfg.offsetRight * offsetUnit;
+    const recoil = this.mainGunRecoilOffsetFor(u, 'whole');
+    const baseX = c.x + forwardOffset * body.ux + rightOffset * body.uy + recoil.x;
+    const baseY = c.y + forwardOffset * body.uy - rightOffset * body.ux + recoil.y;
+    const localX = (cfg.commanderHatchSpriteX - w / 2) * scaleX;
+    const localY = (h / 2 - cfg.commanderHatchSpriteY) * scaleY;
+    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
+    const cos = Math.cos(bodyAngle);
+    const sin = Math.sin(bodyAngle);
+    const spriteX = baseX + localX * cos - localY * sin;
+    const spriteY = baseY + localX * sin + localY * cos;
+    const occupiedSize = cfg.commanderHatchScale * Math.sqrt(scaleX * scaleY);
+    const shermanCommanderScale = splitTankVisualConfigOf('sherman').commanderHatchScale || 1;
+    const size = visualState === 'empty'
+      ? occupiedSize * (EMPTY_COMMANDER_HATCH_SPRITE_SIZE
+        * SHERMAN_EMPTY_COMMANDER_HATCH_SCALE / shermanCommanderScale)
+      : occupiedSize;
+
+    const node = slot.node;
+    const sp = slot.sprite;
+    sp.spriteFrame = sf;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    this.applyTankConcealmentOpacity(sp, u);
+    const ut = node.getComponent(UITransform)!;
+    ut.setContentSize(size, size);
+    ut.setAnchorPoint(0.5, 0.5);
+    node.setScale(1, 1, 1);
+    const angle = bodyAngle * 180 / Math.PI - 90;
+    node.setPosition(spriteX, spriteY, 0);
+    node.angle = angle;
+    node.active = true;
+    this.registerEngineVibrationVisual(
+      node,
+      u,
+      spriteX,
+      spriteY,
+      angle,
+      Math.atan2(body.uy, body.ux) * 180 / Math.PI,
+    );
+  }
+
   private applyTankConcealmentOpacity(sp: Sprite, u: Unit) {
     sp.color = new Color(255, 255, 255, u.hidden ? TANK_CONCEALED_ALPHA : 255);
   }
@@ -11510,6 +11764,24 @@ export class BattleScene extends Component {
           c,
           facingLerp,
         );
+        const hatchVisualState = commanderHatchVisualState(u);
+        const hatchSpriteFrame = hatchVisualState === 'empty'
+          ? this.emptyCommanderHatchSpriteFrame
+          : this.commanderHatchSpriteFrames[u.stats.commanderSpritePath ?? ''];
+        if (hatchVisualState !== 'hidden'
+            && hatchSpriteFrame
+            && tankVisualConfigOf(u.kind).commanderHatchScale > 0
+            && this.commanderHatchPoolNext < this.commanderHatchSpritePool.length) {
+          const commanderSlot = this.commanderHatchSpritePool[this.commanderHatchPoolNext++];
+          this.applyFixedTankCommanderHatchSprite(
+            commanderSlot,
+            u,
+            c,
+            meta.dw,
+            meta.dh,
+            facingLerp,
+          );
+        }
         return;
       }
     }
@@ -14439,14 +14711,22 @@ export class BattleScene extends Component {
     if (!vis || !slot || slot.used) return;
 
     // 构造动作项
-    type Item = { text: string; color: Color; onClick: () => void; unavailableReason: string | null };
+    type Item = {
+      text: string;
+      color: Color;
+      onClick: () => void;
+      unavailableReason: string | null;
+      compactTurn: boolean;
+    };
     const items: Item[] = [];
-    const addItem = (text: string, color: Color, onClick: () => void, unavailableReason: string | null = null) => {
+    const addItem = (text: string, color: Color, onClick: () => void,
+      unavailableReason: string | null = null, compactTurn = false) => {
       items.push({
         text,
         color: unavailableReason ? DIE_ACTION_UNAVAILABLE : color,
         onClick,
         unavailableReason,
+        compactTurn,
       });
     };
 
@@ -14458,10 +14738,10 @@ export class BattleScene extends Component {
       const transmissionAllowsBothDirections = (a === 'drive' || a === 'reverse')
         && this.campaignMovementDiceCanReverseDirection();
       if (a === 'turn') {
-        addItem(t('action.turnCW'), PHASE_BTN_MOVE,
-          () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable());
         addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
-          () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable());
+          () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable(), true);
+        addItem(t('action.turnCW'), PHASE_BTN_MOVE,
+          () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable(), true);
       } else if (a === 'drive') {
         addItem(t('action.advance'), PHASE_BTN_MOVE,
           () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
@@ -14484,10 +14764,10 @@ export class BattleScene extends Component {
             () => this.tryDoublesDriverAdvance(idx), this.driveActionUnavailable(+1, 'driver'));
         }
         if (a !== 'turn') {
-          addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
-            () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'));
           addItem(t('action.doublesCoDriverTurnCCW'), DIE_ACTION_DOUBLES,
-            () => this.tryDoublesCoDriverTurn(idx, -1), this.turnActionUnavailable('coDriver'));
+            () => this.tryDoublesCoDriverTurn(idx, -1), this.turnActionUnavailable('coDriver'), true);
+          addItem(t('action.doublesCoDriverTurnCW'), DIE_ACTION_DOUBLES,
+            () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'), true);
         }
       }
     } else if (this.playerStep === 'attack') {
@@ -14542,10 +14822,10 @@ export class BattleScene extends Component {
           break;
         case 'driver_turn_or_drive':
           // 5 点 C 列：驾驶员转向 / 前进
-          addItem(t('action.turnCW'), PHASE_BTN_MOVE,
-            () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable('driver'));
           addItem(t('action.turnCCW'), PHASE_BTN_MOVE,
-            () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable('driver'));
+            () => this.tryTurnSherman(idx, -1), this.turnActionUnavailable('driver'), true);
+          addItem(t('action.turnCW'), PHASE_BTN_MOVE,
+            () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable('driver'), true);
           addItem(t('action.advance'), PHASE_BTN_MOVE,
             () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1, 'driver'));
           break;
@@ -14618,7 +14898,20 @@ export class BattleScene extends Component {
     if (items.length === 0) return;
 
     const ITEM_W = 180, ITEM_H = 40, GAP = 6;
-    const panelH = items.length * ITEM_H + (items.length - 1) * GAP;
+    // 两个转向按钮加上中间隔后总宽正好等于普通按钮，左右边缘对齐。
+    const TURN_ITEM_W = (ITEM_W - GAP) / 2;
+    const rows: Item[][] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const next = items[i + 1];
+      if (item.compactTurn && next?.compactTurn) {
+        rows.push([item, next]);
+        i++;
+      } else {
+        rows.push([item]);
+      }
+    }
+    const panelH = rows.length * ITEM_H + (rows.length - 1) * GAP;
 
     const panel = new Node('DiePopover');
     panel.layer = this.node.layer;
@@ -14629,50 +14922,58 @@ export class BattleScene extends Component {
     panel.setPosition(local.x, local.y + 96 + panelH / 2, 0);
     this.node.addChild(panel);
 
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      const btn = new Node(`DieAction${i}`);
-      btn.layer = this.node.layer;
-      btn.addComponent(UITransform).setContentSize(ITEM_W, ITEM_H);
-      btn.setPosition(0, panelH / 2 - ITEM_H / 2 - i * (ITEM_H + GAP), 0);
-      const bg = btn.addComponent(Graphics);
-      bg.fillColor = it.color;
-      bg.strokeColor = BTN_BORDER;
-      bg.lineWidth = 2;
-      bg.rect(-ITEM_W / 2, -ITEM_H / 2, ITEM_W, ITEM_H);
-      bg.fill();
-      bg.stroke();
-      const tn = new Node('Label');
-      tn.layer = this.node.layer;
-      tn.addComponent(UITransform).setContentSize(ITEM_W, ITEM_H);
-      const lab = tn.addComponent(Label);
-      lab.fontSize = 20;
-      lab.lineHeight = 24;
-      lab.color = HUD_TEXT_COLOR;
-      lab.horizontalAlign = HorizontalTextAlignment.CENTER;
-      lab.verticalAlign = VerticalTextAlignment.CENTER;
-      lab.overflow = Label.Overflow.SHRINK;
-      lab.string = this.fitTextForLabel(lab, it.text, ITEM_W);
-      btn.addChild(tn);
-      // 不满足条件的选项保持置灰且不可执行；点击时在按钮上方提示具体原因。
-      if (!it.unavailableReason) {
-        bindButtonPressScale(btn);
-        btn.on(Node.EventType.TOUCH_END, () => {
-          playUiClick();
-          it.onClick();
-        }, this);
-      } else {
-        bindButtonPressScale(btn);
-        // 灰色项不可执行，但仍需吞掉触摸，避免点按穿透到下方的地图格。
-        const swallowTouch = (event: EventTouch) => { event.propagationStopped = true; };
-        btn.on(Node.EventType.TOUCH_START, swallowTouch, this);
-        btn.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
-          event.propagationStopped = true;
-          playUiClick();
-          this.showDieActionUnavailable(it.unavailableReason!, btn);
-        }, this);
+    let itemIndex = 0;
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+      const row = rows[rowIndex];
+      for (let columnIndex = 0; columnIndex < row.length; columnIndex++) {
+        const it = row[columnIndex];
+        const itemW = row.length === 2 ? TURN_ITEM_W : ITEM_W;
+        const btn = new Node(`DieAction${itemIndex++}`);
+        btn.layer = this.node.layer;
+        btn.addComponent(UITransform).setContentSize(itemW, ITEM_H);
+        const x = row.length === 2
+          ? (columnIndex === 0 ? -1 : 1) * (TURN_ITEM_W + GAP) / 2
+          : 0;
+        btn.setPosition(x, panelH / 2 - ITEM_H / 2 - rowIndex * (ITEM_H + GAP), 0);
+        const bg = btn.addComponent(Graphics);
+        bg.fillColor = it.color;
+        bg.strokeColor = BTN_BORDER;
+        bg.lineWidth = 2;
+        bg.rect(-itemW / 2, -ITEM_H / 2, itemW, ITEM_H);
+        bg.fill();
+        bg.stroke();
+        const tn = new Node('Label');
+        tn.layer = this.node.layer;
+        tn.addComponent(UITransform).setContentSize(itemW, ITEM_H);
+        const lab = tn.addComponent(Label);
+        lab.fontSize = 20;
+        lab.lineHeight = 24;
+        lab.color = HUD_TEXT_COLOR;
+        lab.horizontalAlign = HorizontalTextAlignment.CENTER;
+        lab.verticalAlign = VerticalTextAlignment.CENTER;
+        lab.overflow = Label.Overflow.SHRINK;
+        lab.string = this.fitTextForLabel(lab, it.text, itemW);
+        btn.addChild(tn);
+        // 不满足条件的选项保持置灰且不可执行；点击时在按钮上方提示具体原因。
+        if (!it.unavailableReason) {
+          bindButtonPressScale(btn);
+          btn.on(Node.EventType.TOUCH_END, () => {
+            playUiClick();
+            it.onClick();
+          }, this);
+        } else {
+          bindButtonPressScale(btn);
+          // 灰色项不可执行，但仍需吞掉触摸，避免点按穿透到下方的地图格。
+          const swallowTouch = (event: EventTouch) => { event.propagationStopped = true; };
+          btn.on(Node.EventType.TOUCH_START, swallowTouch, this);
+          btn.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+            event.propagationStopped = true;
+            playUiClick();
+            this.showDieActionUnavailable(it.unavailableReason!, btn);
+          }, this);
+        }
+        panel.addChild(btn);
       }
-      panel.addChild(btn);
     }
     this.diePopover = panel;
     this.diePopoverDieIdx = idx;
@@ -15751,7 +16052,7 @@ export class BattleScene extends Component {
     return currentTargetFor(actor, this.aiTargetsFor(actor), this.aiMissionTargetsFor(actor), this.rng);
   }
 
-  /** 转向只追踪本车或友军无线电当前实际发现的敌人；无目标时朝对方固定出生格。 */
+  /** 转向优先追踪共享视野内敌人，其次上回合敌方最后攻击格，最后才是对方出生格。 */
   private currentAITurnTargetPosition(actor: Unit): Axial {
     if (!this.mission) return { ...actor.pos };
     const { map, smokeHexes, data } = this.mission;
@@ -15767,6 +16068,7 @@ export class BattleScene extends Component {
       target => visibleHexes.has(HexMap.keyOf(target.pos)),
       this.rng,
       data.rowParityOffset === 1 ? 1 : 0,
+      previousEnemyAttackPosition(this.attackPositionMemory, actor),
     );
   }
 
@@ -16746,6 +17048,7 @@ export class BattleScene extends Component {
     for (let i = 0; i < units.length; i++) {
       const u = units[i];
       const showEffectiveRange = getGameModeConfig(GameSession.gameMode).effectiveRangePenetration;
+      const showGunMantletArmor = getGameModeConfig(GameSession.gameMode).gunMantletArmor && isTankUnit(u);
       const unitTopY = y;
       this.addTileInspectUnitPreview(content, u, imageCX, unitTopY, 34);
       const title = t('tileInspect.currentUnit', { name: t(`unit.name.${u.kind}`) });
@@ -16764,12 +17067,16 @@ export class BattleScene extends Component {
         }
       } else {
         const st = u.stats;
-        const cols = showEffectiveRange ? 6 : 5;
+        const cols = 5 + (showGunMantletArmor ? 1 : 0) + (showEffectiveRange ? 1 : 0);
         const gap = 4;
         const colW = (textW - (cols - 1) * gap) / cols;
         const heads = [t('tileInspect.colFront'), t('tileInspect.colFrontSide'), t('tileInspect.colRearSide'),
           t('tileInspect.colRear'), t('tileInspect.colPen')];
         const values = [st.armorFront, st.armorFrontSide, st.armorRearSide, st.armorRear, st.penetration];
+        if (showGunMantletArmor) {
+          heads.push(t('tileInspect.colGunMantlet'));
+          values.push(st.gunMantletArmor ?? 0);
+        }
         if (showEffectiveRange) {
           heads.push(t('tileInspect.colEffectiveRange'));
           values.push(st.effectiveRange);
@@ -17545,7 +17852,7 @@ export class BattleScene extends Component {
   private openTurnEndEventsReference() {
     this.closeTileInspectModal();
     this.closeBattleModal();
-    const mid = this.missionId || this.mission?.data.id || '';
+    const mid = this.currentTurnEndMissionId();
     const theater = this.mission?.data.theater;
     const rows = this.turnEndEventProvider.rows(mid);
     const panelW = 560;
@@ -17937,6 +18244,7 @@ export class BattleScene extends Component {
       playerStep: this.playerStep as SavePlayerStep,
       hatchChangedThisTurn: this.hatchChangedThisTurn,
       phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+      attackPositionMemory: this.attackPositionMemory,
       missionSource: this.missionSource,
     });
     try {
@@ -17996,6 +18304,7 @@ export class BattleScene extends Component {
     this.attackDone   = (result.attacksLeft ?? 1) === 0;
     this.miscDone = result.miscDone ?? false;
     this.hatchChangedThisTurn = result.hatchChangedThisTurn ?? false;
+    this.attackPositionMemory = cloneAttackPositionMemory(result.attackPositionMemory);
     if (this.phase === 'player') {
       this.playerStep = (result.playerStep ?? 'choose') as PlayerStep;
       this.playerDiceRollAnim = null;
@@ -18786,6 +19095,7 @@ export class BattleScene extends Component {
       this.enterPvpWaitingForOpponent();
       return;
     }
+    advanceAttackPositionMemory(this.attackPositionMemory);
     this.turn += 1;
     this.clearDestroyWreckVisuals();
     // 清理敌方调度中间态
@@ -18863,7 +19173,10 @@ export class BattleScene extends Component {
       ...this.tankMachineGunContext(this.mission!.sherman, e),
     }).ok) : undefined;
 
-    if (attackOrMisc && this.hasTurretReconGunSelection()) {
+    const damagedTurretLegalMGAttack = this.mission.sherman.turretDamaged
+      && mgSel
+      && !!legalMGTarget;
+    if (attackOrMisc && this.hasTurretReconGunSelection() && !damagedTurretLegalMGAttack) {
       if (this.mission.sherman.turretDamaged) {
         this.showGunAimWarning('attack.reason.turretDamaged');
         return;
@@ -18974,7 +19287,7 @@ export class BattleScene extends Component {
       onDone();
       return;
     }
-    if (selection.weapon === 'coaxial') {
+    if (selection.weapon !== 'hull') {
       this.startShermanTurretAim(target, onDone);
       return;
     }
@@ -19075,7 +19388,7 @@ export class BattleScene extends Component {
       onDone();
       return;
     }
-    if (selection.weapon === 'coaxial') {
+    if (selection.weapon !== 'hull') {
       this.startEnemyTurretAim(actor, target, onDone);
       return;
     }
@@ -19269,10 +19582,10 @@ export class BattleScene extends Component {
     // 真正 applyAttack / 消耗骰子 / 推进胜负判定全部放到 onDone 里执行，
     // 这样动画过程中玩家看到的状态（骰子托盘 / 敌人图示）不会提前变。
     if (suppressionAttack) {
-      markAmbushAction(sherman);
-      markAmbushTargeted(target);
       this.startShermanTurretAim(target, () => {
         if (!this.mission || target.destroyed) return;
+        markAmbushAction(sherman);
+        markAmbushTargeted(target);
         this.playHighExplosiveSuppressionCue(sherman, target);
         this.usePhaseDice([gunDieIdx]);
         sherman.loaded = false;
@@ -19298,8 +19611,6 @@ export class BattleScene extends Component {
     }
 
     const ambushModifier = ambushHitThresholdModifier(sherman, GameSession.gameMode);
-    markAmbushAction(sherman);
-    markAmbushTargeted(target);
     if (ambushModifier < 0) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.ambush'),
         new Color(255, 220, 120, 255), { size: 32, dur: 1.0, rise: 44 });
@@ -19318,6 +19629,7 @@ export class BattleScene extends Component {
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
+      gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
     }, this.rng);
     // 瞄准与开火动画期间保留主炮骰的选中态；进入结果展示后再统一消耗。
@@ -19360,6 +19672,10 @@ export class BattleScene extends Component {
       });
     };
     this.startShermanTurretAim(target, () => {
+      // 旋转期间目标头顶仍展示这次已锁定的伏击命中需求。
+      // 到炮塔完成瞄准、即将开火时才消耗伏击资格，使其只影响下次预览。
+      markAmbushAction(sherman);
+      markAmbushTargeted(target);
       if (precisionFire) {
         this.beginPrecisionAimHold(sherman, target, sherman.stats.attackSound, report, showDice);
       } else {
@@ -19483,6 +19799,7 @@ export class BattleScene extends Component {
       sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
+      gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
     };
     const precisionPartnerIdx = !opts.adjacentOnly
@@ -20040,7 +20357,8 @@ export class BattleScene extends Component {
       return {
         title: t('dice.rule.penNeedTitle'),
         w: 460,
-        h: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration ? 420 : 250,
+        h: (getGameModeConfig(GameSession.gameMode).effectiveRangePenetration ? 420 : 250)
+          + ((r.gunMantletArmor ?? 0) > 0 ? 36 : 0),
         rows: [],
         total: [t('dice.rule.penNeed'), String(need)],
       };
@@ -20064,6 +20382,8 @@ export class BattleScene extends Component {
   private populateDiceRulePen(panel: Node, show: DiceShow, startY: number, panelW: number): number {
     const report = show.report;
     const armor = report.armor ?? 0;
+    const gunMantletArmor = Math.max(0, report.gunMantletArmor ?? 0);
+    const baseArmor = armor - gunMantletArmor;
     const actualPen = report.penetration ?? show.attacker?.stats.penetration ?? 0;
     const need = report.penThreshold ?? armor - actualPen;
     const labelX = -panelW * 0.24;
@@ -20092,7 +20412,10 @@ export class BattleScene extends Component {
       y -= 20;
     }
 
-    addRow(t('dice.rule.armorLine', { face: this.armorFaceText(report.armorFace) }), armor);
+    addRow(t('dice.rule.armorLine', { face: this.armorFaceText(report.armorFace) }), baseArmor);
+    if (gunMantletArmor > 0) {
+      addRow(t('dice.rule.gunMantletArmor'), gunMantletArmor);
+    }
     addRow(t('dice.rule.actualPen'), actualPen);
     this.drawDiceRuleDivider(panel, panelW, y + 16);
     y -= 18;

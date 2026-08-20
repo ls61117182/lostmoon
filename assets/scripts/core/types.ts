@@ -227,6 +227,8 @@ export interface UnitStats {
   armorFrontSide: number;  // 前侧装甲
   armorRearSide: number;   // 后侧装甲
   armorRear: number;       // 后装甲
+  /** 炮盾附加装甲；仅硬核模式下、来袭方向位于炮塔朝向 +/-30 度时计入。 */
+  gunMantletArmor?: number;
   penetration: number;     // 穿甲值
   effectiveRange: number;  // 有效射程；超出后每格使本次攻击穿甲值 -1
   /** Maximum turret traverse per action, in 30-degree steps (0..6). */
@@ -330,8 +332,8 @@ export interface Unit {
   ignoreCrewCheckDamage?: boolean;
   /** Campaign mine roller: all road/clear mine event damage is ignored. */
   campaignMineDamageImmune?: boolean;
-  /** Campaign camouflage net: hidden unit cannot be targeted from range 0..2. */
-  campaignHiddenCloseRangeUntargetable?: boolean;
+  /** Campaign camouflage net: hidden unit cannot be targeted beyond range 2. */
+  campaignHiddenLongRangeUntargetable?: boolean;
   /** Campaign reinforced transmission: turn-end mechanical failure is ignored. */
   campaignMechanicalFailureImmune?: boolean;
   /** One-shot per-segment protection against a paralyzed result from applyAttack. */

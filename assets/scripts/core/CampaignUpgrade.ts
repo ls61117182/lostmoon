@@ -67,10 +67,11 @@ export function applyCampaignUpgradesToSherman(sherman: Unit, ids: readonly Camp
       + def.gunnerVisionBonus;
     sherman.stats.armorFrontSide += def.armorFrontSideBonus;
     sherman.stats.armorRearSide += def.armorRearSideBonus;
+    sherman.stats.gunMantletArmor = (sherman.stats.gunMantletArmor ?? 0) + def.gunMantletArmorBonus;
     if (def.ignoreDestroyed) sherman.ignoreDestroyedDamage = true;
     if (def.ignoreCrewCheck) sherman.ignoreCrewCheckDamage = true;
     if (def.mineDamageImmune) sherman.campaignMineDamageImmune = true;
-    if (def.hiddenCloseRangeUntargetable) sherman.campaignHiddenCloseRangeUntargetable = true;
+    if (def.hiddenLongRangeUntargetable) sherman.campaignHiddenLongRangeUntargetable = true;
     if (def.mechanicalFailureImmune) sherman.campaignMechanicalFailureImmune = true;
     if (def.ignoreFirstAttackParalyzedPerSegment) sherman.campaignParalyzedProtectionAvailable = true;
     if (def.commanderShieldPerSegment) sherman.campaignCommanderShieldAvailable = true;

@@ -10,7 +10,7 @@ const runtime = read('assets/scripts/core/CampaignUpgrade.ts');
 const turnEnd = read('assets/scripts/core/TurnEndEventApply.ts');
 const csvLines = read('data/campaign_upgrades.csv').trim().split(/\r?\n/);
 
-assert.strictEqual(csvLines.length, 18, 'upgrade table should contain exactly 17 upgrades plus its header');
+assert.strictEqual(csvLines.length, 19, 'upgrade table should contain exactly 18 upgrades plus its header');
 assert(scene.includes("GameSession.gameMode === 'hardcore'"), 'campaign upgrades must be gated to hardcore mode');
 assert(scene.includes('campaignUpgradeSelectedIndex = 1'), 'the middle card should be selected by default');
 assert(scene.includes("t('campaignUpgrade.confirm')"), 'selection should use an explicit confirmation button');
@@ -39,15 +39,18 @@ assert(scene.includes("id === 'emergency_medical_kit'")
   && scene.includes('reviveFirstCampaignCrewMember'), 'medical kit should revive crew at segment entry/acquisition');
 assert(scene.includes('upgrade_icons_atlas_v1/spriteFrame'), 'upgrade cards should load the illustrated icon atlas');
 assert(scene.includes('upgrade_icons_atlas_v2/spriteFrame'), 'new upgrade cards should load the extension icon atlas');
+assert(scene.includes("'new_gun_mantlet',"), 'new gun mantlet should use the final V2 atlas icon cell');
 assert(fs.existsSync(path.join(root, 'assets/resources/textures/ui/campaign_upgrades/upgrade_icons_atlas_v1.png')),
   'illustrated upgrade icon atlas should exist');
 assert(fs.existsSync(path.join(root, 'assets/resources/textures/ui/campaign_upgrades/upgrade_icons_atlas_v2.png')),
   'extension upgrade icon atlas should exist');
 assert(combat.includes('isDamageEffectSuppressed'), 'damage resolution should honor protected damage results');
-assert(combat.includes('campaignHiddenCloseRangeUntargetable')
+assert(combat.includes('campaignHiddenLongRangeUntargetable')
   && combat.includes('campaignParalyzedProtectionAvailable')
   && combat.includes('commanderShieldBlocked'), 'combat should enforce camouflage, paralysis, and commander protections');
 assert(runtime.includes('armorFrontSideBonus') && runtime.includes('armorRearSideBonus'), 'side skirts should modify both side armor faces');
+assert(runtime.includes('gunMantletArmorBonus') && combat.includes('gunMantletArmorBonus'),
+  'new gun mantlet should modify armor and be resolved by the hardcore combat arc rule');
 assert(turnEnd.includes('campaignMineDamageImmune')
   && turnEnd.includes("'turnEnd.mine.protected'")
   && turnEnd.includes("'turnEnd.clearMine.protected'"), 'mine roller should block both mine event types');

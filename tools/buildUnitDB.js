@@ -18,7 +18,7 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
 
-const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'penetration', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
+const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'commanderSpritePath', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
@@ -298,6 +298,7 @@ function build() {
       `armorFrontSide: ${r.armorFrontSide}, ` +
       `armorRearSide: ${r.armorRearSide}, ` +
       `armorRear: ${r.armorRear}, ` +
+      `gunMantletArmor: ${r.gunMantletArmor}, ` +
       `penetration: ${r.penetration}, ` +
       `effectiveRange: ${r.effectiveRange}, ` +
       `turretTraverseSpeed: ${r.turretTraverseSpeed}, ` +

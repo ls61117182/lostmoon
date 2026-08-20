@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tank-art-manifest.schema.json",
+  "title": "Single-tank art preparation manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "inputs", "processing", "sourceGeometry"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "kind": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "notes": { "type": "string" },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hull", "turret", "destroyed"],
+      "properties": {
+        "hull": { "$ref": "#/$defs/input" },
+        "turret": { "$ref": "#/$defs/input" },
+        "destroyed": { "$ref": "#/$defs/input" },
+        "paintReference": { "type": "string" }
+      }
+    },
+    "processing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alphaThreshold", "commonScale", "outlinePixels"],
+      "properties": {
+        "alphaThreshold": { "type": "integer", "minimum": 1, "maximum": 255 },
+        "commonScale": { "type": "number", "exclusiveMinimum": 0, "maximum": 4 },
+        "outlinePixels": { "type": "integer", "minimum": 0, "maximum": 8 },
+        "hullPadding": { "$ref": "#/$defs/padding" },
+        "turretPadding": { "$ref": "#/$defs/padding" }
+      }
+    },
+    "sourceGeometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hullPivot", "turretPivot", "muzzle", "commanderHatch"],
+      "properties": {
+        "hullPivot": { "$ref": "#/$defs/point" },
+        "turretPivot": { "$ref": "#/$defs/point" },
+        "muzzle": { "$ref": "#/$defs/point" },
+        "commanderHatch": { "$ref": "#/$defs/point" }
+      }
+    }
+  },
+  "$defs": {
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "background"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "background": { "enum": ["alpha", "chroma"] }
+      }
+    },
+    "padding": {
+      "type": "array",
+      "prefixItems": [
+        { "type": "integer", "minimum": 0 },
+        { "type": "integer", "minimum": 0 },
+        { "type": "integer", "minimum": 0 },
+        { "type": "integer", "minimum": 0 }
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "point": {
+      "type": "array",
+      "prefixItems": [{ "type": "number" }, { "type": "number" }],
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}

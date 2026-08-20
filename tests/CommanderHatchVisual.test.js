@@ -26,7 +26,9 @@ try {
     SPLIT_TANK_KINDS,
     commanderHatchRenderedScaleCoefficient,
     emptyCommanderHatchScaleOf,
+    tankVisualConfigOf,
   } = require('../assets/scripts/core/TankVisualDB.ts');
+  const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
 
   const tank = {
     kind: 'sherman',
@@ -174,8 +176,9 @@ try {
     t34: 0.35986913849509267,
     tiger: 0.5366957470010905,
     tigerking: 0.529677519862907,
-    maus: 0.48099392428727217,
-    panzer4: 0.47655398037077423,
+    maus: 0.5569403333852626,
+    panther: 0.4598926283299579,
+    panzer4: 0.40400196145879835,
     panzer3: 0.48372020563950774,
     type97: 0.4556784545879421,
     type95: 0.38985823336968384,
@@ -185,6 +188,29 @@ try {
     assert.ok(commanderHatchRenderedScaleCoefficient(kind) > 0);
     assert.ok(Math.abs(emptyCommanderHatchScaleOf(kind, 0.5) - expectedEmptyScales[kind]) < 1e-12);
   }
+
+  const stugVisual = tankVisualConfigOf('stug3');
+  assert.deepStrictEqual(
+    {
+      x: stugVisual.commanderHatchSpriteX,
+      y: stugVisual.commanderHatchSpriteY,
+      scale: stugVisual.commanderHatchScale,
+    },
+    { x: 114, y: 60, scale: 24 },
+    'StuG III commander overlay must be anchored to the fixed superstructure cupola',
+  );
+  assert.strictEqual(
+    getUnitStats('stug3').commanderSpritePath,
+    'textures/units/german_commander_hatch_open/spriteFrame',
+  );
+
+  const battleSceneSource = fs.readFileSync(
+    require.resolve('../assets/scripts/view/BattleScene.ts'),
+    'utf8',
+  );
+  assert.match(battleSceneSource, /TANK_VISUAL_KINDS\s*\n\s*\.map\(\(kind\) => getUnitStats\(kind\)\.commanderSpritePath/);
+  assert.match(battleSceneSource, /private applyFixedTankCommanderHatchSprite[\s\S]*?cfg\.commanderHatchSpriteX[\s\S]*?cfg\.commanderHatchSpriteY/);
+  assert.match(battleSceneSource, /this\.applyTopDownTankSprite\([\s\S]*?this\.applyFixedTankCommanderHatchSprite\(/);
 
   console.log('Commander hatch visual tests passed.');
 } finally {

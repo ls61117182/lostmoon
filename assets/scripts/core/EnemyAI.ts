@@ -261,9 +261,10 @@ export function visibleAITurnTargetPositionFor(
   isVisible: (candidate: Unit) => boolean,
   rng: RNG,
   rowParityOffset: 0 | 1 = 0,
+  unseenFallback?: Axial,
 ): Axial {
   const target = currentTargetFor(actor, candidates.filter(isVisible), missionTargets, rng);
-  return target?.pos ?? fallbackAITurnTargetPosition(actor, rowParityOffset);
+  return target?.pos ?? unseenFallback ?? fallbackAITurnTargetPosition(actor, rowParityOffset);
 }
 
 export function selectAIOrder(

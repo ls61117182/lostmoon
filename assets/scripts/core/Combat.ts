@@ -94,6 +94,8 @@ export interface AttackReport {
   /** 命中分段：以下字段仅在 hit=true 时有值 */
   armorFace?: ArmorFace;
   armor?: number;
+  /** 本次实际计入总装甲的炮盾附加值；UI 用它把基础装甲与炮盾分行展示。 */
+  gunMantletArmor?: number;
   penetration?: number;
   /** 穿甲检定分段：仅在 hit=true 时有值 */
   penDie?: number;          // 击穿掷骰总和（2d6）
@@ -144,6 +146,8 @@ export interface AttackContext {
   expandedTurretDirections?: boolean;
   /** Hardcore rule: Step 3 damage-table selection may depend on incoming-fire direction. */
   directionalDamageCheck?: boolean;
+  /** Hardcore rule: a turreted tank may add its gun-mantlet armor in the turret's +/-30 degree arc. */
+  gunMantletArmor?: boolean;
   /** Hardcore rule: Step 3 target class may come from units.csv. */
   unitDamageTargetClass?: boolean;
   /** Hardcore rule: a controlled AT gun exposes its three-man operator group to MG fire. */
@@ -152,7 +156,7 @@ export interface AttackContext {
   hardcoreTankMachineGuns?: boolean;
   /** Weapon selected for this tank MG attack. */
   tankMachineGun?: TankMachineGun;
-  /** The intact turret will reach the target direction before coaxial MG fire. */
+  /** The intact turret will reach the target direction before coaxial or combined MG fire. */
   tankMachineGunWillTraverse?: boolean;
   /** Hardcore rule: infantry may attack an enemy tank sharing its hex. */
   sameHexInfantryTankAttack?: boolean;
@@ -162,7 +166,7 @@ export interface AttackContext {
   attackKind?: 'main' | 'mg';
 }
 
-export type TankMachineGun = 'hull' | 'coaxial';
+export type TankMachineGun = 'hull' | 'coaxial' | 'both';
 
 export interface TankMachineGunSelection {
   weapon: TankMachineGun;
@@ -170,7 +174,7 @@ export interface TankMachineGunSelection {
   rotateTurret: boolean;
 }
 
-/** Select the fixed hull MG or turret coaxial MG under hardcore rules. */
+/** Select the fixed hull MG, turret coaxial MG, or both under hardcore rules. */
 export function selectTankMachineGun(
   attacker: Unit,
   targetDirection: FireDirection,
@@ -179,9 +183,16 @@ export function selectTankMachineGun(
   if (!isTankUnit(attacker) || attacker.facing === null) return null;
   const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection;
   const hullMachineGunOperational = attacker.crew?.coDriver !== false;
-  // When both weapons align, the fixed hull MG has priority only if its
-  // co-driver gunner is still alive.
+  // A forward target uses both guns only when the intact turret is already
+  // aligned or can finish aligning during this action. Otherwise the hull MG
+  // may fire alone while an intact turret still attempts its partial traverse.
   if (hullMachineGunOperational && targetDirection === attacker.facing) {
+    if (!attacker.turretDamaged && (turretFacing === targetDirection || turretCanReachTarget)) {
+      return {
+        weapon: 'both',
+        rotateTurret: turretFacing !== targetDirection,
+      };
+    }
     return {
       weapon: 'hull',
       rotateTurret: !attacker.turretDamaged && turretFacing !== targetDirection,
@@ -302,9 +313,9 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const sameHexInfantryTankAttack = isSameHexInfantryTankAttack(ctx);
   const distance = hexDistance(attacker.pos, target.pos);
   if (target.hidden
-    && target.campaignHiddenCloseRangeUntargetable === true
+    && target.campaignHiddenLongRangeUntargetable === true
     && attacker.faction !== target.faction
-    && distance <= 2) {
+    && distance > 2) {
     return { ok: false, reason: 'attack.reason.camouflageNet' };
   }
   if (distance === 0 && !sameHexInfantryTankAttack) {
@@ -521,6 +532,42 @@ export function armorValue(target: Unit, face: ArmorFace): number {
   }
 }
 
+/**
+ * Resolve the incoming shot direction on the same 12-step compass used by
+ * hardcore turrets. The selected red/blue flank hexes beside a halfway ray
+ * deliberately inherit that ray, so both sides of (for example) a 90-degree
+ * shot are treated as exactly 90 degrees rather than being rounded apart.
+ */
+function incomingFireDirectionStepFor(ctx: AttackContext): number | null {
+  if (hexDistance(ctx.attacker.pos, ctx.target.pos) === 0) return null;
+  const flankDirection = ctx.expandedTurretDirections
+    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather, ctx.smokeHexes)
+    : null;
+  const outgoing = flankDirection
+    ?? fireDirectionTo(ctx.attacker.pos, ctx.target.pos)
+    ?? approximateFireDirection(ctx.attacker.pos, ctx.target.pos);
+  return (fireDirectionStep(outgoing) + 6) % 12;
+}
+
+export function gunMantletArmorBonus(ctx: AttackContext): number {
+  const { target } = ctx;
+  const bonus = target.stats.gunMantletArmor ?? 0;
+  if (!ctx.gunMantletArmor
+    || bonus <= 0
+    || !isTankUnit(target)
+    || target.stats.visionType !== 'turreted') return 0;
+  const incomingStep = incomingFireDirectionStepFor(ctx);
+  const turretFacing = target.turretFacing ?? target.facing;
+  if (incomingStep === null || turretFacing === null) return 0;
+  const delta = Math.abs(incomingStep - fireDirectionStep(turretFacing));
+  const shortestDelta = Math.min(delta, 12 - delta);
+  return shortestDelta <= 1 ? bonus : 0;
+}
+
+function effectiveArmorValue(ctx: AttackContext, face: ArmorFace): number {
+  return armorValue(ctx.target, face) + gunMantletArmorBonus(ctx);
+}
+
 function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfiguredClass = false): DamageTargetClass | null {
   if (protagonistTarget) return 'protagonist';
   if (useConfiguredClass && target.stats.damageTargetClass) return target.stats.damageTargetClass as DamageTargetClass;
@@ -625,7 +672,8 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const damageCheckType = ctx.directionalDamageCheck ? directionRule.damageCheckType : undefined;
   const damageTable = damageCheckType ?? 'front';
   const targetClass = damageCheckType ? damageTargetClassFor(target, protagonistTarget, ctx.unitDamageTargetClass) : null;
-  const armor = armorValue(target, face);
+  const gunMantletArmor = gunMantletArmorBonus(ctx);
+  const armor = armorValue(target, face) + gunMantletArmor;
   const pen = effectivePenetration(attacker, target, ctx.effectiveRangePenetration);
 
   // 第二段：穿甲检定。Europe / Pacific 统一使用 2d6。
@@ -668,7 +716,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   if (!hit) {
     return {
       dice: [d1, d2], roll, threshold, hit: false, hitBreakdown: lockedHitBreakdown, hitModifiers,
-      armorFace: face, armor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -683,7 +731,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
-      armorFace: face, armor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -699,7 +747,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       return {
         dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
         hit: true,
-        armorFace: face, armor, penetration: pen,
+        armorFace: face, armor, gunMantletArmor, penetration: pen,
         damageCheckType,
         penDie, penDice, penThreshold, penetrated,
         damageEffects: [],
@@ -713,7 +761,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
-      armorFace: face, armor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated,
       damageEffect: 'destroyed',
@@ -734,7 +782,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
-      armorFace: face, armor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated,
       damageDie, damageEffects,
@@ -753,7 +801,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   return {
     dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
     hit: true,
-    armorFace: face, armor, penetration: pen,
+    armorFace: face, armor, gunMantletArmor, penetration: pen,
     damageCheckType,
     penDie, penDice, penThreshold, penetrated,
     damageDie, damageEffect, damageEffects,
@@ -1022,7 +1070,7 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 // 相对主炮攻击的差异：
 //   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵），且必须在 2 格内的同一直线可视范围内
 //   - 单段 1d6 检定：点数 ≥ 命中公式 = 命中；命中即直接击毙（徒步单位无装甲）
-//   - 吃距离 / 树篱 / 建筑 / 烟雾 / 隐蔽修正；目标在正面时命中所需 -1
+//   - 吃距离 / 树篱 / 建筑 / 烟雾 / 隐蔽修正；硬核坦克仅两挺机枪齐射时命中所需 -1
 //   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
 //
 // canMGAttack 返回的 reason 同样是 i18n key，由 UI 层翻译。
@@ -1081,11 +1129,18 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
   if (ctx.hardcoreTankMachineGuns && isTankUnit(attacker)) {
     const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection | null;
+    const hullMachineGunOperational = attacker.crew?.coDriver !== false;
     if (!ctx.tankMachineGun
-      || (ctx.tankMachineGun === 'hull' && fireDir !== attacker.facing)
+      || (ctx.tankMachineGun === 'hull'
+        && (!hullMachineGunOperational || fireDir !== attacker.facing))
       || (ctx.tankMachineGun === 'coaxial'
         && fireDir !== turretFacing
-        && (attacker.turretDamaged || !ctx.tankMachineGunWillTraverse))) {
+        && (attacker.turretDamaged || !ctx.tankMachineGunWillTraverse))
+      || (ctx.tankMachineGun === 'both'
+        && (!hullMachineGunOperational
+          || attacker.turretDamaged
+          || fireDir !== attacker.facing
+          || (fireDir !== turretFacing && !ctx.tankMachineGunWillTraverse)))) {
       return { ok: false, reason: 'attack.reason.mgDirection' };
     }
   }
@@ -1117,7 +1172,7 @@ export function mgHitThreshold(ctx: AttackContext): number {
 
 export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
   const frontArcModifier = ctx.hardcoreTankMachineGuns && isTankUnit(ctx.attacker)
-    ? (ctx.tankMachineGun === 'hull' ? -1 : 0)
+    ? (ctx.tankMachineGun === 'both' ? -1 : 0)
     : (isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0);
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
   const hitContext = atGunCrewTarget
@@ -1198,7 +1253,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
 
   const directionRule = attackDirectionRuleFor(ctx);
   const face = directionRule.armorFace;
-  const armor = armorValue(ctx.target, face);
+  const armor = effectiveArmorValue(ctx, face);
   const pen = effectivePenetration(ctx.attacker, ctx.target, ctx.effectiveRangePenetration);
   const penThreshold = armor - pen;
   const penProb = probHit2d6(penThreshold);

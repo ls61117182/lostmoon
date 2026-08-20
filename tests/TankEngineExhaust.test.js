@@ -23,6 +23,7 @@ const {
   TANK_EXHAUST_RADIUS_SCALE,
   advanceTankExhaustParticle,
   resetTankExhaustParticle,
+  sampleTankExhaustTrailFractions,
   tankExhaustParticleAlpha,
   tankExhaustParticleRadius,
   tankExhaustPortWorldPosition,
@@ -31,8 +32,8 @@ const {
 assert.strictEqual(TANK_EXHAUST_RADIUS_SCALE, 2.5, 'exhaust radius should be 2.5 times the original');
 assert.strictEqual(TANK_EXHAUST_LIFETIME_SCALE, 1.5, 'exhaust lifetime should be 150% of the original');
 assert.strictEqual(TANK_EXHAUST_IDLE_RATE, 2.75, 'idle emission frequency should remain at 100% of the original');
-assert.strictEqual(TANK_EXHAUST_MOVING_RATE, 45, 'moving emission frequency should be 45 cycles per second');
-assert.strictEqual(TANK_EXHAUST_MAX_PARTICLES, 384, 'the pool should cover simultaneous twin-port high-frequency smoke');
+assert.strictEqual(TANK_EXHAUST_MOVING_RATE, 15, 'distance sampling should replace the former 45-cycle particle flood');
+assert.strictEqual(TANK_EXHAUST_MAX_PARTICLES, 384, 'the fixed pool should cover simultaneous twin-port smoke');
 
 assert.deepStrictEqual(
   tankExhaustPortWorldPosition(100, 50, 1, 0, { forward: -0.4, right: 0.1 }, 100),
@@ -71,16 +72,26 @@ assert(tankExhaustParticleAlpha(particle) > 0, 'mid-life smoke should remain vis
 advanceTankExhaustParticle(particle, particle.lifetime);
 assert.strictEqual(particle.active, false, 'expired particles must return to the fixed pool');
 
+const fractions = [];
+let carried = sampleTankExhaustTrailFractions(6, 10, 0, fractions);
+assert.deepStrictEqual(fractions, [], 'a short first frame should carry distance without emitting early');
+assert.strictEqual(carried, 6);
+carried = sampleTankExhaustTrailFractions(6, 10, carried, fractions);
+assert.deepStrictEqual(fractions, [4 / 6], 'the next frame should interpolate the missing spatial sample');
+assert.strictEqual(carried, 2);
+carried = sampleTankExhaustTrailFractions(28, 10, carried, fractions);
+assert.deepStrictEqual(fractions, [8 / 28, 18 / 28, 1], 'large frame movement should be filled at even distances');
+assert.strictEqual(carried, 0);
+
 const dbSource = fs.readFileSync(path.join(root, 'assets/scripts/core/TankVisualDB.ts'), 'utf8');
 assert(dbSource.includes('exhaustPorts: readonly { forward: number; right: number }[];'));
 assert(dbSource.includes('sherman: { fitScale: 0.76'));
-assert(dbSource.includes('exhaustPorts: [{ forward: -0.36, right: 0.1 }, { forward: -0.36, right: -0.1 }]'));
+assert(dbSource.includes('exhaustPorts: [{ forward: -0.36, right: 0.07 }, { forward: -0.36, right: -0.07 }]'));
 assert(dbSource.includes('at_gun: { fitScale: 0.6'));
-assert(dbSource.includes('at_gun: { fitScale: 0.6') && dbSource.includes('exhaustPorts: []'));
+assert(dbSource.includes('exhaustPorts: [{ forward: 0, right: 0 }, { forward: 0, right: 0 }]'));
 
 const menuSource = fs.readFileSync(path.join(root, 'assets/scripts/view/MainMenuScene.ts'), 'utf8');
 for (const key of [
-  'exhaustPortCount',
   'exhaustPort1Forward',
   'exhaustPort1Right',
   'exhaustPort2Forward',
@@ -90,13 +101,22 @@ for (const key of [
 }
 assert(menuSource.includes("new Node('TankEngineExhaustPreview')"));
 assert(menuSource.includes('addExhaustPortDots(previewRoot)'));
+assert(menuSource.includes('].filter(port => port.forward !== 0)'));
+assert(!menuSource.includes("| 'exhaustPortCount'"), 'the redundant port-count control should be removed');
 
 const battleSource = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
 assert(battleSource.includes("new Node('TankEngineExhaust')"));
 assert(battleSource.includes('this.advanceTankEngineExhaust(dt);'));
 assert(battleSource.includes("this.anim?.unit === unit && this.anim.kind === 'move'"));
 assert(battleSource.includes('|| isAbandonedTank(unit)'));
-assert(battleSource.includes('for (const port of config.exhaustPorts)'));
-assert(battleSource.includes('const particle = this.tankExhaustParticles.find(candidate => !candidate.active);'));
+assert(battleSource.includes('sampleTankExhaustTrailFractions('));
+assert(battleSource.includes('const particleIndex = this.tankExhaustFreeIndices.pop();'));
+assert(!battleSource.includes('this.tankExhaustParticles.find(candidate => !candidate.active)'), 'spawning must not scan the whole pool');
+assert(battleSource.includes('this.tankExhaustDrawBuckets[bucketIndex]!.push(particleIndex)'));
+assert(battleSource.includes('g.fillColor = this.tankExhaustBodyColors[bucketIndex]!'));
+assert(
+  !battleSource.includes('g.fillColor = new Color(shade, shade, Math.max(0, shade - 7), alpha);'),
+  'exhaust draw loop should reuse prebuilt colors',
+);
 
 console.log('Tank engine exhaust tests passed');

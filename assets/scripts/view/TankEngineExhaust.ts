@@ -25,7 +25,8 @@ export interface TankExhaustParticle {
 export const TANK_EXHAUST_MAX_PARTICLES = 384;
 /** Idle keeps the original restrained cadence; movement uses a dense trail cadence. */
 export const TANK_EXHAUST_IDLE_RATE = 2.75;
-export const TANK_EXHAUST_MOVING_RATE = 45;
+/** Spatial interpolation keeps the trail continuous without the former 45 Hz particle flood. */
+export const TANK_EXHAUST_MOVING_RATE = 15;
 /** Smoke radius relative to the original exhaust implementation. */
 export const TANK_EXHAUST_RADIUS_SCALE = 2.5;
 /** Puff lifetime relative to the original exhaust implementation. */
@@ -39,13 +40,39 @@ export function tankExhaustPortWorldPosition(
   forwardY: number,
   port: TankExhaustPort,
   offsetUnit: number,
+  out: TankExhaustPoint = { x: 0, y: 0 },
 ): TankExhaustPoint {
   const rightX = forwardY;
   const rightY = -forwardX;
-  return {
-    x: centerX + (forwardX * port.forward + rightX * port.right) * offsetUnit,
-    y: centerY + (forwardY * port.forward + rightY * port.right) * offsetUnit,
-  };
+  out.x = centerX + (forwardX * port.forward + rightX * port.right) * offsetUnit;
+  out.y = centerY + (forwardY * port.forward + rightY * port.right) * offsetUnit;
+  return out;
+}
+
+/**
+ * Append normalized positions that are evenly spaced along one frame's movement.
+ * The returned remainder carries unfinished spacing into the next frame, preventing
+ * frame-rate-dependent gaps without increasing the nominal emission frequency.
+ */
+export function sampleTankExhaustTrailFractions(
+  segmentLength: number,
+  spacing: number,
+  carriedDistance: number,
+  out: number[],
+): number {
+  out.length = 0;
+  const length = Math.max(0, segmentLength);
+  const safeSpacing = Math.max(0.001, spacing);
+  let carried = Math.max(0, carriedDistance) % safeSpacing;
+  if (length <= 0.0001) return carried;
+
+  let distance = carried > 0 ? safeSpacing - carried : safeSpacing;
+  while (distance <= length + 0.0001) {
+    out.push(Math.max(0, Math.min(1, distance / length)));
+    distance += safeSpacing;
+  }
+  carried = (carried + length) % safeSpacing;
+  return carried;
 }
 
 /** Stable, inexpensive pseudo-random value for presentation-only particle variation. */

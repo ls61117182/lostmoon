@@ -1,0 +1,34 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "panzer4",
+  "notes": "Copy this file to data/tank_art/<kind>.json and replace every source path and source-space point with values from the selected geometry-authority images.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/panzer4/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/panzer4/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/panzer4/destroyed-from-hull.png",
+      "background": "alpha"
+    },
+    "paintReference": "assets/resources/textures/units/panzer4_top_hull.png"
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.1,
+    "outlinePixels": 1,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [500, 250],
+    "turretPivot": [360, 190],
+    "muzzle": [0, 190],
+    "commanderHatch": [460, 190]
+  }
+}

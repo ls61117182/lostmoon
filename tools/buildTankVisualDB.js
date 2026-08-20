@@ -49,7 +49,6 @@ const NUM_FIELDS = [
   'commanderHatchSpriteX',
   'commanderHatchSpriteY',
   'commanderHatchScale',
-  'exhaustPortCount',
   'exhaustPort1Forward',
   'exhaustPort1Right',
   'exhaustPort2Forward',
@@ -191,9 +190,6 @@ function build() {
         ? numberOrDefault(rec, field, 1)
         : numberOrThrow(rec, field);
     }
-    if (!Number.isInteger(rec.exhaustPortCount) || rec.exhaustPortCount < 0 || rec.exhaustPortCount > 2) {
-      throw new Error(`row ${rec.__row} ${rec.kind}: exhaustPortCount must be an integer from 0 to 2`);
-    }
     for (const field of STRING_FIELDS) {
       rec[field] = rec[field] || '';
     }
@@ -241,6 +237,9 @@ function build() {
   lines.push('  destroyedOffsetForward: number;');
   lines.push('  destroyedOffsetRight: number;');
   lines.push('  destroyedFitScale: number;');
+  lines.push('  commanderHatchSpriteX: number;');
+  lines.push('  commanderHatchSpriteY: number;');
+  lines.push('  commanderHatchScale: number;');
   lines.push('  exhaustPorts: readonly { forward: number; right: number }[];');
   lines.push('}');
   lines.push('');
@@ -272,6 +271,9 @@ function build() {
   lines.push('  destroyedOffsetForward: 0,');
   lines.push('  destroyedOffsetRight: 0,');
   lines.push('  destroyedFitScale: 1,');
+  lines.push('  commanderHatchSpriteX: 0,');
+  lines.push('  commanderHatchSpriteY: 0,');
+  lines.push('  commanderHatchScale: 0,');
   lines.push('  exhaustPorts: [],');
   lines.push('};');
   lines.push('');
@@ -288,11 +290,11 @@ function build() {
     const exhaustPorts = [
       { forward: r.exhaustPort1Forward, right: r.exhaustPort1Right },
       { forward: r.exhaustPort2Forward, right: r.exhaustPort2Right },
-    ].slice(0, r.exhaustPortCount);
+    ];
     const exhaustLiteral = exhaustPorts
       .map(port => `{ forward: ${emitNum(port.forward)}, right: ${emitNum(port.right)} }`)
       .join(', ');
-    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)}, exhaustPorts: [${exhaustLiteral}] },`);
+    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)}, commanderHatchSpriteX: ${emitNum(r.commanderHatchSpriteX)}, commanderHatchSpriteY: ${emitNum(r.commanderHatchSpriteY)}, commanderHatchScale: ${emitNum(r.commanderHatchScale)}, exhaustPorts: [${exhaustLiteral}] },`);
   }
   lines.push('};');
   lines.push('');

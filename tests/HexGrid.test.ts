@@ -492,6 +492,7 @@ const rngFrom = (...values): RNG => {
     assert.strictEqual(hardcoreReport.damageCheckType, 'right');
   };
 
+
   {
     // test: 'hardcore table applies combined fire and crew effects to non-protagonist tanks'
     const attacker = tankAt('attacker', 1, -1);

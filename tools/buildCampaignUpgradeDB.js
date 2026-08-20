@@ -15,13 +15,14 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'CampaignUpgradeDB
 const NUMBER_FIELDS = [
   'interiorVisionBonus', 'gunnerVisionBonus', 'hitThresholdModifier',
   'armorFrontSideBonus', 'armorRearSideBonus',
+  'gunMantletArmorBonus',
   'mudAttackDiceBonus', 'mudMovementDiceBonus', 'mudMiscDiceBonus',
   'beachAttackDiceBonus', 'beachMovementDiceBonus', 'beachMiscDiceBonus', 'miscDiceBonus',
 ];
 const BOOLEAN_FIELDS = [
   'ignoreDestroyed', 'ignoreCrewCheck', 'repairDiceCanFireSuppress',
   'movementDiceCanReverseDirection', 'smokeOnMiscPips2And4',
-  'shootingDiceCanReload', 'mineDamageImmune', 'hiddenCloseRangeUntargetable',
+  'shootingDiceCanReload', 'mineDamageImmune', 'hiddenLongRangeUntargetable',
   'mechanicalFailureImmune', 'ignoreFirstAttackParalyzedPerSegment',
   'commanderShieldPerSegment', 'reviveCrewAtSegmentStart', 'carryLowestUnusedAttackDie',
 ];
@@ -54,7 +55,7 @@ function build() {
     }
     return rec;
   });
-  if (records.length !== 17) throw new Error(`expected 17 upgrades, got ${records.length}`);
+  if (records.length !== 18) throw new Error(`expected 18 upgrades, got ${records.length}`);
 
   const ids = records.map(rec => JSON.stringify(rec.id)).join(' | ');
   const lines = [

@@ -187,7 +187,6 @@ type TankVisualDebugKey =
   | 'commanderHatchSpriteX'
   | 'commanderHatchSpriteY'
   | 'commanderHatchScale'
-  | 'exhaustPortCount'
   | 'exhaustPort1Forward'
   | 'exhaustPort1Right'
   | 'exhaustPort2Forward'
@@ -1370,7 +1369,6 @@ export class MainMenuScene extends Component {
         commanderHatchSpriteX: split?.commanderHatchSpriteX ?? 0,
         commanderHatchSpriteY: split?.commanderHatchSpriteY ?? 0,
         commanderHatchScale: split?.commanderHatchScale ?? 0,
-        exhaustPortCount: exhaustPorts.length,
         exhaustPort1Forward: exhaustPorts[0]?.forward ?? 0,
         exhaustPort1Right: exhaustPorts[0]?.right ?? 0,
         exhaustPort2Forward: exhaustPorts[1]?.forward ?? 0,
@@ -1598,7 +1596,6 @@ export class MainMenuScene extends Component {
       { key: 'commanderHatchSpriteX', label: '车长舱口图X' },
       { key: 'commanderHatchSpriteY', label: '车长舱口图Y' },
       { key: 'commanderHatchScale', label: '车长图缩放' },
-      { key: 'exhaustPortCount', label: '排气口数量' },
       { key: 'exhaustPort1Forward', label: '排气口1前后' },
       { key: 'exhaustPort1Right', label: '排气口1右侧' },
       { key: 'exhaustPort2Forward', label: '排气口2前后' },
@@ -1648,9 +1645,7 @@ export class MainMenuScene extends Component {
             if (resetInvalid) input.string = formatTankDebugNumber(draft[def.key]);
             return;
           }
-          const n = def.key === 'exhaustPortCount'
-            ? Math.max(0, Math.min(2, Math.round(parsed)))
-            : parsed;
+          const n = parsed;
           draft[def.key] = n;
           if (resetInvalid) input.string = formatTankDebugNumber(n);
           refreshPreview();
@@ -1742,11 +1737,10 @@ export class MainMenuScene extends Component {
       };
     };
     function debugExhaustPorts(draft: TankVisualDebugDraft) {
-      const count = Math.max(0, Math.min(2, Math.round(draft.exhaustPortCount)));
       return [
         { forward: draft.exhaustPort1Forward, right: draft.exhaustPort1Right },
         { forward: draft.exhaustPort2Forward, right: draft.exhaustPort2Right },
-      ].slice(0, count);
+      ].filter(port => port.forward !== 0);
     }
     function drawTankExhaustPreview() {
       const g = exhaustPreviewGraphics;
@@ -2927,7 +2921,7 @@ export class MainMenuScene extends Component {
       tigerking: 'Tiger II',
       panther: 'Panther G',
       panzer4: 'Pz IV',
-      stug3: 'StuG III',
+      stug3: 'StuG III G',
       panzer3: 'Pz III',
       truck: 'Truck',
       infantry: 'Infantry',

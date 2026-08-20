@@ -69,8 +69,8 @@ assert.match(
 
 assert.match(
   source,
-  /private\s+startShermanMachineGunAim[\s\S]*?selection\.weapon\s*===\s*'coaxial'[\s\S]*?limitTurretTraverse[\s\S]*?startShermanTurretAimDirection\(traverse\.direction/,
-  'forward hull-MG fire should apply a partial turret traverse instead of requiring full alignment',
+  /private\s+startShermanMachineGunAim[\s\S]*?selection\.weapon\s*!==\s*'hull'[\s\S]*?limitTurretTraverse[\s\S]*?startShermanTurretAimDirection\(traverse\.direction/,
+  'combined fire should require full alignment while hull-only fire may apply a partial turret traverse',
 );
 
 assert.doesNotMatch(
@@ -81,8 +81,14 @@ assert.doesNotMatch(
 
 assert.match(
   source,
-  /hasTurretReconGunSelection\(\)[\s\S]*?if \(this\.mission\.sherman\.turretDamaged\) \{[\s\S]*?showGunAimWarning\('attack\.reason\.turretDamaged'\)[\s\S]*?return;/,
-  'a damaged turret must block machine-gun map actions after showing the all-gray preview ring',
+  /const\s+damagedTurretLegalMGAttack\s*=\s*this\.mission\.sherman\.turretDamaged[\s\S]*?mgSel[\s\S]*?legalMGTarget[\s\S]*?hasTurretReconGunSelection\(\)\s*&&\s*!damagedTurretLegalMGAttack/,
+  'a damaged turret must not block a legal forward hull-MG attack',
+);
+
+assert.match(
+  source,
+  /if \(!turretDamaged \|\| machineGunRotationSelection\)[\s\S]*?if \(turretDamaged\)[\s\S]*?!legalWeaponTargetKeys\.has\(tileKey\)/,
+  'damaged-turret machine-gun selection should still mark legal fixed-direction targets',
 );
 
 assert.doesNotMatch(
