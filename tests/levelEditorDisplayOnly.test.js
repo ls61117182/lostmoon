@@ -29,6 +29,11 @@ assert(
 );
 
 assert(
+  /const\s+drawBoundary\s*=\s*\(\)\s*=>\s*{[\s\S]*?outlineGraphics\.lineCap\s*=\s*Graphics\.LineCap\.ROUND;[\s\S]*?outlineGraphics\.lineCap\s*=\s*previousLineCap;/.test(menu),
+  'Level editor battlefield edges should close scaled seams with round caps and restore Graphics state',
+);
+
+assert(
   menu.includes('drawEffectiveBattlefieldBoundary();'),
   'Level editor grid redraw should include effective battlefield boundary',
 );

@@ -570,6 +570,160 @@ const rngFrom = (...values): RNG => {
   };
 
   {
+    // test: 'hardcore overpenetration suppresses fire but preserves other effects in the selected group'
+    const attacker = tankAt('attacker', 1, 0);
+    attacker.stats = { ...attacker.stats, penetration: 8 };
+    const target = tankAt('target', 0, 0, 0);
+    const map = fieldMap(0, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      overpenetration: true,
+      protagonist: attacker,
+    }, rngFrom(6, 5, 4, 5, 3));
+    applyAttack(target, report);
+
+    assert.strictEqual(report.penThreshold, 2);
+    assert.strictEqual(report.penDie, 9);
+    assert.strictEqual(report.overpenetrated, true);
+    assert.deepStrictEqual(report.overpenetrationSuppressedEffects, ['fire']);
+    assert.deepStrictEqual(report.damageEffects?.map(e => e.effect), ['turret']);
+    assert.strictEqual(target.fireLevel ?? 0, 0);
+    assert.strictEqual(target.turretDamaged, true);
+  };
+
+  {
+    // test: 'penetration margin exactly 6 does not overpenetrate'
+    const attacker = tankAt('attacker', 1, 0);
+    attacker.stats = { ...attacker.stats, penetration: 8 };
+    const target = tankAt('target', 0, 0, 0);
+    const map = fieldMap(0, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      overpenetration: true,
+      protagonist: attacker,
+    }, rngFrom(6, 5, 4, 4, 1));
+    applyAttack(target, report);
+
+    assert.strictEqual(report.penDie! - report.penThreshold!, 6);
+    assert.strictEqual(report.overpenetrated, false);
+    assert.strictEqual(report.damageEffect, 'fire');
+    assert.strictEqual(target.fireLevel, 1);
+  };
+
+  {
+    // test: 'overpenetration cancels a vehicle damageTargetClass destroyed result without rolling damage'
+    const attacker = tankAt('attacker', 1, 0);
+    attacker.stats = { ...attacker.stats, penetration: 8 };
+    const target = tankAt('target', 0, 0, 0);
+    target.kind = 'truck';
+    target.stats = { ...target.stats, damageTargetClass: 'destroyed' };
+    const map = fieldMap(0, 1);
+    const report = rollAttack({
+      attacker,
+      target,
+      map,
+      directionalDamageCheck: true,
+      unitDamageTargetClass: true,
+      overpenetration: true,
+      protagonist: attacker,
+    }, rngFrom(6, 5, 4, 5));
+    applyAttack(target, report);
+
+    assert.strictEqual(report.overpenetrated, true);
+    assert.deepStrictEqual(report.overpenetrationSuppressedEffects, ['destroyed']);
+    assert.strictEqual(report.damageDie, undefined);
+    assert.strictEqual(report.damageEffect, undefined);
+    assert.strictEqual(target.destroyed, undefined);
+  };
+
+  {
+    // test: 'AT guns and both heavy-artillery kinds are excluded from vehicle overpenetration targets'
+    const attacker = tankAt('attacker', 1, 0);
+    attacker.stats = { ...attacker.stats, penetration: 8 };
+    const map = fieldMap(0, 1);
+    for (const kind of ['at_gun', 'heavy_artillery', 'german_heavy_artillery'] as const) {
+      const target = tankAt('target', 0, 0, 0);
+      target.kind = kind;
+      const report = rollAttack({
+        attacker,
+        target,
+        map,
+        directionalDamageCheck: true,
+        overpenetration: true,
+        protagonist: attacker,
+      }, rngFrom(6, 5, 4, 5, 1));
+
+      assert.strictEqual(report.overpenetrated, false, `${kind} must not overpenetrate`);
+      assert.strictEqual(report.damageEffect, 'fire');
+    }
+  };
+
+  {
+    // test: 'hardcore heavy artillery rolls 1d6 after penetration: 1-4 fire, 5-6 destroyed'
+    const attacker = tankAt('attacker', 1, 0);
+    attacker.stats = { ...attacker.stats, penetration: 8 };
+    const map = fieldMap(0, 1);
+    for (const kind of ['heavy_artillery', 'german_heavy_artillery'] as const) {
+      for (const damageDie of [1, 4, 5, 6]) {
+        const target = tankAt(`target-${kind}-${damageDie}`, 0, 0, 0);
+        target.kind = kind;
+        target.stats = { ...target.stats, damageTargetClass: 'heavy_artillery' };
+        const report = rollAttack({
+          attacker,
+          target,
+          map,
+          directionalDamageCheck: true,
+          unitDamageTargetClass: true,
+          overpenetration: true,
+          protagonist: attacker,
+        }, rngFrom(6, 5, 4, 5, damageDie));
+        applyAttack(target, report);
+
+        const expected = damageDie >= 5 ? 'destroyed' : 'fire';
+        assert.strictEqual(report.overpenetrated, false, `${kind} must not overpenetrate`);
+        assert.strictEqual(report.damageDie, damageDie);
+        assert.strictEqual(report.damageEffect, expected);
+        assert.strictEqual(target.destroyed === true, expected === 'destroyed');
+        assert.strictEqual(target.fireLevel ?? 0, expected === 'fire' ? 1 : 0);
+      }
+    }
+  };
+
+  {
+    // test: 'hardcore burning heavy artillery is destroyed by the next penetration without damage roll'
+    const attacker = tankAt('attacker', 1, 0);
+    const map = fieldMap(0, 1);
+    for (const kind of ['heavy_artillery', 'german_heavy_artillery'] as const) {
+      const target = tankAt(`burning-${kind}`, 0, 0, 0);
+      target.kind = kind;
+      target.fireLevel = 1;
+      target.stats = { ...target.stats, damageTargetClass: 'heavy_artillery' };
+      const report = rollAttack({
+        attacker,
+        target,
+        map,
+        directionalDamageCheck: true,
+        unitDamageTargetClass: true,
+        overpenetration: true,
+        protagonist: attacker,
+      }, rngFrom(6, 6, 6, 6));
+      applyAttack(target, report);
+
+      assert.strictEqual(report.overpenetrated, false);
+      assert.strictEqual(report.damageDie, undefined);
+      assert.strictEqual(report.stagedDamageDie, undefined);
+      assert.strictEqual(report.damageEffect, 'destroyed');
+      assert.strictEqual(target.destroyed, true);
+    }
+  };
+
+  {
     // test: 'configured damage target class is ignored when the hardcore mode flag is off'
     const attacker = tankAt('attacker', 1, 0);
     const target = tankAt('target', 0, 0, 0);
@@ -837,6 +991,8 @@ const rngFrom = (...values): RNG => {
     assert.strictEqual(getGameModeConfig('hardcore').directionalDamageCheck, true);
     assert.strictEqual(getGameModeConfig('classic').unitDamageTargetClass, false);
     assert.strictEqual(getGameModeConfig('hardcore').unitDamageTargetClass, true);
+    assert.strictEqual(getGameModeConfig('classic').overpenetration, false);
+    assert.strictEqual(getGameModeConfig('hardcore').overpenetration, true);
     assert.strictEqual(getGameModeConfig('classic').radioVisionSharing, false);
     assert.strictEqual(getGameModeConfig('hardcore').radioVisionSharing, true);
   };

@@ -2,15 +2,15 @@
 单位类型ID,显示名称,阵营,尺寸,正面装甲,正面侧装甲,后侧装甲,后装甲,穿甲值,有效射程,炮塔转向速度,美军伤亡骰,视野范围,炮手视野范围,车内视野范围,是否有无线电,移动音效,攻击音效,车长精灵图路径,视野类型,伤害目标类别,步坦协同,行动表,乘员编号,备注,炮盾装甲
 sherman,谢尔曼 M4,usa,4,11,10,9,8,2,2,4,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/sherman_commander_hatch_open_v2/spriteFrame,turreted,us_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,美军玩家方坦克；Pacific profile 由 UnitDB 覆盖为 4/11/10/9/8/AP2,0
 sherman76,谢尔曼 76,usa,4,11,10,9,8,4,2,4,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/sherman_commander_hatch_open_v2/spriteFrame,turreted,us_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,美军坦克；76mm 主炮穿价值为 4,0
-t34,T-34/76,soviet,4,11,10,9,8,2,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/soviet_commander_hatch_open/spriteFrame,turreted,us_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,苏军 T-34/76；战斗参数复用谢尔曼，使用可配置的苏军车长图片,0
+t34,T-34/76,soviet,4,11,10,9,8,2,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/soviet_commander_hatch_open/spriteFrame,turreted,us_tank,1,attack=attack1|move=move1|misc=misc1,1|3|4|5,苏军 T-34/76；战斗参数复用谢尔曼，使用可配置的苏军车长图片,0
 tiger,虎式,german,3,12,11,10,9,3,4,2,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,重型敌方坦克,0
 tigerking,虎王坦克,german,2,13,12,11,10,4,4,2,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,虎王坦克；战斗参数暂复制虎式坦克,0
 maus,鼠式坦克,german,0,16,14,12,10,6,6,1,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Panzer VIII Maus 超重型坦克；高装甲与 128mm 主炮配置,0
 panther,豹式坦克,german,4,12,11,9,8,4,4,2,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Panzer V Panther G 中型坦克；75mm KwK 42 L/70 主炮,0
 panzer4,四号坦克G型,german,4,11,10,9,8,2,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,四号坦克 G 型；保留原四号坦克战斗参数和关卡兼容 ID,0
-stug3,三号突击炮G型,german,5,11,10,9,8,2,2,0,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,fixed,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4,三号突击炮 G 型；沿用现有战斗参数和关卡兼容 ID；固定主炮仅能攻击正前方；支持车长开舱观察,0
+stug3,三号突击炮G型,german,5,11,9,8,7,2,2,0,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,fixed,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4,三号突击炮 G 型；沿用现有战斗参数和关卡兼容 ID；固定主炮仅能攻击正前方；支持车长开舱观察,0
 panzer3,三号坦克,german,5,10,9,8,7,1,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,次级敌方坦克,0
-truck,卡车,german,3,2,2,2,2,0,0,0,0,4,4,1,1,audio/tank_move,,,fixed,destroyed,0,,4,占位 - 后续按特殊规则结算,0
+truck,卡车,german,5,2,2,2,2,0,0,0,0,4,4,1,1,audio/tank_move,,,fixed,destroyed,0,,4,占位 - 后续按特殊规则结算,0
 infantry,步兵,german,2,0,0,0,0,3,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,占位 - 仅事件中作为攻击方,0
 german_infantry,德军步兵,german,2,0,0,0,0,3,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,德军步兵；保留 infantry 作为旧关卡兼容配置,0
 soviet_infantry,苏军步兵,soviet,2,0,0,0,0,3,1,0,0,3,4,1,0,,,,infantry,destroyed,0,,,苏军步兵；未装备无线电，仅可与同格友方坦克共享视野,0
@@ -18,8 +18,8 @@ officer,军官,german,0,0,0,0,0,1,2,0,0,3,4,1,1,,,,infantry,destroyed,0,,,任务
 type95,九五式轻战车,japanese,4,11,10,9,8,0,2,3,1,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Pacific D11: Type 95 Ha-Go,0
 type97,九七式中战车,japanese,4,9,8,8,7,1,2,3,1,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,Pacific: Type 97 Chi-Ha,0
 type4,四式中战车,japanese,4,11,10,9,8,2,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,暂按四号坦克战斗参数配置,0
-at_gun,反坦克炮,japanese,5,8,8,7,6,2,2,0,1,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,Pacific: AT Gun,0
+at_gun,反坦克炮,japanese,5,8,8,7,6,2,2,2,1,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,Pacific: AT Gun; hardcore whole-gun traverse 60 degrees per action,0
 japanese_infantry,日本步兵,japanese,2,0,0,0,0,3,1,0,1,3,4,1,0,,,,infantry,destroyed,0,attack=japanese_infantry1|move=japanese_infantry1|misc=japanese_infantry1,,Pacific: Japanese Infantry; no radio,0
 american_infantry,美军步兵,usa,2,0,0,0,0,3,1,0,1,3,4,1,1,,,,infantry,destroyed,0,attack=american_infantry1|move=american_infantry1|misc=american_infantry1,,US AI support infantry; equipped with radio,0
-heavy_artillery,重炮,japanese,4,10,9,7,6,4,4,0,2,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,Pacific: Heavy Artillery,0
-german_heavy_artillery,重炮,german,4,10,9,7,6,4,4,0,2,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,German heavy-artillery bunker; stats and AI mirror Japanese Heavy Artillery,0
+heavy_artillery,重炮,japanese,3,10,9,7,6,4,4,0,2,4,4,1,1,,audio/cannon_fire,,fixed,heavy_artillery,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,Pacific: Heavy Artillery,0
+german_heavy_artillery,重炮,german,3,10,9,7,6,4,4,0,2,4,4,1,1,,audio/cannon_fire,,fixed,heavy_artillery,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,German heavy-artillery bunker; stats and AI mirror Japanese Heavy Artillery,0

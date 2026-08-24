@@ -43,6 +43,8 @@ let bgmSource: AudioSource | null = null;
 let maneuverSource: AudioSource | null = null;
 /** 防止 `getClip` 晚于 `stopTankManeuver` 回调时误开播 */
 let maneuverPlayId = 0;
+/** 当前正在播放或等待加载的机动音；用于让相邻动画段复用同一次循环播放。 */
+let currentManeuverKey: string | null = null;
 let turretTraverseSource: AudioSource | null = null;
 /** 短转向可能先结束再完成异步加载；代次用于取消迟到的播放回调。 */
 let turretTraversePlayId = 0;
@@ -214,15 +216,22 @@ export function playDiceRoll(): void {
   playSfxKey(AudioKeys.diceRoll);
 }
 
-/** 开始播放坦克机动音（前进 / 后退 / 转向同一 clip）；动画进行中保持循环，结束请调 `stopTankManeuver`。 */
+/**
+ * 开始播放坦克机动音（前进 / 后退 / 转向同一 clip）。
+ * 相同 key 已在播放或加载时不会从头重播。
+ */
 export function startManeuverSound(key?: string | null): void {
   if (!key) return;
   ensureRoot();
   const s = MenuProgress.load();
   if (s.sfxVolume <= 0) return;
+
+  if (currentManeuverKey === key) return;
+
+  currentManeuverKey = key;
   const myId = ++maneuverPlayId;
   getClip(key, (clip) => {
-    if (myId !== maneuverPlayId || !clip || !maneuverSource) return;
+    if (myId !== maneuverPlayId || currentManeuverKey !== key || !clip || !maneuverSource) return;
     refreshVolumes();
     maneuverSource.stop();
     maneuverSource.clip = clip;
@@ -235,9 +244,10 @@ export function startTankManeuver(): void {
   startManeuverSound(AudioKeys.tankManeuver);
 }
 
-/** 当前段移动 / 转向动画结束时调用，立即停止机动音。 */
+/** 立即停止机动音；场景退出、重开、读档等中断流程使用。 */
 export function stopManeuverSound(): void {
   maneuverPlayId++;
+  currentManeuverKey = null;
   if (maneuverSource) maneuverSource.stop();
 }
 

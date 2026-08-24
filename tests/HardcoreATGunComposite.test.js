@@ -14,17 +14,25 @@ assert.match(types, /atGunCrewAlive\?: boolean/, 'AT guns should persist an inde
 assert.match(loader, /u\.kind === 'at_gun'[\s\S]*?u\.atGunCrewAlive = true[\s\S]*?u\.atGunCrewKind = crewKind[\s\S]*?u\.atGunCrewTargetSize = crewStats\.size/, 'scenario AT guns should start with faction infantry crews');
 
 assert.match(combat, /atGunCrewTargets\?: boolean/, 'MG legality should explicitly opt into hardcore AT-gun crew targets');
-assert.match(combat, /atGunCrewTargetSize \?\? 0[\s\S]*?\+ \(atGunCrewTarget \? 1 : 0\)/, 'MG threshold should use infantry target size and then add one for gun armor');
+assert.match(combat, /size: ctx\.target\.atGunCrewTargetSize \?\? 0/, 'MG threshold should use the controlling infantry target size');
+assert.match(combat, /mgHitThreshold[\s\S]*?\+ \(atGunCrewTarget \? 1 : 0\)/, 'MG threshold should add one for AT-gun protection');
 assert.match(combat, /if \(isControlledATGun\(target\)\)[\s\S]*?target\.atGunCrewAlive = false[\s\S]*?target\.faction = 'neutral'/, 'MG hits should abandon the gun instead of destroying it');
 
 assert.match(fog, /isAbandonedATGun\(unit\) \|\| isAttachedATGunCrew\(unit\)[\s\S]*?return visible/, 'abandoned guns and attached crews should provide no independent vision');
 assert.match(fog, /isControlledATGun\(unit\) \? 'infantry'/, 'controlled guns should use infantry vision geometry');
 assert.match(objective, /!e\.destroyed && !isAbandonedATGun\(e\)/, 'neutral guns should be excluded from live enemy counts');
 assert.match(scene, /enemy\.faction !== 'japanese' \|\| isAbandonedATGun\(enemy\) \|\| isAttachedATGunCrew\(enemy\)/, 'neutral guns and folded-in infantry should not provide US casualty dice');
-assert.match(scene, /if \(isAttachedATGunCrew\(u\) \|\| isAbandonedATGun\(u\)\) return;/, 'abandoned guns should not display map name labels');
+assert.match(scene, /if \(isAttachedATGunCrew\(u\) \|\| isAbandonedATGun\(u\)\) return(?: false)?;/, 'abandoned guns should not display map name labels');
 
 assert.match(scene, /private killATGunCrew\(gun: Unit\)[\s\S]*?const crewOffsets = this\.atGunCrewFormationOffsets\(gun\)[\s\S]*?spawnInfantryBloodDecalsAt\([^,]+, true, crewOffsets\)[\s\S]*?gun\.faction = 'neutral'/, 'crew deaths should leave blood at the three visible operator positions and neutralize the intact gun');
-assert.match(scene, /private applyMainGunAttackResult[\s\S]*?target\.destroyed\) this\.killATGunCrew\(target\)/, 'main-gun destruction should also kill the AT-gun crew');
+assert.match(scene, /private applyMainGunAttackResult[\s\S]*?hadATGunCrew && target\.destroyed[\s\S]*?this\.releaseATGunCrew\(target\)[\s\S]*?applyInfantrySuppression\(survivingCrew\)/, 'main-gun destruction should release and suppress the surviving AT-gun crew');
+assert.doesNotMatch(scene.match(/private applyMainGunAttackResult[\s\S]*?\n  }\n\n/)?.[0] ?? '', /killATGunCrew/, 'main-gun destruction must not kill AT-gun operators');
+assert.match(scene, /private inheritReleasedATGunCrewFacing[\s\S]*?currentTurretFacingFor\(gun[\s\S]*?fireDirectionVector\(ruleFacing\)[\s\S]*?infantry\.facing = infantryVisualDirection/,
+  'released infantry should inherit the AT gun current rules-facing direction');
+assert.match(scene, /private inheritReleasedATGunCrewFacing[\s\S]*?currentEnemyTurretLerp\(gun\)[\s\S]*?infantryVisualAngleOverride\.set/,
+  'released infantry should retain the AT gun exact rendered heading');
+assert.match(scene, /private setInfantryVisualFacing[\s\S]*?infantryVisualAngleOverride\.delete\(unit\.id\)/,
+  'the inherited heading should yield when infantry later moves or attacks');
 assert.match(scene, /private applyMachineGunAttackResult[\s\S]*?target\.kind === 'at_gun'[\s\S]*?target\.destroyed = false;[\s\S]*?this\.destroyWreckVisualIds\.delete\(target\.id\);[\s\S]*?this\.killATGunCrew\(target\);[\s\S]*?return;/, 'MG crew kills should explicitly preserve an intact gun and remove any premature wreck visual');
 assert.match(scene, /private applyDiceShowDestroyedVisual[\s\S]*?show\.mg[\s\S]*?target\?\.kind === 'at_gun'[\s\S]*?target\.atGunCrewAlive === true\) return;/, 'MG dice presentation must not preview a controlled AT gun as destroyed');
 assert.match(scene, /private captureAbandonedATGunsAt[\s\S]*?gun\.faction = infantry\.faction[\s\S]*?infantry\.attachedToATGunId = gun\.id[\s\S]*?rehomeCapturedATGun\(gun\)/, 'entering infantry should take control and transfer the gun to its side');

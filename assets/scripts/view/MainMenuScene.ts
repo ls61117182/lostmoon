@@ -7,7 +7,7 @@
  *   3. Build Settings 把 main.scene 设为启动场景，战斗场景名填到 `battleSceneName`
  *
  * 架构约定（与 BattleScene 一致，零美术资源）：
- *   - 全部 UI 用 Graphics + Label 动态构建，画布按 1280×720 设计
+ *   - 全部 UI 用 Graphics + Label 动态构建，以 1280×720 为布局基准并缩放到 1920×1080
  *   - 文案走 i18n（`t('menu.*')` / `t('level.XX.title')`）
  *   - 关卡解锁 / 通关 / 音量 / 语言持久化到 `LevelDB.MenuProgress`
  *   - 跨场景状态通过 `GameSession` 传递，BattleScene 启动时读取
@@ -69,6 +69,11 @@ import type { MissionData, MissionObjective, SeasonType, TileDef, UnitKind, Unit
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
+  applyAdaptiveResolution,
+  subscribeAdaptiveResolution,
+  visibleSizeInRootSpace,
+} from './ResolutionAdapter';
+import {
   TANK_EXHAUST_LIFETIME_SCALE,
   TANK_EXHAUST_RADIUS_SCALE,
   tankExhaustPortWorldPosition,
@@ -96,6 +101,7 @@ const { ccclass, property } = _decorator;
 // ---------- 设计尺寸 ----------
 const CANVAS_W = 1280;
 const CANVAS_H = 720;
+const UI_ROOT_SCALE = 1920 / CANVAS_W;
 
 // 按钮栅格（6 列 × 2 行）
 const LEVEL_BTN_W = 140;
@@ -210,6 +216,7 @@ export class MainMenuScene extends Component {
 
   // UI 根
   private bgNode: Node | null = null;
+  private resolutionUnsubscribe: (() => void) | null = null;
 
   // 继续游戏按钮（需要 refresh 的组件）
   private continueBtn: ButtonRefs | null = null;
@@ -248,6 +255,7 @@ export class MainMenuScene extends Component {
   } | null = null;
 
   onLoad() {
+    applyAdaptiveResolution();
     // 兜底：如果用户把 menu 挂成了 Canvas 的兄弟节点（而非子节点），UI 相机看不到它。
     // 在这里自动找场景里的 Canvas 并 reparent 过去。
     // 注意：Cocos Creator 3.8 的 Component 上没有 getComponentInParent，得自己沿父链找。
@@ -275,6 +283,7 @@ export class MainMenuScene extends Component {
     // 归零本地坐标：编辑器里把节点从场景根拖进 Canvas 时会保留世界坐标，
     // 本地位置会变成 (-640,-360) 让整个菜单跑到 Canvas 左下角。
     this.node.setPosition(0, 0, 0);
+    this.node.setScale(UI_ROOT_SCALE, UI_ROOT_SCALE, 1);
 
     // 每次进菜单读一次持久化语言，确保设置面板里切的语言已生效
     const menuState = MenuProgress.load();
@@ -292,6 +301,7 @@ export class MainMenuScene extends Component {
     this.buildLevelGrid();
     this.buildTopIcons();
     this.buildVersion();
+    this.resolutionUnsubscribe = subscribeAdaptiveResolution(() => this.rebuildBackgroundForResolution());
 
     this.refreshContinueButton();
     this.refreshLevelButtons();
@@ -309,14 +319,20 @@ export class MainMenuScene extends Component {
     }, 0);
   }
 
+  onDestroy() {
+    this.resolutionUnsubscribe?.();
+    this.resolutionUnsubscribe = null;
+  }
+
   // ================================================================
   // 背景：双段渐变（Graphics 画多条横条模拟）+ 顶部一条装饰线
   // ================================================================
   private buildBackground() {
+    const { width: backgroundW, height: backgroundH } = visibleSizeInRootSpace(UI_ROOT_SCALE);
     const n = new Node('MenuBG');
     n.layer = this.node.layer;
     const ut = n.addComponent(UITransform);
-    ut.setContentSize(CANVAS_W, CANVAS_H);
+    ut.setContentSize(backgroundW, backgroundH);
     n.setPosition(0, 0, 0);
     const g = n.addComponent(Graphics);
 
@@ -327,20 +343,20 @@ export class MainMenuScene extends Component {
       const c = tRatio < 0.5
         ? lerp(BG_TOP, BG_MID, tRatio * 2)
         : lerp(BG_MID, BG_BOTTOM, (tRatio - 0.5) * 2);
-      const y = CANVAS_H / 2 - (i + 1) * (CANVAS_H / STEPS);
+      const y = backgroundH / 2 - (i + 1) * (backgroundH / STEPS);
       g.fillColor = c;
-      g.rect(-CANVAS_W / 2, y, CANVAS_W, CANVAS_H / STEPS + 1);
+      g.rect(-backgroundW / 2, y, backgroundW, backgroundH / STEPS + 1);
       g.fill();
     }
 
     // 装饰线条：顶部 + 底部各一条橄榄绿
     g.strokeColor = MENU_DIVIDER;
     g.lineWidth = 1;
-    g.moveTo(-CANVAS_W / 2 + 60, CANVAS_H / 2 - 80);
-    g.lineTo( CANVAS_W / 2 - 60, CANVAS_H / 2 - 80);
+    g.moveTo(-backgroundW / 2 + 60, backgroundH / 2 - 80);
+    g.lineTo( backgroundW / 2 - 60, backgroundH / 2 - 80);
     g.stroke();
-    g.moveTo(-CANVAS_W / 2 + 60, -CANVAS_H / 2 + 60);
-    g.lineTo( CANVAS_W / 2 - 60, -CANVAS_H / 2 + 60);
+    g.moveTo(-backgroundW / 2 + 60, -backgroundH / 2 + 60);
+    g.lineTo( backgroundW / 2 - 60, -backgroundH / 2 + 60);
     g.stroke();
 
     // Faint operations-map grid and route marks.
@@ -370,6 +386,13 @@ export class MainMenuScene extends Component {
 
     this.node.addChild(n);
     this.bgNode = n;
+  }
+
+  private rebuildBackgroundForResolution() {
+    if (this.bgNode?.isValid) this.bgNode.destroy();
+    this.bgNode = null;
+    this.buildBackground();
+    this.bgNode?.setSiblingIndex(0);
   }
 
   // ================================================================
@@ -4057,6 +4080,8 @@ export class MainMenuScene extends Component {
       const drawBoundary = () => {
         const tile = draftTiles[row]?.[col] ?? null;
         if (!isEffectiveEditorTile(tile)) return;
+        const previousLineCap = outlineGraphics.lineCap;
+        outlineGraphics.lineCap = Graphics.LineCap.ROUND;
         outlineGraphics.strokeColor = EDITOR_BATTLEFIELD_EDGE;
         outlineGraphics.lineWidth = 4;
         const angles = [0, -60, -120, 180, 120, 60];
@@ -4071,6 +4096,7 @@ export class MainMenuScene extends Component {
           outlineGraphics.lineTo(p2.x * 0.99, p2.y * 0.99);
           outlineGraphics.stroke();
         }
+        outlineGraphics.lineCap = previousLineCap;
       };
       const redraw = (tile: EditorTile) => {
         const spriteKey = spriteKeyForTile(tile);
@@ -4859,7 +4885,17 @@ export class MainMenuScene extends Component {
 
     const redraw = (c: Color, opts?: { border?: boolean }) => {
       g.clear();
-      drawFieldPanel(g, w, h, c, opts?.border ? BTN_LEVEL_BORDER : MENU_DIVIDER, TEXT_TITLE);
+      // Buttons sit above the operations-map grid.  Keeping their fill translucent
+      // lets the grid/route strokes bleed through; after resolution scaling those
+      // strokes can land on different pixels and look like random black seams.
+      // Panels may remain translucent, but interactive button faces must be opaque.
+      const opaqueFill = new Color(c.r, c.g, c.b, 255);
+      drawFieldPanel(
+        g, w, h, opaqueFill,
+        opts?.border ? BTN_LEVEL_BORDER : MENU_DIVIDER,
+        TEXT_TITLE,
+        false,
+      );
     };
     redraw(color);
 
@@ -4950,7 +4986,15 @@ function lerp(a: Color, b: Color, tRatio: number): Color {
   );
 }
 
-function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: Color, accent: Color) {
+function drawFieldPanel(
+  g: Graphics,
+  w: number,
+  h: number,
+  fill: Color,
+  border: Color,
+  accent: Color,
+  drawInnerStroke: boolean = true,
+) {
   const x = -w / 2;
   const y = -h / 2;
   g.fillColor = new Color(0, 0, 0, 70);
@@ -4966,10 +5010,12 @@ function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: 
   g.lineWidth = 2;
   g.rect(x + 1, y + 1, w - 2, h - 2);
   g.stroke();
-  g.strokeColor = new Color(20, 22, 18, 180);
-  g.lineWidth = 1;
-  g.rect(x + 6, y + 6, w - 12, h - 12);
-  g.stroke();
+  if (drawInnerStroke) {
+    g.strokeColor = new Color(20, 22, 18, 180);
+    g.lineWidth = 1;
+    g.rect(x + 6, y + 6, w - 12, h - 12);
+    g.stroke();
+  }
   g.strokeColor = accent;
   g.lineWidth = 2;
   const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18));

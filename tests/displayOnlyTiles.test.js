@@ -107,6 +107,22 @@ assert(
   'BattleScene should draw an outline around effective battlefield tiles',
 );
 
+const battlefieldBoundary = battleScene.match(/private\s+drawEffectiveBattlefieldBoundary\s*\(\)\s*{[\s\S]*?\n  }\n\n/);
+assert(battlefieldBoundary, 'BattleScene.drawEffectiveBattlefieldBoundary() should be found');
+assert(
+  battlefieldBoundary[0].includes('g.lineCap = Graphics.LineCap.ROUND;')
+    && battlefieldBoundary[0].includes('g.lineCap = previousLineCap;'),
+  'Effective battlefield boundary should close scaled edge seams with round caps and restore Graphics state',
+);
+
+const tileBorder = battleScene.match(/private\s+drawTileBorder\s*\([^)]*\)\s*{[\s\S]*?\n  }\n\n/);
+assert(tileBorder, 'BattleScene.drawTileBorder() should be found');
+assert(
+  tileBorder[0].includes('g.lineCap = Graphics.LineCap.ROUND;')
+    && tileBorder[0].includes('g.lineCap = previousLineCap;'),
+  'Hex tile borders should use round caps so separately stroked edges remain connected after scaling',
+);
+
 assert(
   battleScene.includes('this.drawEffectiveBattlefieldBoundary();'),
   'BattleScene.redraw() should draw the effective battlefield boundary',

@@ -1,6 +1,6 @@
 import { Node, Tween, Vec3, tween } from 'cc';
 
-const PRESSED_SCALE = 0.94;
+const PRESSED_SCALE = 0.97;
 const RELEASE_DURATION = 0.08;
 
 interface PressScaleState {

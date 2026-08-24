@@ -7,7 +7,7 @@
 
 import type { DamageCheckType } from './AttackDirectionDB';
 
-export type DamageTargetClass = "destroyed" | "german_tank" | "protagonist" | "us_tank";
+export type DamageTargetClass = "destroyed" | "german_tank" | "heavy_artillery" | "protagonist" | "us_tank";
 export type DamageTableEffectKind = 'destroyed' | 'fire' | 'turret' | 'paralyzed' | 'radio' | 'crew';
 export type DamageTableCrewRole = 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver';
 
@@ -91,6 +91,40 @@ export const DAMAGE_TABLE: Record<DamageTargetClass, Record<DamageCheckType, Rec
       4: { targetClass: 'german_tank', damageCheckType: 'rear', die: 4, groups: [[{"kind":"fire"},{"kind":"paralyzed"}]], notes: "" },
       5: { targetClass: 'german_tank', damageCheckType: 'rear', die: 5, groups: [[{"kind":"destroyed"}]], notes: "" },
       6: { targetClass: 'german_tank', damageCheckType: 'rear', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
+    },
+  },
+  heavy_artillery: {
+    front: {
+      1: { targetClass: 'heavy_artillery', damageCheckType: 'front', die: 1, groups: [[{"kind":"fire"}]], notes: "" },
+      2: { targetClass: 'heavy_artillery', damageCheckType: 'front', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'heavy_artillery', damageCheckType: 'front', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'heavy_artillery', damageCheckType: 'front', die: 4, groups: [[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'heavy_artillery', damageCheckType: 'front', die: 5, groups: [[{"kind":"destroyed"}]], notes: "" },
+      6: { targetClass: 'heavy_artillery', damageCheckType: 'front', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
+    },
+    right: {
+      1: { targetClass: 'heavy_artillery', damageCheckType: 'right', die: 1, groups: [[{"kind":"fire"}]], notes: "" },
+      2: { targetClass: 'heavy_artillery', damageCheckType: 'right', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'heavy_artillery', damageCheckType: 'right', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'heavy_artillery', damageCheckType: 'right', die: 4, groups: [[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'heavy_artillery', damageCheckType: 'right', die: 5, groups: [[{"kind":"destroyed"}]], notes: "" },
+      6: { targetClass: 'heavy_artillery', damageCheckType: 'right', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
+    },
+    left: {
+      1: { targetClass: 'heavy_artillery', damageCheckType: 'left', die: 1, groups: [[{"kind":"fire"}]], notes: "" },
+      2: { targetClass: 'heavy_artillery', damageCheckType: 'left', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'heavy_artillery', damageCheckType: 'left', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'heavy_artillery', damageCheckType: 'left', die: 4, groups: [[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'heavy_artillery', damageCheckType: 'left', die: 5, groups: [[{"kind":"destroyed"}]], notes: "" },
+      6: { targetClass: 'heavy_artillery', damageCheckType: 'left', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
+    },
+    rear: {
+      1: { targetClass: 'heavy_artillery', damageCheckType: 'rear', die: 1, groups: [[{"kind":"fire"}]], notes: "" },
+      2: { targetClass: 'heavy_artillery', damageCheckType: 'rear', die: 2, groups: [[{"kind":"fire"}]], notes: "" },
+      3: { targetClass: 'heavy_artillery', damageCheckType: 'rear', die: 3, groups: [[{"kind":"fire"}]], notes: "" },
+      4: { targetClass: 'heavy_artillery', damageCheckType: 'rear', die: 4, groups: [[{"kind":"fire"}]], notes: "" },
+      5: { targetClass: 'heavy_artillery', damageCheckType: 'rear', die: 5, groups: [[{"kind":"destroyed"}]], notes: "" },
+      6: { targetClass: 'heavy_artillery', damageCheckType: 'rear', die: 6, groups: [[{"kind":"destroyed"}]], notes: "" },
     },
   },
   protagonist: {

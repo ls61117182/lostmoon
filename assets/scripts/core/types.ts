@@ -164,6 +164,10 @@ export function isFootUnit(u: { kind: UnitKind }): boolean {
   return isFootKind(u.kind);
 }
 
+export function isHeavyArtilleryUnit(u: { kind: UnitKind }): boolean {
+  return u.kind === 'heavy_artillery' || u.kind === 'german_heavy_artillery';
+}
+
 export type ATGunCrewKind = Extract<
   UnitKind,
   'infantry' | 'german_infantry' | 'soviet_infantry' | 'japanese_infantry' | 'american_infantry'

@@ -85,6 +85,16 @@ async function generateTerrain(sourceName, outputName, baseCoverage, snowRaw) {
     let g = data[i + 1];
     let b = data[i + 2];
     const a = data[i + 3];
+    // Preserve RGB outside the source silhouette. Linear texture filtering samples
+    // neighbouring transparent texels at the hex edge; filling them with bright
+    // snow RGB creates a visible halo/protrusion even though their alpha is zero.
+    if (a === 0) {
+      out[i] = r;
+      out[i + 1] = g;
+      out[i + 2] = b;
+      out[i + 3] = a;
+      continue;
+    }
     const pixelIndex = i / 4;
     const x = pixelIndex % info.width;
     const y = Math.floor(pixelIndex / info.width);

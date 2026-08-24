@@ -15,13 +15,32 @@ assert(scene.includes("GameSession.gameMode === 'hardcore'"), 'campaign upgrades
 assert(scene.includes('campaignUpgradeSelectedIndex = 1'), 'the middle card should be selected by default');
 assert(scene.includes("t('campaignUpgrade.confirm')"), 'selection should use an explicit confirmation button');
 assert(scene.includes('openCampaignUpgradeDetail(id)'), 'acquired upgrade slots should open the detail card');
+assert(scene.includes("'transparent-detail'")
+  && scene.includes("visualStyle === 'transparent-detail'")
+  && scene.includes('title.enableOutline = true')
+  && scene.includes('description.enableOutline = true'),
+  'upgrade cards should use a transparent frame with outlined readable text');
+assert.match(scene,
+  /buildCampaignUpgradeCard\([\s\S]*?\(\) => this\.selectCampaignUpgradeCandidate\(index\),[\s\S]*?'transparent-detail'/,
+  'upgrade selection cards should share the transparent detail-frame design');
+assert(scene.includes('选中项只增强金色轮廓，不增加底色'),
+  'the selected upgrade should remain visible without restoring an opaque card fill');
+assert(scene.includes('redrawCampaignUpgradeDetailCloseButton(close.node, 58, 58)')
+  && scene.includes('详情页关闭按钮不使用 drawFieldPanel'),
+  'upgrade detail close button should avoid the shared black inner seam');
 assert(scene.includes('campaignUpgradeStatusRoot'), 'Sherman status should expose acquired upgrades');
+assert(scene.includes('const H = showCampaignUpgrades ? 360')
+  && scene.includes('槽底距面板底边约 21px'),
+  'campaign status panel should leave safe bottom padding around upgrade slots');
 assert(scene.includes('campaignMainGunHitThresholdModifier()'), 'improved optics should modify main-gun attacks');
 assert(scene.includes("campaignUpgradeActive('automatic_extinguisher')"), 'repair dice should support the extinguisher');
 assert(scene.includes("const transmissionAllowsBothDirections = (a === 'drive' || a === 'reverse')")
   && scene.includes("if (dirSign !== nativeDirection && !this.campaignMovementDiceCanReverseDirection()) return;")
   && scene.includes("campaignUpgradeDefinition('improved_transmission').movementDiceCanReverseDirection"),
   'improved transmission should let advance and reverse dice move in either direction');
+assert.match(scene,
+  /else if \(a === 'reverse'\) \{[\s\S]*?if \(transmissionAllowsBothDirections\) \{[\s\S]*?addItem\(t\('action\.advance'\)[\s\S]*?\}[\s\S]*?addItem\(t\('action\.reverse'\)/,
+  'a reverse die that gains both movement directions should list advance above reverse');
 assert(scene.includes("if (action !== 'turn') return;"),
   'improved transmission should no longer let advance dice execute turn actions');
 assert(scene.includes("classifyMiscDie(pip) === 'smoke_or_repair'"), 'the base smoke die should remain initially available');

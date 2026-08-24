@@ -20,6 +20,8 @@ export interface GameModeConfig {
   gunMantletArmor: boolean;
   /** Unit damage target class comes from units.csv instead of hard-coded faction routing. */
   unitDamageTargetClass: boolean;
+  /** Tank main-gun penetration rolls exceeding the required roll by more than 6 may overpenetrate vehicles. */
+  overpenetration: boolean;
   /** Units with intact radios may receive vision from friendly radio transmitters. */
   radioVisionSharing: boolean;
   /** AI tanks skip immediate opposite hull movement within the same action sequence. */
@@ -45,6 +47,7 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     directionalDamageCheck: false,
     gunMantletArmor: false,
     unitDamageTargetClass: false,
+    overpenetration: false,
     radioVisionSharing: false,
     aiReverseMoveFilter: false,
     aiHardcoreTankDice: false,
@@ -62,6 +65,7 @@ const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
     directionalDamageCheck: true,
     gunMantletArmor: true,
     unitDamageTargetClass: true,
+    overpenetration: true,
     radioVisionSharing: true,
     aiReverseMoveFilter: true,
     aiHardcoreTankDice: true,

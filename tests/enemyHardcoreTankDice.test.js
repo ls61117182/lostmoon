@@ -157,7 +157,7 @@ assert.match(enemyAI, /attack: Math\.max\(0, base\.attack \+ rank\.attack\)/);
 assert.match(enemyAI, /move: Math\.max\(0, base\.move \+ \(crewAlive\(unit, 'driver'\) \? 1 : 0\) \+ rank\.move\)/);
 assert.match(enemyAI, /misc: Math\.max\(0, base\.misc \+ \(crewAlive\(unit, 'commander'\) \? 1 : 0\) \+ rank\.misc\)/);
 assert.match(enemyAI, /out\.push\(\{ type: 'misc', pip: rng\.d6\(\) \}\)/);
-assert.match(enemyAI, /case 'at_gun': return \{ attack: 2 \+ atGunActionDiceBonus\(unit\), move: 0, misc: 0 \};/);
+assert.match(enemyAI, /case 'at_gun': return \{ attack: 0, move: 0, misc: 0 \};/);
 assert.match(enemyAI, /case 'japanese_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'american_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'german_heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);

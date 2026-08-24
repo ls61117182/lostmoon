@@ -8,6 +8,7 @@ import {
   reviveFirstCampaignCrewMember,
 } from '../assets/scripts/core/CampaignUpgrade';
 import { applyAttack, canAttack } from '../assets/scripts/core/Combat';
+import { currentInteriorVisionRange } from '../assets/scripts/core/FogOfWar';
 import { HexMap } from '../assets/scripts/core/HexGrid';
 import type { AttackReport } from '../assets/scripts/core/Combat';
 import type { Tile, Unit } from '../assets/scripts/core/types';
@@ -60,6 +61,16 @@ function damageReport(effect: 'paralyzed'): AttackReport {
   assert.strictEqual(campaignUpgradeDiceBonus(['wide_tracks'], 'mud', 'attack'), 1);
   assert.strictEqual(campaignUpgradeDiceBonus(['wide_tracks'], 'beach', 'movement'), 1);
   assert.strictEqual(campaignUpgradeDiceBonus(['wide_tracks'], 'beach', 'misc'), 1);
+}
+
+{
+  const sherman = tank('cupola-upgrade', 'usa');
+  applyCampaignUpgradesToSherman(sherman, ['commander_cupola']);
+  assert.strictEqual(currentInteriorVisionRange(sherman), 2, 'a living commander enables the cupola bonus');
+  sherman.crew!.commander = false;
+  assert.strictEqual(currentInteriorVisionRange(sherman), 1, 'the cupola bonus stops when the commander dies');
+  sherman.crew!.commander = true;
+  assert.strictEqual(currentInteriorVisionRange(sherman), 2, 'reviving the commander restores the cupola bonus');
 }
 
 {

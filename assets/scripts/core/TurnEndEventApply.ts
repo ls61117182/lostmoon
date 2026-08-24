@@ -35,6 +35,9 @@ export interface TurnEndApplyContext {
   nextEnemyId: () => string;
   effectiveRangePenetration?: boolean;
   sameHexInfantryTankAttack?: boolean;
+  directionalDamageCheck?: boolean;
+  gunMantletArmor?: boolean;
+  unitDamageTargetClass?: boolean;
   weather?: WeatherType;
 }
 
@@ -365,6 +368,9 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   rng: RNG,
   effectiveRangePenetration = false,
   sameHexInfantryTankAttack = false,
+  directionalDamageCheck = false,
+  gunMantletArmor = false,
+  unitDamageTargetClass = false,
   weather: WeatherType | undefined = mission.data.weather,
 ): {
   volleys: AdjacentInfantryVolleyPreview[];
@@ -392,6 +398,9 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
       smokeHexes: mission.smokeHexes,
       effectiveRangePenetration,
       sameHexInfantryTankAttack,
+      directionalDamageCheck,
+      gunMantletArmor,
+      unitDamageTargetClass,
       weather,
     };
     if (canAttack(ctx).ok) {
@@ -632,7 +641,14 @@ export function prepareTurnEndEvent(
     }
     case 'adjacent_infantry_fire': {
       const { volleys } = simulateAdjacentInfantryVolleysForTurnEnd(
-        mission, rng, ctx.effectiveRangePenetration, ctx.sameHexInfantryTankAttack, ctx.weather,
+        mission,
+        rng,
+        ctx.effectiveRangePenetration,
+        ctx.sameHexInfantryTankAttack,
+        ctx.directionalDamageCheck,
+        ctx.gunMantletArmor,
+        ctx.unitDamageTargetClass,
+        ctx.weather,
       );
       const reports = volleys.map(v => v.report);
       const bodyKey =

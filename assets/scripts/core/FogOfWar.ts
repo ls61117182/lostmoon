@@ -1,10 +1,12 @@
 import { axialAdd, HexMap, axialEquals, axialToPixel, diagonalFlankFireDirectionTo, fireDirectionStep, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
+import { CAMPAIGN_UPGRADE_BY_ID } from './CampaignUpgradeDB';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, Unit, WeatherType } from './types';
+import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
+export const HEAVY_ARTILLERY_VISION_RANGE = 4;
 
 interface Point {
   x: number;
@@ -35,10 +37,15 @@ export function currentGunnerVisionRange(unit: Unit): number {
 
 /** Closed-hatch interior sight is deliberately separate from gunner sight. */
 export function currentInteriorVisionRange(unit: Unit): number {
-  return normalizedVisionRange(
+  const range = normalizedVisionRange(
     unit.interiorVisionRange ?? unit.stats.interiorVisionRange,
     DEFAULT_INTERIOR_VISION_RANGE,
   );
+  const commanderCupolaDisabled = unit.crew?.commander === false
+    && unit.campaignUpgradeIds?.includes('commander_cupola');
+  return commanderCupolaDisabled
+    ? Math.max(0, range - CAMPAIGN_UPGRADE_BY_ID.commander_cupola.interiorVisionBonus)
+    : range;
 }
 
 function normalizedVisionRange(raw: unknown, fallback: number): number {
@@ -72,14 +79,23 @@ export function computeUnitVisibleHexes(
   };
 
   add(unit.pos);
-  // A unit inside smoke retains awareness of its own hex but contributes no
-  // direct vision beyond it. Radio-shared sight is merged by the caller.
-  if (smokeHexes?.has(HexMap.keyOf(unit.pos))) return visible;
+  // In hardcore mode smoke behaves like a building/forest LoS blocker: its
+  // own hex remains visible, but it blocks hexes behind it. A unit standing in
+  // smoke keeps every one of its own sight types, capped to range 1; unrestricted
+  // friendly radio sight is merged separately by computeRadioSharedVisibleHexes.
+  const ownVisionRange = (range: number) => smokeHexes?.has(HexMap.keyOf(unit.pos))
+    ? Math.min(range, 1)
+    : range;
+  const heavyArtillery = isHeavyArtilleryUnit(unit);
   // Old tests/saves predate the config field; vehicle behavior remains turreted by default.
-  const visionType = isControlledATGun(unit) ? 'infantry' : (unit.stats.visionType ?? 'turreted');
+  const visionType = heavyArtillery
+    ? 'fixed'
+    : isControlledATGun(unit) ? 'infantry' : (unit.stats.visionType ?? 'turreted');
   const commanderAlive = unit.crew?.commander !== false;
-  const openHatch = commanderAlive && unit.hatchOpen === true;
-  const commanderVisionRange = currentVisionRange(unit, weather);
+  const openHatch = !heavyArtillery && commanderAlive && unit.hatchOpen === true;
+  const commanderVisionRange = ownVisionRange(heavyArtillery
+    ? HEAVY_ARTILLERY_VISION_RANGE
+    : currentVisionRange(unit, weather));
 
   if (openHatch) {
     for (const tile of map.all()) {
@@ -89,7 +105,7 @@ export function computeUnitVisibleHexes(
   }
 
   if (visionType === 'infantry') {
-    const infantryRange = isControlledATGun(unit) ? commanderVisionRange : 2;
+    const infantryRange = ownVisionRange(isControlledATGun(unit) ? commanderVisionRange : 2);
     for (const tile of map.all()) {
       if (hexDistance(unit.pos, tile.pos) <= infantryRange
         && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
@@ -102,7 +118,7 @@ export function computeUnitVisibleHexes(
   // Other fixed-gun units (AT guns, artillery, trucks) keep their legacy ray.
   const tank = isTankUnit(unit);
   if (tank && !openHatch) {
-    const interiorVisionRange = currentInteriorVisionRange(unit);
+    const interiorVisionRange = ownVisionRange(currentInteriorVisionRange(unit));
     for (const tile of map.all()) {
       if (hexDistance(unit.pos, tile.pos) <= interiorVisionRange
         && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
@@ -115,22 +131,22 @@ export function computeUnitVisibleHexes(
     : unit.facing;
   if (sightFacing !== null) {
     const gunnerVisionRange = tank ? currentGunnerVisionRange(unit) : commanderVisionRange;
+    const limitedGunnerVisionRange = ownVisionRange(gunnerVisionRange);
     const rayVector = fireDirectionVector(sightFacing as FireDirection);
     const fireDirection = sightFacing as FireDirection;
     const diagonalRay = isDiagonalFireDirection(fireDirection);
     if (tank && !openHatch && diagonalRay) {
-      addClosedTankDiagonalGunnerVision(map, unit, fireDirection, gunnerVisionRange, add, smokeHexes);
+      addClosedTankDiagonalGunnerVision(map, unit, fireDirection, limitedGunnerVisionRange, add, smokeHexes);
       return visible;
     }
     let p = axialAdd(unit.pos, rayVector);
-    while (hexDistance(unit.pos, p) <= gunnerVisionRange && map.has(p)) {
+    while (hexDistance(unit.pos, p) <= limitedGunnerVisionRange && map.has(p)) {
       if (diagonalRay) {
         if (!map.hasDiagonalLineOfSight(unit.pos, p, fireDirection, smokeHexes)) break;
       }
       const tile = map.get(p)!;
-      if (smokeHexes?.has(HexMap.keyOf(p))) break;
       add(p);
-      if (map.lineOfSightBlockedByTile(tile)) break;
+      if (smokeHexes?.has(HexMap.keyOf(p)) || map.lineOfSightBlockedByTile(tile)) break;
       p = axialAdd(p, rayVector);
     }
   }
@@ -150,7 +166,23 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
   weather?: WeatherType,
   smokeHexes?: ReadonlySet<string>,
 ): FireDirection | null {
-  if (!isTankUnit(unit) || unit.stats.visionType !== 'turreted') return null;
+  const controlledATGun = isControlledATGun(unit);
+  if ((!isTankUnit(unit) && !controlledATGun) || unit.stats.visionType !== 'turreted') return null;
+  if (controlledATGun) {
+    // AT guns acquire targets through their infantry crew (including shared
+    // friendly vision), so only the firing path—not the gun's own sight
+    // range—limits a halfway-direction shot.
+    const direction = diagonalFlankFireDirectionTo(unit.pos, target);
+    if (direction === null) return null;
+    return diagonalGunnerClickPreference(
+      map,
+      unit,
+      direction,
+      target,
+      smokeHexes,
+      hexDistance(unit.pos, target),
+    ) !== null ? direction : null;
+  }
   const openHatch = unit.crew?.commander !== false && unit.hatchOpen === true;
   if (openHatch) {
     // Commander sight can reveal either flank without a prior recon turn. Let
@@ -190,13 +222,14 @@ export function diagonalGunnerClickPreference(
   fireDirection: FireDirection,
   target: Axial,
   smokeHexes?: ReadonlySet<string>,
+  maxRange = currentGunnerVisionRange(unit),
 ): Direction | null {
   if (!isDiagonalFireDirection(fireDirection)) return null;
   const diagonalIndex = fireDirection - 6;
   const a = diagonalIndex as Direction;
   const b = ((diagonalIndex + 1) % 6) as Direction;
   const rayVector = fireDirectionVector(fireDirection);
-  const range = currentGunnerVisionRange(unit);
+  const range = Math.max(0, Math.floor(maxRange));
   let aOpen = true;
   let bOpen = true;
   let current = unit.pos;
@@ -207,8 +240,7 @@ export function diagonalGunnerClickPreference(
     const clickedSide = axialEquals(target, aPos) ? a : axialEquals(target, bPos) ? b : null;
     if (clickedSide !== null) {
       const clickedPathOpen = clickedSide === a ? aOpen : bOpen;
-      return clickedPathOpen && map.has(target)
-        && !smokeHexes?.has(HexMap.keyOf(target)) ? clickedSide : null;
+      return clickedPathOpen && map.has(target) ? clickedSide : null;
     }
 
     if (diagonalFlankBlocked(map, aPos, smokeHexes)) aOpen = false;
@@ -252,7 +284,7 @@ function addClosedTankDiagonalGunnerVision(
     const bPos = neighbor(current, b);
     const chosenOpen = chosen === a ? aOpen : bOpen;
     const chosenPos = chosen === a ? aPos : bPos;
-    if (chosenOpen && !smokeHexes?.has(HexMap.keyOf(chosenPos))) add(chosenPos);
+    if (chosenOpen) add(chosenPos);
 
     if (diagonalFlankBlocked(map, aPos, smokeHexes)) aOpen = false;
     if (diagonalFlankBlocked(map, bPos, smokeHexes)) bOpen = false;
@@ -262,9 +294,8 @@ function addClosedTankDiagonalGunnerVision(
     const center = axialAdd(current, rayVector);
     if (!map.has(center)) break;
     const centerTile = map.get(center)!;
-    if (smokeHexes?.has(HexMap.keyOf(center))) break;
     add(center);
-    if (map.lineOfSightBlockedByTile(centerTile)) break;
+    if (smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile)) break;
     current = center;
   }
 }
@@ -335,6 +366,8 @@ export function computeRadioSharedVisibleHexes(
   smokeHexes?: ReadonlySet<string>,
 ): Set<string> {
   const visible = computeUnitVisibleHexes(map, receiver, weather, smokeHexes);
+  // Fixed heavy artillery never acquires off-axis targets from friendly radio.
+  if (isHeavyArtilleryUnit(receiver)) return visible;
   if (hasRadioReceive(receiver)) {
     for (const friendly of friendlies) {
       if (friendly === receiver || !shareVisionFaction(friendly, receiver) || !hasRadioTransmit(friendly)) continue;
@@ -350,6 +383,7 @@ export function computeRadioSharedVisibleHexes(
   // sight is merged directly here, never treated as a radio transmission, so
   // another tank cannot relay it through its intact radio.
   if (isTankUnit(receiver)) {
+    const receiverInSmoke = smokeHexes?.has(HexMap.keyOf(receiver.pos)) === true;
     for (const friendly of friendlies) {
       if (friendly === receiver
         || friendly.destroyed
@@ -358,7 +392,10 @@ export function computeRadioSharedVisibleHexes(
         || !shareVisionFaction(friendly, receiver)
         || !axialEquals(friendly.pos, receiver.pos)) continue;
       for (const key of computeUnitVisibleHexes(map, friendly, weather, smokeHexes)) {
-        if (!smokeHexes?.has(key)) visible.add(key);
+        const [q, r] = key.split(',').map(Number);
+        const pos = { q, r };
+        if (!smokeHexes?.has(key)
+          && (!receiverInSmoke || hexDistance(receiver.pos, pos) <= 1)) visible.add(key);
       }
     }
   }
@@ -411,7 +448,6 @@ export function hasFogLineOfSight(
   smokeHexes?: ReadonlySet<string>,
 ): boolean {
   if (axialEquals(from, to)) return true;
-  if (smokeHexes?.has(HexMap.keyOf(from)) || smokeHexes?.has(HexMap.keyOf(to))) return false;
   const a = axialToPixel(from, GEOMETRY_HEX_SIZE);
   const b = axialToPixel(to, GEOMETRY_HEX_SIZE);
   for (const tile of map.all()) {
@@ -429,8 +465,6 @@ function hasDirectionalFogLineOfSight(
   to: Axial,
   smokeHexes?: ReadonlySet<string>,
 ): boolean {
-  if (!axialEquals(from, to)
-    && (smokeHexes?.has(HexMap.keyOf(from)) || smokeHexes?.has(HexMap.keyOf(to)))) return false;
   const fireDirection = fireDirectionTo(from, to);
   if (fireDirection !== null && isDiagonalFireDirection(fireDirection)) {
     return map.hasDiagonalLineOfSight(from, to, fireDirection, smokeHexes);

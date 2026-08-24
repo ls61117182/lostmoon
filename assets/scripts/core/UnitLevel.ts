@@ -84,7 +84,7 @@ export function nonPlayerTankDiceBonus(unit: Unit): RankedDiceBonus {
   }
 }
 
-/** 反坦克炮的行动骰加成，等级来自操炮步兵。 */
+/** Legacy balance helper retained for compatibility; hardcore AT guns no longer roll action dice. */
 export function atGunActionDiceBonus(unit: Unit): number {
   if (unit.kind !== 'at_gun') return 0;
   const level = unitLevelOf(unit);

@@ -75,6 +75,21 @@ assert(
   'the automatic misc transition should not use a one-frame retry that can expire before the attack result closes',
 );
 
+const computeAdvanceButton = battleScene.match(/private\s+computeAdvanceButton\s*\(\)[^{]*{[\s\S]*?\n  }\n\n  private\s+pvpOpponentProtagonist/);
+assert(computeAdvanceButton, 'BattleScene.computeAdvanceButton() should be found');
+assert(
+  /return\s*{\s*label:\s*t\('btn\.nextPhase'\),\s*urgent:\s*false,\s*visible:\s*false\s*};/.test(computeAdvanceButton[0]),
+  'the advance button should be hidden while the player is still choosing movement or attack',
+);
+assert(
+  battleScene.includes('if (this.endTurnBtn) this.endTurnBtn.active = adv.visible;'),
+  'updateHUD() should apply the computed advance-button visibility to the whole button node',
+);
+assert(
+  /btn\.on\(Node\.EventType\.TOUCH_END, this\.onAdvanceClicked, this\);\s*\/\/[^\n]*\n\s*btn\.active\s*=\s*false;/.test(battleScene),
+  'the advance button should start hidden before the first HUD refresh',
+);
+
 assert(
   endCurrentSubPhase[0].includes('this.beginFireCheckPhase();'),
   'ending the player misc phase should enter the fire-check phase before any AI phase',

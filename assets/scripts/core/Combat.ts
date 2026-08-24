@@ -102,6 +102,10 @@ export interface AttackReport {
   penDice?: number[];       // 击穿掷骰明细（2 颗）
   penThreshold?: number;    // 击穿所需 = armor - penetration（≤0 必穿，≥7 不可击穿）
   penetrated?: boolean;     // 是否击穿装甲；未击穿 = 命中无效
+  /** 硬核过穿：穿甲结果比所需点数高 6 点以上，且目标属于车辆。 */
+  overpenetrated?: boolean;
+  /** 被过穿原位取消的起火 / 击毁结果；不会因此顺延到伤害表下一组。 */
+  overpenetrationSuppressedEffects?: DamageEffect[];
   /** 伤害检定分段：仅在 hit && penetrated 时有值 */
   damageDie?: number;       // 1d6 伤害表掷骰
   damageEffect?: DamageEffect;
@@ -150,6 +154,8 @@ export interface AttackContext {
   gunMantletArmor?: boolean;
   /** Hardcore rule: Step 3 target class may come from units.csv. */
   unitDamageTargetClass?: boolean;
+  /** Hardcore rule: excessive tank main-gun penetration may overpenetrate vehicle targets. */
+  overpenetration?: boolean;
   /** Hardcore rule: a controlled AT gun exposes its three-man operator group to MG fire. */
   atGunCrewTargets?: boolean;
   /** Hardcore rule: tank MG attacks must identify the hull or coaxial weapon being used. */
@@ -221,6 +227,26 @@ export function attackFireDirection(ctx: AttackContext): FireDirection | null {
   return directionTo(attacker.pos, target.pos);
 }
 
+/**
+ * Smoke rules follow the active hardcore capability flags. Some MG and turn-end
+ * call sites carry a narrower hardcore context than main-gun attacks, so no
+ * single capability flag is a sufficient mode discriminator on its own.
+ */
+function usesHardcoreSmokeRules(ctx: AttackContext): boolean {
+  return ctx.expandedTurretDirections === true
+    || ctx.hardcoreTankMachineGuns === true
+    || ctx.sameHexInfantryTankAttack === true;
+}
+
+/** Smoke blocks firing rays only in hardcore mode; classic smoke is a hit modifier only. */
+function firingRaySmokeHexes(ctx: AttackContext): ReadonlySet<string> | undefined {
+  return usesHardcoreSmokeRules(ctx) ? ctx.smokeHexes : undefined;
+}
+
+function unitIsInSmoke(ctx: AttackContext, unit: Unit): boolean {
+  return ctx.smokeHexes?.has(HexMap.keyOf(unit.pos)) === true || unit.smoked === true;
+}
+
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
 export interface EffectivePenetrationBreakdown {
   basePenetration: number;
@@ -288,7 +314,12 @@ export type AttackDenyReason =
   | 'attack.reason.camouflageNet';
 
 function isForwardOnlyGun(unit: Unit): boolean {
-  return unit.stats.visionType === 'fixed' || unit.kind === 'at_gun' || unit.kind === 'heavy_artillery';
+  // A controlled hardcore AT gun is represented as turreted only while its
+  // dedicated AI evaluates/executes whole-mount 12-direction fire. Ordinary
+  // AT guns and artillery retain the legacy six-direction fixed-gun rule.
+  return unit.stats.visionType === 'fixed'
+    || (unit.kind === 'at_gun' && unit.stats.visionType !== 'turreted')
+    || unit.kind === 'heavy_artillery';
 }
 
 /** Infantry attacks are limited to an adjacent hex, including anti-tank attacks. */
@@ -324,24 +355,18 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   // A same-hex infantry attack has no firing ray to validate. Its hit and
   // penetration calculations still use the normal breakdown, where distance is 0.
   if (sameHexInfantryTankAttack) return { ok: true };
-  // Smoke fully obscures its hex. A unit inside it cannot aim outside, and a
-  // unit outside cannot aim into it. Same-hex infantry anti-tank attacks above
-  // remain legal because they require no view through the smoke screen.
-  if (ctx.smokeHexes?.has(HexMap.keyOf(attacker.pos))
-    || ctx.smokeHexes?.has(HexMap.keyOf(target.pos))) {
-    return { ok: false, reason: 'attack.reason.blocked' };
-  }
+  const raySmokeHexes = firingRaySmokeHexes(ctx);
   // Infantry weapons, including anti-tank launchers, are adjacent-hex attacks.
   if (infantryAttack) {
     const range = infantryAttackRange(target);
     if (distance > range) return { ok: false, reason: 'attack.reason.outOfRange' };
-    return map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes)
+    return map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes)
       ? { ok: true }
       : { ok: false, reason: 'attack.reason.blocked' };
   }
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
   const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, raySmokeHexes)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
@@ -351,8 +376,8 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const hasSight = flankDirection !== null || (ctx.expandedTurretDirections
     && attacker.stats.visionType === 'turreted'
     && isDiagonalFireDirection(fireDir)
-    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, ctx.smokeHexes)
-    : map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes));
+    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, raySmokeHexes)
+    : map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }
@@ -379,7 +404,7 @@ export interface HitBreakdown {
    */
   hedges: number;
   building: number;     // 0 或 1
-  smoke: number;        // 0 或 1 —— 目标处于烟雾掩护中（§3.5）
+  smoke: number;        // 经典：目标在烟中 +1；硬核：攻击者或目标在烟中 +2
   concealed: number;    // 0 或 2 —— 目标隐蔽（§3.5）
   threshold: number;    // base modifiers + theater/arc modifiers + actionModifier
   trees?: number;
@@ -397,7 +422,9 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const targetTile = map.get(target.pos);
   const building = targetTile?.hasBuilding ? 1 : 0;
   const size = target.stats.size;
-  const smoke = ctx.smokeHexes?.has(HexMap.keyOf(target.pos)) || target.smoked ? 1 : 0;
+  const smoke = usesHardcoreSmokeRules(ctx)
+    ? (unitIsInSmoke(ctx, attacker) || unitIsInSmoke(ctx, target) ? 2 : 0)
+    : (unitIsInSmoke(ctx, target) ? 1 : 0);
   const concealed = target.hidden && !isInfantryAttacker(attacker) ? 2 : 0;
   const pacific = isPacificCombat(ctx);
   const trees = pacific ? countPacificTreesAlong(ctx) : 0;
@@ -647,6 +674,17 @@ function primaryDamageEffect(effects: readonly DamageEffectStep[]): DamageEffect
   return effects[0]?.effect;
 }
 
+function isOverpenetrationVehicleTarget(target: Unit): boolean {
+  return !isFootUnit(target)
+    && target.kind !== 'at_gun'
+    && target.kind !== 'heavy_artillery'
+    && target.kind !== 'german_heavy_artillery';
+}
+
+function isOverpenetrationSuppressedEffect(effect: DamageEffect): boolean {
+  return effect === 'fire' || effect === 'destroyed';
+}
+
 /**
  * 纯掷骰 + 计算结果（不修改 target）。返回的 report 描述"如果应用，会发生什么"。
  * 拆分出来是为了让 UI 先播掷骰动画，等动画结束再调用 applyAttack 真正落实伤害，
@@ -681,6 +719,12 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const penDie = penDice.reduce((a, b) => a + b, 0);
   const penThreshold = armor - pen;
   const penetrated = penDie >= penThreshold;
+  const overpenetrated = penetrated
+    && ctx.overpenetration === true
+    && ctx.attackKind !== 'mg'
+    && isTankUnit(attacker)
+    && isOverpenetrationVehicleTarget(target)
+    && penDie - penThreshold > 6;
   const directDestroyOnBurningTank = !!damageCheckType
     && !!targetClass
     && !protagonistTarget
@@ -690,19 +734,34 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     && !directDestroyOnBurningTank
     && (!!targetClass || !(pacific && !protagonistTarget));
   const stagedDamageDie = damagePossible ? rng.d6() : undefined;
-  const stagedDamageEffects = stagedDamageDie !== undefined && targetClass
+  const rawStagedDamageEffects = stagedDamageDie !== undefined && targetClass
     ? resolveDamageTableEffects(target, targetClass, damageTable, stagedDamageDie)
     : undefined;
-  const rawStagedDamageEffect = stagedDamageEffects
-    ? primaryDamageEffect(stagedDamageEffects)
+  const rawStagedDamageEffect = rawStagedDamageEffects
+    ? primaryDamageEffect(rawStagedDamageEffects)
     : (stagedDamageDie !== undefined
       ? (pacific && protagonistTarget
         ? resolvePacificShermanDamageEffect(stagedDamageDie, damageTable)
         : resolveDamageEffect(target, stagedDamageDie, protagonistTarget, damageTable))
       : undefined);
-  const stagedDamageEffect = rawStagedDamageEffect && isDamageEffectSuppressed(target, rawStagedDamageEffect)
+  const overpenetrationSuppressedEffects: DamageEffect[] = overpenetrated
+    ? Array.from(new Set([
+      ...(rawStagedDamageEffects ?? []).map(step => step.effect),
+      ...(rawStagedDamageEffect ? [rawStagedDamageEffect] : []),
+      ...((directDestroyByTargetClass || directDestroyOnBurningTank) ? ['destroyed' as DamageEffect] : []),
+    ].filter(isOverpenetrationSuppressedEffect)))
+    : [];
+  const stagedDamageEffects = rawStagedDamageEffects?.filter(
+    step => !(overpenetrated && isOverpenetrationSuppressedEffect(step.effect)),
+  );
+  const filteredStagedDamageEffect = stagedDamageEffects
+    ? primaryDamageEffect(stagedDamageEffects)
+    : (rawStagedDamageEffect && overpenetrated && isOverpenetrationSuppressedEffect(rawStagedDamageEffect)
+      ? undefined
+      : rawStagedDamageEffect);
+  const stagedDamageEffect = filteredStagedDamageEffect && isDamageEffectSuppressed(target, filteredStagedDamageEffect)
     ? undefined
-    : rawStagedDamageEffect;
+    : filteredStagedDamageEffect;
   const tableCrewCheck = stagedDamageEffects?.some(step => step.effect === 'crewCheck' && !!step.crewPriority?.length) ?? false;
   const legacyCrewCheck = protagonistTarget && damagePossible && stagedDamageEffect === 'crewCheck' && !tableCrewCheck;
   let stagedCrewCheck: CrewDeathResult | undefined;
@@ -718,7 +777,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       dice: [d1, d2], roll, threshold, hit: false, hitBreakdown: lockedHitBreakdown, hitModifiers,
       armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
-      penDie, penDice, penThreshold, penetrated,
+      penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles: false,
       commanderShieldBlocked: false,
@@ -733,7 +792,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
-      penDie, penDice, penThreshold, penetrated,
+      penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
       commanderShieldBlocked,
@@ -743,13 +802,13 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   }
 
   if (directDestroyByTargetClass || directDestroyOnBurningTank || (pacific && !protagonistTarget && !targetClass)) {
-    if (isDamageEffectSuppressed(target, 'destroyed')) {
+    if (overpenetrated || isDamageEffectSuppressed(target, 'destroyed')) {
       return {
         dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
         hit: true,
         armorFace: face, armor, gunMantletArmor, penetration: pen,
         damageCheckType,
-        penDie, penDice, penThreshold, penetrated,
+        penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
         damageEffects: [],
         stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
         commanderKilledByHitDoubles,
@@ -763,7 +822,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
-      penDie, penDice, penThreshold, penetrated,
+      penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       damageEffect: 'destroyed',
       damageEffects: [{ effect: 'destroyed' }],
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -784,7 +843,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen,
       damageCheckType,
-      penDie, penDice, penThreshold, penetrated,
+      penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       damageDie, damageEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
@@ -803,7 +862,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     hit: true,
     armorFace: face, armor, gunMantletArmor, penetration: pen,
     damageCheckType,
-    penDie, penDice, penThreshold, penetrated,
+    penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
     damageDie, damageEffect, damageEffects,
     stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
     crewCheck,
@@ -1118,12 +1177,9 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
   const distance = hexDistance(attacker.pos, target.pos);
   if (distance === 0 || distance > MG_MAX_RANGE) return { ok: false, reason: 'attack.reason.mgRange' };
-  if (ctx.smokeHexes?.has(HexMap.keyOf(attacker.pos))
-    || ctx.smokeHexes?.has(HexMap.keyOf(target.pos))) {
-    return { ok: false, reason: 'attack.reason.blocked' };
-  }
+  const raySmokeHexes = firingRaySmokeHexes(ctx);
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)
+    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, raySmokeHexes)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
@@ -1145,8 +1201,8 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
     }
   }
   const hasSight = flankDirection !== null || (ctx.expandedTurretDirections && isDiagonalFireDirection(fireDir)
-    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, ctx.smokeHexes)
-    : map.hasLineOfSight(attacker.pos, target.pos, ctx.smokeHexes));
+    ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, raySmokeHexes)
+    : map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
   return { ok: true };
 }

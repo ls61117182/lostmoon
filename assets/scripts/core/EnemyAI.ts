@@ -44,7 +44,7 @@ import {
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
 import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
-import { atGunActionDiceBonus, commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
+import { commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
 
@@ -118,7 +118,9 @@ function crewAlive(unit: Unit, slot: 'commander' | 'loader' | 'gunner' | 'driver
 
 export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number; misc: number } {
   switch (unit.kind) {
-    case 'at_gun': return { attack: 2 + atGunActionDiceBonus(unit), move: 0, misc: 0 };
+    // Hardcore controlled AT guns use BattleScene's deterministic one-action
+    // flow and must report an empty pool even to diagnostic/UI callers.
+    case 'at_gun': return { attack: 0, move: 0, misc: 0 };
     case 'japanese_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'american_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'heavy_artillery':

@@ -142,6 +142,37 @@ console.log('All six diagonal flank rotation targets passed');
 
 {
   const map = fieldMap();
+  const atGun = {
+    id: 'at-gun',
+    kind: 'at_gun',
+    faction: 'german',
+    pos: { q: 0, r: 0 },
+    facing: 0,
+    turretFacing: 0,
+    atGunCrewAlive: true,
+    stats: { visionType: 'turreted', penetration: 6, effectiveRange: 3 },
+  };
+  const flankTarget = {
+    id: 'sherman', kind: 'sherman', faction: 'usa', pos: { q: 2, r: 1 }, facing: 0,
+    stats: { size: 4, armorFront: 5, armorFrontSide: 4, armorRearSide: 3, armorRear: 2 },
+  };
+  const context = { attacker: atGun, target: flankTarget, map, expandedTurretDirections: true };
+  assert.strictEqual(
+    attackFireDirection(context),
+    6,
+    'a controlled AT gun should resolve an adjacent halfway-ray flank to its 30-degree facing',
+  );
+  assert.strictEqual(
+    canAttack(context).ok,
+    true,
+    'the AT-gun AI attack proxy should retain the flank target for rotate-and-attack',
+  );
+}
+
+console.log('Hardcore AT-gun diagonal rotation target passed');
+
+{
+  const map = fieldMap();
   map.set({ pos: { q: 2, r: 1 }, terrain: 'field', hasBuilding: true });
   map.set({ pos: { q: 1, r: 2 }, terrain: 'field', hasBuilding: true });
   assert.strictEqual(

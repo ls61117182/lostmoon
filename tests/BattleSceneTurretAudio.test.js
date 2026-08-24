@@ -20,13 +20,18 @@ assert.match(
 );
 assert.match(
   battle,
-  /private beginTurretAimAnim[\s\S]*?this\.turretAimAnim = anim[\s\S]*?anim\.from !== anim\.to[\s\S]*?startTurretTraverseSound\(\)/,
+  /private beginTurretAimAnim[\s\S]*?this\.turretAimAnim = anim[\s\S]*?!anim\.suppressTurretSound[\s\S]*?anim\.from !== anim\.to[\s\S]*?startTurretTraverseSound\(\)/,
   'only a real turret-angle animation should start the sound',
 );
 assert.match(
   battle,
-  /if \(this\.turretAimAnim\)[\s\S]*?if \(a\.t < 1\)[\s\S]*?return;[\s\S]*?stopTurretTraverseSound\(\)[\s\S]*?this\.turretAimAnim = null/,
+  /if \(this\.turretAimAnim\)[\s\S]*?if \(a\.t < 1\)[\s\S]*?return;[\s\S]*?!a\.suppressTurretSound[\s\S]*?stopTurretTraverseSound\(\)[\s\S]*?this\.turretAimAnim = null/,
   'turret sound must stop in the same update frame that completes the animation',
+);
+assert.match(
+  battle,
+  /private startHardcoreATGunAim[\s\S]*?beginTurretAimAnim\(\{[\s\S]*?unit: gun,[\s\S]*?suppressTurretSound: true/,
+  'AT-gun whole-mount rotation must suppress the tank turret motor sound',
 );
 assert.match(battle, /private resetTurretFacingState\(\)[\s\S]*?stopTurretTraverseSound\(\)/);
 assert.match(audio, /stopBattleSfx[\s\S]*?stopTurretTraverseSound\(\)/);

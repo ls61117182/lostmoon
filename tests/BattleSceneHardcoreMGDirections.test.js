@@ -63,6 +63,18 @@ assert.match(
 
 assert.match(
   source,
+  /const\s+attackedSidePreference\s*=\s*flankDirection\s*!==\s*null[\s\S]*?diagonalGunnerClickPreference\([\s\S]*?target\.pos[\s\S]*?this\.startShermanTurretAimDirection\([\s\S]*?preserveRuleFacing,\s*attackedSidePreference\s*\?\?\s*undefined/,
+  'a halfway-ray attack must remember which flank contained the attacked target',
+);
+
+assert.match(
+  source,
+  /if\s*\(diagonalSidePreference\s*!==\s*undefined\)\s*\{\s*sherman\.diagonalGunnerSidePreference\s*=\s*diagonalSidePreference;\s*\}\s*else\s+if\s*\(!preserveRuleFacing\)/,
+  'an explicit attacked flank must update closed-hatch vision even when the rules-facing turret direction is unchanged',
+);
+
+assert.match(
+  source,
   /private\s+tankMachineGunSelection[\s\S]*?selectTankMachineGun\([\s\S]*?this\.canTurretReachDirection/,
   'hardcore target selection should resolve hull versus coaxial machine guns through the shared rule',
 );

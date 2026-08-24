@@ -25,6 +25,21 @@ async function alphaBytes(file) {
   return { alpha, width: info.width, height: info.height };
 }
 
+async function assertTransparentRgbPreserved(sourceFile, winterFile, label) {
+  const [source, winter] = await Promise.all([
+    sharp(sourceFile).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+    sharp(winterFile).ensureAlpha().raw().toBuffer({ resolveWithObject: true }),
+  ]);
+  assert.strictEqual(winter.info.width, source.info.width, `${label} transparent RGB width must match`);
+  assert.strictEqual(winter.info.height, source.info.height, `${label} transparent RGB height must match`);
+  for (let i = 0; i < source.data.length; i += 4) {
+    if (source.data[i + 3] !== 0) continue;
+    assert.strictEqual(winter.data[i], source.data[i], `${label} transparent red must match at pixel ${i / 4}`);
+    assert.strictEqual(winter.data[i + 1], source.data[i + 1], `${label} transparent green must match at pixel ${i / 4}`);
+    assert.strictEqual(winter.data[i + 2], source.data[i + 2], `${label} transparent blue must match at pixel ${i / 4}`);
+  }
+}
+
 (async () => {
   const uuids = new Set();
   for (const [summerName, winterName] of pairs) {
@@ -38,6 +53,9 @@ async function alphaBytes(file) {
     assert.strictEqual(winter.width, summer.width, `${winterName} width must match the original`);
     assert.strictEqual(winter.height, summer.height, `${winterName} height must match the original`);
     assert.deepStrictEqual(winter.alpha, summer.alpha, `${winterName} must preserve the original silhouette exactly`);
+    if (summerName.startsWith('terrain_')) {
+      await assertTransparentRgbPreserved(summerPath, winterPath, winterName);
+    }
 
     const meta = JSON.parse(fs.readFileSync(`${winterPath}.meta`, 'utf8'));
     assert.ok(!uuids.has(meta.uuid), `${winterName} must have a unique Cocos uuid`);

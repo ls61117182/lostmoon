@@ -11,7 +11,7 @@ require.extensions['.ts'] = (module, filename) => {
 
 const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
 const { computeRadioSharedVisibleHexes, computeUnitVisibleHexes } = require('../assets/scripts/core/FogOfWar.ts');
-const { canAttack, canMGAttack } = require('../assets/scripts/core/Combat.ts');
+const { canAttack, canMGAttack, hitBreakdown, mgHitBreakdown } = require('../assets/scripts/core/Combat.ts');
 const { beginAmbushTurn, endAmbushTurn, ambushHitThresholdModifier } = require('../assets/scripts/core/Ambush.ts');
 
 const map = new HexMap(8, 8);
@@ -53,7 +53,8 @@ function infantry(id, faction, q) {
 const smokeAtOrigin = new Set([HexMap.keyOf({ q: 0, r: 0 })]);
 const receiver = tank('receiver', 'american', 0);
 const direct = computeUnitVisibleHexes(map, receiver, undefined, smokeAtOrigin);
-assert.deepStrictEqual([...direct], [HexMap.keyOf(receiver.pos)], 'a unit in smoke keeps only its own direct hex vision');
+assert.strictEqual(direct.has(HexMap.keyOf({ q: 1, r: 0 })), true, 'a unit in smoke keeps direct vision at range 1');
+assert.strictEqual(direct.has(HexMap.keyOf({ q: 2, r: 0 })), false, 'a unit in smoke has no direct vision beyond range 1');
 
 const sender = infantry('sender', 'american', 3);
 const shared = computeRadioSharedVisibleHexes(map, receiver, [sender], undefined, smokeAtOrigin);
@@ -61,6 +62,7 @@ assert.strictEqual(shared.has(HexMap.keyOf({ q: 5, r: 0 })), true, 'a unit in sm
 assert.strictEqual(shared.has(HexMap.keyOf(receiver.pos)), true, 'the receiver still knows its own occupied hex');
 
 const outsideReceiver = tank('outside-receiver', 'american', 4);
+outsideReceiver.hatchOpen = false;
 const smokedSender = tank('smoked-sender', 'american', 0);
 const smokeIntel = computeRadioSharedVisibleHexes(map, outsideReceiver, [smokedSender], undefined, smokeAtOrigin);
 assert.strictEqual(
@@ -87,15 +89,26 @@ assert.strictEqual(
 const smokeInLine = new Set([HexMap.keyOf({ q: 1, r: 0 })]);
 const observer = infantry('observer', 'american', 0);
 const obscured = computeUnitVisibleHexes(map, observer, undefined, smokeInLine);
-assert.strictEqual(obscured.has(HexMap.keyOf({ q: 1, r: 0 })), false, 'the smoke hex itself is not visible from outside');
+assert.strictEqual(obscured.has(HexMap.keyOf({ q: 1, r: 0 })), true, 'the smoke hex itself remains visible from outside');
 assert.strictEqual(obscured.has(HexMap.keyOf({ q: 2, r: 0 })), false, 'smoke blocks vision to hexes behind it');
 
 const attacker = tank('attacker', 'american', 0);
 const target = tank('target', 'german', 2);
-assert.strictEqual(canAttack({ attacker, target, map, smokeHexes: smokeAtOrigin }).ok, false, 'a tank in smoke cannot fire outside');
-assert.strictEqual(canAttack({ attacker, target, map, smokeHexes: smokeInLine }).ok, false, 'smoke blocks main-gun fire through its hex');
-assert.strictEqual(canAttack({ attacker, target: { ...target, pos: { q: 1, r: 0 } }, map, smokeHexes: smokeInLine }).ok, false, 'a target inside smoke cannot be attacked from outside');
-assert.strictEqual(canMGAttack({ attacker, target: infantry('mg-target', 'german', 2), map, smokeHexes: smokeAtOrigin }).ok, false, 'a tank in smoke cannot use its MG outside');
+const hardcore = { expandedTurretDirections: true };
+assert.strictEqual(canAttack({ attacker, target, map, smokeHexes: smokeAtOrigin, ...hardcore }).ok, true, 'a tank in smoke may fire outside');
+assert.strictEqual(hitBreakdown({ attacker, target, map, smokeHexes: smokeAtOrigin, ...hardcore }).smoke, 2, 'an attacker in smoke gets the hardcore +2 hit threshold');
+assert.strictEqual(canAttack({ attacker, target, map, smokeHexes: smokeInLine, ...hardcore }).ok, false, 'smoke blocks main-gun fire through its hex');
+const targetInSmoke = { ...target, pos: { q: 1, r: 0 } };
+assert.strictEqual(canAttack({ attacker, target: targetInSmoke, map, smokeHexes: smokeInLine, ...hardcore }).ok, true, 'a target inside smoke may be attacked from outside');
+assert.strictEqual(hitBreakdown({ attacker, target: targetInSmoke, map, smokeHexes: smokeInLine, ...hardcore }).smoke, 2, 'a target in smoke gets the hardcore +2 hit threshold');
+const mgTarget = infantry('mg-target', 'german', 1);
+assert.strictEqual(canMGAttack({ attacker, target: mgTarget, map, smokeHexes: smokeAtOrigin, ...hardcore }).ok, true, 'a tank in smoke may use its MG outside');
+assert.strictEqual(mgHitBreakdown({ attacker, target: mgTarget, map, smokeHexes: smokeAtOrigin, ...hardcore }).smoke, 2, 'MG fire from smoke gets the hardcore +2 hit threshold');
+
+assert.strictEqual(canAttack({ attacker, target, map, smokeHexes: smokeInLine }).ok, true, 'classic attacks ignore smoke along the firing ray');
+assert.strictEqual(canAttack({ attacker, target: targetInSmoke, map, smokeHexes: smokeInLine }).ok, true, 'classic attacks may target a smoke hex');
+assert.strictEqual(hitBreakdown({ attacker, target, map, smokeHexes: smokeAtOrigin }).smoke, 0, 'classic smoke does not penalize the attacker');
+assert.strictEqual(hitBreakdown({ attacker, target: targetInSmoke, map, smokeHexes: smokeInLine }).smoke, 1, 'classic smoke keeps its target-only +1 hit threshold');
 
 const closeInfantry = infantry('close-infantry', 'american', 1);
 const closeTank = { ...target, pos: { q: 1, r: 0 } };
@@ -104,8 +117,17 @@ assert.strictEqual(canAttack({
   target: closeTank,
   map,
   smokeHexes: smokeInLine,
+  expandedTurretDirections: true,
   sameHexInfantryTankAttack: true,
 }).ok, true, 'infantry may attack an enemy tank sharing the same smoke hex');
+assert.strictEqual(hitBreakdown({
+  attacker: closeInfantry,
+  target: closeTank,
+  map,
+  smokeHexes: smokeInLine,
+  expandedTurretDirections: true,
+  sameHexInfantryTankAttack: true,
+}).smoke, 2, 'same-hex infantry attacks from smoke get the hardcore +2 hit threshold');
 
 const ambusher = tank('ambusher', 'american', 0);
 ambusher.crewSkills = { loader: ['calm'] };
