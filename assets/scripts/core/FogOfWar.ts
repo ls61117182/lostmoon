@@ -333,6 +333,50 @@ function chooseDiagonalGunnerSide(
     <= clockStepDistance(fireDirectionStep(previous), fireDirectionStep(b)) ? a : b;
 }
 
+/**
+ * Revalidate an explicitly selected halfway-ray flank after the observer moves.
+ * Keep the old flank when both paths are equivalent, but switch when the old
+ * path is the first one newly cut off and the opposite path can still continue.
+ */
+export function reconcileDiagonalGunnerSideAfterMove(
+  map: HexMap,
+  unit: Unit,
+  smokeHexes?: ReadonlySet<string>,
+): void {
+  const fireDirection = unit.turretFacing ?? unit.facing;
+  const preferred = unit.diagonalGunnerSidePreference;
+  if (fireDirection === null || preferred === undefined
+    || !isDiagonalFireDirection(fireDirection as FireDirection)) return;
+
+  const diagonalIndex = (fireDirection as FireDirection) - 6;
+  const a = diagonalIndex as Direction;
+  const b = ((diagonalIndex + 1) % 6) as Direction;
+  if (preferred !== a && preferred !== b) return;
+
+  const range = currentGunnerVisionRange(unit);
+  const rayVector = fireDirectionVector(fireDirection as FireDirection);
+  let current = unit.pos;
+  for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
+    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a), smokeHexes);
+    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b), smokeHexes);
+    if (aBlocked !== bBlocked) {
+      const preferredBlocked = preferred === a ? aBlocked : bBlocked;
+      if (preferredBlocked) unit.diagonalGunnerSidePreference = preferred === a ? b : a;
+      return;
+    }
+    // Equal obstruction means neither side offers a continuity advantage.
+    if (aBlocked) return;
+
+    const evenDistance = oddDistance + 1;
+    if (evenDistance > range) return;
+    const center = axialAdd(current, rayVector);
+    const centerTile = map.get(center);
+    if (!centerTile || smokeHexes?.has(HexMap.keyOf(center))
+      || map.lineOfSightBlockedByTile(centerTile)) return;
+    current = center;
+  }
+}
+
 function diagonalFlankBlocked(map: HexMap, pos: Axial, smokeHexes?: ReadonlySet<string>): boolean {
   const tile = map.get(pos);
   return !tile || smokeHexes?.has(HexMap.keyOf(pos)) === true || map.lineOfSightBlockedByTile(tile);

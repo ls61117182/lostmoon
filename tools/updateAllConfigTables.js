@@ -21,6 +21,7 @@ const CONFIG_TABLES = {
   'lang.csv': 'tools/buildLangDB.js',
   'player_action_table.csv': 'tools/buildPlayerActionDB.js',
   'player_dice_pool.csv': 'tools/buildPlayerActionDB.js',
+  'player_hardcore_dice_pool.csv': 'tools/buildPlayerActionDB.js',
   'tank_visuals.csv': 'tools/buildTankVisualDB.js',
   'turn_end_events.csv': 'tools/buildTurnEndEventDB.js',
   'units.csv': 'tools/buildUnitDB.js',

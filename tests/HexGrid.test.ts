@@ -208,8 +208,10 @@ const rngFrom = (...values): RNG => {
       armorRearSide: 8,
       armorRear: 7,
       penetration,
+      highExplosivePower: 2,
       effectiveRange,
       turretTraverseSpeed: 6,
+      mobility: 3,
       usCasualtyDice: 0,
       moveSound: '',
       attackSound: '',
@@ -304,8 +306,10 @@ const rngFrom = (...values): RNG => {
       armorRearSide: 8,
       armorRear: 7,
       penetration: 3,
+      highExplosivePower: 2,
       effectiveRange: 4,
       turretTraverseSpeed: 6,
+      mobility: 3,
       usCasualtyDice: 0,
       moveSound: '',
       attackSound: '',
@@ -1009,6 +1013,17 @@ const rngFrom = (...values): RNG => {
       commanderBonusWithoutOpenHatch: hardcoreBonus }), 1);
     assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: true, crew,
       commanderBonusWithoutOpenHatch: hardcoreBonus }), 2);
+    const noCrew = { commander: false, loader: false, gunner: false, driver: false, coDriver: false };
+    assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'road', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 3 }), 3);
+    assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'mud', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 2 }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'beach', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 1 }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'attack', terrain: 'forest', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 1 }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'forest', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 1 }), 1);
   };
 
   const addRect = (map: HexMap, cols: number, rows: number) => {

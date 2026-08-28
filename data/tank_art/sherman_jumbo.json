@@ -1,0 +1,34 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "sherman_jumbo",
+  "notes": "M4A3E2 Jumbo split source redrawn from the user-provided technical three-view; track exposure, single bow MG, turret silhouette and hatch positions follow the drawing.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/sherman_jumbo/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/sherman_jumbo/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/sherman_jumbo/destroyed-from-hull.png",
+      "background": "alpha"
+    },
+    "paintReference": "assets/resources/textures/units/sherman_top_hull.png"
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.085,
+    "outlinePixels": 1,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [829, 470],
+    "turretPivot": [978, 333],
+    "muzzle": [105, 321],
+    "commanderHatch": [981, 234]
+  }
+}

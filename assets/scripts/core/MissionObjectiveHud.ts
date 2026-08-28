@@ -5,7 +5,7 @@
 
 import { allEnemiesOfKindDestroyed, liveEnemyCount } from './Objective';
 import { LoadedMission } from './MissionLoader';
-import { MissionObjective, UnitKind } from './types';
+import { isAttachedATGunCrew, MissionObjective, UnitKind } from './types';
 
 export type ObjHudState = 'locked' | 'active' | 'done';
 
@@ -33,7 +33,7 @@ export function objectiveDestroyProgressLangKey(kind: UnitKind): string {
 }
 
 function kindProgress(mission: LoadedMission, kind: UnitKind): { cur: number; total: number } {
-  const group = mission.enemies.filter(e => e.kind === kind);
+  const group = mission.enemies.filter(e => e.kind === kind && !isAttachedATGunCrew(e));
   const total = group.length;
   const cur = group.filter(e => e.destroyed).length;
   return { cur, total };

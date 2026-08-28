@@ -31,3 +31,4 @@ server/data/
 .codex-tmp/
 .superpowers/
 asset_backups/
+tmp/

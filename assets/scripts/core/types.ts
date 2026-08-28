@@ -117,6 +117,8 @@ export type SeasonType = 'summer' | 'winter';
 export type UnitKind =
   | 'sherman'
   | 'sherman76'
+  | 'sherman_jumbo'
+  | 'm26_pershing'
   | 't34'
   | 'tiger'
   | 'tigerking'
@@ -133,6 +135,7 @@ export type UnitKind =
   | 'type97'
   | 'type4'
   | 'at_gun'
+  | 'pak38'
   | 'japanese_infantry'
   | 'american_infantry'
   | 'heavy_artillery'
@@ -183,14 +186,33 @@ export function infantryKindForFaction(faction: Faction): ATGunCrewKind {
   }
 }
 
+/**
+ * 所有牵引式反坦克炮的统一类别入口。
+ *
+ * 新炮种只需在这里登记一次；操炮组、遗弃/接管、整炮转向、碾压、伤亡、
+ * 等级与存档等规则均通过本 helper 判定，不应再按某个具体炮种 ID 分支。
+ */
+const ANTI_TANK_GUN_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
+  'at_gun',
+  'pak38',
+]);
+
+export function isAntiTankGunKind(kind: UnitKind): boolean {
+  return ANTI_TANK_GUN_KINDS.has(kind);
+}
+
+export function isAntiTankGunUnit(u: Pick<Unit, 'kind'>): boolean {
+  return isAntiTankGunKind(u.kind);
+}
+
 /** Hardcore AT guns are operational only while their three-man crew is alive. */
 export function isControlledATGun(u: Pick<Unit, 'kind' | 'destroyed' | 'atGunCrewAlive'>): boolean {
-  return u.kind === 'at_gun' && !u.destroyed && u.atGunCrewAlive === true;
+  return isAntiTankGunKind(u.kind) && !u.destroyed && u.atGunCrewAlive === true;
 }
 
 /** An abandoned gun remains on the map, but has no faction, vision, AI, or objective weight. */
 export function isAbandonedATGun(u: Pick<Unit, 'kind' | 'destroyed' | 'atGunCrewAlive'>): boolean {
-  return u.kind === 'at_gun' && !u.destroyed && u.atGunCrewAlive === false;
+  return isAntiTankGunKind(u.kind) && !u.destroyed && u.atGunCrewAlive === false;
 }
 
 export function isAttachedATGunCrew(u: Pick<Unit, 'attachedToATGunId'>): boolean {
@@ -200,6 +222,8 @@ export function isAttachedATGunCrew(u: Pick<Unit, 'attachedToATGunId'>): boolean
 export function isTankKind(kind: UnitKind): boolean {
   return kind === 'sherman'
     || kind === 'sherman76'
+    || kind === 'sherman_jumbo'
+    || kind === 'm26_pershing'
     || kind === 't34'
     || kind === 'tiger'
     || kind === 'tigerking'
@@ -234,9 +258,12 @@ export interface UnitStats {
   /** 炮盾附加装甲；仅硬核模式下、来袭方向位于炮塔朝向 +/-30 度时计入。 */
   gunMantletArmor?: number;
   penetration: number;     // 穿甲值
+  highExplosivePower: number; // 高爆威力；仅硬核模式 HE 结算使用
   effectiveRange: number;  // 有效射程；超出后每格使本次攻击穿甲值 -1
   /** Maximum turret traverse per action, in 30-degree steps (0..6). */
   turretTraverseSpeed: number;
+  /** 硬核模式基础移动骰数；非坦克单位配置为 0。 */
+  mobility: number;
   usCasualtyDice: number;
   moveSound: string;        // resources 下无扩展名音效路径；空字符串不播放
   attackSound: string;      // resources 下无扩展名音效路径；空字符串不播放
@@ -257,6 +284,9 @@ export interface UnitStats {
 
 /** 非玩家单位等级；玩家控制坦克不使用整车等级。 */
 export type UnitLevel = 'recruit' | 'veteran' | 'elite';
+
+/** 硬核模式主炮弹种。经典模式继续只使用 loaded。 */
+export type ShellType = 'ap' | 'he' | 'hvap';
 
 /** 玩家坦克五名乘员的独立等级。非玩家坦克通过单位等级即时继承，不单独配置。 */
 export interface CrewLevels {
@@ -319,6 +349,9 @@ export interface Unit {
   /** Hardcore: the infantry must forfeit its next complete action, then this flag clears. */
   suppressed?: boolean;
   loaded?: boolean;         // 主炮已装填
+  loadedShell?: ShellType | null; // 硬核模式已装填弹种；null 表示未装填
+  /** Campaign HVAP rounds remaining in the ready supply. */
+  hvapAmmoRemaining?: number;
   hatchOpen?: boolean;      // 车长打开舱盖
   /** 当前车长开舱观察范围；可受车长装备、天气等效果修改。 */
   visionRange?: number;
@@ -431,12 +464,22 @@ export interface MissionObjective {
   evacExitDir?: Direction;
 }
 
+/** Resolve the hardcore chamber state, using `loaded` only for legacy data without a shell field. */
+export function resolvedLoadedShell(unit: Pick<Unit, 'loaded' | 'loadedShell'>): ShellType | null {
+  return unit.loadedShell !== undefined ? unit.loadedShell : unit.loaded === true ? 'ap' : null;
+}
+
+/** In hardcore the shell field is authoritative; classic mode keeps the legacy boolean rule. */
+export function isMainGunLoaded(unit: Pick<Unit, 'loaded' | 'loadedShell'>, hardcore: boolean): boolean {
+  return hardcore ? resolvedLoadedShell(unit) !== null : unit.loaded === true;
+}
+
 export interface UnitPlacement {
   kind: UnitKind;
   faction?: Faction;
   /** 非玩家单位等级；缺省为 recruit。 */
   unitLevel?: UnitLevel;
-  /** 反坦克炮的操炮步兵等级；仅 kind=at_gun 时使用，缺省为 recruit。 */
+  /** 反坦克炮的操炮步兵等级；所有 isAntiTankGunKind 单位使用，缺省为 recruit。 */
   atGunCrewLevel?: UnitLevel;
   /** 玩家坦克各乘员独立等级；各槽位缺省为 recruit。非玩家单位忽略此字段。 */
   crewLevels?: Partial<CrewLevels>;
@@ -472,6 +515,10 @@ export interface UnitPlacement {
   interiorVisionRange?: number;
   /** 谢尔曼专用：主炮是否已装填；缺省 false（未装填） */
   loaded?: boolean;
+  /** 硬核模式初始弹种；旧关卡仅 loaded=true 时迁移为 AP。 */
+  loadedShell?: ShellType | null;
+  /** 战役强化提供的 HVAP 剩余弹数。 */
+  hvapAmmoRemaining?: number;
 }
 
 export interface MissionData {

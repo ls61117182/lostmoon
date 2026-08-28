@@ -13,6 +13,7 @@ const { HexMap, axialAdd, diagonalFlankFireDirectionTo, directionTo, fireDirecti
 const {
   computeUnitVisibleHexes,
   diagonalGunnerClickPreference,
+  reconcileDiagonalGunnerSideAfterMove,
 } = require('../assets/scripts/core/FogOfWar.ts');
 const {
   attackDirectionRuleFromFireDirection,
@@ -57,7 +58,7 @@ const sees = (visible, q, r) => visible.has(HexMap.keyOf({ q, r }));
 
 {
   const map = fieldMap();
-  map.set({ pos: { q: 1, r: 0 }, terrain: 'forest' });
+  map.set({ pos: { q: 2, r: 1 }, terrain: 'forest' });
   const visible = computeUnitVisibleHexes(map, tank());
   assert(sees(visible, 1, 2), 'an adjacent blocker should select the other side');
   assert(!sees(visible, 2, 1), 'the blocked side must not be added');
@@ -212,6 +213,25 @@ console.log('Hardcore AT-gun diagonal rotation target passed');
 }
 
 console.log('Diagonal clicked-flank preference tests passed');
+
+{
+  const map = fieldMap();
+  const movedTank = tank(0);
+  movedTank.diagonalGunnerSidePreference = 0;
+  map.set({ pos: { q: 2, r: 1 }, terrain: 'forest' });
+  reconcileDiagonalGunnerSideAfterMove(map, movedTank);
+  assert.strictEqual(movedTank.diagonalGunnerSidePreference, 1, 'movement should switch away from a newly blocked preferred flank');
+  const switchedVision = computeUnitVisibleHexes(map, movedTank);
+  assert(sees(switchedVision, 1, 2), 'the alternate flank should remain continuous after movement');
+  assert(!sees(switchedVision, 2, 1), 'the isolated blocking endpoint on the old flank should no longer be shown');
+
+  map.set({ pos: { q: 1, r: 2 }, terrain: 'rocky' });
+  movedTank.diagonalGunnerSidePreference = 0;
+  reconcileDiagonalGunnerSideAfterMove(map, movedTank);
+  assert.strictEqual(movedTank.diagonalGunnerSidePreference, 0, 'equally blocked flanks should retain the previous side');
+}
+
+console.log('Diagonal post-move side reconciliation tests passed');
 
 {
   const map = fieldMap();

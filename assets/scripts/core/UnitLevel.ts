@@ -1,4 +1,4 @@
-import { isFootUnit, isTankUnit } from './types';
+import { isAntiTankGunKind, isAntiTankGunUnit, isFootUnit, isTankUnit } from './types';
 import type { CrewLevels, CrewSkillId, ShermanCrew, Unit, UnitLevel } from './types';
 
 export const DEFAULT_UNIT_LEVEL: UnitLevel = 'recruit';
@@ -31,7 +31,7 @@ export function normalizePlayerCrewLevels(value?: Partial<CrewLevels>): CrewLeve
 
 /** 单位对外表现的有效等级；反坦克炮显示并使用操炮步兵等级。 */
 export function unitLevelOf(unit: Pick<Unit, 'kind' | 'unitLevel' | 'atGunCrewLevel'>): UnitLevel {
-  return unit.kind === 'at_gun'
+  return isAntiTankGunKind(unit.kind)
     ? normalizeUnitLevel(unit.atGunCrewLevel)
     : normalizeUnitLevel(unit.unitLevel);
 }
@@ -86,7 +86,7 @@ export function nonPlayerTankDiceBonus(unit: Unit): RankedDiceBonus {
 
 /** Legacy balance helper retained for compatibility; hardcore AT guns no longer roll action dice. */
 export function atGunActionDiceBonus(unit: Unit): number {
-  if (unit.kind !== 'at_gun') return 0;
+  if (!isAntiTankGunUnit(unit)) return 0;
   const level = unitLevelOf(unit);
   return level === 'elite' ? 2 : level === 'veteran' ? 1 : 0;
 }
@@ -118,7 +118,7 @@ export function unitLevelHitThresholdModifier(
   }
 
   // 操炮步兵为老兵/王牌时，反坦克炮攻击坦克获得 -1。
-  if (attackKind === 'main' && attacker.kind === 'at_gun' && isTankUnit(target)) {
+  if (attackKind === 'main' && isAntiTankGunUnit(attacker) && isTankUnit(target)) {
     const level = unitLevelOf(attacker);
     if (level === 'veteran' || level === 'elite') modifier -= 1;
   }

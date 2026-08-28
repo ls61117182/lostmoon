@@ -2,9 +2,11 @@ import type { CustomMissionPackage, MissionSource } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode } from './GameMode';
 import type { PvpSessionConfig } from './PvpConfig';
 import {
+  createRandomEuropeCampaign,
   createRandomIslandCampaign,
   createRandomSnowCampaign,
   getCampaign,
+  RANDOM_EUROPE_CAMPAIGN_ID,
   RANDOM_ISLAND_CAMPAIGN_ID,
   RANDOM_SNOW_CAMPAIGN_ID,
 } from './CampaignDB';
@@ -43,6 +45,16 @@ export function createRandomSnowPackages(seed: number = Date.now()): CustomMissi
   const weather = ['clear', 'light_snow', 'heavy_snow'] as const;
   return seeds.map((missionSeed, index) => generateRandomMissionPackage('europe', missionSeed, {
     season: 'winter',
+    weather: weather[((missionSeed ^ (index * 0x45d9f3b)) >>> 0) % weather.length],
+  }));
+}
+
+export function createRandomEuropePackages(seed: number = Date.now()): CustomMissionPackage[] {
+  const baseSeed = (seed >>> 0) || 1;
+  const seeds = [baseSeed, (baseSeed + 0x9e3779b9) >>> 0, (baseSeed + 0x3c6ef372) >>> 0];
+  const weather = ['clear', 'rain'] as const;
+  return seeds.map((missionSeed, index) => generateRandomMissionPackage('europe', missionSeed, {
+    season: 'summer',
     weather: weather[((missionSeed ^ (index * 0x45d9f3b)) >>> 0) % weather.length],
   }));
 }
@@ -184,11 +196,15 @@ export const GameSession = {
       ? createRandomIslandPackages()
       : campaignId === RANDOM_SNOW_CAMPAIGN_ID
         ? createRandomSnowPackages()
+        : campaignId === RANDOM_EUROPE_CAMPAIGN_ID
+          ? createRandomEuropePackages()
         : null;
     const campaign = generatedPackages
       ? campaignId === RANDOM_SNOW_CAMPAIGN_ID
         ? createRandomSnowCampaign(generatedPackages.map(pkg => pkg.mission.id))
-        : createRandomIslandCampaign(generatedPackages.map(pkg => pkg.mission.id))
+        : campaignId === RANDOM_EUROPE_CAMPAIGN_ID
+          ? createRandomEuropeCampaign(generatedPackages.map(pkg => pkg.mission.id))
+          : createRandomIslandCampaign(generatedPackages.map(pkg => pkg.mission.id))
       : getCampaign(campaignId);
     if (!campaign) return false;
     state.pvpSession = null;

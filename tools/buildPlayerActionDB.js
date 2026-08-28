@@ -25,6 +25,7 @@ const { readCsvRowsSmart } = require('./csvSmart');
 const ROOT = path.resolve(__dirname, '..');
 const ACTION_CSV = path.join(ROOT, 'data', 'player_action_table.csv');
 const POOL_CSV = path.join(ROOT, 'data', 'player_dice_pool.csv');
+const HARDCORE_POOL_CSV = path.join(ROOT, 'data', 'player_hardcore_dice_pool.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'PlayerActionDB.ts');
 
 // 与 ActionDice.ts 的 MoveDieAction 枚举对齐（MVP 把 doubles 行里的 'driver_drive_and_turn'
@@ -196,43 +197,45 @@ function parseActionTable() {
 }
 
 /** 解析骰池表，返回 modifier → 整数的平面 map（键见 REQUIRED_POOL_KEYS） */
-function parsePoolTable() {
-  const recs = toRecords(readCsvRowsSmart(POOL_CSV, {
+function parsePoolTable(csvPath) {
+  const csvName = path.basename(csvPath);
+  const recs = toRecords(readCsvRowsSmart(csvPath, {
     toolName: 'buildPlayerActionDB',
     requiredHeaders: ['modifier', 'value'],
-  }), POOL_CSV);
+  }), csvPath);
   const map = {};
   const seen = new Set();
   for (const r of recs) {
     const mod = r.modifier;
-    if (!mod) throw new Error(`player_dice_pool.csv 第 ${r.__row} 行：modifier 为空`);
-    if (seen.has(mod)) throw new Error(`player_dice_pool.csv 第 ${r.__row} 行：modifier="${mod}" 重复`);
+    if (!mod) throw new Error(`${csvName} 第 ${r.__row} 行：modifier 为空`);
+    if (seen.has(mod)) throw new Error(`${csvName} 第 ${r.__row} 行：modifier="${mod}" 重复`);
     if (!REQUIRED_POOL_KEYS.includes(mod)) {
-      throw new Error(`player_dice_pool.csv 第 ${r.__row} 行：未知 modifier="${mod}"`);
+      throw new Error(`${csvName} 第 ${r.__row} 行：未知 modifier="${mod}"`);
     }
     seen.add(mod);
     map[mod] = mod === 'cap_max'
-      ? optionalIntOrNull(r.value, `player_dice_pool.csv 第 ${r.__row} 行 ${mod}`)
-      : intOrThrow(r.value, `player_dice_pool.csv 第 ${r.__row} 行 ${mod}`);
+      ? optionalIntOrNull(r.value, `${csvName} 第 ${r.__row} 行 ${mod}`)
+      : intOrThrow(r.value, `${csvName} 第 ${r.__row} 行 ${mod}`);
   }
   for (const k of REQUIRED_POOL_KEYS) {
-    if (!seen.has(k)) throw new Error(`player_dice_pool.csv 缺少 modifier="${k}" 这一行`);
+    if (!seen.has(k)) throw new Error(`${csvName} 缺少 modifier="${k}" 这一行`);
   }
   if (map.cap_max !== null && map.cap_min > map.cap_max) {
-    throw new Error(`player_dice_pool.csv: cap_min (${map.cap_min}) 不能大于 cap_max (${map.cap_max})`);
+    throw new Error(`${csvName}: cap_min (${map.cap_min}) 不能大于 cap_max (${map.cap_max})`);
   }
   return map;
 }
 
 function build() {
   const action = parseActionTable();
-  const pool = parsePoolTable();
+  const pool = parsePoolTable(POOL_CSV);
+  const hardcorePool = parsePoolTable(HARDCORE_POOL_CSV);
 
   const lines = [];
   lines.push('/**');
   lines.push(' * 玩家行动表与骰池 —— 自动生成，请勿手改本文件。');
   lines.push(' *');
-  lines.push(' * 数据源：data/player_action_table.csv + data/player_dice_pool.csv');
+  lines.push(' * 数据源：data/player_action_table.csv + data/player_dice_pool.csv + data/player_hardcore_dice_pool.csv');
   lines.push(' * 重新生成：node tools/buildPlayerActionDB.js');
   lines.push(' * 对应 GDD §3.6 行动表 + §3.6.1 掷骰数。');
   lines.push(' */');
@@ -294,33 +297,37 @@ function build() {
   lines.push('  capMax: number | null;');
   lines.push('}');
   lines.push('');
-  lines.push('export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {');
+  function emitPool(name, values) {
+  lines.push(`export const ${name}: PlayerDicePoolConfig = {`);
   lines.push('  baseByPhaseTerrain: {');
   for (const { csv, ts } of POOL_PHASES) {
     lines.push(`    ${ts}: {`);
     for (const terr of TERRAIN_KINDS) {
-      lines.push(`      ${terr}: ${pool[`${csv}_${terr}`]},`);
+      lines.push(`      ${terr}: ${values[`${csv}_${terr}`]},`);
     }
     lines.push('    },');
   }
   lines.push('  },');
   lines.push('  moveMods: {');
-  lines.push(`    driver: ${pool.mod_move_driver},`);
-  lines.push(`    codriver: ${pool.mod_move_codriver},`);
-  lines.push(`    hatch: ${pool.mod_move_hatch},`);
+  lines.push(`    driver: ${values.mod_move_driver},`);
+  lines.push(`    codriver: ${values.mod_move_codriver},`);
+  lines.push(`    hatch: ${values.mod_move_hatch},`);
   lines.push('  },');
   lines.push('  attackMods: {');
-  lines.push(`    gunner: ${pool.mod_attack_gunner},`);
-  lines.push(`    loader: ${pool.mod_attack_loader},`);
-  lines.push(`    hatch: ${pool.mod_attack_hatch},`);
+  lines.push(`    gunner: ${values.mod_attack_gunner},`);
+  lines.push(`    loader: ${values.mod_attack_loader},`);
+  lines.push(`    hatch: ${values.mod_attack_hatch},`);
   lines.push('  },');
   lines.push('  miscMods: {');
-  lines.push(`    hatch: ${pool.mod_misc_hatch},`);
+  lines.push(`    hatch: ${values.mod_misc_hatch},`);
   lines.push('  },');
-  lines.push(`  capMin: ${pool.cap_min},`);
-  lines.push(`  capMax: ${pool.cap_max === null ? 'null' : pool.cap_max},`);
+  lines.push(`  capMin: ${values.cap_min},`);
+  lines.push(`  capMax: ${values.cap_max === null ? 'null' : values.cap_max},`);
   lines.push('};');
   lines.push('');
+  }
+  emitPool('PLAYER_DICE_POOL', pool);
+  emitPool('PLAYER_HARDCORE_DICE_POOL', hardcorePool);
 
   fs.writeFileSync(OUT_PATH, lines.join('\n'), 'utf8');
   console.log(

@@ -43,6 +43,8 @@ assertContains('assets/scripts/core/CampaignDB.ts', "RANDOM_ISLAND_CAMPAIGN_ID =
 assertContains('assets/scripts/core/CampaignDB.ts', 'createRandomIslandCampaign');
 assertContains('assets/scripts/core/CampaignDB.ts', "RANDOM_SNOW_CAMPAIGN_ID = 'random_snow'");
 assertContains('assets/scripts/core/CampaignDB.ts', 'createRandomSnowCampaign');
+assertContains('assets/scripts/core/CampaignDB.ts', "RANDOM_EUROPE_CAMPAIGN_ID = 'random_europe'");
+assertContains('assets/scripts/core/CampaignDB.ts', 'createRandomEuropeCampaign');
 assertContains('assets/scripts/core/CampaignDB.ts', 'autoEvacAfterDestroyAll: true');
 assertContains('assets/scripts/view/BattleScene.ts', 'beginCampaignAutoEvac');
 assertContains('assets/scripts/view/BattleScene.ts', 'campaignAutoEvacPath');

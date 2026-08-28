@@ -141,13 +141,13 @@ export const DEFAULT_AI_TABLE: AIActionTable = {
 };
 
 export const HARDCORE_TANK_AI_DICE_COUNT: Record<HardcoreTankDiceTerrain, HardcoreTankDiceCount> = {
-  road: { attack: 1, move: 3, misc: -1 },
-  field: { attack: 1, move: 2, misc: 0 },
-  mud: { attack: 1, move: 1, misc: -1 },
-  clear: { attack: 1, move: 2, misc: 0 },
-  trees: { attack: 1, move: 2, misc: 0 },
-  beach: { attack: 1, move: 1, misc: -1 },
-  airstrip: { attack: 1, move: 3, misc: -1 },
+  road: { attack: 1, move: 0, misc: -1 },
+  field: { attack: 1, move: -1, misc: 0 },
+  mud: { attack: 1, move: -2, misc: -1 },
+  clear: { attack: 1, move: -1, misc: 0 },
+  trees: { attack: 1, move: -1, misc: 0 },
+  beach: { attack: 1, move: -2, misc: -1 },
+  airstrip: { attack: 1, move: 0, misc: -1 },
 };
 
 export const DEFAULT_HARDCORE_TANK_ACTION_TABLE: Record<EnemyTankDieType, HardcoreTankActionTableId> = {

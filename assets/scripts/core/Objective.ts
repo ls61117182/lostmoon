@@ -1,6 +1,6 @@
 import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
-import { Axial, Direction, isAbandonedATGun, isAbandonedTank, MissionObjective, tileHasBridge, UnitKind } from './types';
+import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, MissionObjective, tileHasBridge, UnitKind } from './types';
 
 export interface ShermanEvacDriveOptions {
   canExitTo?: (to: Axial) => boolean;
@@ -32,12 +32,15 @@ export function checkOutcome(mission: LoadedMission): MissionOutcome {
 
 /** 指定种类的敌方单位是否已全部被摧毁 */
 export function allEnemiesOfKindDestroyed(mission: LoadedMission, kind: UnitKind): boolean {
-  const group = mission.enemies.filter(e => e.kind === kind);
+  const group = mission.enemies.filter(e => e.kind === kind && !isAttachedATGunCrew(e));
   return group.length > 0 && group.every(e => e.destroyed || isAbandonedATGun(e) || isAbandonedTank(e));
 }
 
 export function liveEnemyCount(mission: LoadedMission): number {
-  return mission.enemies.filter(e => !e.destroyed && !isAbandonedATGun(e) && !isAbandonedTank(e)).length;
+  return mission.enemies.filter(e => !e.destroyed
+    && !isAbandonedATGun(e)
+    && !isAbandonedTank(e)
+    && !isAttachedATGunCrew(e)).length;
 }
 
 /**
@@ -79,8 +82,7 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
     case 'destroy_all_enemies':
       return mission.enemies.length > 0 && liveEnemyCount(mission) === 0;
     case 'destroy_kind': {
-      const group = mission.enemies.filter(e => e.kind === obj.kind);
-      return group.length > 0 && group.every(e => e.destroyed || isAbandonedATGun(e) || isAbandonedTank(e));
+      return !!obj.kind && allEnemiesOfKindDestroyed(mission, obj.kind);
     }
     case 'destroy_kind_evac': {
       if (!obj.evacAt || obj.evacExitDir === undefined) return false;

@@ -524,9 +524,11 @@ for (const theater of ['europe', 'pacific']) {
     for (const gun of loaded.enemies.filter(enemy => enemy.kind === 'at_gun')) {
       assert.strictEqual(gun.atGunCrewAlive, true, `${mission.id}: AT gun must load as a controlled composite unit`);
       assert.strictEqual(gun.atGunCrewKind, 'japanese_infantry', `${mission.id}: AT gun needs its embedded Japanese crew`);
-      assert(!loaded.enemies.some(enemy => enemy.kind === 'japanese_infantry'
-        && enemy.pos.q === gun.pos.q && enemy.pos.r === gun.pos.r),
-      `${mission.id}: AT gun crew must not be a separate infantry unit`);
+      const controller = loaded.enemies.find(enemy => enemy.id === gun.atGunControllerUnitId);
+      assert(controller && controller.kind === 'japanese_infantry'
+        && controller.pos.q === gun.pos.q && controller.pos.r === gun.pos.r
+        && controller.attachedToATGunId === gun.id,
+      `${mission.id}: AT gun must spawn a same-hex Japanese infantry controller folded into the composite`);
     }
     assertTankRoute(loaded, mission);
   }

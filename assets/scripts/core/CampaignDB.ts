@@ -3,6 +3,7 @@ import type { ChapterId } from './LevelDB';
 export const CAMPAIGN_CHAPTER_ID = 'campaign' as const;
 export const RANDOM_ISLAND_CAMPAIGN_ID = 'random_island' as const;
 export const RANDOM_SNOW_CAMPAIGN_ID = 'random_snow' as const;
+export const RANDOM_EUROPE_CAMPAIGN_ID = 'random_europe' as const;
 
 export interface CampaignSegmentDefinition {
   id: string;
@@ -19,7 +20,7 @@ export interface CampaignDefinition {
   transitionSeconds: number;
   stitchDirection: 'horizontal';
   segments: CampaignSegmentDefinition[];
-  generator?: 'pacific_random_island' | 'europe_random_snow';
+  generator?: 'pacific_random_island' | 'europe_random_snow' | 'europe_random_summer';
   /** Destroy-all stages drive the Sherman to the standard exit before victory. */
   autoEvacAfterDestroyAll?: boolean;
 }
@@ -61,6 +62,28 @@ export function createRandomSnowCampaign(generatedMissionIds: readonly string[])
     autoEvacAfterDestroyAll: true,
     segments: generatedMissionIds.map((missionId, index) => ({
       id: `campaign_random_snow_${index + 1}_${missionId}`,
+      missionPath: '',
+      sourcePacificMissionId: missionId,
+    })),
+  };
+}
+
+export function createRandomEuropeCampaign(generatedMissionIds: readonly string[]): CampaignDefinition {
+  if (generatedMissionIds.length !== 3) {
+    throw new Error(`Random Europe requires exactly 3 generated missions, got ${generatedMissionIds.length}`);
+  }
+  return {
+    id: RANDOM_EUROPE_CAMPAIGN_ID,
+    order: 7,
+    levelId: 7,
+    titleKey: 'campaign.randomEurope.title',
+    missionId: 'campaign_random_europe',
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    generator: 'europe_random_summer',
+    autoEvacAfterDestroyAll: true,
+    segments: generatedMissionIds.map((missionId, index) => ({
+      id: `campaign_random_europe_${index + 1}_${missionId}`,
       missionPath: '',
       sourcePacificMissionId: missionId,
     })),
@@ -144,6 +167,18 @@ export const CAMPAIGNS: CampaignDefinition[] = [
     transitionSeconds: 2,
     stitchDirection: 'horizontal',
     generator: 'europe_random_snow',
+    autoEvacAfterDestroyAll: true,
+    segments: [],
+  },
+  {
+    id: RANDOM_EUROPE_CAMPAIGN_ID,
+    order: 7,
+    levelId: 7,
+    titleKey: 'campaign.randomEurope.title',
+    missionId: 'campaign_random_europe',
+    transitionSeconds: 2,
+    stitchDirection: 'horizontal',
+    generator: 'europe_random_summer',
     autoEvacAfterDestroyAll: true,
     segments: [],
   },

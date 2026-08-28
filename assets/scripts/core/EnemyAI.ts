@@ -43,7 +43,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
 import { commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
@@ -66,12 +66,12 @@ export type { AIActionEntry, AIActionTable, AIColumn, EnemyAction, EnemyTankDieT
  * 而非 `tile.terrain`，让水域+桥梁折算成 'road'，确保站在桥上的敌坦走公路 AI 列。
  */
 export function aiColumnFor(enemy: Unit, terrain: TerrainType): AIColumn {
+  if (isAntiTankGunUnit(enemy)) return 'at_gun';
   switch (enemy.kind) {
     case 'type95': return 'type95';
     case 'type97': return 'type97';
     // 四式中战车暂沿用九七式的日军坦克 AI 骰表。
     case 'type4': return 'type97';
-    case 'at_gun': return 'at_gun';
     case 'japanese_infantry': return 'japanese_infantry';
     case 'american_infantry': return 'american_infantry';
     case 'heavy_artillery':
@@ -117,10 +117,9 @@ function crewAlive(unit: Unit, slot: 'commander' | 'loader' | 'gunner' | 'driver
 }
 
 export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number; misc: number } {
+  // All registered AT-gun kinds share the deterministic one-action flow.
+  if (isAntiTankGunUnit(unit)) return { attack: 0, move: 0, misc: 0 };
   switch (unit.kind) {
-    // Hardcore controlled AT guns use BattleScene's deterministic one-action
-    // flow and must report an empty pool even to diagnostic/UI callers.
-    case 'at_gun': return { attack: 0, move: 0, misc: 0 };
     case 'japanese_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'american_infantry': return { attack: 0, move: 3, misc: 0 };
     case 'heavy_artillery':
@@ -130,9 +129,9 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
   const base = HARDCORE_TANK_AI_DICE_COUNT[key];
   const rank = nonPlayerTankDiceBonus(unit);
   return {
-    attack: Math.max(0, base.attack + rank.attack),
-    move: Math.max(0, base.move + (crewAlive(unit, 'driver') ? 1 : 0) + rank.move),
-    misc: Math.max(0, base.misc + (crewAlive(unit, 'commander') ? 1 : 0) + rank.misc),
+    attack: Math.max(1, base.attack + rank.attack),
+    move: Math.max(1, (unit.stats.mobility ?? 0) + base.move + (crewAlive(unit, 'driver') ? 1 : 0) + rank.move),
+    misc: Math.max(1, base.misc + (crewAlive(unit, 'commander') ? 1 : 0) + rank.misc),
   };
 }
 
@@ -388,7 +387,7 @@ function pickCloserTurnSide(
 /**
  * 给定一个行动，判断敌坦当前能不能执行。
  *
- * 注：`turn` 与 `smoke`、`repair` 几乎总能执行；`conceal` 在已隐蔽时不可重复；真正会"做不了"的主要是射击（无视线）
+ * 注：`turn` 与 `smoke`、`repair` 几乎总能执行；`conceal` 在瘫痪或已隐蔽时不可执行；真正会"做不了"的主要是射击（无视线）
  * 与前进/后退（正前/正后被堵）。
  */
 export function canExecuteAction(
@@ -416,7 +415,7 @@ export function canExecuteAction(
       || !!enemy.radioDamaged
       || (enemy.fireLevel ?? 0) > 0
     );
-    case 'conceal': return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
+    case 'conceal': return !enemy.paralyzed && !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
     case 'shoot_adjacent': return enemy.facing !== null && hexDistance(enemy.pos, sherman.pos) === 1;
     case 'infantry_move':
       return enemy.kind === 'japanese_infantry' || enemy.kind === 'american_infantry';

@@ -88,8 +88,8 @@ import {
   classifyMoveDie,
   rollActionDice,
 } from '../core/ActionDice';
-import { PLAYER_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, hitBreakdown, hitThreshold, maxMGHitRoll, mgHitBreakdown, mgHitThreshold, mgHitThresholdModifierDetails, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollMGAttack, selectTankMachineGun, TankMachineGunSelection } from '../core/Combat';
+import { PLAYER_DICE_POOL, PLAYER_HARDCORE_DICE_POOL } from '../core/PlayerActionDB';
+import { applyAttack, applyHighExplosiveAttack, applyMGAttack, AttackReport, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, HighExplosiveReport, hitBreakdown, hitThreshold, infantryHasHighExplosiveCover, maxMGHitRoll, mgHitBreakdown, mgHitThreshold, mgHitThresholdModifierDetails, nonPlayerTankWeaponForTarget, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollHighExplosiveAttack, rollMGAttack, selectTankMachineGun, TankMachineGunSelection } from '../core/Combat';
 import { DAMAGE_TABLE } from '../core/DamageTableDB';
 import type { DamageTableEffect, DamageTargetClass } from '../core/DamageTableDB';
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest, FireCheckEffect } from '../core/FireCheck';
@@ -125,7 +125,7 @@ import {
 } from '../core/EnemyAI';
 import type { CrewSlot } from '../core/EnemyAIDB';
 import { loadMission, LoadedMission } from '../core/MissionLoader';
-import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentGunnerVisionRange, currentVisionRange, diagonalGunnerClickPreference, diagonalGunnerRuleDirectionForVisibleHex, fogOfWarEnabled, HEAVY_ARTILLERY_VISION_RANGE, isUnitInVision } from '../core/FogOfWar';
+import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentGunnerVisionRange, currentVisionRange, diagonalGunnerClickPreference, diagonalGunnerRuleDirectionForVisibleHex, fogOfWarEnabled, HEAVY_ARTILLERY_VISION_RANGE, isUnitInVision, reconcileDiagonalGunnerSideAfterMove } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
 import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
@@ -188,6 +188,7 @@ import {
   campaignUpgradeHitThresholdModifier,
   drawCampaignUpgradeCandidates,
   hasCampaignUpgrade,
+  loadCampaignShell,
   resetCampaignUpgradeSegmentCharges,
   reviveFirstCampaignCrewMember,
 } from '../core/CampaignUpgrade';
@@ -308,8 +309,8 @@ import {
   recordAttackPosition as recordAttackPositionForMemory,
 } from '../core/AttackPositionMemory';
 import { ambushHitThresholdModifier, ambushHitThresholdModifierDetails, beginAmbushTurn, endAmbushTurn, markAmbushAction, markAmbushTargeted } from '../core/Ambush';
-import { applyInfantrySuppression, consumeInfantrySuppression, isMainGunSuppressionAttack, selectMainGunTargetsByHex } from '../core/Suppression';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isTankUnit, MissionData, neutralizeUncrewedTank, restoreFullTankCrew, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import { applyInfantrySuppression, consumeInfantryTurnSuppression, isMainGunSuppressionAttack, selectMainGunTargetsByHex } from '../core/Suppression';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isMainGunLoaded, isTankUnit, MissionData, neutralizeUncrewedTank, resolvedLoadedShell, restoreFullTankCrew, ShellType, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -331,7 +332,19 @@ function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, f
   g.stroke();
 }
 
-function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: Color, accent: Color) {
+function opaqueButtonFill(color: Color): Color {
+  return new Color(color.r, color.g, color.b, 255);
+}
+
+function drawFieldPanel(
+  g: Graphics,
+  w: number,
+  h: number,
+  fill: Color,
+  border: Color,
+  accent: Color,
+  drawInnerStroke: boolean = true,
+) {
   const x = -w / 2;
   const y = -h / 2;
   g.fillColor = new Color(0, 0, 0, 40);
@@ -347,10 +360,12 @@ function drawFieldPanel(g: Graphics, w: number, h: number, fill: Color, border: 
   g.lineWidth = 2;
   g.rect(x + 1, y + 1, w - 2, h - 2);
   g.stroke();
-  g.strokeColor = new Color(14, 16, 14, 185);
-  g.lineWidth = 1;
-  g.rect(x + 6, y + 6, w - 12, h - 12);
-  g.stroke();
+  if (drawInnerStroke) {
+    g.strokeColor = new Color(14, 16, 14, 185);
+    g.lineWidth = 1;
+    g.rect(x + 6, y + 6, w - 12, h - 12);
+    g.stroke();
+  }
   g.strokeColor = accent;
   g.lineWidth = 2;
   const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18));
@@ -630,6 +645,8 @@ interface DestroyedTurretVisual {
   remainTime: number;
   fadeDuration: number;
   maxScale: number;
+  /** Final scale relative to the turret's mounted size. */
+  groundScale: number;
   startAngle: number;
   rotateAngle: number;
   elapsed: number;
@@ -782,12 +799,21 @@ type DiceStage =
   | 'dmg-roll' | 'dmg-show'
   | 'crew-roll' | 'crew-show'
   | 'hold' | 'done';
-type DiceRuleKind = 'hit' | 'pen' | 'damage' | 'crew';
+type DiceRuleKind = 'hit' | 'pen' | 'damage' | 'crew' | 'he';
+
+interface HighExplosiveCollateralResult {
+  target: Unit;
+  report: HighExplosiveReport;
+}
 
 interface DiceShow {
   stage: DiceStage;
   t: number;                 // 当前阶段已经经过的秒数
   report: AttackReport;      // 已 rollAttack 得出的最终结果（不能再变）
+  /** Hardcore HE uses the same modal lifecycle with blast-specific labels. */
+  highExplosiveReport: HighExplosiveReport | null;
+  /** Protected HE blast checks against infantry sharing the primary tank's hex. */
+  highExplosiveCollateral: HighExplosiveCollateralResult[];
   attackerLabel: string;     // 标题里的攻击方名（"玩家" / "敌方 panzer4"）
   targetLabel: string;       // 标题里的目标名（"panzer4" / "谢尔曼"）
   /**
@@ -804,7 +830,8 @@ interface DiceShow {
   target: Unit | null;
   /** Snapshot before attack resolution, so a doubles kill cannot erase the exposed-commander hint. */
   targetCommanderExposed: boolean;
-  onDone: () => void;        // 动画结束回调：真正 applyAttack + 浮字 + 继续调度
+  onDone: () => void;        // 确认/自动关闭回调：确保已结算并继续后续调度
+  /** 骰面最终结果揭示时立即写入状态；确认按钮不负责延迟展示结果。 */
   onHold: (() => void) | null;
   requireManualClose: boolean;
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
@@ -820,6 +847,11 @@ interface DiceShow {
   penDieLabels: Label[];    // 穿甲骰（2 颗）
   penNeedLabel: Label | null;
   penVerdictLabel: Label | null;
+  highExplosiveCollateralRows: Array<{
+    dieLabel: Label;
+    needLabel: Label;
+    verdictLabel: Label;
+  }>;
   dmgDieLabel: Label | null; // 1 颗伤害骰（仅 penetrated 时展示）
   dmgTitleLabel: Label | null;  // "伤害检定" 标题
   dmgEffectLabel: Label | null; // "起火 / 炮塔受损 / 痛痪 / 阵亡检定 / 摧毁 / 受损"
@@ -1699,6 +1731,9 @@ export class BattleScene extends Component {
   private campaignUpgradeIconAtlasV2: SpriteFrame | null = null;
   private campaignUpgradeIconAtlasV2Loading = false;
   private campaignUpgradeIconV2Waiters: Array<(atlas: SpriteFrame | null) => void> = [];
+  private campaignUpgradeHvapIcon: SpriteFrame | null = null;
+  private campaignUpgradeHvapIconLoading = false;
+  private campaignUpgradeHvapIconWaiters: Array<(icon: SpriteFrame | null) => void> = [];
   private retainedCampaignAttackDiePip: number | null = null;
   private offsetX = 0;
   private offsetY = 0;
@@ -1729,7 +1764,7 @@ export class BattleScene extends Component {
     const { sherman, allies, enemies } = this.mission;
     this.shermanTurretFacing = sherman.turretFacing ?? sherman.facing;
     for (const unit of [...allies, ...enemies]) {
-      if (!isSplitTankKind(unit.kind) && unit.kind !== 'at_gun') continue;
+      if (!isSplitTankKind(unit.kind) && !isAntiTankGunUnit(unit)) continue;
       const facing = unit.turretFacing ?? unit.facing;
       if (facing !== null) this.enemyTurretFacing.set(unit.id, facing);
     }
@@ -1961,7 +1996,6 @@ export class BattleScene extends Component {
   /** 底部骰子托盘：movement/attack 子步骤时显示 */
   private diceTrayRoot: Node | null = null;
   private diceVisuals: DieVisual[] = [];
-  private diceTitleLabel: Label | null = null;
   /** 点击某颗骰子时弹出的动作菜单；每次弹出都重建 */
   private diePopover: Node | null = null;
   /** 当前动作菜单所属的骰子下标；用于再次点击同一颗骰子时切换收起。 */
@@ -2851,6 +2885,7 @@ export class BattleScene extends Component {
       destroyed: false,
       damaged: false,
       loaded: role === 'protagonist' ? false : undefined,
+      loadedShell: role === 'protagonist' ? null : undefined,
       hatchOpen: role === 'protagonist' ? false : undefined,
       fireLevel: 0,
       turretDamaged: false,
@@ -3154,6 +3189,7 @@ export class BattleScene extends Component {
       actorId?: string;
       targetId?: string;
       report?: AttackReport;
+      heReport?: HighExplosiveReport;
       attackSound?: string;
       unitId?: string;
       q?: number;
@@ -3178,6 +3214,23 @@ export class BattleScene extends Component {
         const target = byId(details.targetId);
         if (!attacker || !target) return;
         const playCue = () => this.playAttackFireCue(attacker, target, false, details.attackSound ?? attacker.stats.attackSound ?? '', details.report!);
+        if (this.turretAimAnim?.unit === attacker) {
+          const prev = this.turretAimAnim.onDone;
+          this.turretAimAnim.onDone = () => {
+            prev();
+            playCue();
+          };
+          return;
+        }
+        playCue();
+        return;
+      }
+      case 'main_gun_he': {
+        if (!details.attackerId || !details.targetId) return;
+        const attacker = byId(details.attackerId);
+        const target = byId(details.targetId);
+        if (!attacker || !target) return;
+        const playCue = () => this.playHighExplosiveSuppressionCue(attacker, target, details.heReport);
         if (this.turretAimAnim?.unit === attacker) {
           const prev = this.turretAimAnim.onDone;
           this.turretAimAnim.onDone = () => {
@@ -3382,6 +3435,7 @@ export class BattleScene extends Component {
       hidden: !!src.hidden,
       smoked: !!src.smoked,
       loaded: !!src.loaded,
+      loadedShell: src.loadedShell ?? (src.loaded ? 'ap' : null),
       hatchOpen: !!src.hatchOpen,
       visionRange: Number.isFinite(Number(src.visionRange)) ? Number(src.visionRange) : stats.visionRange,
       gunnerVisionRange: Number.isFinite(Number(src.gunnerVisionRange)) ? Number(src.gunnerVisionRange) : stats.gunnerVisionRange,
@@ -3397,8 +3451,8 @@ export class BattleScene extends Component {
       ambushAttackedSinceTurnEnd: !!src.ambushAttackedSinceTurnEnd,
       ambushReadyThisTurn: !!src.ambushReadyThisTurn,
       ambushActedThisTurn: !!src.ambushActedThisTurn,
-      unitLevel: src.role === 'support' && src.kind !== 'at_gun' ? normalizeUnitLevel(src.unitLevel) : undefined,
-      atGunCrewLevel: src.kind === 'at_gun' ? normalizeUnitLevel(src.atGunCrewLevel ?? src.unitLevel) : undefined,
+      unitLevel: src.role === 'support' && !isAntiTankGunKind(src.kind) ? normalizeUnitLevel(src.unitLevel) : undefined,
+      atGunCrewLevel: isAntiTankGunKind(src.kind) ? normalizeUnitLevel(src.atGunCrewLevel ?? src.unitLevel) : undefined,
     };
   }
 
@@ -3418,6 +3472,7 @@ export class BattleScene extends Component {
       destroyed: !!unit.destroyed,
       damaged: !!unit.damaged,
       loaded: !!unit.loaded,
+      loadedShell: unit.loadedShell ?? (unit.loaded ? 'ap' : null),
       hatchOpen: !!unit.hatchOpen,
       fireLevel: unit.fireLevel ?? 0,
       turretDamaged: !!unit.turretDamaged,
@@ -3436,8 +3491,8 @@ export class BattleScene extends Component {
       ambushAttackedSinceTurnEnd: unit.ambushAttackedSinceTurnEnd,
       ambushReadyThisTurn: unit.ambushReadyThisTurn,
       ambushActedThisTurn: unit.ambushActedThisTurn,
-      unitLevel: role === 'support' && unit.kind !== 'at_gun' ? unitLevelOf(unit) : undefined,
-      atGunCrewLevel: unit.kind === 'at_gun' ? unitLevelOf(unit) : undefined,
+      unitLevel: role === 'support' && !isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
+      atGunCrewLevel: isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
     };
   }
 
@@ -3472,6 +3527,7 @@ export class BattleScene extends Component {
         destroyed: !!unit.destroyed,
         damaged: !!unit.damaged,
         loaded: !!unit.loaded,
+        loadedShell: unit.loadedShell ?? (unit.loaded ? 'ap' : null),
         hatchOpen: !!unit.hatchOpen,
         fireLevel: unit.fireLevel ?? 0,
         turretDamaged: !!unit.turretDamaged,
@@ -3488,8 +3544,8 @@ export class BattleScene extends Component {
         ambushAttackedSinceTurnEnd: unit.ambushAttackedSinceTurnEnd,
         ambushReadyThisTurn: unit.ambushReadyThisTurn,
         ambushActedThisTurn: unit.ambushActedThisTurn,
-        unitLevel: !unit.crewLevels && unit.kind !== 'at_gun' ? unitLevelOf(unit) : undefined,
-        atGunCrewLevel: unit.kind === 'at_gun' ? unitLevelOf(unit) : undefined,
+        unitLevel: !unit.crewLevels && !isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
+        atGunCrewLevel: isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
       })),
       smokeHexes: this.mission ? Array.from(this.mission.smokeHexes).sort() : [],
       smokeHexOwners: this.pvpSmokeHexOwnersForSubmit(),
@@ -3689,6 +3745,7 @@ export class BattleScene extends Component {
         Object.entries(s.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
       ) : undefined,
       loaded: s.loaded === true,
+      loadedShell: s.loadedShell ?? (s.loaded ? 'ap' : null),
       hatchOpen: s.hatchOpen === true,
     };
   }
@@ -4169,6 +4226,23 @@ export class BattleScene extends Component {
     });
   }
 
+  private loadCampaignUpgradeHvapIcon(onReady: (icon: SpriteFrame | null) => void) {
+    if (this.campaignUpgradeHvapIcon?.isValid) {
+      onReady(this.campaignUpgradeHvapIcon);
+      return;
+    }
+    this.campaignUpgradeHvapIconWaiters.push(onReady);
+    if (this.campaignUpgradeHvapIconLoading) return;
+    this.campaignUpgradeHvapIconLoading = true;
+    resources.load('textures/ui/campaign_upgrades/upgrade_icon_hvap/spriteFrame', SpriteFrame, (err, icon) => {
+      this.campaignUpgradeHvapIconLoading = false;
+      this.campaignUpgradeHvapIcon = !err && icon ? icon : null;
+      if (err || !icon) console.warn('[CampaignUpgrade] HVAP icon load failed:', err);
+      const waiters = this.campaignUpgradeHvapIconWaiters.splice(0);
+      for (const waiter of waiters) waiter(this.campaignUpgradeHvapIcon);
+    });
+  }
+
   private campaignUpgradeIconFrame(atlas: SpriteFrame, id: CampaignUpgradeId): SpriteFrame | null {
     const legacyIndex = CAMPAIGN_UPGRADE_ICON_ORDER.indexOf(id);
     const extensionIndex = CAMPAIGN_UPGRADE_ICON_ORDER_V2.indexOf(id);
@@ -4221,6 +4295,15 @@ export class BattleScene extends Component {
     fallback.addComponent(UITransform).setContentSize(size, size);
     this.drawCampaignUpgradeIcon(fallback.addComponent(Graphics), id, size * 0.34);
     root.addChild(fallback);
+
+    if (id === 'hvap') {
+      this.loadCampaignUpgradeHvapIcon((frame) => {
+        if (!root.isValid || !frame) return;
+        sprite.spriteFrame = frame;
+        if (fallback.isValid) fallback.destroy();
+      });
+      return root;
+    }
 
     const loadAtlas = CAMPAIGN_UPGRADE_ICON_ORDER_V2.includes(id)
       ? this.loadCampaignUpgradeIconAtlasV2.bind(this)
@@ -4818,7 +4901,7 @@ export class BattleScene extends Component {
     if (!this.anim && this.phase === 'player'
         && (this.playerStep === 'attack' || this.playerStep === 'misc')
         && this.selectedGunDieIdx >= 0
-        && this.mission.sherman.loaded === true
+        && isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore')
         && this.outcome === 'ongoing') {
       this.drawAttackableHighlights();
     }
@@ -5347,11 +5430,9 @@ export class BattleScene extends Component {
     overlayNode.active = showTurretAimMarkers;
     if (!showTurretAimMarkers) return;
     if (showTurretAimMarkers) {
-      const visibleEnemyKeys = new Set(this.mission.enemies
-        .filter(unit => !unit.destroyed && this.isUnitVisible(unit))
-        .map(unit => HexMap.keyOf(unit.pos)));
       const legalWeaponTargetKeys = this.playerWeaponTargetHexKeys();
-      const unloadedGunRotation = this.selectedGunDieIdx >= 0 && !this.mission.sherman.loaded;
+      const unloadedGunRotation = this.selectedGunDieIdx >= 0
+        && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
       const machineGunRotationSelection = this.selectedMGDieIdx >= 0;
       const precisionGunSelection = this.selectedGunDieIdx >= 0
         && this.selectedGunHitThresholdModifier < 0;
@@ -5375,10 +5456,6 @@ export class BattleScene extends Component {
             if (direction === null) continue;
           }
           if (precisionGunSelection && !legalWeaponTargetKeys.has(tileKey)) continue;
-          if (visibleEnemyKeys.has(tileKey)
-            && !unloadedGunRotation
-            && !machineGunRotationSelection
-            && !legalWeaponTargetKeys.has(tileKey)) continue;
           const c = this.project(tile.pos.q, tile.pos.r);
           if (precisionGunSelection) {
             this.drawPrecisionTargetReticle(overlay, c.x, c.y);
@@ -5449,11 +5526,13 @@ export class BattleScene extends Component {
       }
       return keys;
     }
-    if (this.selectedGunDieIdx < 0 || !sherman.loaded) return keys;
+    if (this.selectedGunDieIdx < 0 || !isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')) return keys;
+    const shellType = GameSession.gameMode === 'hardcore'
+      ? resolvedLoadedShell(sherman) : null;
     for (const target of this.playerMainGunHexTargets()) {
       if (target.destroyed || !this.isUnitVisible(target)) continue;
       if (isFootUnit(target)
-        && !isMainGunSuppressionAttack(sherman, target, GameSession.gameMode === 'hardcore')) continue;
+        && !isMainGunSuppressionAttack(sherman, target, GameSession.gameMode === 'hardcore', shellType)) continue;
       if (!this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, target))) continue;
       if (canAttack({
         attacker: sherman,
@@ -5467,6 +5546,7 @@ export class BattleScene extends Component {
         hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
         expandedTurretDirections,
         mainGunSuppressesInfantry: GameSession.gameMode === 'hardcore',
+        shellType: shellType ?? undefined,
       }).ok) keys.add(HexMap.keyOf(target.pos));
     }
     return keys;
@@ -5554,15 +5634,18 @@ export class BattleScene extends Component {
   private drawAttackableHighlights() {
     if (!this.g || !this.mission) return;
     const { map, sherman } = this.mission;
+    const shellType = GameSession.gameMode === 'hardcore'
+      ? resolvedLoadedShell(sherman) : null;
     for (const e of this.playerMainGunHexTargets()) {
       if (e.destroyed) continue;
       if (!this.isUnitVisible(e)) continue;
       // 主炮不瞄徒步类（步兵 / 军官）：徒步单位专属机枪（§3.1.2 / §3.6），避免大红圈误导
-      if (isFootUnit(e) && !isMainGunSuppressionAttack(sherman, e, GameSession.gameMode === 'hardcore')) continue;
+      if (isFootUnit(e) && !isMainGunSuppressionAttack(sherman, e, GameSession.gameMode === 'hardcore', shellType)) continue;
       const ctx = {
         attacker: sherman,
         target: e,
         map,
+        units: this.allUnits(),
         theater: this.mission.data.theater,
         smokeHexes: this.mission.smokeHexes,
         weather: this.currentWeather(),
@@ -5571,18 +5654,20 @@ export class BattleScene extends Component {
         hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         mainGunSuppressesInfantry: GameSession.gameMode === 'hardcore',
+        shellType: shellType ?? undefined,
       };
       if (!this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, e))) continue;
       if (!canAttack(ctx).ok) continue;
 
       const c = this.project(e.pos.q, e.pos.r);
-      // 坦克目标显示命中率；步兵目标明确提示本次主炮行动是压制。
-      if (isMainGunSuppressionAttack(sherman, e, GameSession.gameMode === 'hardcore')) {
-        this.spawnSuppressionPreviewLabel(c.x, c.y - this.hexSize * 0.28);
-      } else {
-        const need = hitThreshold(ctx);
-        this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.28, need);
+      if (shellType === 'he' && isFootUnit(e)) {
+        const destroyNeed = infantryHasHighExplosiveCover(ctx) ? 6 : 5;
+        const destroyProbability = destroyNeed === 6 ? 1 / 6 : 2 / 6;
+        this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.28, destroyNeed, destroyProbability);
+        continue;
       }
+      const need = hitThreshold(ctx);
+      this.spawnPreviewLabel(c.x, c.y - this.hexSize * 0.28, need);
     }
   }
 
@@ -5893,37 +5978,6 @@ export class BattleScene extends Component {
     }
 
     // 加描边让字在任何底色上都清晰
-    n.setPosition(x, y, 0);
-    n.active = true;
-  }
-
-  /** 主炮选择步兵目标时，在目标格内明确标出确定生效的压制行动。 */
-  private spawnSuppressionPreviewLabel(x: number, y: number) {
-    if (!this.mapNode) return;
-    let n = this.previewLabels[this.previewLabelNext++];
-    let l = n?.getComponent(Label) ?? null;
-    if (!n || !l) {
-      n = new Node('SuppressionPreview');
-      n.layer = this.node.layer;
-      const ut = n.addComponent(UITransform);
-      ut.setContentSize(86, 24);
-      ut.setAnchorPoint(0.5, 0.5);
-      l = n.addComponent(Label);
-      l.horizontalAlign = HorizontalTextAlignment.CENTER;
-      l.verticalAlign = VerticalTextAlignment.CENTER;
-      l.enableOutline = true;
-      l.outlineColor = PREVIEW_OUTLINE;
-      l.outlineWidth = 2;
-      this.previewLabels[this.previewLabelNext - 1] = n;
-      this.mapNode.addChild(n);
-    } else if (n.parent !== this.mapNode) {
-      this.mapNode.addChild(n);
-    }
-
-    l.string = t('preview.suppress');
-    l.fontSize = 19;
-    l.lineHeight = 22;
-    l.color = new Color(255, 218, 64, 255);
     n.setPosition(x, y, 0);
     n.active = true;
   }
@@ -6865,6 +6919,7 @@ export class BattleScene extends Component {
       remainTime: 1.5,
       fadeDuration: 0.35,
       maxScale: 1.45 + Math.random() * 0.15,
+      groundScale: 1,
       startAngle: node.angle,
       rotateAngle: (ammoExplosion ? 540 + Math.random() * 360 : 360 + Math.random() * 360)
         * (Math.random() < 0.5 ? -1 : 1),
@@ -6884,7 +6939,8 @@ export class BattleScene extends Component {
       const flightT = Math.min(1, visual.elapsed / visual.duration);
       const height = 4 * flightT * (1 - flightT);
       const moveT = easeOutCubic(flightT);
-      const scale = 1 + (visual.maxScale - 1) * height;
+      const baseScale = 1 + (visual.groundScale - 1) * flightT;
+      const scale = baseScale + (visual.maxScale - baseScale) * height;
       visual.node.setPosition(
         visual.startX + visual.dirX * visual.distance * moveT,
         visual.startY + visual.dirY * visual.distance * moveT,
@@ -6925,7 +6981,7 @@ export class BattleScene extends Component {
 
   /** Kill only the AT-gun operator group, leaving an intact neutral gun behind. */
   private killATGunCrew(gun: Unit): void {
-    if (gun.kind !== 'at_gun') return;
+    if (!isAntiTankGunUnit(gun)) return;
     // Blood must remain exactly where the three visible operators stood, not
     // at the generic infantry triangle used by ordinary squads.
     const crewOffsets = this.atGunCrewFormationOffsets(gun);
@@ -7293,19 +7349,31 @@ export class BattleScene extends Component {
     playMgFire();
   }
 
-  private playHighExplosiveSuppressionCue(attacker: Unit, target: Unit) {
+  private playHighExplosiveSuppressionCue(
+    attacker: Unit,
+    target: Unit,
+    report?: HighExplosiveReport,
+  ) {
     this.rememberAttackPosition(attacker);
     this.startMainGunRecoil(attacker, target);
     this.spawnMuzzleSmoke(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
-    const seed = this.hashStringToSeed(`he-suppression:${attacker.id}:${target.id}`);
+    // Old PvP records did not serialize the HE report. Treat only those legacy
+    // cues as hits; live attacks always pass the report and therefore show no
+    // target-side explosion when the shell misses.
+    const hit = report?.hit ?? true;
+    const seed = this.hashStringToSeed(
+      `he-impact:${attacker.id}:${target.id}:${report?.roll ?? 0}:${report?.effectRoll ?? 0}`,
+    );
     this.spawnProjectileTrace(
       attacker,
       target,
-      { hit: true, penetrated: true, roll: 0 },
+      { hit, penetrated: hit, roll: report?.roll ?? 0 },
       {
-        skipPenetrationImpact: true,
-        onPenetrationImpact: (x, y) => this.spawnHighExplosiveBlast(x, y, seed),
+        skipPenetrationImpact: hit,
+        onPenetrationImpact: hit
+          ? (x, y) => this.spawnHighExplosiveBlast(x, y, seed)
+          : undefined,
       },
     );
     playConfiguredAttackSound(attacker.stats.attackSound);
@@ -7511,7 +7579,7 @@ export class BattleScene extends Component {
     this.mapNode.addChild(node);
     node.setPosition(0, 0, 0);
     this.placeProjectileTraceNode(node);
-    const blast: HighExplosiveBlast = { node, g, x, y, t: 0, dur: 0.82, seed };
+    const blast: HighExplosiveBlast = { node, g, x, y, t: 0, dur: 0.94, seed };
     this.drawHighExplosiveBlast(blast);
     this.highExplosiveBlasts.push(blast);
   }
@@ -7534,42 +7602,59 @@ export class BattleScene extends Component {
     this.placeProjectileTraceNode(blast.node);
     g.clear();
     const p = Math.min(1, blast.t / blast.dur);
-    const burst = 1 - Math.pow(1 - Math.min(1, p / 0.32), 3);
-    const fade = Math.pow(Math.max(0, 1 - p), 1.25);
+    const burst = 1 - Math.pow(1 - Math.min(1, p / 0.28), 3);
+    const fireFade = Math.pow(Math.max(0, 1 - p / 0.72), 1.4);
+    const smokeFade = Math.sin(Math.min(1, p) * Math.PI) * Math.max(0, 1 - p * 0.35);
+    const flashFade = Math.max(0, 1 - p / 0.16);
     const x = blast.x;
     const y = blast.y;
-    const radius = this.hexSize * (0.16 + burst * 0.72);
+    const radius = this.hexSize * (0.13 + burst * 0.68);
 
-    g.fillColor = new Color(105, 78, 45, Math.round(115 * fade));
-    g.circle(x, y - this.hexSize * 0.05, radius * 1.18);
+    // Expanding dust and smoke lobes make HE read as an area blast rather than
+    // the compact, directional shower used for an AP penetration.
+    const smokeLobes = 8;
+    for (let i = 0; i < smokeLobes; i++) {
+      const angle = ((blast.seed + i * 47) % 360) * Math.PI / 180;
+      const drift = radius * (0.25 + this.seededUnit(blast.seed, 30 + i) * 0.52);
+      const lobeSize = radius * (0.25 + this.seededUnit(blast.seed, 50 + i) * 0.22);
+      const rise = this.hexSize * p * (0.10 + this.seededUnit(blast.seed, 70 + i) * 0.22);
+      const shade = 58 + Math.round(this.seededUnit(blast.seed, 90 + i) * 38);
+      g.fillColor = new Color(shade + 24, shade + 14, shade, Math.round(145 * smokeFade));
+      g.circle(x + Math.cos(angle) * drift, y + Math.sin(angle) * drift + rise, lobeSize);
+      g.fill();
+    }
+
+    g.fillColor = new Color(255, 103, 20, Math.round(220 * fireFade));
+    g.circle(x, y + radius * 0.08, radius * 0.72);
     g.fill();
-    g.fillColor = new Color(255, 112, 24, Math.round(215 * fade));
-    g.circle(x, y + radius * 0.10, radius * 0.72);
+    g.fillColor = new Color(255, 219, 65, Math.round(245 * fireFade));
+    g.circle(x, y + radius * 0.14, radius * 0.43);
     g.fill();
-    g.fillColor = new Color(255, 222, 74, Math.round(245 * fade));
-    g.circle(x, y + radius * 0.18, radius * 0.43);
-    g.fill();
-    g.fillColor = new Color(255, 255, 224, Math.round(255 * Math.max(0, 1 - p * 4.5)));
-    g.circle(x, y + radius * 0.20, radius * 0.20);
+    g.fillColor = new Color(255, 255, 232, Math.round(255 * flashFade));
+    g.circle(x, y + radius * 0.12, radius * (0.18 + flashFade * 0.22));
     g.fill();
 
-    const rays = 13;
+    const rays = 15;
     for (let i = 0; i < rays; i++) {
       const angle = ((blast.seed + i * 67) % 360) * Math.PI / 180;
       const random = 0.55 + this.seededUnit(blast.seed, 10 + i) * 0.70;
-      const inner = radius * 0.45;
+      const inner = radius * 0.38;
       const outer = radius * (1.05 + random * 0.65);
       g.strokeColor = i % 3 === 0
-        ? new Color(255, 222, 94, Math.round(225 * fade))
-        : new Color(92, 72, 46, Math.round(185 * fade));
+        ? new Color(255, 222, 94, Math.round(225 * fireFade))
+        : new Color(82, 65, 45, Math.round(190 * smokeFade));
       g.lineWidth = Math.max(1.2, this.hexSize * 0.018);
       g.moveTo(x + Math.cos(angle) * inner, y + Math.sin(angle) * inner);
       g.lineTo(x + Math.cos(angle) * outer, y + Math.sin(angle) * outer);
       g.stroke();
     }
-    g.strokeColor = new Color(76, 62, 44, Math.round(145 * fade));
-    g.lineWidth = Math.max(2, this.hexSize * 0.028);
-    g.circle(x, y, radius * (0.82 + p * 0.78));
+
+    // A pale, rapidly expanding pressure ring is the HE silhouette at a glance.
+    const shockProgress = 1 - Math.pow(1 - Math.min(1, p / 0.52), 2);
+    const shockFade = Math.max(0, 1 - p / 0.66);
+    g.strokeColor = new Color(255, 239, 181, Math.round(205 * shockFade));
+    g.lineWidth = Math.max(1.5, this.hexSize * 0.025 * (1 - p * 0.45));
+    g.circle(x, y, this.hexSize * (0.18 + shockProgress * 1.02));
     g.stroke();
   }
 
@@ -7585,7 +7670,7 @@ export class BattleScene extends Component {
     // complete mount visually aims at the target hex. All firing effects must
     // use that same exact vector or the shell visibly leaves along the hidden
     // rules-facing direction instead of through the rotated barrel.
-    const aimAngle = attacker.kind === 'at_gun'
+    const aimAngle = isAntiTankGunUnit(attacker)
       ? this.targetScreenAngle(attacker.pos, target.pos)
       : this.directionScreenAngle(attacker.pos, c, dir);
     const aim = { ux: Math.cos(aimAngle), uy: Math.sin(aimAngle) };
@@ -8065,7 +8150,7 @@ export class BattleScene extends Component {
 
   private drawProjectilePenetration(g: Graphics, tr: ProjectileTrace, p: number) {
     const alpha = Math.max(0, Math.round(255 * (1 - p)));
-    const s = this.hexSize * (0.22 + p * 0.34);
+    const sparkLength = this.hexSize * (0.20 + p * 0.30);
     const x = tr.impactX;
     const y = tr.impactY;
     const ux = tr.ux;
@@ -8073,20 +8158,34 @@ export class BattleScene extends Component {
     const rx = uy;
     const ry = -ux;
 
-    g.fillColor = new Color(255, 225, 90, Math.round(alpha * 0.5));
-    g.circle(x, y, s);
-    g.fill();
+    // Compact metal sparks and an entry hole replace the old orange cone. The
+    // cone looked like a second muzzle flash attached to the struck vehicle.
+    const rays = 9;
+    for (let i = 0; i < rays; i++) {
+      const spread = (this.seededUnit(tr.seed, 140 + i) - 0.5) * Math.PI * 1.25;
+      const forward = -0.25 - this.seededUnit(tr.seed, 160 + i) * 0.75;
+      const sx = ux * forward + rx * Math.sin(spread);
+      const sy = uy * forward + ry * Math.sin(spread);
+      const mag = Math.max(0.01, Math.hypot(sx, sy));
+      const len = sparkLength * (0.45 + this.seededUnit(tr.seed, 180 + i) * 0.75);
+      g.strokeColor = i % 3 === 0
+        ? new Color(255, 250, 210, alpha)
+        : new Color(255, 158, 48, Math.round(alpha * 0.82));
+      g.lineWidth = Math.max(1, this.hexSize * (i % 3 === 0 ? 0.018 : 0.012));
+      g.moveTo(x, y);
+      g.lineTo(x + sx / mag * len, y + sy / mag * len);
+      g.stroke();
+    }
 
-    g.fillColor = new Color(255, 92, 30, Math.round(alpha * 0.72));
-    g.moveTo(x + ux * s * 1.15, y + uy * s * 1.15);
-    g.lineTo(x - ux * s * 0.34 + rx * s * 0.62, y - uy * s * 0.34 + ry * s * 0.62);
-    g.lineTo(x - ux * s * 0.16, y - uy * s * 0.16);
-    g.lineTo(x - ux * s * 0.34 - rx * s * 0.62, y - uy * s * 0.34 - ry * s * 0.62);
-    g.close();
+    g.strokeColor = new Color(255, 212, 112, Math.round(alpha * 0.55));
+    g.lineWidth = Math.max(1, this.hexSize * 0.014);
+    g.circle(x, y, this.hexSize * (0.10 + p * 0.19));
+    g.stroke();
+    g.fillColor = new Color(48, 42, 35, Math.round(alpha * 0.90));
+    g.circle(x, y, Math.max(2.5, this.hexSize * 0.052));
     g.fill();
-
-    g.fillColor = new Color(255, 252, 204, alpha);
-    g.circle(x + ux * s * 0.2, y + uy * s * 0.2, Math.max(2, s * 0.22));
+    g.fillColor = new Color(255, 250, 218, alpha);
+    g.circle(x - ux * this.hexSize * 0.012, y - uy * this.hexSize * 0.012, Math.max(1.5, this.hexSize * 0.022));
     g.fill();
   }
 
@@ -8992,7 +9091,7 @@ export class BattleScene extends Component {
         this.shermanTurretFacing = a.to;
         a.unit.turretFacing = a.to;
       } else if (!a.preserveRuleFacing
-        && (this.enemySupportsSplitTurret(a.unit) || a.unit.kind === 'at_gun')) {
+        && (this.enemySupportsSplitTurret(a.unit) || isAntiTankGunUnit(a.unit))) {
         this.enemyTurretFacing.set(a.unit.id, a.to);
         a.unit.turretFacing = a.to;
       }
@@ -9070,10 +9169,11 @@ export class BattleScene extends Component {
         };
       }
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
+      reconcileDiagonalGunnerSideAfterMove(this.mission!.map, finishedUnit, this.mission!.smokeHexes);
       this.crushEnemyATGunsAt(finishedUnit);
       this.captureAbandonedATGunsAt(finishedUnit);
       this.captureAbandonedTanksAt(finishedUnit);
-      if (finishedUnit.kind === 'at_gun') {
+      if (isAntiTankGunUnit(finishedUnit)) {
         const controller = this.atGunController(finishedUnit);
         if (controller) controller.pos = { ...finishedUnit.pos };
       }
@@ -11224,6 +11324,28 @@ export class BattleScene extends Component {
           offsetRight: visual.hullOffsetRight,
         };
       }
+      case 'sherman_jumbo': {
+        const geometry = splitTankGeometryConfigOf('sherman_jumbo');
+        const visual = splitTankVisualConfigOf('sherman_jumbo');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
+      case 'm26_pershing': {
+        const geometry = splitTankGeometryConfigOf('m26_pershing');
+        const visual = splitTankVisualConfigOf('m26_pershing');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
       case 't34': {
         const geometry = splitTankGeometryConfigOf('t34');
         const visual = splitTankVisualConfigOf('t34');
@@ -12028,7 +12150,7 @@ export class BattleScene extends Component {
       : this.project(u.pos.q, u.pos.r);
     // A hardcore AT gun has no separate turret: its 12-direction gun facing
     // rotates the whole sprite and its visible operator group together.
-    if (u.kind === 'at_gun') facingLerp = this.currentEnemyTurretLerp(u) ?? facingLerp;
+    if (isAntiTankGunUnit(u)) facingLerp = this.currentEnemyTurretLerp(u) ?? facingLerp;
     // 徒步类（步兵 / 军官）单独走一条更"像小人"的绘制路径，与坦克的大圆 + 朝向线拉开辨识度。
     if (isFootUnit(u)) {
       this.drawInfantry(u, c.x, c.y);
@@ -12170,7 +12292,7 @@ export class BattleScene extends Component {
     };
   }
 
-  /** Exact captured infantry profile when available; scenario-start crews use the persisted proxy profile. */
+  /** Exact attached infantry profile; the proxy remains only for legacy/runtime fallback guns. */
   private atGunCrewActor(gun: Unit): Unit {
     const controller = this.atGunController(gun);
     return controller
@@ -13258,7 +13380,7 @@ export class BattleScene extends Component {
     btn.setPosition(x, y, 0);
 
     const bg = btn.addComponent(Graphics);
-    drawFieldPanel(bg, W, H, bgColor, BTN_BORDER, STATUS_TITLE_COLOR);
+    drawFieldPanel(bg, W, H, opaqueButtonFill(bgColor), BTN_BORDER, STATUS_TITLE_COLOR, false);
 
     const txtNode = new Node('Label');
     txtNode.layer = this.node.layer;
@@ -13499,7 +13621,10 @@ export class BattleScene extends Component {
         this.statusLoaded.string = '—';
         this.statusLoaded.color = STATUS_VALUE_DOWN;
       } else if (s.loaded) {
-        this.statusLoaded.string = t('status.val.loaded');
+        this.statusLoaded.string = GameSession.gameMode === 'hardcore'
+          ? t((s.loadedShell ?? 'ap') === 'he' ? 'status.val.he'
+            : s.loadedShell === 'hvap' ? 'status.val.hvap' : 'status.val.ap')
+          : t('status.val.loaded');
         this.statusLoaded.color = STATUS_VALUE_OK;
       } else {
         this.statusLoaded.string = t('status.val.unloaded');
@@ -13595,7 +13720,8 @@ export class BattleScene extends Component {
     if (!this.endTurnBg) return;
     const g = this.endTurnBg;
     g.clear();
-    drawFieldPanel(g, ADVANCE_BTN_W, ADVANCE_BTN_H, disabled ? BTN_BG_DISABLED : urgent ? BTN_BG_URGENT : BTN_BG_NORMAL, BTN_BORDER, STATUS_TITLE_COLOR);
+    const fill = disabled ? BTN_BG_DISABLED : urgent ? BTN_BG_URGENT : BTN_BG_NORMAL;
+    drawFieldPanel(g, ADVANCE_BTN_W, ADVANCE_BTN_H, opaqueButtonFill(fill), BTN_BORDER, STATUS_TITLE_COLOR, false);
   }
 
   private updateHUD() {
@@ -13634,7 +13760,12 @@ export class BattleScene extends Component {
         this.hudLabel.string = t('hud.miscPhase', { n: this.turn, dice: this.remainingDice() });
       } else {
         const sherman = this.mission?.sherman;
-        const loaded = sherman?.loaded ? t('hud.loaded') : t('hud.unloaded');
+        const loaded = sherman?.loaded
+          ? GameSession.gameMode === 'hardcore'
+            ? t((sherman.loadedShell ?? 'ap') === 'he' ? 'status.val.he'
+              : sherman.loadedShell === 'hvap' ? 'status.val.hvap' : 'status.val.ap')
+            : t('hud.loaded')
+          : t('hud.unloaded');
         // 选中主炮 → "点敌人开火"；选中机枪 → "点步兵扫射"；两者互斥
         let sel = '';
         if (this.selectedGunDieIdx >= 0) {
@@ -14167,7 +14298,7 @@ export class BattleScene extends Component {
       b.addComponent(UITransform).setContentSize(W, H);
       b.setPosition(x, 0, 0);
       const bg = b.addComponent(Graphics);
-      bg.fillColor = color;
+      bg.fillColor = opaqueButtonFill(color);
       bg.strokeColor = BTN_BORDER;
       bg.lineWidth = 2;
       bg.rect(-W / 2, -H / 2, W, H);
@@ -14241,22 +14372,6 @@ export class BattleScene extends Component {
     tray.setPosition(0, BOTTOM_PHASE_ROW_Y, 0);
     this.hudParent().addChild(tray);
     this.diceTrayRoot = tray;
-
-    // 托盘标题（"移动阶段骰 / 攻击阶段骰 ..."），放在骰子上方
-    const titleNode = new Node('DiceTitle');
-    titleNode.layer = this.node.layer;
-    titleNode.addComponent(UITransform).setContentSize(420, 28);
-    titleNode.setPosition(0, 52, 0);
-    const tl = titleNode.addComponent(Label);
-    tl.fontSize = 22;
-    tl.lineHeight = 26;
-    tl.color = HUD_TEXT_COLOR;
-    tl.horizontalAlign = HorizontalTextAlignment.CENTER;
-    tl.verticalAlign = VerticalTextAlignment.CENTER;
-    tl.overflow = Label.Overflow.SHRINK;
-    tl.string = '';
-    tray.addChild(titleNode);
-    this.diceTitleLabel = tl;
 
     // 初始为空；进入阶段后由 refreshDiceTray 按实际颗数补槽并居中。
     tray.active = false;
@@ -14340,16 +14455,6 @@ export class BattleScene extends Component {
         || this.playerStep === 'misc'
       );
     }
-    if (this.diceTitleLabel) {
-      const titleText = this.playerStep === 'movement'
-        ? t('dice.tray.move')
-        : this.playerStep === 'attack'
-          ? t('dice.tray.attack')
-          : this.playerStep === 'misc'
-            ? t('dice.tray.misc')
-            : '';
-      this.diceTitleLabel.string = this.fitTextForLabel(this.diceTitleLabel, titleText, 420);
-    }
     this.refreshDiceTray();
     // 点击骰子后弹出的菜单，状态变化时（比如骰子被消耗）一并关闭
     if (!inBattle || this.playerStep === 'choose') this.closeDiePopover();
@@ -14374,7 +14479,7 @@ export class BattleScene extends Component {
     const ut = btn.getComponent(UITransform);
     if (!ut) return;
     g.clear();
-    g.fillColor = enabled ? baseColor : PHASE_BTN_DISABLED;
+    g.fillColor = opaqueButtonFill(enabled ? baseColor : PHASE_BTN_DISABLED);
     g.strokeColor = BTN_BORDER;
     g.lineWidth = 2;
     g.rect(-ut.contentSize.width / 2, -ut.contentSize.height / 2,
@@ -14762,6 +14867,8 @@ export class BattleScene extends Component {
       hatchOpen: hatchOpenRaw,
       crew,
       commanderBonusWithoutOpenHatch: modeConfig.commanderBonusWithoutOpenHatch,
+      hardcore: GameSession.gameMode === 'hardcore',
+      mobility: sherman.stats.mobility,
       externalBonus: this.campaignUpgradesEnabled()
         ? campaignUpgradeDiceBonus(this.campaignUpgradeIds, terrain, subPhase)
         : 0,
@@ -15003,21 +15110,28 @@ export class BattleScene extends Component {
     return blocker ? t('floater.enemyBlock') : null;
   }
 
-  private reloadActionUnavailable(crewSlot?: 'loader'): string | null {
+  private reloadActionUnavailable(crewSlot?: 'loader', shellType?: ShellType): string | null {
     if (!this.mission) return t('attack.reason.unknown');
     const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
     if (crewReason) return crewReason;
-    return this.mission.sherman.loaded ? t('floater.alreadyLoaded') : null;
+    const sherman = this.mission.sherman;
+    if (GameSession.gameMode !== 'hardcore') return sherman.loaded ? t('floater.alreadyLoaded') : null;
+    const current = resolvedLoadedShell(sherman);
+    if (shellType && current === shellType) return t('floater.alreadyLoaded');
+    if (shellType === 'hvap' && (!this.campaignUpgradeActive('hvap') || (sherman.hvapAmmoRemaining ?? 0) <= 0)) {
+      return t('floater.noHvapAmmo');
+    }
+    return null;
   }
 
   private gunActionUnavailable(crewSlot?: 'gunner'): string | null {
     if (!this.mission) return t('attack.reason.unknown');
     const s = this.mission.sherman;
+    // 炮塔受损时主炮/旋转入口直接置灰；点击灰色按钮只提示受损原因，
+    // 不再进入目标选择态或显示炮塔转向范围。
+    if (s.turretDamaged) return t('dmg.effect.turret');
     const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
     if (crewReason) return crewReason;
-    // A damaged turret may still enter the weapon selection state so the map can
-    // show a fully blocked traverse ring. Target clicks remain non-committing.
-    if (s.turretDamaged) return null;
     // 硬核模式下主炮骰始终可用于旋转炮塔；该用途不需要装填，也不受舱盖状态影响。
     // 实际开炮仍会在 tryAttack 中要求 loaded。
     const canUseUnloadedForTurretRecon = GameSession.gameMode === 'hardcore';
@@ -15042,7 +15156,7 @@ export class BattleScene extends Component {
     if (crewReason) return crewReason;
     // Unlike ordinary hardcore main-gun selection, precision fire can never be
     // used as an unloaded rotation-only action.
-    if (!this.mission.sherman.loaded) return t('hud.unloaded');
+    if (!isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore')) return t('hud.unloaded');
     return this.gunActionUnavailable();
   }
 
@@ -15134,7 +15248,7 @@ export class BattleScene extends Component {
       }
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
-      if (a === 'reload' && !hasDoubles && !this.reloadActionUnavailable()) {
+      if (GameSession.gameMode !== 'hardcore' && a === 'reload' && !hasDoubles && !this.reloadActionUnavailable()) {
         this.closeDiePopover();
         this.tryReload(idx);
         return;
@@ -15178,23 +15292,53 @@ export class BattleScene extends Component {
       onClick: () => void;
       unavailableReason: string | null;
       compactTurn: boolean;
+      badge?: string;
     };
     const items: Item[] = [];
+    const nonDoublesEffects = new Set<string>();
     const addItem = (text: string, color: Color, onClick: () => void,
-      unavailableReason: string | null = null, compactTurn = false) => {
+      unavailableReason: string | null = null, compactTurn = false,
+      effectId?: string, doubles = false, badge?: string) => {
+      // A matching-dice action must not repeat an effect already offered by this
+      // die alone. Keep the cheaper single-die action and omit the duplicate pair.
+      if (doubles && effectId && nonDoublesEffects.has(effectId)) return;
+      if (!doubles && effectId) nonDoublesEffects.add(effectId);
       items.push({
         text,
         color: unavailableReason ? DIE_ACTION_UNAVAILABLE : color,
         onClick,
         unavailableReason,
         compactTurn,
+        badge,
       });
+    };
+    const addReloadItems = (
+      color: Color,
+      onReload: (shellType?: ShellType) => void,
+      crewSlot?: 'loader',
+      classicKey = 'action.reload',
+      doubles = false,
+    ) => {
+      if (GameSession.gameMode === 'hardcore') {
+        addItem(t('action.reloadAP'), color, () => onReload('ap'), this.reloadActionUnavailable(crewSlot, 'ap'), true,
+          'reload-ap', doubles);
+        addItem(t('action.reloadHE'), color, () => onReload('he'), this.reloadActionUnavailable(crewSlot, 'he'), true,
+          'reload-he', doubles);
+        if (this.campaignUpgradeActive('hvap')) {
+          const remaining = this.mission?.sherman.hvapAmmoRemaining ?? 0;
+          addItem(t('action.reloadHVAP'), color, () => onReload('hvap'),
+            this.reloadActionUnavailable(crewSlot, 'hvap'), true, 'reload-hvap', doubles, String(remaining));
+        }
+      } else {
+        addItem(t(classicKey), color, () => onReload(), this.reloadActionUnavailable(crewSlot), false,
+          'reload', doubles);
+      }
     };
 
     const hasDoublesPartner = this.findDoublesPartner(idx) >= 0;
     const unloadedTurretRotation = GameSession.gameMode === 'hardcore'
       && !!this.mission
-      && !this.mission.sherman.loaded;
+      && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
     const fireActionKey = unloadedTurretRotation
       ? 'action.rotateTurret'
       : GameSession.gameMode === 'hardcore' ? 'action.fireHardcore' : 'action.fire';
@@ -15239,14 +15383,12 @@ export class BattleScene extends Component {
     } else if (this.playerStep === 'attack') {
       const a = classifyAttackDie(slot.pip);
       if (a === 'reload') {
-        addItem(t('action.reload'), PHASE_BTN_ATTACK,
-          () => this.tryReload(idx), this.reloadActionUnavailable());
+        addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell));
       } else if (a === 'gun') {
         addItem(t(fireActionKey), PHASE_BTN_ATTACK,
-          () => this.selectGunDie(idx), this.gunActionUnavailable());
+          () => this.selectGunDie(idx), this.gunActionUnavailable(), false, 'main-gun');
         if (this.campaignReadyRackCanReloadShootingDice()) {
-          addItem(t('action.reload'), PHASE_BTN_ATTACK,
-            () => this.tryReload(idx), this.reloadActionUnavailable());
+          addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell));
         }
       } else if (a === 'mg') {
         addItem(t('action.fireMG'), PHASE_BTN_ATTACK,
@@ -15255,14 +15397,15 @@ export class BattleScene extends Component {
       // §3.6 B 列对子：装填手装填（+同点骰）/ 炮手主炮射击（+同点骰）
       if (hasDoublesPartner) {
         if (a !== 'reload') {
-          addItem(t('action.doublesLoaderReload'), DIE_ACTION_DOUBLES,
-            () => this.tryDoublesLoaderReload(idx), this.reloadActionUnavailable('loader'));
+          addReloadItems(DIE_ACTION_DOUBLES, shell => this.tryDoublesLoaderReload(idx, shell), 'loader',
+            'action.doublesLoaderReload', true);
         }
         if (a !== 'gun') {
           addItem(t(unloadedTurretRotation
             ? 'action.doublesGunnerRotate'
             : 'action.doublesGunnerFire'), DIE_ACTION_DOUBLES,
-            () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'));
+            () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'), false,
+            'main-gun', true);
         }
         if (a === 'gun' && getGameModeConfig(GameSession.gameMode).precisionFire) {
           addItem(t('action.precisionFire'), DIE_ACTION_DOUBLES,
@@ -15275,8 +15418,7 @@ export class BattleScene extends Component {
       switch (m) {
         case 'gunner_gun_or_reload':
           // 6 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
-          addItem(t('action.reload'), PHASE_BTN_ATTACK,
-            () => this.tryReload(idx), this.reloadActionUnavailable('loader'));
+          addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell), 'loader');
           addItem(t(fireActionKey), PHASE_BTN_ATTACK,
             () => this.selectGunDie(idx), this.gunActionUnavailable('gunner'));
           break;
@@ -15346,8 +15488,9 @@ export class BattleScene extends Component {
       // §3.6 对子 C 列：只要存在同点搭档，就追加"隐蔽（+同点骰）"
       if (hasDoublesPartner) {
         const concealReason = !sherman ? t('attack.reason.unknown')
-          : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoConceal')
-            : sherman.hidden ? t('floater.alreadyConcealed') : null;
+          : sherman.paralyzed ? t('floater.paralyzedNoConceal')
+            : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoConceal')
+              : sherman.hidden ? t('floater.alreadyConcealed') : null;
         addItem(t('action.concealPair'), DIE_ACTION_DOUBLES,
           () => this.tryConcealment(idx), concealReason);
         if (getGameModeConfig(GameSession.gameMode).miscCloseHatchWithDoubles) {
@@ -15384,7 +15527,12 @@ export class BattleScene extends Component {
     const slotWorldPos = vis.root.worldPosition;
     const parentUT = this.node.getComponent(UITransform);
     const local = parentUT ? parentUT.convertToNodeSpaceAR(slotWorldPos) : new Vec3(0, 0, 0);
-    panel.setPosition(local.x, local.y + 96 + panelH / 2, 0);
+    // 紧贴骰子上沿，仅保留少量触控间距。
+    panel.setPosition(
+      local.x,
+      local.y + BattleScene.DICE_TRAY_SLOT / 2 + 8 + panelH / 2,
+      0,
+    );
     this.node.addChild(panel);
 
     let itemIndex = 0;
@@ -15401,7 +15549,7 @@ export class BattleScene extends Component {
           : 0;
         btn.setPosition(x, panelH / 2 - ITEM_H / 2 - rowIndex * (ITEM_H + GAP), 0);
         const bg = btn.addComponent(Graphics);
-        bg.fillColor = it.color;
+        bg.fillColor = opaqueButtonFill(it.color);
         bg.strokeColor = BTN_BORDER;
         bg.lineWidth = 2;
         bg.rect(-itemW / 2, -ITEM_H / 2, itemW, ITEM_H);
@@ -15419,6 +15567,31 @@ export class BattleScene extends Component {
         lab.overflow = Label.Overflow.SHRINK;
         lab.string = this.fitTextForLabel(lab, it.text, itemW);
         btn.addChild(tn);
+        if (it.badge !== undefined) {
+          const badge = new Node('AmmoBadge');
+          badge.layer = this.node.layer;
+          badge.addComponent(UITransform).setContentSize(24, 24);
+          badge.setPosition(itemW / 2 - 9, ITEM_H / 2 - 8, 0);
+          const badgeBg = badge.addComponent(Graphics);
+          badgeBg.fillColor = new Color(126, 38, 31, 255);
+          badgeBg.strokeColor = new Color(244, 224, 170, 255);
+          badgeBg.lineWidth = 2;
+          badgeBg.circle(0, 0, 11);
+          badgeBg.fill();
+          badgeBg.stroke();
+          const badgeText = new Node('Label');
+          badgeText.layer = this.node.layer;
+          badgeText.addComponent(UITransform).setContentSize(22, 22);
+          const badgeLabel = badgeText.addComponent(Label);
+          badgeLabel.fontSize = 15;
+          badgeLabel.lineHeight = 18;
+          badgeLabel.color = HUD_TEXT_COLOR;
+          badgeLabel.horizontalAlign = HorizontalTextAlignment.CENTER;
+          badgeLabel.verticalAlign = VerticalTextAlignment.CENTER;
+          badgeLabel.string = it.badge;
+          badge.addChild(badgeText);
+          btn.addChild(badge);
+        }
         // 不满足条件的选项保持置灰且不可执行；点击时在按钮上方提示具体原因。
         if (!it.unavailableReason) {
           bindButtonPressScale(btn);
@@ -15628,7 +15801,7 @@ export class BattleScene extends Component {
    * 攻击阶段：骰面 = 'reload' (die=1/2) 时合法。
    * 杂项阶段：骰面 = 'gunner_gun_or_reload' (die=1) 时合法（由 popover 路由）。
    */
-  private tryReload(dieIdx: number) {
+  private tryReload(dieIdx: number, shellType?: ShellType) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
@@ -15642,13 +15815,26 @@ export class BattleScene extends Component {
     }
     if (this.playerStep === 'misc' && !this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
     const sherman = this.mission.sherman;
-    if (sherman.loaded) {
+    const hardcore = GameSession.gameMode === 'hardcore';
+    const requestedShell = hardcore ? (shellType ?? 'ap') : undefined;
+    const currentShell = resolvedLoadedShell(sherman);
+    if ((!hardcore && sherman.loaded) || (hardcore && currentShell === requestedShell)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.loaded'),
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
       return;
     }
-    sherman.loaded = true;
+    if (requestedShell === 'hvap'
+      && (!this.campaignUpgradeActive('hvap') || (sherman.hvapAmmoRemaining ?? 0) <= 0)) {
+      this.closeDiePopover();
+      return;
+    }
+    if (requestedShell) {
+      if (!loadCampaignShell(sherman, requestedShell)) return;
+    } else {
+      sherman.loaded = true;
+      sherman.loadedShell = null;
+    }
     this.usePhaseDice([dieIdx]);
     playCannonReload();
     this.closeDiePopover();
@@ -15732,7 +15918,7 @@ export class BattleScene extends Component {
     if (this.playerStep !== 'attack') return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || classifyAttackDie(slot.pip) !== 'gun') return;
-    if (!this.mission.sherman.loaded) {
+    if (!isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore')) {
       const s = this.mission.sherman;
       this.clearGunSelection();
       this.closeDiePopover();
@@ -16044,20 +16230,17 @@ export class BattleScene extends Component {
     };
 
     const capturedDieIdx = this.selectedMGDieIdx;
-    const requireManualClose = this.playerStep === 'misc'
-      && this.phaseDice.length > 0
-      && this.phaseDice.every((d, i) => d.used || i === capturedDieIdx);
-    this.startDiceShow(
-      panelReport,
-      t('actor.player'),
-      unitDisplayName(target.kind),
-      () => {
-        if (!this.mission) return;
+    let attackApplied = false;
+    const applyAndSyncMGAttack = (completeAction: boolean) => {
+      if (!this.mission) return;
+      if (!attackApplied) {
+        attackApplied = true;
         this.applyMachineGunAttackResult(target, report);
         if (target.destroyed) this.registerImpactDestroyWreckVisual(target, sherman);
         this.usePhaseDice([capturedDieIdx]);
         this.selectedMGDieIdx = -1;
-        // 面板结束后再补一条目标格上方的短浮字，强化"这次扫射打谁"的视觉记忆
+        // Reveal the target state together with the settled dice; confirmation
+        // only closes the report and advances the phase.
         if (report.hit) {
           this.spawnFloater(target.pos.q, target.pos.r, t('floater.mgHit'),
             new Color(255, 120, 120, 255), { size: 32, dur: 1.0, rise: 48 });
@@ -16078,9 +16261,25 @@ export class BattleScene extends Component {
         this.updateHUD();
         this.redraw();
         this.refreshStatusPanel();
-        this.completePhaseDiceAction();
+      }
+      if (completeAction) this.completePhaseDiceAction();
+    };
+    this.startDiceShow(
+      panelReport,
+      t('actor.player'),
+      unitDisplayName(target.kind),
+      () => {
+        applyAndSyncMGAttack(true);
       },
-      { mg: true, attacker: sherman, target, requireManualClose },
+      // Player MG attacks use the same explicit settlement step as main-gun
+      // attacks. Confirm may be pressed immediately to skip the remaining roll.
+      {
+        mg: true,
+        attacker: sherman,
+        target,
+        requireManualClose: true,
+        onHold: () => applyAndSyncMGAttack(false),
+      },
     );
     // 立即刷一次 HUD，让 "点步兵扫射" 提示消失，避免玩家以为还能再点
     this.updateHUD();
@@ -16129,7 +16328,7 @@ export class BattleScene extends Component {
 
   /**
    * 隐蔽（§3.6 对子 C 列 concealment）：
-   * 需要一对同点骰；消耗两颗，置 sherman.hidden=true（被攻击命中阈值 +2）。
+   * 坦克未瘫痪时需要一对同点骰；消耗两颗，置 sherman.hidden=true（被攻击命中阈值 +2）。
    * 隐蔽保持到下一次该单位做出移动动作（转向 / 前进 / 后退）才清除，见 breakConcealment()；
    * 该规则对**德军坦克**同样生效（阶段⑥ AI `turn` / `advance` / `reverse` 分支同步调用）。
    *
@@ -16142,6 +16341,10 @@ export class BattleScene extends Component {
     if (!slot || slot.used || this.playerStep !== 'misc') return;
     const partnerIdx = this.findDoublesPartner(dieIdx);
     const s = this.mission.sherman;
+    if (s.paralyzed) {
+      this.showDieActionUnavailable(t('floater.paralyzedNoConceal'));
+      return;
+    }
     if (tileForbidsSmokeOrConcealment(this.mission.map.get(s.pos))) {
       this.closeDiePopover();
       this.spawnFloater(s.pos.q, s.pos.r, t('floater.beachNoConceal'),
@@ -16408,7 +16611,7 @@ export class BattleScene extends Component {
    * §3.6 B 列对子：装填手装填（仅攻击阶段）。
    * 若已装填则不消耗；装填手阵亡则拒绝。
    */
-  private tryDoublesLoaderReload(dieIdx: number) {
+  private tryDoublesLoaderReload(dieIdx: number, shellType?: ShellType) {
     if (!this.mission) return;
     if (this.playerStep !== 'attack') return;
     const slot = this.phaseDice[dieIdx];
@@ -16416,14 +16619,27 @@ export class BattleScene extends Component {
     if (!this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
 
     const sherman = this.mission.sherman;
-    if (sherman.loaded) {
+    const hardcore = GameSession.gameMode === 'hardcore';
+    const requestedShell = hardcore ? (shellType ?? 'ap') : undefined;
+    const currentShell = resolvedLoadedShell(sherman);
+    if ((!hardcore && sherman.loaded) || (hardcore && currentShell === requestedShell)) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.loaded'),
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       this.closeDiePopover();
       return;
     }
+    if (requestedShell === 'hvap'
+      && (!this.campaignUpgradeActive('hvap') || (sherman.hvapAmmoRemaining ?? 0) <= 0)) {
+      this.closeDiePopover();
+      return;
+    }
     if (!this.consumeDoubles(dieIdx)) return;
-    sherman.loaded = true;
+    if (requestedShell) {
+      if (!loadCampaignShell(sherman, requestedShell)) return;
+    } else {
+      sherman.loaded = true;
+      sherman.loadedShell = null;
+    }
     playCannonReload();
     this.closeDiePopover();
     this.refreshPhaseUI();
@@ -16545,9 +16761,17 @@ export class BattleScene extends Component {
       if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
       if (isAbandonedTank(target)) continue;
       if (target.faction === actor.faction) continue;
-      const tankSuppression = isMainGunSuppressionAttack(actor, target, GameSession.gameMode === 'hardcore');
-      if (!hardcoreInfantry && !tankSuppression && (isFootUnit(target) || target.kind === 'truck')) continue;
       const d = hexDistance(actor.pos, target.pos);
+      const automaticWeapon = GameSession.gameMode === 'hardcore' && isTankUnit(actor)
+        ? nonPlayerTankWeaponForTarget(target, d)
+        : 'ap';
+      const tankSuppression = automaticWeapon === 'he'
+        && isMainGunSuppressionAttack(actor, target, true, 'he');
+      if (GameSession.gameMode === 'hardcore' && isTankUnit(actor)) {
+        if (automaticWeapon === 'mg') continue;
+      } else if (!hardcoreInfantry && !tankSuppression && (isFootUnit(target) || target.kind === 'truck')) {
+        continue;
+      }
       if (!hardcoreInfantry
         && !getGameModeConfig(GameSession.gameMode).radioVisionSharing
         && d > currentVisionRange(actor, this.currentWeather())) continue;
@@ -16574,10 +16798,10 @@ export class BattleScene extends Component {
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         sameHexInfantryTankAttack,
         mainGunSuppressesInfantry: tankSuppression,
+        shellType: automaticWeapon === 'he' ? 'he' : 'ap',
       }).ok) continue;
-      // A tank reserves its main gun for armored targets. Infantry suppression
-      // is considered only when no legal tank target exists.
-      const weaponPriority = isTankUnit(actor) && tankSuppression ? 1 : 0;
+      // A tank prefers AP targets; HE targets are considered when no legal AP target exists.
+      const weaponPriority = isTankUnit(actor) && automaticWeapon === 'he' ? 1 : 0;
       const priority = aiTargetPriorityForActor(actor, target, missionTargets);
       if (weaponPriority < bestWeaponPriority
         || (weaponPriority === bestWeaponPriority
@@ -17222,10 +17446,11 @@ export class BattleScene extends Component {
     }
 
     // 桥梁叠加（GDD §3.2）：水域+桥梁的骰子基数读取按公路；这里 tile 面板与实际掷骰一致。
-    const pool = PLAYER_DICE_POOL;
+    const hardcoreDicePool = GameSession.gameMode === 'hardcore';
+    const pool = hardcoreDicePool ? PLAYER_HARDCORE_DICE_POOL : PLAYER_DICE_POOL;
     const b = pool.baseByPhaseTerrain;
     const eff = effectiveDiceTerrain(tile);
-    const mv = b.movement[eff];
+    const mv = b.movement[eff] + (hardcoreDicePool ? (this.mission?.sherman.stats.mobility ?? 0) : 0);
     const at = b.attack[eff];
     const ms = b.misc[eff];
     const commanderBonusWithoutHatch = getGameModeConfig(GameSession.gameMode).commanderBonusWithoutOpenHatch;
@@ -18499,7 +18724,15 @@ export class BattleScene extends Component {
     const g = n.addComponent(Graphics);
     const redraw = (c: Color, opts?: { border?: boolean }) => {
       g.clear();
-      drawFieldPanel(g, w, h, c, opts?.border ? BATTLE_MODAL_LEVEL_BORDER : BATTLE_MODAL_DIVIDER, STATUS_TITLE_COLOR);
+      drawFieldPanel(
+        g,
+        w,
+        h,
+        opaqueButtonFill(c),
+        opts?.border ? BATTLE_MODAL_LEVEL_BORDER : BATTLE_MODAL_DIVIDER,
+        STATUS_TITLE_COLOR,
+        false,
+      );
     };
     redraw(color);
     bindButtonPressScale(n);
@@ -18855,8 +19088,11 @@ export class BattleScene extends Component {
     this.clearAIMoveState();
     beginAmbushTurn(enemy, GameSession.gameMode);
     this.setActiveActingUnit(enemy);
-    if (this.isHardcoreInfantryActor(enemy) && consumeInfantrySuppression(enemy)) {
+    if (this.isHardcoreInfantryActor(enemy) && consumeInfantryTurnSuppression(enemy)) {
       this.enemyDidActThisTurn = true;
+      // Suppression forfeits the unit's entire turn, including every rank-granted
+      // action (veteran/elite infantry normally receive a second action).
+      this.enemyInfantryActionIndex = infantryTurnActions(enemy).length;
       this.enemyDice = [];
       this.enemyDiceTypes = [];
       this.enemyDiceUsed = [];
@@ -19013,6 +19249,14 @@ export class BattleScene extends Component {
 
   /** Hardcore heavy artillery fires once at a legal target on its fixed four-hex forward ray. */
   private runHardcoreHeavyArtilleryTurn(artillery: Unit) {
+    if (artillery.suppressed) {
+      artillery.suppressed = false;
+      this.enemyDidActThisTurn = true;
+      this.spawnFloater(artillery.pos.q, artillery.pos.r, t('floater.suppressionSkip'),
+        new Color(255, 204, 72, 255), { size: 28, dur: 1.1, rise: 38 });
+      this.finishHardcoreHeavyArtilleryTurn(artillery);
+      return;
+    }
     const target = this.selectHardcoreHeavyArtilleryTarget(artillery);
     if (!target) {
       this.finishHardcoreHeavyArtilleryTurn(artillery);
@@ -19302,15 +19546,30 @@ export class BattleScene extends Component {
       `[Hardcore AT] ${unitDisplayName(gun.kind)} 攻击 ${unitDisplayName(target.kind)}`
       + (selected.infantryAttack ? '（操炮步兵步枪）' : '（反坦克炮）'),
     );
-    this.startDiceShow(report, actorLabel, targetLabel, () => {
+    let attackApplied = false;
+    const applyAndPresentAttack = () => {
+      if (attackApplied) return;
+      attackApplied = true;
       this.applyMainGunAttackResult(target, report);
       if (target.destroyed) this.registerImpactDestroyWreckVisual(target, gun);
       this.presentAttackResult(actorLabel, report, attacker, target);
+      this.updateHUD();
+      this.redraw();
+      this.refreshStatusPanel();
+    };
+    this.startDiceShow(report, actorLabel, targetLabel, () => {
+      applyAndPresentAttack();
       if (this.outcome !== 'ongoing') this.clearActiveActingUnit(gun);
       if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
         this.runNextEnemyStep();
       }
-    }, { attackSound, attacker, target });
+    }, {
+      mg: selected.infantryAttack,
+      attackSound,
+      attacker,
+      target,
+      onHold: applyAndPresentAttack,
+    });
   }
 
   /** Applies the hardcore-only AI commander hatch rule before this tank acts. */
@@ -19658,7 +19917,7 @@ export class BattleScene extends Component {
       }
 
       case 'conceal': {
-        if (tileForbidsSmokeOrConcealment(map.get(enemy.pos))) return 'done';
+        if (enemy.paralyzed || tileForbidsSmokeOrConcealment(map.get(enemy.pos))) return 'done';
         enemy.hidden = true;
         this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 进入隐蔽`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.concealed'),
@@ -19687,6 +19946,7 @@ export class BattleScene extends Component {
     const currentTile = this.mission.map.get(enemy.pos);
     if (!currentTile) return null;
     const currentPriority = this.infantryMoveHexPriority(enemy, enemy.pos, currentTile);
+    const preserveCurrentPriority = currentDist <= 2;
     const occupied = this.buildOccupiedSet(enemy);
     let best: Axial | null = null;
     let bestPriority = Infinity;
@@ -19702,9 +19962,9 @@ export class BattleScene extends Component {
       if (d >= currentDist) continue;
       const priority = this.infantryAIMovePriority(enemy, n, tile);
       if (priority === null) continue;
-      // Lower values are higher priority. Infantry never leaves its current
-      // priority tier for a worse destination, even when that would approach.
-      if (priority > currentPriority) continue;
+      // Lower values are higher priority. Infantry only refuses to leave its
+      // current priority tier when an enemy is already within two hexes.
+      if (preserveCurrentPriority && priority > currentPriority) continue;
       if (occupied.has(`${n.q},${n.r}`) && !this.canInfantryEnterPriorityOccupiedHex(enemy, n)) continue;
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
         bestPriority = priority;
@@ -19762,6 +20022,7 @@ export class BattleScene extends Component {
       this.allUnits().some(unit =>
         !unit.destroyed
         && !unit.suppressed
+        && !isAttachedATGunCrew(unit)
         && unit.kind !== 'officer'
         && isFootUnit(unit)
         && isFriendlyFaction(unit.faction) !== isFriendlyFaction(enemy.faction)
@@ -19777,7 +20038,7 @@ export class BattleScene extends Component {
     const occupants = this.allUnits().filter(u =>
       u !== enemy && !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r,
     );
-    if (occupants.some(u => u.kind === 'at_gun' && u.faction === 'neutral')) return 0;
+    if (occupants.some(u => isAntiTankGunUnit(u) && u.faction === 'neutral')) return 0;
     const sameSide = (unit: Unit) => unit.faction !== 'neutral'
       && isFriendlyFaction(unit.faction) === isFriendlyFaction(enemy.faction);
     if (occupants.some(u => isTankUnit(u) && sameSide(u))) return 1;
@@ -19792,7 +20053,7 @@ export class BattleScene extends Component {
     );
     return occupants.every(unit =>
       !this.isBlockingMoveOccupant(enemy, unit)
-      || (unit.kind === 'at_gun' && unit.faction === 'neutral')
+      || (isAntiTankGunUnit(unit) && unit.faction === 'neutral')
       || (isTankUnit(unit)
         && unit.faction !== 'neutral'
         && isFriendlyFaction(unit.faction) === isFriendlyFaction(enemy.faction)),
@@ -19886,11 +20147,11 @@ export class BattleScene extends Component {
     if (isFootUnit(mover) && isAbandonedTank(occupant)) return false;
     if (GameSession.gameMode === 'hardcore') {
       // AT guns cannot move into a hex occupied by any non-tank unit.
-      if (mover.kind === 'at_gun' && !isTankUnit(occupant)) return true;
+      if (isAntiTankGunUnit(mover) && !isTankUnit(occupant)) return true;
       // Infantry may enter an abandoned gun's hex to take control.
       if (isFootUnit(mover) && isAbandonedATGun(occupant)) return false;
       // A tank can overrun an enemy or neutral AT gun, but never a friendly controlled one.
-      if (isTankUnit(mover) && occupant.kind === 'at_gun') {
+      if (isTankUnit(mover) && isAntiTankGunUnit(occupant)) {
         return isControlledATGun(occupant) && this.areUnitsOnSameSide(mover, occupant);
       }
       // Enemy infantry no longer blocks a tank from entering its hex.
@@ -19911,7 +20172,7 @@ export class BattleScene extends Component {
   private releaseATGunCrew(gun: Unit): Unit | null {
     // Main-gun damage is applied before crew release, so a destroyed gun can
     // still have a living attached crew that must be restored as infantry.
-    if (!this.mission || gun.kind !== 'at_gun' || gun.atGunCrewAlive !== true) return null;
+    if (!this.mission || !isAntiTankGunUnit(gun) || gun.atGunCrewAlive !== true) return null;
     const crewFaction = gun.faction;
     let infantry = this.atGunController(gun);
     if (infantry) {
@@ -19957,7 +20218,7 @@ export class BattleScene extends Component {
     for (const unit of this.allUnits()) {
       if (unit === mover
         || unit.destroyed
-        || unit.kind !== 'at_gun'
+        || !isAntiTankGunUnit(unit)
         || (isControlledATGun(unit) && this.areUnitsOnSameSide(mover, unit))
         || unit.pos.q !== mover.pos.q
         || unit.pos.r !== mover.pos.r) continue;
@@ -20033,6 +20294,12 @@ export class BattleScene extends Component {
 
     const targetVisible = this.isHexVisible(target.pos);
 
+    const visibleUnitsOnTile = targetVisible ? this.allUnits().filter(
+      unit => !unit.destroyed
+        && this.isUnitVisible(unit)
+        && unit.pos.q === target.pos.q
+        && unit.pos.r === target.pos.r,
+    ) : [];
     const enemiesOnTile = targetVisible ? this.playerMainGunTargets().filter(
       e => !e.destroyed && e.pos.q === target.pos.q && e.pos.r === target.pos.r,
     ) : [];
@@ -20040,6 +20307,9 @@ export class BattleScene extends Component {
     const attackOrMisc = this.playerStep === 'attack' || this.playerStep === 'misc';
     const gunSel = this.selectedGunDieIdx >= 0;
     const mgSel = this.selectedMGDieIdx >= 0;
+    const legalMainGunTarget = gunSel && mainGunTarget
+      && this.playerWeaponTargetHexKeys().has(HexMap.keyOf(target.pos))
+      ? mainGunTarget : undefined;
     const legalMGTarget = mgSel ? enemiesOnTile.find(e => canMGAttack({
       attacker: this.mission!.sherman,
       target: e,
@@ -20066,7 +20336,7 @@ export class BattleScene extends Component {
       // may only commit against an actual visible main-gun target. It must not
       // consume its paired dice as a rotation-only reconnaissance action.
       if (precisionGunSelection) {
-        if (!targetVisible || !mainGunTarget) {
+        if (!targetVisible || !legalMainGunTarget) {
           this.openTileInspectModal(target);
           return;
         }
@@ -20090,9 +20360,11 @@ export class BattleScene extends Component {
           this.tryAimShermanTurretAtFogTile(aimDirection, target.pos, mgSel);
           return;
         }
-        const unloadedGunRotation = gunSel && !this.mission.sherman.loaded;
+        const unloadedGunRotation = gunSel
+          && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
         const machineGunRotationOnly = mgSel && enemiesOnTile.length > 0 && !legalMGTarget;
-        if (enemiesOnTile.length === 0 || unloadedGunRotation || machineGunRotationOnly) {
+        const mainGunRotationOnly = gunSel && visibleUnitsOnTile.length > 0 && !legalMainGunTarget;
+        if (visibleUnitsOnTile.length === 0 || unloadedGunRotation || machineGunRotationOnly || mainGunRotationOnly) {
           if (!this.canTurretReachDirection(this.mission.sherman, direction)) {
             this.showGunAimWarning('attack.reason.turretTraverseSpeed');
             return;
@@ -20109,8 +20381,8 @@ export class BattleScene extends Component {
         this.tryMGAttack(legalMGTarget);
         return;
       }
-      if (gunSel) {
-        this.tryAttack(mainGunTarget!);
+      if (gunSel && legalMainGunTarget) {
+        this.tryAttack(legalMainGunTarget);
         return;
       }
     }
@@ -20403,23 +20675,69 @@ export class BattleScene extends Component {
     // Dice presentation may have already applied the destroyed visual, so do
     // not use isControlledATGun here (it deliberately rejects destroyed guns).
     const hadATGunCrew = GameSession.gameMode === 'hardcore'
-      && target.kind === 'at_gun'
+      && isAntiTankGunUnit(target)
       && target.atGunCrewAlive === true;
     applyAttack(target, report);
     if (hadATGunCrew && target.destroyed) {
-      // A main-gun hit destroys the equipment, not its operators. Restore the
-      // crew as an ordinary squad in the same hex and pin it for its next turn.
+      // AP destroys the gun body; the operator group survives without HE suppression.
+      this.releaseATGunCrew(target);
+    }
+  }
+
+  private rollHighExplosiveCollateralResults(
+    attacker: Unit,
+    target: Unit,
+  ): HighExplosiveCollateralResult[] {
+    if (!this.mission) return [];
+    return this.allUnits()
+      .filter(unit => unit !== target
+        && !unit.destroyed
+        // An infantry squad operating a captured AT gun is part of that
+        // composite unit. Keep the object only so releasing the crew can
+        // restore its exact faction, level, and skills; it must not receive a
+        // second HE blast check while attached to the gun.
+        && !isAttachedATGunCrew(unit)
+        && unit.kind !== 'officer'
+        && isFootUnit(unit)
+        && unit.faction === target.faction
+        && unit.pos.q === target.pos.q
+        && unit.pos.r === target.pos.r)
+      .map(infantry => ({
+        target: infantry,
+        report: rollHighExplosiveAttack({
+          attacker,
+          target: infantry,
+          map: this.mission!.map,
+          theater: this.mission!.data.theater,
+          units: this.allUnits(),
+          mainGunSuppressesInfantry: true,
+          shellType: 'he',
+        }, this.rng),
+      }));
+  }
+
+  private applyHighExplosiveAttackResult(
+    target: Unit,
+    report: HighExplosiveReport,
+    collateralResults: HighExplosiveCollateralResult[] = [],
+  ): void {
+    const hadATGunCrew = isAntiTankGunUnit(target) && target.atGunCrewAlive === true;
+    applyHighExplosiveAttack(target, report);
+    if (hadATGunCrew && target.destroyed) {
       const survivingCrew = this.releaseATGunCrew(target);
-      if (survivingCrew && applyInfantrySuppression(survivingCrew)) {
-        this.spawnFloater(survivingCrew.pos.q, survivingCrew.pos.r, t('floater.suppressed'),
-          new Color(255, 204, 72, 255), { size: 32, dur: 1.1, rise: 42 });
-      }
+      if (survivingCrew) applyInfantrySuppression(survivingCrew);
+    }
+
+    // Every ordinary infantry unit in the targeted hex resolves its own HE
+    // blast check, independently of whether the primary target was hit.
+    for (const collateral of collateralResults) {
+      applyHighExplosiveAttack(collateral.target, collateral.report);
     }
   }
 
   private applyMachineGunAttackResult(target: Unit, report: ReturnType<typeof rollMGAttack>): void {
     const hadATGunCrew = GameSession.gameMode === 'hardcore'
-      && target.kind === 'at_gun'
+      && isAntiTankGunUnit(target)
       && target.atGunCrewAlive === true;
     if (hadATGunCrew && report.hit) {
       // MG fire kills only the operators. Undo any generic early-destroy
@@ -20441,15 +20759,18 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[gunDieIdx];
     if (!slot || slot.used) return;
     // 主炮禁瞄徒步类（步兵 / 军官）：引导玩家改用机枪骰；不消耗骰，避免误操作损失行动资源
+    const loadedShell = GameSession.gameMode === 'hardcore'
+      ? resolvedLoadedShell(sherman)
+      : null;
     const suppressionAttack = isMainGunSuppressionAttack(
-      sherman, target, GameSession.gameMode === 'hardcore',
+      sherman, target, GameSession.gameMode === 'hardcore', loadedShell,
     );
     if (isFootUnit(target) && !suppressionAttack) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('attack.reason.gunVsInfantry'),
         new Color(255, 200, 120, 255), { size: 22, dur: 1.0, rise: 26 });
       return;
     }
-    if (!sherman.loaded) {
+    if (!isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.unloaded'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
@@ -20466,6 +20787,7 @@ export class BattleScene extends Component {
       smokeHexes: this.mission.smokeHexes,
       expandedTurretDirections,
       mainGunSuppressesInfantry: suppressionAttack,
+      shellType: loadedShell ?? undefined,
     });
     if (!check.ok) {
       this.battleLogI18n('battleLog.combat.cannotAttack', {
@@ -20484,31 +20806,91 @@ export class BattleScene extends Component {
     this.hideTurretTargetOverlayForCommittedAction();
 
     // 先掷骰拿到确定结果，再让面板按这个结果播 2d6→1d6 两段动画；
-    // 真正 applyAttack / 消耗骰子 / 推进胜负判定全部放到 onDone 里执行，
-    // 这样动画过程中玩家看到的状态（骰子托盘 / 敌人图示）不会提前变。
-    if (suppressionAttack) {
+    // 真正 applyAttack / 消耗骰子 / 推进胜负判定全部放到 onDone 里执行；
+    // 玩家正常看完动画或提前确认关闭面板时，都会通过同一回调完成结算。
+    if (loadedShell === 'he') {
+      const ambushModifier = ambushHitThresholdModifier(sherman, GameSession.gameMode);
+      const report = rollHighExplosiveAttack({
+        attacker: sherman,
+        target,
+        map,
+        protagonist: this.protagonistForAttackTarget(target),
+        theater: this.mission.data.theater,
+        units: this.allUnits(),
+        smokeHexes: this.mission.smokeHexes,
+        weather: this.currentWeather(),
+        hitThresholdModifier: this.campaignMainGunHitThresholdModifier() + ambushModifier,
+        hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
+        expandedTurretDirections,
+        gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
+        mainGunSuppressesInfantry: true,
+        shellType: 'he',
+      }, this.rng);
+      const collateralResults = this.rollHighExplosiveCollateralResults(sherman, target);
+      const doublesPartnerIdx = this.selectedGunDoublesIdx;
+      const panelReport = this.highExplosivePanelReport(report);
+      let attackApplied = false;
+      const applyAndSyncHEAttack = (completeAction: boolean) => {
+        if (!this.mission) return;
+        if (!attackApplied) {
+          attackApplied = true;
+          this.applyHighExplosiveAttackResult(target, report, collateralResults);
+          if (target.destroyed) this.registerImpactDestroyWreckVisual(target, sherman);
+          this.usePhaseDice(doublesPartnerIdx >= 0 ? [gunDieIdx, doublesPartnerIdx] : [gunDieIdx]);
+          sherman.loaded = false;
+          sherman.loadedShell = null;
+          this.clearGunSelection();
+          this.outcome = this.computeOutcome();
+          if (this.outcome !== 'ongoing') this.updateOutcomeOverlay();
+          const resultKey = !report.hit ? 'dice.panel.outcomeMiss'
+            : report.outcome === 'destroyed' ? 'dmg.outcome.destroyed'
+              : report.outcome === 'paralyzed' ? 'dmg.outcome.paralyzed'
+                : report.outcome === 'fire_suppressed' ? 'dice.panel.heFireSuppressed'
+                  : report.outcome === 'suppressed' ? 'floater.suppressed' : 'dmg.outcome.none';
+          const effectNeed = report.fireThreshold !== undefined
+            ? `${report.effectThreshold}/${report.fireThreshold}`
+            : report.effectThreshold ?? '-';
+          this.battleLogI18n('battleLog.combat.heResult', {
+            actor: t('actor.player'),
+            hitRoll: report.automaticHit ? t('dice.rule.heAutomaticHit') : report.roll,
+            hitNeed: report.automaticHit ? '-' : report.threshold,
+            effectRoll: report.effectRoll ?? '-',
+            effectNeed,
+            result: t(resultKey),
+          });
+          this.sendPvpActionResult('main_gun_he', {
+            type: 'main_gun_he',
+            attackerId: sherman.id,
+            targetId: target.id,
+            heReport: report,
+            collateralResults: collateralResults.map(collateral => ({
+              targetId: collateral.target.id,
+              report: collateral.report,
+            })),
+          });
+          this.spawnFloater(target.pos.q, target.pos.r, t(resultKey),
+            report.outcome === 'none' || !report.hit ? new Color(210, 210, 210, 255) : new Color(255, 204, 72, 255),
+            { size: 32, dur: 1.1, rise: 42 });
+          this.refreshPhaseUI();
+          this.updateHUD();
+          this.redraw();
+          this.refreshStatusPanel();
+        }
+        if (completeAction) this.completePhaseDiceAction();
+      };
       this.startShermanTurretAim(target, () => {
         if (!this.mission || target.destroyed) return;
         markAmbushAction(sherman);
         markAmbushTargeted(target);
-        this.playHighExplosiveSuppressionCue(sherman, target);
-        this.usePhaseDice([gunDieIdx]);
-        sherman.loaded = false;
-        this.clearGunSelection();
-        this.scheduleOnce(() => {
-          if (applyInfantrySuppression(target)) {
-            this.spawnFloater(target.pos.q, target.pos.r, t('floater.suppressed'),
-              new Color(255, 204, 72, 255), { size: 32, dur: 1.1, rise: 42 });
-            this.battleLogI18n('battleLog.combat.suppressed', {
-              attacker: t('actor.player'),
-              target: unitDisplayName(target.kind),
-            });
-          }
-          this.refreshPhaseUI();
-          this.updateHUD();
-          this.redraw();
-        }, 0.30);
-        this.scheduleOnce(() => this.completePhaseDiceAction(), 0.84);
+        this.startDiceShow(panelReport, t('actor.player'), unitDisplayName(target.kind), () => {
+          applyAndSyncHEAttack(true);
+        }, {
+          attacker: sherman,
+          target,
+          highExplosiveReport: report,
+          highExplosiveCollateral: collateralResults,
+          onHold: () => applyAndSyncHEAttack(false),
+        });
       });
       this.updateHUD();
       this.redraw();
@@ -20537,6 +20919,7 @@ export class BattleScene extends Component {
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
       gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
+      shellType: loadedShell ?? undefined,
     }, this.rng);
     // 瞄准与开火动画期间保留主炮骰的选中态；进入结果展示后再统一消耗。
     // §3.6 B 列对子（炮手主炮射击）：开火前记住 partner idx，结算时一并消耗；
@@ -20552,6 +20935,7 @@ export class BattleScene extends Component {
         if (target.destroyed) this.registerImpactDestroyWreckVisual(target, sherman);
         this.usePhaseDice(doublesPartnerIdx >= 0 ? [gunDieIdx, doublesPartnerIdx] : [gunDieIdx]);
         sherman.loaded = false;
+        sherman.loadedShell = null;
         this.clearGunSelection();
         this.presentAttackResult(t('actor.player'), report, sherman, target);
         this.sendPvpActionResult('main_gun', {
@@ -20664,29 +21048,90 @@ export class BattleScene extends Component {
       }
     }
 
-    if (isMainGunSuppressionAttack(enemy, target, GameSession.gameMode === 'hardcore')) {
+    const automaticWeapon = GameSession.gameMode === 'hardcore' && isTankUnit(enemy)
+      ? nonPlayerTankWeaponForTarget(target, hexDistance(enemy.pos, target.pos))
+      : 'ap';
+    if (automaticWeapon === 'mg') return this.tryAIMGAttack(enemy, target);
+
+    if (automaticWeapon === 'he') {
+      const heContext = {
+        attacker: enemy,
+        target,
+        map,
+        protagonist: this.protagonistForAttackTarget(target),
+        theater: this.mission.data.theater,
+        units: this.allUnits(),
+        smokeHexes: this.mission.smokeHexes,
+        weather: this.currentWeather(),
+        hitThresholdModifier: ambushHitThresholdModifier(enemy, GameSession.gameMode),
+        hitThresholdModifiers: ambushHitThresholdModifierDetails(enemy, GameSession.gameMode),
+        expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
+        gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
+        mainGunSuppressesInfantry: true,
+        shellType: 'he' as const,
+      };
+      const report = rollHighExplosiveAttack(heContext, this.rng);
+      const collateralResults = this.rollHighExplosiveCollateralResults(enemy, target);
+      const panelReport = this.highExplosivePanelReport(report);
       markAmbushAction(enemy);
       markAmbushTargeted(target);
+      const enemyActor = !isFriendlyFaction(enemy.faction)
+        ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
+        : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
+      const targetLabel = target === this.mission.sherman
+        ? t('actor.sherman')
+        : !isFriendlyFaction(target.faction)
+          ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
+          : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
+      let attackApplied = false;
+      const applyAndPresentHEAttack = () => {
+        if (attackApplied) return;
+        attackApplied = true;
+        this.applyHighExplosiveAttackResult(target, report, collateralResults);
+        if (target.destroyed) this.registerImpactDestroyWreckVisual(target, enemy);
+        this.outcome = this.computeOutcome();
+        if (this.outcome !== 'ongoing') {
+          this.updateOutcomeOverlay();
+          this.clearActiveActingUnit(enemy);
+        }
+        const resultKey = !report.hit ? 'dice.panel.outcomeMiss'
+          : report.outcome === 'destroyed' ? 'dmg.outcome.destroyed'
+            : report.outcome === 'paralyzed' ? 'dmg.outcome.paralyzed'
+              : report.outcome === 'fire_suppressed' ? 'dice.panel.heFireSuppressed'
+                : report.outcome === 'suppressed' ? 'floater.suppressed' : 'dmg.outcome.none';
+        const effectNeed = report.fireThreshold !== undefined
+          ? `${report.effectThreshold}/${report.fireThreshold}`
+          : report.effectThreshold ?? '-';
+        this.battleLogI18n('battleLog.combat.heResult', {
+          actor: unitDisplayName(enemy.kind),
+          hitRoll: report.automaticHit ? t('dice.rule.heAutomaticHit') : report.roll,
+          hitNeed: report.automaticHit ? '-' : report.threshold,
+          effectRoll: report.effectRoll ?? '-',
+          effectNeed,
+          result: t(resultKey),
+        });
+        this.spawnFloater(target.pos.q, target.pos.r, t(resultKey),
+          report.outcome === 'none' || !report.hit ? new Color(210, 210, 210, 255) : new Color(255, 204, 72, 255),
+          { size: 32, dur: 1.1, rise: 42 });
+        this.updateHUD();
+        this.redraw();
+        this.refreshStatusPanel();
+      };
       const fire = () => {
-        this.playHighExplosiveSuppressionCue(enemy, target);
-        this.scheduleOnce(() => {
-          if (applyInfantrySuppression(target)) {
-            this.spawnFloater(target.pos.q, target.pos.r, t('floater.suppressed'),
-              new Color(255, 204, 72, 255), { size: 32, dur: 1.1, rise: 42 });
-            this.battleLogI18n('battleLog.combat.suppressed', {
-              attacker: unitDisplayName(enemy.kind),
-              target: unitDisplayName(target.kind),
-            });
-          }
-          this.redraw();
-        }, 0.30);
-        this.scheduleOnce(() => {
+        this.startDiceShow(panelReport, enemyActor, targetLabel, () => {
+          applyAndPresentHEAttack();
           if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
             this.enemyDiceHighlightIdx = -1;
             this.refreshEnemyDiceTray();
             this.runNextEnemyStep();
           }
-        }, 0.84);
+        }, {
+          attacker: enemy,
+          target,
+          highExplosiveReport: report,
+          highExplosiveCollateral: collateralResults,
+          onHold: applyAndPresentHEAttack,
+        });
       };
       if (splitTurretReady) this.startEnemyTurretAim(enemy, target, fire);
       else fire();
@@ -20741,6 +21186,7 @@ export class BattleScene extends Component {
         ...(precisionFire ? [{ labelKey: 'dice.rule.precisionFire', value: -2 }] : []),
       ],
     }, this.rng);
+    const infantryVsInfantry = isFootUnit(enemy) && isFootUnit(target);
     const enemyActor = !isFriendlyFaction(enemy.faction)
       ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
@@ -20756,12 +21202,20 @@ export class BattleScene extends Component {
         need: report.threshold,
       });
     }
-    const showDice = (fireEffectPlayed = false) => this.startDiceShow(report, enemyActor, targetLabel, () => {
-      if (!this.mission) return;
+    let attackApplied = false;
+    const applyAndPresentAttack = () => {
+      if (attackApplied || !this.mission) return;
+      attackApplied = true;
       this.applyMainGunAttackResult(target, report);
       if (target.destroyed) this.registerImpactDestroyWreckVisual(target, enemy);
       this.presentAttackResult(enemyActor, report, enemy, target);
       if (this.outcome !== 'ongoing') this.clearActiveActingUnit(enemy);
+      this.updateHUD();
+      this.redraw();
+      this.refreshStatusPanel();
+    };
+    const showDice = (fireEffectPlayed = false) => this.startDiceShow(report, enemyActor, targetLabel, () => {
+      applyAndPresentAttack();
       // 本骰打完：回到当前敌坦的下一颗骰（DiceShow 里已经消耗掉的那颗之外）
       if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
         // 重新浮出托盘（可能还剩骰子），再继续调度
@@ -20771,7 +21225,14 @@ export class BattleScene extends Component {
         }
         this.runNextEnemyStep();
       }
-    }, { attackSound: enemy.stats.attackSound, attacker: enemy, target, fireEffectPlayed });
+    }, {
+      mg: infantryVsInfantry,
+      attackSound: enemy.stats.attackSound,
+      attacker: enemy,
+      target,
+      fireEffectPlayed,
+      onHold: applyAndPresentAttack,
+    });
     const afterTurretAim = () => {
       if (precisionFire) {
         this.beginPrecisionAimHold(enemy, target, enemy.stats.attackSound, report, showDice);
@@ -20792,8 +21253,8 @@ export class BattleScene extends Component {
 
   /**
    * 启动攻击掷骰动画。调用方应已经 rollAttack 完拿到 report（保证结果不会在动画中变化），
-   * 但 *不要* 自己 applyAttack —— 让本面板在动画末尾回调 onDone，调用方在 onDone
-   * 里真正写入伤害 / 弹浮字 / 推进调度。
+   * 但 *不要* 自己 applyAttack —— onHold 在最终结果揭示时写入伤害并刷新目标，
+   * onDone 只负责兜底结算与推进调度。玩家可随时确认并跳过剩余动画。
    *
    * 期间所有玩家与敌方新指令被屏蔽（见 isBusy()）；关闭骰子弹窗。
    * 敌方主炮开火时：敌方 AI 骰子托盘挂到 DiceShow 内、遮罩之上，与命中/穿甲结果同屏可见。
@@ -20812,6 +21273,8 @@ export class BattleScene extends Component {
       fireEffectPlayed?: boolean;
       onHold?: () => void;
       requireManualClose?: boolean;
+      highExplosiveReport?: HighExplosiveReport;
+      highExplosiveCollateral?: HighExplosiveCollateralResult[];
     } = {},
   ) {
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
@@ -20832,16 +21295,20 @@ export class BattleScene extends Component {
         this.redraw();
       }
       if (!opts.fireEffectPlayed) {
-        this.playAttackFireCue(
-          opts.attacker,
-          opts.target ?? null,
-          mg,
-          opts.attackSound ?? '',
-          report,
-          mg ? undefined : () => {
-            this.applyAttackDestroyedVisualAtImpact(report, opts.attacker ?? null, opts.target ?? null);
-          },
-        );
+        if (opts.highExplosiveReport && opts.attacker && opts.target) {
+          this.playHighExplosiveSuppressionCue(opts.attacker, opts.target, opts.highExplosiveReport);
+        } else {
+          this.playAttackFireCue(
+            opts.attacker,
+            opts.target ?? null,
+            mg,
+            opts.attackSound ?? '',
+            report,
+            mg ? undefined : () => {
+              this.applyAttackDestroyedVisualAtImpact(report, opts.attacker ?? null, opts.target ?? null);
+            },
+          );
+        }
       }
       this.scheduleOnce(() => {
         if (revealKey) {
@@ -20852,12 +21319,21 @@ export class BattleScene extends Component {
       }, FOG_ATTACK_REVEAL_DURATION);
       return;
     }
-    const panel = this.buildDiceShowPanel(report, attackerLabel, targetLabel, mg);
+    const panel = this.buildDiceShowPanel(
+      report,
+      attackerLabel,
+      targetLabel,
+      mg,
+      opts.highExplosiveReport,
+      opts.highExplosiveCollateral,
+    );
     this.liftEnemyDiceTrayIntoDiceShowIfNeeded(panel.root);
     this.diceShow = {
       stage: 'hit-roll',
       t: 0,
       report,
+      highExplosiveReport: opts.highExplosiveReport ?? null,
+      highExplosiveCollateral: opts.highExplosiveCollateral ?? [],
       attackerLabel,
       targetLabel,
       mg,
@@ -20881,6 +21357,7 @@ export class BattleScene extends Component {
       penDieLabels: panel.penDieLabels,
       penNeedLabel: panel.penNeedLabel,
       penVerdictLabel: panel.penVerdictLabel,
+      highExplosiveCollateralRows: panel.highExplosiveCollateralRows,
       dmgDieLabel: panel.dmgDieLabel,
       dmgTitleLabel: panel.dmgTitleLabel,
       dmgEffectLabel: panel.dmgEffectLabel,
@@ -20921,6 +21398,8 @@ export class BattleScene extends Component {
     attackerLabel: string,
     targetLabel: string,
     mg: boolean = false,
+    highExplosiveReport?: HighExplosiveReport,
+    highExplosiveCollateral: HighExplosiveCollateralResult[] = [],
   ): {
     root: Node;
     hitDieLabels: Label[];
@@ -20931,6 +21410,11 @@ export class BattleScene extends Component {
     penDieLabels: Label[];
     penNeedLabel: Label | null;
     penVerdictLabel: Label | null;
+    highExplosiveCollateralRows: Array<{
+      dieLabel: Label;
+      needLabel: Label;
+      verdictLabel: Label;
+    }>;
     dmgDieLabel: Label | null;
     dmgTitleLabel: Label | null;
     dmgEffectLabel: Label | null;
@@ -20946,7 +21430,18 @@ export class BattleScene extends Component {
     const hasHitDoublesCommanderKill = !mg && report.hit && !!report.commanderKilledByHitDoubles;
     const PANEL_W = 560;
     // 机枪模式：只有标题 + 命中阈值 + 1d6 + 结果大字，用更矮的面板
-    const PANEL_H = mg ? 240 : needsCrewRow ? 500 : 400;
+    const heHasEffectRow = !!highExplosiveReport?.effectDice?.length;
+    const automaticHEHit = highExplosiveReport?.automaticHit === true;
+    const hasHECollateral = highExplosiveCollateral.length > 0;
+    const compactPanel = !hasHECollateral
+      && (mg || automaticHEHit || (!!highExplosiveReport && !heHasEffectRow));
+    // Keep the lowest die row visually separate from the confirmation button.
+    // These heights provide at least 36 px of clear space in every DiceShow
+    // layout (44 px for the compact MG layout and 48 px with a crew row).
+    const basePanelH = compactPanel ? 280 : needsCrewRow ? 520 : 420;
+    // A collateral infantry result needs its own caption and die row. Reserve
+    // enough vertical space so neither touches the primary tank dice.
+    const PANEL_H = Math.min(680, basePanelH + highExplosiveCollateral.length * 116);
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -20976,17 +21471,24 @@ export class BattleScene extends Component {
     drawDicePopupPanel(pg, PANEL_W, PANEL_H, DICE_PANEL_BG, DICE_PANEL_BORDER);
     root.addChild(panel);
 
+    // 同类型信息统一字号：攻击标题 / 判定条件 / 判定结果。
+    const TITLE_FONT_SIZE = 26;
+    const CHECK_FONT_SIZE = 18;
+    const VERDICT_FONT_SIZE = 28;
+
     // 标题
     const title = this.makeCenteredLabel(panel, `${attackerLabel} → ${targetLabel}`,
-      0, PANEL_H / 2 - 34, PANEL_W - 40, 34, 26, HUD_TEXT_COLOR);
+      0, PANEL_H / 2 - 34, PANEL_W - 40, 34, TITLE_FONT_SIZE, HUD_TEXT_COLOR);
 
-    // 命中需求：机枪用单独文案（"机枪扫射 命中需 ≥N"），主炮走原来的命中阈值行
-    const hitNeedText = t('dice.panel.penNeed', { n: report.threshold });
+    // 命中需求：机枪使用专用语言键，主炮走原来的命中阈值行
+    const hitNeedText = mg
+      ? t('dice.panel.mgHitNeed', { n: report.threshold })
+      : t('dice.panel.hitNeed', { n: report.threshold });
 
     // 三/四行使用固定列：骰子列 / 数值或需求列 / 结果列，避免各行文字左右漂移。
     const DIE_SIZE = 68, DIE_GAP = 24, ROW_GAP = 74;
     const hitDiceY = PANEL_H / 2 - 118;
-    const penDiceY = hitDiceY - ROW_GAP;
+    const penDiceY = automaticHEHit ? hitDiceY : hitDiceY - ROW_GAP;
     const dmgDiceY = penDiceY - ROW_GAP;
     const crewDiceY = dmgDiceY - ROW_GAP;
     const DIE_COL_1 = -126;
@@ -21010,30 +21512,43 @@ export class BattleScene extends Component {
     const hitSum = this.makeCenteredLabel(panel, '',
       MID_COL_X, hitDiceY, MID_COL_W, 40, 30, DICE_INFO_TEXT);
     const hitNeed = this.makeCenteredLabel(panel, hitNeedText,
-      MID_COL_X, hitDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
+      MID_COL_X, hitDiceY, MID_COL_W, 28, CHECK_FONT_SIZE, DICE_INFO_TEXT);
 
     // 命中判定文字
     const hitVerdictY = hasHitDoublesCommanderKill ? hitDiceY + 15 : hitDiceY;
     const hitVerdict = this.makeCenteredLabel(panel, '',
-      RESULT_COL_X, hitVerdictY, RESULT_COL_W, 34, 28, DICE_OK_TEXT);
+      RESULT_COL_X, hitVerdictY, RESULT_COL_W, 34, VERDICT_FONT_SIZE, DICE_OK_TEXT);
     const hitSpecial = hasHitDoublesCommanderKill
       ? this.makeCenteredLabel(panel, '',
         RESULT_COL_X, hitDiceY - 18, RESULT_COL_W, 30, 24, new Color(255, 90, 90, 255))
       : null;
     if (hitSpecial) hitSpecial.node.active = false;
-    this.makeDiceRuleButton(panel, -238, hitDiceY, () => this.openDiceRuleModal('hit'));
+    if (!automaticHEHit) {
+      this.makeDiceRuleButton(panel, -238, hitDiceY, () => this.openDiceRuleModal('hit'));
+    } else {
+      d1.node.parent!.active = false;
+      d2.node.parent!.active = false;
+      hitSum.node.active = false;
+      hitNeed.node.active = false;
+      hitVerdict.node.active = false;
+    }
 
     // 2d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有命中这一段。
     const penDice: Label[] = [];
     let penNeed: Label | null = null;
     let penVerdict: Label | null = null;
+    const highExplosiveCollateralRows: Array<{
+      dieLabel: Label;
+      needLabel: Label;
+      verdictLabel: Label;
+    }> = [];
     let dmgDie: Label | null = null;
     let dmgTitle: Label | null = null;
     let dmgEffect: Label | null = null;
     let crewDie: Label | null = null;
     let crewTitle: Label | null = null;
     let crewEffect: Label | null = null;
-    if (!mg) {
+    if (!mg && (!highExplosiveReport || heHasEffectRow)) {
       // 2d6 穿甲骰 + 需求 + 判定
       const penDiceCount = Math.max(1, report.penDice?.length ?? 1);
       const penStartX = penDiceCount >= 2 ? DIE_COL_1 : DIE_COL_1 + (DIE_SIZE + DIE_GAP) / 2;
@@ -21041,10 +21556,14 @@ export class BattleScene extends Component {
         penDice.push(this.makeDieSquare(panel, penStartX + i * (DIE_SIZE + DIE_GAP), penDiceY, DIE_SIZE));
       }
       penNeed = this.makeCenteredLabel(panel, '',
-        MID_COL_X, penDiceY, MID_COL_W, 40, 30, DICE_INFO_TEXT);
+        MID_COL_X, penDiceY, MID_COL_W, 40, CHECK_FONT_SIZE, DICE_INFO_TEXT);
       penVerdict = this.makeCenteredLabel(panel, '',
-        RESULT_COL_X, penDiceY, RESULT_COL_W, 40, 28, DICE_OK_TEXT);
-      this.makeDiceRuleButton(panel, -238, penDiceY, () => this.openDiceRuleModal('pen'));
+        RESULT_COL_X, penDiceY, RESULT_COL_W, 40, VERDICT_FONT_SIZE, DICE_OK_TEXT);
+      if (highExplosiveReport) {
+        this.makeDiceRuleButton(panel, -238, penDiceY, () => this.openDiceRuleModal('he'));
+      } else {
+        this.makeDiceRuleButton(panel, -238, penDiceY, () => this.openDiceRuleModal('pen'));
+      }
 
       // 1d6 伤害骰 + "伤害检定" + 效果文字
       if (needsDamageRow) {
@@ -21070,13 +21589,59 @@ export class BattleScene extends Component {
       // 主炮三段检定同屏滚动；未命中 / 未击穿时，伤害行在揭示时显示"无效"。
     }
 
+    if (!mg && highExplosiveReport) {
+      const collateralAnchorY = heHasEffectRow ? penDiceY : hitDiceY;
+      for (let i = 0; i < highExplosiveCollateral.length; i++) {
+        const collateral = highExplosiveCollateral[i];
+        const rowY = collateralAnchorY - 126 - i * 110;
+        this.makeCenteredLabel(
+          panel,
+          `${attackerLabel} → ${unitDisplayName(collateral.target.kind)}`,
+          0,
+          rowY + 54,
+          PANEL_W - 40,
+          34,
+          TITLE_FONT_SIZE,
+          HUD_TEXT_COLOR,
+        );
+        const dieLabel = this.makeDieSquare(
+          panel,
+          DIE_COL_1 + (DIE_SIZE + DIE_GAP) / 2,
+          rowY,
+          60,
+        );
+        const needLabel = this.makeCenteredLabel(
+          panel,
+          '',
+          MID_COL_X,
+          rowY,
+          MID_COL_W,
+          40,
+          CHECK_FONT_SIZE,
+          DICE_INFO_TEXT,
+        );
+        const verdictLabel = this.makeCenteredLabel(
+          panel,
+          '',
+          RESULT_COL_X,
+          rowY,
+          RESULT_COL_W,
+          40,
+          VERDICT_FONT_SIZE,
+          DICE_OK_TEXT,
+        );
+        this.makeDiceRuleButton(panel, -238, rowY,
+          () => this.openDiceRuleModal('he', collateral.report));
+        highExplosiveCollateralRows.push({ dieLabel, needLabel, verdictLabel });
+      }
+    }
+
     // 底部大字结果
     const outcome = this.makeCenteredLabel(panel, '',
       0, -PANEL_H / 2 + 86, PANEL_W - 40, 48, 36, DICE_OUTCOME_MISS);
     outcome.node.active = false;
     const confirmY = -PANEL_H / 2 + (needsCrewRow ? 76 : 62);
     const confirmButton = this.makeDiceShowConfirmButton(panel, 0, confirmY);
-    confirmButton.active = false;
 
     // title / hitNeed 仅作标题用，外部不再更新它们，但避免 TS 报"未使用"，
     // 保留到返回结构里（外部不用就不用，Label 生命周期跟随 root.destroy 自动回收）
@@ -21092,6 +21657,7 @@ export class BattleScene extends Component {
       penDieLabels: penDice,
       penNeedLabel: penNeed,
       penVerdictLabel: penVerdict,
+      highExplosiveCollateralRows,
       dmgDieLabel: dmgDie,
       dmgTitleLabel: dmgTitle,
       dmgEffectLabel: dmgEffect,
@@ -21136,12 +21702,12 @@ export class BattleScene extends Component {
     if (show) show.ruleModalRoot = null;
   }
 
-  private openDiceRuleModal(kind: DiceRuleKind) {
+  private openDiceRuleModal(kind: DiceRuleKind, highExplosiveOverride?: HighExplosiveReport) {
     const show = this.diceShow;
     if (!show) return;
     this.closeDiceRuleModal();
 
-    const spec = this.diceRuleModalSpec(show, kind);
+    const spec = this.diceRuleModalSpec(show, kind, highExplosiveOverride);
     const root = new Node('DiceRuleModal');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(1280, 720);
@@ -21181,8 +21747,14 @@ export class BattleScene extends Component {
     this.mirrorBattleModalButtonLabel(closeLab, () => this.closeDiceRuleModal());
 
     let y = spec.h / 2 - 82;
+    const highExplosiveForModal = highExplosiveOverride ?? show.highExplosiveReport;
+    const tankHighExplosiveFormula = kind === 'he'
+      && highExplosiveForModal?.armor !== undefined
+      && highExplosiveForModal.fireThreshold === undefined;
     if (kind === 'damage') {
       y = this.populateDiceRuleDamage(panel, show, y, spec.w);
+    } else if (kind === 'he' && !tankHighExplosiveFormula) {
+      y = this.populateDiceRuleHighExplosive(panel, show, y, spec.w, highExplosiveOverride);
     } else if (kind === 'pen') {
       y = this.populateDiceRulePen(panel, show, y, spec.w);
     } else {
@@ -21210,7 +21782,11 @@ export class BattleScene extends Component {
     show.ruleModalRoot = root;
   }
 
-  private diceRuleModalSpec(show: DiceShow, kind: DiceRuleKind): {
+  private diceRuleModalSpec(
+    show: DiceShow,
+    kind: DiceRuleKind,
+    highExplosiveOverride?: HighExplosiveReport,
+  ): {
     title: string;
     w: number;
     h: number;
@@ -21219,6 +21795,30 @@ export class BattleScene extends Component {
     note?: string;
   } {
     const r = show.report;
+    if (kind === 'he') {
+      const he = highExplosiveOverride ?? show.highExplosiveReport;
+      if (!he) {
+        return { title: t('dice.rule.heTitle'), w: 460, h: 250, rows: [] };
+      }
+      if (he.armor !== undefined && he.fireThreshold === undefined) {
+        return {
+          title: t('dice.rule.heTitle'),
+          w: 460,
+          h: 300,
+          rows: [
+            [t('dice.rule.armorLine', { face: this.armorFaceText(he.armorFace) }), String(he.armor)],
+            [t('dice.rule.hePower'), String(he.highExplosivePower)],
+          ],
+          total: [t('dice.rule.heParalyzeNeed'), String(he.effectThreshold ?? '-')],
+        };
+      }
+      return {
+        title: t('dice.rule.heTitle'),
+        w: 460,
+        h: he.infantryInCover !== undefined ? 430 : 620,
+        rows: [],
+      };
+    }
     if (kind === 'hit') {
       const showOpenHatchCommanderHint = show.targetCommanderExposed;
       const rows: Array<[string, string]> = [];
@@ -21313,9 +21913,14 @@ export class BattleScene extends Component {
       && !!show.attacker
       && !!show.target;
     if (showEffectivePen && show.attacker && show.target) {
-      const breakdown = effectivePenetrationBreakdown(show.attacker, show.target, true);
-      addRow(t('dice.rule.basePen'), breakdown.basePenetration);
-      addRow(t('dice.rule.effectiveRange'), breakdown.effectiveRange);
+      const breakdown = report.penetrationBreakdown
+        ?? effectivePenetrationBreakdown(show.attacker, show.target, true);
+      const penetrationBonus = breakdown.penetrationBonus ?? 0;
+      addRow(
+        t(penetrationBonus !== 0 ? 'dice.rule.hvapPen' : 'dice.rule.basePen'),
+        breakdown.basePenetration + penetrationBonus,
+      );
+      addRow(t('dice.rule.effectiveRange'), breakdown.effectiveRange + (breakdown.effectiveRangeBonus ?? 0));
       addRow(t('dice.rule.distance'), breakdown.distance);
       addRow(t('dice.rule.rangePenalty'), -breakdown.rangePenalty);
       this.drawDiceRuleDivider(panel, panelW, y + 16);
@@ -21364,6 +21969,60 @@ export class BattleScene extends Component {
     return y;
   }
 
+  /** HE explanation mirrors the damage table: every possible blast roll maps to its outcome. */
+  private populateDiceRuleHighExplosive(
+    panel: Node,
+    show: DiceShow,
+    startY: number,
+    panelW: number,
+    highExplosiveOverride?: HighExplosiveReport,
+  ): number {
+    const report = highExplosiveOverride ?? show.highExplosiveReport;
+    if (!report) return startY;
+    const infantryRoll = report.infantryInCover !== undefined;
+    const firstRoll = infantryRoll ? 1 : 2;
+    const lastRoll = infantryRoll ? 6 : 12;
+    const rowGap = infantryRoll ? 45 : 42;
+    const dieX = -panelW * 0.32;
+    const textX = panelW * 0.16;
+    const textW = panelW * 0.58;
+    let y = startY;
+
+    for (let roll = firstRoll; roll <= lastRoll; roll++) {
+      const dieLabel = this.makeDieSquare(panel, dieX, y, 38);
+      this.setDieLabelFace(dieLabel, roll);
+      this.makeBattleModalLabel(
+        panel,
+        this.highExplosiveTableOutcome(report, roll),
+        textX,
+        y,
+        textW,
+        32,
+        19,
+        HUD_TEXT_COLOR,
+      );
+      y -= rowGap;
+    }
+    return y;
+  }
+
+  private highExplosiveTableOutcome(report: HighExplosiveReport, roll: number): string {
+    if (report.infantryInCover !== undefined) {
+      return roll >= (report.effectThreshold ?? 7)
+        ? t('dmg.outcome.destroyed')
+        : t('dice.panel.heSuppressed');
+    }
+    if (report.fireThreshold !== undefined && roll >= report.fireThreshold) {
+      return t('dice.panel.heFireSuppressed');
+    }
+    if (roll < (report.effectThreshold ?? Number.POSITIVE_INFINITY)) {
+      return t('dmg.outcome.none');
+    }
+    return report.fireThreshold !== undefined
+      ? t('dice.panel.heSuppressed')
+      : t('dmg.outcome.paralyzed');
+  }
+
   private drawDiceRuleDivider(parent: Node, panelW: number, y: number) {
     const n = new Node('Divider');
     n.layer = this.node.layer;
@@ -21379,8 +22038,8 @@ export class BattleScene extends Component {
   private armorFaceText(face: AttackReport['armorFace']): string {
     switch (face) {
       case 'front': return t('dice.rule.faceFront');
-      case 'frontSide': return t('dice.rule.faceFront');
-      case 'rearSide': return t('dice.rule.faceRear');
+      case 'frontSide': return t('dice.rule.faceFrontSide');
+      case 'rearSide': return t('dice.rule.faceRearSide');
       case 'rear': return t('dice.rule.faceRear');
       default: return t('dice.rule.faceTarget');
     }
@@ -21536,12 +22195,106 @@ export class BattleScene extends Component {
     }
     this.setDieLabelFace(show.dmgDieLabel, ((frame * 11) % 6) + 1);
     this.setDieLabelFace(show.crewDieLabel, ((frame * 29) % 6) + 1);
+    for (let i = 0; i < show.highExplosiveCollateralRows.length; i++) {
+      const row = show.highExplosiveCollateralRows[i];
+      this.setDieLabelFace(row.dieLabel, ((frame * (17 + i * 6)) % 6) + 1);
+      row.needLabel.string = '';
+      row.verdictLabel.string = '';
+    }
     if (show.penVerdictLabel) show.penVerdictLabel.string = '';
     if (show.dmgEffectLabel) show.dmgEffectLabel.string = '';
     if (show.crewEffectLabel) show.crewEffectLabel.string = '';
   }
 
+  /** Adapt HE hit/effect dice to the shared AP result-modal animation contract. */
+  private highExplosivePanelReport(report: HighExplosiveReport): AttackReport {
+    const effectDice = report.effectDice?.slice();
+    const damageEffect: DamageEffect | undefined = report.outcome === 'destroyed'
+      ? 'destroyed'
+      : report.outcome === 'paralyzed'
+        ? 'paralyzed'
+        : report.outcome === 'fire_suppressed' ? 'fire' : undefined;
+    return {
+      dice: report.dice,
+      roll: report.roll,
+      threshold: report.threshold,
+      hit: report.hit,
+      hitBreakdown: report.hitBreakdown,
+      hitModifiers: report.hitModifiers,
+      armorFace: report.armorFace,
+      armor: report.armor,
+      penetration: report.highExplosivePower,
+      penDice: effectDice,
+      penDie: report.effectRoll,
+      penThreshold: report.effectThreshold,
+      penetrated: report.hit && report.outcome !== 'none',
+      damageEffect,
+      commanderKilledByHitDoubles: report.commanderKilledByHitDoubles,
+      commanderShieldBlocked: report.commanderShieldBlocked,
+      statusChange: report.outcome === 'destroyed' ? 'destroyed'
+        : report.outcome === 'none' ? 'none' : 'damaged',
+    };
+  }
+
+  private highExplosiveOutcomeLabel(report: HighExplosiveReport): { text: string; color: Color } {
+    if (!report.hit) return { text: t('dice.panel.outcomeMiss'), color: DICE_OUTCOME_MISS };
+    switch (report.outcome) {
+      case 'destroyed': return { text: t('dmg.outcome.destroyed'), color: DICE_OUTCOME_HIT };
+      case 'paralyzed': return { text: t('dmg.outcome.paralyzed'), color: DICE_OUTCOME_HIT };
+      case 'suppressed': return { text: t('dice.panel.heSuppressed'), color: DICE_OUTCOME_HIT };
+      case 'fire_suppressed': return { text: t('dice.panel.heFireSuppressed'), color: DICE_OUTCOME_HIT };
+      case 'none': return { text: t('dmg.outcome.none'), color: DICE_OUTCOME_RIC };
+    }
+  }
+
   private revealMainGunDiceRows(show: DiceShow) {
+    if (show.highExplosiveReport) {
+      const he = show.highExplosiveReport;
+      if (he.effectDice?.length) {
+        show.penDieLabels.forEach((label, i) => this.setDieLabelFace(label, he.effectDice![i] ?? '?'));
+        if (show.penNeedLabel) {
+          show.penNeedLabel.fontSize = 18;
+          show.penNeedLabel.lineHeight = 22;
+          show.penNeedLabel.color = DICE_INFO_TEXT;
+          show.penNeedLabel.string = !he.hit
+            ? t('dice.panel.heParalyzeCheck')
+            : he.fireThreshold !== undefined
+              ? t('dice.panel.heNeedDual', { suppress: he.effectThreshold ?? '-', fire: he.fireThreshold })
+              : he.infantryInCover !== undefined
+                ? t('dice.panel.heDestroyNeed', { n: he.effectThreshold ?? '-' })
+                : he.armor !== undefined
+                  ? t('dice.panel.heParalyzeNeed', { n: he.effectThreshold ?? '-' })
+                  : t('dice.panel.heNeed', { n: he.effectThreshold ?? '-' });
+        }
+        if (show.penVerdictLabel) {
+          if (!he.hit) {
+            show.penVerdictLabel.string = t('dice.panel.invalid');
+            show.penVerdictLabel.color = DICE_FAIL_TEXT;
+          } else {
+            const out = this.highExplosiveOutcomeLabel(he);
+            show.penVerdictLabel.string = out.text;
+            show.penVerdictLabel.color = out.color;
+          }
+        }
+      } else {
+        for (const label of show.penDieLabels) label.node.parent!.active = false;
+        if (show.penNeedLabel) show.penNeedLabel.node.active = false;
+        if (show.penVerdictLabel) show.penVerdictLabel.node.active = false;
+      }
+      for (let i = 0; i < show.highExplosiveCollateralRows.length; i++) {
+        const row = show.highExplosiveCollateralRows[i];
+        const collateral = show.highExplosiveCollateral[i];
+        if (!collateral) continue;
+        this.setDieLabelFace(row.dieLabel, collateral.report.effectRoll ?? '?');
+        row.needLabel.string = t('dice.panel.heDestroyNeed', {
+          n: collateral.report.effectThreshold ?? '-',
+        });
+        const out = this.highExplosiveOutcomeLabel(collateral.report);
+        row.verdictLabel.string = out.text;
+        row.verdictLabel.color = out.color;
+      }
+      return;
+    }
     if (show.report.hit) {
       if (show.report.penDice?.length) {
         show.penDieLabels.forEach((label, i) => this.setDieLabelFace(label, show.report.penDice![i] ?? '?'));
@@ -21555,7 +22308,7 @@ export class BattleScene extends Component {
         show.penNeedLabel.color = DICE_INFO_TEXT;
         show.penNeedLabel.string = thr <= 0
           ? t('dice.panel.penMustPen')
-          : t('dice.panel.penNeed', { n: thr });
+          : t('dice.panel.penetrateNeed', { n: thr });
       }
       if (show.penVerdictLabel) {
         if (show.report.penetrated) {
@@ -21576,8 +22329,8 @@ export class BattleScene extends Component {
       if (show.penNeedLabel) {
         show.penNeedLabel.fontSize = 18;
         show.penNeedLabel.lineHeight = 22;
-        show.penNeedLabel.string = t('dice.panel.invalid');
-        show.penNeedLabel.color = DICE_FAIL_TEXT;
+        show.penNeedLabel.string = t('dice.panel.penCheck');
+        show.penNeedLabel.color = DICE_INFO_TEXT;
       }
       if (show.penVerdictLabel) {
         show.penVerdictLabel.string = t('dice.panel.invalid');
@@ -21624,6 +22377,12 @@ export class BattleScene extends Component {
   }
 
   private setMainGunDiceOutcome(show: DiceShow) {
+    if (show.highExplosiveReport) {
+      const out = this.highExplosiveOutcomeLabel(show.highExplosiveReport);
+      show.outcomeLabel.string = out.text;
+      show.outcomeLabel.color = out.color;
+      return;
+    }
     if (!show.report.hit) {
       show.outcomeLabel.string = t('dice.panel.outcomeMiss');
       show.outcomeLabel.color = DICE_OUTCOME_MISS;
@@ -21654,10 +22413,6 @@ export class BattleScene extends Component {
     show.stage = 'hold';
     show.t = 0;
     show.outcomeLabel.node.active = false;
-    // Keep confirmation hidden through the final presentation hold. The firing/
-    // impact VFX starts as the dice settle, so showing it here creates a visible
-    // but not-yet-safe interaction window.
-    if (show.confirmButton) show.confirmButton.active = false;
     if (!show.holdNotified) {
       show.holdNotified = true;
       show.onHold?.();
@@ -21666,12 +22421,14 @@ export class BattleScene extends Component {
 
   private applyDiceShowDestroyedVisual(show: DiceShow) {
     if (show.earlyDestroyedVisualApplied) return;
+    if (show.highExplosiveReport) return;
     const target = show.target;
     // A hardcore MG hit abandons an AT gun; it must never preview the gun's
     // destroyed sprite. Crew death and blood are applied by the real result.
     if (show.mg
         && GameSession.gameMode === 'hardcore'
-        && target?.kind === 'at_gun'
+        && target !== undefined
+        && isAntiTankGunUnit(target)
         && target.atGunCrewAlive === true) return;
     if (!target || !this.applyAttackDestroyedVisualAtImpact(show.report, show.attacker, target, show.mg)) return;
     show.earlyDestroyedVisualApplied = true;
@@ -21865,21 +22622,7 @@ export class BattleScene extends Component {
     hl.color = new Color(230, 230, 200, 255);
     hl.horizontalAlign = HorizontalTextAlignment.CENTER;
     hl.verticalAlign = VerticalTextAlignment.CENTER;
-    const typedCount = this.enemyDiceTypes.some(type => !!type)
-      ? {
-        attack: this.enemyDiceTypes.filter(type => type === 'attack').length,
-        move: this.enemyDiceTypes.filter(type => type === 'move').length,
-        misc: this.enemyDiceTypes.filter(type => type === 'misc').length,
-      }
-      : null;
-    hl.string = typedCount
-      ? t('dice.aiHeader.hardcoreTank', {
-        terrain: this.enemyHardcoreTankTerrainLabel(),
-        attack: typedCount.attack,
-        move: typedCount.move,
-        misc: typedCount.misc,
-      })
-      : t('dice.aiHeader', { col: aiColumnDisplayName(this.enemyAICol), n: count });
+    hl.string = unitDisplayName(enemy.kind);
     hl.enableOutline = true;
     hl.outlineColor = new Color(0, 0, 0, 220);
     hl.outlineWidth = 2;
@@ -22110,8 +22853,14 @@ export class BattleScene extends Component {
           if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], show.report.dice[1]);
           show.hitSumLabel.string = '';
           if (show.report.hit) {
-            show.hitVerdictLabel.string = t('dice.panel.hitYes');
-            show.hitVerdictLabel.color = DICE_OK_TEXT;
+            if (show.highExplosiveReport && !show.highExplosiveReport.effectDice?.length) {
+              const out = this.highExplosiveOutcomeLabel(show.highExplosiveReport);
+              show.hitVerdictLabel.string = out.text;
+              show.hitVerdictLabel.color = out.color;
+            } else {
+              show.hitVerdictLabel.string = t('dice.panel.hitYes');
+              show.hitVerdictLabel.color = DICE_OK_TEXT;
+            }
           } else {
             show.hitVerdictLabel.string = t('dice.panel.hitNo');
             show.hitVerdictLabel.color = DICE_FAIL_TEXT;
@@ -22127,7 +22876,11 @@ export class BattleScene extends Component {
           }
           // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
           if (!show.fireEffectPlayed) {
-            this.playAttackFireCue(show.attacker, show.target, show.mg, show.attackSound, show.report);
+            if (show.highExplosiveReport && show.attacker && show.target) {
+              this.playHighExplosiveSuppressionCue(show.attacker, show.target, show.highExplosiveReport);
+            } else {
+              this.playAttackFireCue(show.attacker, show.target, show.mg, show.attackSound, show.report);
+            }
           }
         }
         break;
@@ -22336,8 +23089,6 @@ export class BattleScene extends Component {
           if (show.mg && !show.requireManualClose) {
             show.stage = 'done';
             this.finalizeDiceShow(false);
-          } else if (show.confirmButton) {
-            show.confirmButton.active = true;
           }
         }
         break;
@@ -22372,7 +23123,6 @@ export class BattleScene extends Component {
       || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
       || this.turretAimAnim !== null
-      || this.highExplosiveBlasts.length > 0
       || this.precisionAimHoldCallback !== null
       || this.enemyDiceSortAnim !== null
       || this.enemyDiceResultHold !== null
@@ -23059,8 +23809,11 @@ export class BattleScene extends Component {
       resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
     });
 
-    const finish = () => {
+    let attackApplied = false;
+    const applyAndPresentAttack = () => {
       if (!this.mission) return;
+      if (attackApplied) return;
+      attackApplied = true;
       this.applyMachineGunAttackResult(target, report);
       if (target.destroyed) this.registerImpactDestroyWreckVisual(target, actor);
       if (this.isUnitVisible(target)) {
@@ -23080,6 +23833,9 @@ export class BattleScene extends Component {
       this.updateHUD();
       this.redraw();
       this.refreshStatusPanel();
+    };
+    const finish = () => {
+      applyAndPresentAttack();
       if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
         if (this.enemyDiceUsed.some(used => !used)) {
           const current = this.enemyOrder[this.enemyIndex];
@@ -23117,6 +23873,7 @@ export class BattleScene extends Component {
       mg: true,
       attacker: actor,
       target,
+      onHold: applyAndPresentAttack,
     });
     return true;
   }
@@ -23352,7 +24109,7 @@ export class BattleScene extends Component {
 
   /**
    * 回合结束「相邻步兵集火」：完整回合结束说明停顿后再逐发串联主炮同款 DiceShow，每段结束补浮字（与 tryEnemyAttack 一致），
-   * 全部播完再显示回合结束正文与确认（此时再 applyAttack）。
+   * 每发结果揭示时立即 applyAttack；全部播完再显示回合结束正文与确认，确认只继续流程。
    */
   private beginAdjacentInfantryDiceChain(idx: number) {
     const ui = this.turnEndEventUI;
@@ -23377,13 +24134,27 @@ export class BattleScene extends Component {
     const actor = t('actor.enemyPrefix', { name: unitDisplayName(v.attackerKind) });
     const sh = this.mission.sherman;
     const attacker = this.mission.enemies.find(unit => unit.id === v.attackerId) ?? null;
+    let volleyApplied = false;
+    const applyAndPresentVolley = () => {
+      if (volleyApplied || !this.turnEndEventUI) return;
+      volleyApplied = true;
+      this.applyMainGunAttackResult(sh, v.report);
+      // The prepared event's apply callback contains the same reports. Once
+      // presentation applies them one-by-one, confirmation must not replay them.
+      this.turnEndEventUI.effectApplied = true;
+      if (sh.destroyed) this.registerImpactDestroyWreckVisual(sh, attacker);
+      this.presentAttackResult(actor, v.report, attacker ?? sh, sh);
+      this.updateHUD();
+      this.redraw();
+      this.refreshStatusPanel();
+    };
 
     this.startDiceShow(
       v.report,
       actor,
       t('actor.sherman'),
       () => {
-        this.presentAttackResult(actor, v.report, sh, sh);
+        applyAndPresentVolley();
         this.beginAdjacentInfantryDiceChain(idx + 1);
       },
       {
@@ -23392,6 +24163,7 @@ export class BattleScene extends Component {
         attackSound: getUnitStats(v.attackerKind, this.mission.data.theater ?? 'europe').attackSound,
         attacker,
         target: sh,
+        onHold: applyAndPresentVolley,
       },
     );
   }
@@ -23785,7 +24557,17 @@ export class BattleScene extends Component {
     let text: string;
     let color: Color;
     let size: number;
-    if (!report.hit) {
+    if (isFootUnit(_attacker) && isFootUnit(target)) {
+      this.battleLogI18n('battleLog.combatMgAI', {
+        actor,
+        diceExpr: `${report.dice[0]}+${report.dice[1]}=${report.roll}`,
+        need: report.threshold,
+        resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
+      });
+      text = report.hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss');
+      color = report.hit ? new Color(255, 120, 120, 255) : new Color(230, 230, 230, 255);
+      size = 32;
+    } else if (!report.hit) {
       this.battleLogI18n('battleLog.combat.miss', baseParams);
       text = t('dice.panel.outcomeMiss'); color = new Color(230, 230, 230, 255); size = 32;
     } else {

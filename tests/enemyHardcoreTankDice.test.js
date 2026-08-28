@@ -125,13 +125,13 @@ assert.deepStrictEqual(
     misc: Number(row.misc_dice),
   }])),
   {
-    road: { attack: 1, move: 3, misc: -1 },
-    field: { attack: 1, move: 2, misc: 0 },
-    mud: { attack: 1, move: 1, misc: -1 },
-    clear: { attack: 1, move: 2, misc: 0 },
-    trees: { attack: 1, move: 2, misc: 0 },
-    beach: { attack: 1, move: 1, misc: -1 },
-    airstrip: { attack: 1, move: 3, misc: -1 },
+    road: { attack: 1, move: 0, misc: -1 },
+    field: { attack: 1, move: -1, misc: 0 },
+    mud: { attack: 1, move: -2, misc: -1 },
+    clear: { attack: 1, move: -1, misc: 0 },
+    trees: { attack: 1, move: -1, misc: 0 },
+    beach: { attack: 1, move: -2, misc: -1 },
+    airstrip: { attack: 1, move: 0, misc: -1 },
   },
   'hardcore enemy tank terrain dice counts should match the requested table',
 );
@@ -139,7 +139,7 @@ assert.deepStrictEqual(
 assert.match(generated, /export type EnemyTankDieType = 'attack' \| 'move' \| 'misc';/);
 assert.match(generated, /export type HardcoreTankActionTableId = 'american_infantry1' \| 'at_gun1' \| 'attack1' \| 'heavy_artillery1' \| 'japanese_infantry1' \| 'misc1' \| 'move1';/);
 assert.match(generated, /export const DEFAULT_HARDCORE_TANK_ACTION_TABLE: Record<EnemyTankDieType, HardcoreTankActionTableId> = \{/);
-assert.match(generated, /road: \{ attack: 1, move: 3, misc: -1 \}/);
+assert.match(generated, /road: \{ attack: 1, move: 0, misc: -1 \}/);
 assert.match(generated, /2: \{ primary: 'shoot', primaryCrew: 'loader' \}/);
 assert.match(generated, /6: \{ primary: 'shoot', primaryCrew: 'commander' \}/);
 assert.match(generated, /misc1: \{\n\s+1: \{ primary: 'repair', primaryCrew: 'commander', fallback: 'shoot', fallbackCrew: 'gunner' \}/);
@@ -153,11 +153,11 @@ assert.match(unitGenerated, /actionTable: \{ attack: "at_gun1", move: "at_gun1",
 assert.match(unitGenerated, /actionTable: \{ attack: "japanese_infantry1", move: "japanese_infantry1", misc: "japanese_infantry1" \}/);
 assert.match(unitGenerated, /actionTable: \{ attack: "american_infantry1", move: "american_infantry1", misc: "american_infantry1" \}/);
 assert.match(unitGenerated, /actionTable: \{ attack: "heavy_artillery1", move: "heavy_artillery1", misc: "heavy_artillery1" \}/);
-assert.match(enemyAI, /attack: Math\.max\(0, base\.attack \+ rank\.attack\)/);
-assert.match(enemyAI, /move: Math\.max\(0, base\.move \+ \(crewAlive\(unit, 'driver'\) \? 1 : 0\) \+ rank\.move\)/);
-assert.match(enemyAI, /misc: Math\.max\(0, base\.misc \+ \(crewAlive\(unit, 'commander'\) \? 1 : 0\) \+ rank\.misc\)/);
+assert.match(enemyAI, /attack: Math\.max\(1, base\.attack \+ rank\.attack\)/);
+assert.match(enemyAI, /move: Math\.max\(1, \(unit\.stats\.mobility \?\? 0\) \+ base\.move \+ \(crewAlive\(unit, 'driver'\) \? 1 : 0\) \+ rank\.move\)/);
+assert.match(enemyAI, /misc: Math\.max\(1, base\.misc \+ \(crewAlive\(unit, 'commander'\) \? 1 : 0\) \+ rank\.misc\)/);
 assert.match(enemyAI, /out\.push\(\{ type: 'misc', pip: rng\.d6\(\) \}\)/);
-assert.match(enemyAI, /case 'at_gun': return \{ attack: 0, move: 0, misc: 0 \};/);
+assert.match(enemyAI, /if \(isAntiTankGunUnit\(unit\)\) return \{ attack: 0, move: 0, misc: 0 \};/);
 assert.match(enemyAI, /case 'japanese_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'american_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'german_heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);

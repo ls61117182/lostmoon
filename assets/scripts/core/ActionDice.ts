@@ -22,6 +22,7 @@ import {
   ActionDiceSubPhase,
   PLAYER_ACTION_BY_PIP,
   PLAYER_DICE_POOL,
+  PLAYER_HARDCORE_DICE_POOL,
   AttackDieAction as AttackDieActionDB,
   MiscDieAction as MiscDieActionDB,
   MoveDieAction as MoveDieActionDB,
@@ -113,6 +114,9 @@ export interface ActionDicePoolOpts {
   crew: ShermanCrew;
   /** 战役强化等系统在钳制前追加的阶段骰修正。 */
   externalBonus?: number;
+  /** 硬核模式使用独立骰池，并在移动阶段加入当前坦克机动属性。 */
+  hardcore?: boolean;
+  mobility?: number;
 }
 
 /**
@@ -120,9 +124,11 @@ export interface ActionDicePoolOpts {
  *   子阶段 × 地形基础、各阶段修正系数、cap_min / cap_max 均来自配置。
  */
 export function actionDicePool(opts: ActionDicePoolOpts): number {
-  const cfg = PLAYER_DICE_POOL;
+  const cfg = opts.hardcore ? PLAYER_HARDCORE_DICE_POOL : PLAYER_DICE_POOL;
   const row = cfg.baseByPhaseTerrain[opts.subPhase];
   let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
+
+  if (opts.hardcore && opts.subPhase === 'movement') n += opts.mobility ?? 0;
 
   /** 舱盖加骰仅在车长存活时成立（车长阵亡后 `hatchOpen` 可能未及时清位） */
   const hatchOpenForDice = !!opts.hatchOpen && !!opts.crew.commander;
@@ -144,7 +150,8 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
   n += opts.externalBonus ?? 0;
 
   const capped = cfg.capMax == null ? n : Math.min(cfg.capMax, n);
-  return Math.max(cfg.capMin, capped);
+  const minimum = opts.hardcore ? Math.max(1, cfg.capMin) : cfg.capMin;
+  return Math.max(minimum, capped);
 }
 
 /** 用给定 RNG 掷 count 颗 d6，返回长度为 count 的点数数组。 */

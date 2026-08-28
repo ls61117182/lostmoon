@@ -5,7 +5,7 @@ const source = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
 
 assert.match(
   source,
-  /if \(GameSession\.gameMode === 'hardcore'\) \{[\s\S]*?mover\.kind === 'at_gun' && !isTankUnit\(occupant\)[\s\S]*?isFootUnit\(mover\) && isAbandonedATGun\(occupant\)[\s\S]*?isTankUnit\(mover\) && occupant\.kind === 'at_gun'[\s\S]*?isControlledATGun\(occupant\) && this\.areUnitsOnSameSide\(mover, occupant\)/,
+  /if \(GameSession\.gameMode === 'hardcore'\) \{[\s\S]*?isAntiTankGunUnit\(mover\) && !isTankUnit\(occupant\)[\s\S]*?isFootUnit\(mover\) && isAbandonedATGun\(occupant\)[\s\S]*?isTankUnit\(mover\) && isAntiTankGunUnit\(occupant\)[\s\S]*?isControlledATGun\(occupant\) && this\.areUnitsOnSameSide\(mover, occupant\)/,
   'hardcore occupancy should let infantry enter abandoned guns, keep friendly controlled guns blocking tanks, and keep AT guns out of non-tank hexes',
 );
 
@@ -29,7 +29,7 @@ assert.match(
 
 assert.match(
   source,
-  /private crushEnemyATGunsAt\(mover: Unit\)[\s\S]*?GameSession\.gameMode !== 'hardcore' \|\| !isTankUnit\(mover\)[\s\S]*?unit\.kind !== 'at_gun'[\s\S]*?isControlledATGun\(unit\) && this\.areUnitsOnSameSide\(mover, unit\)[\s\S]*?this\.releaseATGunCrew\(unit\)[\s\S]*?unit\.destroyed = true/,
+  /private crushEnemyATGunsAt\(mover: Unit\)[\s\S]*?GameSession\.gameMode !== 'hardcore' \|\| !isTankUnit\(mover\)[\s\S]*?!isAntiTankGunUnit\(unit\)[\s\S]*?isControlledATGun\(unit\) && this\.areUnitsOnSameSide\(mover, unit\)[\s\S]*?this\.releaseATGunCrew\(unit\)[\s\S]*?unit\.destroyed = true/,
   'only tanks should destroy enemy/neutral AT guns on arrival while releasing a living crew',
 );
 

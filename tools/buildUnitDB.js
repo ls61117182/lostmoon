@@ -18,7 +18,7 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
 
-const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
+const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'highExplosivePower', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'commanderSpritePath', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
@@ -26,8 +26,9 @@ const ACTION_TABLE_FIELD = 'action_table';
 const CREW_MEMBER_FIELD = 'crewMembers';
 const FACTIONS = ['usa', 'soviet', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
-const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
-const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
+const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, 'mobility', ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'pak38', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
+const TANK_KINDS = new Set(['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'type95', 'type97', 'type4']);
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);
@@ -268,6 +269,7 @@ function build() {
 
   for (const rec of records) {
     for (const f of NUM_FIELDS) intOrThrow(rec, f);
+    if (TANK_KINDS.has(rec.unitKind)) intOrThrow(rec, 'mobility');
     for (const f of BONUS_FIELDS) intOrThrow(rec, f);
     const turretTraverseSpeed = intOrThrow(rec, 'turretTraverseSpeed');
     if (turretTraverseSpeed > 6) {
@@ -300,8 +302,10 @@ function build() {
       `armorRear: ${r.armorRear}, ` +
       `gunMantletArmor: ${r.gunMantletArmor}, ` +
       `penetration: ${r.penetration}, ` +
+      `highExplosivePower: ${r.highExplosivePower}, ` +
       `effectiveRange: ${r.effectiveRange}, ` +
       `turretTraverseSpeed: ${r.turretTraverseSpeed}, ` +
+      `mobility: ${optionalInt(r, 'mobility', 0)}, ` +
       `usCasualtyDice: ${r.usCasualtyDice}, ` +
       `visionRange: ${r.visionRange}, ` +
       `gunnerVisionRange: ${optionalInt(r, 'gunnerVisionRange', 4)}, ` +

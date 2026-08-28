@@ -5,7 +5,7 @@ import {
   PvpParity,
   PvpSessionConfig,
 } from './PvpConfig';
-import type { CrewLevels, CrewSkills, Direction, FireDirection, ShermanCrew, UnitKind, UnitLevel } from './types';
+import type { CrewLevels, CrewSkills, Direction, FireDirection, ShellType, ShermanCrew, UnitKind, UnitLevel } from './types';
 
 export interface PvpBattleUnitSnapshot {
   id: string;
@@ -22,6 +22,7 @@ export interface PvpBattleUnitSnapshot {
   destroyed?: boolean;
   damaged?: boolean;
   loaded?: boolean;
+  loadedShell?: ShellType | null;
   hatchOpen?: boolean;
   fireLevel?: number;
   turretDamaged?: boolean;

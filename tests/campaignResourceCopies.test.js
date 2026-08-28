@@ -63,7 +63,7 @@ for (const [sourceId, campaignId] of copies) {
 }
 
 const campaigns = readJson('assets/resources/campaigns/pacific_campaigns.json');
-assert.strictEqual(campaigns.campaigns.length, 6, 'campaign resource should define six campaigns');
+assert.strictEqual(campaigns.campaigns.length, 7, 'campaign resource should define seven campaigns');
 assert.deepStrictEqual(
   campaigns.campaigns.slice(0, 4).map(c => c.title),
   ['塔拉瓦红滩1', '塞班岛', '塔拉瓦红滩2', '贝里琉'],
@@ -92,6 +92,15 @@ assert.deepStrictEqual(randomSnow.weatherPool, ['clear', 'light_snow', 'heavy_sn
 assert.strictEqual(randomSnow.autoEvacAfterDestroyAll, true);
 assert.strictEqual(randomSnow.usCasualtyPhase, false);
 assert.strictEqual(randomSnow.segmentCount, 3);
+const randomEurope = campaigns.campaigns[6];
+assert.strictEqual(randomEurope.id, 'random_europe');
+assert.strictEqual(randomEurope.title, '随机欧洲');
+assert.strictEqual(randomEurope.generator, 'europe_random_summer');
+assert.strictEqual(randomEurope.season, 'summer');
+assert.deepStrictEqual(randomEurope.weatherPool, ['clear', 'rain']);
+assert.strictEqual(randomEurope.autoEvacAfterDestroyAll, true);
+assert.strictEqual(randomEurope.usCasualtyPhase, false);
+assert.strictEqual(randomEurope.segmentCount, 3);
 
 const lang = fs.readFileSync(path.join(repo, 'data/lang.csv'), 'utf8');
 for (const key of [
@@ -103,6 +112,7 @@ for (const key of [
   'campaign.peleliu.title',
   'campaign.randomIsland.title',
   'campaign.randomSnow.title',
+  'campaign.randomEurope.title',
 ]) {
   assert(lang.includes(key), `data/lang.csv should contain ${key}`);
 }

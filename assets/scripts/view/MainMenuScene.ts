@@ -64,7 +64,7 @@ import {
   activeTerrainCategoryForTheater,
   terrainCategoryForCode,
 } from '../core/TerrainCatalog';
-import { isFootKind, isTankKind } from '../core/types';
+import { isAntiTankGunKind, isFootKind, isTankKind } from '../core/types';
 import type { MissionData, MissionObjective, SeasonType, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
@@ -2939,6 +2939,8 @@ export class MainMenuScene extends Component {
     const unitKindLabels: Record<UnitKind, string> = {
       sherman: 'Sherman',
       sherman76: 'Sherman 76',
+      sherman_jumbo: 'Sherman Jumbo',
+      m26_pershing: 'M26E1 Pershing',
       t34: 'T-34/76',
       tiger: 'Tiger',
       tigerking: 'Tiger II',
@@ -2955,6 +2957,7 @@ export class MainMenuScene extends Component {
       type4: 'Type 4 Chi-To',
       maus: 'Panzer VIII Maus',
       at_gun: 'AT Gun',
+      pak38: 'pak38',
       japanese_infantry: 'JP Inf',
       american_infantry: 'US Inf',
       heavy_artillery: 'Artillery',
@@ -3014,7 +3017,7 @@ export class MainMenuScene extends Component {
       elite: '王牌',
     };
     const unitSummary = (unit: UnitPlacement) => {
-      const level = unitLevelLabels[normalizeUnitLevel(unit.kind === 'at_gun' ? (unit.atGunCrewLevel ?? unit.unitLevel) : unit.unitLevel)];
+      const level = unitLevelLabels[normalizeUnitLevel(isAntiTankGunKind(unit.kind) ? (unit.atGunCrewLevel ?? unit.unitLevel) : unit.unitLevel)];
       if (unit.startEids?.length) return `${level} ${unitKindLabels[unit.kind]} eid${unit.startEids.join(',')}`;
       if (unit.startRids?.length) return `${level} ${unitKindLabels[unit.kind]} rid${unit.startRids.join(',')}`;
       const at = unit.at ? `${unit.at.col},${unit.at.row}` : '骰子';
@@ -3352,12 +3355,12 @@ export class MainMenuScene extends Component {
               unitRandomPickerTarget = null;
               unitKindPickerTarget = { group: item.group, index: item.index };
             }, 12);
-            const currentLevel = normalizeUnitLevel(item.unit.kind === 'at_gun'
+      const currentLevel = normalizeUnitLevel(isAntiTankGunKind(item.unit.kind)
               ? (item.unit.atGunCrewLevel ?? item.unit.unitLevel)
               : item.unit.unitLevel);
-            addPlainBtn(`${item.unit.kind === 'at_gun' ? '兵' : ''}${unitLevelLabels[currentLevel]}`, 26, y, 36, 24, currentLevel !== 'recruit', () => {
+      addPlainBtn(`${isAntiTankGunKind(item.unit.kind) ? '兵' : ''}${unitLevelLabels[currentLevel]}`, 26, y, 36, 24, currentLevel !== 'recruit', () => {
               const nextLevel = cycleIn(unitLevels, currentLevel, 'recruit');
-              if (item.unit.kind === 'at_gun') {
+        if (isAntiTankGunKind(item.unit.kind)) {
                 item.unit.atGunCrewLevel = nextLevel;
                 delete item.unit.unitLevel;
               } else {
@@ -3429,12 +3432,12 @@ export class MainMenuScene extends Component {
                   24,
                   kind === targetUnit.kind ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
                   () => {
-                    const previousLevel = normalizeUnitLevel(targetUnit.kind === 'at_gun'
+      const previousLevel = normalizeUnitLevel(isAntiTankGunKind(targetUnit.kind)
                       ? targetUnit.atGunCrewLevel
                       : targetUnit.unitLevel);
                     targetUnit.kind = kind;
                     targetUnit.faction = getUnitStats(kind).faction;
-                    if (kind === 'at_gun') {
+      if (isAntiTankGunKind(kind)) {
                       targetUnit.atGunCrewLevel = previousLevel;
                       delete targetUnit.unitLevel;
                     } else {
@@ -5070,6 +5073,8 @@ function tankVisualAssetName(kind: TankVisualKind): string {
   switch (kind) {
     case 'sherman': return 'Sherman';
     case 'sherman76': return 'Sherman 76';
+    case 'sherman_jumbo': return 'Sherman Jumbo';
+    case 'm26_pershing': return 'M26E1 潘兴';
     case 't34': return 'T-34/76';
     case 'tiger': return 'Tiger';
     case 'tigerking': return 'Tiger II';
@@ -5078,7 +5083,8 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'panzer4': return 'Panzer IV';
     case 'panzer3': return 'Panzer III';
     case 'type97': return 'Type 97';
-    case 'at_gun': return 'AT Gun';
+      case 'at_gun': return 'AT Gun';
+      case 'pak38': return 'pak38';
     case 'heavy_artillery': return 'Artillery';
     case 'german_heavy_artillery': return 'German Artillery';
     case 'truck': return 'Truck';

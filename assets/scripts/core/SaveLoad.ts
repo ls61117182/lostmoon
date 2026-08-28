@@ -1,7 +1,7 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import type { ATGunCrewKind, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShermanCrew, Unit, UnitKind, UnitLevel } from './types';
-import { isTankKind, neutralizeUncrewedTank } from './types';
+import type { ATGunCrewKind, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitKind, UnitLevel } from './types';
+import { isAntiTankGunKind, isTankKind, neutralizeUncrewedTank } from './types';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
@@ -19,8 +19,10 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  *   6: 追加非玩家单位等级与玩家独立乘员等级
  *   7: 追加乘员技能与伏击跨回合状态
  *   8: 追加本回合/上回合敌方最后攻击位置记忆
+ *   9: 追加硬核模式 AP/HE 已装填弹种
+ *   10: 关卡初始反坦克炮组改为真实绑定步兵单位
  */
-const SAVE_VERSION = 8 as const;
+const SAVE_VERSION = 10 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -46,6 +48,8 @@ interface UnitSnapshot {
   turretDamaged?: boolean;
   paralyzed?: boolean;
   loaded?: boolean;
+  loadedShell?: ShellType | null;
+  hvapAmmoRemaining?: number;
   hatchOpen?: boolean;
   visionRange?: number;
   gunnerVisionRange?: number;
@@ -69,7 +73,7 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 7 | 6 | 5 | 4 | 3 | 2;
+  version: typeof SAVE_VERSION | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2;
   /** v5: selected rule profile; older saves resume as classic. */
   gameMode?: GameMode;
   missionId: string;
@@ -137,6 +141,8 @@ function captureUnit(u: Unit): UnitSnapshot {
     turretDamaged: u.turretDamaged,
     paralyzed: u.paralyzed,
     loaded: u.loaded,
+    loadedShell: u.loadedShell,
+    hvapAmmoRemaining: u.hvapAmmoRemaining,
     hatchOpen: u.hatchOpen,
     visionRange: u.visionRange,
     gunnerVisionRange: u.gunnerVisionRange,
@@ -206,6 +212,8 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.turretDamaged = s.turretDamaged ?? false;
   live.paralyzed = s.paralyzed ?? false;
   live.loaded = s.loaded ?? false;
+  live.loadedShell = s.loadedShell ?? (s.loaded ? 'ap' : null);
+  live.hvapAmmoRemaining = s.hvapAmmoRemaining;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
   if (s.gunnerVisionRange !== undefined) live.gunnerVisionRange = s.gunnerVisionRange;
   if (s.interiorVisionRange !== undefined) live.interiorVisionRange = s.interiorVisionRange;
@@ -213,7 +221,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   if (s.crew) live.crew = { ...s.crew };
   if (live.id === 'sherman_player') {
     live.crewLevels = normalizePlayerCrewLevels(s.crewLevels ?? live.crewLevels);
-  } else if (live.kind === 'at_gun') {
+  } else if (isAntiTankGunKind(live.kind)) {
     live.atGunCrewLevel = normalizeUnitLevel(s.atGunCrewLevel ?? s.unitLevel ?? live.atGunCrewLevel);
     live.unitLevel = undefined;
   } else {
@@ -308,6 +316,33 @@ export interface ApplyResult {
   reason?: string;
 }
 
+/** Restore the implicit initial crew represented by v9-and-older snapshots. */
+function reconcileLegacyScenarioATGunCrews(units: Unit[]): void {
+  for (let i = units.length - 1; i >= 0; i--) {
+    const crew = units[i];
+    if (!crew.id.endsWith(':scenario_crew')) continue;
+    const gunId = crew.id.slice(0, -':scenario_crew'.length);
+    const gun = units.find(unit => unit.id === gunId);
+    const gunStillUsesImplicitCrew = !!gun
+      && !gun.destroyed
+      && gun.atGunCrewAlive === true
+      && !gun.atGunControllerUnitId;
+    if (!gunStillUsesImplicitCrew) {
+      units.splice(i, 1);
+      continue;
+    }
+    crew.faction = gun.faction;
+    crew.pos = { ...gun.pos };
+    crew.facing = gun.facing;
+    crew.unitLevel = normalizeUnitLevel(gun.atGunCrewLevel);
+    crew.crewSkills = gun.crewSkills ? Object.fromEntries(
+      Object.entries(gun.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+    ) : undefined;
+    crew.attachedToATGunId = gun.id;
+    gun.atGunControllerUnitId = crew.id;
+  }
+}
+
 /**
  * 将存档应用到当前 mission（就地修改 Unit 对象，保持引用稳定，
  * 这样外部保存的 Unit 指针/Set 缓存不会失效）。
@@ -320,7 +355,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 9 && save.version !== 8 && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -329,31 +364,41 @@ export function applySave(
   if (save.sherman.kind !== mission.sherman.kind) {
     return { ok: false, reason: `谢尔曼种类不匹配` };
   }
-  if (save.enemies.length < mission.enemies.length) {
+  // v9 and older missions had no real unit object for a scenario-start AT-gun
+  // crew. Compare those saves against the original authored unit list; the
+  // generated controllers are reconciled after applying the old snapshots.
+  const legacyCrewLayout = save.version < 10;
+  const liveEnemies = legacyCrewLayout
+    ? mission.enemies.filter(unit => !unit.id.endsWith(':scenario_crew'))
+    : mission.enemies;
+  const liveAllies = legacyCrewLayout
+    ? mission.allies.filter(unit => !unit.id.endsWith(':scenario_crew'))
+    : mission.allies;
+  if (save.enemies.length < liveEnemies.length) {
     return {
       ok: false,
-      reason: `敌人数不匹配 (${save.enemies.length} vs ${mission.enemies.length})`,
+      reason: `敌人数不匹配 (${save.enemies.length} vs ${liveEnemies.length})`,
     };
   }
-  for (let i = 0; i < mission.enemies.length; i++) {
-    if (save.enemies[i].kind !== mission.enemies[i].kind) {
+  for (let i = 0; i < liveEnemies.length; i++) {
+    if (save.enemies[i].kind !== liveEnemies[i].kind) {
       return { ok: false, reason: `敌人 #${i} 种类不匹配` };
     }
   }
   const extraEnemies: Unit[] = [];
-  for (let i = mission.enemies.length; i < save.enemies.length; i++) {
+  for (let i = liveEnemies.length; i < save.enemies.length; i++) {
     extraEnemies.push(makeSavedUnit(save.enemies[i], `save_enemy_${i}`, mission.data.theater));
   }
   if (save.version >= 4) {
     const allies = save.allies ?? [];
-    if (allies.length !== mission.allies.length) {
+    if (allies.length !== liveAllies.length) {
       return {
         ok: false,
-        reason: `友军数不匹配 (${allies.length} vs ${mission.allies.length})`,
+        reason: `友军数不匹配 (${allies.length} vs ${liveAllies.length})`,
       };
     }
     for (let i = 0; i < allies.length; i++) {
-      if (allies[i].kind !== mission.allies[i].kind) {
+      if (allies[i].kind !== liveAllies[i].kind) {
         return { ok: false, reason: `友军 #${i} 种类不匹配` };
       }
     }
@@ -373,7 +418,7 @@ export function applySave(
   mission.sherman.faction = save.sherman.faction ?? mission.sherman.stats.faction;
   for (let i = 0; i < save.enemies.length; i++) {
     const s = save.enemies[i];
-    const live = mission.enemies[i];
+    const live = i < liveEnemies.length ? liveEnemies[i] : extraEnemies[i - liveEnemies.length];
     applyUnitSnapshot(
       live,
       s,
@@ -383,9 +428,13 @@ export function applySave(
   if (save.version >= 4 && save.allies) {
     for (let i = 0; i < save.allies.length; i++) {
       const s = save.allies[i];
-      const live = mission.allies[i];
+      const live = liveAllies[i];
       applyUnitSnapshot(live, s, mission.sherman.faction);
     }
+  }
+  if (legacyCrewLayout) {
+    reconcileLegacyScenarioATGunCrews(mission.enemies);
+    reconcileLegacyScenarioATGunCrews(mission.allies);
   }
 
   if (save.version >= 3) {
@@ -397,6 +446,8 @@ export function applySave(
     sh.turretDamaged = ss.turretDamaged ?? false;
     sh.paralyzed = ss.paralyzed ?? false;
     sh.loaded = ss.loaded ?? false;
+    sh.loadedShell = ss.loadedShell ?? (ss.loaded ? 'ap' : null);
+    sh.hvapAmmoRemaining = ss.hvapAmmoRemaining;
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
     if (ss.visionRange !== undefined) sh.visionRange = ss.visionRange;
     if (ss.gunnerVisionRange !== undefined) sh.gunnerVisionRange = ss.gunnerVisionRange;

@@ -1279,7 +1279,7 @@ function generateAttempt(
       : `随机关卡（太平洋）#${seed >>> 0}`,
     description: `由随机关卡生成器 v${RANDOM_MISSION_GENERATOR_VERSION} 生成；seed=${seed >>> 0}`,
     theater,
-    ...(winter ? { season: 'winter' as const } : {}),
+    ...(options.season ? { season: options.season } : {}),
     ...(options.weather && options.weather !== 'clear' ? { weather: options.weather } : {}),
     cols: COLS,
     rows: ROWS,

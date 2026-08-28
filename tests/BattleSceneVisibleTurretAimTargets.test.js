@@ -47,8 +47,8 @@ assert.doesNotMatch(
 );
 assert.match(
   methodBody('gunActionUnavailable'),
-  /const crewReason[\s\S]*?if \(crewReason\) return crewReason;[\s\S]*?if \(s\.turretDamaged\) return null;/,
-  'a damaged turret must still allow the main-gun button to enter the blocked-range preview state',
+  /if \(s\.turretDamaged\) return t\('dmg\.effect\.turret'\);[\s\S]*?const crewReason/,
+  'a damaged turret must disable the main-gun button and report 炮塔受损 before entering a range preview',
 );
 assert.doesNotMatch(
   methodBody('hasTurretReconGunSelection'),
@@ -67,7 +67,7 @@ assert.match(
 );
 assert.match(
   methodBody('precisionGunActionUnavailable'),
-  /crewActionUnavailable\('gunner'\)[\s\S]*?!this\.mission\.sherman\.loaded[\s\S]*?return t\('hud\.unloaded'\)/,
+  /crewActionUnavailable\('gunner'\)[\s\S]*?!isMainGunLoaded\(this\.mission\.sherman, GameSession\.gameMode === 'hardcore'\)[\s\S]*?return t\('hud\.unloaded'\)/,
   'precision fire must report unloaded instead of inheriting ordinary main-gun rotation availability',
 );
 assert.match(
@@ -77,7 +77,7 @@ assert.match(
 );
 assert.match(
   methodBody('selectPrecisionGunDie'),
-  /if \(!this\.mission\.sherman\.loaded\) \{[\s\S]*?clearGunSelection\(\)[\s\S]*?t\('hud\.unloaded'\)[\s\S]*?redraw\(\)[\s\S]*?return;[\s\S]*?selectedGunHitThresholdModifier = -2/,
+  /if \(!isMainGunLoaded\(this\.mission\.sherman, GameSession\.gameMode === 'hardcore'\)\) \{[\s\S]*?clearGunSelection\(\)[\s\S]*?t\('hud\.unloaded'\)[\s\S]*?redraw\(\)[\s\S]*?return;[\s\S]*?selectedGunHitThresholdModifier = -2/,
   'an unloaded precision-fire selection must clear any target state and return before enabling the range preview',
 );
 assert.match(
@@ -137,18 +137,23 @@ assert.match(
 );
 assert.match(
   source,
-  /enemiesOnTile\.length === 0 \|\| unloadedGunRotation[\s\S]*?this\.tryAimShermanTurretAtFogTile\(direction, target\.pos, mgSel\)/,
+  /visibleUnitsOnTile\.length === 0 \|\| unloadedGunRotation[\s\S]*?this\.tryAimShermanTurretAtFogTile\(direction, target\.pos, mgSel\)/,
   'clicking a marked visible empty hex must rotate the selected turret weapon instead of opening inspection',
 );
 assert.match(
   methodBody('onTouchMap'),
-  /const unloadedGunRotation = gunSel && !this\.mission\.sherman\.loaded;[\s\S]*?enemiesOnTile\.length === 0 \|\| unloadedGunRotation[\s\S]*?tryAimShermanTurretAtFogTile/,
+  /const unloadedGunRotation = gunSel[\s\S]*?!isMainGunLoaded\(this\.mission\.sherman, GameSession\.gameMode === 'hardcore'\);[\s\S]*?visibleUnitsOnTile\.length === 0 \|\| unloadedGunRotation[\s\S]*?tryAimShermanTurretAtFogTile/,
   'an unloaded main gun must rotate instead of trying to fire when a visible enemy hex is clicked',
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /legalWeaponTargetKeys = this\.playerWeaponTargetHexKeys\(\)[\s\S]*?unloadedGunRotation[\s\S]*?machineGunRotationSelection[\s\S]*?visibleEnemyKeys\.has\(tileKey\)[\s\S]*?!machineGunRotationSelection[\s\S]*?!legalWeaponTargetKeys\.has\(tileKey\)[\s\S]*?drawTurretAimHex/,
-  'legal firing targets, unloaded-gun targets, and MG rotation-only enemy hexes must share the green mask',
+  /legalWeaponTargetKeys = this\.playerWeaponTargetHexKeys\(\)[\s\S]*?precisionGunSelection[\s\S]*?if \(precisionGunSelection && !legalWeaponTargetKeys\.has\(tileKey\)\) continue;[\s\S]*?drawTurretAimHex/,
+  'ordinary weapon selection must retain rotation masks while precision fire remains limited to legal targets',
+);
+assert.match(
+  methodBody('onTouchMap'),
+  /const legalMainGunTarget = gunSel[\s\S]*?const mainGunRotationOnly = gunSel && visibleUnitsOnTile\.length > 0 && !legalMainGunTarget;[\s\S]*?mainGunRotationOnly[\s\S]*?tryAimShermanTurretAtFogTile/,
+  'a loaded AP gun must treat an otherwise invalid infantry hex as rotation-only instead of firing',
 );
 assert.match(
   methodBody('onTouchMap'),
@@ -167,7 +172,7 @@ assert.match(
 );
 assert.match(
   methodBody('onTouchMap'),
-  /precisionGunSelection = gunSel && this\.selectedGunHitThresholdModifier < 0[\s\S]*?if \(precisionGunSelection\)[\s\S]*?!targetVisible \|\| !mainGunTarget[\s\S]*?openTileInspectModal\(target\)[\s\S]*?\} else \{[\s\S]*?tryAimShermanTurretAtFogTile/,
+  /precisionGunSelection = gunSel && this\.selectedGunHitThresholdModifier < 0[\s\S]*?if \(precisionGunSelection\)[\s\S]*?!targetVisible \|\| !legalMainGunTarget[\s\S]*?openTileInspectModal\(target\)[\s\S]*?\} else \{[\s\S]*?tryAimShermanTurretAtFogTile/,
   'precision fire must keep the range preview without permitting empty or fog hexes to consume its paired dice as rotation-only actions',
 );
 assert.match(
@@ -187,7 +192,7 @@ assert.match(
 );
 assert.match(
   methodBody('playerWeaponTargetHexKeys'),
-  /selectedMGDieIdx[\s\S]*?canMGAttack[\s\S]*?keys\.add[\s\S]*?selectedGunDieIdx[\s\S]*?sherman\.loaded[\s\S]*?canAttack[\s\S]*?keys\.add/,
+  /selectedMGDieIdx[\s\S]*?canMGAttack[\s\S]*?keys\.add[\s\S]*?selectedGunDieIdx[\s\S]*?isMainGunLoaded\(sherman, GameSession\.gameMode === 'hardcore'\)[\s\S]*?canAttack[\s\S]*?keys\.add/,
   'green enemy masks must follow machine-gun and loaded main-gun legality',
 );
 assert.doesNotMatch(
@@ -207,7 +212,7 @@ assert.match(
 );
 assert.match(
   source,
-  /this\.selectedGunDieIdx >= 0\s*&& this\.mission\.sherman\.loaded === true\s*&& this\.outcome === 'ongoing'\) \{\s*this\.drawAttackableHighlights\(\)/,
+  /this\.selectedGunDieIdx >= 0\s*&& isMainGunLoaded\(this\.mission\.sherman, GameSession\.gameMode === 'hardcore'\)\s*&& this\.outcome === 'ongoing'\) \{\s*this\.drawAttackableHighlights\(\)/,
   'main-gun hit and suppression previews must only render while the gun is loaded',
 );
 assert.match(

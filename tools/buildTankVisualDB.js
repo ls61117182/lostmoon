@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
-const SPLIT_KINDS = ['sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
+const SPLIT_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',

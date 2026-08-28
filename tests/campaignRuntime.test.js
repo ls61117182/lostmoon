@@ -104,11 +104,15 @@ const carried = runtime.carryShermanToNextSegment({
   turretDamaged: true,
   radioDamaged: true,
   loaded: true,
+  loadedShell: 'hvap',
+  hvapAmmoRemaining: 1,
   hatchOpen: true,
   visionRange: 1,
 }, stitched.segmentMissionData[1].sherman);
 assert.deepStrictEqual(carried.at, { col: 1, row: 1 });
 assert.strictEqual(carried.loaded, true);
+assert.strictEqual(carried.loadedShell, 'hvap', 'a chambered HVAP round carries into the next segment');
+assert.strictEqual(carried.hvapAmmoRemaining, undefined, 'HVAP supply refills instead of carrying into the next segment');
 assert.strictEqual(carried.hatchOpen, true);
 assert.deepStrictEqual(carried.crew, { commander: false, loader: true, gunner: false, driver: true, coDriver: false });
 assert.strictEqual(carried.fireLevel, undefined);

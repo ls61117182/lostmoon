@@ -12,10 +12,10 @@ const end = source.indexOf('\n  /**', start + 1);
 assert.ok(start >= 0 && end > start, 'tryAttack must exist');
 const body = source.slice(start, end);
 
-const ambushCapture = body.indexOf(
+const ambushCapture = body.lastIndexOf(
   'const ambushModifier = ambushHitThresholdModifier(sherman, GameSession.gameMode);',
 );
-const reportRoll = body.indexOf('const report = rollAttack({');
+const reportRoll = body.lastIndexOf('const report = rollAttack({');
 const aimStart = body.indexOf('this.startShermanTurretAim(target, () => {', reportRoll);
 const consumeAmbush = body.indexOf('markAmbushAction(sherman);', aimStart);
 

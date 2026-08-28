@@ -5,7 +5,7 @@
  * Regenerate: node tools/buildCampaignUpgradeDB.js
  */
 
-export type CampaignUpgradeId = "commander_cupola" | "improved_optics" | "wet_ammo_rack" | "spall_liner" | "automatic_extinguisher" | "side_skirts" | "wide_tracks" | "improved_transmission" | "smoke_launcher" | "intercom" | "ready_rack" | "mine_roller" | "camouflage_net" | "reinforced_transmission" | "commander_ballistic_shield" | "emergency_medical_kit" | "ammo_handling_optimization" | "new_gun_mantlet";
+export type CampaignUpgradeId = "commander_cupola" | "improved_optics" | "wet_ammo_rack" | "spall_liner" | "automatic_extinguisher" | "side_skirts" | "wide_tracks" | "improved_transmission" | "smoke_launcher" | "intercom" | "ready_rack" | "mine_roller" | "camouflage_net" | "reinforced_transmission" | "commander_ballistic_shield" | "emergency_medical_kit" | "ammo_handling_optimization" | "new_gun_mantlet" | "hvap";
 
 export interface CampaignUpgradeDefinition {
   id: CampaignUpgradeId;
@@ -577,6 +577,37 @@ export const CAMPAIGN_UPGRADES: readonly CampaignUpgradeDefinition[] = [
     armorFrontSideBonus: 0,
     armorRearSideBonus: 0,
     gunMantletArmorBonus: 1,
+    mudAttackDiceBonus: 0,
+    mudMovementDiceBonus: 0,
+    mudMiscDiceBonus: 0,
+    beachAttackDiceBonus: 0,
+    beachMovementDiceBonus: 0,
+    beachMiscDiceBonus: 0,
+    miscDiceBonus: 0,
+    ignoreDestroyed: false,
+    ignoreCrewCheck: false,
+    repairDiceCanFireSuppress: false,
+    movementDiceCanReverseDirection: false,
+    smokeOnMiscPips2And4: false,
+    shootingDiceCanReload: false,
+    mineDamageImmune: false,
+    hiddenLongRangeUntargetable: false,
+    mechanicalFailureImmune: false,
+    ignoreFirstAttackParalyzedPerSegment: false,
+    commanderShieldPerSegment: false,
+    reviveCrewAtSegmentStart: false,
+    carryLowestUnusedAttackDie: false,
+  },
+  {
+    id: "hvap",
+    nameKey: "campaignUpgrade.hvap.name",
+    descriptionKey: "campaignUpgrade.hvap.description",
+    interiorVisionBonus: 0,
+    gunnerVisionBonus: 0,
+    hitThresholdModifier: 0,
+    armorFrontSideBonus: 0,
+    armorRearSideBonus: 0,
+    gunMantletArmorBonus: 0,
     mudAttackDiceBonus: 0,
     mudMovementDiceBonus: 0,
     mudMiscDiceBonus: 0,

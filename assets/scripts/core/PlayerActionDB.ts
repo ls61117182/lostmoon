@@ -1,7 +1,7 @@
 /**
  * 玩家行动表与骰池 —— 自动生成，请勿手改本文件。
  *
- * 数据源：data/player_action_table.csv + data/player_dice_pool.csv
+ * 数据源：data/player_action_table.csv + data/player_dice_pool.csv + data/player_hardcore_dice_pool.csv
  * 重新生成：node tools/buildPlayerActionDB.js
  * 对应 GDD §3.6 行动表 + §3.6.1 掷骰数。
  */
@@ -71,6 +71,65 @@ export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {
       beach: -1,
       rocky: 0,
       airstrip: 2,
+    },
+    attack: {
+      road: 2,
+      field: 2,
+      mud: 1,
+      forest: 0,
+      water: 0,
+      deep_water: 0,
+      clear: 2,
+      trees: 1,
+      beach: 0,
+      rocky: 0,
+      airstrip: 2,
+    },
+    misc: {
+      road: 1,
+      field: 2,
+      mud: 1,
+      forest: 0,
+      water: 0,
+      deep_water: 0,
+      clear: 1,
+      trees: 2,
+      beach: 1,
+      rocky: 0,
+      airstrip: 1,
+    },
+  },
+  moveMods: {
+    driver: 1,
+    codriver: 1,
+    hatch: 1,
+  },
+  attackMods: {
+    gunner: 1,
+    loader: 1,
+    hatch: 1,
+  },
+  miscMods: {
+    hatch: 1,
+  },
+  capMin: 1,
+  capMax: null,
+};
+
+export const PLAYER_HARDCORE_DICE_POOL: PlayerDicePoolConfig = {
+  baseByPhaseTerrain: {
+    movement: {
+      road: -1,
+      field: -2,
+      mud: -3,
+      forest: -3,
+      water: -3,
+      deep_water: -3,
+      clear: -1,
+      trees: -2,
+      beach: -4,
+      rocky: -3,
+      airstrip: -1,
     },
     attack: {
       road: 2,

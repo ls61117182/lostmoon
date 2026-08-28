@@ -16,6 +16,7 @@ export const TANK_ENGINE_VIBRATION_DEFAULT_ENABLED = false;
 export function unitKindHasEngineVibration(kind: UnitKind): boolean {
   return kind === 'sherman'
     || kind === 'sherman76'
+    || kind === 'sherman_jumbo'
     || kind === 't34'
     || kind === 'tiger'
     || kind === 'tigerking'

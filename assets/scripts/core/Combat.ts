@@ -33,7 +33,7 @@ import {
 } from './HexGrid';
 import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
 import { markAmbushTargeted } from './Ambush';
-import { Axial, CrewSlot, FireDirection, isControlledATGun, isFootUnit, isFriendlyFaction, isTankUnit, neutralizeUncrewedTank, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { Axial, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isTankUnit, neutralizeUncrewedTank, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 import { unitLevelHitThresholdModifier } from './UnitLevel';
 
@@ -97,6 +97,8 @@ export interface AttackReport {
   /** 本次实际计入总装甲的炮盾附加值；UI 用它把基础装甲与炮盾分行展示。 */
   gunMantletArmor?: number;
   penetration?: number;
+  /** Locked effective-range calculation used by the penetration detail panel. */
+  penetrationBreakdown?: EffectivePenetrationBreakdown;
   /** 穿甲检定分段：仅在 hit=true 时有值 */
   penDie?: number;          // 击穿掷骰总和（2d6）
   penDice?: number[];       // 击穿掷骰明细（2 颗）
@@ -166,8 +168,10 @@ export interface AttackContext {
   tankMachineGunWillTraverse?: boolean;
   /** Hardcore rule: infantry may attack an enemy tank sharing its hex. */
   sameHexInfantryTankAttack?: boolean;
-  /** Hardcore rule: a tank main gun may target infantry to suppress it. */
+  /** Hardcore rule: a tank main gun may target ordinary infantry with HE. */
   mainGunSuppressesInfantry?: boolean;
+  /** Hardcore main-gun ammunition, loaded by players or selected automatically by AI. */
+  shellType?: ShellType;
   /** 命中等级规则区分主炮/步兵武器与机枪；缺省按主炮/普通攻击处理。 */
   attackKind?: 'main' | 'mg';
 }
@@ -254,6 +258,8 @@ export interface EffectivePenetrationBreakdown {
   distance: number;
   rangePenalty: number;
   penetration: number;
+  penetrationBonus?: number;
+  effectiveRangeBonus?: number;
 }
 
 export function effectivePenetrationBreakdown(attacker: Unit, target: Unit, enabled = false): EffectivePenetrationBreakdown {
@@ -272,6 +278,34 @@ export function effectivePenetrationBreakdown(attacker: Unit, target: Unit, enab
 
 export function effectivePenetration(attacker: Unit, target: Unit, enabled = false): number {
   return effectivePenetrationBreakdown(attacker, target, enabled).penetration;
+}
+
+export const HVAP_PENETRATION_BONUS = 2;
+export const HVAP_EFFECTIVE_RANGE_BONUS = 2;
+
+/** HVAP follows AP rules with its penetration and effective-range bonuses applied before range falloff. */
+export function attackEffectivePenetrationBreakdown(ctx: AttackContext): EffectivePenetrationBreakdown {
+  const hvap = ctx.shellType === 'hvap';
+  const basePenetration = ctx.attacker.stats.penetration;
+  const penetrationBonus = hvap ? HVAP_PENETRATION_BONUS : 0;
+  const baseEffectiveRange = ctx.attacker.stats.effectiveRange;
+  const effectiveRangeBonus = hvap ? HVAP_EFFECTIVE_RANGE_BONUS : 0;
+  const effectiveRange = baseEffectiveRange + effectiveRangeBonus;
+  const distance = hexDistance(ctx.attacker.pos, ctx.target.pos);
+  const rangePenalty = ctx.effectiveRangePenetration ? Math.max(0, distance - effectiveRange) : 0;
+  return {
+    basePenetration,
+    effectiveRange: baseEffectiveRange,
+    distance,
+    rangePenalty,
+    penetration: Math.max(0, basePenetration + penetrationBonus - rangePenalty),
+    penetrationBonus,
+    effectiveRangeBonus,
+  };
+}
+
+export function attackEffectivePenetration(ctx: AttackContext): number {
+  return attackEffectivePenetrationBreakdown(ctx).penetration;
 }
 
 const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
@@ -318,7 +352,7 @@ function isForwardOnlyGun(unit: Unit): boolean {
   // dedicated AI evaluates/executes whole-mount 12-direction fire. Ordinary
   // AT guns and artillery retain the legacy six-direction fixed-gun rule.
   return unit.stats.visionType === 'fixed'
-    || (unit.kind === 'at_gun' && unit.stats.visionType !== 'turreted')
+    || (isAntiTankGunUnit(unit) && unit.stats.visionType !== 'turreted')
     || unit.kind === 'heavy_artillery';
 }
 
@@ -333,6 +367,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   const infantryAttack = isFootUnit(attacker);
   const suppressionAttack = ctx.mainGunSuppressesInfantry === true
+    && ctx.shellType === 'he'
     && isTankUnit(attacker)
     && isFootUnit(target)
     && target.kind !== 'officer';
@@ -586,13 +621,172 @@ export function gunMantletArmorBonus(ctx: AttackContext): number {
   const incomingStep = incomingFireDirectionStepFor(ctx);
   const turretFacing = target.turretFacing ?? target.facing;
   if (incomingStep === null || turretFacing === null) return 0;
-  const delta = Math.abs(incomingStep - fireDirectionStep(turretFacing));
-  const shortestDelta = Math.min(delta, 12 - delta);
-  return shortestDelta <= 1 ? bonus : 0;
+  return isWithinThirtyDegreeArc(incomingStep, turretFacing) ? bonus : 0;
 }
 
-function effectiveArmorValue(ctx: AttackContext, face: ArmorFace): number {
+/** Both tank mantlets and AT-gun shields protect the facing ray and its two adjacent 30-degree rays. */
+function isWithinThirtyDegreeArc(incomingStep: number, facing: FireDirection): boolean {
+  const delta = Math.abs(incomingStep - fireDirectionStep(facing));
+  return Math.min(delta, 12 - delta) <= 1;
+}
+
+export function effectiveArmorValue(ctx: AttackContext, face: ArmorFace): number {
   return armorValue(ctx.target, face) + gunMantletArmorBonus(ctx);
+}
+
+export type HighExplosiveOutcome =
+  | 'none'
+  | 'paralyzed'
+  | 'suppressed'
+  | 'destroyed'
+  | 'fire_suppressed';
+
+export type NonPlayerTankWeapon = ShellType | 'mg';
+
+/** Hardcore non-player tanks choose a weapon automatically from target class and range. */
+export function nonPlayerTankWeaponForTarget(target: Unit, distance: number): NonPlayerTankWeapon {
+  const ordinaryInfantry = isFootUnit(target) && target.kind !== 'officer';
+  if (ordinaryInfantry || isAntiTankGunUnit(target)) return distance <= 1 ? 'mg' : 'he';
+  if (target.kind === 'truck') return 'he';
+  // Tanks/assault guns and heavy-artillery bunkers are AP targets.
+  return 'ap';
+}
+
+/** A standalone HE report: normal hit first, then target-specific blast resolution. */
+export interface HighExplosiveReport {
+  dice: [number, number];
+  roll: number;
+  threshold: number;
+  hit: boolean;
+  /** Ordinary infantry is automatically hit by HE and skips the normal hit roll. */
+  automaticHit?: boolean;
+  hitBreakdown: HitBreakdown;
+  hitModifiers?: HitThresholdModifierDetail[];
+  armorFace?: ArmorFace;
+  armor?: number;
+  highExplosivePower: number;
+  effectDice?: number[];
+  effectRoll?: number;
+  effectThreshold?: number;
+  fireThreshold?: number;
+  infantryInCover?: boolean;
+  outcome: HighExplosiveOutcome;
+  commanderKilledByHitDoubles?: boolean;
+  commanderShieldBlocked?: boolean;
+}
+
+/** Buildings, woods and a friendly tank in the same hex improve infantry's HE survival. */
+export function infantryHasHighExplosiveCover(ctx: AttackContext): boolean {
+  const tile = ctx.map.get(ctx.target.pos);
+  if (tile?.hasBuilding || tile?.terrain === 'forest' || tile?.terrain === 'trees') return true;
+  return ctx.units?.some(unit => unit !== ctx.target
+    && !unit.destroyed
+    && unit.faction === ctx.target.faction
+    && isTankUnit(unit)
+    && unit.pos.q === ctx.target.pos.q
+    && unit.pos.r === ctx.target.pos.r) === true;
+}
+
+export function rollHighExplosiveInfantryOutcome(
+  inCover: boolean,
+  rng: RNG,
+): { die: number; threshold: number; outcome: 'destroyed' | 'suppressed' } {
+  const die = rng.d6();
+  const threshold = inCover ? 6 : 5;
+  return { die, threshold, outcome: die >= threshold ? 'destroyed' : 'suppressed' };
+}
+
+/** Resolve hardcore HE without any AP penetration, range falloff or damage-table roll. */
+export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplosiveReport {
+  const { attacker, target } = ctx;
+  const lockedHitBreakdown = hitBreakdown(ctx);
+  const automaticHit = isFootUnit(target) && target.kind !== 'officer';
+  const d1 = automaticHit ? 0 : rng.d6();
+  const d2 = automaticHit ? 0 : rng.d6();
+  const roll = automaticHit ? 0 : d1 + d2;
+  const threshold = automaticHit ? 0 : lockedHitBreakdown.threshold;
+  const hit = automaticHit || roll >= threshold;
+  const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
+  const power = attacker.stats.highExplosivePower ?? 0;
+  const base: HighExplosiveReport = {
+    dice: [d1, d2], roll, threshold, hit, automaticHit, hitBreakdown: lockedHitBreakdown,
+    hitModifiers, highExplosivePower: power, outcome: 'none',
+  };
+  if (hit) {
+    const commanderDeathTriggered = !automaticHit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
+    base.commanderShieldBlocked = commanderDeathTriggered && target.campaignCommanderShieldAvailable === true;
+    base.commanderKilledByHitDoubles = commanderDeathTriggered && !base.commanderShieldBlocked;
+  }
+  // Tank HE pre-rolls its blast dice for presentation even on a miss. The
+  // outcome remains none and is never applied unless the hit check succeeded.
+  if (!hit && !isTankUnit(target)) return base;
+
+  if (isFootUnit(target)) {
+    const infantryInCover = infantryHasHighExplosiveCover(ctx);
+    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryInCover, rng);
+    const effectRoll = infantryEffect.die;
+    const effectThreshold = infantryEffect.threshold;
+    return {
+      ...base, infantryInCover, effectDice: [effectRoll], effectRoll, effectThreshold,
+      outcome: infantryEffect.outcome,
+    };
+  }
+  if (target.kind === 'truck' || isAntiTankGunUnit(target)) {
+    return { ...base, outcome: 'destroyed' };
+  }
+
+  const directionRule = attackDirectionRuleFor(ctx);
+  const armorFace = directionRule.armorFace;
+  const armor = effectiveArmorValue(ctx, armorFace);
+  if (isHeavyArtilleryUnit(target)) {
+    if ((target.fireLevel ?? 0) > 0) {
+      return { ...base, armorFace, armor, outcome: 'suppressed' };
+    }
+    const effectDice = [rng.d6(), rng.d6()];
+    const effectRoll = effectDice[0] + effectDice[1];
+    const effectThreshold = armor - power - 2;
+    const fireThreshold = armor - power;
+    const outcome: HighExplosiveOutcome = effectRoll >= fireThreshold
+      ? 'fire_suppressed'
+      : effectRoll >= effectThreshold ? 'suppressed' : 'none';
+    return { ...base, armorFace, armor, effectDice, effectRoll, effectThreshold, fireThreshold, outcome };
+  }
+  if (isTankUnit(target)) {
+    const effectDice = [rng.d6(), rng.d6()];
+    const effectRoll = effectDice[0] + effectDice[1];
+    const effectThreshold = armor - power;
+    return {
+      ...base, armorFace, armor, effectDice, effectRoll, effectThreshold,
+      outcome: hit && effectRoll >= effectThreshold ? 'paralyzed' : 'none',
+    };
+  }
+  return { ...base, outcome: 'destroyed' };
+}
+
+export function applyHighExplosiveAttack(target: Unit, report: HighExplosiveReport): void {
+  markAmbushTargeted(target);
+  if (!report.hit) return;
+  if (report.commanderShieldBlocked && target.campaignCommanderShieldAvailable === true) {
+    target.campaignCommanderShieldAvailable = false;
+  }
+  if (report.commanderKilledByHitDoubles && target.crew?.commander) target.crew.commander = false;
+  switch (report.outcome) {
+    case 'destroyed': target.destroyed = true; break;
+    case 'paralyzed':
+      if (target.campaignParalyzedProtectionAvailable === true) {
+        target.campaignParalyzedProtectionAvailable = false;
+      } else {
+        target.paralyzed = true;
+      }
+      break;
+    case 'suppressed': target.suppressed = true; break;
+    case 'fire_suppressed':
+      target.suppressed = true;
+      target.fireLevel = Math.max(1, target.fireLevel ?? 0);
+      break;
+    case 'none': break;
+  }
+  neutralizeUncrewedTank(target);
 }
 
 function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfiguredClass = false): DamageTargetClass | null {
@@ -676,7 +870,7 @@ function primaryDamageEffect(effects: readonly DamageEffectStep[]): DamageEffect
 
 function isOverpenetrationVehicleTarget(target: Unit): boolean {
   return !isFootUnit(target)
-    && target.kind !== 'at_gun'
+    && !isAntiTankGunUnit(target)
     && target.kind !== 'heavy_artillery'
     && target.kind !== 'german_heavy_artillery';
 }
@@ -705,6 +899,22 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const commanderShieldBlocked = commanderDeathTriggered && target.campaignCommanderShieldAvailable === true;
   const commanderKilledByHitDoubles = commanderDeathTriggered && !commanderShieldBlocked;
 
+  // Small-arms fire between foot units is settled by the hit roll alone.
+  // A hit destroys the target immediately, so no penetration dice are rolled
+  // or included in the report shown to the player.
+  if (isFootUnit(attacker) && isFootUnit(target)) {
+    return {
+      dice: [d1, d2], roll, threshold, hit, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      penetrated: hit,
+      damageEffect: hit ? 'destroyed' : undefined,
+      damageEffects: hit ? [{ effect: 'destroyed' }] : [],
+      commanderKilledByHitDoubles: false,
+      commanderShieldBlocked: false,
+      protagonistTarget,
+      statusChange: hit ? 'destroyed' : 'none',
+    };
+  }
+
   const directionRule = attackDirectionRuleFor(ctx);
   const face = directionRule.armorFace;
   const damageCheckType = ctx.directionalDamageCheck ? directionRule.damageCheckType : undefined;
@@ -712,7 +922,8 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const targetClass = damageCheckType ? damageTargetClassFor(target, protagonistTarget, ctx.unitDamageTargetClass) : null;
   const gunMantletArmor = gunMantletArmorBonus(ctx);
   const armor = armorValue(target, face) + gunMantletArmor;
-  const pen = effectivePenetration(attacker, target, ctx.effectiveRangePenetration);
+  const penetrationBreakdown = attackEffectivePenetrationBreakdown(ctx);
+  const pen = penetrationBreakdown.penetration;
 
   // 第二段：穿甲检定。Europe / Pacific 统一使用 2d6。
   const penDice = [rng.d6(), rng.d6()];
@@ -775,7 +986,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   if (!hit) {
     return {
       dice: [d1, d2], roll, threshold, hit: false, hitBreakdown: lockedHitBreakdown, hitModifiers,
-      armorFace: face, armor, gunMantletArmor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -790,7 +1001,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
-      armorFace: face, armor, gunMantletArmor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -806,7 +1017,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       return {
         dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
         hit: true,
-        armorFace: face, armor, gunMantletArmor, penetration: pen,
+        armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
         damageCheckType,
         penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
         damageEffects: [],
@@ -820,7 +1031,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
-      armorFace: face, armor, gunMantletArmor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       damageEffect: 'destroyed',
@@ -841,7 +1052,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
       hit: true,
-      armorFace: face, armor, gunMantletArmor, penetration: pen,
+      armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       damageDie, damageEffects,
@@ -860,7 +1071,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   return {
     dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
     hit: true,
-    armorFace: face, armor, gunMantletArmor, penetration: pen,
+    armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
     damageCheckType,
     penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
     damageDie, damageEffect, damageEffects,
@@ -1220,10 +1431,18 @@ export interface MGReport {
 
 export function mgHitThreshold(ctx: AttackContext): number {
   const base = mgHitBreakdown(ctx);
-  const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
   return base.threshold
     + mgTankCoordinationModifier(ctx)
-    + (atGunCrewTarget ? 1 : 0);
+    + atGunShieldModifier(ctx);
+}
+
+/** A controlled AT gun's shield uses the same +/-30-degree protection arc as a tank gun mantlet. */
+function atGunShieldModifier(ctx: AttackContext): number {
+  if (ctx.atGunCrewTargets !== true || !isControlledATGun(ctx.target)) return 0;
+  const shieldFacing = ctx.target.turretFacing ?? ctx.target.facing;
+  if (shieldFacing === null) return 0;
+  const incomingStep = incomingFireDirectionStepFor(ctx);
+  return incomingStep !== null && isWithinThirtyDegreeArc(incomingStep, shieldFacing) ? 1 : 0;
 }
 
 export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
@@ -1260,9 +1479,9 @@ export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
 export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
   const details = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item })) ?? [];
   const coordination = mgTankCoordinationModifier(ctx);
-  const atGunCrew = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target) ? 1 : 0;
+  const atGunShield = atGunShieldModifier(ctx);
   if (coordination) details.push({ labelKey: 'dice.rule.infantryTankCoordination', value: coordination });
-  if (atGunCrew) details.push({ labelKey: 'dice.rule.atGunCrewTarget', value: atGunCrew });
+  if (atGunShield) details.push({ labelKey: 'dice.rule.atGunCrewTarget', value: atGunShield });
   return details;
 }
 
@@ -1310,7 +1529,7 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
   const directionRule = attackDirectionRuleFor(ctx);
   const face = directionRule.armorFace;
   const armor = effectiveArmorValue(ctx, face);
-  const pen = effectivePenetration(ctx.attacker, ctx.target, ctx.effectiveRangePenetration);
+  const pen = attackEffectivePenetration(ctx);
   const penThreshold = armor - pen;
   const penProb = probHit2d6(penThreshold);
 

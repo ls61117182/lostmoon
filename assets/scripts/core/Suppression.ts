@@ -1,4 +1,4 @@
-import { isFootUnit, isTankUnit, Unit } from './types';
+import { isFootUnit, isTankUnit, ShellType, Unit } from './types';
 
 /**
  * Pick the unit a main-gun hex click represents. A vehicle/gun in a hex shields
@@ -19,24 +19,28 @@ export function selectMainGunTargetsByHex(targets: readonly Unit[]): Unit[] {
 }
 
 /** Only ordinary infantry squads can be pinned by a hardcore tank main gun. */
-export function isMainGunSuppressionAttack(attacker: Unit, target: Unit, hardcore: boolean): boolean {
+export function isMainGunSuppressionAttack(attacker: Unit, target: Unit, hardcore: boolean, shellType?: ShellType | null): boolean {
   return hardcore
+    && shellType === 'he'
     && isTankUnit(attacker)
     && isFootUnit(target)
     && target.kind !== 'officer'
     && !target.destroyed;
 }
 
-/** Suppression is deterministic and replaces damage; repeated hits do not stack extra lost actions. */
+/** Suppression is deterministic and replaces damage; repeated hits do not stack extra lost turns. */
 export function applyInfantrySuppression(target: Unit): boolean {
   if (!isFootUnit(target) || target.kind === 'officer' || target.destroyed) return false;
   target.suppressed = true;
   return true;
 }
 
-/** Called exactly when the infantry's next action begins. */
-export function consumeInfantrySuppression(unit: Unit): boolean {
+/** Called at the start of the infantry's next turn; the whole turn is forfeited. */
+export function consumeInfantryTurnSuppression(unit: Unit): boolean {
   if (!unit.suppressed) return false;
   unit.suppressed = false;
   return true;
 }
+
+/** @deprecated Use consumeInfantryTurnSuppression; suppression forfeits a turn, not one action. */
+export const consumeInfantrySuppression = consumeInfantryTurnSuppression;

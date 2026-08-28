@@ -6,7 +6,26 @@ import {
   CampaignUpgradeId,
 } from './CampaignUpgradeDB';
 import type { RNG } from './Dice';
-import type { TerrainType, Unit } from './types';
+import { resolvedLoadedShell } from './types';
+import type { ShellType, TerrainType, Unit } from './types';
+
+export const HVAP_AMMO_CAPACITY = 2;
+
+/** Load a hardcore shell while keeping the finite HVAP reserve in sync with the chamber. */
+export function loadCampaignShell(sherman: Unit, nextShell: ShellType): boolean {
+  const currentShell = resolvedLoadedShell(sherman);
+  if (currentShell === nextShell) return true;
+  if (nextShell === 'hvap') {
+    const remaining = sherman.hvapAmmoRemaining ?? 0;
+    if (remaining <= 0) return false;
+    sherman.hvapAmmoRemaining = remaining - 1;
+  } else if (currentShell === 'hvap') {
+    sherman.hvapAmmoRemaining = Math.min(HVAP_AMMO_CAPACITY, (sherman.hvapAmmoRemaining ?? 0) + 1);
+  }
+  sherman.loaded = true;
+  sherman.loadedShell = nextShell;
+  return true;
+}
 
 export type { CampaignUpgradeDefinition, CampaignUpgradeId } from './CampaignUpgradeDB';
 
@@ -75,6 +94,10 @@ export function applyCampaignUpgradesToSherman(sherman: Unit, ids: readonly Camp
     if (def.mechanicalFailureImmune) sherman.campaignMechanicalFailureImmune = true;
     if (def.ignoreFirstAttackParalyzedPerSegment) sherman.campaignParalyzedProtectionAvailable = true;
     if (def.commanderShieldPerSegment) sherman.campaignCommanderShieldAvailable = true;
+    if (id === 'hvap' && sherman.hvapAmmoRemaining === undefined) {
+      const chamberedHvap = resolvedLoadedShell(sherman) === 'hvap' ? 1 : 0;
+      sherman.hvapAmmoRemaining = HVAP_AMMO_CAPACITY - chamberedHvap;
+    }
     applied.add(id);
   }
   sherman.campaignUpgradeIds = [...applied];

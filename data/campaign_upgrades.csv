@@ -17,3 +17,4 @@ commander_ballistic_shield,campaignUpgrade.commanderBallisticShield.name,campaig
 emergency_medical_kit,campaignUpgrade.emergencyMedicalKit.name,campaignUpgrade.emergencyMedicalKit.description,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0
 ammo_handling_optimization,campaignUpgrade.ammoHandlingOptimization.name,campaignUpgrade.ammoHandlingOptimization.description,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0
 new_gun_mantlet,campaignUpgrade.newGunMantlet.name,campaignUpgrade.newGunMantlet.description,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+hvap,campaignUpgrade.hvap.name,campaignUpgrade.hvap.description,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0

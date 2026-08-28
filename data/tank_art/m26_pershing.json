@@ -1,0 +1,34 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "m26_pershing",
+  "notes": "M26E1 Pershing split source redrawn from the user-provided three-view; hull planform and long-gun turret follow that drawing as the sole geometry authority.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/m26_pershing/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/m26_pershing/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/m26_pershing/destroyed-from-hull.png",
+      "background": "alpha"
+    },
+    "paintReference": "assets/resources/textures/units/sherman_jumbo_top_hull.png"
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.1,
+    "outlinePixels": 1,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [560, 355],
+    "turretPivot": [1300, 356],
+    "muzzle": [1, 356],
+    "commanderHatch": [1445, 225]
+  }
+}

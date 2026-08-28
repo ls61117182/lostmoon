@@ -75,6 +75,13 @@ assert(
   'the automatic misc transition should not use a one-frame retry that can expire before the attack result closes',
 );
 
+const isBusy = battleScene.match(/private\s+isBusy\s*\(\)\s*:\s*boolean\s*{[\s\S]*?\n  }\n\n  private\s+destroyFireCheckEventUI/);
+assert(isBusy, 'BattleScene.isBusy() should be found');
+assert(
+  !isBusy[0].includes('this.highExplosiveBlasts.length'),
+  'high-explosive visual effects must not block game-flow phase transitions',
+);
+
 const computeAdvanceButton = battleScene.match(/private\s+computeAdvanceButton\s*\(\)[^{]*{[\s\S]*?\n  }\n\n  private\s+pvpOpponentProtagonist/);
 assert(computeAdvanceButton, 'BattleScene.computeAdvanceButton() should be found');
 assert(
@@ -120,16 +127,23 @@ const enterDiceShowHold = battleScene.match(/private\s+enterDiceShowHold\s*\(\s*
 assert(enterDiceShowHold, 'BattleScene.enterDiceShowHold() should be found');
 
 assert(
-  /show\.confirmButton\.active\s*=\s*!show\.mg\s*\|\|\s*show\.requireManualClose/.test(enterDiceShowHold[0]),
-  'manual-close MG DiceShow panels should show the confirm button so the last misc MG result can be dismissed',
+  /show\.confirmButton\.active\s*=\s*false/.test(enterDiceShowHold[0]),
+  'DiceShow confirmation should stay hidden until the final presentation hold finishes',
 );
 
 const holdStage = battleScene.match(/case\s+'hold'\s*:\s*{[\s\S]*?break;\s*\n\s*}/);
 assert(holdStage, 'BattleScene.advanceDiceShow() hold stage should be found');
 
 assert(
-  /show\.mg\s*&&\s*!show\.requireManualClose\s*&&\s*show\.t\s*>=\s*DICE_HOLD_DUR/.test(holdStage[0]),
-  'ordinary MG DiceShow panels should still auto-close unless requireManualClose is set',
+  /show\.mg\s*&&\s*!show\.requireManualClose/.test(holdStage[0]),
+  'only non-player MG DiceShow panels may auto-close',
+);
+
+const tryMGAttack = battleScene.match(/private\s+tryMGAttack\s*\([\s\S]*?\n  }\n\n  \/\*\*/);
+assert(tryMGAttack, 'BattleScene.tryMGAttack() should be found');
+assert(
+  /\{\s*mg:\s*true,\s*attacker:\s*sherman,\s*target,\s*requireManualClose:\s*true\s*\}/.test(tryMGAttack[0]),
+  'player MG result panels must wait for confirmation before applying the result and advancing',
 );
 
 console.log('BattleScene phase advance test passed');

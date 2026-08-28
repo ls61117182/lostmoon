@@ -13,6 +13,7 @@ import {
   Direction,
   Faction,
   infantryKindForFaction,
+  isAntiTankGunKind,
   isFootKind,
   isTankKind,
   neutralizeUncrewedTank,
@@ -348,6 +349,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     return makeUnit(`enemy_${i}`, p, rowParityOffset);
   });
   for (const enemy of enemies) validateUnitNotOnDisplayOnly(data.id, map, enemy);
+  attachScenarioATGunCrews(allies, data.theater);
+  attachScenarioATGunCrews(enemies, data.theater);
   if (diceList && di !== diceList.length) {
     throw new Error(
       `任务 ${data.id}：内部错误：无坐标掷骰数 ${diceList.length} 与无 at 的敌方数不一致`,
@@ -380,6 +383,39 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
     }
   }
   return mission;
+}
+
+/**
+ * Give every scenario-deployed AT gun a real infantry controller. The attached
+ * unit remains folded into the composite gun until the gun is destroyed or
+ * abandoned, at which point BattleScene releases this exact object with its
+ * original faction, level, and skills intact.
+ */
+function attachScenarioATGunCrews(units: Unit[], theater: MissionData['theater']): void {
+  const guns = units.filter(unit => isAntiTankGunKind(unit.kind));
+  for (const gun of guns) {
+    const crewKind = gun.atGunCrewKind ?? infantryKindForFaction(gun.faction);
+    const crewStats = getUnitStats(crewKind, theater ?? 'europe');
+    const crew: Unit = {
+      id: `${gun.id}:scenario_crew`,
+      kind: crewKind,
+      faction: gun.faction,
+      pos: { ...gun.pos },
+      facing: gun.facing,
+      stats: crewStats,
+      visionRange: crewStats.visionRange,
+      unitLevel: normalizeUnitLevel(gun.atGunCrewLevel),
+      crewSkills: gun.crewSkills ? Object.fromEntries(
+        Object.entries(gun.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
+      ) : undefined,
+      attachedToATGunId: gun.id,
+    };
+    gun.atGunCrewAlive = true;
+    gun.atGunCrewKind = crewKind;
+    gun.atGunCrewTargetSize = crewStats.size;
+    gun.atGunControllerUnitId = crew.id;
+    units.push(crew);
+  }
 }
 
 function validateTruckPath(data: MissionData, map: HexMap) {
@@ -644,9 +680,9 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
   const stats = getUnitStats(p.kind, currentMissionTheater ?? 'europe');
   // 旧关卡 JSON 以 allied 记录美军单位；运行时迁移为新的精确阵营，保持旧任务可加载。
   const placementFaction = p.faction === ('allied' as unknown as Faction) ? 'usa' : p.faction;
-  // AT guns share one generic UnitDB profile whose historical default is Japanese.
-  // For placements without an explicit faction, infer the owning enemy faction from
-  // the mission theater so European guns do not incorrectly receive Japanese crews.
+  // Legacy `at_gun` placements share one historical profile whose default is Japanese.
+  // Preserve theater-based inference for that compatibility ID; named models such as
+  // Pak 38 keep the explicit faction from their own UnitDB row.
   const defaultFaction = p.kind === 'at_gun'
     ? (currentMissionTheater === 'pacific' ? 'japanese' : 'german')
     : stats.faction;
@@ -676,9 +712,9 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     );
   }
   if (id === 'sherman_player') u.crewLevels = normalizePlayerCrewLevels(p.crewLevels);
-  else if (u.kind === 'at_gun') u.atGunCrewLevel = normalizeUnitLevel(p.atGunCrewLevel ?? p.unitLevel);
+  else if (isAntiTankGunKind(u.kind)) u.atGunCrewLevel = normalizeUnitLevel(p.atGunCrewLevel ?? p.unitLevel);
   else u.unitLevel = normalizeUnitLevel(p.unitLevel);
-  if (u.kind === 'at_gun') {
+  if (isAntiTankGunKind(u.kind)) {
     const crewKind = infantryKindForFaction(u.faction);
     const crewStats = getUnitStats(crewKind, currentMissionTheater ?? 'europe');
     u.atGunCrewAlive = true;
@@ -723,6 +759,10 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
   if (p.kind === 'sherman') {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
+    u.loadedShell = p.loadedShell ?? (p.loaded === true ? 'ap' : null);
+    if (p.hvapAmmoRemaining !== undefined) {
+      u.hvapAmmoRemaining = Math.max(0, Math.floor(p.hvapAmmoRemaining));
+    }
     u.visionRange = typeof p.visionRange === 'number' && Number.isFinite(p.visionRange)
       ? Math.max(0, Math.floor(p.visionRange))
       : stats.visionRange ?? DEFAULT_VISION_RANGE;

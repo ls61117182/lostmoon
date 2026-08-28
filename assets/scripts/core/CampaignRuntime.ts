@@ -368,6 +368,7 @@ export function carryShermanToNextSegment(current: UnitPlacement, nextTemplate: 
         ? Object.fromEntries(Object.entries(nextTemplate.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]))
         : undefined,
     loaded: current.loaded === true,
+    loadedShell: current.loadedShell ?? (current.loaded ? 'ap' : null),
     hatchOpen: current.hatchOpen === true,
   };
 }

@@ -10,7 +10,7 @@ const runtime = read('assets/scripts/core/CampaignUpgrade.ts');
 const turnEnd = read('assets/scripts/core/TurnEndEventApply.ts');
 const csvLines = read('data/campaign_upgrades.csv').trim().split(/\r?\n/);
 
-assert.strictEqual(csvLines.length, 19, 'upgrade table should contain exactly 18 upgrades plus its header');
+assert.strictEqual(csvLines.length, 20, 'upgrade table should contain exactly 19 upgrades plus its header');
 assert(scene.includes("GameSession.gameMode === 'hardcore'"), 'campaign upgrades must be gated to hardcore mode');
 assert(scene.includes('campaignUpgradeSelectedIndex = 1'), 'the middle card should be selected by default');
 assert(scene.includes("t('campaignUpgrade.confirm')"), 'selection should use an explicit confirmation button');
@@ -54,6 +54,16 @@ assert(scene.includes("campaignUpgradeActive('ready_rack')")
   && scene.includes('shootingDiceCanReload'), 'ready rack should let shooting dice reload');
 assert(scene.includes("campaignUpgradeActive('ammo_handling_optimization')")
   && scene.includes('retainedCampaignAttackDiePip'), 'ammo handling should retain the lowest unused attack die');
+assert(scene.includes("campaignUpgradeActive('hvap')")
+  && scene.includes("t('action.reloadHVAP')")
+  && scene.includes("new Node('AmmoBadge')")
+  && scene.includes('hvapAmmoRemaining'), 'HVAP should add a reload choice with a remaining-ammo badge');
+assert(scene.includes('loadCampaignShell(sherman, requestedShell)')
+  && runtime.includes("currentShell === 'hvap'")
+  && runtime.includes("resolvedLoadedShell(sherman) === 'hvap' ? 1 : 0"),
+  'unfired chambered HVAP should return to reserve and reduce the next-segment reserve by one');
+assert(combat.includes('HVAP_PENETRATION_BONUS = 2')
+  && combat.includes('HVAP_EFFECTIVE_RANGE_BONUS = 2'), 'HVAP should add two penetration and two effective range');
 assert(scene.includes("id === 'emergency_medical_kit'")
   && scene.includes('reviveFirstCampaignCrewMember'), 'medical kit should revive crew at segment entry/acquisition');
 assert(scene.includes('upgrade_icons_atlas_v1/spriteFrame'), 'upgrade cards should load the illustrated icon atlas');
@@ -63,6 +73,10 @@ assert(fs.existsSync(path.join(root, 'assets/resources/textures/ui/campaign_upgr
   'illustrated upgrade icon atlas should exist');
 assert(fs.existsSync(path.join(root, 'assets/resources/textures/ui/campaign_upgrades/upgrade_icons_atlas_v2.png')),
   'extension upgrade icon atlas should exist');
+assert(fs.existsSync(path.join(root, 'assets/resources/textures/ui/campaign_upgrades/upgrade_icon_hvap.png')),
+  'HVAP illustrated upgrade icon should exist');
+assert(scene.includes('upgrade_icon_hvap/spriteFrame')
+  && scene.includes('loadCampaignUpgradeHvapIcon'), 'HVAP cards should load their dedicated illustrated icon');
 assert(combat.includes('isDamageEffectSuppressed'), 'damage resolution should honor protected damage results');
 assert(combat.includes('campaignHiddenLongRangeUntargetable')
   && combat.includes('campaignParalyzedProtectionAvailable')

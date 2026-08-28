@@ -27,7 +27,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Faction, isFootKind, isFootUnit, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isFootKind, isFootUnit, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -146,7 +146,7 @@ function findShermanLosInfantry(mission: LoadedMission): Unit | null {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
     // 「徒步类」单位都纳入狙击手视线检查。
-    if (e.destroyed || !isFootUnit(e)) continue;
+    if (e.destroyed || isAttachedATGunCrew(e) || !isFootUnit(e)) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return e;
   }
@@ -173,7 +173,7 @@ export function spawnMarkerKindForMission(
   legacyNonFootMarker: 'eid' | 'rid' = 'eid',
 ): 'eid' | 'rid' {
   if (isFootKind(unitKind)) return 'rid';
-  if (missionId.startsWith('random_') && (unitKind === 'at_gun' || unitKind === 'heavy_artillery')) return 'rid';
+  if (missionId.startsWith('random_') && (isAntiTankGunKind(unitKind) || unitKind === 'heavy_artillery')) return 'rid';
   return missionId.startsWith('random_') ? 'eid' : legacyNonFootMarker;
 }
 
@@ -203,14 +203,16 @@ function unitsAt(mission: LoadedMission, pos: { q: number; r: number }): Unit[] 
 }
 
 function isTankUnitKind(k: UnitKind): boolean {
-  return k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger' || k === 'truck' || k === 'type95' || k === 'type97' || k === 'at_gun' || k === 'heavy_artillery';
+  return isAntiTankGunKind(k)
+    || k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger'
+    || k === 'truck' || k === 'type95' || k === 'type97' || k === 'heavy_artillery';
 }
 
 function isJapaneseTankOrGunUnit(u: Unit): boolean {
   return u.faction === 'japanese'
     && (u.kind === 'type95'
       || u.kind === 'type97'
-      || u.kind === 'at_gun'
+      || isAntiTankGunUnit(u)
       || u.kind === 'heavy_artillery');
 }
 
@@ -295,8 +297,7 @@ function prepareTankSpawnEvent(
     : findTileByEnemyStartId(mission, spawnDie);
   const pos = tile?.pos;
   const occupants = pos ? unitsAt(mission, pos) : [];
-  const tankKinds: UnitKind[] = ['sherman', 'panzer4', 'panzer3', 'tiger', 'truck', 'type95', 'type97', 'at_gun', 'heavy_artillery'];
-  const blocked = occupants.some(occ => tankKinds.includes(occ.kind));
+  const blocked = occupants.some(occ => isTankUnitKind(occ.kind));
   const invalidTerrain = kind === 'type97' && tile?.terrain === 'rocky';
   const placed = !!pos && !tile?.displayOnly && !blocked && !invalidTerrain;
   const face = ((spawnPoint === 'rid'
@@ -358,7 +359,7 @@ function hasInfantryAdjacentToSherman(mission: LoadedMission, includeSameHex = f
   if (sh.destroyed) return false;
   // 步兵 / 军官都计入「相邻徒步单位」 —— 任务 8 起军官在相邻齐射事件中与步兵同等参与。
   return mission.enemies.some(
-    e => !e.destroyed && isFootUnit(e)
+    e => !e.destroyed && !isAttachedATGunCrew(e) && isFootUnit(e)
       && (hexDistance(e.pos, sh.pos) === 1 || (includeSameHex && hexDistance(e.pos, sh.pos) === 0)),
   );
 }
@@ -385,7 +386,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   const simTarget = cloneUnitForSim(sh);
   // 任务 8 起：军官与步兵同属「徒步类」，相邻齐射时也参与。
   const infs = mission.enemies.filter(
-    e => !e.destroyed && isFootUnit(e)
+    e => !e.destroyed && !isAttachedATGunCrew(e) && isFootUnit(e)
       && (hexDistance(e.pos, sh.pos) === 1 || (sameHexInfantryTankAttack && hexDistance(e.pos, sh.pos) === 0)),
   );
 
@@ -603,6 +604,7 @@ export function prepareTurnEndEvent(
             return;
           }
           sh.loaded = true;
+          sh.loadedShell = 'ap';
         },
       };
     }

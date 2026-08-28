@@ -16,5 +16,14 @@ assert(lang.includes('dice.rule.gunMantletArmor,炮盾装甲值,Gun Mantlet Armo
   'the separate gun-mantlet armor row must be localized');
 assert(lang.includes('dice.rule.faceFront,前,Front'),
   'front-facing armor must be labeled 前装甲 rather than 前侧装甲');
+assert(lang.includes('dice.rule.faceFrontSide,前侧,Front Side'),
+  'front-side armor must be labeled 前侧装甲 rather than 前装甲');
+assert(lang.includes('dice.rule.faceRearSide,后侧,Rear Side'),
+  'rear-side armor must remain distinct from rear armor');
+assert(lang.includes('dice.rule.faceRear,后,Rear'),
+  'rear-facing armor must be labeled 后装甲 rather than 后侧装甲');
+assert(scene.includes("case 'frontSide': return t('dice.rule.faceFrontSide');")
+  && scene.includes("case 'rearSide': return t('dice.rule.faceRearSide');"),
+  'armor detail modals must preserve all four armor-face labels');
 
 console.log('BattleScene gun mantlet armor breakdown test passed');

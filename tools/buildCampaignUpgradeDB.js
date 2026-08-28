@@ -55,7 +55,7 @@ function build() {
     }
     return rec;
   });
-  if (records.length !== 18) throw new Error(`expected 18 upgrades, got ${records.length}`);
+  if (records.length !== 19) throw new Error(`expected 19 upgrades, got ${records.length}`);
 
   const ids = records.map(rec => JSON.stringify(rec.id)).join(' | ');
   const lines = [

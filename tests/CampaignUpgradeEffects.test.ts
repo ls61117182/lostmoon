@@ -5,9 +5,10 @@ const assert = require('assert');
 import {
   applyCampaignUpgradesToSherman,
   campaignUpgradeDiceBonus,
+  loadCampaignShell,
   reviveFirstCampaignCrewMember,
 } from '../assets/scripts/core/CampaignUpgrade';
-import { applyAttack, canAttack } from '../assets/scripts/core/Combat';
+import { applyAttack, canAttack, previewAttack } from '../assets/scripts/core/Combat';
 import { currentInteriorVisionRange } from '../assets/scripts/core/FogOfWar';
 import { HexMap } from '../assets/scripts/core/HexGrid';
 import type { AttackReport } from '../assets/scripts/core/Combat';
@@ -28,8 +29,10 @@ function tank(id: string, faction: Unit['faction'], q = 0): Unit {
       armorRearSide: 9,
       armorRear: 8,
       penetration: 2,
+      highExplosivePower: 2,
       effectiveRange: 2,
       turretTraverseSpeed: 6,
+      mobility: 3,
       usCasualtyDice: 0,
       visionRange: 4,
       gunnerVisionRange: 4,
@@ -80,6 +83,49 @@ function damageReport(effect: 'paralyzed'): AttackReport {
   assert.strictEqual(sherman.stats.gunMantletArmor, 1);
   applyCampaignUpgradesToSherman(sherman, ['new_gun_mantlet']);
   assert.strictEqual(sherman.stats.gunMantletArmor, 1, 'persistent stat upgrades apply exactly once');
+}
+
+{
+  const firstSegment = tank('hvap-segment-1', 'usa');
+  applyCampaignUpgradesToSherman(firstSegment, ['hvap']);
+  assert.strictEqual(firstSegment.hvapAmmoRemaining, 2, 'HVAP starts each segment with two rounds');
+  firstSegment.hvapAmmoRemaining = 1;
+  applyCampaignUpgradesToSherman(firstSegment, ['hvap']);
+  assert.strictEqual(firstSegment.hvapAmmoRemaining, 1, 'reapplying upgrades inside a segment must not refill HVAP');
+
+  const nextSegment = tank('hvap-segment-2', 'usa');
+  applyCampaignUpgradesToSherman(nextSegment, ['hvap']);
+  assert.strictEqual(nextSegment.hvapAmmoRemaining, 2, 'a newly loaded segment refills HVAP to two rounds');
+
+  assert.strictEqual(loadCampaignShell(nextSegment, 'hvap'), true);
+  assert.strictEqual(nextSegment.loadedShell, 'hvap');
+  assert.strictEqual(nextSegment.hvapAmmoRemaining, 1, 'chambering HVAP removes one round from reserve');
+  assert.strictEqual(loadCampaignShell(nextSegment, 'he'), true);
+  assert.strictEqual(nextSegment.loadedShell, 'he');
+  assert.strictEqual(nextSegment.hvapAmmoRemaining, 2, 'switching away from unfired HVAP returns it to reserve');
+
+  const carriedHvap = tank('hvap-carried-to-next-segment', 'usa');
+  carriedHvap.loaded = true;
+  carriedHvap.loadedShell = 'hvap';
+  applyCampaignUpgradesToSherman(carriedHvap, ['hvap']);
+  assert.strictEqual(carriedHvap.hvapAmmoRemaining, 1,
+    'a segment entered with HVAP chambered starts with only one reserve round');
+
+  const map = new HexMap(5, 1);
+  for (let q = 0; q < 5; q++) map.set({ pos: { q, r: 0 }, terrain: 'clear' } as Tile);
+  const target = tank('hvap-target', 'japanese', 1);
+  const ap = previewAttack({ attacker: firstSegment, target, map, shellType: 'ap' });
+  const hvap = previewAttack({ attacker: firstSegment, target, map, shellType: 'hvap' });
+  assert.strictEqual(hvap.pen.penetration, ap.pen.penetration + 2, 'HVAP adds exactly two penetration');
+  const distantTarget = tank('hvap-distant-target', 'japanese', 4);
+  const distantAp = previewAttack({
+    attacker: firstSegment, target: distantTarget, map, shellType: 'ap', effectiveRangePenetration: true,
+  });
+  const distantHvap = previewAttack({
+    attacker: firstSegment, target: distantTarget, map, shellType: 'hvap', effectiveRangePenetration: true,
+  });
+  assert.strictEqual(distantAp.pen.penetration, 0, 'standard AP loses penetration beyond range 2');
+  assert.strictEqual(distantHvap.pen.penetration, 4, 'HVAP keeps full penetration through its extended range 4');
 }
 
 {

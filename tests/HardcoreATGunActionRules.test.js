@@ -66,7 +66,7 @@ assert.match(aim[0], /fromVisualTarget: gun\.turretVisualTarget[\s\S]*?toVisualT
 
 const muzzle = scene.match(/private\s+muzzleFlashPosition\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
 assert(muzzle, 'shared main-gun muzzle geometry helper should be found');
-assert.match(muzzle[0], /attacker\.kind === 'at_gun'[\s\S]*?targetScreenAngle\(attacker\.pos, target\.pos\)/,
+assert.match(muzzle[0], /isAntiTankGunUnit\(attacker\)[\s\S]*?targetScreenAngle\(attacker\.pos, target\.pos\)/,
   'AT-gun muzzle effects and projectile vector must point exactly at the target hex');
 
 assert.match(loader, /u\.visionRange = crewStats\.visionRange/,

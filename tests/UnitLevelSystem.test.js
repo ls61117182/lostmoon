@@ -39,7 +39,7 @@ try {
     faction,
     pos: { q, r: 0 },
     facing: 0,
-    stats: { faction, visionRange: 4 },
+    stats: { faction, visionRange: 4, mobility: 3 },
     crew: { ...crew },
     unitLevel,
   });
@@ -92,6 +92,14 @@ try {
   assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 2, move: 1, misc: 1 });
   const recruitDice = hardcoreTankAIDiceCount({ ...actor, unitLevel: 'recruit' }, 'clear');
   const eliteDice = hardcoreTankAIDiceCount(actor, 'clear');
+  const minimumDice = hardcoreTankAIDiceCount({
+    ...actor,
+    unitLevel: 'recruit',
+    stats: { ...actor.stats, mobility: 0 },
+    crew: { ...actor.crew, commander: false, driver: false },
+  }, 'road');
+  assert.deepStrictEqual(minimumDice, { attack: 1, move: 1, misc: 1 },
+    'hardcore tanks must always receive at least one die of every type');
   assert.deepStrictEqual({
     attack: eliteDice.attack - recruitDice.attack,
     move: eliteDice.move - recruitDice.move,

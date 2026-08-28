@@ -62,6 +62,17 @@
       "autoEvacAfterDestroyAll": true,
       "usCasualtyPhase": false,
       "transitionSeconds": 2
+    },
+    {
+      "id": "random_europe",
+      "title": "随机欧洲",
+      "generator": "europe_random_summer",
+      "season": "summer",
+      "weatherPool": ["clear", "rain"],
+      "segmentCount": 3,
+      "autoEvacAfterDestroyAll": true,
+      "usCasualtyPhase": false,
+      "transitionSeconds": 2
     }
   ]
 }

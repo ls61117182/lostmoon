@@ -63,6 +63,8 @@ const sherman = {
   stats: {},
   fireLevel: 0,
   loaded: true,
+  loadedShell: 'he',
+  hvapAmmoRemaining: 1,
   hatchOpen: true,
   crew: { commander: true, loader: true, gunner: true, driver: true, coDriver: true },
 };
@@ -100,6 +102,8 @@ sherman.turretDamaged = true;
 sherman.paralyzed = true;
 sherman.radioDamaged = true;
 sherman.loaded = false;
+sherman.loadedShell = null;
+sherman.hvapAmmoRemaining = 0;
 sherman.hatchOpen = false;
 sherman.crew.gunner = false;
 
@@ -110,6 +114,8 @@ assert.strictEqual(sherman.turretDamaged, false);
 assert.strictEqual(sherman.paralyzed, false);
 assert.strictEqual(sherman.radioDamaged, false);
 assert.strictEqual(sherman.loaded, true);
+assert.strictEqual(sherman.loadedShell, 'he');
+assert.strictEqual(sherman.hvapAmmoRemaining, 1, 'retrying a segment restores its checkpoint HVAP supply');
 assert.strictEqual(sherman.hatchOpen, true);
 assert.strictEqual(sherman.crew.gunner, true);
 assert.deepStrictEqual(result.attackPositionMemory, {
