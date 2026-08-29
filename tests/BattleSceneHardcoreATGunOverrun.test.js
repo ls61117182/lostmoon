@@ -11,8 +11,8 @@ assert.match(
 
 assert.match(
   source,
-  /private areUnitsOnSameSide\(a: Unit, b: Unit\): boolean \{[\s\S]*?a\.faction !== 'neutral'[\s\S]*?b\.faction !== 'neutral'[\s\S]*?isFriendlyFaction\(a\.faction\) === isFriendlyFaction\(b\.faction\)/,
-  'friendly AT-gun blocking should use battle side rather than exact faction identity',
+  /private areUnitsOnSameSide\(a: Unit, b: Unit\): boolean \{[\s\S]*?a\.faction !== 'neutral'[\s\S]*?b\.faction !== 'neutral'[\s\S]*?isSameSide\(a, b\)/,
+  'friendly AT-gun blocking should use explicit battle side rather than faction identity',
 );
 
 assert.match(
@@ -23,7 +23,7 @@ assert.match(
 
 assert.match(
   source,
-  /finishedUnit\.pos = \{ q: anim\.toQ, r: anim\.toR \};\s*this\.crushEnemyATGunsAt\(finishedUnit\);\s*this\.captureAbandonedATGunsAt\(finishedUnit\);/,
+  /finishedUnit\.pos = \{ q: anim\.toQ, r: anim\.toR \};[\s\S]*?this\.crushEnemyATGunsAt\(finishedUnit\);\s*this\.captureAbandonedATGunsAt\(finishedUnit\);/,
   'every completed movement animation should check for AT-gun overrun and infantry capture',
 );
 

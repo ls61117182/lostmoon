@@ -78,7 +78,7 @@ objective.usCasualties,美军伤亡 {cur}/{limit},US casualties {cur}/{limit}
 objective.evacFromMark,从指定位置撤离,Evacuate from the marked hex
 objective.exitEdge,从地图边缘指定方向离境,Leave the map at the designated edge
 objective.typeUnknown,任务目标（{type}）,Objective ({type})
-status.panelTitle,谢尔曼状态,Sherman Status
+status.panelTitle,{unit}状态,{unit} Status
 status.row.loaded,装填,Loaded
 status.row.hatch,舱盖,Hatch
 status.row.fire,车体,Hull
@@ -331,6 +331,7 @@ unit.name.tiger,虎式,Tiger
 unit.name.maus,鼠式坦克,Panzer VIII Maus
 unit.name.panther,豹式坦克,Panther G
 unit.name.panzer4,四号坦克G型,Panzer IV Ausf. G
+unit.name.stug3,三号突击炮G型,StuG III Ausf. G
 unit.name.panzer3,三号,Panzer III
 unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
@@ -427,7 +428,7 @@ menu.settings.langZh,中文,Chinese
 menu.settings.langEn,English,English
 menu.settings.close,关闭,Close
 menu.help.title,游戏说明,How to Play
-menu.help.body,· 目标：操控谢尔曼完成每关任务要求。\n\n· 每回合行动阶段由攻击/移动/杂项3个阶段组成，攻击和移动可自由选择先后顺序，每个阶段根据所在地形获得对应数量的行动骰子。\n\n· 移动阶段：使用对应点数转向、前进、后退，两个相同骰子可以合并执行新的动作。\n\n· 攻击阶段：主炮需要装填后才可使用，可攻击直线上未被视线阻挡的装甲单位；机枪可扫射直线上未被视线阻挡的步兵（1D6 命中检定）。\n\n· 杂项阶段：装填、灭火、隐蔽、烟雾、副驾驶机枪等。\n\n· 敌方回合：按距离由近到远依次行动；步兵只在回合结束事件里出没。\n\n· 操作：点骰子弹出动作菜单；选中对应选项后执行动作。,"· Goal: Complete each mission's objectives with the Sherman.\n\n· Each turn has three action phases (Attack / Move / Misc). Attack and Move may be resolved in either order; each phase grants action dice according to the terrain you occupy.\n\n· Move phase: spend matching pips to turn, advance, or reverse; two identical dice may be merged to perform new actions.\n\n· Attack phase: the main gun can only be used after loading; it may fire at armored targets along a straight line if line of sight is clear. The machine gun may strafe infantry along a clear straight line (roll 1d6 to hit).\n\n· Misc phase: reload, extinguish fire, concealment, smoke, co-driver MG, and more.\n\n· Enemy phase: enemies act from nearest to farthest; enemy infantry only appear during end-of-turn events.\n\n· Controls: tap a die to open its action menu; pick an option to execute it."
+menu.help.body,· 目标：操控本关的玩家坦克完成任务要求。\n\n· 每回合行动阶段由攻击/移动/杂项3个阶段组成，攻击和移动可自由选择先后顺序，每个阶段根据所在地形获得对应数量的行动骰子。\n\n· 移动阶段：使用对应点数转向、前进、后退，两个相同骰子可以合并执行新的动作。\n\n· 攻击阶段：主炮需要装填后才可使用，可攻击直线上未被视线阻挡的装甲单位；机枪可扫射直线上未被视线阻挡的步兵（1D6 命中检定）。\n\n· 杂项阶段：装填、灭火、隐蔽、烟雾、副驾驶机枪等。\n\n· 敌方回合：按距离由近到远依次行动；步兵只在回合结束事件里出没。\n\n· 操作：点骰子弹出动作菜单；选中对应选项后执行动作。,"· Goal: Complete each mission's objectives with its player tank.\n\n· Each turn has three action phases (Attack / Move / Misc). Attack and Move may be resolved in either order; each phase grants action dice according to the terrain you occupy.\n\n· Move phase: spend matching pips to turn, advance, or reverse; two identical dice may be merged to perform new actions.\n\n· Attack phase: the main gun can only be used after loading; it may fire at armored targets along a straight line if line of sight is clear. The machine gun may strafe infantry along a clear straight line (roll 1d6 to hit).\n\n· Misc phase: reload, extinguish fire, concealment, smoke, co-driver MG, and more.\n\n· Enemy phase: enemies act from nearest to farthest; enemy infantry only appear during end-of-turn events.\n\n· Controls: tap a die to open its action menu; pick an option to execute it."
 menu.help.gotIt,已 了 解,Got it
 menu.modal.close,✕,✕
 level.01.title,村庄,Village
@@ -494,7 +495,7 @@ terrain.water_snow,水域（积雪）,Water (Snow)
 terrain.bridge,桥梁,Bridge
 tileInspect.title,格子介绍,Tile info
 tileInspect.building,建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。,Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile.
-tileInspect.rules.forest,森林：谢尔曼与德军坦克不可进入；步兵可进入；遮挡视线。,Forest: Sherman and German tanks cannot enter; infantry can enter; blocks line of sight.
+tileInspect.rules.forest,森林：坦克不可进入；步兵可进入；遮挡视线。,Forest: tanks cannot enter; infantry can enter; blocks line of sight.
 tileInspect.rules.water,水域：任何单位不可进入；不遮挡视线。,Water: impassable to all units; does not block line of sight.
 tileInspect.rules.bridge,桥梁：坦克只能从桥梁连接的 {a}、{b} 方向进出；按公路地形计算行动骰。,Bridge: tanks may enter or leave only through connected sides {a} and {b}; action dice use road terrain values.
 tileInspect.hedges,主炮射击时视线上的每个树篱使命中所需点数+1，但攻击者相邻的树篱不增加命中所需点数。,"For main-gun fire, each hedge along the line of sight adds +1 to the hit number, but hedges adjacent to the attacker do not increase the hit number."
@@ -526,6 +527,7 @@ tileInspect.statusSep,；,;
 tileInspect.status.shermanFire,着火 {n} 级,Fire level {n}
 tileInspect.status.turretDamaged,炮塔受损,Turret damaged
 tileInspect.status.paralyzed,瘫痪,Immobilized
+tileInspect.status.radioIntact,无线电完好,Radio operational
 tileInspect.status.radioDamaged,无线电损坏,Radio damaged
 tileInspect.status.hidden,隐蔽,Concealed
 tileInspect.status.smoked,烟雾,Smoked
@@ -577,7 +579,7 @@ battleLog.armorFace.frontSide,前侧,front side
 battleLog.armorFace.rearSide,后侧,rear side
 battleLog.armorFace.rear,后方,rear
 battleLog.combat.miss,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 未命中,"[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> miss"
-battleLog.combat.hitDoublesCommanderKia,[战斗] {actor} 命中骰掷出对子 {d1}+{d2}，谢尔曼舱盖打开 -> 车长阵亡,[Combat] {actor} hit dice doubles {d1}+{d2}; Sherman hatch open -> Commander KIA
+battleLog.combat.hitDoublesCommanderKia,[战斗] {actor} 命中骰掷出对子 {d1}+{d2}，玩家坦克舱盖打开 -> 车长阵亡,[Combat] {actor} hit dice doubles {d1}+{d2}; player tank hatch open -> Commander KIA
 battleLog.combat.cannotAttack,[战斗] 无法攻击：{reason},[Combat] Cannot attack: {reason}
 battleLog.combatMg,[战斗] 玩家机枪命中骰={diceExpr}，需要 ≥{need} -> {result},[Combat] Player MG hit dice={diceExpr}; needs ≥{need} -> {result}
 battleLog.combatMgAI,[战斗] {actor}主炮无目标，改用机枪：命中骰={diceExpr}，需要 ≥{need} -> {result},[Combat] {actor} has no main-gun target and uses MG: hit dice={diceExpr}; needs ≥{need} -> {result}
@@ -602,7 +604,7 @@ battle.turnEndList.effect.adjacent_infantry_fire,相邻步兵齐射,Adjacent inf
 battle.turnEndList.effect.mechanical_failure,机械故障,Mechanical failure
 battle.turnEndList.effect.stuka,斯图卡空袭,Stuka raid
 battle.turnEndList.effect.panzer3_spawn,III 号坦克增援,Panzer III reinforcement
-battle.turnEndList.effect.road_mine,公路地雷（谢尔曼在公路上）,Road mine (Sherman on road)
+battle.turnEndList.effect.road_mine,公路地雷（玩家坦克在公路上）,Road mine (player tank on road)
 battle.turnEndList.effect.panzer4_spawn,IV 号坦克增援,Panzer IV reinforcement
 battle.turnEndList.effect.tiger_spawn,虎式坦克增援,Tiger reinforcement
 battle.turnEndList.effect.sherman_spawn,谢尔曼增援,Sherman reinforcement
@@ -611,7 +613,7 @@ battle.turnEndList.effect.clear_mine,开阔地地雷,Clear-hex mine
 battle.turnEndList.effect.type95_spawn,九五式增援,Type 95 reinforcement
 battle.turnEndList.effect.type97_spawn,九七式增援,Type 97 reinforcement
 battle.turnEndList.effect.heavy_mortar,重迫击炮火力,Heavy mortar fire
-turnEnd.mine.skip,地雷：谢尔曼不在公路格，或已瘫痪，未触发。,Mine: not on a road or immobilized; no effect.
+turnEnd.mine.skip,地雷：玩家坦克不在公路格，或已瘫痪，未触发。,Mine: player tank not on a road or immobilized; no effect.
 turnEnd.mine.ric,地雷：命中间隙装甲未击穿（穿甲掷骰 {penDie}）。,Mine: failed to penetrate (AP roll {penDie}).
 turnEnd.mine.hit,地雷：击穿！伤害掷骰 {damageDie}，最终结果：{result}。,Mine: penetrated! Damage die {damageDie}; final result: {result}.
 turnEnd.mine.protected,扫雷滚筒排除了公路地雷，本次事件无效。,Mine roller cleared the road mine; no effect.
@@ -629,12 +631,12 @@ turnEnd.extra.type97Start,九七式起始格骰（1d6）,Type 97 start tile (1d6
 turnEnd.type95.placed,日军九五式增援：编号格骰 {spawnDie}。格可用则确认后放置。,Type 95 reinforcement: numbered hex die {spawnDie}. Confirm to place if clear.
 turnEnd.type95.blocked,九五式增援：骰 {spawnDie}，目标编号格被占据、不可用或位于岩石高地，未部署。,"Type 95 reinforcement: die {spawnDie}; numbered hex blocked, invalid, or rocky; not placed."
 turnEnd.extra.type95Start,九五式起始格骰（1d6）,Type 95 start tile (1d6)
-turnEnd.clearMine.skip,地雷：谢尔曼不在开阔地格，或已瘫痪，未触发。,Mine: Sherman is not on a Clear hex or is immobilized; no effect.
-turnEnd.clearMine.hit,地雷：开阔地自动命中，伤害掷骰 {damageDie}，最终结果：{result}。确认后应用到谢尔曼。,Mine: automatic hit on Clear hex; damage die {damageDie}; final result: {result}. Confirm to apply.
+turnEnd.clearMine.skip,地雷：玩家坦克不在开阔地格，或已瘫痪，未触发。,Mine: the player tank is not on a Clear hex or is immobilized; no effect.
+turnEnd.clearMine.hit,地雷：开阔地自动命中，伤害掷骰 {damageDie}，最终结果：{result}。确认后应用到玩家坦克。,Mine: automatic hit on Clear hex; damage die {damageDie}; final result: {result}. Confirm to apply to the player tank.
 turnEnd.clearMine.protected,扫雷滚筒排除了开阔地地雷，本次事件无效。,Mine roller cleared the mine; no effect.
-turnEnd.heavyMortar.skip,重迫击炮：场上没有与谢尔曼非相邻的日军步兵，未触发。,Heavy mortar: no Japanese infantry is non-adjacent to Sherman; no effect.
+turnEnd.heavyMortar.skip,重迫击炮：场上没有与玩家坦克非相邻的日军步兵，未触发。,Heavy mortar: no Japanese infantry is non-adjacent to the player tank; no effect.
 turnEnd.heavyMortar.ric,重迫击炮：自动命中，击穿骰 {pen1}+{pen2}={penSum}，需要 {penThreshold} -> 未击穿。,"Heavy mortar: automatic hit; penetration {pen1}+{pen2}={penSum}, needs {penThreshold} -> no penetration."
-turnEnd.heavyMortar.hit,重迫击炮：自动命中，击穿骰 {pen1}+{pen2}={penSum}，需要 {penThreshold} -> 击穿；伤害骰 {damageDie}，最终结果：{result}。确认后应用到谢尔曼。,"Heavy mortar: automatic hit; penetration {pen1}+{pen2}={penSum}, needs {penThreshold} -> penetrated; damage die {damageDie}; final result: {result}. Confirm to apply."
+turnEnd.heavyMortar.hit,重迫击炮：自动命中，击穿骰 {pen1}+{pen2}={penSum}，需要 {penThreshold} -> 击穿；伤害骰 {damageDie}，最终结果：{result}。确认后应用到玩家坦克。,"Heavy mortar: automatic hit; penetration {pen1}+{pen2}={penSum}, needs {penThreshold} -> penetrated; damage die {damageDie}; final result: {result}. Confirm to apply to the player tank."
 turnEnd.extra.mortarPen,重迫击炮击穿骰（2d6，AV8 / AP0）,"Heavy mortar penetration (2d6, AV8 / AP0)"
 turnEnd.germanTruck.noConfig,本关未配置 truckPath。,This mission has no truckPath.
 turnEnd.germanTruck.dead,德军卡车已被击毁，本事件不移动卡车。,Truck destroyed; no movement.
@@ -645,7 +647,7 @@ turnEnd.germanTruck.escapeDrive,德军卡车已到达公路末端：将沿当前
 turnEnd.germanTruck.moved,德军卡车沿路前进（本次跨越 {stepCells} 格，至路径第 {toIdx} 格）。,German truck advances {stepCells} hex(es) (now at path step {toIdx}).
 turnEnd.extra.panzer4Start,IV 号起始格骰（1d6）,Panzer IV start tile (1d6)
 turnEnd.extra.tigerStart,虎式起始格骰（1d6）,Tiger start tile (1d6)
-turnEnd.extra.shermanStart,谢尔曼起始格骰（1d6）,Sherman start tile (1d6)
+turnEnd.extra.shermanStart,玩家坦克起始格骰（1d6）,Player tank start tile (1d6)
 battle.save.ok,已存档,Game saved
 battle.save.busy,忙碌中无法存档,Cannot save while busy
 battle.save.notOngoing,胜负已分无法存档,Cannot save after battle ends
@@ -669,7 +671,7 @@ turnEnd.extra.stukaBomb,斯图卡轰炸命中判定（2d6≥8；不是伤害）,
 turnEnd.extra.stukaPen,穿甲检定：穿甲 1 vs 装甲 4（1d6≥3）,Penetration: AP 1 vs AV 4 (1d6≥3)
 turnEnd.extra.stukaDamage,伤害表（1d6，仅击穿后）,Damage table (1d6 after penetration)
 turnEnd.extra.stukaCrew,阵亡检定（1d6）,Crew casualty check (1d6)
-turnEnd.sniper.kia,敌方狙击手：谢尔曼舱盖开启且视野内有步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡。,Enemy sniper: hatch open with infantry in sight. Event dice {d1}+{d2}={sum}. Commander KIA.
+turnEnd.sniper.kia,敌方狙击手：玩家坦克舱盖开启且视野内有步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡。,Enemy sniper: player tank hatch open with infantry in sight. Event dice {d1}+{d2}={sum}. Commander KIA.
 turnEnd.sniper.safe,敌方狙击手射击（事件骰 {d1}+{d2}={sum}）。舱盖状态 {hatch}、视野内步兵 {los}，未造成车长伤亡。,Enemy sniper fires (event dice {d1}+{d2}={sum}). Hatch={hatch} LOS infantry={los}; commander unharmed.
 turnEnd.sniper.shielded,敌方狙击手命中车长位置，但防弹护盾挡下了本小关第一次致命射击。,Enemy sniper hit the commander position, but the ballistic shield stopped this segment's first lethal shot.
 turnEnd.commanderExtra.skip,车长额外指挥：车长不在位，无效果。,Commander bonus: no commander; no effect.
@@ -681,14 +683,14 @@ turnEnd.infantry.placed,德军步兵增援：增援骰 {spawnDie}，部署至增
 turnEnd.infantry.blocked,德军步兵增援：增援骰 {spawnDie}，目标格 rid={rid} 不可用或已被占据，未部署。,Infantry reinforcement: die {spawnDie}; tile rid={rid} blocked or occupied; not placed.
 turnEnd.japaneseInfantry.placed,日军步兵增援：增援骰 {spawnDie}，部署至编号格 rid={rid}（若格空）。确认后放置单位。,Japanese infantry reinforcement: die {spawnDie} at numbered tile rid={rid} if clear. Confirm to place.
 turnEnd.japaneseInfantry.blocked,日军步兵增援：增援骰 {spawnDie}，目标编号格 rid={rid} 不可用或已被占据，未部署。,Japanese infantry reinforcement: die {spawnDie}; numbered tile rid={rid} blocked or occupied; not placed.
-turnEnd.adjacent,与谢尔曼相邻的敌军步兵集火：已按直射或间接火力规则结算。,Adjacent enemy infantry fire on the Sherman: resolved per direct/indirect rules.
+turnEnd.adjacent,与玩家坦克相邻的敌军步兵集火：已按直射或间接火力规则结算。,Adjacent enemy infantry fire on the player tank: resolved per direct/indirect rules.
 turnEnd.adjacent.noTarget,步兵射程内无攻击目标。,No attack target in infantry range.
-turnEnd.mechanical.already,机械故障：谢尔曼已瘫痪，无额外效果。,Mechanical failure: already immobilized; no extra effect.
-turnEnd.mechanical.ok,机械故障：行走/动力受损，谢尔曼瘫痪。,Mechanical failure: Sherman immobilized.
+turnEnd.mechanical.already,机械故障：玩家坦克已瘫痪，无额外效果。,Mechanical failure: player tank already immobilized; no extra effect.
+turnEnd.mechanical.ok,机械故障：行走/动力受损，玩家坦克瘫痪。,Mechanical failure: player tank immobilized.
 turnEnd.mechanical.protected,强化传动机构避免了机械故障，本次事件无效。,Reinforced transmission prevented the mechanical failure; no effect.
-turnEnd.stuka.miss,斯图卡空袭：未对谢尔曼造成有效毁伤（详见各掷骰）。,Stuka attack: no effective damage to the Sherman.
+turnEnd.stuka.miss,斯图卡空袭：未对玩家坦克造成有效毁伤（详见各掷骰）。,Stuka attack: no effective damage to the player tank.
 turnEnd.stuka.shotDown,车长对空射击 2d6={aa1}+{aa2}={aasum}（≥6）：斯图卡被击落，无轰炸命中。,AA fire 2d6={aa1}+{aa2}={aasum} (≥6): Stuka shot down; no bomb hit.
-turnEnd.stuka.hit,斯图卡轰炸命中车体：轰炸命中 2d6={b1}+{b2}={bsum}；随后按装甲 4 / 穿甲 1 结算穿甲与伤害，最终结果：{result}。确认后应用到谢尔曼。,Stuka bomb hit: hit check 2d6={b1}+{b2}={bsum}; resolve AP 1 vs AV 4 and damage; final result: {result}. Confirm to apply.
+turnEnd.stuka.hit,斯图卡轰炸命中车体：轰炸命中 2d6={b1}+{b2}={bsum}；随后按装甲 4 / 穿甲 1 结算穿甲与伤害，最终结果：{result}。确认后应用到玩家坦克。,Stuka bomb hit: hit check 2d6={b1}+{b2}={bsum}; resolve AP 1 vs AV 4 and damage; final result: {result}. Confirm to apply to the player tank.
 turnEnd.stuka.bombMiss,斯图卡投弹未命中装甲目标：{b1}+{b2}={bsum}（需≥8）。,Stuka bombs miss armor: {b1}+{b2}={bsum} (need ≥8).
 turnEnd.stuka.ric,斯图卡炸弹命中，但按装甲 4 / 穿甲 1 的穿甲骰未过阈值，无车体伤害。,Bomb hit but AP 1 vs AV 4 failed to penetrate; no hull damage.
 turnEnd.panzer3.placed,敌军 III 号坦克增援：起始格骰 {spawnDie}，eid={eid}。格可用则确认后放置。,Panzer III reinforcement: start die {spawnDie} eid={eid}. Confirm to place if tile free.
@@ -758,7 +760,7 @@ campaignUpgrade.readyRack.description,攻击阶段的5、6点射击骰也可以�
 campaignUpgrade.mineRoller.name,扫雷滚筒,Mine Roller
 campaignUpgrade.mineRoller.description,不再受到公路地雷或开阔地地雷事件的伤害。,Take no damage from road-mine or clear-mine events.
 campaignUpgrade.camouflageNet.name,伪装网,Camouflage Net
-campaignUpgrade.camouflageNet.description,处于隐蔽状态时，2格以外的敌人无法选择谢尔曼为攻击目标。,"While concealed, enemies beyond 2 hexes cannot target the Sherman."
+campaignUpgrade.camouflageNet.description,处于隐蔽状态时，2格以外的敌人无法选择玩家坦克为攻击目标。,"While concealed, enemies beyond 2 hexes cannot target the player tank."
 campaignUpgrade.reinforcedTransmission.name,强化传动机构,Reinforced Transmission
 campaignUpgrade.reinforcedTransmission.description,免疫回合结束事件的机械故障；每小关第一次因攻击产生的瘫痪结果无效。,Ignore mechanical-failure events; the first attack-caused Immobilized result each segment is cancelled.
 campaignUpgrade.commanderBallisticShield.name,车长防弹护盾,Commander Ballistic Shield

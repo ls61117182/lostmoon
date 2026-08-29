@@ -9,10 +9,12 @@ import {
 } from './HexGrid';
 import type { CustomMissionPackage } from './CustomMissionStore';
 import type { TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
-import { isFootKind } from './types';
+import { isFootKind, isTankKind } from './types';
+import { getUnitStats } from './UnitDB';
 import type {
   Axial,
   Direction,
+  Faction,
   MissionData,
   MissionObjective,
   Offset,
@@ -36,6 +38,9 @@ export interface RandomMissionGenerationOptions {
   objectiveKinds?: readonly RandomMissionObjectiveKind[];
   /** Require the initial enemy roster to have exactly this many threat points. */
   enemyThreatPoints?: number;
+  /** Optional protagonist vehicle; nationality remains independently configurable. */
+  playerTankKind?: UnitKind;
+  playerTankFaction?: Faction;
 }
 
 export const RANDOM_MISSION_GENERATOR_VERSION = '23';
@@ -1272,6 +1277,13 @@ function generateAttempt(
   placeSpawnMarkers(layout.tiles, rng, markerReserved);
   bindPacificGunPlacements(enemies, layout.tiles, rng);
 
+  const playerKind = options.playerTankKind ?? 'sherman';
+  const playerPlacement: UnitPlacement = {
+    kind: playerKind,
+    faction: options.playerTankFaction ?? getUnitStats(playerKind, theater).faction,
+    at: cloneOffset(START),
+    facing: 0,
+  };
   const mission: MissionData = {
     id: missionId,
     name: theater === 'europe'
@@ -1285,7 +1297,8 @@ function generateAttempt(
     rows: ROWS,
     enemyStartByDice: true,
     tiles: layout.tiles,
-    sherman: { kind: 'sherman', faction: 'usa', at: cloneOffset(START), facing: 0 },
+    playerTank: playerPlacement,
+    sherman: playerPlacement,
     enemies,
     objective: objectiveRoll.objective,
     ...(theater === 'pacific' ? { usCasualtyLimit: 10 } : {}),
@@ -1295,7 +1308,7 @@ function generateAttempt(
     ...(truckPath ? { truckPath } : {}),
   };
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     editorVersion: `random-${RANDOM_MISSION_GENERATOR_VERSION}`,
     savedAt: Date.now(),
     source: 'developer',
@@ -1313,6 +1326,9 @@ export function generateRandomMissionPackage(
   seed: number = Date.now(),
   options: RandomMissionGenerationOptions = {},
 ): CustomMissionPackage {
+  if (options.playerTankKind !== undefined && !isTankKind(options.playerTankKind)) {
+    throw new Error(`Random mission playerTankKind must be a tank: ${options.playerTankKind}`);
+  }
   const normalizedSeed = (seed >>> 0) || 1;
   let lastError: unknown = null;
   for (let attempt = 0; attempt < 100; attempt++) {

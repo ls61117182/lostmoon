@@ -170,7 +170,8 @@ function campaignExitTarget(data: MissionData, segmentOffset: RawSegmentOffset):
 }
 
 function segmentEntryAnchor(data: MissionData): Axial {
-  return offsetToAxial(data.sherman.at ? data.sherman.at : { col: 0, row: 0 }, localRowParity(data));
+  const playerTank = data.playerTank ?? data.sherman!;
+  return offsetToAxial(playerTank.at ? playerTank.at : { col: 0, row: 0 }, localRowParity(data));
 }
 
 function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntime[] {
@@ -243,10 +244,12 @@ function calculateSegmentOffsets(missions: MissionData[]): CampaignSegmentRuntim
 
 export function translateMissionData(data: MissionData, segmentIndex: number, segment: CampaignSegmentRuntime): MissionData {
   void segmentIndex;
+  const translatedPlayerTank = translatePlacement(data.playerTank ?? data.sherman!, data, segment);
   return {
     ...cloneJson(data),
     rowParityOffset: 0,
-    sherman: translatePlacement(data.sherman, data, segment),
+    playerTank: translatedPlayerTank,
+    sherman: translatedPlayerTank,
     allies: (data.allies ?? []).map(p => translatePlacement(p, data, segment)),
     enemies: data.enemies.map(p => translatePlacement(p, data, segment)),
     objective: translateObjective(data, segment),
@@ -349,9 +352,9 @@ export function campaignSegmentForOffset(stitched: StitchedCampaignData, pos: Of
   return null;
 }
 
-export function carryShermanToNextSegment(current: UnitPlacement, nextTemplate: UnitPlacement): UnitPlacement {
+export function carryPlayerTankToNextSegment(current: UnitPlacement, nextTemplate: UnitPlacement): UnitPlacement {
   return {
-    kind: 'sherman',
+    kind: current.kind,
     faction: current.faction ?? nextTemplate.faction,
     at: nextTemplate.at ? { ...nextTemplate.at } : undefined,
     facing: current.facing ?? nextTemplate.facing,
@@ -372,3 +375,6 @@ export function carryShermanToNextSegment(current: UnitPlacement, nextTemplate: 
     hatchOpen: current.hatchOpen === true,
   };
 }
+
+/** @deprecated Compatibility export for older tests and integrations. */
+export const carryShermanToNextSegment = carryPlayerTankToNextSegment;

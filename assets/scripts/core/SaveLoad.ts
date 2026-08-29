@@ -1,6 +1,6 @@
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import type { ATGunCrewKind, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitKind, UnitLevel } from './types';
+import type { ATGunCrewKind, BattleSideId, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitController, UnitKind, UnitLevel } from './types';
 import { isAntiTankGunKind, isTankKind, neutralizeUncrewedTank } from './types';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
@@ -21,8 +21,9 @@ export const SAVE_KEY = 'lone_sherman_save_v1';
  *   8: 追加本回合/上回合敌方最后攻击位置记忆
  *   9: 追加硬核模式 AP/HE 已装填弹种
  *   10: 关卡初始反坦克炮组改为真实绑定步兵单位
+ *   11: 国家 faction 与战斗方 sideId、控制者 controller 分离
  */
-const SAVE_VERSION = 10 as const;
+const SAVE_VERSION = 11 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -31,6 +32,8 @@ interface UnitSnapshot {
   id?: string;
   kind: UnitKind;
   faction?: Faction;
+  sideId?: BattleSideId;
+  controller?: UnitController;
   q: number;
   r: number;
   facing: Direction | null;
@@ -73,7 +76,7 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2;
+  version: typeof SAVE_VERSION | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2;
   /** v5: selected rule profile; older saves resume as classic. */
   gameMode?: GameMode;
   missionId: string;
@@ -83,6 +86,8 @@ export interface SaveData {
   movesLeft: number;
   attacksLeft: number;
   sherman: UnitSnapshot;
+  /** v11 semantic name; `sherman` remains populated for old readers. */
+  playerTank?: UnitSnapshot;
   allies?: UnitSnapshot[];
   enemies: UnitSnapshot[];
   /** v5: active smoke screen hexes, stored as HexMap.keyOf(pos). */
@@ -128,6 +133,8 @@ function captureUnit(u: Unit): UnitSnapshot {
     id: u.id,
     kind: u.kind,
     faction: u.faction,
+    sideId: u.sideId,
+    controller: u.controller,
     q: u.pos.q,
     r: u.pos.r,
     facing: u.facing,
@@ -195,6 +202,8 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.faction = recoverLegacyCrewlessTankFaction
     ? legacyCrewlessTankFaction
     : (s.faction ?? live.stats.faction);
+  live.sideId = s.sideId ?? live.sideId;
+  live.controller = s.controller ?? live.controller;
   live.pos = { q: s.q, r: s.r };
   live.facing = s.facing;
   live.turretFacing = savedTurretFacing(s.turretFacing, s.facing);
@@ -219,7 +228,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   if (s.interiorVisionRange !== undefined) live.interiorVisionRange = s.interiorVisionRange;
   live.radioDamaged = s.radioDamaged ?? false;
   if (s.crew) live.crew = { ...s.crew };
-  if (live.id === 'sherman_player') {
+  if (live.controller === 'local_player') {
     live.crewLevels = normalizePlayerCrewLevels(s.crewLevels ?? live.crewLevels);
   } else if (isAntiTankGunKind(live.kind)) {
     live.atGunCrewLevel = normalizeUnitLevel(s.atGunCrewLevel ?? s.unitLevel ?? live.atGunCrewLevel);
@@ -250,6 +259,8 @@ function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMissi
     id: s.id || idFallback,
     kind: s.kind,
     faction: s.faction ?? stats.faction,
+    sideId: s.sideId ?? 'enemy',
+    controller: s.controller ?? 'ai',
     pos: { q: s.q, r: s.r },
     facing: s.facing,
     stats,
@@ -272,7 +283,11 @@ function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMissi
  * 单元测试或服务器战报回放时可以直接使用同一 JSON 格式。
  */
 export function captureSave(p: SnapshotParams): SaveData {
-  const sh = p.mission.sherman;
+  const sh = p.mission.playerTank ?? p.mission.sherman;
+  const playerTankSnapshot = {
+    ...captureUnit(sh),
+    damaged: false,
+  };
   return {
     version: SAVE_VERSION,
     gameMode: p.gameMode,
@@ -287,15 +302,13 @@ export function captureSave(p: SnapshotParams): SaveData {
     hatchChangedThisTurn: p.hatchChangedThisTurn,
     phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
     attackPositionMemory: cloneAttackPositionMemory(p.attackPositionMemory),
-    sherman: {
-      ...captureUnit(sh),
-      damaged: false,
-    },
+    sherman: playerTankSnapshot,
+    playerTank: { ...playerTankSnapshot },
     allies: p.mission.allies.map(captureUnit),
     enemies: p.mission.enemies.map(captureUnit),
     smokeHexes: Array.from(p.mission.smokeHexes ?? []),
     smokeHexOwners: captureSmokeHexOwners(p.mission),
-    shermanEvacuated: p.mission.shermanEvacuated ?? false,
+    shermanEvacuated: p.mission.playerTankEvacuated ?? p.mission.shermanEvacuated ?? false,
     truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
     usCasualties: p.mission.usCasualties ?? 0,
   };
@@ -355,14 +368,16 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 9 && save.version !== 8 && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 10 && save.version !== 9 && save.version !== 8 && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
     return { ok: false, reason: `任务不匹配 (${save.missionId} vs ${missionId})` };
   }
-  if (save.sherman.kind !== mission.sherman.kind) {
-    return { ok: false, reason: `谢尔曼种类不匹配` };
+  const playerTank = mission.playerTank ?? mission.sherman;
+  const savedPlayer = save.playerTank ?? save.sherman;
+  if (savedPlayer.kind !== playerTank.kind) {
+    return { ok: false, reason: `玩家坦克种类不匹配` };
   }
   // v9 and older missions had no real unit object for a scenario-start AT-gun
   // crew. Compare those saves against the original authored unit list; the
@@ -405,17 +420,21 @@ export function applySave(
   }
 
   // 校验通过，写入状态
-  mission.sherman.pos = { q: save.sherman.q, r: save.sherman.r };
+  playerTank.pos = { q: savedPlayer.q, r: savedPlayer.r };
   mission.enemies.push(...extraEnemies);
-  mission.sherman.facing = save.sherman.facing;
-  mission.sherman.turretFacing = savedTurretFacing(save.sherman.turretFacing, save.sherman.facing);
-  mission.sherman.previousTurretFacing = savedTurretFacing(save.sherman.previousTurretFacing, save.sherman.facing);
-  mission.sherman.diagonalGunnerSidePreference = savedTurretFacing(save.sherman.diagonalGunnerSidePreference, null);
-  mission.sherman.turretVisualTarget = save.sherman.turretVisualTarget ? { ...save.sherman.turretVisualTarget } : undefined;
+  playerTank.facing = savedPlayer.facing;
+  playerTank.turretFacing = savedTurretFacing(savedPlayer.turretFacing, savedPlayer.facing);
+  playerTank.previousTurretFacing = savedTurretFacing(savedPlayer.previousTurretFacing, savedPlayer.facing);
+  playerTank.diagonalGunnerSidePreference = savedTurretFacing(savedPlayer.diagonalGunnerSidePreference, null);
+  playerTank.turretVisualTarget = savedPlayer.turretVisualTarget ? { ...savedPlayer.turretVisualTarget } : undefined;
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
-  mission.sherman.damaged = false;
-  mission.sherman.destroyed = save.sherman.destroyed ?? false;
-  mission.sherman.faction = save.sherman.faction ?? mission.sherman.stats.faction;
+  playerTank.damaged = false;
+  playerTank.destroyed = savedPlayer.destroyed ?? false;
+  playerTank.faction = savedPlayer.faction ?? playerTank.stats.faction;
+  playerTank.sideId = savedPlayer.sideId ?? 'player';
+  playerTank.controller = savedPlayer.controller ?? 'local_player';
+  mission.playerTank = playerTank;
+  mission.sherman = playerTank;
   for (let i = 0; i < save.enemies.length; i++) {
     const s = save.enemies[i];
     const live = i < liveEnemies.length ? liveEnemies[i] : extraEnemies[i - liveEnemies.length];
@@ -429,7 +448,7 @@ export function applySave(
     for (let i = 0; i < save.allies.length; i++) {
       const s = save.allies[i];
       const live = liveAllies[i];
-      applyUnitSnapshot(live, s, mission.sherman.faction);
+      applyUnitSnapshot(live, s, playerTank.faction);
     }
   }
   if (legacyCrewLayout) {
@@ -438,8 +457,8 @@ export function applySave(
   }
 
   if (save.version >= 3) {
-    const sh = mission.sherman;
-    const ss = save.sherman;
+    const sh = playerTank;
+    const ss = savedPlayer;
     // Restore defaults as well as explicit truthy damage. Campaign checkpoints
     // are JSON-round-tripped, which removes undefined clean-state properties.
     sh.fireLevel = ss.fireLevel ?? 0;
@@ -464,7 +483,8 @@ export function applySave(
     sh.ambushActedThisTurn = ss.ambushActedThisTurn ?? false;
     neutralizeUncrewedTank(sh);
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
-    mission.shermanEvacuated = save.shermanEvacuated ?? false;
+    mission.playerTankEvacuated = save.shermanEvacuated ?? false;
+    mission.shermanEvacuated = mission.playerTankEvacuated;
     mission.truckEscapeDefeat = save.truckEscapeDefeat ?? false;
     mission.usCasualties = save.usCasualties ?? 0;
   }

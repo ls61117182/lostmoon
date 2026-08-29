@@ -1,5 +1,5 @@
 import type { Axial, Unit } from './types';
-import { isFriendlyFaction } from './types';
+import { battleSideIdOf } from './types';
 
 export type BattleSide = 'friendly' | 'enemy';
 export type LastEnemyAttackBySide = Partial<Record<BattleSide, Axial>>;
@@ -11,8 +11,8 @@ export interface AttackPositionMemory {
   previousTurn: LastEnemyAttackBySide;
 }
 
-export function battleSideOf(unit: Pick<Unit, 'faction'>): BattleSide {
-  return isFriendlyFaction(unit.faction) ? 'friendly' : 'enemy';
+export function battleSideOf(unit: Pick<Unit, 'sideId' | 'faction'>): BattleSide {
+  return battleSideIdOf(unit) === 'player' ? 'friendly' : 'enemy';
 }
 
 export function createAttackPositionMemory(): AttackPositionMemory {
@@ -45,7 +45,7 @@ export function cloneAttackPositionMemory(value?: Partial<AttackPositionMemory>)
 }
 
 /** 一次实际攻击会更新敌对阵营所记忆的攻击者当时位置。 */
-export function recordAttackPosition(memory: AttackPositionMemory, attacker: Pick<Unit, 'faction' | 'pos'>): void {
+export function recordAttackPosition(memory: AttackPositionMemory, attacker: Pick<Unit, 'sideId' | 'faction' | 'pos'>): void {
   const observerSide: BattleSide = battleSideOf(attacker) === 'friendly' ? 'enemy' : 'friendly';
   memory.currentTurn[observerSide] = { ...attacker.pos };
 }
@@ -58,7 +58,7 @@ export function advanceAttackPositionMemory(memory: AttackPositionMemory): void 
 
 export function previousEnemyAttackPosition(
   memory: AttackPositionMemory,
-  observer: Pick<Unit, 'faction'>,
+  observer: Pick<Unit, 'sideId' | 'faction'>,
 ): Axial | undefined {
   const pos = memory.previousTurn[battleSideOf(observer)];
   return pos ? { ...pos } : undefined;

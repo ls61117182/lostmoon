@@ -16,8 +16,8 @@ function methodBody(name) {
 
 assert.match(
   source,
-  /private visibleTurretAimDirection\(pos: Axial\): FireDirection \| null[\s\S]*?!this\.isHexVisible\(pos\)[\s\S]*?this\.canTurretReachDirection\(sherman, direction\)/,
-  'visible turret targets must be visible, direction-valid, and within the configured traverse speed',
+  /private visibleTurretAimDirection\(pos: Axial\): FireDirection \| null[\s\S]*?!this\.isHexVisible\(pos\)[\s\S]*?this\.canWeaponAimDirection\(sherman, direction\)/,
+  'visible weapon targets must be visible, direction-valid, and inside the turret or fixed-hull arc',
 );
 
 assert.doesNotMatch(
@@ -37,8 +37,8 @@ assert.doesNotMatch(
 );
 assert.match(
   methodBody('gunActionUnavailable'),
-  /const canUseUnloadedForTurretRecon = GameSession\.gameMode === 'hardcore';/,
-  'hardcore turret rotation must remain selectable while unloaded regardless of hatch state',
+  /const canUseUnloadedForTurretRecon = GameSession\.gameMode === 'hardcore'[\s\S]*?&& this\.playerTurretCanRotate\(\);/,
+  'hardcore unloaded-gun rotation must only remain selectable for a rotatable turret',
 );
 assert.doesNotMatch(
   methodBody('gunActionUnavailable'),
@@ -63,7 +63,7 @@ assert.doesNotMatch(
 assert.match(
   methodBody('mgActionUnavailable'),
   /if \(this\.mission\.sherman\.turretDamaged\) return null;/,
-  'a damaged turret must still allow the machine-gun button to enter the blocked-range preview state',
+  'a damaged turret must still allow an independent hull machine gun without a rotation preview',
 );
 assert.match(
   methodBody('precisionGunActionUnavailable'),
@@ -117,8 +117,8 @@ assert.match(
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /const turretDamaged = this\.mission\.sherman\.turretDamaged === true;[\s\S]*?if \(!turretDamaged \|\| machineGunRotationSelection\)[\s\S]*?if \(turretDamaged\)[\s\S]*?!legalWeaponTargetKeys\.has\(tileKey\)[\s\S]*?drawTurretAimHex[\s\S]*?turretDamaged \? 0 : this\.mission\.sherman\.stats\.turretTraverseSpeed/,
-  'a damaged turret should mark only legal fixed-direction MG targets while keeping the angle ring all gray',
+  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| precisionGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
+  'blue masks and the angle ring must only be shown when the player turret can rotate',
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
@@ -167,8 +167,8 @@ assert.match(
 );
 assert.match(
   methodBody('onTouchMap'),
-  /hasTurretReconGunSelection\(\)[\s\S]*?if \(this\.mission\.sherman\.turretDamaged\) \{[\s\S]*?showGunAimWarning\('attack\.reason\.turretDamaged'\)[\s\S]*?return;/,
-  'map clicks during a damaged-turret preview must not rotate, fire, or consume the selected die',
+  /this\.playerTurretCanRotate\(\)[\s\S]*?this\.hasTurretReconGunSelection\(\)/,
+  'map clicks may enter rotation-only handling only when the player turret can rotate',
 );
 assert.match(
   methodBody('onTouchMap'),

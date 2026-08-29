@@ -61,7 +61,7 @@ assertContains('assets/scripts/view/BattleScene.ts', 'loadSelectedCampaignFromSe
 assertContains('assets/scripts/view/BattleScene.ts', 'redrawCampaignShadow');
 assertContains('assets/scripts/view/BattleScene.ts', 'stitchCampaignMissions');
 assertContains('assets/scripts/view/BattleScene.ts', 'canAdvanceCampaignSegment');
-assertContains('assets/scripts/view/BattleScene.ts', 'carryShermanToNextSegment');
+assertContains('assets/scripts/view/BattleScene.ts', 'carryPlayerTankToNextSegment');
 assertContains('assets/scripts/view/BattleScene.ts', 'currentTurnEndMissionId');
 assertContains('assets/scripts/view/BattleScene.ts', 'CAMPAIGN_CHAPTER_ID');
 assertContains('assets/scripts/view/BattleScene.ts', 'private campaignViewTiles()');

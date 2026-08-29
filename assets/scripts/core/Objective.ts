@@ -2,9 +2,12 @@ import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
 import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, MissionObjective, tileHasBridge, UnitKind } from './types';
 
-export interface ShermanEvacDriveOptions {
+export interface PlayerTankEvacDriveOptions {
   canExitTo?: (to: Axial) => boolean;
 }
+
+/** @deprecated Use PlayerTankEvacDriveOptions. */
+export type ShermanEvacDriveOptions = PlayerTankEvacDriveOptions;
 
 /** `destroy_kind_evac`：歼敌前置是否已满足（纯撤离无 kind/kinds 时恒为 true） */
 export function destroyKindEvacPrereqMet(mission: LoadedMission, obj: MissionObjective): boolean {
@@ -22,7 +25,10 @@ export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 
 /** 判断当前任务状态：胜 / 负 / 进行中 */
 export function checkOutcome(mission: LoadedMission): MissionOutcome {
-  if (mission.sherman.destroyed || isAbandonedTank(mission.sherman)) return 'defeat';
+  // Keep hand-built legacy fixtures/extensions working while MissionLoader
+  // guarantees playerTank for all real missions.
+  const playerTank = mission.playerTank ?? mission.sherman;
+  if (playerTank.destroyed || isAbandonedTank(playerTank)) return 'defeat';
   if (mission.truckEscapeDefeat) return 'defeat';
   const usLimit = mission.data.usCasualtyLimit ?? 0;
   if (usLimit > 0 && (mission.usCasualties ?? 0) > usLimit) return 'defeat';
@@ -44,19 +50,19 @@ export function liveEnemyCount(mission: LoadedMission): number {
 }
 
 /**
- * 谢尔曼是否满足「撤离移动」几何条件：已在撤离格、歼灭条件已达成、
+ * 玩家坦克是否满足「撤离移动」几何条件：已在撤离格、歼灭条件已达成、
  * 沿 `evacExitDir` 前进或后退的目标六角无地图格（可驶出地图外）。
  *
  * **桥梁约束（GDD §3.2）**：撤离格若叠加桥梁，`evacExitDir` 必须落在桥梁两端方向之一，
  * 否则视为越水阻挡（即便方向已指向地图外，仍按桥端规则拦截）。
  */
-export function isShermanEvacDrive(
+export function isPlayerTankEvacDrive(
   mission: LoadedMission,
   from: Axial,
   facing: Direction,
   dirSign: 1 | -1,
   to: Axial,
-  options: ShermanEvacDriveOptions = {},
+  options: PlayerTankEvacDriveOptions = {},
 ): boolean {
   const obj = mission.data.objective;
   const legacyTruckObjective = obj.type === 'destroy_truck';
@@ -77,6 +83,9 @@ export function isShermanEvacDrive(
   return !mission.map.has(to) || options.canExitTo?.(to) === true;
 }
 
+/** @deprecated Compatibility alias for older call sites and extensions. */
+export const isShermanEvacDrive = isPlayerTankEvacDrive;
+
 export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): boolean {
   switch (obj.type) {
     case 'destroy_all_enemies':
@@ -87,13 +96,14 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
     case 'destroy_kind_evac': {
       if (!obj.evacAt || obj.evacExitDir === undefined) return false;
       if (!destroyKindEvacPrereqMet(mission, obj)) return false;
-      return !!mission.shermanEvacuated;
+      return !!(mission.playerTankEvacuated || mission.shermanEvacuated);
     }
     case 'exit_from_edge':
       // MVP 未实现：按位置判定谢尔曼是否到达指定边
       return false;
     case 'destroy_truck':
-      return allEnemiesOfKindDestroyed(mission, 'truck') && !!mission.shermanEvacuated;
+      return allEnemiesOfKindDestroyed(mission, 'truck')
+        && !!(mission.playerTankEvacuated || mission.shermanEvacuated);
     default:
       return false;
   }

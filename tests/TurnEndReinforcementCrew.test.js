@@ -77,8 +77,56 @@ try {
   assert.strictEqual(hasLivingTankCrew(reinforcement), true);
   assert.strictEqual(isAbandonedTank(reinforcement), false);
   assert.strictEqual(reinforcement.faction, 'german');
+  assert.strictEqual(reinforcement.sideId, 'enemy');
+  assert.strictEqual(reinforcement.controller, 'ai');
   assert.strictEqual(reinforcement.visionRange, reinforcement.stats.visionRange);
   assert.strictEqual(reinforcement.turretFacing, reinforcement.facing);
+
+  const mixedPlayerTank = {
+    id: 'sherman_player',
+    kind: 'tiger',
+    faction: 'german',
+    sideId: 'player',
+    controller: 'local_player',
+    pos: { q: 4, r: 0 },
+    facing: 3,
+    stats: { faction: 'german' },
+  };
+  const mixedMission = {
+    data: { id: 'mixed_reinforcement', theater: 'pacific' },
+    map: {
+      all: () => [{ ...spawnTile, reinforceId: 1 }],
+      has: () => false,
+      canTankEnter: () => false,
+    },
+    playerTank: mixedPlayerTank,
+    sherman: mixedPlayerTank,
+    allies: [],
+    enemies: [],
+  };
+  const friendlyInfantry = prepareTurnEndEvent(
+    {
+      missionId: 'mixed_reinforcement',
+      sumMin: 2,
+      sumMax: 2,
+      diceCount: 2,
+      effectType: 'infantry_spawn',
+      reinforcementSide: 'friendly',
+    },
+    [1, 1],
+    2,
+    {
+      mission: mixedMission,
+      rng: { d6: () => 1 },
+      nextEnemyId: () => 'friendly-infantry-1',
+    },
+  );
+  friendlyInfantry.apply();
+  assert.strictEqual(mixedMission.allies.length, 1);
+  assert.strictEqual(mixedMission.allies[0].kind, 'japanese_infantry');
+  assert.strictEqual(mixedMission.allies[0].faction, 'japanese');
+  assert.strictEqual(mixedMission.allies[0].sideId, 'player',
+    'reinforcement battle side must remain independent from its nationality');
 
   // Regression for saves produced by the buggy reinforcement constructor:
   // crew was omitted, an attack neutralized the unit, and load used to retain

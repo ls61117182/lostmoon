@@ -124,8 +124,10 @@ assert.match(mainMenu, /american_infantry:\s*'US Inf'/);
 assert.match(mainMenu, /const allUnitKinds = getAllUnitKinds\(\);/);
 assert.match(
   mainMenu,
-  /const allyKinds = allUnitKinds\.filter\(kind => getUnitStats\(kind\)\.faction === 'usa' \|\| getUnitStats\(kind\)\.faction === 'soviet'\);/,
-  'mission editor should derive allied units from the latest UnitDB factions',
+  /const objectiveTargetKinds = allUnitKinds;/,
+  'mission editor objective targets should follow authored battle sides rather than national factions',
 );
+assert.match(mainMenu, /unitKindPickerTarget\.group === 'player'\s*\? allUnitKinds\.filter\(isTankKind\)/,
+  'mission editor should allow any configured tank kind as the player vehicle');
 
 console.log('American infantry configuration test passed');

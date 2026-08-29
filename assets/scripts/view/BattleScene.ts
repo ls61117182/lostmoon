@@ -128,7 +128,7 @@ import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentGunnerVisionRange, currentVisionRange, diagonalGunnerClickPreference, diagonalGunnerRuleDirectionForVisibleHex, fogOfWarEnabled, HEAVY_ARTILLERY_VISION_RANGE, isUnitInVision, reconcileDiagonalGunnerSideAfterMove } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
-import { checkOutcome, isShermanEvacDrive, MissionOutcome } from '../core/Objective';
+import { checkOutcome, isPlayerTankEvacDrive, MissionOutcome } from '../core/Objective';
 import {
   AdjacentInfantryVolleyPreview,
   GermanTruckMoveSegment,
@@ -178,7 +178,7 @@ import { CAMPAIGN_CHAPTER_ID, getCampaign } from '../core/CampaignDB';
 import {
   StitchedCampaignData,
   campaignSegmentForOffset,
-  carryShermanToNextSegment,
+  carryPlayerTankToNextSegment,
   stitchCampaignMissions,
 } from '../core/CampaignRuntime';
 import {
@@ -310,7 +310,7 @@ import {
 } from '../core/AttackPositionMemory';
 import { ambushHitThresholdModifier, ambushHitThresholdModifierDetails, beginAmbushTurn, endAmbushTurn, markAmbushAction, markAmbushTargeted } from '../core/Ambush';
 import { applyInfantrySuppression, consumeInfantryTurnSuppression, isMainGunSuppressionAttack, selectMainGunTargetsByHex } from '../core/Suppression';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isMainGunLoaded, isTankUnit, MissionData, neutralizeUncrewedTank, resolvedLoadedShell, restoreFullTankCrew, ShellType, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isMainGunLoaded, isSameSide, isTankUnit, MissionData, neutralizeUncrewedTank, resolvedLoadedShell, restoreFullTankCrew, ShellType, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -1422,6 +1422,12 @@ const CREW_RANK_ICON_PATHS = {
 const CREW_STATUS_NORMAL_COLOR = new Color(245, 245, 238, 255);
 const CREW_STATUS_HATCH_OPEN_COLOR = new Color(40, 255, 80, 255);
 const CREW_STATUS_DEAD_COLOR = new Color(125, 125, 125, 220);
+const STATUS_CREW_ICON_SIZE = 38;
+const STATUS_CREW_ICON_GAP = 6;
+const STATUS_CREW_SLOT_COUNT = 5;
+const STATUS_CREW_ROW_W = STATUS_CREW_ICON_SIZE * STATUS_CREW_SLOT_COUNT
+  + STATUS_CREW_ICON_GAP * (STATUS_CREW_SLOT_COUNT - 1);
+const STATUS_CREW_START_X = -STATUS_CREW_ROW_W / 2 + STATUS_CREW_ICON_SIZE / 2;
 
 // 掷骰结果展示时序（秒）；骰面转动统一使用 DICE_ROLL_DUR。
 const DICE_HIT_SHOW_DUR   = 0.6;
@@ -2936,13 +2942,16 @@ export class BattleScene extends Component {
     if (!pvp?.active || !snapshot || !this.mission) return;
     const localParity = pvp.localPlayer.parity;
     const localMain = snapshot.units.find(u => u.ownerParity === localParity && u.role === 'protagonist');
-    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'usa');
+    if (localMain) {
+      this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'usa', true);
+      this.mission.playerTank = this.mission.sherman;
+    }
     this.mission.allies = snapshot.units
       .filter(u => u.ownerParity === localParity && u.role !== 'protagonist')
-      .map(u => this.unitFromPvpSnapshot(u, 'usa'));
+      .map(u => this.unitFromPvpSnapshot(u, 'usa', true));
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
-      .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
+      .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u), false));
     this.resetTurretFacingState();
     this.updatePvpSpawnMarkerForLocalParity(localParity);
     this.pvpCurrentParity = snapshot.currentParity;
@@ -3129,13 +3138,16 @@ export class BattleScene extends Component {
 
     const localParity = pvp.localPlayer.parity;
     const localMain = snapshot.units.find(u => u.ownerParity === localParity && u.role === 'protagonist');
-    if (localMain) this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'usa');
+    if (localMain) {
+      this.mission.sherman = this.unitFromPvpSnapshot(localMain, 'usa', true);
+      this.mission.playerTank = this.mission.sherman;
+    }
     this.mission.allies = snapshot.units
       .filter(u => u.ownerParity === localParity && u.role !== 'protagonist')
-      .map(u => this.unitFromPvpSnapshot(u, 'usa'));
+      .map(u => this.unitFromPvpSnapshot(u, 'usa', true));
     this.mission.enemies = snapshot.units
       .filter(u => u.ownerParity !== localParity)
-      .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u)));
+      .map(u => this.unitFromPvpSnapshot(u, this.factionForPvpUnit(u), false));
     this.resetTurretFacingState();
     this.applyPvpSmokeSnapshot(snapshot);
     // PVP snapshots replace the unit objects wholesale, bypassing the local
@@ -3400,7 +3412,7 @@ export class BattleScene extends Component {
     return 'german';
   }
 
-  private unitFromPvpSnapshot(src: PvpBattleUnitSnapshot, faction: Faction): Unit {
+  private unitFromPvpSnapshot(src: PvpBattleUnitSnapshot, faction: Faction, localSide: boolean): Unit {
     const stats = { ...getUnitStats(src.kind, src.ownerFactionId === 'japan' ? 'pacific' : 'europe') };
     stats.faction = faction;
     const facing = src.facing == null ? null : (((src.facing % 6) + 6) % 6) as Direction;
@@ -3420,6 +3432,10 @@ export class BattleScene extends Component {
       id: src.id,
       kind: src.kind,
       faction,
+      sideId: localSide ? 'player' : 'enemy',
+      controller: src.role === 'protagonist'
+        ? (localSide ? 'local_player' : 'remote_player')
+        : 'ai',
       pos: { q: Number(src.pos?.q ?? 0), r: Number(src.pos?.r ?? 0) },
       facing,
       turretFacing,
@@ -3732,10 +3748,10 @@ export class BattleScene extends Component {
   }
 
   private currentShermanCampaignPlacement(): UnitPlacement | null {
-    const s = this.mission?.sherman;
+    const s = this.mission?.playerTank;
     if (!s) return null;
     return {
-      kind: 'sherman',
+      kind: s.kind,
       faction: s.faction,
       facing: s.facing ?? undefined,
       turretFacing: this.shermanTurretFacing ?? s.turretFacing ?? undefined,
@@ -3747,6 +3763,10 @@ export class BattleScene extends Component {
       loaded: s.loaded === true,
       loadedShell: s.loadedShell ?? (s.loaded ? 'ap' : null),
       hatchOpen: s.hatchOpen === true,
+      fireLevel: s.fireLevel ?? 0,
+      turretDamaged: s.turretDamaged === true,
+      paralyzed: s.paralyzed === true,
+      hvapAmmoRemaining: s.hvapAmmoRemaining,
     };
   }
 
@@ -3770,7 +3790,10 @@ export class BattleScene extends Component {
     }
     const nextData = this.cloneMissionData(nextTemplate);
     if (carriedSherman) {
-      nextData.sherman = carryShermanToNextSegment(carriedSherman, nextData.sherman);
+      const nextTemplatePlayer = nextData.playerTank ?? nextData.sherman!;
+      const carried = carryPlayerTankToNextSegment(carriedSherman, nextTemplatePlayer);
+      nextData.playerTank = carried;
+      nextData.sherman = carried;
     }
 
     this.activeCampaignSegmentIndex = nextIndex;
@@ -5272,14 +5295,14 @@ export class BattleScene extends Component {
     const sherman = this.mission.sherman;
     if (hexDistance(sherman.pos, pos) > currentGunnerVisionRange(sherman)) return null;
     const direction = fireDirectionTo(sherman.pos, pos) ?? diagonalFlankFireDirectionTo(sherman.pos, pos);
-    return direction !== null && this.canTurretReachDirection(sherman, direction) ? direction : null;
+    return direction !== null && this.canWeaponAimDirection(sherman, direction) ? direction : null;
   }
 
   private visibleTurretAimDirection(pos: Axial): FireDirection | null {
     if (!this.mission || !this.isHexVisible(pos)) return null;
     const sherman = this.mission.sherman;
     const direction = fireDirectionTo(sherman.pos, pos) ?? diagonalFlankFireDirectionTo(sherman.pos, pos);
-    return direction !== null && this.canTurretReachDirection(sherman, direction) ? direction : null;
+    return direction !== null && this.canWeaponAimDirection(sherman, direction) ? direction : null;
   }
 
   private hasTurretReconGunSelection(): boolean {
@@ -5424,7 +5447,11 @@ export class BattleScene extends Component {
     const overlayNode = this.turretAimOverlayNode;
     if (!overlay || !overlayNode || !this.mission) return;
     overlay.clear();
+    const precisionGunSelection = this.selectedGunDieIdx >= 0
+      && this.selectedGunHitThresholdModifier < 0;
+    const turretCanRotate = this.playerTurretCanRotate();
     const showTurretAimMarkers = this.hasTurretReconGunSelection()
+      && (turretCanRotate || precisionGunSelection)
       && !this.turretAimAnim
       && !this.turretTargetOverlaySuppressed;
     overlayNode.active = showTurretAimMarkers;
@@ -5433,23 +5460,15 @@ export class BattleScene extends Component {
       const legalWeaponTargetKeys = this.playerWeaponTargetHexKeys();
       const unloadedGunRotation = this.selectedGunDieIdx >= 0
         && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
-      const machineGunRotationSelection = this.selectedMGDieIdx >= 0;
-      const precisionGunSelection = this.selectedGunDieIdx >= 0
-        && this.selectedGunHitThresholdModifier < 0;
-      const turretDamaged = this.mission.sherman.turretDamaged === true;
       const originKey = HexMap.keyOf(this.mission.sherman.pos);
       const reachableKeys = new Set<string>();
       const reachableTiles: Tile[] = [];
-      if (!turretDamaged || machineGunRotationSelection) {
+      if (turretCanRotate || precisionGunSelection) {
         for (const tile of this.mission.map.all()) {
           if (this.isDeepShadowTile(tile)) continue;
           const tileKey = HexMap.keyOf(tile.pos);
           if (tileKey === originKey) continue;
-          if (turretDamaged) {
-            // A damaged turret cannot rotate or reveal fog, but legal hull/coaxial
-            // targets in the two fixed directions remain clickable MG targets.
-            if (!legalWeaponTargetKeys.has(tileKey)) continue;
-          } else {
+          if (!precisionGunSelection) {
             const direction = this.isHexVisible(tile.pos)
               ? this.visibleTurretAimDirection(tile.pos)
               : this.fogTurretAimDirection(tile.pos);
@@ -5466,23 +5485,25 @@ export class BattleScene extends Component {
           this.drawTurretAimHex(overlay, c.x, c.y);
         }
       }
-      const origin = this.project(this.mission.sherman.pos.q, this.mission.sherman.pos.r);
-      const turretFacing = this.currentTurretFacingFor(
-        this.mission.sherman,
-        (this.mission.sherman.facing ?? 0) as FireDirection,
-      );
-      const turretAngle = this.directionScreenAngle(
-        this.mission.sherman.pos,
-        origin,
-        turretFacing,
-      );
-      this.drawTurretTraverseAngleRing(
-        overlay,
-        origin.x,
-        origin.y,
-        turretAngle,
-        turretDamaged ? 0 : this.mission.sherman.stats.turretTraverseSpeed,
-      );
+      if (turretCanRotate) {
+        const origin = this.project(this.mission.sherman.pos.q, this.mission.sherman.pos.r);
+        const turretFacing = this.currentTurretFacingFor(
+          this.mission.sherman,
+          (this.mission.sherman.facing ?? 0) as FireDirection,
+        );
+        const turretAngle = this.directionScreenAngle(
+          this.mission.sherman.pos,
+          origin,
+          turretFacing,
+        );
+        this.drawTurretTraverseAngleRing(
+          overlay,
+          origin.x,
+          origin.y,
+          turretAngle,
+          this.mission.sherman.stats.turretTraverseSpeed,
+        );
+      }
       // The origin is not clickable, but belongs to the displayed area's interior so
       // blue range hexes do not draw a separating boundary against the player's tank.
       const boundaryInteriorKeys = new Set(reachableKeys);
@@ -5863,7 +5884,7 @@ export class BattleScene extends Component {
 
   private activeActingUnitFrameColor(unit: Unit): Color {
     if (unit === this.mission?.sherman) return ACTIVE_UNIT_PLAYER_FRAME;
-    if (isFriendlyFaction(unit.faction)) return ACTIVE_UNIT_ALLIED_FRAME;
+    if (unit.sideId === 'player') return ACTIVE_UNIT_ALLIED_FRAME;
     return ACTIVE_UNIT_ENEMY_FRAME;
   }
 
@@ -6156,7 +6177,7 @@ export class BattleScene extends Component {
    */
   private spawnUnitNameLabels(units: Unit[]) {
     const priority = (u: Unit): number => {
-      const side = u === this.mission?.sherman ? 0 : isFriendlyFaction(u.faction) ? 1 : 2;
+      const side = u === this.mission?.sherman ? 0 : u.sideId === 'player' ? 1 : 2;
       const unitType = isFootUnit(u) ? 1 : 0;
       return side * 2 + unitType;
     };
@@ -6209,7 +6230,7 @@ export class BattleScene extends Component {
       ? UNIT_NAME_TEXT_DEAD
       : u === this.mission?.sherman
         ? UNIT_NAME_TEXT_PLAYER
-        : (isFriendlyFaction(u.faction) ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
+        : (u.sideId === 'player' ? UNIT_NAME_TEXT_ALLIED : UNIT_NAME_TEXT_GERMAN);
     const isPvpAiUnit = GameSession.isPvp && u !== this.mission?.sherman && u !== this.pvpOpponentProtagonist();
     const isPvpOpponentHero = GameSession.isPvp && u === this.pvpOpponentProtagonist();
     l.string = `${t(`unit.name.${u.kind}`)}${isPvpOpponentHero ? ' 主角' : isPvpAiUnit ? ' AI' : ''}`;
@@ -6728,7 +6749,7 @@ export class BattleScene extends Component {
       o !== u
       && !o.destroyed
       && isTankUnit(o)
-      && o.faction !== u.faction
+      && isHostile(o, u)
       && o.pos.q === u.pos.q
       && o.pos.r === u.pos.r
     ) ?? null;
@@ -7005,14 +7026,12 @@ export class BattleScene extends Component {
 
   private rehomeCapturedUnit(unit: Unit): void {
     if (!this.mission) return;
-    const friendly = isFriendlyFaction(unit.faction);
-    const from = friendly ? this.mission.enemies : this.mission.allies;
-    const to = friendly ? this.mission.allies : this.mission.enemies;
-    const idx = from.indexOf(unit);
-    if (idx >= 0) {
-      from.splice(idx, 1);
-      if (!to.includes(unit)) to.push(unit);
+    const to = unit.sideId === 'player' ? this.mission.allies : this.mission.enemies;
+    for (const list of [this.mission.allies, this.mission.enemies]) {
+      const idx = list.indexOf(unit);
+      if (idx >= 0) list.splice(idx, 1);
     }
+    if (!to.includes(unit)) to.push(unit);
   }
 
   /** Kept as the AT-gun-specific entry point for the established composite flow. */
@@ -7030,6 +7049,8 @@ export class BattleScene extends Component {
     );
     if (!gun) return;
     gun.faction = infantry.faction;
+    gun.sideId = infantry.sideId;
+    gun.controller = 'ai';
     gun.atGunCrewAlive = true;
     gun.atGunCrewKind = infantryKindForFaction(infantry.faction);
     gun.atGunCrewLevel = unitLevelOf(infantry);
@@ -7055,6 +7076,8 @@ export class BattleScene extends Component {
     if (!tank) return;
 
     tank.faction = infantry.faction;
+    tank.sideId = infantry.sideId;
+    tank.controller = 'ai';
     restoreFullTankCrew(tank);
     tank.hatchOpen = false;
     tank.visionRange = tank.stats.visionRange;
@@ -7315,7 +7338,8 @@ export class BattleScene extends Component {
       this.setInfantryVisualFacing(attacker, target.pos);
       this.redraw();
     }
-    if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isFootUnit(target)) {
+    if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer'
+      && (isFootUnit(target) || isControlledATGun(target))) {
       this.spawnInfantryBulletVolley(attacker, target);
       playInfantryAttack();
       return;
@@ -7340,7 +7364,8 @@ export class BattleScene extends Component {
       playInfantryAntiTankFire();
       return;
     }
-    if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isFootUnit(target)) {
+    if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer'
+      && (isFootUnit(target) || isControlledATGun(target))) {
       this.spawnInfantryBulletVolley(attacker, target);
       playInfantryAttack();
       return;
@@ -7462,7 +7487,9 @@ export class BattleScene extends Component {
    */
   private spawnInfantryBulletVolley(attacker: Unit | null, target: Unit | null) {
     if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
-    if (!isFootUnit(attacker) || attacker.kind === 'officer' || !isFootUnit(target) || !this.isUnitVisible(attacker)) return;
+    if (!isFootUnit(attacker) || attacker.kind === 'officer'
+      || (!isFootUnit(target) && !isControlledATGun(target))
+      || !this.isUnitVisible(attacker)) return;
     const a = this.project(attacker.pos.q, attacker.pos.r);
     const b = this.project(target.pos.q, target.pos.r);
     const dx = b.x - a.x;
@@ -9178,6 +9205,7 @@ export class BattleScene extends Component {
         if (controller) controller.pos = { ...finishedUnit.pos };
       }
       if (anim.evacExit && this.mission) {
+        this.mission.playerTankEvacuated = true;
         this.mission.shermanEvacuated = true;
         this.outcome = this.computeOutcome();
         this.updateOutcomeOverlay();
@@ -9299,7 +9327,7 @@ export class BattleScene extends Component {
       const pos = neighbor(sherman.pos, c.dir as 0 | 1 | 2 | 3 | 4 | 5);
       const tile = map.get(pos);
       const dirSign = c.dir === sherman.facing ? 1 : -1;
-      const isEvacExit = !GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign as 1 | -1, pos, {
+      const isEvacExit = !GameSession.isPvp && isPlayerTankEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign as 1 | -1, pos, {
         canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
       });
       const blocked = !isEvacExit && (!tile
@@ -12073,6 +12101,21 @@ export class BattleScene extends Component {
     return limitTurretTraverse(from, target, unit.stats.turretTraverseSpeed).reached;
   }
 
+  private playerTurretCanRotate(): boolean {
+    const sherman = this.mission?.sherman;
+    return !!sherman
+      && sherman.stats.visionType === 'turreted'
+      && sherman.turretDamaged !== true;
+  }
+
+  /** Fixed-gun tanks can aim both their main gun and MG only along the hull's forward ray. */
+  private canWeaponAimDirection(unit: Unit, target: FireDirection): boolean {
+    if (isTankUnit(unit) && unit.stats.visionType === 'fixed') {
+      return unit.facing !== null && target === unit.facing;
+    }
+    return this.canTurretReachDirection(unit, target);
+  }
+
   private tankMachineGunSelection(unit: Unit, target: Unit): TankMachineGunSelection | null {
     if (GameSession.gameMode !== 'hardcore' || !isTankUnit(unit)) return null;
     const direction = this.turretTargetDirection(unit, target);
@@ -12207,7 +12250,9 @@ export class BattleScene extends Component {
         const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
         this.applySplitTankHullSprite(hullSlot, u, u.kind, c, facingLerp);
         const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
-        const turretFacingLerp = this.currentEnemyTurretLerp(u) ?? facingLerp;
+        const turretFacingLerp = u === this.mission?.playerTank
+          ? (this.currentShermanTurretLerp(u) ?? facingLerp)
+          : (this.currentEnemyTurretLerp(u) ?? facingLerp);
         this.applySplitTankTurretSprite(turretSlot, u, u.kind, c, facingLerp, turretFacingLerp);
         const hatchVisualState = commanderHatchVisualState(u);
         const hatchSpriteFrame = hatchVisualState === 'empty'
@@ -12285,6 +12330,8 @@ export class BattleScene extends Component {
       id: `${gun.id}:crew:${gun.atGunCrewGeneration ?? 0}`,
       kind,
       faction: gun.faction,
+      sideId: gun.sideId,
+      controller: 'ai',
       pos: gun.pos,
       facing: gun.facing,
       stats: getUnitStats(kind, this.mission?.data.theater ?? 'europe'),
@@ -13405,6 +13452,15 @@ export class BattleScene extends Component {
 
   // ---------- 谢尔曼状态面板 ----------
 
+  /** HUD is constructed before the asynchronous mission load completes. */
+  private playerTankStatusTitle(): string {
+    const playerTank = this.mission?.playerTank ?? this.mission?.sherman;
+    const unitName = playerTank
+      ? t(`unit.name.${playerTank.kind}`)
+      : t('actor.player');
+    return t('status.panelTitle', { unit: unitName });
+  }
+
   /**
    * 右侧常驻信息面板（自上而下）：
    *   ┌──────────────────┐
@@ -13466,33 +13522,29 @@ export class BattleScene extends Component {
     this.statusCrewTitleLabel = this.makeCenteredLabel(panel, t('status.row.crewTitle'),
       0, crewTitleY, W - 20, 22, 18, STATUS_TITLE_COLOR);
 
-    const crewIconSize = 38;
-    const crewIconGap = 6;
-    const crewRowW = crewIconSize * 5 + crewIconGap * 4;
-    const crewStartX = -crewRowW / 2 + crewIconSize / 2;
     this.statusCrewIcons = [];
     this.statusCrewDeadMarkers = [];
     this.statusCrewRankNodes = [];
     this.statusCrewRankIcons = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < STATUS_CREW_SLOT_COUNT; i++) {
       const iconNode = new Node(`CrewIcon${i + 1}`);
       iconNode.layer = this.node.layer;
-      iconNode.addComponent(UITransform).setContentSize(crewIconSize, crewIconSize);
-      iconNode.setPosition(crewStartX + i * (crewIconSize + crewIconGap), crewFirstY, 0);
+      iconNode.addComponent(UITransform).setContentSize(STATUS_CREW_ICON_SIZE, STATUS_CREW_ICON_SIZE);
+      iconNode.setPosition(STATUS_CREW_START_X + i * (STATUS_CREW_ICON_SIZE + STATUS_CREW_ICON_GAP), crewFirstY, 0);
       const icon = iconNode.addComponent(Sprite);
       icon.sizeMode = Sprite.SizeMode.CUSTOM;
       panel.addChild(iconNode);
       this.assignCrewStatusIcon(icon, iconNode, i + 1);
       this.statusCrewIcons.push(icon);
 
-      const deadMarker = this.addStatusCrewDeadMarker(iconNode, i + 1, crewIconSize);
+      const deadMarker = this.addStatusCrewDeadMarker(iconNode, i + 1, STATUS_CREW_ICON_SIZE);
       deadMarker.active = false;
       this.statusCrewDeadMarkers.push(deadMarker);
 
       const rankNode = new Node(`CrewRank${i + 1}`);
       rankNode.layer = this.node.layer;
       rankNode.addComponent(UITransform).setContentSize(17, 17);
-      rankNode.setPosition(crewIconSize * 0.32, -crewIconSize * 0.32, 0);
+      rankNode.setPosition(STATUS_CREW_ICON_SIZE * 0.32, -STATUS_CREW_ICON_SIZE * 0.32, 0);
       const rankBg = rankNode.addComponent(Graphics);
       rankBg.fillColor = new Color(48, 55, 38, 245);
       rankBg.roundRect(-8.5, -8.5, 17, 17, 2);
@@ -13512,7 +13564,7 @@ export class BattleScene extends Component {
     this.loadCrewStatusRankFrames();
 
     // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
-    this.statusPanelTitleLabel = this.makeCenteredLabel(panel, t('status.panelTitle'),
+    this.statusPanelTitleLabel = this.makeCenteredLabel(panel, this.playerTankStatusTitle(),
       0, shermanTitleY, W - 20, 28, 22, STATUS_TITLE_COLOR);
     const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'radio' | 'fire']> = [
       [t('status.row.loaded'),    'loaded'],
@@ -13536,7 +13588,7 @@ export class BattleScene extends Component {
     }
 
     if (showCampaignUpgrades) {
-      const upgradeSepY = crewFirstY - crewIconSize / 2 - 20;
+      const upgradeSepY = crewFirstY - STATUS_CREW_ICON_SIZE / 2 - 20;
       bg.strokeColor = new Color(145, 138, 100, 190);
       bg.lineWidth = 1;
       bg.moveTo(-W / 2 + 16, upgradeSepY);
@@ -13614,6 +13666,9 @@ export class BattleScene extends Component {
   private refreshStatusPanel() {
     if (!this.statusPanel || !this.mission) return;
     const s = this.mission.sherman;
+    if (this.statusPanelTitleLabel) {
+      this.statusPanelTitleLabel.string = this.playerTankStatusTitle();
+    }
 
     // 装填
     if (this.statusLoaded) {
@@ -13693,8 +13748,26 @@ export class BattleScene extends Component {
       ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
       : [true, true, true, true, true];
     const crewSlots = ['commander', 'loader', 'gunner', 'driver', 'coDriver'] as const;
+    const configuredCrewSlots = new Set<number>(s.stats.crewMembers);
+    let visibleCrewIndex = 0;
 
     for (let i = 0; i < this.statusCrewIcons.length; i++) {
+      const slot = i + 1;
+      const iconNode = this.statusCrewIcons[i].node;
+      const slotExists = configuredCrewSlots.has(slot);
+      iconNode.active = slotExists;
+      if (!slotExists) {
+        if (this.statusCrewDeadMarkers[i]) this.statusCrewDeadMarkers[i].active = false;
+        if (this.statusCrewRankNodes[i]) this.statusCrewRankNodes[i].active = false;
+        continue;
+      }
+      iconNode.setPosition(
+        STATUS_CREW_START_X + visibleCrewIndex * (STATUS_CREW_ICON_SIZE + STATUS_CREW_ICON_GAP),
+        iconNode.position.y,
+        iconNode.position.z,
+      );
+      visibleCrewIndex++;
+
       const dead = s.destroyed || !crewFlags[i];
       const hatchOpen = i === 0 && !dead && s.hatchOpen === true;
       this.statusCrewIcons[i].color = dead
@@ -13953,7 +14026,7 @@ export class BattleScene extends Component {
       if (outcome === 'victory'
         && this.campaignRuntime?.campaign.autoEvacAfterDestroyAll
         && this.mission.data.objective.type === 'destroy_all_enemies'
-        && !this.mission.shermanEvacuated) {
+        && !(this.mission.playerTankEvacuated || this.mission.shermanEvacuated)) {
         if (!this.campaignAutoEvacActive) {
           this.campaignAutoEvacActive = true;
           this.beginCampaignAutoEvac();
@@ -15096,7 +15169,7 @@ export class BattleScene extends Component {
     if (sherman.facing === null) return t('floater.noFacing');
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as Direction);
-    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
+    if (!GameSession.isPvp && isPlayerTankEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) return null;
     const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
@@ -15134,7 +15207,8 @@ export class BattleScene extends Component {
     if (crewReason) return crewReason;
     // 硬核模式下主炮骰始终可用于旋转炮塔；该用途不需要装填，也不受舱盖状态影响。
     // 实际开炮仍会在 tryAttack 中要求 loaded。
-    const canUseUnloadedForTurretRecon = GameSession.gameMode === 'hardcore';
+    const canUseUnloadedForTurretRecon = GameSession.gameMode === 'hardcore'
+      && this.playerTurretCanRotate();
     if (!s.loaded && !canUseUnloadedForTurretRecon) return t('hud.unloaded');
     if (!fogOfWarEnabled(GameSession.gameMode)) {
       const hasTarget = this.mission.enemies.some(e => !e.destroyed && canAttack({
@@ -15162,8 +15236,8 @@ export class BattleScene extends Component {
 
   private mgActionUnavailable(): string | null {
     if (!this.mission) return t('attack.reason.unknown');
-    // Keep the button selectable while the turret is damaged so the player can
-    // inspect the all-gray traverse ring; map interaction remains blocked.
+    // Turret damage does not disable an independent hull MG. The weapon remains
+    // selectable, but no blue traverse overlay is shown because the turret cannot rotate.
     if (this.mission.sherman.turretDamaged) return null;
     // 硬核模式可将机枪骰用于瞄准迷雾内地格；即使当前没有合法步兵目标也不禁用。
     if (GameSession.gameMode === 'hardcore') return null;
@@ -15720,7 +15794,7 @@ export class BattleScene extends Component {
     }
     const driveDir = dirSign === 1 ? sherman.facing : rotateDirection(sherman.facing, 3);
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
-    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
+    if (!GameSession.isPvp && isPlayerTankEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign, to, {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) {
       markAmbushAction(sherman);
@@ -16499,7 +16573,7 @@ export class BattleScene extends Component {
     }
     const driveDir = sherman.facing;
     const to = neighbor(sherman.pos, driveDir as 0 | 1 | 2 | 3 | 4 | 5);
-    if (!GameSession.isPvp && isShermanEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to, {
+    if (!GameSession.isPvp && isPlayerTankEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, 1, to, {
       canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
     })) {
       if (!this.consumeDoubles(dieIdx)) return;
@@ -16680,9 +16754,7 @@ export class BattleScene extends Component {
 
   private aiTargetsFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    const sideTargets = !isFriendlyFaction(actor.faction)
-      ? [this.mission.sherman, ...this.mission.allies]
-      : this.mission.enemies;
+    const sideTargets = this.allUnits().filter(unit => isHostile(actor, unit));
     // Abandoned tanks are capturable battlefield objects, not combatants.
     // Neither side's AI should spend attacks destroying them.
     return sideTargets.filter(u => u !== actor && !isAbandonedTank(u));
@@ -16701,14 +16773,12 @@ export class BattleScene extends Component {
 
   private aiFriendliesFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    return !isFriendlyFaction(actor.faction)
-      ? this.mission.enemies.filter(u => u !== actor && u.faction === actor.faction)
-      : [this.mission.sherman, ...this.mission.allies].filter(u => u !== actor);
+    return this.allUnits().filter(u => u !== actor && isSameSide(actor, u));
   }
 
   private aiMissionTargetsFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    if (!isFriendlyFaction(actor.faction)) return [this.mission.sherman];
+    if (actor.sideId === 'enemy') return [this.mission.sherman];
     const candidates = this.mission.enemies.filter(u => !isAbandonedATGun(u) && !isAttachedATGunCrew(u));
     const objective = this.mission.data.objective;
     if (objective.type === 'destroy_all_enemies' || objective.destroyAllEnemiesBeforeEvac) {
@@ -16760,7 +16830,7 @@ export class BattleScene extends Component {
     for (const target of this.aiTargetsFor(actor)) {
       if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
       if (isAbandonedTank(target)) continue;
-      if (target.faction === actor.faction) continue;
+      if (isSameSide(target, actor)) continue;
       const d = hexDistance(actor.pos, target.pos);
       const automaticWeapon = GameSession.gameMode === 'hardcore' && isTankUnit(actor)
         ? nonPlayerTankWeaponForTarget(target, d)
@@ -16832,7 +16902,7 @@ export class BattleScene extends Component {
     for (const target of this.aiTargetsFor(actor)) {
       if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
       if (isAbandonedTank(target)) continue;
-      if (target.faction === actor.faction) continue;
+      if (isSameSide(target, actor)) continue;
       if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
       if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather(), this.mission.smokeHexes)) continue;
       const machineGun = this.tankMachineGunSelection(actor, target);
@@ -17267,20 +17337,20 @@ export class BattleScene extends Component {
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'turret':
-        if (s.kind !== 'sherman') s.damaged = true;
+        if (s !== this.mission?.playerTank) s.damaged = true;
         s.turretDamaged = true;
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.turret'), color,
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'paralyzed':
-        if (s.kind !== 'sherman') s.damaged = true;
+        if (s !== this.mission?.playerTank) s.damaged = true;
         s.paralyzed = true;
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.paralyzed'), color,
           { size: 22, dur: 0.9, rise: 24 });
         break;
       case 'crewCheck': {
         // §3.4 Step 3 d6=2：再掷一次决定哪位乘员阵亡（与受击穿同机制）
-        if (s.kind !== 'sherman') s.damaged = true;
+        if (s !== this.mission?.playerTank) s.damaged = true;
         const crewDie = preCrew?.crewDie ?? this.rng.d6();
         const slot = preCrew
           ? preCrew.crewSlot
@@ -18823,7 +18893,9 @@ export class BattleScene extends Component {
 
   /** 语言切换后刷新战斗 HUD 内所有固定文案（不重建节点） */
   private refreshBattleStaticI18n() {
-    if (this.statusPanelTitleLabel) this.statusPanelTitleLabel.string = t('status.panelTitle');
+    if (this.statusPanelTitleLabel) {
+      this.statusPanelTitleLabel.string = this.playerTankStatusTitle();
+    }
     if (this.campaignUpgradeStatusTitleLabel) {
       this.campaignUpgradeStatusTitleLabel.string = t('campaignUpgrade.acquiredTitle');
     }
@@ -19280,7 +19352,7 @@ export class BattleScene extends Component {
 
     for (const target of this.aiTargetsFor(artillery)) {
       if (target.destroyed
-        || target.faction === artillery.faction
+        || isSameSide(target, artillery)
         || isAbandonedATGun(target)
         || isAbandonedTank(target)
         || isAttachedATGunCrew(target)
@@ -19332,7 +19404,7 @@ export class BattleScene extends Component {
 
     for (const target of this.aiTargetsFor(gun)) {
       if (target.destroyed || isAbandonedATGun(target) || isAbandonedTank(target)
-        || isAttachedATGunCrew(target) || target.faction === gun.faction) continue;
+        || isAttachedATGunCrew(target) || isSameSide(target, gun)) continue;
       if (!isUnitInVision(
         map,
         gun,
@@ -19532,12 +19604,12 @@ export class BattleScene extends Component {
     markAmbushAction(gun);
     markAmbushTargeted(target);
     const report = rollAttack(attackCtx, this.rng);
-    const actorLabel = !isFriendlyFaction(gun.faction)
+    const actorLabel = gun.sideId === 'enemy'
       ? t('actor.enemyPrefix', { name: unitDisplayName(gun.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(gun.kind) });
     const targetLabel = target === this.mission.sherman
-      ? t('actor.sherman')
-      : !isFriendlyFaction(target.faction)
+      ? unitDisplayName(target.kind)
+      : target.sideId === 'enemy'
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     const attackSound = selected.infantryAttack ? attacker.stats.attackSound : gun.stats.attackSound;
@@ -19884,7 +19956,7 @@ export class BattleScene extends Component {
         if (!commanderHasSkill(enemy, 'use_smoke_grenade')
           || tileForbidsSmokeOrConcealment(map.get(enemy.pos))
           || this.hasSmokeAt(enemy.pos)) return 'done';
-        this.deploySmokeAt(enemy.pos, isFriendlyFaction(enemy.faction) ? 'friendly' : 'enemy', true);
+        this.deploySmokeAt(enemy.pos, enemy.sideId === 'player' ? 'friendly' : 'enemy', true);
         this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 施放烟雾`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.smoke'),
           new Color(200, 200, 220, 255), { size: 24 });
@@ -20025,7 +20097,7 @@ export class BattleScene extends Component {
         && !isAttachedATGunCrew(unit)
         && unit.kind !== 'officer'
         && isFootUnit(unit)
-        && isFriendlyFaction(unit.faction) !== isFriendlyFaction(enemy.faction)
+        && isHostile(unit, enemy)
         && unit.pos.q === adjacent.q
         && unit.pos.r === adjacent.r,
       ),
@@ -20039,8 +20111,7 @@ export class BattleScene extends Component {
       u !== enemy && !u.destroyed && u.pos.q === pos.q && u.pos.r === pos.r,
     );
     if (occupants.some(u => isAntiTankGunUnit(u) && u.faction === 'neutral')) return 0;
-    const sameSide = (unit: Unit) => unit.faction !== 'neutral'
-      && isFriendlyFaction(unit.faction) === isFriendlyFaction(enemy.faction);
+    const sameSide = (unit: Unit) => unit.faction !== 'neutral' && isSameSide(unit, enemy);
     if (occupants.some(u => isTankUnit(u) && sameSide(u))) return 1;
     if (tile.terrain === 'rocky' || tile.hasBuilding || tile.terrain === 'forest') return 2;
     if (tile.terrain === 'trees') return 3;
@@ -20056,7 +20127,7 @@ export class BattleScene extends Component {
       || (isAntiTankGunUnit(unit) && unit.faction === 'neutral')
       || (isTankUnit(unit)
         && unit.faction !== 'neutral'
-        && isFriendlyFaction(unit.faction) === isFriendlyFaction(enemy.faction)),
+        && isSameSide(unit, enemy)),
     );
   }
 
@@ -20158,14 +20229,14 @@ export class BattleScene extends Component {
       if (isTankUnit(mover) && isFootUnit(occupant)) return false;
     }
     // Tanks and other vehicle-like units may enter same-faction foot-unit hexes.
-    if (!isFootUnit(mover) && isFootUnit(occupant) && mover.faction === occupant.faction) return false;
+    if (!isFootUnit(mover) && isFootUnit(occupant) && isSameSide(mover, occupant)) return false;
     return true;
   }
 
   private areUnitsOnSameSide(a: Unit, b: Unit): boolean {
     return a.faction !== 'neutral'
       && b.faction !== 'neutral'
-      && isFriendlyFaction(a.faction) === isFriendlyFaction(b.faction);
+      && isSameSide(a, b);
   }
 
   /** Restore a controlled AT-gun crew as an ordinary infantry unit in the gun's hex. */
@@ -20182,7 +20253,7 @@ export class BattleScene extends Component {
     } else {
       infantry = this.atGunCrewProxy(gun);
       infantry.id = `${gun.id}:released:${gun.atGunCrewGeneration ?? 0}`;
-      const side = isFriendlyFaction(crewFaction) ? this.mission.allies : this.mission.enemies;
+      const side = gun.sideId === 'player' ? this.mission.allies : this.mission.enemies;
       side.push(infantry);
     }
     this.inheritReleasedATGunCrewFacing(gun, infantry);
@@ -20323,14 +20394,9 @@ export class BattleScene extends Component {
       ...this.tankMachineGunContext(this.mission!.sherman, e),
     }).ok) : undefined;
 
-    const damagedTurretLegalMGAttack = this.mission.sherman.turretDamaged
-      && mgSel
-      && !!legalMGTarget;
-    if (attackOrMisc && this.hasTurretReconGunSelection() && !damagedTurretLegalMGAttack) {
-      if (this.mission.sherman.turretDamaged) {
-        this.showGunAimWarning('attack.reason.turretDamaged');
-        return;
-      }
+    if (attackOrMisc
+      && this.playerTurretCanRotate()
+      && this.hasTurretReconGunSelection()) {
       const precisionGunSelection = gunSel && this.selectedGunHitThresholdModifier < 0;
       // Precision fire uses the common range overlay and traverse ring, but it
       // may only commit against an actual visible main-gun target. It must not
@@ -20345,6 +20411,10 @@ export class BattleScene extends Component {
           ?? diagonalFlankFireDirectionTo(this.mission.sherman.pos, target.pos);
         if (direction === null) {
           this.showGunAimWarning('attack.reason.cannotTurnDirection');
+          return;
+        }
+        if (!this.canWeaponAimDirection(this.mission.sherman, direction)) {
+          this.openTileInspectModal(target);
           return;
         }
         if (!targetVisible) {
@@ -20699,7 +20769,7 @@ export class BattleScene extends Component {
         && !isAttachedATGunCrew(unit)
         && unit.kind !== 'officer'
         && isFootUnit(unit)
-        && unit.faction === target.faction
+        && isSameSide(unit, target)
         && unit.pos.q === target.pos.q
         && unit.pos.r === target.pos.r)
       .map(infantry => ({
@@ -20735,7 +20805,7 @@ export class BattleScene extends Component {
     }
   }
 
-  private applyMachineGunAttackResult(target: Unit, report: ReturnType<typeof rollMGAttack>): void {
+  private applyMachineGunAttackResult(target: Unit, report: Pick<AttackReport, 'hit'>): void {
     const hadATGunCrew = GameSession.gameMode === 'hardcore'
       && isAntiTankGunUnit(target)
       && target.atGunCrewAlive === true;
@@ -21075,12 +21145,12 @@ export class BattleScene extends Component {
       const panelReport = this.highExplosivePanelReport(report);
       markAmbushAction(enemy);
       markAmbushTargeted(target);
-      const enemyActor = !isFriendlyFaction(enemy.faction)
+      const enemyActor = enemy.sideId === 'enemy'
         ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
       const targetLabel = target === this.mission.sherman
-        ? t('actor.sherman')
-        : !isFriendlyFaction(target.faction)
+        ? unitDisplayName(target.kind)
+        : target.sideId === 'enemy'
           ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
           : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
       let attackApplied = false;
@@ -21187,12 +21257,13 @@ export class BattleScene extends Component {
       ],
     }, this.rng);
     const infantryVsInfantry = isFootUnit(enemy) && isFootUnit(target);
-    const enemyActor = !isFriendlyFaction(enemy.faction)
+    const infantryVsATGunCrew = isFootUnit(enemy) && isControlledATGun(target);
+    const enemyActor = enemy.sideId === 'enemy'
       ? t('actor.enemyPrefix', { name: unitDisplayName(enemy.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(enemy.kind) });
     const targetLabel = target === this.mission.sherman
-      ? t('actor.sherman')
-      : !isFriendlyFaction(target.faction)
+      ? unitDisplayName(target.kind)
+      : target.sideId === 'enemy'
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     if (precisionFire) {
@@ -21206,7 +21277,8 @@ export class BattleScene extends Component {
     const applyAndPresentAttack = () => {
       if (attackApplied || !this.mission) return;
       attackApplied = true;
-      this.applyMainGunAttackResult(target, report);
+      if (infantryVsATGunCrew) this.applyMachineGunAttackResult(target, report);
+      else this.applyMainGunAttackResult(target, report);
       if (target.destroyed) this.registerImpactDestroyWreckVisual(target, enemy);
       this.presentAttackResult(enemyActor, report, enemy, target);
       if (this.outcome !== 'ongoing') this.clearActiveActingUnit(enemy);
@@ -21226,7 +21298,7 @@ export class BattleScene extends Component {
         this.runNextEnemyStep();
       }
     }, {
-      mg: infantryVsInfantry,
+      mg: infantryVsInfantry || infantryVsATGunCrew,
       attackSound: enemy.stats.attackSound,
       attacker: enemy,
       target,
@@ -22058,14 +22130,14 @@ export class BattleScene extends Component {
     if (show.report.protagonistTarget) return 'protagonist';
     const configured = show.target?.stats.damageTargetClass;
     if (configured && configured in DAMAGE_TABLE) return configured as DamageTargetClass;
-    if (show.target && isFriendlyFaction(show.target.faction)) return 'us_tank';
+    if (show.target && show.target.sideId === 'player') return 'us_tank';
     if (show.target && isTankUnit(show.target)) return 'german_tank';
     return null;
   }
 
   private damageTargetClassText(targetClass: DamageTargetClass): string {
     switch (targetClass) {
-      case 'protagonist': return t('actor.sherman');
+      case 'protagonist': return unitDisplayName(this.mission.playerTank.kind);
       case 'german_tank': return t('dice.rule.germanTank');
       case 'us_tank': return t('dice.rule.usTank');
       case 'destroyed': return t('dice.rule.destroyedTarget');
@@ -23794,12 +23866,12 @@ export class BattleScene extends Component {
           hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
       : rollMGAttack(ctx, this.rng);
-    const actorLabel = !isFriendlyFaction(actor.faction)
+    const actorLabel = actor.sideId === 'enemy'
       ? t('actor.enemyPrefix', { name: unitDisplayName(actor.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(actor.kind) });
     const targetLabel = target === this.mission.sherman
-      ? t('actor.sherman')
-      : !isFriendlyFaction(target.faction)
+      ? unitDisplayName(target.kind)
+      : target.sideId === 'enemy'
         ? t('actor.enemyPrefix', { name: unitDisplayName(target.kind) })
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     this.battleLogI18n('battleLog.combatMgAI', {
@@ -24152,7 +24224,7 @@ export class BattleScene extends Component {
     this.startDiceShow(
       v.report,
       actor,
-      t('actor.sherman'),
+      unitDisplayName(sh.kind),
       () => {
         applyAndPresentVolley();
         this.beginAdjacentInfantryDiceChain(idx + 1);
@@ -24543,7 +24615,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const actorParams: CombatLogParams = _attacker === this.mission.sherman && target !== this.mission.sherman
       ? { actorKey: 'actor.player' }
-      : !isFriendlyFaction(_attacker.faction)
+      : _attacker.sideId === 'enemy'
         ? { actorNameKey: `unit.name.${_attacker.kind}` }
         : { actorText: actor };
     const baseParams: CombatLogParams = {
@@ -24558,6 +24630,16 @@ export class BattleScene extends Component {
     let color: Color;
     let size: number;
     if (isFootUnit(_attacker) && isFootUnit(target)) {
+      this.battleLogI18n('battleLog.combatMgAI', {
+        actor,
+        diceExpr: `${report.dice[0]}+${report.dice[1]}=${report.roll}`,
+        need: report.threshold,
+        resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
+      });
+      text = report.hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss');
+      color = report.hit ? new Color(255, 120, 120, 255) : new Color(230, 230, 230, 255);
+      size = 32;
+    } else if (report.smallArms) {
       this.battleLogI18n('battleLog.combatMgAI', {
         actor,
         diceExpr: `${report.dice[0]}+${report.dice[1]}=${report.roll}`,

@@ -88,19 +88,19 @@ assert.match(
 assert.doesNotMatch(
   source,
   /mgSelectionActive[\s\S]*?GameSession\.gameMode\s*===\s*'hardcore'\s*&&\s*this\.mission\?\.sherman\.turretDamaged/,
-  'a damaged turret should preserve the machine-gun selection so the blocked angle ring remains visible',
+  'turret damage should not discard a selected independent machine gun',
+);
+
+assert.match(
+  source.slice(source.indexOf('private onTouchMap'), source.indexOf('private showGunAimWarning')),
+  /this\.playerTurretCanRotate\(\)[\s\S]*?if \(mgSel && legalMGTarget\)[\s\S]*?tryMGAttack\(legalMGTarget\)/,
+  'turret rotation handling must be skipped without blocking a legal forward hull-MG attack',
 );
 
 assert.match(
   source,
-  /const\s+damagedTurretLegalMGAttack\s*=\s*this\.mission\.sherman\.turretDamaged[\s\S]*?mgSel[\s\S]*?legalMGTarget[\s\S]*?hasTurretReconGunSelection\(\)\s*&&\s*!damagedTurretLegalMGAttack/,
-  'a damaged turret must not block a legal forward hull-MG attack',
-);
-
-assert.match(
-  source,
-  /if \(!turretDamaged \|\| machineGunRotationSelection\)[\s\S]*?if \(turretDamaged\)[\s\S]*?!legalWeaponTargetKeys\.has\(tileKey\)/,
-  'damaged-turret machine-gun selection should still mark legal fixed-direction targets',
+  /const\s+turretCanRotate\s*=\s*this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| precisionGunSelection\)/,
+  'a damaged turret must not show the blue rotation mask for machine-gun selection',
 );
 
 assert.doesNotMatch(

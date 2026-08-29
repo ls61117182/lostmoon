@@ -43,7 +43,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isAttachedATGunCrew, isFootUnit, isFriendlyFaction, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { Axial, battleSideIdOf, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isAttachedATGunCrew, isFootUnit, isHostile, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
 import { commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
@@ -186,7 +186,7 @@ export function aiTargetPriorityForActor(
   target: Unit,
   missionTargets: readonly Unit[],
 ): number {
-  if (!isFriendlyFaction(actor.faction)) {
+  if (battleSideIdOf(actor) === 'enemy') {
     return unitLevelOf(actor) === 'elite' && missionTargets.includes(target) ? 0 : 1;
   }
   return aiTargetPriority(target, missionTargets);
@@ -214,8 +214,8 @@ export function currentTargetFor(
     !u.destroyed
     && !isAbandonedATGun(u)
     && !isAttachedATGunCrew(u)
-    && u.faction !== actor.faction
-    && (!isFriendlyFaction(actor.faction) || u.kind !== 'truck' || missionTargets.includes(u)),
+    && isHostile(actor, u)
+    && (battleSideIdOf(actor) === 'enemy' || u.kind !== 'truck' || missionTargets.includes(u)),
   );
   if (hostile.length === 0) return null;
   let bestPriority = Infinity;
@@ -245,7 +245,7 @@ export function fallbackAITurnTargetPosition(
   actor: Unit,
   rowParityOffset: 0 | 1 = 0,
 ): Axial {
-  const target = isFriendlyFaction(actor.faction)
+  const target = battleSideIdOf(actor) === 'player'
     ? ENEMY_SIDE_INITIAL_HEX
     : PLAYER_SIDE_INITIAL_HEX;
   return offsetToAxial(target, rowParityOffset);

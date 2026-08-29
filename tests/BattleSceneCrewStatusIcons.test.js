@@ -9,8 +9,8 @@ const assert = (condition, message) => {
 const buildMethod = battleScene.match(/private\s+buildStatusPanel\s*\([\s\S]*?\n  }\n\n  \/\*\*/);
 assert(buildMethod, 'Status panel builder should be present');
 assert(
-  buildMethod[0].includes('crewStartX + i * (crewIconSize + crewIconGap)'),
-  'Crew status icons should be arranged in one horizontal row',
+  buildMethod[0].includes('STATUS_CREW_START_X + i * (STATUS_CREW_ICON_SIZE + STATUS_CREW_ICON_GAP)'),
+  'Crew status icon placeholders should be arranged in one horizontal row',
 );
 assert(
   !buildMethod[0].includes("t('status.crew."),

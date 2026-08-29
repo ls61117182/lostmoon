@@ -9,6 +9,7 @@
 import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
 import {
   Axial,
+  BattleSideId,
   DEFAULT_VISION_RANGE,
   Direction,
   Faction,
@@ -26,6 +27,7 @@ import {
   Unit,
   UnitKind,
   UnitPlacement,
+  UnitController,
   ShermanCrew,
 } from './types';
 import { getUnitStats } from './UnitDB';
@@ -89,13 +91,18 @@ function addStartOccupant(occupied: Map<string, StartOccupant[]>, pos: Axial, oc
 
 export interface LoadedMission {
   map: HexMap;
+  /** The one locally controlled protagonist vehicle. */
+  playerTank: Unit;
+  /** @deprecated Runtime compatibility alias for playerTank. */
   sherman: Unit;
   allies: Unit[];
   enemies: Unit[];
   smokeHexes: Set<string>;
   smokeHexOwners: Map<string, 'friendly' | 'enemy'>;
   data: MissionData;
-  /** destroy_kind_evac：谢尔曼已成功执行离场移动（驶出地图） */
+  /** destroy_kind_evac：玩家坦克已成功执行离场移动（驶出地图） */
+  playerTankEvacuated?: boolean;
+  /** @deprecated Runtime compatibility alias for playerTankEvacuated. */
   shermanEvacuated?: boolean;
   /** 任务 5：德军卡车因回合结束事件驶出地图底/终点 → 玩家判负 */
   truckEscapeDefeat?: boolean;
@@ -216,6 +223,17 @@ function pickRestrictedNumberedSlot(
 }
 
 export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
+  const playerPlacement = data.playerTank ?? data.sherman;
+  if (!playerPlacement) {
+    throw new Error(`任务 ${data.id}：playerTank（或旧字段 sherman）必填`);
+  }
+  if (!isTankKind(playerPlacement.kind)) {
+    throw new Error(`任务 ${data.id}：玩家单位 ${playerPlacement.kind} 不是坦克`);
+  }
+  // Keep both authoring keys available while the rest of the project migrates.
+  // They intentionally reference the same placement object.
+  data.playerTank = playerPlacement;
+  data.sherman = playerPlacement;
   currentMissionTheater = data.theater ?? 'europe';
   const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
   // 1. 构建 HexMap
@@ -312,8 +330,16 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   } else {
     shermanPlacement = data.sherman as UnitPlacement;
   }
-  const sherman = makeUnit('sherman_player', shermanPlacement, rowParityOffset);
-  const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p, rowParityOffset));
+  // Preserve the historical id for replay/save compatibility. Runtime logic
+  // must use controller/playerTank identity rather than this string.
+  const sherman = makeUnit('sherman_player', shermanPlacement, rowParityOffset, {
+    sideId: 'player',
+    controller: 'local_player',
+  });
+  const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p, rowParityOffset, {
+    sideId: 'player',
+    controller: 'ai',
+  }));
   validateUnitNotOnDisplayOnly(data.id, map, sherman);
   for (const ally of allies) validateUnitNotOnDisplayOnly(data.id, map, ally);
 
@@ -329,7 +355,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   const enemies = data.enemies.map((p, i) => {
     if (useDice) {
       if (p.at) {
-        return makeUnit(`enemy_${i}`, p, rowParityOffset);
+        return makeUnit(`enemy_${i}`, p, rowParityOffset, { sideId: 'enemy', controller: 'ai' });
       }
       if (!diceList || di >= diceList.length) {
         throw new Error(`任务 ${data.id}： enemyStartByDice 时缺少第 ${i} 个单位的掷骰格`);
@@ -341,12 +367,12 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         at: slot.at,
         facing: slot.facing,
       };
-      return makeUnit(`enemy_${i}`, merged, rowParityOffset);
+      return makeUnit(`enemy_${i}`, merged, rowParityOffset, { sideId: 'enemy', controller: 'ai' });
     }
     if (!p.at) {
       throw new Error(`任务 ${data.id}：敌方单位 ${i} 缺少 at（非 enemyStartByDice 模式）`);
     }
-    return makeUnit(`enemy_${i}`, p, rowParityOffset);
+    return makeUnit(`enemy_${i}`, p, rowParityOffset, { sideId: 'enemy', controller: 'ai' });
   });
   for (const enemy of enemies) validateUnitNotOnDisplayOnly(data.id, map, enemy);
   attachScenarioATGunCrews(allies, data.theater);
@@ -363,12 +389,14 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
 
   const mission: LoadedMission = {
     map,
+    playerTank: sherman,
     sherman,
     allies,
     enemies,
     smokeHexes: new Set<string>(),
     smokeHexOwners: new Map<string, 'friendly' | 'enemy'>(),
     data,
+    playerTankEvacuated: false,
     shermanEvacuated: false,
     truckEscapeDefeat: false,
     usCasualties: 0,
@@ -400,6 +428,8 @@ function attachScenarioATGunCrews(units: Unit[], theater: MissionData['theater']
       id: `${gun.id}:scenario_crew`,
       kind: crewKind,
       faction: gun.faction,
+      sideId: gun.sideId,
+      controller: 'ai',
       pos: { ...gun.pos },
       facing: gun.facing,
       stats: crewStats,
@@ -673,7 +703,12 @@ function parseRoadFlags(
   return flags;
 }
 
-function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
+interface UnitRuntimeRole {
+  sideId: BattleSideId;
+  controller: UnitController;
+}
+
+function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: UnitRuntimeRole): Unit {
   if (!p.at) {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }
@@ -696,12 +731,14 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     id,
     kind: p.kind,
     faction: placementFaction ?? defaultFaction,
+    sideId: role.sideId,
+    controller: role.controller,
     pos: offsetToAxial(p.at, rowParityOffset),
     facing: facingNorm,
     stats,
     // The protagonist always starts a newly loaded mission with the hatch open.
     // Other tanks remain closed unless their placement explicitly opts in.
-    hatchOpen: id === 'sherman_player',
+    hatchOpen: role.controller === 'local_player',
     visionRange: stats.visionRange,
     gunnerVisionRange: stats.gunnerVisionRange,
     interiorVisionRange: stats.interiorVisionRange,
@@ -711,7 +748,7 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
       Object.entries(p.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
     );
   }
-  if (id === 'sherman_player') u.crewLevels = normalizePlayerCrewLevels(p.crewLevels);
+  if (role.controller === 'local_player') u.crewLevels = normalizePlayerCrewLevels(p.crewLevels);
   else if (isAntiTankGunKind(u.kind)) u.atGunCrewLevel = normalizeUnitLevel(p.atGunCrewLevel ?? p.unitLevel);
   else u.unitLevel = normalizeUnitLevel(p.unitLevel);
   if (isAntiTankGunKind(u.kind)) {
@@ -753,10 +790,10 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1): Unit {
     }
     // Preserve explicit mission placement values, while keeping the player's
     // default open hatch across every game mode.
-    u.hatchOpen = p.hatchOpen ?? id === 'sherman_player';
+    u.hatchOpen = p.hatchOpen ?? role.controller === 'local_player';
     neutralizeUncrewedTank(u);
   }
-  if (p.kind === 'sherman') {
+  if (role.controller === 'local_player') {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
     u.loadedShell = p.loadedShell ?? (p.loaded === true ? 'ap' : null);

@@ -84,7 +84,7 @@ assert.match(
 );
 assert.match(
   scene,
-  /private enemyTankSharingInfantryHex[\s\S]*?isTankUnit\(o\)[\s\S]*?o\.faction !== u\.faction/,
+  /private enemyTankSharingInfantryHex[\s\S]*?isTankUnit\(o\)[\s\S]*?isHostile\(o, u\)/,
   'infantry rendering should identify a co-located enemy tank',
 );
 assert.match(

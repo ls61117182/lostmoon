@@ -7,6 +7,13 @@ const ROOT = path.resolve(__dirname, '..');
 const SCRIPTS_DIR = path.join(ROOT, 'assets', 'scripts');
 const LANG_DB_PATH = path.join(SCRIPTS_DIR, 'core', 'LangDB.ts');
 
+function definedLangKeys() {
+  const langDb = fs.readFileSync(LANG_DB_PATH, 'utf8');
+  return new Set(
+    [...langDb.matchAll(/^\s*'([^']+)':\s*\{/gm)].map((match) => match[1]),
+  );
+}
+
 function sourceFiles(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = path.join(dir, entry.name);
@@ -16,10 +23,7 @@ function sourceFiles(dir) {
 }
 
 test('literal localization keys used by scripts exist in LangDB', () => {
-  const langDb = fs.readFileSync(LANG_DB_PATH, 'utf8');
-  const definedKeys = new Set(
-    [...langDb.matchAll(/^\s*'([^']+)':\s*\{/gm)].map((match) => match[1]),
-  );
+  const definedKeys = definedLangKeys();
   const missing = new Set();
   const literalCall = /\bt\(\s*(['"])([^'"]+)\1/g;
 
@@ -34,4 +38,10 @@ test('literal localization keys used by scripts exist in LangDB', () => {
   }
 
   assert.deepEqual([...missing].sort(), []);
+});
+
+test('reported dynamic localization keys exist', () => {
+  const definedKeys = definedLangKeys();
+  assert.equal(definedKeys.has('unit.name.stug3'), true);
+  assert.equal(definedKeys.has('tileInspect.status.radioIntact'), true);
 });

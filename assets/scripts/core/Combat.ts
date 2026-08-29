@@ -33,7 +33,7 @@ import {
 } from './HexGrid';
 import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
 import { markAmbushTargeted } from './Ambush';
-import { Axial, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isTankUnit, neutralizeUncrewedTank, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isPlayerControlled, isSameSide, isTankUnit, neutralizeUncrewedTank, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 import { unitLevelHitThresholdModifier } from './UnitLevel';
 
@@ -125,6 +125,8 @@ export interface AttackReport {
   commanderKilledByHitDoubles?: boolean;
   /** The hit doubles triggered, but a per-segment campaign shield absorbed the commander hit. */
   commanderShieldBlocked?: boolean;
+  /** Infantry small-arms fire resolves on the hit roll without an armour check. */
+  smallArms?: boolean;
   /** 本次伤害是否按主角受伤表结算；用于 applyAttack 区分同型号队友。 */
   protagonistTarget?: boolean;
   statusChange: HitStatusChange;
@@ -191,6 +193,10 @@ export function selectTankMachineGun(
   turretCanReachTarget: boolean,
 ): TankMachineGunSelection | null {
   if (!isTankUnit(attacker) || attacker.facing === null) return null;
+  // Casemate tanks have no independently traversable turret weapon. Keep both
+  // their hull-mounted and superstructure-mounted MG fire on the hull's single
+  // forward ray in every rules mode.
+  if (attacker.stats.visionType === 'fixed' && targetDirection !== attacker.facing) return null;
   const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection;
   const hullMachineGunOperational = attacker.crew?.coDriver !== false;
   // A forward target uses both guns only when the intact turret is already
@@ -324,7 +330,7 @@ function isPacificCombat(ctx: AttackContext): boolean {
 }
 
 function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: number): boolean {
-  return ctx.attacker.faction !== ctx.target.faction
+  return isHostile(ctx.attacker, ctx.target)
     && isTankUnit(ctx.target)
     && d1 === d2
     && !!ctx.target.hatchOpen
@@ -380,7 +386,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const distance = hexDistance(attacker.pos, target.pos);
   if (target.hidden
     && target.campaignHiddenLongRangeUntargetable === true
-    && attacker.faction !== target.faction
+    && isHostile(attacker, target)
     && distance > 2) {
     return { ok: false, reason: 'attack.reason.camouflageNet' };
   }
@@ -523,7 +529,7 @@ export function probDie1d6(threshold: number): number {
 }
 
 function isProtagonistTarget(ctx: AttackContext): boolean {
-  return ctx.protagonist ? ctx.target === ctx.protagonist : ctx.target.kind === 'sherman';
+  return ctx.protagonist ? ctx.target === ctx.protagonist : isPlayerControlled(ctx.target);
 }
 
 /**
@@ -562,7 +568,7 @@ function isSameHexInfantryTankAttack(ctx: AttackContext): boolean {
   return ctx.sameHexInfantryTankAttack === true
     && isFootUnit(ctx.attacker)
     && isTankUnit(ctx.target)
-    && ctx.attacker.faction !== ctx.target.faction
+    && isHostile(ctx.attacker, ctx.target)
     && hexDistance(ctx.attacker.pos, ctx.target.pos) === 0;
 }
 
@@ -681,7 +687,7 @@ export function infantryHasHighExplosiveCover(ctx: AttackContext): boolean {
   if (tile?.hasBuilding || tile?.terrain === 'forest' || tile?.terrain === 'trees') return true;
   return ctx.units?.some(unit => unit !== ctx.target
     && !unit.destroyed
-    && unit.faction === ctx.target.faction
+    && isSameSide(unit, ctx.target)
     && isTankUnit(unit)
     && unit.pos.q === ctx.target.pos.q
     && unit.pos.r === ctx.target.pos.r) === true;
@@ -793,7 +799,7 @@ function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfi
   if (protagonistTarget) return 'protagonist';
   if (useConfiguredClass && target.stats.damageTargetClass) return target.stats.damageTargetClass as DamageTargetClass;
   if (!isTankUnit(target)) return null;
-  return isFriendlyFaction(target.faction) ? 'us_tank' : 'german_tank';
+  return battleSideIdOf(target) === 'player' ? 'us_tank' : 'german_tank';
 }
 
 function crewRoleSlot(role: DamageTableCrewRole): CrewSlot {
@@ -891,13 +897,42 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const d1 = rng.d6();
   const d2 = rng.d6();
   const roll = d1 + d2;
-  const lockedHitBreakdown = hitBreakdown(ctx);
+  const infantryVsATGunCrew = isFootUnit(attacker) && isControlledATGun(target);
+  const lockedHitBreakdown = infantryVsATGunCrew
+    ? hitBreakdown({
+        ...ctx,
+        target: {
+          ...target,
+          stats: {
+            ...target.stats,
+            size: target.atGunCrewTargetSize ?? 0,
+          },
+        },
+      })
+    : hitBreakdown(ctx);
   const threshold = lockedHitBreakdown.threshold;
   const hit = roll >= threshold;
   const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
   const commanderDeathTriggered = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
   const commanderShieldBlocked = commanderDeathTriggered && target.campaignCommanderShieldAvailable === true;
   const commanderKilledByHitDoubles = commanderDeathTriggered && !commanderShieldBlocked;
+
+  // A crewed AT gun is a small-arms target for attacking infantry. Resolve
+  // the exposed operators exactly like infantry instead of testing the rifle
+  // round against the gun carriage's armour.
+  if (infantryVsATGunCrew) {
+    return {
+      dice: [d1, d2], roll, threshold, hit, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      penetrated: hit,
+      damageEffect: hit ? 'destroyed' : undefined,
+      damageEffects: hit ? [{ effect: 'destroyed' }] : [],
+      commanderKilledByHitDoubles: false,
+      commanderShieldBlocked: false,
+      protagonistTarget,
+      smallArms: true,
+      statusChange: hit ? 'destroyed' : 'none',
+    };
+  }
 
   // Small-arms fire between foot units is settled by the hit roll alone.
   // A hit destroys the target immediately, so no penetration dice are rolled
@@ -911,6 +946,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       commanderKilledByHitDoubles: false,
       commanderShieldBlocked: false,
       protagonistTarget,
+      smallArms: true,
       statusChange: hit ? 'destroyed' : 'none',
     };
   }
@@ -1101,7 +1137,7 @@ export function resolvePacificShermanDamageEffect(die: number, damageCheckType: 
 export function resolveDamageEffect(
   target: Unit,
   die: number,
-  protagonistTarget = target.kind === 'sherman',
+  protagonistTarget = isPlayerControlled(target),
   damageCheckType: DamageCheckType = 'front',
 ): DamageEffect {
   if (protagonistTarget) {
@@ -1255,6 +1291,13 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
   markAmbushTargeted(target);
+  if (report.smallArms && isControlledATGun(target)) {
+    if (report.hit) {
+      target.atGunCrewAlive = false;
+      target.faction = 'neutral';
+    }
+    return;
+  }
   if (report.hit && report.commanderShieldBlocked && target.campaignCommanderShieldAvailable === true) {
     target.campaignCommanderShieldAvailable = false;
   }
@@ -1270,7 +1313,7 @@ export function applyAttack(target: Unit, report: AttackReport): void {
     return;
   }
   const effect = report.damageEffect;
-  const protagonistTarget = report.protagonistTarget ?? target.kind === 'sherman';
+  const protagonistTarget = report.protagonistTarget ?? isPlayerControlled(target);
   const markHullDamaged = !protagonistTarget;
   if (report.damageEffects?.length) {
     for (const step of report.damageEffects) {
@@ -1394,6 +1437,11 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
+  if (isTankUnit(attacker)
+    && attacker.stats.visionType === 'fixed'
+    && attacker.facing !== fireDir) {
+    return { ok: false, reason: 'attack.reason.mgDirection' };
+  }
   if (ctx.hardcoreTankMachineGuns && isTankUnit(attacker)) {
     const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection | null;
     const hullMachineGunOperational = attacker.crew?.coDriver !== false;
@@ -1490,7 +1538,7 @@ export function maxMGHitRoll(ctx: AttackContext): number {
 }
 
 /** 写入机枪攻击结果：命中 = 目标直接击毙。 */
-export function applyMGAttack(target: Unit, report: MGReport): void {
+export function applyMGAttack(target: Unit, report: Pick<MGReport, 'hit'>): void {
   markAmbushTargeted(target);
   if (!report.hit) return;
   if (isControlledATGun(target)) {

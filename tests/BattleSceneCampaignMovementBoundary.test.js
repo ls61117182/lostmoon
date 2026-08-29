@@ -20,28 +20,28 @@ assert(
   'Drive preview should mark non-current campaign segment destinations as blocked',
 );
 assert(
-  drawDriveCandidates[0].indexOf('isShermanEvacDrive') < drawDriveCandidates[0].indexOf('this.canMoveToBattleTile(pos)'),
+  drawDriveCandidates[0].indexOf('isPlayerTankEvacDrive') < drawDriveCandidates[0].indexOf('this.canMoveToBattleTile(pos)'),
   'Drive preview should preserve the objective exit exception before blocking other segment movement',
 );
 
 const driveActionUnavailable = battleScene.match(/private\s+driveActionUnavailable\s*\([^)]*\)\s*:\s*string\s*\|\s*null\s*{[\s\S]*?\n  }\n\n/);
 assert(driveActionUnavailable, 'driveActionUnavailable() should be found');
 assert(
-  driveActionUnavailable[0].indexOf('isShermanEvacDrive') < driveActionUnavailable[0].indexOf('this.canMoveToBattleTile(to)'),
+  driveActionUnavailable[0].indexOf('isPlayerTankEvacDrive') < driveActionUnavailable[0].indexOf('this.canMoveToBattleTile(to)'),
   'Player drive availability should allow objective exit before applying campaign boundary',
 );
 
 const tryDriveSherman = battleScene.match(/private\s+tryDriveSherman\s*\([^)]*\)\s*{[\s\S]*?\n  }\n\n/);
 assert(tryDriveSherman, 'tryDriveSherman() should be found');
 assert(
-  tryDriveSherman[0].indexOf('isShermanEvacDrive') < tryDriveSherman[0].indexOf('this.canMoveToBattleTile(to)'),
+  tryDriveSherman[0].indexOf('isPlayerTankEvacDrive') < tryDriveSherman[0].indexOf('this.canMoveToBattleTile(to)'),
   'Player drive execution should allow objective exit before applying campaign boundary',
 );
 
 const doublesDrive = battleScene.match(/private\s+tryDoublesDriverAdvance\s*\([^)]*\)\s*{[\s\S]*?\n  }\n\n/);
 assert(doublesDrive, 'tryDoublesDriverAdvance() should be found');
 assert(
-  doublesDrive[0].indexOf('isShermanEvacDrive') < doublesDrive[0].indexOf('this.canMoveToBattleTile(to)'),
+  doublesDrive[0].indexOf('isPlayerTankEvacDrive') < doublesDrive[0].indexOf('this.canMoveToBattleTile(to)'),
   'Doubles drive execution should allow objective exit before applying campaign boundary',
 );
 

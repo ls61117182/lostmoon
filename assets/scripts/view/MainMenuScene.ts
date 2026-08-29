@@ -2869,7 +2869,7 @@ export class MainMenuScene extends Component {
     let draftName = existingPackage?.mission.name || (getLang() === 'en' ? 'Custom Mission' : '自定义关卡');
     let draftDescription = existingPackage?.mission.description || draftName;
     let draftObjective: MissionObjective = cloneJson(existingPackage?.mission.objective ?? { type: 'destroy_all_enemies' });
-    let draftSherman: UnitPlacement = cloneJson(existingPackage?.mission.sherman ?? defaultSherman());
+    let draftSherman: UnitPlacement = cloneJson(existingPackage?.mission.playerTank ?? existingPackage?.mission.sherman ?? defaultSherman());
     let draftAllies: UnitPlacement[] = cloneJson(existingPackage?.mission.allies ?? []);
     let draftEnemies: UnitPlacement[] = cloneJson(existingPackage?.mission.enemies ?? [defaultEnemy()]);
     let draftTurnEndEvents: TurnEndEventRow[] = cloneJson(existingPackage?.turnEndEvents ?? []);
@@ -2882,7 +2882,7 @@ export class MainMenuScene extends Component {
     let draftSeason: SeasonType = existingPackage?.mission.season === 'winter' ? 'winter' : 'summer';
     let draftTerrainCategory: ActiveTerrainCategory = activeTerrainCategoryForTheater(existingPackage?.mission.theater);
     let editorTab: 'terrain' | 'tile' | 'mission' | 'units' = 'terrain';
-    let unitKindPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
+    let unitKindPickerTarget: { group: 'player' | 'enemy' | 'ally'; index: number } | null = null;
     let unitRandomPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
     let unitListScrollStart = 0;
     let unitKindPickerScrollStart = 0;
@@ -2966,8 +2966,9 @@ export class MainMenuScene extends Component {
     };
     // Keep editor choices in sync with data/units.csv (via the generated UnitDB).
     const allUnitKinds = getAllUnitKinds();
-    const enemyKinds = allUnitKinds.filter(kind => getUnitStats(kind).faction !== 'usa' && getUnitStats(kind).faction !== 'soviet');
-    const allyKinds = allUnitKinds.filter(kind => getUnitStats(kind).faction === 'usa' || getUnitStats(kind).faction === 'soviet');
+    // Objective authoring follows battle-side placement, not nationality: an
+    // American or Soviet vehicle may legally be authored in the enemy list.
+    const objectiveTargetKinds = allUnitKinds;
     const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge'];
     const objectiveTypeLabels: Record<MissionObjective['type'], string> = {
       destroy_all_enemies: '击毁所有单位',
@@ -3267,7 +3268,7 @@ export class MainMenuScene extends Component {
           }, 12);
           if (draftObjective.type === 'destroy_kind' || draftObjective.type === 'destroy_kind_evac') {
             addPlainBtn(`目标 ${unitKindLabels[draftObjective.kind ?? 'infantry']}`, -62, -22, 104, 26, true, () => {
-              draftObjective.kind = cycleIn(enemyKinds, draftObjective.kind, 'infantry');
+              draftObjective.kind = cycleIn(objectiveTargetKinds, draftObjective.kind, 'infantry');
             }, 12);
           }
           if (draftObjective.type === 'exit_from_edge' || draftObjective.type === 'destroy_kind_evac') {
@@ -3311,18 +3312,21 @@ export class MainMenuScene extends Component {
 
         if (editorTab === 'units') {
           this.makeLabel(propRoot, `当前格 ${selectedCol},${selectedRow}`, 0, 152, 190, 24, 16, TEXT_TITLE);
-          addPlainBtn(`谢尔曼 ${draftSherman.at ? `${draftSherman.at.col},${draftSherman.at.row}` : '骰子'}`, -60, 116, 128, 26, true, () => {
+          addPlainBtn(`${unitKindLabels[draftSherman.kind]} ${draftSherman.at ? `${draftSherman.at.col},${draftSherman.at.row}` : '骰子'}`, -68, 116, 112, 26, true, () => {
             draftSherman.at = selectedOffset();
-            draftSherman.faction = 'usa';
-            draftSherman.kind = 'sherman';
           }, 12);
-          addPlainBtn(`朝向 ${draftSherman.facing ?? '-'}`, 76, 116, 78, 26, draftSherman.facing !== undefined, () => {
+          addPlainBtn(`朝向 ${draftSherman.facing ?? '-'}`, 49, 116, 68, 26, draftSherman.facing !== undefined, () => {
             draftSherman.facing = cycleFacing(draftSherman.facing) as UnitPlacement['facing'];
+          }, 12);
+          addPlainBtn('换车', 130, 116, 58, 26, unitKindPickerTarget?.group === 'player', () => {
+            unitRandomPickerTarget = null;
+            unitKindPickerScrollStart = 0;
+            unitKindPickerTarget = { group: 'player', index: 0 };
           }, 12);
           addPlainBtn(`敌方骰子 ${draftEnemyStartByDice ? '开' : '关'}`, -62, 82, 114, 24, draftEnemyStartByDice, () => {
             draftEnemyStartByDice = !draftEnemyStartByDice;
           }, 12);
-          addPlainBtn(`谢尔曼骰子 ${draftShermanStartByDice ? '开' : '关'}`, 62, 82, 114, 24, draftShermanStartByDice, () => {
+          addPlainBtn(`玩家坦克骰子 ${draftShermanStartByDice ? '开' : '关'}`, 62, 82, 114, 24, draftShermanStartByDice, () => {
             draftShermanStartByDice = !draftShermanStartByDice;
           }, 12);
           addPlainBtn(`eid上限 ${draftEnemyDiceEidMax ?? '-'}`, 0, 50, 112, 24, draftEnemyDiceEidMax !== undefined, () => {
@@ -3394,7 +3398,9 @@ export class MainMenuScene extends Component {
             this.makeLabel(propRoot, `还有 ${draftEnemies.length + draftAllies.length - units.length} 个单位未显示`, 0, -210, 220, 20, 11, TEXT_SUBTITLE);
           }
           if (unitKindPickerTarget) {
-            const targetUnits = unitKindPickerTarget.group === 'ally' ? draftAllies : draftEnemies;
+            const targetUnits = unitKindPickerTarget.group === 'player'
+              ? [draftSherman]
+              : unitKindPickerTarget.group === 'ally' ? draftAllies : draftEnemies;
             const targetUnit = targetUnits[unitKindPickerTarget.index];
             if (!targetUnit) {
               unitKindPickerTarget = null;
@@ -3412,14 +3418,17 @@ export class MainMenuScene extends Component {
                 refreshPropertyPanel();
               });
               this.makeLabel(closeBtn.node, 'X', 0, 0, 28, 22, 14, TEXT_PRIMARY);
+              const pickerKinds = unitKindPickerTarget.group === 'player'
+                ? allUnitKinds.filter(isTankKind)
+                : allUnitKinds;
               const visibleKindRows = 5;
-              const totalKindRows = Math.ceil(allUnitKinds.length / 2);
+              const totalKindRows = Math.ceil(pickerKinds.length / 2);
               const maxKindPickerScroll = Math.max(0, totalKindRows - visibleKindRows);
               unitKindPickerScrollStart = Math.max(0, Math.min(unitKindPickerScrollStart, maxKindPickerScroll));
               const firstKind = unitKindPickerScrollStart * 2;
-              const lastKind = Math.min(allUnitKinds.length, firstKind + visibleKindRows * 2);
+              const lastKind = Math.min(pickerKinds.length, firstKind + visibleKindRows * 2);
               for (let k = firstKind; k < lastKind; k++) {
-                const kind = allUnitKinds[k]!;
+                const kind = pickerKinds[k]!;
                 const col = k % 2;
                 const row = Math.floor((k - firstKind) / 2);
                 const x = -58 + col * 116;
@@ -3758,7 +3767,10 @@ export class MainMenuScene extends Component {
     };
     const scrollUnitKindPicker = (delta: number) => {
       if (!unitKindPickerTarget || delta === 0) return false;
-      const max = Math.max(0, Math.ceil(allUnitKinds.length / 2) - 5);
+      const pickerKindCount = unitKindPickerTarget.group === 'player'
+        ? allUnitKinds.filter(isTankKind).length
+        : allUnitKinds.length;
+      const max = Math.max(0, Math.ceil(pickerKindCount / 2) - 5);
       const next = Math.max(0, Math.min(max, unitKindPickerScrollStart + delta));
       if (next === unitKindPickerScrollStart) return false;
       unitKindPickerScrollStart = next;
@@ -4347,7 +4359,7 @@ export class MainMenuScene extends Component {
       draftName = mission.name || fallbackName || mission.id;
       draftDescription = mission.description || draftName;
       draftObjective = cloneJson(mission.objective ?? { type: 'destroy_all_enemies' });
-      draftSherman = cloneJson(mission.sherman ?? defaultSherman());
+      draftSherman = cloneJson(mission.playerTank ?? mission.sherman ?? defaultSherman());
       draftAllies = cloneJson(mission.allies ?? []);
       draftEnemies = cloneJson(mission.enemies ?? [defaultEnemy()]);
       draftTurnEndEvents = cloneJson([...turnEndEvents]);
@@ -4727,6 +4739,7 @@ export class MainMenuScene extends Component {
         cols,
         rows,
         tiles: cloneJson(draftTiles) as MissionData['tiles'],
+        playerTank: sherman,
         sherman,
         enemies: cloneJson(draftEnemies),
         objective: cloneJson(draftObjective),
@@ -4804,7 +4817,7 @@ export class MainMenuScene extends Component {
         const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
         const mission = buildDraftMission(id, oldPkg, name);
         editingPackageId = CustomMissionStore.save(id, {
-          schemaVersion: 1,
+          schemaVersion: 2,
           editorVersion: 'menu-editor-mvp',
           savedAt: Date.now(),
           source: oldPkg?.source ?? 'player',

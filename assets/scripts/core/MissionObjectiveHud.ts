@@ -65,7 +65,7 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
 
   switch (obj.type) {
     case 'destroy_kind_evac': {
-      const evacDone = !!mission.shermanEvacuated;
+      const evacDone = !!(mission.playerTankEvacuated || mission.shermanEvacuated);
       if (obj.destroyAllEnemiesBeforeEvac) {
         const remaining = liveEnemyCount(mission);
         const destroyDone = remaining === 0;
@@ -148,7 +148,7 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
     case 'destroy_truck': {
       const { cur, total } = truckProgress(mission);
       const done = total > 0 && mission.enemies.filter(e => e.kind === 'truck').every(e => e.destroyed);
-      const evacDone = !!mission.shermanEvacuated;
+      const evacDone = !!(mission.playerTankEvacuated || mission.shermanEvacuated);
       return withUsCasualties([
         {
           displayIndex: 1,

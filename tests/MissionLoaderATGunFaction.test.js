@@ -102,7 +102,7 @@ const currentSave = captureSave({
   hatchChangedThisTurn: false,
   phaseDice: [],
 });
-assert.strictEqual(currentSave.version, 10);
+assert.strictEqual(currentSave.version, 11);
 assert(currentSave.enemies.some(unit => unit.id.endsWith(':scenario_crew')),
   'current saves should persist the real initial controller');
 const restoredCurrentMission = loadMission(missionWithGun('europe'));

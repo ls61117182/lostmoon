@@ -7,7 +7,7 @@ export const CUSTOM_MISSION_MAX_SLOTS = 10;
 const transientPackages = new Map<string, CustomMissionPackage>();
 
 export interface CustomMissionPackage {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   editorVersion: string;
   savedAt: number;
   source: 'player' | 'developer';
@@ -96,9 +96,14 @@ function indexEntryFor(id: string, pkg: CustomMissionPackage): CustomMissionInde
 }
 
 function normalizePackage(pkg: CustomMissionPackage): CustomMissionPackage {
+  const playerTank = pkg.mission.playerTank ?? pkg.mission.sherman;
   return {
     ...pkg,
-    schemaVersion: 1,
+    schemaVersion: 2,
+    mission: {
+      ...pkg.mission,
+      ...(playerTank ? { playerTank, sherman: playerTank } : {}),
+    },
     savedAt: Date.now(),
     editorVersion: pkg.editorVersion || '1',
     source: pkg.source || 'player',
@@ -120,10 +125,19 @@ export const CustomMissionStore = {
       const raw = localStorage.getItem(packageKey(normalizedId));
       if (!raw) return null;
       const parsed = JSON.parse(raw) as CustomMissionPackage;
-      if (parsed.schemaVersion !== 1 || !parsed.mission || !Array.isArray(parsed.turnEndEvents)) {
+      if ((parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2)
+        || !parsed.mission || !Array.isArray(parsed.turnEndEvents)) {
         return null;
       }
-      return parsed;
+      const playerTank = parsed.mission.playerTank ?? parsed.mission.sherman;
+      return {
+        ...parsed,
+        schemaVersion: 2,
+        mission: {
+          ...parsed.mission,
+          ...(playerTank ? { playerTank, sherman: playerTank } : {}),
+        },
+      };
     } catch {
       return null;
     }

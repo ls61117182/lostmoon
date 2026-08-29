@@ -27,7 +27,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, Faction, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isFootKind, isFootUnit, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
+import { Axial, Direction, effectiveDiceTerrain, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isFootKind, isFootUnit, isTankKind, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -203,9 +203,11 @@ function unitsAt(mission: LoadedMission, pos: { q: number; r: number }): Unit[] 
 }
 
 function isTankUnitKind(k: UnitKind): boolean {
-  return isAntiTankGunKind(k)
-    || k === 'sherman' || k === 'panzer4' || k === 'panzer3' || k === 'tiger'
-    || k === 'truck' || k === 'type95' || k === 'type97' || k === 'heavy_artillery';
+  return isTankKind(k)
+    || isAntiTankGunKind(k)
+    || k === 'truck'
+    || k === 'heavy_artillery'
+    || k === 'german_heavy_artillery';
 }
 
 function isJapaneseTankOrGunUnit(u: Unit): boolean {
@@ -220,11 +222,6 @@ function blocksJapaneseInfantrySpawn(u: Unit): boolean {
   return !isJapaneseTankOrGunUnit(u);
 }
 
-function reinforcementFaction(mission: LoadedMission, side: ReinforcementSide): Faction {
-  if (side === 'friendly') return mission.sherman.faction;
-  return mission.data.theater === 'pacific' ? 'japanese' : 'german';
-}
-
 function requireReinforcementSide(row: TurnEndEventRow): ReinforcementSide {
   if (row.reinforcementSide === 'friendly' || row.reinforcementSide === 'enemy') {
     return row.reinforcementSide;
@@ -233,7 +230,8 @@ function requireReinforcementSide(row: TurnEndEventRow): ReinforcementSide {
 }
 
 function addReinforcement(mission: LoadedMission, unit: Unit, side: ReinforcementSide): void {
-  unit.faction = reinforcementFaction(mission, side);
+  unit.sideId = side === 'friendly' ? 'player' : 'enemy';
+  unit.controller = 'ai';
   (side === 'friendly' ? mission.allies : mission.enemies).push(unit);
 }
 
@@ -318,7 +316,9 @@ function prepareTankSpawnEvent(
       const reinforcement: Unit = {
         id: unitId,
         kind,
-        faction: reinforcementFaction(mission, side),
+        faction: stats.faction,
+        sideId: side === 'friendly' ? 'player' : 'enemy',
+        controller: 'ai',
         pos: entry ? { ...entry.from } : { ...pos },
         facing: entry ? entry.facing : face,
         stats,
@@ -633,7 +633,9 @@ export function prepareTurnEndEvent(
           addReinforcement(mission, {
             id: nextEnemyId(),
             kind,
-            faction: reinforcementFaction(mission, side),
+            faction: stats.faction,
+            sideId: side === 'friendly' ? 'player' : 'enemy',
+            controller: 'ai',
             pos: { ...pos },
             facing,
             stats,

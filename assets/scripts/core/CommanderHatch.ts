@@ -1,6 +1,6 @@
 import { GameMode } from './GameMode';
 import { commanderHasSkill } from './UnitLevel';
-import { isTankUnit, Unit } from './types';
+import { isSameSide, isTankUnit, Unit } from './types';
 
 export type CommanderHatchVisualState = 'hidden' | 'occupied' | 'empty';
 
@@ -44,7 +44,7 @@ export function shouldNonPlayerTankOpenCommanderHatch(
   return !allUnits.some(other =>
     other !== unit
     && !other.destroyed
-    && other.faction === unit.faction
+    && isSameSide(other, unit)
     && isTankUnit(other)
     && other.crew?.commander !== false
     && other.hatchOpen === true,

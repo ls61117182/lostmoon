@@ -83,6 +83,22 @@ const forcedDestroyAll = generateRandomMissionPackage('pacific', 103, {
   objectiveKinds: ['destroy_all'],
   enemyThreatPoints: 16,
 });
+
+const germanPlayerMission = generateRandomMissionPackage('europe', 104, {
+  playerTankKind: 'tiger',
+  playerTankFaction: 'german',
+}).mission;
+assert.strictEqual(germanPlayerMission.playerTank.kind, 'tiger');
+assert.strictEqual(germanPlayerMission.playerTank.faction, 'german');
+assert.strictEqual(germanPlayerMission.sherman, germanPlayerMission.playerTank,
+  'random missions should keep the legacy authoring alias synchronized');
+assert(germanPlayerMission.enemies.some(enemy => enemy.faction === 'german'),
+  'a German player vehicle may still oppose German-nationality units');
+assert.throws(
+  () => generateRandomMissionPackage('europe', 105, { playerTankKind: 'infantry' }),
+  /playerTankKind must be a tank/,
+  'random mission authoring should reject non-tank protagonists instead of silently changing them',
+);
 assert.strictEqual(forcedDestroyAll.mission.objective.type, 'destroy_all_enemies');
 assert.strictEqual(
   forcedDestroyAll.mission.enemies.reduce((sum, enemy) => sum + threatByKind[enemy.kind], 0),

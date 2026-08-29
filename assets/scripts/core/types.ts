@@ -104,9 +104,20 @@ export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType
 // ---------- 单位 ----------
 export type Faction = 'usa' | 'soviet' | 'german' | 'japanese' | 'neutral';
 
+/**
+ * Runtime battle allegiance.  This is deliberately independent from
+ * `Faction`: a German vehicle may fight on the local player's side while a
+ * second German vehicle fights for the opposition.
+ */
+export type BattleSideId = 'player' | 'enemy';
+
+/** Who issues orders to a runtime unit. */
+export type UnitController = 'local_player' | 'remote_player' | 'ai';
+
 /** 美军与苏军在战斗中属于同一友方阵线，但保留独立阵营身份。 */
-export function isFriendlyFaction(faction: Faction): boolean {
-  return faction === 'usa' || faction === 'soviet';
+export function isFriendlyFaction(faction: Faction | string): boolean {
+  return faction === 'usa' || faction === 'soviet'
+    || faction === 'american' || faction === 'allied';
 }
 
 export type Theater = 'europe' | 'pacific' | 'north_africa' | 'soviet';
@@ -310,6 +321,10 @@ export interface Unit {
   id: string;
   kind: UnitKind;
   faction: Faction;
+  /** Scenario allegiance; never infer this from faction. */
+  sideId?: BattleSideId;
+  /** Input authority; independent from allegiance and vehicle kind. */
+  controller?: UnitController;
   pos: Axial;
   /** 步兵无朝向时为 null */
   facing: Direction | null;
@@ -389,6 +404,31 @@ export interface Unit {
   atGunControllerUnitId?: string;
   /** Infantry folded into an AT-gun composite unit after entering an abandoned gun's hex. */
   attachedToATGunId?: string;
+}
+
+export function battleSideIdOf(unit: Pick<Unit, 'sideId' | 'faction'>): BattleSideId {
+  // Fallback is exclusively for v10 saves and legacy test/authored objects.
+  // MissionLoader assigns sideId to every new runtime unit.
+  return unit.sideId ?? (isFriendlyFaction(unit.faction) ? 'player' : 'enemy');
+}
+
+export function isSameSide(
+  a: Pick<Unit, 'sideId' | 'faction'>,
+  b: Pick<Unit, 'sideId' | 'faction'>,
+): boolean {
+  return battleSideIdOf(a) === battleSideIdOf(b);
+}
+
+export function isHostile(
+  a: Pick<Unit, 'sideId' | 'faction'>,
+  b: Pick<Unit, 'sideId' | 'faction'>,
+): boolean {
+  return battleSideIdOf(a) !== battleSideIdOf(b);
+}
+
+export function isPlayerControlled(unit: Pick<Unit, 'controller' | 'id'>): boolean {
+  return unit.controller === 'local_player'
+    || (unit.controller === undefined && unit.id === 'sherman_player');
 }
 
 // ---------- 谢尔曼乘员 ----------
@@ -539,8 +579,10 @@ export interface MissionData {
   rowParityOffset?: 0 | 1;
   /** 允许玩家在战斗中拖动地图，以查看超出初始显示范围的格子。 */
   allowMapPan?: boolean;
-  /** 谢尔曼初始放置 */
-  sherman: UnitPlacement;
+  /** 玩家主角坦克初始放置。新关卡使用此字段。 */
+  playerTank?: UnitPlacement;
+  /** @deprecated 旧关卡兼容字段；加载时归一化为 playerTank。 */
+  sherman?: UnitPlacement;
   /** 玩家阵营 AI 队友；玩家不可直接控制 */
   allies?: UnitPlacement[];
   /** 德军初始放置 */

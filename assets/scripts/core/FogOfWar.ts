@@ -1,7 +1,7 @@
 import { axialAdd, HexMap, axialEquals, axialToPixel, diagonalFlankFireDirectionTo, fireDirectionStep, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { CAMPAIGN_UPGRADE_BY_ID } from './CampaignUpgradeDB';
 import { getGameModeConfig, GameMode } from './GameMode';
-import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isFriendlyFaction, isHeavyArtilleryUnit, isTankUnit, Unit, WeatherType } from './types';
+import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isSameSide, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
 
 const GEOMETRY_HEX_SIZE = 1;
@@ -398,8 +398,7 @@ export function hasRadioTransmit(unit: Unit): boolean {
 }
 
 function shareVisionFaction(a: Unit, b: Unit): boolean {
-  return a.faction === b.faction
-    || (isFriendlyFaction(a.faction) && isFriendlyFaction(b.faction));
+  return isSameSide(a, b);
 }
 
 export function computeRadioSharedVisibleHexes(
