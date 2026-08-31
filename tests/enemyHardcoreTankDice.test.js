@@ -15,9 +15,12 @@ function readCsv(file) {
 const unitRows = readCsv('data/units.csv');
 const actionRows = readCsv('data/enemy_hardcore_tank_action_table.csv');
 const diceRows = readCsv('data/enemy_hardcore_tank_dice.csv');
+const playerHardcorePoolRows = readCsv('data/player_hardcore_dice_pool.csv');
 const generated = fs.readFileSync(path.join(root, 'assets/scripts/core/EnemyAIDB.ts'), 'utf8');
+const playerActionGenerated = fs.readFileSync(path.join(root, 'assets/scripts/core/PlayerActionDB.ts'), 'utf8');
 const unitGenerated = fs.readFileSync(path.join(root, 'assets/scripts/core/UnitDB.ts'), 'utf8');
 const enemyAI = fs.readFileSync(path.join(root, 'assets/scripts/core/EnemyAI.ts'), 'utf8');
+const actionDice = fs.readFileSync(path.join(root, 'assets/scripts/core/ActionDice.ts'), 'utf8');
 const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
 
 assert.strictEqual(
@@ -61,6 +64,80 @@ assert.deepStrictEqual(
   [1, 2, 3, 4, 5, 6],
   'hardcore enemy tank action table should define misc dice 1..6',
 );
+
+assert.deepStrictEqual(
+  Object.fromEntries(
+    playerHardcorePoolRows
+      .filter((row) => row.modifier.startsWith('attack_'))
+      .map((row) => [row.modifier, Number(row.value)]),
+  ),
+  {
+    attack_road: 0,
+    attack_field: 0,
+    attack_mud: -1,
+    attack_forest: -2,
+    attack_water: -2,
+    attack_deep_water: -2,
+    attack_clear: 0,
+    attack_trees: -1,
+    attack_beach: -2,
+    attack_rocky: -2,
+    attack_airstrip: 0,
+  },
+  'hardcore attack terrain values should be firepower modifiers after subtracting two dice',
+);
+
+assert.deepStrictEqual(
+  Object.fromEntries(
+    playerHardcorePoolRows
+      .filter((row) => row.modifier.startsWith('move_'))
+      .map((row) => [row.modifier, Number(row.value)]),
+  ),
+  {
+    move_road: 0,
+    move_field: -1,
+    move_mud: -2,
+    move_forest: -2,
+    move_water: -2,
+    move_deep_water: -2,
+    move_clear: 0,
+    move_trees: -1,
+    move_beach: -3,
+    move_rocky: -2,
+    move_airstrip: 0,
+  },
+  'hardcore movement terrain modifiers should all increase by one',
+);
+assert.strictEqual(
+  Number(playerHardcorePoolRows.find((row) => row.modifier === 'mod_move_hatch').value),
+  0,
+  'hardcore commander movement dice bonus should decrease from one to zero',
+);
+assert.match(playerActionGenerated, /moveMods: \{\s+driver: 1,\s+codriver: 1,\s+hatch: 0,/);
+
+assert.deepStrictEqual(
+  Object.fromEntries(
+    playerHardcorePoolRows
+      .filter((row) => row.modifier.startsWith('misc_'))
+      .map((row) => [row.modifier, Number(row.value)]),
+  ),
+  {
+    misc_road: 0,
+    misc_field: 1,
+    misc_mud: 0,
+    misc_forest: -1,
+    misc_water: -1,
+    misc_deep_water: -1,
+    misc_clear: 0,
+    misc_trees: 1,
+    misc_beach: 0,
+    misc_rocky: -1,
+    misc_airstrip: 0,
+  },
+  'hardcore misc terrain values should be modifiers after subtracting one die',
+);
+assert.match(actionDice, /HARDCORE_PLAYER_MISC_BASE_DICE = 1/);
+assert.match(actionDice, /opts\.hardcore && opts\.subPhase === 'misc'\) n \+= HARDCORE_PLAYER_MISC_BASE_DICE/);
 
 assert.deepStrictEqual(
   Object.fromEntries(actionRows.map((row) => [`${row.die_type}:${row.die}`, [
@@ -161,9 +238,14 @@ assert.match(enemyAI, /if \(isAntiTankGunUnit\(unit\)\) return \{ attack: 0, mov
 assert.match(enemyAI, /case 'japanese_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'american_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'german_heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);
-assert.match(enemyAI, /export function actionForHardcoreTankDie\(unit: Unit, type: EnemyTankDieType, pip: number\): AIActionEntry/);
+assert.match(enemyAI, /export function hardcoreAttackDieIsInvalid\(pip: number, firepowerModifier: number\): boolean/);
+assert.match(enemyAI, /export function actionForHardcoreTankDie\([\s\S]*?firepowerModifier = 0,[\s\S]*?\): AIActionEntry/);
 assert.match(battleScene, /unit\.stats\.actionTable/);
-assert.match(battleScene, /actionForHardcoreTankDie\(enemy, type, pip\)/);
+assert.match(battleScene, /actionForHardcoreTankDie\(enemy, type, pip, this\.enemyFirepowerModifier\)/);
+assert.match(battleScene, /hardcoreAttackDieIsInvalid\(this\.enemyDice\[dieIdx\], this\.enemyFirepowerModifier\)/);
+assert.match(battleScene, /if \(mv !== 0\) blocks\.push\(t\('tileInspect\.modifier\.mobility'/);
+assert.match(battleScene, /if \(at !== 0\) blocks\.push\(t\('tileInspect\.modifier\.firepower'/);
+assert.match(battleScene, /if \(ms !== 0\) blocks\.push\(t\('tileInspect\.modifier\.misc'/);
 assert.match(battleScene, /const AI_MISC_DIE_FILL\s+= new Color\(255, 240, 170, 255\)/);
 assert.match(battleScene, /if \(this\.playerStep === 'misc'\) return AI_MISC_DIE_FILL/);
 assert.match(battleScene, /this\.enemyCrewRequirementMet\(enemy, crew\)/);

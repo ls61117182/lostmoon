@@ -270,6 +270,8 @@ export interface UnitStats {
   gunMantletArmor?: number;
   penetration: number;     // 穿甲值
   highExplosivePower: number; // 高爆威力；仅硬核模式 HE 结算使用
+  /** 重炮碉堡射击孔精确命中的 size 替代值；未配置时按 6。 */
+  shootingPortHitThreshold?: number;
   effectiveRange: number;  // 有效射程；超出后每格使本次攻击穿甲值 -1
   /** Maximum turret traverse per action, in 30-degree steps (0..6). */
   turretTraverseSpeed: number;
@@ -356,7 +358,7 @@ export interface Unit {
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
-  fireLevel?: number;       // 着火程度（仅谢尔曼）
+  fireLevel?: number;       // 着火程度；重炮碉堡再次起火时直接摧毁
   turretDamaged?: boolean;  // 炮塔受损
   paralyzed?: boolean;      // 痛痪
   hidden?: boolean;         // 隐蔽

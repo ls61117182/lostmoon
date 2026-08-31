@@ -1,8 +1,10 @@
 /**
  * 行动阶段骰子逻辑 —— 纯 TypeScript，不依赖 Cocos。
  *
- * GDD §3.6.1：掷骰数 = **当前子阶段（移动 / 攻击 / 杂项）× 谢尔曼当前格地形** 的基础值，
- * 再叠加该阶段适用的乘员存活 / 舱盖修正，最后经配置的下限与可选上限钳制。
+ * GDD §3.6.1：掷骰数由当前子阶段、谢尔曼当前格地形与乘员状态共同决定。
+ * 硬核攻击阶段使用“地形火力值修正 + 固定 2 骰 + 乘员加成”，杂项阶段使用
+ * “地形杂项修正 + 固定 1 骰 + 开舱车长加成”，其余阶段沿用配置规则，
+ * 最后经配置的下限与可选上限钳制。
  * 玩家进入某一子阶段时重摇该数量的骰，再按骰面拖入对应行动槽。
  *
  * 本文件只负责薄薄一层业务胶水：
@@ -10,7 +12,8 @@
  *   2) `classifyMoveDie()` / `classifyAttackDie()`：把单颗骰点数映射到当前阶段动作；
  *   3) `rollActionDice()`：用给定 RNG 掷 N 颗 d6。
  *
- * **所有数值与映射均来自 `data/player_action_table.csv` + `data/player_dice_pool.csv`，
+ * **地形数值与映射来自 `data/player_action_table.csv`、`data/player_dice_pool.csv` 与
+ *   `data/player_hardcore_dice_pool.csv`，
  *   由 `tools/buildPlayerActionDB.js` 生成 `PlayerActionDB.ts`。** 本文件不再写任何
  *   骰面→动作的硬编码，也不再写 3 / 5 / +1 这类魔法常量。
  *
@@ -119,9 +122,14 @@ export interface ActionDicePoolOpts {
   mobility?: number;
 }
 
+/** 硬核玩家攻击阶段不随地形变化的基础骰数。地形表中的 attack_* 仅表示火力值修正。 */
+export const HARDCORE_PLAYER_ATTACK_BASE_DICE = 2;
+/** 硬核玩家杂项阶段不随地形变化的基础骰数。地形表中的 misc_* 仅表示杂项修正。 */
+export const HARDCORE_PLAYER_MISC_BASE_DICE = 1;
+
 /**
- * 本阶段应掷骰数。`data/player_dice_pool.csv` → `PLAYER_DICE_POOL`：
- *   子阶段 × 地形基础、各阶段修正系数、cap_min / cap_max 均来自配置。
+ * 本阶段应掷骰数。经典地形基础值及硬核地形修正值、各阶段乘员修正系数、
+ * cap_min / cap_max 均来自对应骰池配置。
  */
 export function actionDicePool(opts: ActionDicePoolOpts): number {
   const cfg = opts.hardcore ? PLAYER_HARDCORE_DICE_POOL : PLAYER_DICE_POOL;
@@ -129,6 +137,8 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
   let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
 
   if (opts.hardcore && opts.subPhase === 'movement') n += opts.mobility ?? 0;
+  if (opts.hardcore && opts.subPhase === 'attack') n += HARDCORE_PLAYER_ATTACK_BASE_DICE;
+  if (opts.hardcore && opts.subPhase === 'misc') n += HARDCORE_PLAYER_MISC_BASE_DICE;
 
   /** 舱盖加骰仅在车长存活时成立（车长阵亡后 `hatchOpen` 可能未及时清位） */
   const hatchOpenForDice = !!opts.hatchOpen && !!opts.crew.commander;

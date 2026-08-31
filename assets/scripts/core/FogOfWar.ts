@@ -168,6 +168,13 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
 ): FireDirection | null {
   const controlledATGun = isControlledATGun(unit);
   if ((!isTankUnit(unit) && !controlledATGun) || unit.stats.visionType !== 'turreted') return null;
+  // Every adjacent hex lies on one of the six true hex axes. It is also the
+  // first side cell of two halfway-ray paths geometrically, but attacks at
+  // distance one must use the exact 60-degree axis bearing. Otherwise a
+  // closed-hatch turret already facing a halfway ray can incorrectly keep (for
+  // example) a 90-degree rules/visual facing while firing into a 60-degree
+  // neighboring hex.
+  if (hexDistance(unit.pos, target) === 1) return null;
   if (controlledATGun) {
     // AT guns acquire targets through their infantry crew (including shared
     // friendly vision), so only the firing path—not the gun's own sight

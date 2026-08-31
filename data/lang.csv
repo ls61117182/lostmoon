@@ -227,6 +227,7 @@ attack.reason.mgDirection,目标不在航向机枪或同轴机枪的可射方向
 attack.reason.notInfantry,机枪只能扫射步兵,MG: Target Must Be Infantry
 attack.reason.gunVsInfantry,主炮不瞄步兵，请改用机枪,Main gun ignores infantry; use MG
 attack.reason.camouflageNet,目标被远距伪装网完全遮蔽,Camouflage net prevents targeting at this range
+attack.reason.precisionInvalidTarget,步兵不能成为精确射击目标，HE也不能精确射击反坦克炮,Infantry cannot be precision-fire targets; HE also cannot precision-fire at anti-tank guns
 attack.reason.unknown,无法攻击,Cannot Attack
 preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
 dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}
@@ -241,11 +242,17 @@ dice.panel.penNeed,需 ≥{n},Need ≥{n}
 dice.panel.penetrateNeed,击穿需≥{n},Penetrate ≥{n}
 dice.panel.heNeed,威力需 ≥{n},Blast ≥{n}
 dice.panel.heDestroyNeed,击毁需≥{n},Destroy ≥{n}
+dice.panel.heSuppressNeed,压制需≥{n},Suppress ≥{n}
+dice.panel.heFireNeed,起火需≥{n},Fire ≥{n}
+dice.panel.heDestroyFireNeed,击毁≥{destroy} / 起火≥{fire},Destroy ≥{destroy} / Fire ≥{fire}
 dice.panel.heParalyzeNeed,瘫痪需≥{n},Immobilize ≥{n}
 dice.panel.heParalyzeCheck,瘫痪检定,Immobilization Check
 dice.panel.heNeedDual,压制≥{suppress} / 起火≥{fire},Suppress ≥{suppress} / Fire ≥{fire}
 dice.panel.heFireSuppressed,起火并压制,Fire + Suppressed
 dice.panel.heSuppressed,压制,Suppressed
+dice.panel.shootingPortHitNeed,射击孔命中需≥{n},Firing slit hit ≥{n}
+dice.panel.shootingPortDestroyed,命中射击孔,Hit firing slit
+dice.panel.shootingPortMissContinue,未命中，继续判定,Missed; continue check
 dice.panel.penYes,击穿,Penetrate
 dice.panel.penNo,跳弹,Ricochet
 dice.panel.penCheck,穿甲检定,Penetration Check
@@ -278,20 +285,28 @@ dice.rule.attackModifier,射击修正,Attack Modifier
 dice.rule.heTitle,高爆弹威力详情,HE Blast Details
 dice.rule.heHit,命中判定,Hit Check
 dice.rule.heAutomaticHit,自动命中,Automatic Hit
+dice.rule.heHitEffect,命中效果,Effect on Hit
+dice.rule.heAutomaticDestroy,命中即击毁,Destroyed on Hit
 dice.rule.heTarget,目标,Target
 dice.rule.heCover,步兵掩护,Infantry Cover
+dice.rule.heTankCover,坦克掩护,Tank Cover
 dice.rule.heCoverYes,有（摧毁需6）,Yes (Destroy on 6)
 dice.rule.heCoverNo,无（摧毁需5）,No (Destroy on 5)
 dice.rule.heArmor,装甲值,Armor
 dice.rule.hePower,HE威力,HE Power
+dice.rule.heBaseDestroy,基础击毁值,Base Destroy Threshold
+dice.rule.heBaseSuppress,基础压制值,Base Suppress Threshold
+dice.rule.heDestroyModifier,击毁修正,Destroy Modifier
+dice.rule.heFireModifier,起火修正,Fire Modifier
 dice.rule.heRoll,威力骰,Blast Roll
-dice.rule.heDestroyNeed,摧毁所需,Destroy Threshold
+dice.rule.heDestroyNeed,击毁所需点数,Destroy Threshold
 dice.rule.heEffectNeed,生效所需,Effect Threshold
-dice.rule.heSuppressNeed,压制所需,Suppress Threshold
-dice.rule.heFireNeed,起火所需,Fire Threshold
+dice.rule.heSuppressNeed,压制所需点数,Suppress Threshold
+dice.rule.heFireNeed,起火所需点数,Fire Threshold
 dice.rule.heBelowThreshold,未达摧毁值,Below Destroy Threshold
 dice.rule.heResult,最终结果,Final Result
 dice.rule.heParalyzeNeed,瘫痪所需点数,Immobilize Threshold
+dice.rule.shootingPortValue,射击孔命中值,Firing Slit Hit Value
 dice.rule.penNeed,击穿所需,Required Roll
 dice.rule.die,骰子,Die
 dice.rule.result,结果,Result
@@ -328,6 +343,7 @@ unit.name.sherman_jumbo,谢尔曼巨无霸,M4A3E2 Sherman Jumbo
 unit.name.m26_pershing,M26E1 潘兴,M26E1 Pershing
 unit.name.t34,T-34/76,T-34/76
 unit.name.tiger,虎式,Tiger
+unit.name.tigerking,虎王坦克,Tiger II
 unit.name.maus,鼠式坦克,Panzer VIII Maus
 unit.name.panther,豹式坦克,Panther G
 unit.name.panzer4,四号坦克G型,Panzer IV Ausf. G
@@ -392,6 +408,9 @@ menu.continueSummary,回合 {turn} · {phase} · {mission},Turn {turn} · {phase
 menu.mode.title,游戏模式,GAME MODE
 menu.mode.classic,经典,Classic
 menu.mode.hardcore,硬核,Hardcore
+menu.tankSelect.button,坦克 · {tank},Tank · {tank}
+menu.tankSelect.title,选择玩家坦克,Select Player Tank
+menu.tankSelect.hint,车型国籍不决定战斗敌我；关卡原有队友与敌军保持不变。,Vehicle nationality does not determine battle sides; mission allies and enemies stay unchanged.
 menu.phase.player,玩家阶段,Player Phase
 menu.phase.enemy,敌方阶段,Enemy Phase
 chapter.europe.title,欧洲战场,European Theater
@@ -507,6 +526,9 @@ tileInspect.diceRow.move,移动阶段：基础骰子 {n} 颗，驾驶员存活 +
 tileInspect.diceRow.moveHardcore,移动阶段：基础骰子 {n} 颗，驾驶员存活 +{md}、副驾驶存活 +{mc}、车长存活 +{mh}。,"Movement: base {n} dice; driver alive +{md}, co-driver alive +{mc}, commander alive +{mh}."
 tileInspect.diceRow.attack,攻击阶段：基础骰子 {n} 颗，炮手存活 +{ag}、装填手存活 +{al}、车长开舱 +{ah}。,"Attack: base {n} dice; gunner alive +{ag}, loader alive +{al}, commander hatch open +{ah}."
 tileInspect.diceRow.attackHardcore,攻击阶段：基础骰子 {n} 颗，炮手存活 +{ag}、装填手存活 +{al}、车长存活 +{ah}。,"Attack: base {n} dice; gunner alive +{ag}, loader alive +{al}, commander alive +{ah}."
+tileInspect.modifier.mobility,机动力修正{n}。,Mobility modifier {n}.
+tileInspect.modifier.firepower,火力值修正{n}。,Firepower modifier {n}.
+tileInspect.modifier.misc,杂项修正{n}。,Misc modifier {n}.
 tileInspect.diceRow.misc,杂项阶段：基础骰子 {n} 颗，车长开舱 +{xc}。,Misc: base {n} dice; commander hatch open +{xc}.
 tileInspect.unitBlock,{name}\n状态：{status},{name}\nStatus: {status}
 tileInspect.currentUnit,当前单位：{name},Current unit: {name}

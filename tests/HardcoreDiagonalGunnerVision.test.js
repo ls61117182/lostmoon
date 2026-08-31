@@ -13,6 +13,7 @@ const { HexMap, axialAdd, diagonalFlankFireDirectionTo, directionTo, fireDirecti
 const {
   computeUnitVisibleHexes,
   diagonalGunnerClickPreference,
+  diagonalGunnerRuleDirectionForVisibleHex,
   reconcileDiagonalGunnerSideAfterMove,
 } = require('../assets/scripts/core/FogOfWar.ts');
 const {
@@ -47,6 +48,55 @@ const tank = (previousTurretFacing = 0) => ({
 });
 
 const sees = (visible, q, r) => visible.has(HexMap.keyOf({ q, r }));
+
+{
+  const map = fieldMap();
+  const attacker = tank(0);
+  for (let axis = 0; axis < 6; axis++) {
+    const targetPos = neighbor(attacker.pos, axis);
+    const target = {
+      id: `adjacent-${axis}`,
+      kind: 'panzer4',
+      faction: 'german',
+      pos: targetPos,
+      facing: 0,
+      stats: {
+        size: 4,
+        armorFront: 10,
+        armorFrontSide: 9,
+        armorRearSide: 8,
+        armorRear: 7,
+        penetration: 2,
+        effectiveRange: 2,
+      },
+    };
+    const context = { attacker, target, map, expandedTurretDirections: true };
+    assert.strictEqual(
+      diagonalGunnerRuleDirectionForVisibleHex(map, attacker, targetPos),
+      null,
+      `adjacent axis ${axis} must not be treated as a halfway-ray flank`,
+    );
+    assert.strictEqual(
+      attackFireDirection(context),
+      axis,
+      `an adjacent main-gun target on axis ${axis} must use its 60-degree bearing`,
+    );
+
+    const infantry = {
+      ...target,
+      id: `adjacent-infantry-${axis}`,
+      kind: 'german_infantry',
+      stats: { ...target.stats, size: 2 },
+    };
+    assert.strictEqual(
+      attackFireDirection({ ...context, target: infantry }),
+      axis,
+      `an adjacent machine-gun target on axis ${axis} must use its 60-degree bearing`,
+    );
+  }
+}
+
+console.log('Adjacent turret target directions passed');
 
 {
   const visible = computeUnitVisibleHexes(fieldMap(), tank(0));

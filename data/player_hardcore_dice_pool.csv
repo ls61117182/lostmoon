@@ -1,41 +1,41 @@
 ﻿modifier,value,notes
 修正项,数值,备注
-move_road,-1,硬核移动阶段·公路地形修正
-move_field,-2,硬核移动阶段·田地地形修正
-move_mud,-3,硬核移动阶段·泥地地形修正
-move_forest,-3,硬核移动阶段·林地（不可入占位）
-move_water,-3,硬核移动阶段·水域（不可入占位）
-move_deep_water,-3,Pacific 硬核移动阶段·深海（不可入占位）
-move_clear,-1,Pacific 硬核移动阶段·沙地/开阔地修正
-move_trees,-2,Pacific 硬核移动阶段·树木修正
-move_beach,-4,Pacific 硬核移动阶段·海滩修正
-move_rocky,-3,Pacific 硬核移动阶段·岩石高地（坦克不可入占位）
-move_airstrip,-1,Pacific 硬核移动阶段·机场跑道修正
-attack_road,2,攻击阶段·公路基础骰
-attack_field,2,攻击阶段·田地基础骰
-attack_mud,1,攻击阶段·泥地基础骰
-attack_forest,0,攻击阶段·林地占位
-attack_water,0,攻击阶段·水域占位
-attack_deep_water,0,Pacific 攻击阶段·深海占位
-attack_clear,2,Pacific 攻击阶段·沙地/开阔地
-attack_trees,1,Pacific 攻击阶段·树木
-attack_beach,0,Pacific 攻击阶段·海滩
-attack_rocky,0,Pacific 攻击阶段·岩石高地（坦克不可入占位）
-attack_airstrip,2,Pacific 攻击阶段·机场跑道
-misc_road,1,杂项阶段·公路基础骰
-misc_field,2,杂项阶段·田地基础骰
-misc_mud,1,杂项阶段·泥地基础骰
-misc_forest,0,杂项阶段·林地占位
-misc_water,0,杂项阶段·水域占位
-misc_deep_water,0,Pacific 杂项阶段·深海占位
-misc_clear,1,Pacific 杂项阶段·沙地/开阔地
-misc_trees,2,Pacific 杂项阶段·树木
-misc_beach,1,Pacific 杂项阶段·海滩
-misc_rocky,0,Pacific 杂项阶段·岩石高地（坦克不可入占位）
-misc_airstrip,1,Pacific 杂项阶段·机场跑道
+move_road,0,硬核移动阶段·公路地形修正
+move_field,-1,硬核移动阶段·田地地形修正
+move_mud,-2,硬核移动阶段·泥地地形修正
+move_forest,-2,硬核移动阶段·林地（不可入占位）
+move_water,-2,硬核移动阶段·水域（不可入占位）
+move_deep_water,-2,Pacific 硬核移动阶段·深海（不可入占位）
+move_clear,0,Pacific 硬核移动阶段·沙地/开阔地修正
+move_trees,-1,Pacific 硬核移动阶段·树木修正
+move_beach,-3,Pacific 硬核移动阶段·海滩修正
+move_rocky,-2,Pacific 硬核移动阶段·岩石高地（坦克不可入占位）
+move_airstrip,1,Pacific 硬核移动阶段·机场跑道修正
+attack_road,0,硬核火力值·公路地形修正
+attack_field,0,硬核火力值·田地地形修正
+attack_mud,-1,硬核火力值·泥地地形修正
+attack_forest,-2,硬核火力值·林地（不可入占位）
+attack_water,-2,硬核火力值·水域（不可入占位）
+attack_deep_water,-2,Pacific 硬核火力值·深海（不可入占位）
+attack_clear,0,Pacific 硬核火力值·沙地/开阔地修正
+attack_trees,-1,Pacific 硬核火力值·树木修正
+attack_beach,-2,Pacific 硬核火力值·海滩修正
+attack_rocky,-2,Pacific 硬核火力值·岩石高地（坦克不可入占位）
+attack_airstrip,0,Pacific 硬核火力值·机场跑道修正
+misc_road,0,硬核杂项·公路地形修正
+misc_field,1,硬核杂项·田地地形修正
+misc_mud,0,硬核杂项·泥地地形修正
+misc_forest,-1,硬核杂项·林地（不可入占位）
+misc_water,-1,硬核杂项·水域（不可入占位）
+misc_deep_water,-1,Pacific 硬核杂项·深海（不可入占位）
+misc_clear,0,Pacific 硬核杂项·沙地/开阔地修正
+misc_trees,1,Pacific 硬核杂项·树木修正
+misc_beach,0,Pacific 硬核杂项·海滩修正
+misc_rocky,-1,Pacific 硬核杂项·岩石高地（坦克不可入占位）
+misc_airstrip,-1,Pacific 硬核杂项·机场跑道修正
 mod_move_driver,1,移动：驾驶员存活则加骰
 mod_move_codriver,1,移动：副驾驶存活则加骰
-mod_move_hatch,1,移动：硬核模式车长存活则加骰
+mod_move_hatch,0,移动：硬核模式车长不再提供额外骰
 mod_attack_gunner,1,攻击：炮手存活则加骰
 mod_attack_loader,1,攻击：装填手存活则加骰
 mod_attack_hatch,1,攻击：硬核模式车长存活则加骰

@@ -317,8 +317,8 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       cellsByEid,
       occupiedBeforeSherman,
       rngResolved!,
-      '谢尔曼',
-      'sherman',
+      '玩家坦克',
+      playerPlacement.kind,
       data.theater,
       6,
     );

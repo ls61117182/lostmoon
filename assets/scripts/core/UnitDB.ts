@@ -23,7 +23,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   sherman76: { // 谢尔曼 76 - 美军坦克；76mm 主炮穿价值为 4
     faction: "usa",
-    size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 4, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 4, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 4, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 4, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -49,7 +49,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   m26_pershing: { // M26E1 潘兴 - 美军重型坦克；按用户提供的 M26E1 三视图制作；长身管 90mm 主炮
     faction: "usa",
-    size: 3, armorFront: 13, armorFrontSide: 12, armorRearSide: 10, armorRear: 9, gunMantletArmor: 2, penetration: 5, highExplosivePower: 3, effectiveRange: 4, turretTraverseSpeed: 4, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 3, armorFront: 13, armorFrontSide: 12, armorRearSide: 10, armorRear: 9, gunMantletArmor: 2, penetration: 5, highExplosivePower: 4, effectiveRange: 4, turretTraverseSpeed: 4, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -71,7 +71,7 @@ const DB: Record<UnitKind, UnitStats> = {
     damageTargetClass: "us_tank",
     infantryTankCoordination: 1,
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
-    crewMembers: [1, 3, 4, 5],
+    crewMembers: [1, 2, 4, 5],
   },
   tiger: { // 虎式 - 重型敌方坦克
     faction: "german",
@@ -88,7 +88,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   tigerking: { // 虎王坦克 - 虎王坦克；战斗参数暂复制虎式坦克
     faction: "german",
-    size: 2, armorFront: 13, armorFrontSide: 12, armorRearSide: 11, armorRear: 10, gunMantletArmor: 0, penetration: 4, highExplosivePower: 3, effectiveRange: 4, turretTraverseSpeed: 2, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 13, armorFrontSide: 12, armorRearSide: 11, armorRear: 10, gunMantletArmor: 0, penetration: 4, highExplosivePower: 4, effectiveRange: 4, turretTraverseSpeed: 2, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -101,7 +101,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   maus: { // 鼠式坦克 - Panzer VIII Maus 超重型坦克；高装甲与 128mm 主炮配置
     faction: "german",
-    size: 0, armorFront: 16, armorFrontSide: 14, armorRearSide: 12, armorRear: 10, gunMantletArmor: 0, penetration: 6, highExplosivePower: 4, effectiveRange: 6, turretTraverseSpeed: 1, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 0, armorFront: 16, armorFrontSide: 14, armorRearSide: 12, armorRear: 10, gunMantletArmor: 0, penetration: 6, highExplosivePower: 6, effectiveRange: 6, turretTraverseSpeed: 1, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -140,7 +140,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   stug3: { // 三号突击炮G型 - 三号突击炮 G 型；沿用现有战斗参数和关卡兼容 ID；固定主炮仅能攻击正前方；支持车长开舱观察
     faction: "german",
-    size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, penetration: 2, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 0, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, penetration: 2, highExplosivePower: 3, effectiveRange: 2, turretTraverseSpeed: 0, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -178,7 +178,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 3, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -190,7 +190,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   german_infantry: { // 德军步兵 - 德军步兵；保留 infantry 作为旧关卡兼容配置
     faction: "german",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 3, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -202,7 +202,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   soviet_infantry: { // 苏军步兵 - 苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
     faction: "soviet",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 3, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: false,
     moveSound: "",
     attackSound: "",
@@ -291,7 +291,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   japanese_infantry: { // 日本步兵 - Pacific: Japanese Infantry; no radio
     faction: "japanese",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 3, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: false,
     moveSound: "",
     attackSound: "",
@@ -304,7 +304,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   american_infantry: { // 美军步兵 - US AI support infantry; equipped with radio
     faction: "usa",
-    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 3, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",

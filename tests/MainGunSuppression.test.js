@@ -14,6 +14,7 @@ const {
   applyHighExplosiveAttack,
   canAttack,
   nonPlayerTankWeaponForTarget,
+  rollAttack,
   rollHighExplosiveAttack,
 } = require('../assets/scripts/core/Combat.ts');
 const {
@@ -50,6 +51,15 @@ assert.strictEqual(isMainGunSuppressionAttack(sherman, infantry, true, 'he'), tr
 assert.strictEqual(isMainGunSuppressionAttack(sherman, officer, true, 'he'), false);
 assert.strictEqual(canAttack({ attacker: sherman, target: infantry, map, mainGunSuppressesInfantry: true, shellType: 'ap' }).ok, false);
 assert.strictEqual(canAttack({ attacker: sherman, target: infantry, map, mainGunSuppressesInfantry: true, shellType: 'he' }).ok, true);
+assert.strictEqual(canAttack({
+  attacker: sherman, target: infantry, map, mainGunSuppressesInfantry: true, shellType: 'he', precisionFire: true,
+}).reason, 'attack.reason.precisionInvalidTarget');
+assert.strictEqual(canAttack({
+  attacker: sherman, target: make('at_gun', 'german', 2, 0), map, shellType: 'he', precisionFire: true,
+}).reason, 'attack.reason.precisionInvalidTarget');
+assert.strictEqual(canAttack({
+  attacker: sherman, target: make('at_gun', 'german', 2, 0), map, shellType: 'ap', precisionFire: true,
+}).ok, true, 'AP precision fire must allow an anti-tank gun target');
 
 const veteranInfantry = { ...infantry, id: 'veteran-infantry', unitLevel: 'veteran', suppressed: false };
 assert.strictEqual(infantryTurnActions(veteranInfantry).length, 2,
@@ -74,10 +84,14 @@ assert.strictEqual(nonPlayerTankWeaponForTarget(make('german_heavy_artillery', '
 const rng = values => ({ d6: () => values.shift() });
 let report = rollHighExplosiveAttack({
   attacker: sherman, target: infantry, map, units: [sherman, infantry], mainGunSuppressesInfantry: true, shellType: 'he',
-}, rng([4]));
+}, rng([2, 2]));
 assert.strictEqual(report.automaticHit, true);
 assert.deepStrictEqual(report.dice, [0, 0], 'HE against infantry must not consume or display a hit roll');
 assert.strictEqual(report.hit, true);
+assert.deepStrictEqual(report.effectDice, [2, 2], 'infantry HE must use 2d6');
+assert.strictEqual(report.destroyThreshold, 10);
+assert.strictEqual(report.suppressThreshold, 4);
+assert.strictEqual(report.infantryCoverSource, undefined, 'open ground must not report a cover row');
 assert.strictEqual(report.outcome, 'suppressed');
 applyHighExplosiveAttack(infantry, report);
 assert.strictEqual(infantry.suppressed, true);
@@ -86,10 +100,19 @@ infantry.suppressed = false;
 map.get(infantry.pos).hasBuilding = true;
 report = rollHighExplosiveAttack({
   attacker: sherman, target: infantry, map, units: [sherman, infantry], mainGunSuppressesInfantry: true, shellType: 'he',
-}, rng([5]));
+}, rng([2, 2]));
 assert.strictEqual(report.infantryInCover, true);
-assert.strictEqual(report.outcome, 'suppressed', 'building cover raises destruction to 6+');
+assert.strictEqual(report.infantryCoverSource, 'building');
+assert.strictEqual(report.destroyThreshold, 11);
+assert.strictEqual(report.suppressThreshold, 5);
+assert.strictEqual(report.outcome, 'none', 'one point of cover raises both infantry thresholds by one');
 map.get(infantry.pos).hasBuilding = false;
+map.get(infantry.pos).terrain = 'forest';
+report = rollHighExplosiveAttack({
+  attacker: sherman, target: infantry, map, units: [sherman, infantry], mainGunSuppressesInfantry: true, shellType: 'he',
+}, rng([2, 2]));
+assert.strictEqual(report.infantryCoverSource, 'forest');
+map.get(infantry.pos).terrain = 'field';
 
 const tank = make('panzer4', 'german', 2, 0, 3);
 report = rollHighExplosiveAttack({ attacker: sherman, target: tank, map, units: [sherman, tank], shellType: 'he' }, rng([1, 1, 5, 4]));
@@ -99,25 +122,142 @@ assert.deepStrictEqual(report.effectDice, [5, 4],
 assert.strictEqual(report.outcome, 'none', 'a displayed post-miss HE roll must never affect the tank');
 report = rollHighExplosiveAttack({ attacker: sherman, target: tank, map, units: [sherman, tank], shellType: 'he' }, rng([6, 6, 5, 4]));
 assert.strictEqual(report.effectThreshold, tank.stats.armorFront - sherman.stats.highExplosivePower);
+assert.strictEqual(report.paralyzeThreshold, tank.stats.armorFront - sherman.stats.highExplosivePower);
+assert.strictEqual(report.fireThreshold, tank.stats.armorFront + 4 - sherman.stats.highExplosivePower);
 assert.strictEqual(report.outcome, 'paralyzed');
 applyHighExplosiveAttack(tank, report);
 assert.strictEqual(tank.paralyzed, true);
 
-for (const kind of ['truck', 'at_gun']) {
-  const target = make(kind, 'german', 2, 0, 3);
-  report = rollHighExplosiveAttack({ attacker: sherman, target, map, units: [sherman, target], shellType: 'he' }, rng([6, 6]));
-  assert.strictEqual(report.outcome, 'destroyed');
-}
+const lightTank = {
+  ...tank,
+  id: 'light-tank',
+  stats: { ...tank.stats, armorFront: 8 },
+};
+report = rollHighExplosiveAttack({
+  attacker: sherman, target: lightTank, map, units: [sherman, lightTank], shellType: 'he',
+}, rng([6, 6, 5, 5]));
+assert.strictEqual(report.paralyzeThreshold, 6);
+assert.strictEqual(report.fireThreshold, 10);
+assert.strictEqual(report.effectThreshold, 10, 'a fire result must expose the fire threshold as the effective threshold');
+assert.strictEqual(report.outcome, 'fire');
+applyHighExplosiveAttack(lightTank, report);
+assert.strictEqual(lightTank.fireLevel, 1);
+
+const burningTank = { ...lightTank, id: 'burning-tank', fireLevel: 1 };
+report = rollHighExplosiveAttack({
+  attacker: sherman, target: burningTank, map, units: [sherman, burningTank], shellType: 'he',
+}, rng([6, 6, 5, 5]));
+assert.strictEqual(report.outcome, 'destroyed', 'repeat HE fire must destroy a burning non-player tank');
+assert.strictEqual(report.destroyedByRepeatFire, true);
+applyHighExplosiveAttack(burningTank, report);
+assert.strictEqual(burningTank.destroyed, true);
+
+const burningProtagonist = {
+  ...lightTank,
+  id: 'burning-protagonist',
+  controller: 'local_player',
+  fireLevel: 1,
+};
+report = rollHighExplosiveAttack({
+  attacker: sherman,
+  target: burningProtagonist,
+  protagonist: burningProtagonist,
+  map,
+  units: [sherman, burningProtagonist],
+  shellType: 'he',
+}, rng([6, 6, 5, 5]));
+assert.strictEqual(report.outcome, 'fire', 'repeat HE fire must not directly destroy the protagonist tank');
+assert.strictEqual(report.destroyedByRepeatFire, false);
+
+const heTruck = make('truck', 'german', 2, 0, 3);
+report = rollHighExplosiveAttack({ attacker: sherman, target: heTruck, map, units: [sherman, heTruck], shellType: 'he' }, rng([6, 6]));
+assert.strictEqual(report.outcome, 'destroyed', 'a hit must destroy a truck without a blast check');
+
+const atGun = make('at_gun', 'german', 2, 0, 3);
+report = rollHighExplosiveAttack({ attacker: sherman, target: atGun, map, units: [sherman, atGun], shellType: 'he' }, rng([5, 5]));
+assert.strictEqual(report.automaticHit, true, 'HE must automatically hit an AT gun');
+assert.deepStrictEqual(report.effectDice, [5, 5]);
+assert.strictEqual(report.destroyThreshold, 10);
+assert.strictEqual(report.outcome, 'destroyed');
 
 const artillery = make('german_heavy_artillery', 'german', 2, 0, 3);
-report = rollHighExplosiveAttack({ attacker: sherman, target: artillery, map, units: [sherman, artillery], shellType: 'he' }, rng([6, 6, 3, 3]));
-assert.strictEqual(report.outcome, 'suppressed');
-report = rollHighExplosiveAttack({ attacker: sherman, target: artillery, map, units: [sherman, artillery], shellType: 'he' }, rng([6, 6, 4, 4]));
-assert.strictEqual(report.outcome, 'fire_suppressed');
-artillery.fireLevel = 1;
-report = rollHighExplosiveAttack({ attacker: sherman, target: artillery, map, units: [sherman, artillery], shellType: 'he' }, rng([6, 6]));
-assert.strictEqual(report.outcome, 'suppressed');
-assert.strictEqual(report.effectDice, undefined);
+const bunkerHEContext = {
+  attacker: sherman, target: artillery, map, units: [sherman, artillery], shellType: 'he',
+  hardcoreHeavyArtilleryRules: true,
+};
+report = rollHighExplosiveAttack(bunkerHEContext, rng([3, 3]));
+assert.strictEqual(report.automaticHit, true);
+assert.strictEqual(report.fireThreshold, 6);
+assert.strictEqual(report.destroyThreshold, 10);
+assert.strictEqual(report.outcome, 'fire');
+report = rollHighExplosiveAttack(bunkerHEContext, rng([5, 5]));
+assert.strictEqual(report.outcome, 'destroyed');
+
+const burningArtillery = { ...artillery, id: 'burning-artillery', fireLevel: 1 };
+const burningBunkerHEContext = {
+  ...bunkerHEContext,
+  target: burningArtillery,
+  units: [sherman, burningArtillery],
+};
+report = rollHighExplosiveAttack(burningBunkerHEContext, rng([3, 3]));
+assert.strictEqual(report.outcome, 'destroyed', 'a second heavy-artillery fire result must destroy it');
+assert.strictEqual(report.destroyedByRepeatFire, true);
+applyHighExplosiveAttack(burningArtillery, report);
+assert.strictEqual(burningArtillery.destroyed, true);
+
+report = rollHighExplosiveAttack({
+  ...bunkerHEContext, precisionFire: true, hitThresholdModifier: -2,
+}, rng([3, 3]));
+assert.strictEqual(report.shootingPortHit, true);
+assert.strictEqual(report.outcome, 'destroyed');
+assert.strictEqual(report.effectDice, undefined, 'a shooting-port hit destroys before the HE power check');
+
+report = rollHighExplosiveAttack({
+  ...bunkerHEContext, precisionFire: true, hitThresholdModifier: -2,
+}, rng([1, 1, 5, 5]));
+assert.strictEqual(report.shootingPortHit, false);
+assert.strictEqual(report.hit, true, 'a shooting-port miss must still hit the bunker body');
+assert.strictEqual(report.outcome, 'destroyed', 'the failed port attempt must continue into the HE power check');
+
+let apReport = rollAttack({
+  attacker: sherman, target: artillery, map,
+  hardcoreHeavyArtilleryRules: true,
+  directionalDamageCheck: true,
+  unitDamageTargetClass: true,
+  overpenetration: true,
+}, rng([4, 4, 6]));
+assert.strictEqual(apReport.automaticHit, true);
+assert.deepStrictEqual(apReport.dice, [0, 0], 'ordinary AP fire at a bunker skips the hit roll');
+assert.deepStrictEqual(apReport.penDice, [4, 4]);
+
+apReport = rollAttack({
+  attacker: { ...sherman, stats: { ...sherman.stats, penetration: 10 } },
+  target: artillery,
+  map,
+  hardcoreHeavyArtilleryRules: true,
+  overpenetration: true,
+}, rng([6, 6, 6]));
+assert.strictEqual(apReport.overpenetrated, true, 'a bunker must remain eligible for AP overpenetration');
+
+apReport = rollAttack({
+  attacker: sherman, target: artillery, map,
+  hardcoreHeavyArtilleryRules: true,
+  precisionFire: true,
+  hitThresholdModifier: -2,
+}, rng([3, 3]));
+assert.strictEqual(apReport.shootingPortHit, true);
+assert.strictEqual(apReport.damageEffect, 'destroyed');
+assert.strictEqual(apReport.penDice, undefined);
+
+apReport = rollAttack({
+  attacker: sherman, target: artillery, map,
+  hardcoreHeavyArtilleryRules: true,
+  precisionFire: true,
+  hitThresholdModifier: -2,
+}, rng([1, 1, 6, 6, 6]));
+assert.strictEqual(apReport.shootingPortHit, false);
+assert.strictEqual(apReport.hit, true);
+assert.deepStrictEqual(apReport.penDice, [6, 6], 'a port miss must continue into AP penetration');
 
 const truck = make('truck', 'german', 2, 3, 3);
 const coLocatedInfantry = make('german_infantry', 'german', 2, 3, null);
@@ -136,8 +276,8 @@ assert.match(battleSceneSource,
   /rollHighExplosiveCollateralResults\([\s\S]*?if \(!this\.mission\) return \[\][\s\S]*?!isAttachedATGunCrew\(unit\)[\s\S]*?unit\.pos\.q === target\.pos\.q[\s\S]*?rollHighExplosiveAttack\([\s\S]*?target: infantry/,
   'every ordinary infantry unit sharing an HE target hex must receive a pre-rolled blast result');
 assert.match(battleSceneSource,
-  /rollHighExplosiveCollateralResults\([\s\S]*?!isAttachedATGunCrew\(unit\)/,
-  'an infantry squad attached to an AT gun must resolve as part of the gun instead of receiving a separate HE check');
+  /rollHighExplosiveCollateralResults\([\s\S]*?isAntiTankGunUnit\(target\)[\s\S]*?unit\.attachedToATGunId === target\.id/,
+  'the targeted AT gun crew must receive exactly one additional infantry HE check');
 assert.doesNotMatch(
   battleSceneSource.match(/private rollHighExplosiveCollateralResults[\s\S]*?\n  }/)?.[0] ?? '',
   /report\.hit|isTankUnit\(target\)/,
@@ -155,20 +295,29 @@ assert.match(battleSceneSource,
   /else \{[\s\S]*?penVerdictLabel\.node\.active = false[\s\S]*?for \(let i = 0; i < show\.highExplosiveCollateralRows\.length; i\+\+\)/,
   'collateral infantry results must still be revealed when the primary HE attack misses');
 assert.match(battleSceneSource,
-  /shellType === 'he' && isFootUnit\(e\)[\s\S]*?destroyNeed = infantryHasHighExplosiveCover\(ctx\) \? 6 : 5[\s\S]*?spawnPreviewLabel\(c\.x, c\.y - this\.hexSize \* 0\.28, destroyNeed, destroyProbability\)/,
+  /shellType === 'he' && isFootUnit\(e\)[\s\S]*?destroyNeed = 12 \+ infantryHighExplosiveCoverValue\(ctx\)[\s\S]*?sherman\.stats\.highExplosivePower[\s\S]*?probHit2d6\(destroyNeed\)/,
   'HE infantry targeting preview must show only the cover-dependent destruction threshold and chance');
 assert.match(battleSceneSource,
-  /if \(!automaticHEHit\)[\s\S]*?else \{[\s\S]*?d1\.node\.parent!\.active = false[\s\S]*?hitVerdict\.node\.active = false/,
+  /if \(!automaticHit\)[\s\S]*?else \{[\s\S]*?d1\.node\.parent!\.active = false[\s\S]*?hitVerdict\.node\.active = false/,
   'automatic infantry HE must hide the normal hit-dice row');
 assert.match(battleSceneSource,
-  /he\.infantryInCover !== undefined[\s\S]*?dice\.panel\.heDestroyNeed/,
-  'the HE infantry result row must label its threshold as a destruction threshold');
+  /he\.suppressThreshold !== undefined[\s\S]*?he\.outcome === 'destroyed'[\s\S]*?heDestroyNeed[\s\S]*?heSuppressNeed/,
+  'the HE infantry row must show destroy-needed only for destruction, otherwise suppress-needed');
 assert.match(battleSceneSource,
-  /he\.armor !== undefined[\s\S]*?dice\.panel\.heParalyzeNeed/,
-  'the HE tank result row must label its threshold as an immobilization threshold');
+  /he\.fireThreshold !== undefined[\s\S]*?he\.outcome === 'destroyed'[\s\S]*?heDestroyNeed[\s\S]*?heFireNeed/,
+  'the heavy-artillery HE row must show destroy-needed only for destruction, otherwise fire-needed');
+assert.match(battleSceneSource,
+  /he\.destroyedByRepeatFire \? he\.fireThreshold[\s\S]*?: he\.destroyThreshold/,
+  'a repeated-fire destruction must display the fire threshold as its effective destroy threshold');
+assert.match(battleSceneSource,
+  /he\.paralyzeThreshold !== undefined[\s\S]*?he\.outcome === 'fire' \|\| he\.outcome === 'destroyed'[\s\S]*?heFireNeed[\s\S]*?heParalyzeNeed/,
+  'the HE tank result row must show fire-needed for fire/destruction and immobilize-needed otherwise');
 assert.match(battleSceneSource,
   /hitNeedText = mg[\s\S]*?dice\.panel\.mgHitNeed[\s\S]*?dice\.panel\.hitNeed/,
   'main-gun hit rows must explicitly say that the displayed threshold is required to hit');
+assert.match(battleSceneSource,
+  /shootingPortHit !== undefined[\s\S]*?shootingPortHitNeed[\s\S]*?shootingPortMissContinue/,
+  'bunker precision fire must label its firing-slit roll and show that a miss continues');
 assert.match(battleSceneSource,
   /if \(he\.effectDice\?\.length\)[\s\S]*?!he\.hit[\s\S]*?dice\.panel\.heParalyzeCheck[\s\S]*?dice\.panel\.invalid/,
   'a missed HE tank attack must still show its pre-rolled immobilization row as an invalid check');
@@ -179,17 +328,17 @@ assert.match(battleSceneSource,
   /thr <= 0[\s\S]*?dice\.panel\.penMustPen[\s\S]*?dice\.panel\.penetrateNeed/,
   'a normal AP penetration threshold must be labeled as required to penetrate');
 assert.match(battleSceneSource,
-  /tankHighExplosiveFormula[\s\S]*?he\.armor !== undefined && he\.fireThreshold === undefined[\s\S]*?dice\.rule\.armorLine[\s\S]*?armorFaceText\(he\.armorFace\)[\s\S]*?dice\.rule\.hePower[\s\S]*?total: \[t\('dice\.rule\.heParalyzeNeed'\)/,
-  'the HE tank detail modal must identify the struck armor face and separate the immobilization threshold as its total');
+  /he\.armor !== undefined && he\.paralyzeThreshold !== undefined[\s\S]*?dice\.rule\.armorLine[\s\S]*?armorFaceText\(he\.armorFace\)[\s\S]*?dice\.rule\.hePower[\s\S]*?dice\.rule\.heFireModifier[\s\S]*?dice\.rule\.heFireNeed[\s\S]*?dice\.rule\.heParalyzeNeed/,
+  'the HE tank detail modal must identify the armor face and show both fire and immobilization thresholds');
 assert.match(battleSceneSource,
   /if \(highExplosiveReport\) \{[\s\S]*?makeDiceRuleButton\(panel, -238, penDiceY, \(\) => this\.openDiceRuleModal\('he'\)\)/,
   'the HE blast row must expose a clickable blast-detail button');
 assert.match(battleSceneSource,
-  /kind === 'he'[\s\S]*?populateDiceRuleHighExplosive[\s\S]*?for \(let roll = firstRoll; roll <= lastRoll; roll\+\+\)[\s\S]*?highExplosiveTableOutcome\(report, roll\)/,
-  'the blast-detail modal must list the outcome for every possible HE roll');
+  /dice\.rule\.heBaseDestroy[\s\S]*?dice\.rule\.heBaseSuppress[\s\S]*?coverValue !== 0[\s\S]*?infantryCoverSource === 'building'[\s\S]*?terrain\.forest[\s\S]*?dice\.rule\.hePower[\s\S]*?heSuppressNeed/,
+  'the infantry blast-detail modal must list every threshold parameter and summarize destroy and suppression totals');
 assert.match(battleSceneSource,
-  /highExplosiveTableOutcome[\s\S]*?dice\.panel\.heSuppressed[\s\S]*?highExplosiveOutcomeLabel[\s\S]*?case 'suppressed': return \{ text: t\('dice\.panel\.heSuppressed'\)/,
-  'HE result tables and result rows must show suppression without an exclamation mark');
+  /const totals = spec\.totals[\s\S]*?drawDiceRuleDivider[\s\S]*?for \(const total of totals\)/,
+  'formula detail modals must draw a divider before rendering all summarized thresholds');
 assert.match(battleSceneSource,
   /playHighExplosiveSuppressionCue\([\s\S]*?report\?: HighExplosiveReport[\s\S]*?const hit = report\?\.hit \?\? true[\s\S]*?\{ hit, penetrated: hit[\s\S]*?onPenetrationImpact: hit[\s\S]*?spawnHighExplosiveBlast/,
   'HE must create its target-side blast only on a reported hit while preserving legacy replay cues');

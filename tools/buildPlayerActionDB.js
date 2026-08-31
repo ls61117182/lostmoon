@@ -281,11 +281,11 @@ function build() {
   lines.push(`  misc: '${action.doubles.misc}',`);
   lines.push('};');
   lines.push('');
-  lines.push('/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 下限 / 可选上限。由 actionDicePool() 消费。 */');
+  lines.push('/** GDD §3.6.1：子阶段 × 地形数值 + 乘员修正 + 下限 / 可选上限。硬核三阶段地形值均为修正。 */');
   lines.push("export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';");
   lines.push('');
   lines.push('export interface PlayerDicePoolConfig {');
-  lines.push("  /** 移动 / 攻击 / 杂项 → 各地形基础骰数 */");
+  lines.push("  /** 移动 / 攻击 / 杂项 → 各地形数值；硬核三阶段列为修正，经典模式列为基础骰数。 */");
   lines.push('  baseByPhaseTerrain: Record<ActionDiceSubPhase, Record<TerrainType, number>>;');
   lines.push('  /** 移动阶段：驾驶员 / 副驾驶存活、开舱 各加多少（通常为 1） */');
   lines.push('  moveMods: { driver: number; codriver: number; hatch: number };');

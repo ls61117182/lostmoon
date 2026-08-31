@@ -32,6 +32,7 @@ import { shouldNonPlayerTankOpenCommanderHatch } from '../assets/scripts/core/Co
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest } from '../assets/scripts/core/FireCheck';
 import { applyAttack, armorFaceFrom, attackDirectionRuleFrom, canAttack, canMGAttack, effectivePenetration, effectivePenetrationBreakdown, hitThreshold, incomingAngleFrom, previewAttack, rollAttack } from '../assets/scripts/core/Combat';
 import { actionDicePool } from '../assets/scripts/core/ActionDice';
+import { hardcoreAttackDieIsInvalid } from '../assets/scripts/core/EnemyAI';
 import { RNG } from '../assets/scripts/core/Dice';
 
 const rngFrom = (...values): RNG => {
@@ -1016,14 +1017,32 @@ const rngFrom = (...values): RNG => {
     const noCrew = { commander: false, loader: false, gunner: false, driver: false, coDriver: false };
     assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'road', hatchOpen: false, crew: noCrew,
       commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 3 }), 3);
+    const commanderOnly = { ...noCrew, commander: true };
+    assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'road', hatchOpen: false, crew: commanderOnly,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 3 }), 3);
     assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'mud', hatchOpen: false, crew: noCrew,
       commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 2 }), 1);
     assert.strictEqual(actionDicePool({ subPhase: 'movement', terrain: 'beach', hatchOpen: false, crew: noCrew,
       commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 1 }), 1);
     assert.strictEqual(actionDicePool({ subPhase: 'attack', terrain: 'forest', hatchOpen: false, crew: noCrew,
       commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 1 }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'attack', terrain: 'road', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true }), 2);
+    assert.strictEqual(actionDicePool({ subPhase: 'attack', terrain: 'mud', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true }), 1);
     assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'forest', hatchOpen: false, crew: noCrew,
       commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true, mobility: 1 }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'road', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true }), 1);
+    assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'field', hatchOpen: false, crew: noCrew,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true }), 2);
+    assert.strictEqual(actionDicePool({ subPhase: 'misc', terrain: 'field', hatchOpen: true, crew: commanderOnly,
+      commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true }), 3);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(6, 0), false);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(6, -1), true);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(5, -1), false);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(5, -2), true);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(4, -2), false);
   };
 
   const addRect = (map: HexMap, cols: number, rows: number) => {

@@ -43,5 +43,6 @@ test('literal localization keys used by scripts exist in LangDB', () => {
 test('reported dynamic localization keys exist', () => {
   const definedKeys = definedLangKeys();
   assert.equal(definedKeys.has('unit.name.stug3'), true);
+  assert.equal(definedKeys.has('unit.name.tigerking'), true);
   assert.equal(definedKeys.has('tileInspect.status.radioIntact'), true);
 });

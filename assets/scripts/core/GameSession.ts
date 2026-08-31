@@ -12,6 +12,8 @@ import {
 } from './CampaignDB';
 import type { CampaignDefinition } from './CampaignDB';
 import { generateRandomMissionPackage } from './RandomMissionGenerator';
+import { DEFAULT_PLAYER_TANK_KIND, normalizeSelectedPlayerTankKind } from './PlayerTankSelection';
+import type { UnitKind } from './types';
 
 export function createRandomIslandPackages(seed: number = Date.now()): CustomMissionPackage[] {
   const baseSeed = (seed >>> 0) || 1;
@@ -79,6 +81,8 @@ export interface GameSessionState {
   selectedCampaign: CampaignDefinition | null;
   /** In-memory generated missions and event tables for Random Island. */
   selectedCampaignPackages: CustomMissionPackage[] | null;
+  /** Main-menu tank choice used for newly loaded single-player missions. */
+  selectedPlayerTankKind: UnitKind;
 }
 
 const DEFAULT_MISSION_PATH = 'missions/mission_01';
@@ -94,6 +98,7 @@ const DEFAULT_STATE: GameSessionState = {
   selectedCampaignId: null,
   selectedCampaign: null,
   selectedCampaignPackages: null,
+  selectedPlayerTankKind: DEFAULT_PLAYER_TANK_KIND,
 };
 
 const state: GameSessionState = { ...DEFAULT_STATE };
@@ -111,6 +116,11 @@ export const GameSession = {
   get selectedCampaign() { return state.selectedCampaign; },
   get selectedCampaignPackages() { return state.selectedCampaignPackages; },
   get isCampaign() { return !!state.selectedCampaignId; },
+  get selectedPlayerTankKind() { return state.selectedPlayerTankKind; },
+
+  setSelectedPlayerTankKind(kind: unknown) {
+    state.selectedPlayerTankKind = normalizeSelectedPlayerTankKind(kind);
+  },
 
   setGameMode(mode: GameMode) {
     state.gameMode = mode;
@@ -234,5 +244,6 @@ export const GameSession = {
     state.selectedCampaignId = DEFAULT_STATE.selectedCampaignId;
     state.selectedCampaign = DEFAULT_STATE.selectedCampaign;
     state.selectedCampaignPackages = DEFAULT_STATE.selectedCampaignPackages;
+    state.selectedPlayerTankKind = DEFAULT_STATE.selectedPlayerTankKind;
   },
 };

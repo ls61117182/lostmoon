@@ -44,6 +44,17 @@
    看到 `[buildUnitDB] OK  6 units → assets\scripts\core\UnitDB.ts` 即成功。
 5. **回到 Cocos Creator** 点预览，新数值立即生效。
 
+### 可以调整列顺序
+
+配置表按英文表头名称读取，不依赖列的位置。你可以在 Excel / WPS 中拖动整列，之后运行：
+
+```powershell
+node E:\cocos\Project\Sherman\tools\updateAllConfigTables.js
+```
+
+批量更新器会记住每张表运行前的列顺序，并在生成代码后保持该顺序。调整时必须移动整列，
+且不要修改、删除或重复英文表头；中文说明行也要和对应英文表头一起移动。
+
 > **关于 Excel 中文乱码**
 >
 > 中文版 Excel 默认会把 CSV 保存为 GBK 编码并去掉 BOM 标记，下次再打开就会乱码。

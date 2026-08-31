@@ -58,6 +58,7 @@ import { readActiveSaveRaw } from '../core/SaveSlot';
 import { normalizeWeather } from '../core/Weather';
 import { normalizeUnitLevel } from '../core/UnitLevel';
 import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
+import { selectablePlayerTankKinds } from '../core/PlayerTankSelection';
 import {
   ACTIVE_TERRAIN_CATEGORIES,
   ActiveTerrainCategory,
@@ -227,6 +228,9 @@ export class MainMenuScene extends Component {
   private classicModeBtn: ButtonRefs | null = null;
   private hardcoreModeBtn: ButtonRefs | null = null;
   private pvpEntryBtn: ButtonRefs | null = null;
+  private playerTankSelectBtn: ButtonRefs | null = null;
+  private playerTankSelectLabel: Label | null = null;
+  private selectedPlayerTankKind: UnitKind = 'sherman';
 
   // 关卡按钮池（1..12，对应 LEVELS）
   private levelBtns: ButtonRefs[] = [];
@@ -291,6 +295,8 @@ export class MainMenuScene extends Component {
     this.selectedChapterId = getChapter(menuState.selectedChapterId) ? menuState.selectedChapterId : DEFAULT_CHAPTER_ID;
     this.gameMode = menuState.gameMode;
     GameSession.setGameMode(this.gameMode);
+    this.selectedPlayerTankKind = menuState.selectedPlayerTankKind;
+    GameSession.setSelectedPlayerTankKind(this.selectedPlayerTankKind);
 
     this.buildBackground();
     this.buildTitle();
@@ -988,6 +994,9 @@ export class MainMenuScene extends Component {
     this.gameMode = savedMode;
     GameSession.setGameMode(savedMode);
     MenuProgress.setGameMode(savedMode);
+    // A continued battle must load the same protagonist kind before applying
+    // its snapshot; otherwise SaveLoad correctly rejects the kind mismatch.
+    GameSession.setSelectedPlayerTankKind(save.playerTank?.kind ?? save.sherman.kind);
     if (save.missionSource?.type === 'custom') {
       const pkg = CustomMissionStore.load(save.missionSource.packageId);
       if (pkg) {
@@ -1288,6 +1297,17 @@ export class MainMenuScene extends Component {
     debugLabel.enableOutline = true;
     debugLabel.outlineColor = TEXT_OUTLINE;
     debugLabel.outlineWidth = 2;
+    const tankSelectBtn = this.makeRectButton(
+      this.node, -500, 270, 180, 42, ICON_BTN_BG, () => this.openPlayerTankPicker(),
+    );
+    tankSelectBtn.node.name = 'PlayerTankSelectButton';
+    this.playerTankSelectBtn = tankSelectBtn;
+    this.playerTankSelectLabel = this.makeLabel(tankSelectBtn.node, '', 0, 0, 164, 30, 17, TEXT_PRIMARY);
+    this.playerTankSelectLabel.overflow = Label.Overflow.SHRINK;
+    this.playerTankSelectLabel.enableOutline = true;
+    this.playerTankSelectLabel.outlineColor = TEXT_OUTLINE;
+    this.playerTankSelectLabel.outlineWidth = 2;
+    this.refreshPlayerTankSelectButton();
     const settings = this.makeCircleButton(this.node, 580, 320, 24, '⚙', () => this.openSettings());
     settings.node.name = 'SettingsIcon';
 
@@ -1302,6 +1322,68 @@ export class MainMenuScene extends Component {
     void settings;
     void help;
     void account;
+  }
+
+  private refreshPlayerTankSelectButton() {
+    if (!this.playerTankSelectLabel) return;
+    this.playerTankSelectLabel.string = t('menu.tankSelect.button', {
+      tank: t(`unit.name.${this.selectedPlayerTankKind}`),
+    });
+  }
+
+  private openPlayerTankPicker() {
+    this.closeModal();
+    const { panel } = this.openModal(t('menu.tankSelect.title'), 780, 560);
+    this.makeLabel(panel, t('menu.tankSelect.hint'), 0, 180, 700, 28, 16, TEXT_SUBTITLE);
+
+    const kinds = selectablePlayerTankKinds();
+    const columns = 3;
+    const buttonW = 214;
+    const buttonH = 48;
+    const gapX = 22;
+    const gapY = 62;
+    const startX = -buttonW - gapX;
+    const startY = 126;
+    for (let i = 0; i < kinds.length; i++) {
+      const kind = kinds[i]!;
+      const col = i % columns;
+      const row = Math.floor(i / columns);
+      const active = kind === this.selectedPlayerTankKind;
+      const btn = this.makeRectButton(
+        panel,
+        startX + col * (buttonW + gapX),
+        startY - row * gapY,
+        buttonW,
+        buttonH,
+        active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED,
+        () => this.selectPlayerTank(kind),
+      );
+      btn.node.name = `PlayerTankOption_${kind}`;
+      const label = this.makeLabel(
+        btn.node,
+        `${active ? '✓ ' : ''}${t(`unit.name.${kind}`)}`,
+        0,
+        0,
+        buttonW - 20,
+        30,
+        18,
+        active ? TEXT_TITLE : TEXT_PRIMARY,
+      );
+      label.overflow = Label.Overflow.SHRINK;
+      label.enableOutline = true;
+      label.outlineColor = TEXT_OUTLINE;
+      label.outlineWidth = 2;
+    }
+  }
+
+  private selectPlayerTank(kind: UnitKind) {
+    if (!isTankKind(kind)) return;
+    this.selectedPlayerTankKind = kind;
+    GameSession.setSelectedPlayerTankKind(kind);
+    MenuProgress.setSelectedPlayerTankKind(kind);
+    syncServerProfile(MenuProgress.load());
+    this.refreshPlayerTankSelectButton();
+    this.closeModal();
   }
 
   private refreshAuthBadge() {
@@ -2604,6 +2686,8 @@ export class MainMenuScene extends Component {
     this.continueSubLabel = null;
     this.classicModeBtn = null;
     this.hardcoreModeBtn = null;
+    this.playerTankSelectBtn = null;
+    this.playerTankSelectLabel = null;
     this.authNameLabel = null;
     this.authStatusLabel = null;
     this.modalRoot = null;

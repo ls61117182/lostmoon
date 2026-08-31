@@ -87,6 +87,10 @@ export interface AttackReport {
   roll: number;
   threshold: number;
   hit: boolean;
+  /** 硬核重炮碉堡普通射击跳过命中检定，直接进入后续结算。 */
+  automaticHit?: boolean;
+  /** 精确射击是否命中重炮碉堡射击孔；false 时仍继续正常穿甲/威力判定。 */
+  shootingPortHit?: boolean;
   /** 攻击发生时锁定的基础命中分解，避免 UI 受结算后的状态变化影响。 */
   hitBreakdown?: HitBreakdown;
   /** UI 命中详情中的具名修正；每个实际因素单独一项。 */
@@ -174,6 +178,10 @@ export interface AttackContext {
   mainGunSuppressesInfantry?: boolean;
   /** Hardcore main-gun ammunition, loaded by players or selected automatically by AI. */
   shellType?: ShellType;
+  /** 硬核重炮碉堡：普通射击自动命中，精确射击失败后继续后续判定。 */
+  hardcoreHeavyArtilleryRules?: boolean;
+  /** 本次攻击是否为精确射击。 */
+  precisionFire?: boolean;
   /** 命中等级规则区分主炮/步兵武器与机枪；缺省按主炮/普通攻击处理。 */
   attackKind?: 'main' | 'mg';
 }
@@ -351,7 +359,8 @@ export type AttackDenyReason =
   | 'attack.reason.blocked'
   | 'attack.reason.outOfRange'
   | 'attack.reason.turretDamaged'
-  | 'attack.reason.camouflageNet';
+  | 'attack.reason.camouflageNet'
+  | 'attack.reason.precisionInvalidTarget';
 
 function isForwardOnlyGun(unit: Unit): boolean {
   // A controlled hardcore AT gun is represented as turreted only while its
@@ -371,6 +380,10 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
+  if (ctx.precisionFire === true
+    && (isFootUnit(target) || (isAntiTankGunUnit(target) && ctx.shellType === 'he'))) {
+    return { ok: false, reason: 'attack.reason.precisionInvalidTarget' };
+  }
   const infantryAttack = isFootUnit(attacker);
   const suppressionAttack = ctx.mainGunSuppressesInfantry === true
     && ctx.shellType === 'he'
@@ -462,7 +475,11 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const hedges = map.countHedgesAlong(attacker.pos, target.pos);
   const targetTile = map.get(target.pos);
   const building = targetTile?.hasBuilding ? 1 : 0;
-  const size = target.stats.size;
+  const size = ctx.hardcoreHeavyArtilleryRules === true
+    && ctx.precisionFire === true
+    && isHeavyArtilleryUnit(target)
+    ? (target.stats.shootingPortHitThreshold ?? 6)
+    : target.stats.size;
   const smoke = usesHardcoreSmokeRules(ctx)
     ? (unitIsInSmoke(ctx, attacker) || unitIsInSmoke(ctx, target) ? 2 : 0)
     : (unitIsInSmoke(ctx, target) ? 1 : 0);
@@ -645,6 +662,7 @@ export type HighExplosiveOutcome =
   | 'paralyzed'
   | 'suppressed'
   | 'destroyed'
+  | 'fire'
   | 'fire_suppressed';
 
 export type NonPlayerTankWeapon = ShellType | 'mg';
@@ -666,6 +684,8 @@ export interface HighExplosiveReport {
   hit: boolean;
   /** Ordinary infantry is automatically hit by HE and skips the normal hit roll. */
   automaticHit?: boolean;
+  /** 精确射击是否命中重炮碉堡射击孔；false 时继续正常威力判定。 */
+  shootingPortHit?: boolean;
   hitBreakdown: HitBreakdown;
   hitModifiers?: HitThresholdModifierDetail[];
   armorFace?: ArmorFace;
@@ -674,48 +694,92 @@ export interface HighExplosiveReport {
   effectDice?: number[];
   effectRoll?: number;
   effectThreshold?: number;
+  destroyThreshold?: number;
+  suppressThreshold?: number;
   fireThreshold?: number;
+  /** 坦克 HE 的低档结果阈值；达到更高的 fireThreshold 时由起火取代瘫痪。 */
+  paralyzeThreshold?: number;
+  /** 重炮碉堡已经起火时，本次再次达到起火阈值而升级为摧毁。 */
+  destroyedByRepeatFire?: boolean;
   infantryInCover?: boolean;
+  infantryCoverValue?: number;
+  infantryCoverSource?: InfantryHighExplosiveCoverSource;
   outcome: HighExplosiveOutcome;
   commanderKilledByHitDoubles?: boolean;
   commanderShieldBlocked?: boolean;
 }
 
-/** Buildings, woods and a friendly tank in the same hex improve infantry's HE survival. */
-export function infantryHasHighExplosiveCover(ctx: AttackContext): boolean {
+export type InfantryHighExplosiveCoverSource = 'building' | 'forest' | 'trees' | 'friendly_tank';
+
+/** Identify the concrete source of the current binary infantry HE cover bonus. */
+export function infantryHighExplosiveCoverSource(
+  ctx: AttackContext,
+): InfantryHighExplosiveCoverSource | undefined {
   const tile = ctx.map.get(ctx.target.pos);
-  if (tile?.hasBuilding || tile?.terrain === 'forest' || tile?.terrain === 'trees') return true;
+  if (tile?.hasBuilding) return 'building';
+  if (tile?.terrain === 'forest') return 'forest';
+  if (tile?.terrain === 'trees') return 'trees';
   return ctx.units?.some(unit => unit !== ctx.target
     && !unit.destroyed
     && isSameSide(unit, ctx.target)
     && isTankUnit(unit)
     && unit.pos.q === ctx.target.pos.q
-    && unit.pos.r === ctx.target.pos.r) === true;
+    && unit.pos.r === ctx.target.pos.r) === true ? 'friendly_tank' : undefined;
+}
+
+/** Buildings, woods and a friendly tank in the same hex each use the current binary cover value (0/1). */
+export function infantryHighExplosiveCoverValue(ctx: AttackContext): number {
+  return infantryHighExplosiveCoverSource(ctx) ? 1 : 0;
+}
+
+/** Compatibility helper retained for callers that only need a yes/no cover preview. */
+export function infantryHasHighExplosiveCover(ctx: AttackContext): boolean {
+  return infantryHighExplosiveCoverValue(ctx) > 0;
 }
 
 export function rollHighExplosiveInfantryOutcome(
-  inCover: boolean,
+  coverValue: number,
+  highExplosivePower: number,
   rng: RNG,
-): { die: number; threshold: number; outcome: 'destroyed' | 'suppressed' } {
-  const die = rng.d6();
-  const threshold = inCover ? 6 : 5;
-  return { die, threshold, outcome: die >= threshold ? 'destroyed' : 'suppressed' };
+): {
+  dice: [number, number];
+  roll: number;
+  destroyThreshold: number;
+  suppressThreshold: number;
+  outcome: 'destroyed' | 'suppressed' | 'none';
+} {
+  const dice: [number, number] = [rng.d6(), rng.d6()];
+  const roll = dice[0] + dice[1];
+  const destroyThreshold = 12 + coverValue - highExplosivePower;
+  const suppressThreshold = 6 + coverValue - highExplosivePower;
+  const outcome = roll >= destroyThreshold
+    ? 'destroyed'
+    : roll >= suppressThreshold ? 'suppressed' : 'none';
+  return { dice, roll, destroyThreshold, suppressThreshold, outcome };
 }
 
 /** Resolve hardcore HE without any AP penetration, range falloff or damage-table roll. */
 export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplosiveReport {
   const { attacker, target } = ctx;
   const lockedHitBreakdown = hitBreakdown(ctx);
-  const automaticHit = isFootUnit(target) && target.kind !== 'officer';
+  const shootingPortAttack = ctx.hardcoreHeavyArtilleryRules === true
+    && ctx.precisionFire === true
+    && isHeavyArtilleryUnit(target);
+  const automaticHit = (isFootUnit(target) && target.kind !== 'officer')
+    || isAntiTankGunUnit(target)
+    || (ctx.hardcoreHeavyArtilleryRules === true && isHeavyArtilleryUnit(target) && !shootingPortAttack);
   const d1 = automaticHit ? 0 : rng.d6();
   const d2 = automaticHit ? 0 : rng.d6();
   const roll = automaticHit ? 0 : d1 + d2;
   const threshold = automaticHit ? 0 : lockedHitBreakdown.threshold;
-  const hit = automaticHit || roll >= threshold;
+  const shootingPortHit = shootingPortAttack ? roll >= threshold : undefined;
+  // Heavy-artillery ordinary fire is automatic. A failed shooting-port attempt
+  // also lands on the bunker and therefore continues into the normal HE check.
+  const hit = automaticHit || shootingPortAttack || roll >= threshold;
   const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
   const power = attacker.stats.highExplosivePower ?? 0;
   const base: HighExplosiveReport = {
-    dice: [d1, d2], roll, threshold, hit, automaticHit, hitBreakdown: lockedHitBreakdown,
+    dice: [d1, d2], roll, threshold, hit, automaticHit, shootingPortHit, hitBreakdown: lockedHitBreakdown,
     hitModifiers, highExplosivePower: power, outcome: 'none',
   };
   if (hit) {
@@ -727,43 +791,107 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   // outcome remains none and is never applied unless the hit check succeeded.
   if (!hit && !isTankUnit(target)) return base;
 
+  if (shootingPortHit) {
+    return { ...base, outcome: 'destroyed' };
+  }
+
   if (isFootUnit(target)) {
-    const infantryInCover = infantryHasHighExplosiveCover(ctx);
-    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryInCover, rng);
-    const effectRoll = infantryEffect.die;
-    const effectThreshold = infantryEffect.threshold;
+    const infantryCoverSource = infantryHighExplosiveCoverSource(ctx);
+    const infantryCoverValue = infantryCoverSource ? 1 : 0;
+    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryCoverValue, power, rng);
+    const effectRoll = infantryEffect.roll;
+    const effectThreshold = infantryEffect.outcome === 'destroyed'
+      ? infantryEffect.destroyThreshold
+      : infantryEffect.suppressThreshold;
     return {
-      ...base, infantryInCover, effectDice: [effectRoll], effectRoll, effectThreshold,
+      ...base,
+      infantryInCover: infantryCoverValue > 0,
+      infantryCoverValue,
+      infantryCoverSource,
+      effectDice: infantryEffect.dice,
+      effectRoll,
+      effectThreshold,
+      destroyThreshold: infantryEffect.destroyThreshold,
+      suppressThreshold: infantryEffect.suppressThreshold,
       outcome: infantryEffect.outcome,
     };
   }
-  if (target.kind === 'truck' || isAntiTankGunUnit(target)) {
+  if (target.kind === 'truck') {
     return { ...base, outcome: 'destroyed' };
+  }
+  if (isAntiTankGunUnit(target)) {
+    const infantryCoverSource = infantryHighExplosiveCoverSource(ctx);
+    const infantryCoverValue = infantryCoverSource ? 1 : 0;
+    const effectDice: [number, number] = [rng.d6(), rng.d6()];
+    const effectRoll = effectDice[0] + effectDice[1];
+    const destroyThreshold = 12 + infantryCoverValue - power;
+    return {
+      ...base,
+      infantryInCover: infantryCoverValue > 0,
+      infantryCoverValue,
+      infantryCoverSource,
+      effectDice,
+      effectRoll,
+      effectThreshold: destroyThreshold,
+      destroyThreshold,
+      outcome: effectRoll >= destroyThreshold ? 'destroyed' : 'none',
+    };
   }
 
   const directionRule = attackDirectionRuleFor(ctx);
   const armorFace = directionRule.armorFace;
   const armor = effectiveArmorValue(ctx, armorFace);
   if (isHeavyArtilleryUnit(target)) {
-    if ((target.fireLevel ?? 0) > 0) {
-      return { ...base, armorFace, armor, outcome: 'suppressed' };
-    }
-    const effectDice = [rng.d6(), rng.d6()];
+    const effectDice: [number, number] = [rng.d6(), rng.d6()];
     const effectRoll = effectDice[0] + effectDice[1];
-    const effectThreshold = armor - power - 2;
-    const fireThreshold = armor - power;
-    const outcome: HighExplosiveOutcome = effectRoll >= fireThreshold
-      ? 'fire_suppressed'
-      : effectRoll >= effectThreshold ? 'suppressed' : 'none';
-    return { ...base, armorFace, armor, effectDice, effectRoll, effectThreshold, fireThreshold, outcome };
+    const destroyThreshold = 2 + armor - power;
+    const fireThreshold = -2 + armor - power;
+    const rolledOutcome: HighExplosiveOutcome = effectRoll >= destroyThreshold
+      ? 'destroyed'
+      : effectRoll >= fireThreshold ? 'fire' : 'none';
+    const destroyedByRepeatFire = rolledOutcome === 'fire' && (target.fireLevel ?? 0) > 0;
+    const outcome: HighExplosiveOutcome = destroyedByRepeatFire ? 'destroyed' : rolledOutcome;
+    return {
+      ...base,
+      armorFace,
+      armor,
+      effectDice,
+      effectRoll,
+      effectThreshold: outcome === 'destroyed' ? destroyThreshold : fireThreshold,
+      destroyThreshold,
+      fireThreshold,
+      destroyedByRepeatFire,
+      outcome,
+    };
   }
   if (isTankUnit(target)) {
-    const effectDice = [rng.d6(), rng.d6()];
+    const effectDice: [number, number] = [rng.d6(), rng.d6()];
     const effectRoll = effectDice[0] + effectDice[1];
-    const effectThreshold = armor - power;
+    const paralyzeThreshold = armor - power;
+    const fireThreshold = armor + 4 - power;
+    const rolledOutcome: HighExplosiveOutcome = effectRoll >= fireThreshold
+      ? 'fire'
+      : effectRoll >= paralyzeThreshold ? 'paralyzed' : 'none';
+    const destroyedByRepeatFire = hit
+      && rolledOutcome === 'fire'
+      && !isProtagonistTarget(ctx)
+      && (target.fireLevel ?? 0) > 0;
+    const outcome: HighExplosiveOutcome = !hit
+      ? 'none'
+      : destroyedByRepeatFire ? 'destroyed' : rolledOutcome;
     return {
-      ...base, armorFace, armor, effectDice, effectRoll, effectThreshold,
-      outcome: hit && effectRoll >= effectThreshold ? 'paralyzed' : 'none',
+      ...base,
+      armorFace,
+      armor,
+      effectDice,
+      effectRoll,
+      effectThreshold: outcome === 'fire' || outcome === 'destroyed'
+        ? fireThreshold
+        : paralyzeThreshold,
+      fireThreshold,
+      paralyzeThreshold,
+      destroyedByRepeatFire,
+      outcome,
     };
   }
   return { ...base, outcome: 'destroyed' };
@@ -789,6 +917,9 @@ export function applyHighExplosiveAttack(target: Unit, report: HighExplosiveRepo
     case 'fire_suppressed':
       target.suppressed = true;
       target.fireLevel = Math.max(1, target.fireLevel ?? 0);
+      break;
+    case 'fire':
+      target.fireLevel = (target.fireLevel ?? 0) + 1;
       break;
     case 'none': break;
   }
@@ -876,9 +1007,7 @@ function primaryDamageEffect(effects: readonly DamageEffectStep[]): DamageEffect
 
 function isOverpenetrationVehicleTarget(target: Unit): boolean {
   return !isFootUnit(target)
-    && !isAntiTankGunUnit(target)
-    && target.kind !== 'heavy_artillery'
-    && target.kind !== 'german_heavy_artillery';
+    && !isAntiTankGunUnit(target);
 }
 
 function isOverpenetrationSuppressedEffect(effect: DamageEffect): boolean {
@@ -894,9 +1023,12 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const { attacker, target } = ctx;
   const pacific = isPacificCombat(ctx);
   const protagonistTarget = isProtagonistTarget(ctx);
-  const d1 = rng.d6();
-  const d2 = rng.d6();
-  const roll = d1 + d2;
+  const heavyArtilleryRules = ctx.hardcoreHeavyArtilleryRules === true && isHeavyArtilleryUnit(target);
+  const shootingPortAttack = heavyArtilleryRules && ctx.precisionFire === true;
+  const automaticHit = heavyArtilleryRules && !shootingPortAttack;
+  const d1 = automaticHit ? 0 : rng.d6();
+  const d2 = automaticHit ? 0 : rng.d6();
+  const roll = automaticHit ? 0 : d1 + d2;
   const infantryVsATGunCrew = isFootUnit(attacker) && isControlledATGun(target);
   const lockedHitBreakdown = infantryVsATGunCrew
     ? hitBreakdown({
@@ -911,7 +1043,14 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       })
     : hitBreakdown(ctx);
   const threshold = lockedHitBreakdown.threshold;
-  const hit = roll >= threshold;
+  const shootingPortHit = shootingPortAttack ? roll >= threshold : undefined;
+  // A failed shooting-port attempt still hits the bunker body and proceeds to
+  // penetration. Ordinary hardcore fire against the bunker is automatic.
+  const hit = automaticHit || shootingPortAttack || roll >= threshold;
+  const hitRollMeta = {
+    automaticHit: automaticHit || undefined,
+    shootingPortHit,
+  };
   const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
   const commanderDeathTriggered = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
   const commanderShieldBlocked = commanderDeathTriggered && target.campaignCommanderShieldAvailable === true;
@@ -948,6 +1087,20 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       protagonistTarget,
       smallArms: true,
       statusChange: hit ? 'destroyed' : 'none',
+    };
+  }
+
+  if (shootingPortHit) {
+    return {
+      dice: [d1, d2], roll, threshold, hit: true, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta,
+      penetrated: true,
+      damageEffect: 'destroyed',
+      damageEffects: [{ effect: 'destroyed' }],
+      commanderKilledByHitDoubles: false,
+      commanderShieldBlocked: false,
+      protagonistTarget,
+      statusChange: 'destroyed',
     };
   }
 
@@ -1022,6 +1175,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   if (!hit) {
     return {
       dice: [d1, d2], roll, threshold, hit: false, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
@@ -1036,6 +1190,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   if (!penetrated) {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta,
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
@@ -1052,6 +1207,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     if (overpenetrated || isDamageEffectSuppressed(target, 'destroyed')) {
       return {
         dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
+        ...hitRollMeta,
         hit: true,
         armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
         damageCheckType,
@@ -1066,6 +1222,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     }
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta,
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
@@ -1087,6 +1244,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   if (!damageEffect && damageEffects.length === 0) {
     return {
       dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta,
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
       damageCheckType,
@@ -1106,6 +1264,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
 
   return {
     dice: [d1, d2], roll, threshold, hitBreakdown: lockedHitBreakdown, hitModifiers,
+    ...hitRollMeta,
     hit: true,
     armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
     damageCheckType,

@@ -9,7 +9,7 @@
  *   4. LangDB.ts 会被自动重写；Cocos Creator 预览即可看到新文案
  *
  * 设计约定：
- *   - CSV 必须恰好三列：key, zh, en；三列都不允许为空
+ *   - CSV 必须恰好包含 key / zh / en 三列，列顺序可以自由调整；三列都不允许为空
  *   - key 在整张表内必须唯一；重复或空 key 都会报错
  *   - zh / en 中允许 {name} 形式的占位符，由运行时 t(key, params) 替换
  *   - zh / en 中允许 \n（两个字符：反斜杠 + n），运行时会转成真正的换行
@@ -103,25 +103,24 @@ function escapeForTs(s) {
     .replace(/\n/g, '\\n');
 }
 
-function build() {
-  const rows = readCsvRowsSmart(CSV_PATH, {
-    toolName: 'buildLangDB',
-    requiredHeaders: ['key', 'zh', 'en'],
-  });
+function rowsToEntries(rows) {
   if (rows.length < 2) throw new Error('lang.csv 除表头外没有任何行');
 
-  const headers = rows[0];
-  if (headers.length < 3 || headers[0] !== 'key' || headers[1] !== 'zh' || headers[2] !== 'en') {
-    throw new Error(`lang.csv 表头必须是 "key,zh,en"，当前为 "${headers.join(',')}"`);
+  const headers = rows[0].map(header => String(header).trim().replace(/^\uFEFF/, ''));
+  const expectedHeaders = ['key', 'zh', 'en'];
+  if (headers.length !== expectedHeaders.length
+    || expectedHeaders.some(header => !headers.includes(header))) {
+    throw new Error(`lang.csv 必须恰好包含 key, zh, en 三列，当前为 "${headers.join(',')}"`);
   }
+  const columnIndex = Object.fromEntries(headers.map((header, index) => [header, index]));
 
   const entries = [];
   const seen = new Set();
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    const key = (r[0] ?? '').trim();
-    const zh = r[1] ?? '';
-    const en = r[2] ?? '';
+    const key = (r[columnIndex.key] ?? '').trim();
+    const zh = r[columnIndex.zh] ?? '';
+    const en = r[columnIndex.en] ?? '';
     const rowNo = i + 1;
     if (!key) throw new Error(`第 ${rowNo} 行 key 为空`);
     if (seen.has(key)) throw new Error(`第 ${rowNo} 行 key="${key}" 重复`);
@@ -130,6 +129,15 @@ function build() {
     seen.add(key);
     entries.push({ key, zh, en });
   }
+  return entries;
+}
+
+function build() {
+  const rows = readCsvRowsSmart(CSV_PATH, {
+    toolName: 'buildLangDB',
+    requiredHeaders: ['key', 'zh', 'en'],
+  });
+  const entries = rowsToEntries(rows);
 
   // 生成 TS
   const lines = [];
@@ -156,9 +164,13 @@ function build() {
   console.log(`[buildLangDB] OK  ${entries.length} keys → ${path.relative(ROOT, OUT_PATH)}`);
 }
 
-try {
-  build();
-} catch (e) {
-  console.error('[buildLangDB] 失败：', e.message);
-  process.exit(1);
+if (require.main === module) {
+  try {
+    build();
+  } catch (e) {
+    console.error('[buildLangDB] 失败：', e.message);
+    process.exit(1);
+  }
 }
+
+module.exports = { rowsToEntries };

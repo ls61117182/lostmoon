@@ -4,6 +4,7 @@
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { chooseParsedRows, decodeTable, rowsToCsv } = require('./csvSmart');
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -79,12 +80,80 @@ function runBuildScript(scriptPath) {
   }
 }
 
+function normalizedHeaders(row, tableName) {
+  const headers = (row ?? []).map((header, index) => {
+    const normalized = String(header).trim().replace(/^\uFEFF/, '');
+    // Keep legacy unnamed columns addressable so their cells are not discarded
+    // while named columns are rearranged.
+    return normalized || `__unnamed_column_${index + 1}`;
+  });
+  if (!headers.length) throw new Error(`${tableName} has no column headers`);
+  if (new Set(headers).size !== headers.length) {
+    throw new Error(`${tableName} contains duplicate column headers`);
+  }
+  return headers;
+}
+
+function readTable(filePath) {
+  const decoded = decodeTable(filePath);
+  const parsed = chooseParsedRows(decoded.text, []);
+  const tableName = path.basename(filePath);
+  return {
+    rows: parsed.rows,
+    headers: normalizedHeaders(parsed.rows[0], tableName),
+  };
+}
+
+function captureColumnOrders() {
+  return new Map(listDataTables().map((tableName) => {
+    const filePath = path.join(DATA_DIR, tableName);
+    return [tableName, readTable(filePath).headers];
+  }));
+}
+
+function restoreColumnOrder(filePath, desiredHeaders) {
+  const tableName = path.basename(filePath);
+  const { rows, headers } = readTable(filePath);
+  if (headers.length !== desiredHeaders.length
+    || headers.some((header) => !desiredHeaders.includes(header))) {
+    throw new Error(
+      `${tableName} header set changed while updating; refusing to guess how columns should map`,
+    );
+  }
+  if (headers.every((header, index) => header === desiredHeaders[index])) return false;
+
+  const currentIndexes = new Map(headers.map((header, index) => [header, index]));
+  const reorderedRows = rows.map((row) => desiredHeaders.map((header) => (
+    row[currentIndexes.get(header)] ?? ''
+  )));
+  const target = Buffer.concat([
+    Buffer.from([0xEF, 0xBB, 0xBF]),
+    Buffer.from(rowsToCsv(reorderedRows), 'utf8'),
+  ]);
+  fs.writeFileSync(filePath, target);
+  console.log(`[updateAllConfigTables] restored column order for ${tableName}`);
+  return true;
+}
+
+function restoreColumnOrders(columnOrders) {
+  for (const [tableName, headers] of columnOrders) {
+    restoreColumnOrder(path.join(DATA_DIR, tableName), headers);
+  }
+}
+
 function main() {
   validateRegistry();
-  for (const scriptPath of getBuildScripts()) {
-    runBuildScript(scriptPath);
+  const columnOrders = captureColumnOrders();
+  try {
+    for (const scriptPath of getBuildScripts()) {
+      runBuildScript(scriptPath);
+    }
+  } finally {
+    // A generator may prefer a canonical internal order, but the editable CSV
+    // must retain the column layout selected by the user in Excel/WPS.
+    restoreColumnOrders(columnOrders);
   }
-  console.log('[updateAllConfigTables] OK all config tables updated and normalized');
+  console.log('[updateAllConfigTables] OK all config tables updated; column order preserved');
 }
 
 if (require.main === module) {
@@ -98,7 +167,11 @@ if (require.main === module) {
 
 module.exports = {
   CONFIG_TABLES,
+  captureColumnOrders,
   getBuildScripts,
   listDataTables,
+  readTable,
+  restoreColumnOrder,
+  restoreColumnOrders,
   validateRegistry,
 };

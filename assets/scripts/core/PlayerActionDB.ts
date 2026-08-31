@@ -41,11 +41,11 @@ export const PLAYER_ACTION_DOUBLES: ActionTableRow = {
   misc: 'concealment',
 };
 
-/** GDD §3.6.1：子阶段 × 地形基础 + 修正系数 + 下限 / 可选上限。由 actionDicePool() 消费。 */
+/** GDD §3.6.1：子阶段 × 地形数值 + 乘员修正 + 下限 / 可选上限。硬核三阶段地形值均为修正。 */
 export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';
 
 export interface PlayerDicePoolConfig {
-  /** 移动 / 攻击 / 杂项 → 各地形基础骰数 */
+  /** 移动 / 攻击 / 杂项 → 各地形数值；硬核三阶段列为修正，经典模式列为基础骰数。 */
   baseByPhaseTerrain: Record<ActionDiceSubPhase, Record<TerrainType, number>>;
   /** 移动阶段：驾驶员 / 副驾驶存活、开舱 各加多少（通常为 1） */
   moveMods: { driver: number; codriver: number; hatch: number };
@@ -119,49 +119,49 @@ export const PLAYER_DICE_POOL: PlayerDicePoolConfig = {
 export const PLAYER_HARDCORE_DICE_POOL: PlayerDicePoolConfig = {
   baseByPhaseTerrain: {
     movement: {
-      road: -1,
-      field: -2,
-      mud: -3,
-      forest: -3,
-      water: -3,
-      deep_water: -3,
-      clear: -1,
-      trees: -2,
-      beach: -4,
-      rocky: -3,
-      airstrip: -1,
+      road: 0,
+      field: -1,
+      mud: -2,
+      forest: -2,
+      water: -2,
+      deep_water: -2,
+      clear: 0,
+      trees: -1,
+      beach: -3,
+      rocky: -2,
+      airstrip: 1,
     },
     attack: {
-      road: 2,
-      field: 2,
-      mud: 1,
-      forest: 0,
-      water: 0,
-      deep_water: 0,
-      clear: 2,
-      trees: 1,
-      beach: 0,
-      rocky: 0,
-      airstrip: 2,
+      road: 0,
+      field: 0,
+      mud: -1,
+      forest: -2,
+      water: -2,
+      deep_water: -2,
+      clear: 0,
+      trees: -1,
+      beach: -2,
+      rocky: -2,
+      airstrip: 0,
     },
     misc: {
-      road: 1,
-      field: 2,
-      mud: 1,
-      forest: 0,
-      water: 0,
-      deep_water: 0,
-      clear: 1,
-      trees: 2,
-      beach: 1,
-      rocky: 0,
-      airstrip: 1,
+      road: 0,
+      field: 1,
+      mud: 0,
+      forest: -1,
+      water: -1,
+      deep_water: -1,
+      clear: 0,
+      trees: 1,
+      beach: 0,
+      rocky: -1,
+      airstrip: -1,
     },
   },
   moveMods: {
     driver: 1,
     codriver: 1,
-    hatch: 1,
+    hatch: 0,
   },
   attackMods: {
     gunner: 1,

@@ -14,7 +14,9 @@ import { LangCode } from './Lang';
 import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionStore';
 import { DEFAULT_GAME_MODE, GameMode, isGameMode } from './GameMode';
 import { CAMPAIGNS, CAMPAIGN_CHAPTER_ID } from './CampaignDB';
-import type { SeasonType } from './types';
+import { isTankKind } from './types';
+import type { SeasonType, UnitKind } from './types';
+import { DEFAULT_PLAYER_TANK_KIND, normalizeSelectedPlayerTankKind } from './PlayerTankSelection';
 
 export type ChapterId = string;
 
@@ -253,6 +255,8 @@ export interface MenuState {
   selectedChapterId: ChapterId;
   /** Rule profile selected before starting a mission. */
   gameMode: GameMode;
+  /** Tank selected for new single-player missions. */
+  selectedPlayerTankKind: UnitKind;
 }
 
 const DEFAULT_STATE: MenuState = {
@@ -264,6 +268,7 @@ const DEFAULT_STATE: MenuState = {
   lang: 'zh',
   selectedChapterId: DEFAULT_CHAPTER_ID,
   gameMode: DEFAULT_GAME_MODE,
+  selectedPlayerTankKind: DEFAULT_PLAYER_TANK_KIND,
 };
 
 function maxLevelIdForChapter(chapterId: ChapterId): number {
@@ -356,6 +361,7 @@ function readState(): MenuState {
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,
       selectedChapterId: getChapter(parsed.selectedChapterId ?? '') ? parsed.selectedChapterId! : DEFAULT_CHAPTER_ID,
       gameMode: isGameMode(parsed.gameMode) ? parsed.gameMode : DEFAULT_GAME_MODE,
+      selectedPlayerTankKind: normalizeSelectedPlayerTankKind(parsed.selectedPlayerTankKind),
     };
   } catch (e) {
     console.warn('[LevelDB] 解析菜单存档失败，重置', e);
@@ -394,6 +400,7 @@ export const MenuProgress = {
       lang: (state.lang === 'en' || state.lang === 'zh') ? state.lang : DEFAULT_STATE.lang,
       selectedChapterId: getChapter(state.selectedChapterId ?? '') ? state.selectedChapterId : DEFAULT_CHAPTER_ID,
       gameMode: isGameMode(state.gameMode) ? state.gameMode : DEFAULT_GAME_MODE,
+      selectedPlayerTankKind: normalizeSelectedPlayerTankKind(state.selectedPlayerTankKind),
     });
   },
 
@@ -459,6 +466,13 @@ export const MenuProgress = {
   setGameMode(gameMode: GameMode): void {
     const s = readState();
     s.gameMode = gameMode;
+    writeState(s);
+  },
+
+  setSelectedPlayerTankKind(kind: UnitKind): void {
+    if (!isTankKind(kind)) return;
+    const s = readState();
+    s.selectedPlayerTankKind = kind;
     writeState(s);
   },
 

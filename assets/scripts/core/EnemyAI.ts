@@ -150,7 +150,24 @@ export function actionFor(table: AIActionTable, col: AIColumn, pip: number): AIA
   return row?.[pip] ?? { primary: 'none' };
 }
 
-export function actionForHardcoreTankDie(unit: Unit, type: EnemyTankDieType, pip: number): AIActionEntry {
+/**
+ * 火力值负修正会从高点数开始令攻击骰失效：-1 无效 6，-2 无效 5~6。
+ * 正修正与 0 均不改变原行动表含义。
+ */
+export function hardcoreAttackDieIsInvalid(pip: number, firepowerModifier: number): boolean {
+  const penalty = Math.max(0, -Math.trunc(firepowerModifier));
+  return penalty > 0 && pip > Math.max(0, 6 - penalty);
+}
+
+export function actionForHardcoreTankDie(
+  unit: Unit,
+  type: EnemyTankDieType,
+  pip: number,
+  firepowerModifier = 0,
+): AIActionEntry {
+  if (type === 'attack' && hardcoreAttackDieIsInvalid(pip, firepowerModifier)) {
+    return { primary: 'none' };
+  }
   const tableId = (unit.stats.actionTable?.[type] ?? DEFAULT_HARDCORE_TANK_ACTION_TABLE[type]) as keyof typeof HARDCORE_TANK_AI_TABLE;
   return HARDCORE_TANK_AI_TABLE[tableId]?.[pip] ?? { primary: 'none' };
 }
