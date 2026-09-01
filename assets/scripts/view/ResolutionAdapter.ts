@@ -1,4 +1,16 @@
-import { ResolutionPolicy, screen, view } from 'cc';
+import {
+  _decorator,
+  Color,
+  Component,
+  Graphics,
+  Node,
+  ResolutionPolicy,
+  screen,
+  UITransform,
+  view,
+} from 'cc';
+
+const { ccclass } = _decorator;
 
 export const DESIGN_RESOLUTION_WIDTH = 1920;
 export const DESIGN_RESOLUTION_HEIGHT = 1080;
@@ -31,6 +43,61 @@ export function visibleSizeInRootSpace(rootScale: number): { width: number; heig
     width: Math.max(DESIGN_RESOLUTION_WIDTH, visible.width) / safeScale,
     height: Math.max(DESIGN_RESOLUTION_HEIGHT, visible.height) / safeScale,
   };
+}
+
+/**
+ * Keeps one Graphics rectangle covering the complete visible area of a scaled
+ * UI root. The component owns its resize subscription, so dynamically created
+ * modal masks continue to cover surplus ultrawide/tall screen space and clean
+ * themselves up when their node is destroyed.
+ */
+@ccclass('AdaptiveFullscreenMask')
+export class AdaptiveFullscreenMask extends Component {
+  private rootScale = 1;
+  private fillColor = new Color(0, 0, 0, 0);
+  private resolutionUnsubscribe: (() => void) | null = null;
+
+  configure(rootScale: number, fillColor: Readonly<Color>): void {
+    this.rootScale = rootScale > 0 ? rootScale : 1;
+    this.fillColor.set(fillColor.r, fillColor.g, fillColor.b, fillColor.a);
+    if (!this.resolutionUnsubscribe) {
+      this.resolutionUnsubscribe = subscribeAdaptiveResolution(() => this.redraw());
+    }
+    this.redraw();
+  }
+
+  redraw(): void {
+    const transform = this.node.getComponent(UITransform);
+    const graphics = this.node.getComponent(Graphics);
+    if (!transform || !graphics) return;
+    const { width, height } = visibleSizeInRootSpace(this.rootScale);
+    transform.setContentSize(width, height);
+    graphics.clear();
+    graphics.fillColor = this.fillColor;
+    graphics.rect(-width * 0.5, -height * 0.5, width, height);
+    graphics.fill();
+  }
+
+  onDestroy(): void {
+    this.resolutionUnsubscribe?.();
+    this.resolutionUnsubscribe = null;
+  }
+}
+
+/** Create and attach a self-resizing, centered, full-visible-area Graphics mask. */
+export function createAdaptiveFullscreenMask(
+  parent: Node,
+  name: string,
+  fillColor: Readonly<Color>,
+  rootScale: number,
+): { node: Node; graphics: Graphics } {
+  const node = new Node(name);
+  node.layer = parent.layer;
+  node.addComponent(UITransform);
+  const graphics = node.addComponent(Graphics);
+  parent.addChild(node);
+  node.addComponent(AdaptiveFullscreenMask).configure(rootScale, fillColor);
+  return { node, graphics };
 }
 
 export function subscribeAdaptiveResolution(listener: ResolutionChangeListener): () => void {

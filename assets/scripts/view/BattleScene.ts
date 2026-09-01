@@ -98,6 +98,7 @@ import { t, setLang, getLang, LangCode } from '../core/Lang';
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
   applyAdaptiveResolution,
+  createAdaptiveFullscreenMask,
   subscribeAdaptiveResolution,
   visibleSizeInRootSpace,
 } from './ResolutionAdapter';
@@ -567,6 +568,15 @@ function tableCrewOutcomeLabel(report: AttackReport): { text: string; color: Col
   };
 }
 
+/** 已经确定具体阵亡成员时，直接显示“XX 阵亡”，不再回退成“阵亡检定”。 */
+function resolvedCrewDeathLabel(report: AttackReport): { text: string; color: Color } | null {
+  const crewCheck = report.crewCheck ?? report.stagedCrewCheck;
+  if (crewCheck?.slot !== null && crewCheck?.slot !== undefined) {
+    return crewOutcomeLabel(crewCheck);
+  }
+  return tableCrewOutcomeLabel(report);
+}
+
 function damageEffectStepText(report: AttackReport, index: number): string {
   const step = report.damageEffects?.[index];
   if (!step) return damageEffectLabel(report.damageEffect).text;
@@ -582,7 +592,12 @@ function damageEffectSummaryLabel(report: AttackReport): { text: string; color: 
   const suppressedText = suppressed.map(effect => t('dmg.effect.overpenetrationSuppressed', {
     effect: damageEffectLabel(effect).text,
   }));
-  if (suppressedText.length === 0 && (!effects || effects.length <= 1)) return damageEffectLabel(report.damageEffect);
+  if (suppressedText.length === 0 && (!effects || effects.length <= 1)) {
+    if (report.damageEffect === 'crewCheck') {
+      return resolvedCrewDeathLabel(report) ?? damageEffectLabel(report.damageEffect);
+    }
+    return damageEffectLabel(report.damageEffect);
+  }
   const activeText = effects?.map((_, index) => damageEffectStepText(report, index)) ?? [];
   const text = [...suppressedText, ...activeText].join('\n');
   const crew = tableCrewOutcomeLabel(report);
@@ -1412,8 +1427,8 @@ const STATUS_VALUE_DOWN   = new Color(130, 130, 130, 255);
 const STATUS_VALUE_DEAD   = new Color(240,  90,  90, 255);
 const CREW_STATUS_ICON_PATHS = [
   'textures/ui/crew_icons_source_split/crew_icon_01_star/spriteFrame',
-  'textures/ui/crew_icons_source_split/crew_icon_03_shell/spriteFrame',
   'textures/ui/crew_icons_source_split/crew_icon_02_crosshair/spriteFrame',
+  'textures/ui/crew_icons_source_split/crew_icon_03_shell/spriteFrame',
   'textures/ui/crew_icons_source_split/crew_icon_04_steering/spriteFrame',
   'textures/ui/crew_icons_source_split/crew_icon_05_radio/spriteFrame',
 ] as const;
@@ -2328,6 +2343,7 @@ export class BattleScene extends Component {
     this.resolutionUnsubscribe = subscribeAdaptiveResolution(() => {
       this.rebuildBackgroundForResolution();
       this.layoutBattleHud();
+      this.layoutTurnTransition();
     });
     const terrainNode = new Node('TerrainSprites');
     terrainNode.layer = this.node.layer;
@@ -2772,6 +2788,38 @@ export class BattleScene extends Component {
     const subtitle = this.makeCenteredLabel(panel, '', 0, -20, 560, 28, 17, new Color(225, 225, 210, 255));
     subtitle.horizontalAlign = HorizontalTextAlignment.CENTER;
     (root as any).__turnTransitionRefs = { panel, panelG, opacity, title, subtitle, icon };
+    this.layoutTurnTransition();
+  }
+
+  /** 横幅铺满真实可视宽度；中央信息组与横幅高度保持稳定。 */
+  private layoutTurnTransition(accentOverride?: Color) {
+    const root = this.node.getChildByName('TurnTransition');
+    const refs = (root as any)?.__turnTransitionRefs;
+    if (!root || !refs) return;
+    const { width, height } = visibleSizeInRootSpace(UI_ROOT_SCALE);
+    root.getComponent(UITransform)?.setContentSize(width, height);
+    const panelTransform = refs.panel.getComponent(UITransform);
+    const bannerHeight = panelTransform?.contentSize.height ?? 132;
+    panelTransform?.setContentSize(width, bannerHeight);
+
+    const accent: Color | null = accentOverride ?? refs.accent ?? null;
+    if (!accent) return;
+    const g: Graphics = refs.panelG;
+    g.clear();
+    g.fillColor = new Color(17, 21, 15, 238);
+    g.rect(-width * 0.5, -bannerHeight * 0.5, width, bannerHeight);
+    g.fill();
+    g.fillColor = new Color(accent.r, accent.g, accent.b, 42);
+    g.rect(-width * 0.5, bannerHeight * 0.5 - 10, width, 10);
+    g.fill();
+    // 开放式横幅：只保留上下横线，不在两侧形成封闭方框。
+    g.strokeColor = accent;
+    g.lineWidth = 2;
+    g.moveTo(-width * 0.5, bannerHeight * 0.5 - 1);
+    g.lineTo(width * 0.5, bannerHeight * 0.5 - 1);
+    g.moveTo(-width * 0.5, -bannerHeight * 0.5 + 1);
+    g.lineTo(width * 0.5, -bannerHeight * 0.5 + 1);
+    g.stroke();
   }
 
   private showTurnTransition(factionId: string, side: 'player' | 'ally' | 'enemy', onDone: () => void) {
@@ -2780,17 +2828,9 @@ export class BattleScene extends Component {
     if (!root || !refs) { onDone(); return; }
     const faction = factionUiFor(factionId as any);
     const accent = side === 'enemy' ? new Color(202, 75, 61, 255) : new Color(faction.accent.r, faction.accent.g, faction.accent.b, 255);
+    refs.accent = accent;
+    this.layoutTurnTransition(accent);
     const w = refs.panel.getComponent(UITransform)!.contentSize.width;
-    const h = refs.panel.getComponent(UITransform)!.contentSize.height;
-    const g: Graphics = refs.panelG;
-    g.clear();
-    g.fillColor = new Color(17, 21, 15, 238); g.rect(-w * 0.5, -h * 0.5, w, h); g.fill();
-    g.fillColor = new Color(accent.r, accent.g, accent.b, 42); g.rect(-w * 0.5, h * 0.5 - 10, w, 10); g.fill();
-    // 开放式横幅：只保留上下横线，不在两侧形成封闭方框。
-    g.strokeColor = accent; g.lineWidth = 2;
-    g.moveTo(-w * 0.5, h * 0.5 - 1); g.lineTo(w * 0.5, h * 0.5 - 1);
-    g.moveTo(-w * 0.5, -h * 0.5 + 1); g.lineTo(w * 0.5, -h * 0.5 + 1);
-    g.stroke();
     refs.title.string = getLang() === 'zh'
       ? `第 ${String(this.turn).padStart(2, '0')} 回合 · ${side === 'player' ? '玩家回合' : side === 'ally' ? '友方 AI 回合' : '敌方回合'}`
       : `TURN ${this.turn} · ${side === 'player' ? 'PLAYER TURN' : side === 'ally' ? 'ALLIED AI TURN' : 'ENEMY TURN'}`;
@@ -2805,7 +2845,7 @@ export class BattleScene extends Component {
       }
     });
     root.active = true;
-    refs.panel.setPosition(-CANVAS_W, 0, 0);
+    refs.panel.setPosition(-w, 0, 0);
     refs.opacity.opacity = 255;
     this.turnTransition = { root, panel: refs.panel, panelOpacity: refs.opacity, title: refs.title, subtitle: refs.subtitle, icon: refs.icon, t: 0, faction: faction.id, onDone };
   }
@@ -2816,13 +2856,14 @@ export class BattleScene extends Component {
     transition.t += dt;
     // 入场与淡出各提速 100%；完整展示时长保持不变。
     const enter = 0.12, hold = 1.2, leave = 0.13;
+    const width = transition.panel.getComponent(UITransform)?.contentSize.width ?? CANVAS_W;
     if (transition.t < enter) {
-      transition.panel.setPosition(-CANVAS_W + CANVAS_W * (transition.t / enter), 0, 0);
+      transition.panel.setPosition(-width + width * (transition.t / enter), 0, 0);
       return;
     }
     if (transition.t < enter + hold) { transition.panel.setPosition(0, 0, 0); return; }
     const p = Math.min(1, (transition.t - enter - hold) / leave);
-    transition.panel.setPosition(CANVAS_W * 0.12 * p, 0, 0);
+    transition.panel.setPosition(width * 0.12 * p, 0, 0);
     transition.panelOpacity.opacity = Math.round(255 * (1 - p));
     if (p < 1) return;
     transition.root.active = false;
@@ -3921,15 +3962,13 @@ export class BattleScene extends Component {
     root.setSiblingIndex(this.node.children.length - 1);
     this.campaignUpgradeChoiceRoot = root;
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = new Color(5, 8, 5, 205);
-    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
-    bd.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      new Color(5, 8, 5, 205),
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (event: EventTouch) => { event.propagationStopped = true; }, this);
-    root.addChild(backdrop);
 
     const panelW = Math.min(1180, CANVAS_W - 44);
     const panelH = Math.min(674, CANVAS_H - 28);
@@ -4493,17 +4532,16 @@ export class BattleScene extends Component {
     root.setSiblingIndex(this.node.children.length - 1);
     this.campaignUpgradeDetailRoot = root;
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = new Color(0, 0, 0, 180);
-    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H); bd.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      new Color(0, 0, 0, 180),
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
       this.closeCampaignUpgradeDetail();
       event.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
 
     const cardW = Math.min(520, CANVAS_W - 180);
     const cardH = Math.min(570, CANVAS_H - 90);
@@ -5408,17 +5446,38 @@ export class BattleScene extends Component {
 
   private redrawUnitVisibilityMask() {
     if (!this.mission) return;
-    if (this.unitVisibilityMaskGraphics) this.redrawVisibleHexMask(this.unitVisibilityMaskGraphics);
+    if (this.unitVisibilityMaskGraphics) this.redrawVisibleHexMask(this.unitVisibilityMaskGraphics, true);
     if (this.trackVisibilityMaskGraphics) this.redrawVisibleHexMask(this.trackVisibilityMaskGraphics);
   }
 
-  private redrawVisibleHexMask(mask: Graphics) {
+  private playerTankEvacVisibilityExtension(): Axial | null {
+    if (!this.mission) return null;
+    const playerTank = this.mission.playerTank ?? this.mission.sherman;
+    let pos: Axial | null = null;
+    if (this.anim?.evacExit && this.anim.unit === playerTank) {
+      pos = { q: this.anim.toQ, r: this.anim.toR };
+    } else if (this.mission.playerTankEvacuated || this.mission.shermanEvacuated) {
+      pos = playerTank.pos;
+    }
+    // Campaign exits may lead to a real tile in the next segment. Its normal
+    // visibility rules remain authoritative; only true off-map exits need an
+    // extra stencil hex so the departing tank is not clipped away.
+    return pos && !this.mission.map.has(pos) ? pos : null;
+  }
+
+  private redrawVisibleHexMask(mask: Graphics, includePlayerEvacExit = false) {
     if (!this.mission) return;
     mask.clear();
     mask.fillColor = new Color(255, 255, 255, 0);
     for (const tile of this.mission.map.all()) {
       if (!this.isHexVisible(tile.pos)) continue;
       const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
+      mask.fill();
+    }
+    const evacExit = includePlayerEvacExit ? this.playerTankEvacVisibilityExtension() : null;
+    if (evacExit) {
+      const c = this.project(evacExit.q, evacExit.r);
       this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
       mask.fill();
     }
@@ -12685,15 +12744,7 @@ export class BattleScene extends Component {
 
     if (this.combatLogPanel) this.combatLogPanel.setPosition(left, bottom, 0);
     if (this.combatLogDimmer) {
-      this.combatLogDimmer.getComponent(UITransform)?.setContentSize(width, height);
       this.combatLogDimmer.setPosition(0, 0, 0);
-      const dimGraphics = this.combatLogDimmer.getComponent(Graphics);
-      if (dimGraphics) {
-        dimGraphics.clear();
-        dimGraphics.fillColor = new Color(0, 0, 0, 140);
-        dimGraphics.rect(-width * 0.5, -height * 0.5, width, height);
-        dimGraphics.fill();
-      }
     }
   }
 
@@ -12924,21 +12975,19 @@ export class BattleScene extends Component {
     this.hudParent().addChild(root);
     this.combatLogRoot = root;
 
-    const dim = new Node('CombatLogDimmer');
-    dim.layer = this.node.layer;
-    dim.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
+    const { node: dim } = createAdaptiveFullscreenMask(
+      root,
+      'CombatLogDimmer',
+      new Color(0, 0, 0, 140),
+      UI_ROOT_SCALE,
+    );
     dim.setPosition(0, 0, 0);
     dim.addComponent(BlockInputEvents);
-    const dg = dim.addComponent(Graphics);
-    dg.fillColor = new Color(0, 0, 0, 140);
-    dg.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
-    dg.fill();
     dim.active = false;
     dim.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       this.setCombatLogExpanded(false);
       e.propagationStopped = true;
     }, this);
-    root.addChild(dim);
     this.combatLogDimmer = dim;
 
     const panel = new Node('CombatLogPanel');
@@ -13505,7 +13554,7 @@ export class BattleScene extends Component {
    *   │  着火程度  2 / -   │
    *   │  ─────────────     │
    *   │       乘员          │
-   *   │  ☆  ◉  ◇  ◯  ◌   │  ← 图标从左至右：车长、装填手、炮手、驾驶员、副驾驶
+   *   │  ☆  ◉  ◇  ◯  ◌   │  ← 图标从左至右：车长、炮手、装填手、驾驶员、副驾驶
    *   └──────────────────┘
    *
    * 乘员等级显示在图标右下角；阵亡时图标灰化并覆盖红色斜杠；
@@ -13779,9 +13828,9 @@ export class BattleScene extends Component {
     // 乘员：纯图标状态。车长开舱为绿色，阵亡为灰色并带红色斜杠，等级在右下角。
     const crew = s.crew;
     const crewFlags: boolean[] = crew
-      ? [crew.commander, crew.loader, crew.gunner, crew.driver, crew.coDriver]
+      ? [crew.commander, crew.gunner, crew.loader, crew.driver, crew.coDriver]
       : [true, true, true, true, true];
-    const crewSlots = ['commander', 'loader', 'gunner', 'driver', 'coDriver'] as const;
+    const crewSlots = ['commander', 'gunner', 'loader', 'driver', 'coDriver'] as const;
     const configuredCrewSlots = new Set<number>(s.stats.crewMembers);
     let visibleCrewIndex = 0;
 
@@ -15179,8 +15228,8 @@ export class BattleScene extends Component {
     if (!crew || crew[slot]) return null;
     const roleKey = {
       commander: 'crew.role.1',
-      loader: 'crew.role.2',
-      gunner: 'crew.role.3',
+      loader: 'crew.role.3',
+      gunner: 'crew.role.2',
       driver: 'crew.role.4',
       coDriver: 'crew.role.5',
     }[slot];
@@ -15450,6 +15499,7 @@ export class BattleScene extends Component {
     const fireActionKey = unloadedTurretRotation
       ? 'action.rotateTurret'
       : GameSession.gameMode === 'hardcore' ? 'action.fireHardcore' : 'action.fire';
+    const mainGunEffectId = unloadedTurretRotation ? 'turret-rotation' : 'main-gun';
 
     if (this.playerStep === 'movement') {
       const a = classifyMoveDie(slot.pip);
@@ -15494,13 +15544,14 @@ export class BattleScene extends Component {
         addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell));
       } else if (a === 'gun') {
         addItem(t(fireActionKey), PHASE_BTN_ATTACK,
-          () => this.selectGunDie(idx), this.gunActionUnavailable(), false, 'main-gun');
+          () => this.selectGunDie(idx), this.gunActionUnavailable(), false, mainGunEffectId);
         if (this.campaignReadyRackCanReloadShootingDice()) {
           addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell));
         }
       } else if (a === 'mg') {
         addItem(t('action.fireMG'), PHASE_BTN_ATTACK,
-          () => this.selectMGDie(idx), this.mgActionUnavailable());
+          () => this.selectMGDie(idx), this.mgActionUnavailable(), false,
+          unloadedTurretRotation ? 'turret-rotation' : undefined);
       }
       // §3.6 B 列对子：装填手装填（+同点骰）/ 炮手主炮射击（+同点骰）
       if (hasDoublesPartner) {
@@ -15513,7 +15564,7 @@ export class BattleScene extends Component {
             ? 'action.doublesGunnerRotate'
             : 'action.doublesGunnerFire'), DIE_ACTION_DOUBLES,
             () => this.selectGunDieDoubles(idx), this.gunActionUnavailable('gunner'), false,
-            'main-gun', true);
+            mainGunEffectId, true);
         }
         if (a === 'gun' && getGameModeConfig(GameSession.gameMode).precisionFire) {
           addItem(t('action.precisionFire'), DIE_ACTION_DOUBLES,
@@ -16128,8 +16179,8 @@ export class BattleScene extends Component {
     if (!alive) {
       const roleKey = {
         commander: 'crew.role.1',
-        loader: 'crew.role.2',
-        gunner: 'crew.role.3',
+        loader: 'crew.role.3',
+        gunner: 'crew.role.2',
         driver: 'crew.role.4',
         coDriver: 'crew.role.5',
       }[slot];
@@ -17396,8 +17447,8 @@ export class BattleScene extends Component {
             case 1:
               s.crew.commander = false;
               break;
-            case 2: s.crew.loader = false;    break;
-            case 3: s.crew.gunner = false;    break;
+            case 2: s.crew.gunner = false;    break;
+            case 3: s.crew.loader = false;    break;
             case 4: s.crew.driver = false;    break;
             case 5: s.crew.coDriver = false;  break;
           }
@@ -17719,8 +17770,8 @@ export class BattleScene extends Component {
     if (!crew) return true;
     switch (slot) {
       case 1: return crew.commander;
-      case 2: return crew.loader;
-      case 3: return crew.gunner;
+      case 2: return crew.gunner;
+      case 3: return crew.loader;
       case 4: return crew.driver;
       case 5: return crew.coDriver;
       default: return true;
@@ -18471,18 +18522,16 @@ export class BattleScene extends Component {
     root.setSiblingIndex(this.node.children.length - 1);
     this.tileInspectModalRoot = root;
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = MODAL_BACKDROP;
-    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
-    bd.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      MODAL_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       this.closeTileInspectModal();
       e.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
 
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
@@ -18595,18 +18644,16 @@ export class BattleScene extends Component {
     root.setPosition(0, 0, 0);
     this.node.addChild(root);
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = MODAL_BACKDROP;
-    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
-    bd.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      MODAL_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       this.closeBattleModal();
       e.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
 
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
@@ -21611,16 +21658,14 @@ export class BattleScene extends Component {
     this.node.addChild(root);
 
     // 背景遮罩（占满 Canvas）
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(1280, 720);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = DICE_BACKDROP;
-    bd.rect(-640, -360, 1280, 720);
-    bd.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      DICE_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     // 消耗点击事件，让遮罩背后的地图 / 骰子托盘都不会被触发
     backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; }, this);
-    root.addChild(backdrop);
 
     // 面板本体
     const panel = new Node('Panel');
@@ -21648,7 +21693,8 @@ export class BattleScene extends Component {
         : t('dice.panel.hitNeed', { n: report.threshold });
 
     // 三/四行使用固定列：骰子列 / 数值或需求列 / 结果列，避免各行文字左右漂移。
-    const DIE_SIZE = 68, DIE_GAP = 24, ROW_GAP = 74;
+    const ATTACK_RESULT_DIE_SCALE = 0.75;
+    const DIE_SIZE = 68 * ATTACK_RESULT_DIE_SCALE, DIE_GAP = 24, ROW_GAP = 74;
     const hitDiceY = PANEL_H / 2 - 118;
     const penDiceY = automaticHit ? hitDiceY : hitDiceY - ROW_GAP;
     const dmgDiceY = penDiceY - ROW_GAP;
@@ -21717,7 +21763,14 @@ export class BattleScene extends Component {
       for (let i = 0; i < penDiceCount; i++) {
         penDice.push(this.makeDieSquare(panel, penStartX + i * (DIE_SIZE + DIE_GAP), penDiceY, DIE_SIZE));
       }
-      penNeed = this.makeCenteredLabel(panel, '',
+      // AP 的击穿阈值与命中阈值、伤害检定标题一样，在面板创建时就完成排版。
+      // 之前这里先创建空 Label、骰子落定时才写入文字，首次生成字形会偶发晚一帧。
+      const initialPenNeedText = !highExplosiveReport && report.penThreshold !== undefined
+        ? report.penThreshold <= 0
+          ? t('dice.panel.penMustPen')
+          : t('dice.panel.penetrateNeed', { n: report.penThreshold })
+        : '';
+      penNeed = this.makeCenteredLabel(panel, initialPenNeedText,
         MID_COL_X, penDiceY, MID_COL_W, 40, CHECK_FONT_SIZE, DICE_INFO_TEXT);
       penVerdict = this.makeCenteredLabel(panel, '',
         RESULT_COL_X, penDiceY, RESULT_COL_W, 40, VERDICT_FONT_SIZE, DICE_OK_TEXT);
@@ -21741,7 +21794,11 @@ export class BattleScene extends Component {
       // 可选：1d6 阵亡检定骰（仅谢尔曼被击穿 + 伤害表 d6=2 时才会出现）
       if (needsCrewRow) {
         crewDie = this.makeDieSquare(panel, DIE_COL_1, crewDiceY, DIE_SIZE);
-        crewTitle = this.makeCenteredLabel(panel, t('dice.panel.crewTitle'),
+        const resolvedCrewTitle = report.stagedCrewCheck?.slot !== null
+          && report.stagedCrewCheck?.slot !== undefined
+          ? t('crew.death.kia', { role: crewRoleName(report.stagedCrewCheck.slot) })
+          : t('dice.panel.crewTitle');
+        crewTitle = this.makeCenteredLabel(panel, resolvedCrewTitle,
           MID_COL_X, crewDiceY, MID_COL_W, 28, 18, DICE_INFO_TEXT);
         crewEffect = this.makeCenteredLabel(panel, '',
           RESULT_COL_X, crewDiceY, RESULT_COL_W, 40, 28, DICE_OUTCOME_CREW);
@@ -21767,8 +21824,8 @@ export class BattleScene extends Component {
           HUD_TEXT_COLOR,
         );
         const dieLabels = [
-          this.makeDieSquare(panel, DIE_COL_1, rowY, 60),
-          this.makeDieSquare(panel, DIE_COL_2, rowY, 60),
+          this.makeDieSquare(panel, DIE_COL_1, rowY, 60 * ATTACK_RESULT_DIE_SCALE),
+          this.makeDieSquare(panel, DIE_COL_2, rowY, 60 * ATTACK_RESULT_DIE_SCALE),
         ];
         const needLabel = this.makeCenteredLabel(
           panel,
@@ -21875,18 +21932,16 @@ export class BattleScene extends Component {
     host.addChild(root);
     root.setSiblingIndex(host.children.length - 1);
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(1280, 720);
-    const bg = backdrop.addComponent(Graphics);
-    bg.fillColor = new Color(0, 0, 0, 70);
-    bg.rect(-640, -360, 1280, 720);
-    bg.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      new Color(0, 0, 0, 70),
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       this.closeDiceRuleModal();
       ev.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
 
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
@@ -22086,7 +22141,7 @@ export class BattleScene extends Component {
       return {
         title: t('dice.rule.hitNeedTitle'),
         w: 410,
-        h: Math.max(420, 150 + rows.length * 38 + (showOpenHatchCommanderHint ? 58 : 0)),
+        h: 150 + rows.length * 38 + (showOpenHatchCommanderHint ? 58 : 0),
         rows,
         total: [t('dice.rule.total'), String(r.threshold)],
         note: showOpenHatchCommanderHint ? t('dice.rule.hitDoublesCommanderKiaHint') : undefined,
@@ -22262,8 +22317,8 @@ export class BattleScene extends Component {
     if (effect.kind === 'crew') {
       const roles = (effect.crew ?? []).map(role => crewRoleName({
         commander: 1,
-        loader: 2,
-        gunner: 3,
+        loader: 3,
+        gunner: 2,
         driver: 4,
         coDriver: 5,
       }[role] ?? 1)).join('|');
@@ -22591,9 +22646,10 @@ export class BattleScene extends Component {
       show.outcomeLabel.string = out.text;
       show.outcomeLabel.color = out.color;
     } else if (show.report.damageEffect === 'crewCheck') {
-      const out = show.report.crewCheck
-        ? crewOutcomeLabel(show.report.crewCheck)
-        : tableCrewOutcomeLabel(show.report) ?? damageOutcomeLabel(show.report.damageEffect);
+      const out = resolvedCrewDeathLabel(show.report)
+        ?? (show.report.crewCheck
+          ? crewOutcomeLabel(show.report.crewCheck)
+          : damageOutcomeLabel(show.report.damageEffect));
       show.outcomeLabel.string = out.text;
       show.outcomeLabel.color = out.color;
     } else {
@@ -23242,7 +23298,7 @@ export class BattleScene extends Component {
               && !(show.report.damageEffects?.length)
               ? overpenetrationOutcomeLabel()
               : show.report.damageEffect === 'crewCheck'
-              ? tableCrewOutcomeLabel(show.report) ?? damageOutcomeLabel(show.report.damageEffect)
+              ? resolvedCrewDeathLabel(show.report) ?? damageOutcomeLabel(show.report.damageEffect)
               : damageOutcomeLabel(show.report.damageEffect);
             show.outcomeLabel.string = out.text;
             show.outcomeLabel.color = out.color;
@@ -23280,9 +23336,10 @@ export class BattleScene extends Component {
         if (show.t >= DICE_CREW_SHOW_DUR) {
           show.t = 0;
           if (show.report.hit && show.report.penetrated && show.report.damageEffect === 'crewCheck') {
-            const out = show.report.crewCheck
-              ? crewOutcomeLabel(show.report.crewCheck)
-              : tableCrewOutcomeLabel(show.report) ?? damageOutcomeLabel(show.report.damageEffect);
+            const out = resolvedCrewDeathLabel(show.report)
+              ?? (show.report.crewCheck
+                ? crewOutcomeLabel(show.report.crewCheck)
+                : damageOutcomeLabel(show.report.damageEffect));
             show.outcomeLabel.string = out.text;
             show.outcomeLabel.color = out.color;
           }
@@ -23365,18 +23422,16 @@ export class BattleScene extends Component {
     host.addChild(root);
     root.setSiblingIndex(host.children.length - 1);
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bg = backdrop.addComponent(Graphics);
-    bg.fillColor = new Color(0, 0, 0, 70);
-    bg.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
-    bg.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      new Color(0, 0, 0, 70),
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       this.closeFireCheckRuleModal();
       ev.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
 
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
@@ -23430,18 +23485,16 @@ export class BattleScene extends Component {
     host.addChild(root);
     root.setSiblingIndex(host.children.length - 1);
 
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bg = backdrop.addComponent(Graphics);
-    bg.fillColor = new Color(0, 0, 0, 70);
-    bg.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
-    bg.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      new Color(0, 0, 0, 70),
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       this.closeFireCheckRuleModal();
       ev.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
 
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
@@ -23504,14 +23557,12 @@ export class BattleScene extends Component {
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
 
-    const mask = new Node('Mask');
-    mask.layer = this.node.layer;
-    mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    root.addChild(mask);
-    const maskG = mask.addComponent(Graphics);
-    maskG.fillColor = DICE_BACKDROP;
-    maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
-    maskG.fill();
+    const { node: mask } = createAdaptiveFullscreenMask(
+      root,
+      'Mask',
+      DICE_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     mask.addComponent(BlockInputEvents);
 
     const pw = Math.min(720, CANVAS_W - 40);
@@ -23662,14 +23713,12 @@ export class BattleScene extends Component {
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
 
-    const mask = new Node('Mask');
-    mask.layer = this.node.layer;
-    mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    root.addChild(mask);
-    const maskG = mask.addComponent(Graphics);
-    maskG.fillColor = DICE_BACKDROP;
-    maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
-    maskG.fill();
+    const { node: mask } = createAdaptiveFullscreenMask(
+      root,
+      'Mask',
+      DICE_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     mask.addComponent(BlockInputEvents);
 
     const pw = Math.min(760, CANVAS_W - 40);
@@ -24173,14 +24222,12 @@ export class BattleScene extends Component {
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
 
-    const mask = new Node('Mask');
-    mask.layer = this.node.layer;
-    mask.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    root.addChild(mask);
-    const maskG = mask.addComponent(Graphics);
-    maskG.fillColor = DICE_BACKDROP;
-    maskG.rect(-CANVAS_W * 0.5, -CANVAS_H * 0.5, CANVAS_W, CANVAS_H);
-    maskG.fill();
+    const { node: mask } = createAdaptiveFullscreenMask(
+      root,
+      'Mask',
+      DICE_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     mask.addComponent(BlockInputEvents);
 
     const panel = new Node('Panel');
@@ -24822,7 +24869,8 @@ export class BattleScene extends Component {
         } else if (effect === 'crewCheck') {
           this.battleLogI18n('battleLog.combat.damage', damageParams);
           const cc = report.crewCheck;
-          const out = cc ? crewOutcomeLabel(cc) : tableCrewOutcomeLabel(report) ?? damageOutcomeLabel(effect);
+          const out = resolvedCrewDeathLabel(report)
+            ?? (cc ? crewOutcomeLabel(cc) : damageOutcomeLabel(effect));
           text = out.text;
           color = out.color;
           size = cc?.slot === null ? 36 : 44;

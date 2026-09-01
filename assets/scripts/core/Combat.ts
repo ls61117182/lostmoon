@@ -936,8 +936,8 @@ function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfi
 function crewRoleSlot(role: DamageTableCrewRole): CrewSlot {
   switch (role) {
     case 'commander': return 1;
-    case 'loader': return 2;
-    case 'gunner': return 3;
+    case 'loader': return 3;
+    case 'gunner': return 2;
     case 'driver': return 4;
     case 'coDriver': return 5;
   }
@@ -1340,7 +1340,7 @@ function resolvePacificShermanDamageEffectByDie(die: number): DamageEffect {
  * §3.2 + §3.4 的"乘员阵亡检定"。
  *
  * 规则：
- *   - 1d6 = 1..5 → 直接映射到 1=车长 / 2=装填手 / 3=炮手 / 4=驾驶员 / 5=副驾驶
+ *   - 1d6 = 1..5 → 直接映射到 1=车长 / 2=炮手 / 3=装填手 / 4=驾驶员 / 5=副驾驶
  *   - 1d6 = 6     → 仅在车长"打开舱盖"时 → 车长阵亡；否则视为虚惊（无人阵亡）
  *   - 已死乘员需重新掷骰（§3.2 脚注）：若映射到的乘员已死亡，则重抛。
  *     兜底：最多重抛 N 次，若全员皆死则返回 slot=null（虚惊），避免死循环。
@@ -1378,8 +1378,8 @@ export function mapCrewDie(die: number, hatchOpen: boolean): CrewSlot | null {
 export function isCrewAlive(crew: ShermanCrew, slot: CrewSlot): boolean {
   switch (slot) {
     case 1: return crew.commander;
-    case 2: return crew.loader;
-    case 3: return crew.gunner;
+    case 2: return crew.gunner;
+    case 3: return crew.loader;
     case 4: return crew.driver;
     case 5: return crew.coDriver;
   }
@@ -1389,8 +1389,8 @@ export function isCrewAlive(crew: ShermanCrew, slot: CrewSlot): boolean {
 export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
   switch (slot) {
     case 1: crew.commander = false; break;
-    case 2: crew.loader = false;    break;
-    case 3: crew.gunner = false;    break;
+    case 2: crew.gunner = false;    break;
+    case 3: crew.loader = false;    break;
     case 4: crew.driver = false;    break;
     case 5: crew.coDriver = false;  break;
   }

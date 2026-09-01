@@ -26,3 +26,20 @@ test('menu and battle backgrounds expand to the visible logical area', () => {
     assert.match(source, /subscribeAdaptiveResolution/, `${file} must react to window aspect changes`);
   }
 });
+
+test('all modal backdrops use the shared adaptive fullscreen mask', () => {
+  const adapter = read('assets/scripts/view/ResolutionAdapter.ts');
+  assert.match(adapter, /class AdaptiveFullscreenMask extends Component/);
+  assert.match(adapter, /visibleSizeInRootSpace\(this\.rootScale\)/);
+  assert.match(adapter, /subscribeAdaptiveResolution\(\(\) => this\.redraw\(\)\)/);
+  assert.match(adapter, /graphics\.rect\(-width \* 0\.5, -height \* 0\.5, width, height\)/);
+  assert.match(adapter, /onDestroy\(\)[\s\S]*?this\.resolutionUnsubscribe\?\.\(\)/);
+
+  const menu = read('assets/scripts/view/MainMenuScene.ts');
+  const battle = read('assets/scripts/view/BattleScene.ts');
+  assert.match(menu, /createAdaptiveFullscreenMask\(/);
+  assert.match(battle, /createAdaptiveFullscreenMask\(/);
+  assert.doesNotMatch(menu, /const backdrop = new Node\('Backdrop'\)/);
+  assert.doesNotMatch(battle, /const backdrop = new Node\('Backdrop'\)/);
+  assert.doesNotMatch(battle, /const mask = new Node\('Mask'\)[\s\S]{0,300}?DICE_BACKDROP/);
+});

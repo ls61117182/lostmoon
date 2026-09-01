@@ -17,8 +17,8 @@ dmg.outcome.radio,无线电损坏,Radio Hit
 dmg.outcome.none,无效果,No effect
 turnEnd.result.noEffect,无事发生,No effect
 crew.role.1,车长,Commander
-crew.role.2,装填手,Loader
-crew.role.3,炮手,Gunner
+crew.role.2,炮手,Gunner
+crew.role.3,装填手,Loader
 crew.role.4,驾驶员,Driver
 crew.role.5,副驾驶,Co-driver
 crew.death.falseAlarmHatch,虚惊（舱盖关）,False Alarm (Hatch Closed)
@@ -88,8 +88,8 @@ status.row.radio,无线电,Radio
 status.row.fireLevel,着火程度,Fire level
 status.row.crewTitle,乘员,Crew
 status.crew.1,① 车长,① COM
-status.crew.2,② 装填手,② LDR
-status.crew.3,③ 炮手,③ GUN
+status.crew.2,② 炮手,② GUN
+status.crew.3,③ 装填手,③ LDR
 status.crew.4,④ 驾驶员,④ DRV
 status.crew.5,⑤ 副驾驶,⑤ ASD
 status.val.loaded,已装填,Loaded
@@ -721,7 +721,7 @@ turnEnd.unknown,未配置的回合结束效果类型。,Unknown turn-end effect.
 fireCheck.title,着火程度检定,Fire intensity check
 fireCheck.ruleTitle,着火检定说明,Fire check rules
 fireCheck.crewRuleTitle,阵亡检定说明,Crew check rules
-fireCheck.crewRuleBody,触发阵亡检定时，再掷 1 颗 d6：1=车长，2=装填手，3=炮手，4=驾驶员，5=副驾驶；6 点仅在车长处于打开舱盖状态时判定为车长阵亡，否则为虚惊。,"When a crew check is triggered, roll 1d6: 1=Commander, 2=Loader, 3=Gunner, 4=Driver, 5=Co-driver; 6 kills the Commander only if the hatch is open, otherwise it is a false alarm."
+fireCheck.crewRuleBody,触发阵亡检定时，再掷 1 颗 d6：1=车长，2=炮手，3=装填手，4=驾驶员，5=副驾驶；6 点仅在车长处于打开舱盖状态时判定为车长阵亡，否则为虚惊。,"When a crew check is triggered, roll 1d6: 1=Commander, 2=Gunner, 3=Loader, 4=Driver, 5=Co-driver; 6 kills the Commander only if the hatch is open, otherwise it is a false alarm."
 fireCheck.crewOpenHatchCommander,开舱状态车长阵亡,Open hatch commander KIA
 fireCheck.confirm,确定,OK
 fireCheck.intro,按着火层数 {n} 掷 {rolls} 颗 d6：{dice}；取最低 {lowest} 结算一次。,Roll {rolls} fire check d6 for fire level {n}: {dice}; resolve the lowest {lowest} once.
@@ -788,7 +788,7 @@ campaignUpgrade.reinforcedTransmission.description,免疫回合结束事件的�
 campaignUpgrade.commanderBallisticShield.name,车长防弹护盾,Commander Ballistic Shield
 campaignUpgrade.commanderBallisticShield.description,每小关免疫第一次由同点数命中或狙击事件导致的车长死亡。,Each segment prevent the first commander death caused by hit doubles or a sniper event.
 campaignUpgrade.emergencyMedicalKit.name,应急医疗包,Emergency Medical Kit
-campaignUpgrade.emergencyMedicalKit.description,每个小关开始时，按车长、装填手、炮手、驾驶员、副驾驶顺序复活1名上一关阵亡的乘员。,At each segment start revive one crew member lost earlier in crew order.
+campaignUpgrade.emergencyMedicalKit.description,每个小关开始时，按车长、炮手、装填手、驾驶员、副驾驶顺序复活1名上一关阵亡的乘员。,At each segment start revive one crew member lost earlier in crew order.
 campaignUpgrade.ammoHandlingOptimization.name,弹药搬运优化,Ammunition Handling Optimization
 campaignUpgrade.ammoHandlingOptimization.description,攻击阶段结束时，将未使用且点数最低的一颗攻击骰保留到下一回合的攻击阶段。,At attack-phase end retain the lowest unused attack die for next turn's attack phase.
 preview.suppress,压制,SUPPRESS

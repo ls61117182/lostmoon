@@ -55,6 +55,11 @@ assert.match(
 );
 assert.match(
   showDiePopover[0],
+  /const mainGunEffectId = unloadedTurretRotation \? 'turret-rotation' : 'main-gun';[\s\S]*?selectMGDie\(idx\)[\s\S]*?unloadedTurretRotation \? 'turret-rotation' : undefined[\s\S]*?selectGunDieDoubles\(idx\)[\s\S]*?mainGunEffectId, true/,
+  'an unloaded matching-dice gun rotation must be omitted when a machine-gun die already offers turret rotation',
+);
+assert.match(
+  showDiePopover[0],
   /local\.y \+ BattleScene\.DICE_TRAY_SLOT \/ 2 \+ 8 \+ panelH \/ 2/,
   'the die action menu should sit close to the top edge of its die',
 );

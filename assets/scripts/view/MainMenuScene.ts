@@ -71,6 +71,7 @@ import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB'
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
   applyAdaptiveResolution,
+  createAdaptiveFullscreenMask,
   subscribeAdaptiveResolution,
   visibleSizeInRootSpace,
 } from './ResolutionAdapter';
@@ -2787,20 +2788,17 @@ export class MainMenuScene extends Component {
     this.node.addChild(root);
 
     // 全屏遮罩
-    const backdrop = new Node('Backdrop');
-    backdrop.layer = this.node.layer;
-    backdrop.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    const bd = backdrop.addComponent(Graphics);
-    bd.fillColor = MODAL_BACKDROP;
-    bd.rect(-CANVAS_W / 2, -CANVAS_H / 2, CANVAS_W, CANVAS_H);
-    bd.fill();
+    const { node: backdrop } = createAdaptiveFullscreenMask(
+      root,
+      'Backdrop',
+      MODAL_BACKDROP,
+      UI_ROOT_SCALE,
+    );
     backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       // 点遮罩空白处关闭模态
       this.closeModal();
       e.propagationStopped = true;
     }, this);
-    root.addChild(backdrop);
-
     // 面板本体
     const panel = new Node('Panel');
     panel.layer = this.node.layer;

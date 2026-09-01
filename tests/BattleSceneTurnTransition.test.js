@@ -19,8 +19,13 @@ assert.match(
 );
 assert.match(
   source,
-  /setContentSize\(CANVAS_W, 132\)/,
-  'turn-transition banner must span the full screen width',
+  /const \{ width, height \} = visibleSizeInRootSpace\(UI_ROOT_SCALE\)[\s\S]*?panelTransform\?\.setContentSize\(width, bannerHeight\)/,
+  'turn-transition banner must expand to the actual visible width',
+);
+assert.match(
+  source,
+  /subscribeAdaptiveResolution\([\s\S]*?this\.layoutTurnTransition\(\)/,
+  'turn-transition banner must relayout when the window size or orientation changes',
 );
 assert.match(
   source,
@@ -29,8 +34,18 @@ assert.match(
 );
 assert.match(
   source,
-  /g\.moveTo\(-w \* 0\.5, h \* 0\.5 - 1\)/,
+  /g\.moveTo\(-width \* 0\.5, bannerHeight \* 0\.5 - 1\)/,
   'turn-transition banner must use open horizontal borders instead of side frames',
+);
+assert.match(
+  source,
+  /refs\.panel\.setPosition\(-w, 0, 0\)/,
+  'turn-transition entry animation must start outside the current visible width',
+);
+assert.match(
+  source,
+  /transition\.panel\.setPosition\(-width \+ width \* \(transition\.t \/ enter\), 0, 0\)/,
+  'turn-transition animation must use the adaptive banner width',
 );
 assert.match(
   source,

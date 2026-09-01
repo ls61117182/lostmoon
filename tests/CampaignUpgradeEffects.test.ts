@@ -177,6 +177,11 @@ function damageReport(effect: 'paralyzed'): AttackReport {
   assert.strictEqual(reviveFirstCampaignCrewMember(sherman), 'commander');
   assert.strictEqual(sherman.crew.commander, true);
   assert.strictEqual(sherman.crew.loader, false);
+  sherman.crew.commander = false;
+  sherman.crew.gunner = false;
+  assert.strictEqual(reviveFirstCampaignCrewMember(sherman), 'commander');
+  assert.strictEqual(reviveFirstCampaignCrewMember(sherman), 'gunner');
+  assert.strictEqual(sherman.crew.loader, false);
 }
 
 console.log('Campaign upgrade effect tests passed');

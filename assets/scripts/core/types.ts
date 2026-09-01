@@ -292,7 +292,7 @@ export interface UnitStats {
   /** 关舱时的车内环形观察距离；默认 1 格。 */
   interiorVisionRange?: number;
   hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
-  crewMembers: CrewSlot[];   // 单位乘员槽位：1=车长, 2=装填手, 3=炮手, 4=驾驶员, 5=副驾驶
+  crewMembers: CrewSlot[];   // 单位乘员槽位：1=车长, 2=炮手, 3=装填手, 4=驾驶员, 5=副驾驶
 }
 
 /** 非玩家单位等级；玩家控制坦克不使用整车等级。 */
@@ -434,13 +434,13 @@ export function isPlayerControlled(unit: Pick<Unit, 'controller' | 'id'>): boole
 }
 
 // ---------- 谢尔曼乘员 ----------
-/** 1=车长, 2=装填手, 3=炮手, 4=驾驶员, 5=副驾驶 */
+/** 1=车长, 2=炮手, 3=装填手, 4=驾驶员, 5=副驾驶 */
 export type CrewSlot = 1 | 2 | 3 | 4 | 5;
 
 export interface ShermanCrew {
   commander: boolean;   // 1
-  loader: boolean;      // 2
-  gunner: boolean;      // 3
+  loader: boolean;      // 3
+  gunner: boolean;      // 2
   driver: boolean;      // 4
   coDriver: boolean;    // 5
 }

@@ -71,7 +71,7 @@ const DB: Record<UnitKind, UnitStats> = {
     damageTargetClass: "us_tank",
     infantryTankCoordination: 1,
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
-    crewMembers: [1, 2, 4, 5],
+    crewMembers: [1, 3, 4, 5],
   },
   tiger: { // 虎式 - 重型敌方坦克
     faction: "german",

@@ -518,7 +518,7 @@ const rngFrom = (...values): RNG => {
 
     assert.strictEqual(report.damageCheckType, 'left');
     assert.deepStrictEqual(report.damageEffects?.map(e => e.effect), ['fire', 'crewCheck']);
-    assert.strictEqual(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot, 3);
+    assert.strictEqual(report.damageEffects?.find(e => e.effect === 'crewCheck')?.crewSlot, 2);
     assert.strictEqual(target.fireLevel, 1);
     assert.strictEqual(target.crew!.gunner, false);
     assert.strictEqual(report.commanderKilledByHitDoubles, true);

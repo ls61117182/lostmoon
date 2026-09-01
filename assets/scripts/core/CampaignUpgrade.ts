@@ -122,7 +122,7 @@ export function reviveFirstCampaignCrewMember(
   sherman: { crew?: Partial<NonNullable<Unit['crew']>> },
 ): keyof NonNullable<Unit['crew']> | null {
   if (!sherman.crew) return null;
-  const order: Array<keyof NonNullable<Unit['crew']>> = ['commander', 'loader', 'gunner', 'driver', 'coDriver'];
+  const order: Array<keyof NonNullable<Unit['crew']>> = ['commander', 'gunner', 'loader', 'driver', 'coDriver'];
   const slot = order.find(candidate => sherman.crew?.[candidate] === false);
   if (!slot) return null;
   sherman.crew[slot] = true;
