@@ -33,6 +33,26 @@ assert.match(
   /private startHardcoreATGunAim[\s\S]*?beginTurretAimAnim\(\{[\s\S]*?unit: gun,[\s\S]*?suppressTurretSound: true/,
   'AT-gun whole-mount rotation must suppress the tank turret motor sound',
 );
+assert.match(
+  battle,
+  /private prepareCampaignExitTurretAlignment[\s\S]*?anim\.evacExit[\s\S]*?turret\.repair\(sherman\)[\s\S]*?campaignExitTurretFrom = from[\s\S]*?campaignExitTurretTo = to[\s\S]*?startTurretTraverseSound\(\)/,
+  'a next-segment exit repairs a damaged turret before starting its synchronized traverse sound',
+);
+assert.match(
+  battle,
+  /if \(this\.anim\.t === 0 && this\.anim\.evacExit\)[\s\S]*?prepareCampaignExitTurretAlignment\(this\.anim\)[\s\S]*?this\.anim\.t \+= dt \/ this\.anim\.dur/,
+  'campaign turret alignment starts in the same update frame as the exit movement',
+);
+assert.match(
+  battle,
+  /private currentShermanTurretLerp[\s\S]*?campaignExitTurretFrom[\s\S]*?campaignExitTurretTo[\s\S]*?easeInOutCubic\([\s\S]*?this\.anim\.t/,
+  'the exit movement progress also drives the turret rotation progress',
+);
+assert.match(
+  battle,
+  /finishTankTrackAnimation\(anim\);[\s\S]*?finishCampaignExitTurretAlignment\(anim\);[\s\S]*?if \(anim\.evacExit/,
+  'the aligned turret heading is committed before the exit advances the campaign',
+);
 assert.match(battle, /private resetTurretFacingState\(\)[\s\S]*?stopTurretTraverseSound\(\)/);
 assert.match(audio, /stopBattleSfx[\s\S]*?stopTurretTraverseSound\(\)/);
 assert.ok(fs.existsSync(path.join(root, 'assets/resources/audio/tank_turret_rotate.mp3')));

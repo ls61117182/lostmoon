@@ -299,7 +299,7 @@ export interface UnitStats {
 export type UnitLevel = 'recruit' | 'veteran' | 'elite';
 
 /** 硬核模式主炮弹种。经典模式继续只使用 loaded。 */
-export type ShellType = 'ap' | 'he' | 'hvap';
+export type ShellType = 'ap' | 'he' | 'hvap' | 'smoke';
 
 /** 玩家坦克五名乘员的独立等级。非玩家坦克通过单位等级即时继承，不单独配置。 */
 export interface CrewLevels {
@@ -369,6 +369,7 @@ export interface Unit {
   loadedShell?: ShellType | null; // 硬核模式已装填弹种；null 表示未装填
   /** Campaign HVAP rounds remaining in the ready supply. */
   hvapAmmoRemaining?: number;
+  smokeAmmoRemaining?: number;
   hatchOpen?: boolean;      // 车长打开舱盖
   /** 当前车长开舱观察范围；可受车长装备、天气等效果修改。 */
   visionRange?: number;
@@ -561,6 +562,7 @@ export interface UnitPlacement {
   loadedShell?: ShellType | null;
   /** 战役强化提供的 HVAP 剩余弹数。 */
   hvapAmmoRemaining?: number;
+  smokeAmmoRemaining?: number;
 }
 
 export interface MissionData {

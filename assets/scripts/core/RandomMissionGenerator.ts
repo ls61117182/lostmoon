@@ -43,7 +43,7 @@ export interface RandomMissionGenerationOptions {
   playerTankFaction?: Faction;
 }
 
-export const RANDOM_MISSION_GENERATOR_VERSION = '23';
+export const RANDOM_MISSION_GENERATOR_VERSION = '24';
 export const RANDOM_MISSION_TRANSIENT_IDS: Record<RandomMissionTheater, string> = {
   europe: 'generated_random_europe',
   pacific: 'generated_random_pacific',
@@ -1013,6 +1013,7 @@ function placeSpawnMarkers(
       const buildingA = tileAt(tiles, a)?.bd === 1 ? 1 : 0;
       const buildingB = tileAt(tiles, b)?.bd === 1 ? 1 : 0;
       return buildingA - buildingB
+        || distanceToBoundary(a) - distanceToBoundary(b)
         || hexDistance(offsetToAxial(a), startAxial) - hexDistance(offsetToAxial(b), startAxial);
     });
   if (eidCandidates.length < 6) throw new Error('not enough eid marker cells');

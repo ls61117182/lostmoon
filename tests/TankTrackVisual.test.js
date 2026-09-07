@@ -129,5 +129,13 @@ assert(
   battleScene.includes('this.clearTankTracks();'),
   'loading or restarting a mission should clear the previous mission tracks',
 );
+assert(
+  battleScene.includes('this.tankTracks = this.tankTracks.filter(track => this.tankTrackRemainsVisible(track));'),
+  'turn-end fading should discard track records after their rendered alpha reaches zero',
+);
+assert(
+  /tankTrackRemainsVisible[\s\S]*?tankTrackAlphaAfterTurns\(TANK_TRACK_COLORS\[style\]\.a, track\.fadeSteps\) > 0/.test(battleScene),
+  'track cleanup should use the same rounded alpha calculation as rendering',
+);
 
 console.log('Tank-track visual tests passed');

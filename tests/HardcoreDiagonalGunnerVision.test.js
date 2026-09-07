@@ -151,7 +151,7 @@ console.log('Hardcore diagonal gunner vision tests passed');
   const blueTarget = { ...redTarget, id: 'blue', pos: { q: 1, r: 2 } };
   const redContext = { attacker, target: redTarget, map, expandedTurretDirections: true, directionalDamageCheck: true };
   assert.strictEqual(canAttack(redContext).ok, true, 'the selected visible flank must be a legal main-gun target');
-  assert.strictEqual(canAttack({ ...redContext, target: blueTarget }).ok, false, 'the unselected flank must remain illegal');
+  assert.strictEqual(canAttack({ ...redContext, target: blueTarget }).ok, true, 'either unobstructed flank must be a legal main-gun path');
   assert.strictEqual(attackFireDirection(redContext), 6, 'the rules-facing attack direction must remain the halfway turret direction');
 
   const path = hexLine(attacker.pos, redTarget.pos);
@@ -318,9 +318,26 @@ console.log('Diagonal post-move side reconciliation tests passed');
   const closedHatchTank = { ...openHatchTank, hatchOpen: false };
   assert.strictEqual(
     canAttack({ ...ctx, attacker: closedHatchTank }).ok,
-    false,
-    'closing the hatch must restore the selected single-flank gunner-vision restriction',
+    true,
+    'closing the hatch must not remove an unobstructed main-gun path to an acquired target',
   );
 }
 
 console.log('Open-hatch diagonal flank attack tests passed');
+
+// Every shell can use either clear flank, even outside the current gunner view.
+for (const shellType of ['ap', 'he', 'hvap', 'smoke']) {
+  const map = fieldMap();
+  const attacker = { ...tank(0), turretFacing: 0, gunnerVisionRange: 1 };
+  for (const pos of [{q:2,r:1}, {q:1,r:2}]) {
+    const target = {...tank(0), id:'target', faction:'german', pos};
+    const ctx = {attacker, target, map, shellType, expandedTurretDirections:true};
+    assert.equal(canAttack(ctx).ok, true, shellType + ': both flank targets must be legal');
+    assert.equal(attackFireDirection(ctx), 6);
+    assert.equal(canAttack({...ctx, smokeHexes:new Set([HexMap.keyOf({q:1,r:1})])}).ok, false, 'intervening smoke blocks the diagonal path');
+    assert.equal(canAttack({...ctx, attacker:{...attacker,turretDamaged:true}}).ok, false);
+    assert.equal(canAttack({...ctx, expandedTurretDirections:false}).ok, false, 'classic axis rules remain unchanged');
+  }
+  map.set({pos:{q:1,r:1},terrain:'forest'});
+  assert.equal(canAttack({attacker,target:{...tank(0),id:'target',pos:{q:2,r:1}},map,shellType,expandedTurretDirections:true}).ok,false,'intervening terrain blocks the diagonal path');
+}

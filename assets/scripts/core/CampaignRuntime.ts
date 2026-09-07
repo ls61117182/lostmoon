@@ -372,6 +372,7 @@ export function carryPlayerTankToNextSegment(current: UnitPlacement, nextTemplat
         : undefined,
     loaded: current.loaded === true,
     loadedShell: current.loadedShell ?? (current.loaded ? 'ap' : null),
+    smokeAmmoRemaining: current.smokeAmmoRemaining,
     hatchOpen: current.hatchOpen === true,
   };
 }

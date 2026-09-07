@@ -15,6 +15,8 @@ export const HVAP_AMMO_CAPACITY = 2;
 export function loadCampaignShell(sherman: Unit, nextShell: ShellType): boolean {
   const currentShell = resolvedLoadedShell(sherman);
   if (currentShell === nextShell) return true;
+  const smokeReserve = sherman.smokeAmmoRemaining ?? (currentShell === 'smoke' ? 6 : 7);
+  if (nextShell === 'smoke' && smokeReserve <= 0) return false;
   if (nextShell === 'hvap') {
     const remaining = sherman.hvapAmmoRemaining ?? 0;
     if (remaining <= 0) return false;
@@ -22,6 +24,8 @@ export function loadCampaignShell(sherman: Unit, nextShell: ShellType): boolean 
   } else if (currentShell === 'hvap') {
     sherman.hvapAmmoRemaining = Math.min(HVAP_AMMO_CAPACITY, (sherman.hvapAmmoRemaining ?? 0) + 1);
   }
+  if (nextShell === 'smoke') sherman.smokeAmmoRemaining = smokeReserve - 1;
+  else if (currentShell === 'smoke') sherman.smokeAmmoRemaining = Math.min(7, smokeReserve + 1);
   sherman.loaded = true;
   sherman.loadedShell = nextShell;
   return true;

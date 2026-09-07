@@ -53,6 +53,7 @@ interface UnitSnapshot {
   loaded?: boolean;
   loadedShell?: ShellType | null;
   hvapAmmoRemaining?: number;
+  smokeAmmoRemaining?: number;
   hatchOpen?: boolean;
   visionRange?: number;
   gunnerVisionRange?: number;
@@ -150,6 +151,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     loaded: u.loaded,
     loadedShell: u.loadedShell,
     hvapAmmoRemaining: u.hvapAmmoRemaining,
+    smokeAmmoRemaining: u.smokeAmmoRemaining,
     hatchOpen: u.hatchOpen,
     visionRange: u.visionRange,
     gunnerVisionRange: u.gunnerVisionRange,
@@ -223,6 +225,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.loaded = s.loaded ?? false;
   live.loadedShell = s.loadedShell ?? (s.loaded ? 'ap' : null);
   live.hvapAmmoRemaining = s.hvapAmmoRemaining;
+  live.smokeAmmoRemaining = s.smokeAmmoRemaining;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
   if (s.gunnerVisionRange !== undefined) live.gunnerVisionRange = s.gunnerVisionRange;
   if (s.interiorVisionRange !== undefined) live.interiorVisionRange = s.interiorVisionRange;
@@ -467,6 +470,7 @@ export function applySave(
     sh.loaded = ss.loaded ?? false;
     sh.loadedShell = ss.loadedShell ?? (ss.loaded ? 'ap' : null);
     sh.hvapAmmoRemaining = ss.hvapAmmoRemaining;
+    sh.smokeAmmoRemaining = ss.smokeAmmoRemaining;
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
     if (ss.visionRange !== undefined) sh.visionRange = ss.visionRange;
     if (ss.gunnerVisionRange !== undefined) sh.gunnerVisionRange = ss.gunnerVisionRange;

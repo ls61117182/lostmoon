@@ -25,3 +25,21 @@ test('AP penetration target text is initialized with the result panel', () => {
     'the penetration label should not be created with an empty string',
   );
 });
+
+test('a missed AP attack keeps the initialized penetration target text', () => {
+  const revealStart = source.indexOf('private revealMainGunDiceRows');
+  const revealEnd = source.indexOf('private setMainGunDiceOutcome', revealStart);
+  assert.ok(revealStart >= 0 && revealEnd > revealStart, 'revealMainGunDiceRows should exist');
+
+  const revealBody = source.slice(revealStart, revealEnd);
+  assert.doesNotMatch(
+    revealBody,
+    /show\.penNeedLabel\.string = t\('dice\.panel\.penCheck'\)/,
+    'the miss branch should not overwrite the penetration threshold label',
+  );
+  assert.match(
+    revealBody,
+    /else \{[\s\S]*?show\.penNeedLabel\.color = DICE_INFO_TEXT[\s\S]*?show\.penVerdictLabel\.string = t\('dice\.panel\.invalid'\)/,
+    'the miss branch should only mark the penetration result invalid',
+  );
+});

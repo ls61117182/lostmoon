@@ -321,9 +321,12 @@ assert.match(battleSceneSource,
 assert.match(battleSceneSource,
   /if \(he\.effectDice\?\.length\)[\s\S]*?!he\.hit[\s\S]*?dice\.panel\.heParalyzeCheck[\s\S]*?dice\.panel\.invalid/,
   'a missed HE tank attack must still show its pre-rolled immobilization row as an invalid check');
+assert.doesNotMatch(battleSceneSource,
+  /show\.penNeedLabel\.string = t\('dice\.panel\.penCheck'\)/,
+  'a missed AP attack must not replace the initialized penetration threshold with a generic check label');
 assert.match(battleSceneSource,
-  /show\.penNeedLabel\.string = t\('dice\.panel\.penCheck'\)[\s\S]*?show\.penNeedLabel\.color = DICE_INFO_TEXT[\s\S]*?show\.penVerdictLabel\.string = t\('dice\.panel\.invalid'\)/,
-  'a missed AP attack must label the white middle row as penetration check while retaining the invalid verdict');
+  /else \{[\s\S]*?show\.penNeedLabel\.color = DICE_INFO_TEXT[\s\S]*?show\.penVerdictLabel\.string = t\('dice\.panel\.invalid'\)/,
+  'a missed AP attack must retain the initialized penetration threshold and show the invalid verdict');
 assert.match(battleSceneSource,
   /thr <= 0[\s\S]*?dice\.panel\.penMustPen[\s\S]*?dice\.panel\.penetrateNeed/,
   'a normal AP penetration threshold must be labeled as required to penetrate');

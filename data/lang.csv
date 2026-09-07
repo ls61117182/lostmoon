@@ -21,6 +21,11 @@ crew.role.2,炮手,Gunner
 crew.role.3,装填手,Loader
 crew.role.4,驾驶员,Driver
 crew.role.5,副驾驶,Co-driver
+crew.tooltip.1,攻击阶段骰子+1；打开舱盖时获得额外视野，并使杂项阶段骰子+1,Attack-phase dice +1; opening the hatch grants extra vision and Misc-phase dice +1.
+crew.tooltip.2,攻击阶段骰子+1；杂项阶段可使用主炮射击，攻击阶段可消耗两颗同点骰使用主炮射击,"Attack-phase dice +1; may fire the main gun during the Misc phase, or by spending two matching dice during the Attack phase."
+crew.tooltip.3,攻击阶段骰子+1；杂项阶段可装填主炮，攻击阶段可消耗两颗同点骰装填主炮,"Attack-phase dice +1; may reload the main gun during the Misc phase, or by spending two matching dice during the Attack phase."
+crew.tooltip.4,移动阶段骰子+1；杂项阶段可转向或前进，移动阶段可消耗两颗同点骰前进,"Movement-phase dice +1; may turn or advance during the Misc phase, or advance by spending two matching dice during the Movement phase."
+crew.tooltip.5,移动阶段骰子+1；移动阶段可消耗两颗同点骰转向；硬核模式下可操作航向机枪,Movement-phase dice +1; may turn by spending two matching dice during the Movement phase; operates the bow machine gun in Hardcore mode.
 crew.death.falseAlarmHatch,虚惊（舱盖关）,False Alarm (Hatch Closed)
 crew.death.falseAlarm,乘员虚惊,Crew False Alarm
 crew.death.kia,{role} 阵亡,{role} KIA
@@ -155,6 +160,12 @@ action.reload,装填主炮,Reload Gun
 action.reloadAP,装填AP,Load AP
 action.reloadHE,装填HE,Load HE
 action.reloadHVAP,装填HVAP,Load HVAP
+ammo.tooltip.ap.title,AP · 穿甲弹,AP · Armor-Piercing
+ammo.tooltip.ap.description,穿甲值 {penetration}，有效射程 {range} 格；距离超过有效射程后，每远 1 格穿甲值降低 1。主要用于攻击装甲单位，可能造成过穿；无法攻击步兵。,"Penetration {penetration}; effective range {range} hexes. Beyond effective range, penetration falls by 1 per extra hex. Intended for armored targets and may overpenetrate; cannot attack infantry."
+ammo.tooltip.he.title,HE · 高爆弹,HE · High-Explosive
+ammo.tooltip.he.description,威力值 {power}。适合攻击软目标：攻击步兵时有概率击毁，未击毁时仍可能造成压制；攻击坦克时有低概率直接摧毁目标，也可能造成瘫痪。,"Power {power}. Best against soft targets: it may destroy infantry, or suppress them if they survive. Against tanks it has a low chance to destroy outright and may also immobilize."
+ammo.tooltip.hvap.title,HVAP · 钨芯穿甲弹,HVAP · Tungsten-Core AP
+ammo.tooltip.hvap.description,穿甲值 {penetration}，有效射程 {range} 格；距离超过有效射程后，每远 1 格穿甲值降低 1。,"Penetration {penetration}; effective range {range} hexes. Beyond effective range, penetration falls by 1 per extra hex."
 action.repair,修复,Repair
 action.fire,炮击,Fire
 action.fireHardcore,炮击/旋转,Fire/Rotate
@@ -162,7 +173,7 @@ action.rotateTurret,旋转,Rotate
 action.repairTurret,修复炮塔,Repair Turret
 action.repairMobility,修复瘫痪,Repair Mobility
 action.fireSuppress,灭火 -1,Reduce Fire -1
-action.smoke,施放烟雾,Deploy Smoke
+action.smoke,投掷烟雾弹,Throw Smoke Grenade
 action.concealment,进入隐蔽,Go Concealed
 action.codriverMG,副驾驶机枪,Co-driver MG
 action.fireMG,机枪扫射,Fire MG
@@ -515,6 +526,9 @@ terrain.bridge,桥梁,Bridge
 tileInspect.title,格子介绍,Tile info
 tileInspect.building,建筑叠加：坦克可进入格内；视线沿路径经过建筑格时会被遮挡。,Building overlay: tanks may enter the tile; line of sight is blocked when the sight path passes through a building tile.
 tileInspect.rules.forest,森林：坦克不可进入；步兵可进入；遮挡视线。,Forest: tanks cannot enter; infantry can enter; blocks line of sight.
+tileInspect.rules.infantryOnly,仅允许步兵进入,Infantry only
+tileInspect.rules.blocksVision,阻挡视野,Blocks line of sight
+tileInspect.rules.impassable,无法驶入,Impassable
 tileInspect.rules.water,水域：任何单位不可进入；不遮挡视线。,Water: impassable to all units; does not block line of sight.
 tileInspect.rules.bridge,桥梁：坦克只能从桥梁连接的 {a}、{b} 方向进出；按公路地形计算行动骰。,Bridge: tanks may enter or leave only through connected sides {a} and {b}; action dice use road terrain values.
 tileInspect.hedges,主炮射击时视线上的每个树篱使命中所需点数+1，但攻击者相邻的树篱不增加命中所需点数。,"For main-gun fire, each hedge along the line of sight adds +1 to the hit number, but hedges adjacent to the attacker do not increase the hit number."
@@ -557,7 +571,15 @@ tileInspect.status.loaded,主炮已装填,Main gun loaded
 tileInspect.status.unloaded,主炮未装填,Main gun not loaded
 tileInspect.status.hatchOpen,舱盖打开,Hatches open
 tileInspect.status.enemyDamaged,车体受损,Hull damaged
-battleLog.title,战斗记录 · 点标题放大,Combat log · tap title to expand
+battleLog.title,战斗记录,Combat log
+battle.hud.popupResults,弹出结果,Show Results
+battleLog.turnDivider,──────── 回合 {turn} ────────,──────── Turn {turn} ────────
+battleLog.fireCheckResult,着火检定：{dice} → {result},Fire check: {dice} → {result}
+battleLog.turnEndResult,回合结束：{dice} → {result},Turn end: {dice} → {result}
+battleLog.fireCheckSummary,着火检定：{result},Fire check: {result}
+battleLog.usCasualtyDelta,美军伤亡 +{hits},US casualties +{hits}
+battleLog.combat.resultMiss,未命中,MISS
+battleLog.combat.commanderKia,车长阵亡,Commander KIA
 battleLog.ready,[系统] 战斗记录就绪。,[System] Combat log ready.
 battleLog.missionLoaded,[战斗] 任务加载成功：{name}，{tiles} 格，1 + {allies} + {enemies} 个单位,"[Battle] Mission loaded: {name}, {tiles} tiles, 1 + {allies} + {enemies} units"
 battleLog.playerTurnStart,[战斗] === 进入回合 {turn}（玩家）===,[Battle] === Enter turn {turn} (Player) ===
@@ -606,7 +628,7 @@ battleLog.combat.cannotAttack,[战斗] 无法攻击：{reason},[Combat] Cannot a
 battleLog.combatMg,[战斗] 玩家机枪命中骰={diceExpr}，需要 ≥{need} -> {result},[Combat] Player MG hit dice={diceExpr}; needs ≥{need} -> {result}
 battleLog.combatMgAI,[战斗] {actor}主炮无目标，改用机枪：命中骰={diceExpr}，需要 ≥{need} -> {result},[Combat] {actor} has no main-gun target and uses MG: hit dice={diceExpr}; needs ≥{need} -> {result}
 battleLog.combatMg.hit,命中击毙,Hit and killed
-battleLog.combatMg.miss,未命中,Miss
+battleLog.combatMg.miss,未命中,MISS
 battleLog.combat.ricochet,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 命中{face}（装甲 {armor} / 穿甲 {pen}），穿甲骰={penDiceExpr}，需要 {penNeed} -> 跳弹,"[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> hit {face} (armor {armor} / pen {pen}), AP dice={penDiceExpr}, needs {penNeed} -> ricochet"
 battleLog.combat.directDestroy,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 命中{face}（装甲 {armor} / 穿甲 {pen}），穿甲骰={penDiceExpr}，需要 {penNeed} -> 击穿，目标摧毁,"[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> hit {face} (armor {armor} / pen {pen}), AP dice={penDiceExpr}, needs {penNeed} -> penetrated, target destroyed"
 battleLog.combat.damage,[战斗] {actor} 2d6={d1}+{d2}={roll}，需要 {need} -> 命中{face}（装甲 {armor} / 穿甲 {pen}），穿甲骰={penDiceExpr}，需要 {penNeed} -> 击穿 -> 伤害骰 1d6={dmgDie} -> {effect} -> {target},"[Combat] {actor} 2d6={d1}+{d2}={roll}, needs {need} -> hit {face} (armor {armor} / pen {pen}), AP dice={penDiceExpr}, needs {penNeed} -> penetrated -> damage 1d6={dmgDie} -> {effect} -> {target}"
@@ -616,7 +638,7 @@ battle.settings.title,战斗设置,Battle Settings
 battle.settings.exit,退出关卡,Exit Level
 battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)
 battle.turnEndList.empty,本关未配置回合结束事件表。,This mission has no turn-end event table.
-battle.turnEndList.line,{range}（主骰 {n} 颗，点数之和）→ {effect},{range} (sum of {n} dice) → {effect}
+battle.turnEndList.line,{range} → {effect},{range} → {effect}
 battle.turnEndList.effect.none,本回合没有事件发生,No event occurs this turn
 battle.turnEndList.effect.sniper,狙击手,Sniper
 battle.turnEndList.effect.commander_extra,车长额外指挥,Commander bonus
@@ -797,3 +819,9 @@ floater.suppressionSkip,受压制：跳过本回合,PINNED: TURN SKIPPED
 battleLog.combat.suppressed,{attacker} 主炮高爆弹压制了 {target},{attacker}'s main-gun HE shell suppressed {target}
 battleLog.combat.heResult,{actor} HE：命中 {hitRoll}/{hitNeed}；效果 {effectRoll}/{effectNeed}；{result},{actor} HE: hit {hitRoll}/{hitNeed}; effect {effectRoll}/{effectNeed}; {result}
 battleLog.combat.suppressionSkip,{target} 受压制，本回合所有行动跳过,{target} is suppressed and forfeits every action this turn
+"action.reloadSmoke","装填SMK","Load SMK"
+"status.val.smoke","炮射烟雾弹","Smoke Shell"
+"floater.noSmokeAmmo","炮射烟雾弹已耗尽","No smoke shells remaining"
+"ammo.tooltip.smoke.title","炮射烟雾弹","Smoke Shell"
+"ammo.tooltip.smoke.description","默认备弹7发。向射界内目标格发射，不造成伤害；烟雾效果与投掷烟雾弹相同。","7 rounds by default. Fire at a hex in the firing arc without damage. Same effect as thrown smoke grenades."
+"battleLog.attack.smoke","向（{q}，{r}）发射炮射烟雾弹","Fired smoke shell at ({q}, {r})"

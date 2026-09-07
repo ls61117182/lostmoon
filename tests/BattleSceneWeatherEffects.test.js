@@ -36,8 +36,21 @@ const body = drawWeatherEffects[0];
 
 assert(
   /for\s*\(let\s+i\s*=\s*0;\s*i\s*<\s*RAIN_VISUAL_SLOT_COUNT;\s*i\+\+\)/.test(body)
-    && /sampleRainVisual\(i,\s*this\.unitEffectTime,\s*CANVAS_W,\s*CANVAS_H,\s*sample\)/.test(body),
+    && /sampleRainVisual\(i,\s*this\.unitEffectTime,\s*width,\s*height,\s*sample\)/.test(body),
   'Weather drawing should sample all fixed rain slots without creating nodes',
+);
+
+assert(
+  /visibleSizeInRootSpace\(UI_ROOT_SCALE\)/.test(body)
+    && /setContentSize\(width,\s*height\)/.test(body)
+    && /g\.rect\(-width \* 0\.5,\s*-height \* 0\.5,\s*width,\s*height\)/.test(body),
+  'Weather layer and veil should cover the full adaptive visible area instead of the fixed design canvas',
+);
+
+assert(
+  /drawSnowWeather\(g,\s*weather === 'heavy_snow',\s*width,\s*height\)/.test(body)
+    && /sampleSnowVisual\(i,\s*visualTime,\s*width,\s*height,\s*sample\)/.test(battleScene),
+  'Snow veil and particles should use the same adaptive visible bounds',
 );
 
 assert(

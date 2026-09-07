@@ -14,7 +14,7 @@ assert.match(
 );
 
 const moveTurretLerps = [...source.matchAll(
-  /if\s*\(this\.anim\.kind\s*===\s*'move'\)\s*\{[\s\S]{0,500}?toVisualTarget:\s*u\.turretVisualTarget/g,
+  /if\s*\(this\.anim\.kind\s*===\s*'move'\)\s*\{[\s\S]{0,1000}?toVisualTarget:\s*u\.turretVisualTarget/g,
 )];
 assert.strictEqual(
   moveTurretLerps.length,

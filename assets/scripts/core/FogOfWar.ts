@@ -154,6 +154,23 @@ export function computeUnitVisibleHexes(
   return visible;
 }
 
+/** Main-gun target paths are independent of the currently selected vision flank.
+ * Visibility of actual units is checked by the caller; terrain and smoke still block the path.
+ */
+export function diagonalMainGunDirectionForHex(
+  map: HexMap,
+  unit: Unit,
+  target: Axial,
+  weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
+): FireDirection | null {
+  if ((!isTankUnit(unit) && !isControlledATGun(unit)) || unit.stats.visionType !== 'turreted') return null;
+  const direction = diagonalFlankFireDirectionTo(unit.pos, target);
+  if (direction === null) return null;
+  return diagonalGunnerClickPreference(map, unit, direction, target, smokeHexes, hexDistance(unit.pos, target)) !== null
+    ? direction : null;
+}
+
 /**
  * Return the current halfway turret direction when `target` is on the selected
  * flank path. Hatch state changes how sight is acquired, not which currently

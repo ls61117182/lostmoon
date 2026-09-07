@@ -33,3 +33,4 @@ server/data/
 asset_backups/
 tmp/
 outputs/
+output/

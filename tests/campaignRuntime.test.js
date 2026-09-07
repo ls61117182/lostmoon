@@ -111,6 +111,9 @@ const carried = runtime.carryShermanToNextSegment({
 }, stitched.segmentMissionData[1].sherman);
 assert.deepStrictEqual(carried.at, { col: 1, row: 1 });
 assert.strictEqual(carried.loaded, true);
+assert.strictEqual(carried.facing, 5);
+assert.strictEqual(carried.turretFacing, 7,
+  'the inherited turret heading remains available for the campaign exit alignment animation');
 assert.strictEqual(carried.loadedShell, 'hvap', 'a chambered HVAP round carries into the next segment');
 assert.strictEqual(carried.hvapAmmoRemaining, undefined, 'HVAP supply refills instead of carrying into the next segment');
 assert.strictEqual(carried.hatchOpen, true);

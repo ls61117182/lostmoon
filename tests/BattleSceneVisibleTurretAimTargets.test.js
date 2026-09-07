@@ -117,7 +117,7 @@ assert.match(
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| precisionGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
+  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
   'blue masks and the angle ring must only be shown when the player turret can rotate',
 );
 assert.match(
@@ -234,6 +234,26 @@ assert.match(
   methodBody('onClickDie'),
   /selectedWeaponDieIdx = this\.selectedGunDieIdx >= 0[\s\S]*?: this\.selectedMGDieIdx[\s\S]*?selectedWeaponDieIdx !== idx[\s\S]*?clearGunSelection\(\)[\s\S]*?this\.redraw\(\)/,
   'clicking any other die must cancel either weapon selection and redraw the map',
+);
+assert.doesNotMatch(
+  methodBody('selectGunDie'),
+  /selectedGunDieIdx === dieIdx[\s\S]*?clearGunSelection\(\)/,
+  'selecting the same main-gun action again must keep its range overlay visible',
+);
+assert.match(
+  methodBody('selectGunDie'),
+  /selectedGunDieIdx = dieIdx[\s\S]*?selectedGunDoublesIdx = -1[\s\S]*?selectedGunHitThresholdModifier = 0[\s\S]*?selectedMGDieIdx = -1[\s\S]*?redraw\(\)/,
+  'selecting main-gun fire must replace any other weapon-range mode before redrawing',
+);
+assert.doesNotMatch(
+  methodBody('selectMGDie'),
+  /selectedMGDieIdx === dieIdx[\s\S]*?selectedMGDieIdx = -1/,
+  'selecting the same machine-gun action again must keep its range overlay visible',
+);
+assert.match(
+  methodBody('selectMGDie'),
+  /selectedMGDieIdx !== dieIdx[\s\S]*?clearGunSelection\(\)[\s\S]*?selectedMGDieIdx = dieIdx[\s\S]*?redraw\(\)/,
+  'switching to machine-gun fire must replace the previous weapon range before redrawing',
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),

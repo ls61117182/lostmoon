@@ -278,6 +278,21 @@ function assertRidPriority(pkg) {
       return tileAt(mission, { col, row }).bd !== 1;
     }), `${mission.id}: eid markers should preserve buildings for infantry rid markers`);
   }
+  const eidScore = pos => {
+    const buildingPriority = tileAt(mission, pos).bd === 1 ? 1 : 0;
+    const edgeDistance = Math.min(...boundaries.map(boundary =>
+      hexDistance(offsetToAxial(pos), offsetToAxial(boundary))));
+    return buildingPriority * 100 + edgeDistance;
+  };
+  const unselectedEids = eligibleEids.filter(pos => !eidKeys.has(`${pos.col},${pos.row}`));
+  if (unselectedEids.length > 0) {
+    const eidPositions = [...eidKeys].map(eidKey => {
+      const [col, row] = eidKey.split(',').map(Number);
+      return { col, row };
+    });
+    assert(Math.max(...eidPositions.map(eidScore)) <= Math.min(...unselectedEids.map(eidScore)),
+      `${mission.id}: eid markers must prefer map-edge cells after preserving buildings`);
+  }
   const candidates = active.filter(pos => {
     const tile = tileAt(mission, pos);
     return !reserved.has(`${pos.col},${pos.row}`)

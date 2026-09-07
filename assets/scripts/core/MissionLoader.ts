@@ -797,6 +797,7 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: Un
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
     u.loadedShell = p.loadedShell ?? (p.loaded === true ? 'ap' : null);
+    u.smokeAmmoRemaining = Math.max(0, Math.floor(p.smokeAmmoRemaining ?? (u.loadedShell === 'smoke' ? 6 : 7)));
     if (p.hvapAmmoRemaining !== undefined) {
       u.hvapAmmoRemaining = Math.max(0, Math.floor(p.hvapAmmoRemaining));
     }

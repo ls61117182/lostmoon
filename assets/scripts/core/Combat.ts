@@ -31,7 +31,7 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
+import { diagonalMainGunDirectionForHex, diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
 import { markAmbushTargeted } from './Ambush';
 import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isPlayerControlled, isSameSide, isTankUnit, neutralizeUncrewedTank, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
@@ -236,7 +236,7 @@ export interface HitThresholdModifierDetail {
 export function attackFireDirection(ctx: AttackContext): FireDirection | null {
   const { attacker, target, map } = ctx;
   if (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted') {
-    const flankDirection = diagonalGunnerRuleDirectionForVisibleHex(
+    const flankDirection = diagonalMainGunDirectionForHex(
       map, attacker, target.pos, ctx.weather, ctx.smokeHexes,
     );
     if (flankDirection !== null) return flankDirection;
@@ -420,7 +420,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   }
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
   const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
-    ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, raySmokeHexes)
+    ? diagonalMainGunDirectionForHex(map, attacker, target.pos, ctx.weather, raySmokeHexes)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
@@ -593,7 +593,7 @@ function attackDirectionRuleFor(ctx: AttackContext): AttackDirectionRule {
   // Infantry sharing a tank's hex attacks it from its vulnerable rear.
   if (isSameHexInfantryTankAttack(ctx)) return ATTACK_DIRECTION_RULES[180];
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather)
+    ? diagonalMainGunDirectionForHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather)
     : null;
   return flankDirection !== null
     ? attackDirectionRuleFromFireDirection(ctx.target, flankDirection)
@@ -626,7 +626,7 @@ export function armorValue(target: Unit, face: ArmorFace): number {
 function incomingFireDirectionStepFor(ctx: AttackContext): number | null {
   if (hexDistance(ctx.attacker.pos, ctx.target.pos) === 0) return null;
   const flankDirection = ctx.expandedTurretDirections
-    ? diagonalGunnerRuleDirectionForVisibleHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather, ctx.smokeHexes)
+    ? diagonalMainGunDirectionForHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather, ctx.smokeHexes)
     : null;
   const outgoing = flankDirection
     ?? fireDirectionTo(ctx.attacker.pos, ctx.target.pos)

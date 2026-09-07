@@ -89,6 +89,10 @@ assert(
   'the advance button should be hidden while the player is still choosing movement or attack',
 );
 assert(
+  /this\.isPvpWaitingForRemoteAction\(\)[\s\S]*?this\.phase === 'fireCheck'[\s\S]*?this\.phase === 'ally'[\s\S]*?this\.phase === 'enemy'[\s\S]*?return\s*{\s*label:\s*'',\s*urgent:\s*false,\s*visible:\s*false\s*};/.test(computeAdvanceButton[0]),
+  'non-interactive turn states should not be presented as a disabled-looking button',
+);
+assert(
   battleScene.includes('if (this.endTurnBtn) this.endTurnBtn.active = adv.visible;'),
   'updateHUD() should apply the computed advance-button visibility to the whole button node',
 );
