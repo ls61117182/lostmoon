@@ -1,0 +1,13 @@
+{
+  "data/tank_visuals.csv": "f8ec87ba26b82bc9655e21e82072e8347f5adc977e11983f90cd8966841556be",
+  "data/tank_art/t34.json": "ab876f5af59c0763a986a67f297d30c28d5b8c20674fe93bd17defc0e183aae6",
+  "assets/scripts/core/TankVisualDB.ts": "c9a9bef3c673e63c8713b5d12497dd0b59af8cfca5b689388c0640bb0f121b33",
+  "assets/resources/textures/units/t34_top.png": "b18e0aefbcbbd3c5a59d7b070a7ea2992338fe6c98f889417ed9aecc7b7f14bb",
+  "assets/resources/textures/units/t34_top.png.meta": "6119530c7257c6e61eb84d0362f962c46449f4fa195584986590c23c902db71a",
+  "assets/resources/textures/units/t34_top_hull.png": "bb23279751fba0eb4fe078fc1cfce2b8fe30970c37c4de398b56215225ccfa00",
+  "assets/resources/textures/units/t34_top_hull.png.meta": "c714194f251206656836d3c66c0d1bd992550edfaac8a4a079dbf17890c978f8",
+  "assets/resources/textures/units/t34_top_turret.png": "2e3a74e21a69cdbf63440000fea6e98f88823dd66c3a6cee83b2f034cbdfebf4",
+  "assets/resources/textures/units/t34_top_turret.png.meta": "f6bdaa5593172fdf5d11dad720aaf1f5141180d9cee3c11a36bf40de18107b05",
+  "assets/resources/textures/units/t34_top_destroyed.png": "ee20cdfe8e11ddd85565981c263f64c46dad3aa3fc94fc4ac383cb095e479efb",
+  "assets/resources/textures/units/t34_top_destroyed.png.meta": "5ca5ea8947d9c3606b022694301715ee168ffebe30639775d42b072f0907c641"
+}

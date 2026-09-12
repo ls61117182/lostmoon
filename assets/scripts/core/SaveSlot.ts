@@ -1,4 +1,6 @@
 import { SAVE_KEY } from './SaveLoad';
+import type { SaveData } from './SaveLoad';
+import type { MissionSource } from './CustomMissionStore';
 
 const AUTH_SESSION_KEY = 'lone_sherman_auth_session_v1';
 
@@ -28,6 +30,26 @@ export function readActiveSaveRaw(): string | null {
 export function writeActiveSaveRaw(raw: string): void {
   if (!hasLocalStorage()) return;
   localStorage.setItem(getActiveSaveKey(), raw);
+}
+
+/** Remove only this mission's save, including a matching legacy fallback. */
+export function clearCompletedMissionSave(missionId: string, source: MissionSource): void {
+  if (!hasLocalStorage()) return;
+  const activeKey = getActiveSaveKey();
+  const keys = [activeKey];
+  if (activeKey === `${SAVE_KEY}:guest` || activeKey === `${SAVE_KEY}:offline`) keys.push(SAVE_KEY);
+  for (const key of keys) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    let save: SaveData;
+    try { save = JSON.parse(raw); } catch { continue; }
+    if (save?.missionId !== missionId) continue;
+    const savedSource = save.missionSource;
+    if (savedSource && (savedSource.type !== source.type
+      || (savedSource.type === 'custom' && source.type === 'custom' && savedSource.packageId !== source.packageId)
+      || (savedSource.type === 'resource' && source.type === 'resource' && savedSource.missionPath !== source.missionPath))) continue;
+    localStorage.removeItem(key);
+  }
 }
 
 function readLegacySaveForCurrentSlot(activeKey: string): string | null {

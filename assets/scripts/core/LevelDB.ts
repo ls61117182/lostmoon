@@ -1,3 +1,4 @@
+import { BUILD_FEATURES, profileStorageKey } from './BuildProfile';
 /**
  * 关卡元数据 + 主菜单本地进度（解锁、通关、设置）。
  *
@@ -12,7 +13,7 @@
 
 import { LangCode } from './Lang';
 import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionStore';
-import { DEFAULT_GAME_MODE, GameMode, isGameMode } from './GameMode';
+import { DEFAULT_GAME_MODE, GameMode, normalizeSelectedGameMode } from './GameMode';
 import { CAMPAIGNS, CAMPAIGN_CHAPTER_ID } from './CampaignDB';
 import { isTankKind } from './types';
 import type { SeasonType, UnitKind } from './types';
@@ -63,7 +64,7 @@ export const LEVEL_EDITOR_ENTRY_ID = 0;
 /**
  * 12 关卡配置。当前已实装到 mission_12（`assets/resources/missions/mission_12.json`）。
  */
-export const CHAPTERS: ChapterMeta[] = [
+const ALL_CHAPTERS: ChapterMeta[] = [
   {
     id: DEFAULT_CHAPTER_ID,
     order: 1,
@@ -163,6 +164,8 @@ export const CHAPTERS: ChapterMeta[] = [
   },
 ];
 
+export const CHAPTERS: ChapterMeta[] = ALL_CHAPTERS.filter(chapter => BUILD_FEATURES.testChapter || chapter.id !== 'test');
+
 export const LEVELS: LevelMeta[] = CHAPTERS
   .slice()
   .sort((a, b) => a.order - b.order)
@@ -199,6 +202,12 @@ export function getChapterLevels(id: ChapterId): LevelMeta[] {
   return getChapter(id)?.levels ?? [];
 }
 
+/** Random missions are player content even when developer tools are hidden. */
+export function getRandomMissionLevels(): LevelMeta[] {
+  return ALL_CHAPTERS.flatMap(chapter => chapter.levels)
+    .filter(level => level.entryKind === 'random');
+}
+
 export function findLevelByMissionId(missionId: string): LevelMeta | undefined {
   return LEVELS.find(l => l.missionId === missionId);
 }
@@ -226,7 +235,7 @@ export function getCustomChapterLevels(): LevelMeta[] {
 
 // ---------- 菜单本地进度 ----------
 
-export const MENU_STATE_KEY = 'lone_sherman_menu_v1';
+export const MENU_STATE_KEY = profileStorageKey('lone_sherman_menu_v1');
 
 /**
  * 至少解锁到此关：测试期间设为 `LEVELS.length`（当前 = 12），主菜单全部关卡开放，
@@ -360,7 +369,7 @@ function readState(): MenuState {
       sfxVolume: clamp(parsed.sfxVolume ?? legacyVol ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (parsed.lang === 'en' || parsed.lang === 'zh') ? parsed.lang : DEFAULT_STATE.lang,
       selectedChapterId: getChapter(parsed.selectedChapterId ?? '') ? parsed.selectedChapterId! : DEFAULT_CHAPTER_ID,
-      gameMode: isGameMode(parsed.gameMode) ? parsed.gameMode : DEFAULT_GAME_MODE,
+      gameMode: normalizeSelectedGameMode(parsed.gameMode),
       selectedPlayerTankKind: normalizeSelectedPlayerTankKind(parsed.selectedPlayerTankKind),
     };
   } catch (e) {
@@ -399,7 +408,7 @@ export const MenuProgress = {
       sfxVolume: clamp(state.sfxVolume ?? DEFAULT_STATE.sfxVolume, 0, 100),
       lang: (state.lang === 'en' || state.lang === 'zh') ? state.lang : DEFAULT_STATE.lang,
       selectedChapterId: getChapter(state.selectedChapterId ?? '') ? state.selectedChapterId : DEFAULT_CHAPTER_ID,
-      gameMode: isGameMode(state.gameMode) ? state.gameMode : DEFAULT_GAME_MODE,
+      gameMode: normalizeSelectedGameMode(state.gameMode),
       selectedPlayerTankKind: normalizeSelectedPlayerTankKind(state.selectedPlayerTankKind),
     });
   },
@@ -465,14 +474,14 @@ export const MenuProgress = {
 
   setGameMode(gameMode: GameMode): void {
     const s = readState();
-    s.gameMode = gameMode;
+    s.gameMode = normalizeSelectedGameMode(gameMode);
     writeState(s);
   },
 
   setSelectedPlayerTankKind(kind: UnitKind): void {
     if (!isTankKind(kind)) return;
     const s = readState();
-    s.selectedPlayerTankKind = kind;
+    s.selectedPlayerTankKind = normalizeSelectedPlayerTankKind(kind);
     writeState(s);
   },
 

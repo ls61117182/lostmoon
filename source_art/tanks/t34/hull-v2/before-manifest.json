@@ -1,0 +1,55 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "t34",
+  "notes": "Simplified bold-line Soviet-green art. Locked approved pixel geometry and alpha; coarse local wreck damage. High-resolution selected edits and registration script retained.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/t34/simplified/hull-source.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/t34/simplified/turret-source.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/t34/simplified/destroyed-source.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 1,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      57,
+      34
+    ],
+    "turretPivot": [
+      75,
+      23
+    ],
+    "muzzle": [
+      1,
+      23
+    ],
+    "commanderHatch": [
+      76,
+      30
+    ]
+  }
+}

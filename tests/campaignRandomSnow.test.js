@@ -26,6 +26,9 @@ const observedWeather = new Set();
 for (let seed = 1; seed <= 50; seed++) {
   const packages = createRandomSnowPackages(seed);
   assert.strictEqual(packages.length, 3);
+  const threat = { infantry: 1, german_infantry: 1, officer: 1, truck: 0, panzer3: 2, panzer3_m: 2, panzer4: 3, stug3: 3, panther: 4, tiger: 5, tigerking: 6, maus: 6, pak38: 3, german_heavy_artillery: 4 };
+  assert.deepStrictEqual(packages.map(pkg => pkg.mission.enemies.reduce(
+    (sum, enemy) => sum + (threat[enemy.kind] ?? 0), 0)), [7, 10, 13]);
   assert(packages.every(pkg => pkg.mission.theater === 'europe'));
   assert(packages.every(pkg => pkg.mission.season === 'winter'));
   assert(packages.every(pkg => pkg.mission.usCasualtyLimit === undefined),

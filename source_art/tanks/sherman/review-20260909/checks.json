@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "name": "sherman_top",
+      "width": 698,
+      "height": 328,
+      "alpha": true
+    },
+    {
+      "name": "sherman_top_destroyed",
+      "width": 698,
+      "height": 328,
+      "alpha": true
+    },
+    {
+      "name": "sherman_top_hull",
+      "width": 698,
+      "height": 328,
+      "alpha": true
+    },
+    {
+      "name": "sherman_top_turret",
+      "width": 698,
+      "height": 328,
+      "alpha": true
+    }
+  ],
+  "compositeMatches": true
+}

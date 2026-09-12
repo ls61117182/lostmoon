@@ -1,0 +1,38 @@
+{
+  "status": "AWAITING_USER_REVIEW_NOT_INSTALLED",
+  "facing": "left",
+  "canvas": {
+    "width": 698,
+    "height": 328
+  },
+  "hullBounds": {
+    "x": 40,
+    "y": 24,
+    "width": 634,
+    "height": 280
+  },
+  "sharedPivot": {
+    "x": 351,
+    "y": 162
+  },
+  "sourceBounds": {
+    "hull": {
+      "left": 16,
+      "top": 356,
+      "width": 1221,
+      "height": 540
+    },
+    "turret": {
+      "left": 151,
+      "top": 115,
+      "width": 1457,
+      "height": 669
+    }
+  },
+  "scales": {
+    "hull": 0.5192465192465192,
+    "turret": 0.37369207772795215
+  },
+  "reference": "reference-top.png",
+  "note": "Uniform resampling. Turret height 250 to reference hull length 634. No independent stretching. Current runtime assets and configs untouched."
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "t34",
+  "notes": "T-34/76 replacement from user three-view. Plan layers separated before colorization; angular turret with short 76mm gun and single vent, bow MG, two aligned fuel drums, three-pane rear grille, Soviet green. Body and turret registered to common 4x blueprint units; plain barrel shaft restored to reference length. Destroyed alpha matches hull.",
+  "inputs": {
+    "hull": { "path": "source_art/tanks/t34/hull-selected.png", "background": "alpha" },
+    "turret": { "path": "source_art/tanks/t34/turret-selected.png", "background": "alpha" },
+    "destroyed": { "path": "source_art/tanks/t34/destroyed-from-hull.png", "background": "alpha" }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.1,
+    "outlinePixels": 0,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [591, 324],
+    "turretPivot": [740, 221],
+    "muzzle": [1, 221],
+    "commanderHatch": [755, 295]
+  }
+}

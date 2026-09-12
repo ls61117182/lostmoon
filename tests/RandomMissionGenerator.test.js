@@ -28,7 +28,7 @@ const allowedTerrain = {
 };
 
 const threatByKind = {
-  infantry: 1, officer: 1, panzer3: 2, panzer4: 3, tiger: 5,
+  infantry: 1, german_infantry: 1, officer: 1, truck: 0, panzer3: 2, panzer3_m: 2, panzer4: 3, stug3: 3, panther: 4, tiger: 5, tigerking: 6, maus: 6, pak38: 3, german_heavy_artillery: 4,
   japanese_infantry: 1, type95: 2, type97: 3, at_gun: 3, heavy_artillery: 4,
 };
 
@@ -442,10 +442,12 @@ let gunFacingThree = 0;
 let pacificLandingMaps = 0;
 let pacificInlandMaps = 0;
 
+const observedGermanKinds = new Set();
 for (const theater of ['europe', 'pacific']) {
   for (let seed = 1; seed <= 150; seed++) {
     const pkg = generateRandomMissionPackage(theater, seed);
     const mission = pkg.mission;
+    if (theater === 'europe') for (const enemy of mission.enemies) observedGermanKinds.add(enemy.kind);
     assert.strictEqual(mission.theater, theater);
     assert.strictEqual(mission.cols, 8);
     assert.strictEqual(mission.rows, 6);
@@ -486,9 +488,9 @@ for (const theater of ['europe', 'pacific']) {
     }
 
     const objective = mission.objective;
-    assert(!mission.enemies.some(enemy => enemy.kind === 'officer'), `${mission.id}: random enemies exclude officers`);
+
     const initialThreat = mission.enemies.reduce((sum, enemy) => sum + (threatByKind[enemy.kind] ?? 0), 0);
-    assert(initialThreat >= 10 && initialThreat <= 12, `${mission.id}: initial enemy threat must be 10..12`);
+    assert(initialThreat === 7, `${mission.id}: initial enemy threat must be 7`);
     for (const gun of mission.enemies.filter(enemy => enemy.kind === 'at_gun' || enemy.kind === 'heavy_artillery')) {
       assert(gun.at, `${mission.id}: guns must have fixed rid positions`);
       assert(tileAt(mission, gun.at).rid, `${mission.id}: guns must deploy on rid tiles`);
@@ -552,11 +554,12 @@ for (const theater of ['europe', 'pacific']) {
       assert.strictEqual(checkOutcome(loaded), 'victory',
         `${mission.id}: destroying the truck and evacuating must win the mission`);
     }
-    for (const gun of loaded.enemies.filter(enemy => enemy.kind === 'at_gun')) {
+    for (const gun of loaded.enemies.filter(enemy => enemy.kind === 'at_gun' || enemy.kind === 'pak38')) {
+      const crewKind = gun.kind === 'pak38' ? 'german_infantry' : 'japanese_infantry';
       assert.strictEqual(gun.atGunCrewAlive, true, `${mission.id}: AT gun must load as a controlled composite unit`);
-      assert.strictEqual(gun.atGunCrewKind, 'japanese_infantry', `${mission.id}: AT gun needs its embedded Japanese crew`);
+      assert.strictEqual(gun.atGunCrewKind, crewKind, `${mission.id}: AT gun needs its embedded Japanese crew`);
       const controller = loaded.enemies.find(enemy => enemy.id === gun.atGunControllerUnitId);
-      assert(controller && controller.kind === 'japanese_infantry'
+      assert(controller && controller.kind === crewKind
         && controller.pos.q === gun.pos.q && controller.pos.r === gun.pos.r
         && controller.attachedToATGunId === gun.id,
       `${mission.id}: AT gun must spawn a same-hex Japanese infantry controller folded into the composite`);
@@ -573,3 +576,6 @@ assert(directionThreeShare >= 0.55 && directionThreeShare <= 0.77,
   `direction 3 should occur about 66% of the time, got ${directionThreeShare}`);
 
 console.log('random mission generator tests passed');
+
+const { getAllUnitKinds, getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
+assert.deepStrictEqual([...observedGermanKinds].sort(), getAllUnitKinds().filter(kind => getUnitStats(kind).faction === 'german').sort(), 'European random missions must be able to generate every current German unit');

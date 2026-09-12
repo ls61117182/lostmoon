@@ -104,7 +104,7 @@ export function applyCampaignUpgradesToSherman(sherman: Unit, ids: readonly Camp
     }
     applied.add(id);
   }
-  sherman.campaignUpgradeIds = [...applied];
+  sherman.campaignUpgradeIds = Array.from(applied);
 }
 
 /** Restore per-segment charges when retrying from that segment's start checkpoint. */

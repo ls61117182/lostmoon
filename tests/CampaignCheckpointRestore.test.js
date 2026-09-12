@@ -16,6 +16,7 @@ function loadSaveLoad() {
   }).outputText;
   const mod = { exports: {} };
   const req = (id) => {
+    if (id === './BuildProfile') return { profileStorageKey: key => key };
     if (id === './types') return {
       isTankKind: (kind) => kind === 'sherman',
       neutralizeUncrewedTank: (unit) => {

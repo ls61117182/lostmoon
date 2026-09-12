@@ -58,6 +58,20 @@ assert.deepStrictEqual(canAttack({ attacker, target: sideTank, map }), {
   reason: 'attack.reason.fixedGunFacing',
 }, 'a fixed main gun may not fire to the side');
 
+// Use the actual Soviet unit configuration so a missing tank registration or
+// accidentally traversable casemate is caught as part of combat behavior.
+const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
+const su152 = {
+  ...attacker, id: 'su152', kind: 'su152', faction: 'soviet',
+  stats: getUnitStats('su152'), turretFacing: 1,
+};
+assert.strictEqual(su152.stats.faction, 'soviet');
+assert.strictEqual(canAttack({ attacker: su152, target: frontTank, map }).ok, true);
+assert.deepStrictEqual(canAttack({ attacker: su152, target: sideTank, map }), {
+  ok: false,
+  reason: 'attack.reason.fixedGunFacing',
+}, 'SU-152 must follow its hull even when a stale turret direction points at the target');
+
 const frontInfantry = unitAt('front-infantry', 'infantry', 1, 0);
 const sideInfantry = unitAt('side-infantry', 'infantry', 0, 1);
 assert.strictEqual(canMGAttack({ attacker, target: frontInfantry, map }).ok, true,

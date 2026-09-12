@@ -1,0 +1,23 @@
+# Simplified art revision
+
+Built-in imagegen edits of the previously approved sources, following the tank-art skill and SU-152 simplified style reference. Selected generated files are saved here. The formal source files use the existing runtime pixel coordinate system and alpha; all source resizing is baked into paint registration, with commonScale=1 in the manifest. All CSV display settings were preserved, including user-adjusted pivots and hatch scale.
+
+Regenerate: `node tools/prepareT34SimplifiedArt.cjs`, then `node tools/prepareTankArt.cjs --kind t34_85`. Previous art and manifest remain in before-* files. The older prepare-sources.cjs script reproduces the previous detailed revision only.
+
+Validated: tank:validate (22 asset sets, seven tests, typecheck); CommanderHatchVisual; original hull/turret/destroyed canvas and alpha pixel identity; full CSV row identity. Cocos interactive play inspection not performed. The complete T-34/76 preview was recomposed using the current saved pivot (57,34), correcting its previously stale complete sprite.
+
+## 85h
+
+Precise-object-edit: Simplify INPUT1's exact approved T-34/85 geometry into bold small strategy-game sprite art. INPUT2 is ONLY example of bold strokes and simplified flat shading, never copy its parts or brown/olive color. Use Soviet FOREST GREEN: main fill RGB(82,107,60), highlight RGB(110,135,78), shadow RGB(48,65,35). Keep input1 outer shape, part positions, ratios, orientation LEFT. Remove all fine scratches, grain, rivets, bolts and surface textures. Strong smooth dark exterior and primary structure lines, broad clean 3-tone green shapes. At 140px hull size, major lines must be 1-2 pixels thick. Simplify grids to few thick bars. No perspective, no text, no new components. Pure solid #00ff00 background, no checkerboard or cast shadows. HULL ONLY. Preserve offset bow MG upper-left glacis; plain dark round turret opening; exactly THREE fuel drums: TWO upper rear, ONE lower rear (lower aligned with rightmost upper). Same positions as input1, not 76 layout. Keep large rear mesh and engine cover with vent blocks and pair of rear exhausts; reduce all handrails/tools to a few clear thick strokes. No main cannon or turret.
+
+## 85hc
+
+Precise local correction: input1 simplified T34/85 hull accidentally omitted the LARGE ROUND rear access hatch between the two exhaust housings at the far RIGHT. Restore ONE circular green access hatch centered between those two exhaust housings, matching input2 original location and diameter; use bold black circular outline and one simple hinge, same flat green simplified style. Also preserve short rear fender rectangles at both upper/right and lower/right corners from input2. Keep everything else from input1 unchanged, especially exactly three fuel drums, bow MG, turret ring, green paint, line weight, dimensions. Pure green background.
+
+## 85t
+
+Precise-object-edit: Simplify INPUT1's exact approved T-34/85 geometry into bold small strategy-game sprite art. INPUT2 is ONLY example of bold strokes and simplified flat shading, never copy its parts or brown/olive color. Use Soviet FOREST GREEN: main fill RGB(82,107,60), highlight RGB(110,135,78), shadow RGB(48,65,35). Keep input1 outer shape, part positions, ratios, orientation LEFT. Remove all fine scratches, grain, rivets, bolts and surface textures. Strong smooth dark exterior and primary structure lines, broad clean 3-tone green shapes. At 140px hull size, major lines must be 1-2 pixels thick. Simplify grids to few thick bars. No perspective, no text, no new components. Pure solid #00ff00 background, no checkerboard or cast shadows. TURRET AND GUN ONLY. Preserve the exact long thin 85mm barrel length/thickness and mantlet, rounded casting outline, circular loader hatch upper side and larger commander cupola lower side, paired TWO rear ventilation domes and main handrails. Keep muzzle, rotation pivot and cupola positions. No hull. Do not shorten the long barrel or widen it. Thick lines grow inward, preserving silhouette.
+
+## 85d
+
+Edit this exact simplified T34/85 HULL into destroyed state. Keep identical geometry, canvas, outer silhouette, body location, TWO upper fuel drums and ONE lower drum, bow MG and rear round access cover between exhausts. Same military GREEN paint and normal brightness on undamaged areas, same bold simplified outlines. Damage only locally inside body: show broken jagged turret ring with 2-3 large bent metal lips and local soot; one large dark torn hole on engine cover; a large broken section of rear mesh. No turret, main gun, smoke, flames, micro debris or fragments outside hull. No overall darkening or brown recolor. Make damage visible at 140px scale using simple strong shapes. Pure #00ff00 outside hull.

@@ -1,6 +1,33 @@
 import { GameMode } from './GameMode';
 import { commanderHasSkill } from './UnitLevel';
 import { isSameSide, isTankUnit, Unit } from './types';
+import {
+  EMPTY_COMMANDER_HATCH_SPRITE_SIZE, SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
+  splitTankVisualConfigOf, TankVisualConfig,
+} from './TankVisualDB';
+
+/** An invisible, fixed turret uses the complete body image as its source space. */
+export function fixedTankCommanderHatchTransform(
+  config: Pick<TankVisualConfig, 'commanderHatchSpriteX' | 'commanderHatchSpriteY' | 'commanderHatchScale'>,
+  width: number,
+  height: number,
+  scaleX: number,
+  scaleY: number,
+  bodyAngle: number,
+  empty: boolean,
+): { x: number; y: number; size: number; angle: number } {
+  const localX = (config.commanderHatchSpriteX - width / 2) * scaleX;
+  const localY = (height / 2 - config.commanderHatchSpriteY) * scaleY;
+  const occupiedSize = config.commanderHatchScale * Math.sqrt(scaleX * scaleY);
+  const emptyRatio = EMPTY_COMMANDER_HATCH_SPRITE_SIZE * SHERMAN_EMPTY_COMMANDER_HATCH_SCALE
+    / (splitTankVisualConfigOf('sherman').commanderHatchScale || 1);
+  return {
+    x: localX * Math.cos(bodyAngle) - localY * Math.sin(bodyAngle),
+    y: localX * Math.sin(bodyAngle) + localY * Math.cos(bodyAngle),
+    size: occupiedSize * (empty ? emptyRatio : 1),
+    angle: bodyAngle * 180 / Math.PI - 90,
+  };
+}
 
 export type CommanderHatchVisualState = 'hidden' | 'occupied' | 'empty';
 

@@ -1,0 +1,24 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "t34_85",
+  "notes": "T-34/85 from second user blueprint: plan layers separated before colorization. Bow MG retained; three cylindrical fuel tanks in two-plus-one layout. Source colors registered by uniform layer scaling to common blueprint units. Destroyed alpha identical to hull.",
+  "inputs": {
+    "hull": { "path": "source_art/tanks/t34_85/hull-selected.png", "background": "alpha" },
+    "turret": { "path": "source_art/tanks/t34_85/turret-selected.png", "background": "alpha" },
+    "destroyed": { "path": "source_art/tanks/t34_85/destroyed-from-hull.png", "background": "alpha" }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.15,
+    "outlinePixels": 0,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [410, 226],
+    "turretPivot": [728, 163],
+    "muzzle": [1, 163],
+    "commanderHatch": [755, 212]
+  }
+}

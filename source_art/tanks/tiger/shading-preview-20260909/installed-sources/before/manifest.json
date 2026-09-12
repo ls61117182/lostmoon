@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "tiger",
+  "notes": "User-approved v6 blueprint proportions; covered tracks; common canvas and scale; wreck alpha locked to hull.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/tiger/final-20260909/hull-source.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/tiger/final-20260909/turret-source.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/tiger/final-20260909/destroyed-source.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.109,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      1160,
+      386
+    ],
+    "turretPivot": [
+      1160,
+      386
+    ],
+    "muzzle": [
+      69,
+      386
+    ],
+    "commanderHatch": [
+      1270,
+      495
+    ]
+  }
+}

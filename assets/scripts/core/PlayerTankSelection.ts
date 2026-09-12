@@ -1,4 +1,5 @@
 import { getAllUnitKinds, getUnitStats } from './UnitDB';
+import { BUILD_FEATURES } from './BuildProfile';
 import { isTankKind } from './types';
 import type { MissionData, UnitKind } from './types';
 
@@ -7,10 +8,12 @@ export const DEFAULT_PLAYER_TANK_KIND: UnitKind = 'sherman';
 
 /** Keep the menu list data-driven so newly registered tanks become selectable automatically. */
 export function selectablePlayerTankKinds(): UnitKind[] {
+  if (!BUILD_FEATURES.playerTankSelection) return [DEFAULT_PLAYER_TANK_KIND];
   return getAllUnitKinds().filter(isTankKind);
 }
 
 export function normalizeSelectedPlayerTankKind(kind: unknown): UnitKind {
+  if (!BUILD_FEATURES.playerTankSelection) return DEFAULT_PLAYER_TANK_KIND;
   return typeof kind === 'string' && isTankKind(kind as UnitKind)
     ? kind as UnitKind
     : DEFAULT_PLAYER_TANK_KIND;

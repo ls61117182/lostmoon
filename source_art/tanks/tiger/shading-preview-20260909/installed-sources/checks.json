@@ -1,0 +1,11 @@
+{
+  "hull": {
+    "alphaChanges": 0
+  },
+  "turret": {
+    "alphaChanges": 0
+  },
+  "destroyed": {
+    "alphaChanges": 0
+  }
+}

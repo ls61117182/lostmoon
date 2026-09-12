@@ -2,6 +2,8 @@ import {
   _decorator,
   Color,
   Component,
+  director,
+  game,
   Graphics,
   Node,
   ResolutionPolicy,
@@ -20,12 +22,56 @@ type ResolutionChangeListener = () => void;
 
 const listeners = new Set<ResolutionChangeListener>();
 let listeningForResize = false;
+let containerObserver: ResizeObserver | null = null;
+let webViewportConfigured = false;
+
+function configureWebViewport(): void {
+  if (webViewportConfigured || typeof document === 'undefined') return;
+  // Fix the real exported/editor-preview wrapper, not only the test server's HTML.
+  const frame = document.getElementById('GameDiv');
+  const container = game.canvas?.parentElement;
+  if (!frame || !container || !frame.contains(container)) return;
+  webViewportConfigured = true;
+  const style = document.createElement('style');
+  style.textContent = `
+    html, body { width:100%; height:100%; margin:0; overflow:hidden; }
+    #GameDiv { position:fixed !important; inset:0 !important; width:100% !important;
+      height:100% !important; max-width:none !important; max-height:none !important;
+      margin:0 !important; padding:0 !important; border:0 !important; border-radius:0 !important; }
+    #Cocos3dGameContainer { width:100% !important; height:100% !important; }
+    #GameCanvas { display:block; width:100% !important; height:100% !important; }
+    body > .header, body > .footer { display:none !important; }
+  `;
+  document.head.appendChild(style);
+  const size = screen.windowSize;
+  if (size.width > 0 && size.height > 0) director.root?.resize(size.width, size.height);
+}
+
+function observeWebContainer(): void {
+  if (containerObserver || typeof ResizeObserver === 'undefined') return;
+  const container = game.canvas?.parentElement;
+  if (!container) return;
+  let previous = screen.windowSize;
+  let width = previous.width, height = previous.height;
+  containerObserver = new ResizeObserver(() => {
+    const size = screen.windowSize;
+    if (size.width <= 0 || size.height <= 0 || (size.width === width && size.height === height)) return;
+    width = size.width;
+    height = size.height;
+    // Cocos 3.8 caches CSS style strings; percentage/vw/vh containers can
+    // change their pixel size without its normal resize event being emitted.
+    director.root?.resize(width, height);
+    handleWindowResize();
+  });
+  containerObserver.observe(container);
+}
 
 /**
  * Keep the full 16:9 composition visible while exposing any surplus screen area.
  * Wide screens expand the logical width; tall screens expand the logical height.
  */
 export function applyAdaptiveResolution(): void {
+  configureWebViewport();
   const frame = screen.windowSize;
   const aspect = frame.height > 0 ? frame.width / frame.height : DESIGN_ASPECT;
   const policy = aspect >= DESIGN_ASPECT
@@ -102,8 +148,11 @@ export function createAdaptiveFullscreenMask(
 
 export function subscribeAdaptiveResolution(listener: ResolutionChangeListener): () => void {
   listeners.add(listener);
+  observeWebContainer();
   if (!listeningForResize) {
-    screen.on('window-resize', handleWindowResize);
+    // Use the engine's completed canvas resize as well as orientation events.
+    // This also covers resizing an embedded preview/container.
+    view.on('canvas-resize', handleWindowResize);
     screen.on('orientation-change', handleWindowResize);
     listeningForResize = true;
   }
@@ -112,5 +161,5 @@ export function subscribeAdaptiveResolution(listener: ResolutionChangeListener):
 
 function handleWindowResize(): void {
   applyAdaptiveResolution();
-  for (const listener of [...listeners]) listener();
+  for (const listener of Array.from(listeners)) listener();
 }

@@ -55,7 +55,7 @@ for (const pkg of packages.slice(0, 2)) {
 }
 assert.strictEqual(packages[2].mission.objective.type, 'destroy_all_enemies',
   'third generated mission must require destroying every enemy');
-assert.deepStrictEqual(packages.map(pkg => initialEnemyThreat(pkg.mission)), [10, 13, 16],
+assert.deepStrictEqual(packages.map(pkg => initialEnemyThreat(pkg.mission)), [7, 10, 13],
   'Random Island stages must use their configured initial enemy threat totals');
 assert(packages.every(pkg => pkg.mission.id.startsWith('random_pacific_')),
   'Random Island must use newly generated missions, not bundled Pacific missions');
@@ -66,7 +66,7 @@ assert(packages.every(pkg => pkg.turnEndEvents.every(row => row.missionId === pk
 const firstTwoObjectiveKinds = new Set();
 for (let seed = 1; seed <= 50; seed++) {
   const generated = createRandomIslandPackages(seed);
-  assert.deepStrictEqual(generated.map(pkg => initialEnemyThreat(pkg.mission)), [10, 13, 16],
+  assert.deepStrictEqual(generated.map(pkg => initialEnemyThreat(pkg.mission)), [7, 10, 13],
     `seed ${seed}: initial enemy threat totals must remain exact`);
   for (const pkg of generated.slice(0, 2)) {
     const objective = pkg.mission.objective;

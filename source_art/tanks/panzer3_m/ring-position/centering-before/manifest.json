@@ -1,0 +1,55 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "panzer3_m",
+  "notes": "Independent Ausf M. User overhead view is geometry authority. Common assembled source; extraction zoom corrected uniformly; no old Panzer III art reused. Color-only German grey repaint; camouflage removed; original source alpha and geometry retained. Ring artwork relocated to revised user annotation at source (910,430); turret and runtime geometry unchanged.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/panzer3_m/ring-position/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/panzer3_m/grey/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/panzer3_m/ring-position/destroyed-selected.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.1,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      854,
+      441
+    ],
+    "turretPivot": [
+      944,
+      469
+    ],
+    "muzzle": [
+      27,
+      469
+    ],
+    "commanderHatch": [
+      1117,
+      469
+    ]
+  }
+}

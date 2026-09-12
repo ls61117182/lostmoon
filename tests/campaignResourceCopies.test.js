@@ -81,7 +81,7 @@ assert.deepStrictEqual(
 );
 assert.deepStrictEqual(
   randomIsland.segmentGeneration.map(segment => segment.enemyThreatPoints),
-  [10, 13, 16],
+  [7, 10, 13],
 );
 assert.strictEqual(randomIsland.segmentCount, 3);
 const randomSnow = campaigns.campaigns[5];

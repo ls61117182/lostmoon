@@ -894,6 +894,7 @@ export function prepareTurnEndEvent(
         extraDicePhases: [
           { dice: [penDie], captionKey: 'turnEnd.extra.minePen' },
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
+          ...(crewCheck ? [{ dice: [crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' }] : []),
         ],
         apply: () => applyAttack(sh, rep),
       };
@@ -939,7 +940,10 @@ export function prepareTurnEndEvent(
       return {
         bodyKey: 'turnEnd.clearMine.hit',
         bodyParams: { ...baseParams, damageDie, ...turnEndDamageResultParams(damageEffect, crewCheck) },
-        extraDicePhases: [{ dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' }],
+        extraDicePhases: [
+          { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
+          ...(crewCheck ? [{ dice: [crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' }] : []),
+        ],
         apply: () => applyAttack(sh, rep),
       };
     }
@@ -1000,6 +1004,7 @@ export function prepareTurnEndEvent(
         extraDicePhases: [
           { dice: penDice, captionKey: 'turnEnd.extra.mortarPen' },
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
+          ...(crewCheck ? [{ dice: [crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' }] : []),
         ],
         apply: () => applyAttack(sh, rep),
       };

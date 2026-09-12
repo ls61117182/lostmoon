@@ -7,10 +7,10 @@
 
 import { UnitKind } from './types';
 
-export type TankVisualKind = Extract<UnitKind, 'sherman' | 'sherman76' | 'sherman_jumbo' | 'm26_pershing' | 't34' | 'tiger' | 'tigerking' | 'maus' | 'panther' | 'panzer4' | 'stug3' | 'panzer3' | 'type97' | 'type95' | 'type4' | 'at_gun' | 'pak38' | 'heavy_artillery' | 'german_heavy_artillery' | 'truck'>;
-export type SplitTankKind = Extract<UnitKind, 'sherman' | 'sherman76' | 'sherman_jumbo' | 'm26_pershing' | 't34' | 'tiger' | 'tigerking' | 'maus' | 'panther' | 'panzer4' | 'panzer3' | 'type97' | 'type95' | 'type4'>;
-export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
-export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer3', 'type97', 'type95', 'type4'];
+export type TankVisualKind = Extract<UnitKind, 'sherman' | 'sherman76' | 'sherman_jumbo' | 'm26_pershing' | 't34' | 't34_85' | 'su152' | 'tiger' | 'tigerking' | 'maus' | 'panther' | 'panzer4' | 'stug3' | 'panzer3' | 'panzer3_m' | 'type97' | 'type95' | 'type4' | 'at_gun' | 'pak38' | 'heavy_artillery' | 'german_heavy_artillery' | 'truck'>;
+export type SplitTankKind = Extract<UnitKind, 'sherman' | 'sherman76' | 'sherman_jumbo' | 'm26_pershing' | 't34' | 't34_85' | 'tiger' | 'tigerking' | 'maus' | 'panther' | 'panzer4' | 'panzer3' | 'panzer3_m' | 'type97' | 'type95' | 'type4'>;
+export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
+export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer3', 'panzer3_m', 'type97', 'type95', 'type4'];
 export const EMPTY_COMMANDER_HATCH_SPRITE_SIZE = 20;
 export const SHERMAN_EMPTY_COMMANDER_HATCH_SCALE = 0.5;
 
@@ -76,6 +76,8 @@ const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = 
   sherman_jumbo: { topSpritePath: "textures/units/sherman_jumbo_top/spriteFrame", hullSpritePath: "textures/units/sherman_jumbo_top_hull/spriteFrame", turretSpritePath: "textures/units/sherman_jumbo_top_turret/spriteFrame", destroyedSpritePath: "textures/units/sherman_jumbo_top_destroyed/spriteFrame" },
   m26_pershing: { topSpritePath: "textures/units/m26_pershing_top/spriteFrame", hullSpritePath: "textures/units/m26_pershing_top_hull/spriteFrame", turretSpritePath: "textures/units/m26_pershing_top_turret/spriteFrame", destroyedSpritePath: "textures/units/m26_pershing_top_destroyed/spriteFrame" },
   t34: { topSpritePath: "textures/units/t34_top/spriteFrame", hullSpritePath: "textures/units/t34_top_hull/spriteFrame", turretSpritePath: "textures/units/t34_top_turret/spriteFrame", destroyedSpritePath: "textures/units/t34_top_destroyed/spriteFrame" },
+  t34_85: { topSpritePath: "textures/units/t34_85_top/spriteFrame", hullSpritePath: "textures/units/t34_85_top_hull/spriteFrame", turretSpritePath: "textures/units/t34_85_top_turret/spriteFrame", destroyedSpritePath: "textures/units/t34_85_top_destroyed/spriteFrame" },
+  su152: { topSpritePath: "textures/units/su152_top/spriteFrame", hullSpritePath: "", turretSpritePath: "", destroyedSpritePath: "textures/units/su152_top_destroyed/spriteFrame" },
   tiger: { topSpritePath: "textures/units/tiger_top/spriteFrame", hullSpritePath: "textures/units/tiger_top_hull/spriteFrame", turretSpritePath: "textures/units/tiger_top_turret/spriteFrame", destroyedSpritePath: "textures/units/tiger_top_destroyed/spriteFrame" },
   tigerking: { topSpritePath: "textures/units/tigerking_top/spriteFrame", hullSpritePath: "textures/units/tigerking_top_hull/spriteFrame", turretSpritePath: "textures/units/tigerking_top_turret/spriteFrame", destroyedSpritePath: "textures/units/tigerking_top_destroyed/spriteFrame" },
   maus: { topSpritePath: "textures/units/maus_top/spriteFrame", hullSpritePath: "textures/units/maus_top_hull/spriteFrame", turretSpritePath: "textures/units/maus_top_turret/spriteFrame", destroyedSpritePath: "textures/units/maus_top_destroyed/spriteFrame" },
@@ -83,6 +85,7 @@ const TANK_VISUAL_ASSET_CONFIG: Record<TankVisualKind, TankVisualAssetConfig> = 
   panzer4: { topSpritePath: "textures/units/panzer4_top/spriteFrame", hullSpritePath: "textures/units/panzer4_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer4_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer4_top_destroyed/spriteFrame" },
   stug3: { topSpritePath: "textures/units/stug3_top/spriteFrame", hullSpritePath: "", turretSpritePath: "", destroyedSpritePath: "textures/units/stug3_top_destroyed/spriteFrame" },
   panzer3: { topSpritePath: "textures/units/panzer3_top/spriteFrame", hullSpritePath: "textures/units/panzer3_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer3_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer3_top_destroyed/spriteFrame" },
+  panzer3_m: { topSpritePath: "textures/units/panzer3_m_top/spriteFrame", hullSpritePath: "textures/units/panzer3_m_top_hull/spriteFrame", turretSpritePath: "textures/units/panzer3_m_top_turret/spriteFrame", destroyedSpritePath: "textures/units/panzer3_m_top_destroyed/spriteFrame" },
   type97: { topSpritePath: "textures/units/type97_top/spriteFrame", hullSpritePath: "textures/units/type97_top_hull/spriteFrame", turretSpritePath: "textures/units/type97_top_turret/spriteFrame", destroyedSpritePath: "textures/units/type97_top_destroyed/spriteFrame" },
   type95: { topSpritePath: "textures/units/type95_top/spriteFrame", hullSpritePath: "textures/units/type95_top_hull/spriteFrame", turretSpritePath: "textures/units/type95_top_turret/spriteFrame", destroyedSpritePath: "textures/units/type95_top_destroyed/spriteFrame" },
   type4: { topSpritePath: "textures/units/type4_top/spriteFrame", hullSpritePath: "textures/units/type4_top_hull/spriteFrame", turretSpritePath: "textures/units/type4_top_turret/spriteFrame", destroyedSpritePath: "textures/units/type4_top_destroyed/spriteFrame" },
@@ -98,14 +101,17 @@ const TANK_VISUAL_CONFIG: Record<TankVisualKind, TankVisualConfig> = {
   sherman76: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 14 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 51, commanderHatchSpriteY: 10, commanderHatchScale: 14, exhaustPorts: [{ forward: -0.36, right: 0.07 }, { forward: -0.36, right: -0.07 }] },
   sherman_jumbo: { fitScale: 0.78, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 27 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 76, commanderHatchSpriteY: 19, commanderHatchScale: 16, exhaustPorts: [{ forward: -0.37, right: 0.06 }, { forward: -0.37, right: -0.06 }] },
   m26_pershing: { fitScale: 0.82, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 37 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 141, commanderHatchSpriteY: 23, commanderHatchScale: 30, exhaustPorts: [{ forward: -0.35, right: 0.08 }, { forward: -0.35, right: -0.08 }] },
-  t34: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 24 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 72, commanderHatchSpriteY: 25, commanderHatchScale: 22, exhaustPorts: [{ forward: -0.36, right: 0.07 }, { forward: -0.36, right: -0.07 }] },
-  tiger: { fitScale: 0.9, offsetForward: 0.1, offsetRight: 0, aspectRatioMul: 1.1, muzzle: { spriteX: 0, spriteY: 18 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 71, commanderHatchSpriteY: 25, commanderHatchScale: 17, exhaustPorts: [{ forward: -0.35, right: 0.04 }, { forward: -0.35, right: -0.07 }] },
+  t34: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 23 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 76, commanderHatchSpriteY: 30, commanderHatchScale: 22, exhaustPorts: [{ forward: -0.36, right: 0.055 }, { forward: -0.36, right: -0.055 }] },
+  t34_85: { fitScale: 0.76, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 25 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 114, commanderHatchSpriteY: 33, commanderHatchScale: 22, exhaustPorts: [{ forward: -0.36, right: 0.055 }, { forward: -0.36, right: -0.055 }] },
+  su152: { fitScale: 0.95, offsetForward: 0.11, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 2, spriteY: 62 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 172, commanderHatchSpriteY: 45, commanderHatchScale: 30, exhaustPorts: [{ forward: -0.37, right: 0.06 }, { forward: -0.37, right: -0.06 }] },
+  tiger: { fitScale: 1.104957, offsetForward: 0, offsetRight: -0.01, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 28 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 132, commanderHatchSpriteY: 40, commanderHatchScale: 22, exhaustPorts: [{ forward: -0.35, right: 0.04 }, { forward: -0.35, right: -0.07 }] },
   tigerking: { fitScale: 0.78, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 26 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 96, commanderHatchSpriteY: 31, commanderHatchScale: 16, exhaustPorts: [{ forward: -0.44, right: 0.05 }, { forward: -0.44, right: -0.05 }] },
   maus: { fitScale: 0.9, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 17 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 69, commanderHatchSpriteY: 23, commanderHatchScale: 13, exhaustPorts: [{ forward: -0.56, right: 0.13 }, { forward: -0.56, right: -0.13 }] },
   panther: { fitScale: 0.82, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 53 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 197, commanderHatchSpriteY: 67, commanderHatchScale: 43, exhaustPorts: [{ forward: -0.36, right: 0.05 }, { forward: -0.36, right: -0.05 }] },
   panzer4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 27 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 117, commanderHatchSpriteY: 28, commanderHatchScale: 24, exhaustPorts: [{ forward: -0.32, right: 0.08 }, { forward: -0.32, right: -0.08 }] },
-  stug3: { fitScale: 0.8, offsetForward: 0.08, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 39 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 114, commanderHatchSpriteY: 60, commanderHatchScale: 24, exhaustPorts: [{ forward: -0.34, right: 0.1 }, { forward: -0.34, right: -0.1 }] },
+  stug3: { fitScale: 0.72, offsetForward: 0.06, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 39 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 114, commanderHatchSpriteY: 60, commanderHatchScale: 24, exhaustPorts: [{ forward: -0.34, right: 0.1 }, { forward: -0.34, right: -0.1 }] },
   panzer3: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 20 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 52, commanderHatchSpriteY: 20, commanderHatchScale: 23, exhaustPorts: [{ forward: -0.3, right: 0.08 }, { forward: -0.3, right: -0.08 }] },
+  panzer3_m: { fitScale: 0.66, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 33 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 110, commanderHatchSpriteY: 33, commanderHatchScale: 24, exhaustPorts: [{ forward: -0.3, right: 0.08 }, { forward: -0.3, right: -0.08 }] },
   type97: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 14 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 47, commanderHatchSpriteY: 9, commanderHatchScale: 18, exhaustPorts: [{ forward: -0.33, right: -0.12 }, { forward: 0, right: 0 }] },
   type95: { fitScale: 0.6, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 0, spriteY: 21 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 46, commanderHatchSpriteY: 30, commanderHatchScale: 28, exhaustPorts: [{ forward: -0.28, right: -0.11 }, { forward: 0, right: 0 }] },
   type4: { fitScale: 0.7, offsetForward: 0, offsetRight: 0, aspectRatioMul: 1, muzzle: { spriteX: 1, spriteY: 25 }, destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1, commanderHatchSpriteX: 48, commanderHatchSpriteY: 28, commanderHatchScale: 14, exhaustPorts: [{ forward: -0.37, right: 0.11 }, { forward: -0.37, right: -0.11 }] },
@@ -121,13 +127,15 @@ const SPLIT_TANK_VISUAL_CONFIG: Record<SplitTankKind, SplitTankVisualConfig> = {
   sherman76: { hullFitScale: 0.7, turretScale: 1.2, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.04, turretOffsetRight: 0, commanderHatchSpriteX: 51, commanderHatchSpriteY: 10, commanderHatchScale: 14 },
   sherman_jumbo: { hullFitScale: 0.72, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 76, commanderHatchSpriteY: 19, commanderHatchScale: 16 },
   m26_pershing: { hullFitScale: 0.7, turretScale: 0.71, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.05, turretOffsetRight: 0.005, commanderHatchSpriteX: 141, commanderHatchSpriteY: 23, commanderHatchScale: 30 },
-  t34: { hullFitScale: 0.7, turretScale: 0.6, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 72, commanderHatchSpriteY: 25, commanderHatchScale: 22 },
-  tiger: { hullFitScale: 0.6755, turretScale: 1.2, hullOffsetForward: 0, hullOffsetRight: -0.01, turretOffsetForward: 0.07, turretOffsetRight: 0.004, commanderHatchSpriteX: 71, commanderHatchSpriteY: 25, commanderHatchScale: 17 },
+  t34: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.01, turretOffsetRight: 0, commanderHatchSpriteX: 76, commanderHatchSpriteY: 30, commanderHatchScale: 22 },
+  t34_85: { hullFitScale: 0.7, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 114, commanderHatchSpriteY: 33, commanderHatchScale: 22 },
+  tiger: { hullFitScale: 0.78, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: -0.01, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 132, commanderHatchSpriteY: 40, commanderHatchScale: 22 },
   tigerking: { hullFitScale: 0.85, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.02, turretOffsetRight: 0.01, commanderHatchSpriteX: 96, commanderHatchSpriteY: 31, commanderHatchScale: 16 },
   maus: { hullFitScale: 1.1, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.02, turretOffsetRight: -0.01, commanderHatchSpriteX: 69, commanderHatchSpriteY: 23, commanderHatchScale: 13 },
   panther: { hullFitScale: 0.74, turretScale: 0.95, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 197, commanderHatchSpriteY: 67, commanderHatchScale: 43 },
   panzer4: { hullFitScale: 0.63, turretScale: 0.92, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0, turretOffsetRight: 0, commanderHatchSpriteX: 117, commanderHatchSpriteY: 28, commanderHatchScale: 24 },
   panzer3: { hullFitScale: 0.6, turretScale: 0.9, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.01, turretOffsetRight: 0, commanderHatchSpriteX: 52, commanderHatchSpriteY: 20, commanderHatchScale: 23 },
+  panzer3_m: { hullFitScale: 0.62, turretScale: 1.02, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.03, turretOffsetRight: 0, commanderHatchSpriteX: 110, commanderHatchSpriteY: 33, commanderHatchScale: 24 },
   type97: { hullFitScale: 0.65, turretScale: 1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: -0.015, turretOffsetRight: 0, commanderHatchSpriteX: 47, commanderHatchSpriteY: 9, commanderHatchScale: 18 },
   type95: { hullFitScale: 0.55, turretScale: 0.65, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.01, turretOffsetRight: -0.025, commanderHatchSpriteX: 46, commanderHatchSpriteY: 30, commanderHatchScale: 28 },
   type4: { hullFitScale: 0.72, turretScale: 1.1, hullOffsetForward: 0, hullOffsetRight: 0, turretOffsetForward: 0.07, turretOffsetRight: -0.003, commanderHatchSpriteX: 48, commanderHatchSpriteY: 28, commanderHatchScale: 14 },
@@ -159,16 +167,22 @@ const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig>
     muzzle: { spriteX: 1, spriteY: 37 },
   },
   t34: {
-    topTrim: { x: 0, y: 0, w: 100, h: 50 },
-    turretTrim: { x: 0, y: 0, w: 100, h: 50 },
-    pivot: { bodyX: 42, bodyY: 25, spriteX: 70, spriteY: 25 },
-    muzzle: { spriteX: 0, spriteY: 24 },
+    topTrim: { x: 0, y: 0, w: 143, h: 69 },
+    turretTrim: { x: 0, y: 0, w: 99, h: 46 },
+    pivot: { bodyX: 62, bodyY: 35, spriteX: 72, spriteY: 23 },
+    muzzle: { spriteX: 1, spriteY: 23 },
+  },
+  t34_85: {
+    topTrim: { x: 0, y: 0, w: 143, h: 69 },
+    turretTrim: { x: 0, y: 0, w: 142, h: 50 },
+    pivot: { bodyX: 62, bodyY: 35, spriteX: 110, spriteY: 26 },
+    muzzle: { spriteX: 1, spriteY: 25 },
   },
   tiger: {
-    topTrim: { x: 0, y: 0, w: 100, h: 66 },
-    turretTrim: { x: 0, y: 0, w: 100, h: 37 },
-    pivot: { bodyX: 49, bodyY: 33, spriteX: 65, spriteY: 18 },
-    muzzle: { spriteX: 0, spriteY: 18 },
+    topTrim: { x: 0, y: 0, w: 151, h: 85 },
+    turretTrim: { x: 0, y: 0, w: 159, h: 58 },
+    pivot: { bodyX: 72, bodyY: 42, spriteX: 120, spriteY: 28 },
+    muzzle: { spriteX: 1, spriteY: 28 },
   },
   tigerking: {
     topTrim: { x: 0, y: 0, w: 100, h: 50 },
@@ -200,6 +214,12 @@ const SPLIT_TANK_GEOMETRY_CONFIG: Record<SplitTankKind, SplitTankGeometryConfig>
     pivot: { bodyX: 42, bodyY: 26, spriteX: 41, spriteY: 20 },
     muzzle: { spriteX: 0, spriteY: 20 },
   },
+  panzer3_m: {
+    topTrim: { x: 0, y: 0, w: 148, h: 90 },
+    turretTrim: { x: 0, y: 0, w: 134, h: 65 },
+    pivot: { bodyX: 60, bodyY: 44, spriteX: 93, spriteY: 33 },
+    muzzle: { spriteX: 1, spriteY: 33 },
+  },
   type97: {
     topTrim: { x: 0, y: 0, w: 100, h: 42 },
     turretTrim: { x: 0, y: 0, w: 64, h: 27 },
@@ -225,7 +245,7 @@ export function tankVisualAssetConfigOf(kind: TankVisualKind): TankVisualAssetCo
 }
 
 export function tankVisualConfigOf(kind: UnitKind): TankVisualConfig {
-  if (kind === 'sherman' || kind === 'sherman76' || kind === 'sherman_jumbo' || kind === 'm26_pershing' || kind === 't34' || kind === 'tiger' || kind === 'tigerking' || kind === 'maus' || kind === 'panther' || kind === 'panzer4' || kind === 'stug3' || kind === 'panzer3' || kind === 'type97' || kind === 'type95' || kind === 'type4' || kind === 'at_gun' || kind === 'pak38' || kind === 'heavy_artillery' || kind === 'german_heavy_artillery' || kind === 'truck') {
+  if (kind === 'sherman' || kind === 'sherman76' || kind === 'sherman_jumbo' || kind === 'm26_pershing' || kind === 't34' || kind === 't34_85' || kind === 'su152' || kind === 'tiger' || kind === 'tigerking' || kind === 'maus' || kind === 'panther' || kind === 'panzer4' || kind === 'stug3' || kind === 'panzer3' || kind === 'panzer3_m' || kind === 'type97' || kind === 'type95' || kind === 'type4' || kind === 'at_gun' || kind === 'pak38' || kind === 'heavy_artillery' || kind === 'german_heavy_artillery' || kind === 'truck') {
     return TANK_VISUAL_CONFIG[kind];
   }
   return TANK_VISUAL_DEFAULT;

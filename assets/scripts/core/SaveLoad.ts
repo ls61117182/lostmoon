@@ -1,3 +1,4 @@
+import { profileStorageKey } from './BuildProfile';
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
 import type { ATGunCrewKind, BattleSideId, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitController, UnitKind, UnitLevel } from './types';
@@ -9,7 +10,7 @@ import { HexMap } from './HexGrid';
 import { AttackPositionMemory, cloneAttackPositionMemory } from './AttackPositionMemory';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
-export const SAVE_KEY = 'lone_sherman_save_v1';
+export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
 
 /**
  * 存档版本号。

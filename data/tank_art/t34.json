@@ -1,0 +1,55 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "t34",
+  "notes": "T34/85 source hull copied exactly except fuel drum rectangles: two aligned drums. Current T34/76 turret geometry retained; RGB paint gain matched to current T34/85 turret. Wreck shares the same fuel layout. User requested installation.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/t34/shared-hull-20260908/hull.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/t34/shared-hull-20260908/turret.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/t34/shared-hull-20260908/destroyed.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.15,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      410,
+      226
+    ],
+    "turretPivot": [
+      480,
+      153.33333333333334
+    ],
+    "muzzle": [
+      6.666666666666667,
+      153.33333333333334
+    ],
+    "commanderHatch": [
+      493.33333333333337,
+      206.66666666666669
+    ]
+  }
+}

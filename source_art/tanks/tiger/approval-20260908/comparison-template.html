@@ -1,0 +1,7 @@
+<div id="tiger-compare">
+ <style>#tiger-compare .picture{position:relative;background:white}#tiger-compare img{width:100%;display:block}#tiger-compare .ref{position:absolute;inset:0;opacity:.85}#tiger-compare .controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}#tiger-compare input{flex:1;min-width:140px}#tiger-compare .art{opacity:.65}</style>
+ <div class="controls"><strong>原图叠加对比</strong><span style="color:#e11e41">红线：原图</span><span>灰色：生成稿</span></div>
+ <div class="controls"><label for="tiger-opacity">原图显现程度</label><input id="tiger-opacity" type="range" min="0" max="100" value="85"><output>85%</output></div>
+ <div class="picture"><img class="art" src="data:image/png;base64,ART_DATA" alt="按车体前后基准等比对齐的生成稿"><img class="ref" src="data:image/png;base64,REF_DATA" alt="原始三视图中俯视部分的红色线条"></div>
+ <script>(()=>{const r=document.getElementById('tiger-compare');const s=r.querySelector('input');s.addEventListener('input',()=>{r.querySelector('.ref').style.opacity=s.value/100;r.querySelector('output').textContent=s.value+'%';});})();</script>
+</div>

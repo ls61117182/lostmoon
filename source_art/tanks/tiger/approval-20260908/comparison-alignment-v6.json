@@ -1,0 +1,27 @@
+{
+  "scale": 0.41021548284118114,
+  "dx": 14.636871508379897,
+  "dy": 5.656823623304092,
+  "cropTop": 370,
+  "referenceAnchors": [
+    [
+      230,
+      534
+    ],
+    [
+      744,
+      534
+    ]
+  ],
+  "artAnchors": [
+    [
+      525,
+      386
+    ],
+    [
+      1778,
+      386
+    ]
+  ],
+  "method": "Manual corresponding deck-edge anchors; uniform scaling and translation only; estimates, not CAD measurements"
+}

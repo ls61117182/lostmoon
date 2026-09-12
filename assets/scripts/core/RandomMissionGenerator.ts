@@ -43,7 +43,7 @@ export interface RandomMissionGenerationOptions {
   playerTankFaction?: Faction;
 }
 
-export const RANDOM_MISSION_GENERATOR_VERSION = '24';
+export const RANDOM_MISSION_GENERATOR_VERSION = '25';
 export const RANDOM_MISSION_TRANSIENT_IDS: Record<RandomMissionTheater, string> = {
   europe: 'generated_random_europe',
   pacific: 'generated_random_pacific',
@@ -890,17 +890,36 @@ function enemyBudget(
     const points = Math.max(1, Math.trunc(exactThreatPoints));
     return { min: points, max: points };
   }
-  return { min: 10, max: 12 };
+  return { min: 7, max: 7 };
 }
 
+const EUROPE_ENEMY_POOL: WeightedKind[] = [
+  { kind: 'infantry', weight: 3, threat: 1 },
+  { kind: 'german_infantry', weight: 3, threat: 1 },
+  { kind: 'officer', weight: 1, threat: 1 },
+  { kind: 'truck', weight: 1, threat: 0 },
+  { kind: 'panzer3', weight: 4, threat: 2 },
+  { kind: 'panzer3_m', weight: 4, threat: 2 },
+  { kind: 'panzer4', weight: 4, threat: 3 },
+  { kind: 'stug3', weight: 3, threat: 3 },
+  { kind: 'panther', weight: 2, threat: 4 },
+  { kind: 'tiger', weight: 1, threat: 5 },
+  { kind: 'tigerking', weight: 1, threat: 6 },
+  { kind: 'maus', weight: 1, threat: 6 },
+  { kind: 'pak38', weight: 3, threat: 3 },
+  { kind: 'german_heavy_artillery', weight: 2, threat: 4 },
+];
+const PACIFIC_ENEMY_POOL: WeightedKind[] = [
+  { kind: 'japanese_infantry', weight: 4, threat: 1 },
+  { kind: 'type95', weight: 4, threat: 2 },
+  { kind: 'type97', weight: 4, threat: 3 },
+  { kind: 'at_gun', weight: 4, threat: 3 },
+  { kind: 'heavy_artillery', weight: 3, threat: 4 },
+];
+
 function threatForKind(theater: RandomMissionTheater, kind: UnitKind): number {
-  const europe: Partial<Record<UnitKind, number>> = {
-    infantry: 1, panzer3: 2, panzer4: 3, tiger: 5,
-  };
-  const pacific: Partial<Record<UnitKind, number>> = {
-    japanese_infantry: 1, type95: 2, type97: 3, at_gun: 3, heavy_artillery: 4,
-  };
-  return (theater === 'europe' ? europe[kind] : pacific[kind]) ?? 0;
+  const pool = theater === 'europe' ? EUROPE_ENEMY_POOL : PACIFIC_ENEMY_POOL;
+  return pool.find(entry => entry.kind === kind)?.threat ?? 0;
 }
 
 function selectHighValueTarget(
@@ -937,21 +956,9 @@ function buildEnemyRoster(
   exactThreatPoints?: number,
 ): UnitPlacement[] {
   const budget = enemyBudget(theater, objective, exactThreatPoints);
-  const pool: WeightedKind[] = theater === 'europe'
-    ? [
-      { kind: 'infantry', weight: 5, threat: 1 },
-      { kind: 'panzer3', weight: 4, threat: 2 },
-      { kind: 'panzer4', weight: 4, threat: 3 },
-      { kind: 'tiger', weight: 1, threat: 5 },
-    ]
-    : [
-      { kind: 'japanese_infantry', weight: 4, threat: 1 },
-      { kind: 'type95', weight: 4, threat: 2 },
-      { kind: 'type97', weight: 4, threat: 3 },
-      { kind: 'at_gun', weight: 4, threat: 3 },
-      { kind: 'heavy_artillery', weight: 3, threat: 4 },
-    ];
-  const threatOf = (kind: UnitKind) => pool.find(entry => entry.kind === kind)?.threat ?? 0;
+  const pool = (theater === 'europe' ? EUROPE_ENEMY_POOL : PACIFIC_ENEMY_POOL)
+    .filter(entry => objective.kind !== 'truck' || entry.kind !== 'truck');
+  const threatOf = (kind: UnitKind) => threatForKind(theater, kind);
   const minCount = theater === 'europe' ? 2 : 3;
   const maxCount = theater === 'europe' ? 8 : 6;
 
@@ -965,9 +972,10 @@ function buildEnemyRoster(
     if (kinds.filter(isFootKind).length > 6 || kinds.filter(kind => !isFootKind(kind)).length > 6) continue;
     const count = (kind: UnitKind) => kinds.filter(value => value === kind).length;
     if (theater === 'europe') {
-      if (count('tiger') > 1 || count('panzer4') > 3 || count('infantry') > 6) continue;
+      if (count('tiger') > 1 || count('tigerking') > 1 || count('maus') > 1
+        || count('panzer4') > 3 || count('pak38') > 3 || count('german_heavy_artillery') > 2) continue;
       if (objective.targetKind !== 'infantry'
-        && !kinds.some(kind => kind === 'panzer3' || kind === 'panzer4' || kind === 'tiger')) continue;
+        && !kinds.some(isTankKind)) continue;
     } else {
       if (count('heavy_artillery') > 2 || count('at_gun') > 3 || count('japanese_infantry') > 3) continue;
       if (!kinds.some(kind => kind !== 'japanese_infantry')) continue;
@@ -1088,13 +1096,13 @@ function liesOnForwardRay(from: Offset, facing: Direction, target: Offset): bool
   return false;
 }
 
-function bindPacificGunPlacements(
+function bindGunPlacements(
   enemies: UnitPlacement[],
   tiles: Array<Array<TileDef | null>>,
   rng: RNG,
 ): void {
-  const guns = enemies.filter(enemy => enemy.kind === 'at_gun');
-  const artillery = enemies.filter(enemy => enemy.kind === 'heavy_artillery');
+  const guns = enemies.filter(enemy => (enemy.kind === 'at_gun' || enemy.kind === 'pak38'));
+  const artillery = enemies.filter(enemy => (enemy.kind === 'heavy_artillery' || enemy.kind === 'german_heavy_artillery'));
   if (guns.length === 0 && artillery.length === 0) return;
   const available = shuffled(ACTIVE.filter(pos => tileAt(tiles, pos)?.rid !== undefined), rng)
     .sort((a, b) => ridTerrainPriority(tileAt(tiles, a)) - ridTerrainPriority(tileAt(tiles, b))
@@ -1131,9 +1139,9 @@ function bindPacificGunPlacements(
   const remainingRidIds = available
     .map(pos => tileAt(tiles, pos)?.rid)
     .filter((rid): rid is number => rid !== undefined);
-  const unplacedInfantry = enemies.filter(enemy => enemy.kind === 'japanese_infantry' && !enemy.at);
+  const unplacedInfantry = enemies.filter(enemy => isFootKind(enemy.kind) && !enemy.at);
   if (remainingRidIds.length < unplacedInfantry.length) {
-    throw new Error('not enough unoccupied rid positions for Japanese infantry');
+    throw new Error('not enough unoccupied rid positions for infantry');
   }
   for (const infantry of unplacedInfantry) infantry.startRids = remainingRidIds.slice();
 }
@@ -1204,14 +1212,11 @@ function enforceEventThreatBudget(
   theater: RandomMissionTheater,
   enemies: ReadonlyArray<UnitPlacement>,
 ): void {
-  const unitThreat: Partial<Record<UnitKind, number>> = theater === 'europe'
-    ? { infantry: 1, panzer3: 2, panzer4: 3, tiger: 5, truck: 0 }
-    : { japanese_infantry: 1, type95: 2, type97: 3, at_gun: 3, heavy_artillery: 4 };
   const spawnThreat: Partial<Record<TurnEndEffectType, number>> = theater === 'europe'
     ? { infantry_spawn: 1, panzer3_spawn: 2, panzer4_spawn: 3, tiger_spawn: 5 }
     : { infantry_spawn: 1, type95_spawn: 2, type97_spawn: 3 };
   const sumWays = [0, 0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
-  const initial = enemies.reduce((sum, enemy) => sum + (unitThreat[enemy.kind] ?? 0), 0);
+  const initial = enemies.reduce((sum, enemy) => sum + threatForKind(theater, enemy.kind), 0);
   const expected = () => rows.reduce((sum, row) => {
     const threat = spawnThreat[row.effectType] ?? 0;
     let ways = 0;
@@ -1276,7 +1281,7 @@ function generateAttempt(
   if (!findTankPath(layout.tiles, START, EVAC)) throw new Error('final terrain disconnected player route');
   if (tankReachableShare(layout.tiles, START) < 1) throw new Error('not all passable tiles are player-connected');
   placeSpawnMarkers(layout.tiles, rng, markerReserved);
-  bindPacificGunPlacements(enemies, layout.tiles, rng);
+  bindGunPlacements(enemies, layout.tiles, rng);
 
   const playerKind = options.playerTankKind ?? 'sherman';
   const playerPlacement: UnitPlacement = {

@@ -117,6 +117,8 @@ export interface AttackReport {
   damageEffect?: DamageEffect;
   /** Direction-specific damage table selected by the incoming-fire angle. */
   damageCheckType?: DamageCheckType;
+  /** 本次实际采用的伤害表类别；战斗记录回放无需依赖仍在场的目标单位。 */
+  damageTargetClass?: DamageTargetClass;
   damageEffects?: DamageEffectStep[];
   /** 展示用预掷伤害骰：只有本攻击类型可能需要伤害检定时有值；前置判定失败时仍显示为无效。 */
   stagedDamageDie?: number;
@@ -1177,7 +1179,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       dice: [d1, d2], roll, threshold, hit: false, hitBreakdown: lockedHitBreakdown, hitModifiers,
       ...hitRollMeta,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
-      damageCheckType,
+      damageCheckType, damageTargetClass: targetClass ?? undefined,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles: false,
@@ -1193,7 +1195,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       ...hitRollMeta,
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
-      damageCheckType,
+      damageCheckType, damageTargetClass: targetClass ?? undefined,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
       commanderKilledByHitDoubles,
@@ -1210,7 +1212,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
         ...hitRollMeta,
         hit: true,
         armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
-        damageCheckType,
+        damageCheckType, damageTargetClass: targetClass ?? undefined,
         penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
         damageEffects: [],
         stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -1225,7 +1227,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       ...hitRollMeta,
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
-      damageCheckType,
+      damageCheckType, damageTargetClass: targetClass ?? undefined,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       damageEffect: 'destroyed',
       damageEffects: [{ effect: 'destroyed' }],
@@ -1247,7 +1249,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       ...hitRollMeta,
       hit: true,
       armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
-      damageCheckType,
+      damageCheckType, damageTargetClass: targetClass ?? undefined,
       penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
       damageDie, damageEffects,
       stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,
@@ -1267,7 +1269,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     ...hitRollMeta,
     hit: true,
     armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
-    damageCheckType,
+    damageCheckType, damageTargetClass: targetClass ?? undefined,
     penDie, penDice, penThreshold, penetrated, overpenetrated, overpenetrationSuppressedEffects,
     damageDie, damageEffect, damageEffects,
     stagedDamageDie, stagedDamageEffect, stagedDamageEffects, stagedCrewCheck,

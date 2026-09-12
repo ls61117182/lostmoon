@@ -1,5 +1,6 @@
+import { BUILD_FEATURES } from './BuildProfile';
 import type { CustomMissionPackage, MissionSource } from './CustomMissionStore';
-import { DEFAULT_GAME_MODE, GameMode } from './GameMode';
+import { DEFAULT_GAME_MODE, GameMode, normalizeSelectedGameMode } from './GameMode';
 import type { PvpSessionConfig } from './PvpConfig';
 import {
   createRandomEuropeCampaign,
@@ -14,6 +15,7 @@ import type { CampaignDefinition } from './CampaignDB';
 import { generateRandomMissionPackage } from './RandomMissionGenerator';
 import { DEFAULT_PLAYER_TANK_KIND, normalizeSelectedPlayerTankKind } from './PlayerTankSelection';
 import type { UnitKind } from './types';
+import type { CampaignRunSave } from './CampaignRunStore';
 
 export function createRandomIslandPackages(seed: number = Date.now()): CustomMissionPackage[] {
   const baseSeed = (seed >>> 0) || 1;
@@ -26,17 +28,17 @@ export function createRandomIslandPackages(seed: number = Date.now()): CustomMis
     generateRandomMissionPackage('pacific', seeds[0], {
       pacificBattleType: 'landing',
       objectiveKinds: ['direct_evac', 'target_evac'],
-      enemyThreatPoints: 10,
+      enemyThreatPoints: 7,
     }),
     generateRandomMissionPackage('pacific', seeds[1], {
       pacificBattleType: 'inland',
       objectiveKinds: ['direct_evac', 'target_evac'],
-      enemyThreatPoints: 13,
+      enemyThreatPoints: 10,
     }),
     generateRandomMissionPackage('pacific', seeds[2], {
       pacificBattleType: 'inland',
       objectiveKinds: ['destroy_all'],
-      enemyThreatPoints: 16,
+      enemyThreatPoints: 13,
     }),
   ];
 }
@@ -47,6 +49,7 @@ export function createRandomSnowPackages(seed: number = Date.now()): CustomMissi
   const weather = ['clear', 'light_snow', 'heavy_snow'] as const;
   return seeds.map((missionSeed, index) => generateRandomMissionPackage('europe', missionSeed, {
     season: 'winter',
+    enemyThreatPoints: [7, 10, 13][index],
     weather: weather[((missionSeed ^ (index * 0x45d9f3b)) >>> 0) % weather.length],
   }));
 }
@@ -57,6 +60,7 @@ export function createRandomEuropePackages(seed: number = Date.now()): CustomMis
   const weather = ['clear', 'rain'] as const;
   return seeds.map((missionSeed, index) => generateRandomMissionPackage('europe', missionSeed, {
     season: 'summer',
+    enemyThreatPoints: [7, 10, 13][index],
     weather: weather[((missionSeed ^ (index * 0x45d9f3b)) >>> 0) % weather.length],
   }));
 }
@@ -102,8 +106,23 @@ const DEFAULT_STATE: GameSessionState = {
 };
 
 const state: GameSessionState = { ...DEFAULT_STATE };
+let campaignResume: CampaignRunSave | null = null;
+
+let missionMenuTab = 'europe';
+let menuReturnRequest: { kind: 'mission' | 'campaign'; tab: string } | null = null;
 
 export const GameSession = {
+  setMissionMenuTab(tab: string) { missionMenuTab = tab; },
+  requestBattleMenuReturn() {
+    menuReturnRequest = state.pvpSession?.active ? null : {
+      kind: state.selectedCampaignId ? 'campaign' : 'mission', tab: missionMenuTab,
+    };
+  },
+  consumeBattleMenuReturn() {
+    const request = menuReturnRequest;
+    menuReturnRequest = null;
+    return request;
+  },
   get selectedMissionPath() { return state.selectedMissionPath; },
   get selectedMissionSource() { return state.selectedMissionSource; },
   get selectedLevelId() { return state.selectedLevelId; },
@@ -117,13 +136,14 @@ export const GameSession = {
   get selectedCampaignPackages() { return state.selectedCampaignPackages; },
   get isCampaign() { return !!state.selectedCampaignId; },
   get selectedPlayerTankKind() { return state.selectedPlayerTankKind; },
+  get campaignResume() { return state.resumeFromSave && state.selectedCampaignId ? campaignResume : null; },
 
   setSelectedPlayerTankKind(kind: unknown) {
     state.selectedPlayerTankKind = normalizeSelectedPlayerTankKind(kind);
   },
 
   setGameMode(mode: GameMode) {
-    state.gameMode = mode;
+    state.gameMode = state.selectedCampaignId ? 'hardcore' : normalizeSelectedGameMode(mode);
   },
 
   startPvpBattle(session: PvpSessionConfig) {
@@ -154,6 +174,7 @@ export const GameSession = {
   },
 
   selectMission(levelId: number, missionPath: string) {
+    if (!BUILD_FEATURES.testChapter && missionPath === 'missions/mission_test') return;
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
@@ -178,6 +199,7 @@ export const GameSession = {
   },
 
   resumeMission(levelId: number, missionPath: string) {
+    if (!BUILD_FEATURES.testChapter && missionPath === 'missions/mission_test') return;
     state.pvpSession = null;
     state.openPvpSelectionOnMenu = false;
     state.selectedCampaignId = null;
@@ -202,6 +224,7 @@ export const GameSession = {
   },
 
   selectCampaign(levelId: number, campaignId: string) {
+    campaignResume = null;
     const generatedPackages = campaignId === RANDOM_ISLAND_CAMPAIGN_ID
       ? createRandomIslandPackages()
       : campaignId === RANDOM_SNOW_CAMPAIGN_ID
@@ -223,17 +246,37 @@ export const GameSession = {
     state.selectedMissionPath = '';
     state.selectedMissionSource = { type: 'resource', missionPath: '' };
     state.selectedCampaignId = campaignId;
+    state.gameMode = 'hardcore';
     state.selectedCampaign = campaign;
     state.selectedCampaignPackages = generatedPackages;
     state.resumeFromSave = false;
     return true;
   },
 
+  resumeCampaign(run: CampaignRunSave) {
+    state.pvpSession = null;
+    state.openPvpSelectionOnMenu = false;
+    state.selectedCampaignId = run.runtime.campaign.id;
+    state.selectedCampaign = run.runtime.campaign;
+    state.selectedCampaignPackages = run.packages;
+    state.selectedLevelId = run.runtime.campaign.levelId;
+    state.selectedMissionPath = '';
+    state.selectedMissionSource = { type: 'resource', missionPath: '' };
+    state.selectedPlayerTankKind = normalizeSelectedPlayerTankKind(run.save.playerTank?.kind ?? run.save.sherman.kind);
+    state.gameMode = 'hardcore';
+    state.resumeFromSave = true;
+    campaignResume = run;
+  },
+
   clearResumeFlag() {
     state.resumeFromSave = false;
+    campaignResume = null;
   },
 
   reset() {
+    menuReturnRequest = null;
+    missionMenuTab = 'europe';
+    campaignResume = null;
     state.selectedMissionPath = DEFAULT_STATE.selectedMissionPath;
     state.selectedMissionSource = { ...DEFAULT_STATE.selectedMissionSource };
     state.selectedLevelId = DEFAULT_STATE.selectedLevelId;

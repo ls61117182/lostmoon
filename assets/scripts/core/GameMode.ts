@@ -1,3 +1,5 @@
+import { BUILD_FEATURES } from './BuildProfile';
+
 export type GameMode = 'classic' | 'hardcore';
 
 export interface GameModeConfig {
@@ -33,7 +35,12 @@ export interface GameModeConfig {
   enemyActionTableProfile: 'standard';
 }
 
-export const DEFAULT_GAME_MODE: GameMode = 'classic';
+export const DEFAULT_GAME_MODE: GameMode = BUILD_FEATURES.gameModeSelection ? 'classic' : 'hardcore';
+
+export function normalizeSelectedGameMode(value: unknown): GameMode {
+  if (!BUILD_FEATURES.gameModeSelection) return 'hardcore';
+  return isGameMode(value) ? value : DEFAULT_GAME_MODE;
+}
 
 const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
   classic: {

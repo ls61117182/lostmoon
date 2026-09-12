@@ -34,6 +34,8 @@ const selectable = selectablePlayerTankKinds();
 assert(selectable.includes('sherman'));
 assert(selectable.includes('tiger'));
 assert(selectable.includes('type97'));
+assert(selectable.includes('panzer3'));
+assert(selectable.includes('panzer3_m'));
 assert(!selectable.includes('truck'));
 assert(!selectable.includes('infantry'));
 
@@ -75,6 +77,12 @@ assert.strictEqual(sourceMission.playerTank.kind, 'sherman');
 assert.strictEqual(sourceMission.playerTank.faction, 'usa');
 
 const loaded = loadMission(selectedMission);
+const ausfMMission = missionWithSelectedPlayerTank(sourceMission, 'panzer3_m');
+const ausfM = loadMission(ausfMMission);
+assert.strictEqual(ausfM.playerTank.kind, 'panzer3_m');
+assert.strictEqual(ausfM.playerTank.faction, 'german');
+assert.strictEqual(ausfM.playerTank.controller, 'local_player');
+assert.strictEqual(ausfMMission.enemies[0].kind, 'panzer3', 'selecting M must preserve the existing Panzer III enemy');
 assert.strictEqual(loaded.playerTank.kind, 'tiger');
 assert.strictEqual(loaded.playerTank.faction, 'german');
 assert.strictEqual(loaded.playerTank.sideId, 'player');
@@ -86,6 +94,8 @@ assert.strictEqual(isSameSide(loaded.playerTank, loaded.allies[0]), true,
 assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'sherman');
 MenuProgress.setSelectedPlayerTankKind('panther');
 assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'panther');
+MenuProgress.setSelectedPlayerTankKind('panzer3_m');
+assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'panzer3_m', 'M selection must survive persistence');
 const persisted = JSON.parse(storage.get(MENU_STATE_KEY));
 persisted.selectedPlayerTankKind = 'infantry';
 storage.set(MENU_STATE_KEY, JSON.stringify(persisted));

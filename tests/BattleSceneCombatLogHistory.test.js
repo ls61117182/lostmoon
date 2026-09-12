@@ -80,7 +80,7 @@ test('combat history truncates at its safe width and only text receives clicks',
 test('combat history prevents top-edge flicker while scrolling and rebuilding', () => {
   assert.match(source, /sv\.elastic = false/);
   assert.match(source, /row\.active = rowTop <= viewH \+ 0\.5 && rowBottom >= -0\.5/);
-  assert.match(source, /ut\.setContentSize\(width, contentHeight\);\s*\/\/ 新记录创建后默认 active[\s\S]*?this\.refreshCombatLogEntryVisibility\(\)/);
+  assert.match(source, /ut\.setContentSize\(width, contentHeight\);[\s\S]*?this\.syncCombatLogScrollAfterLayout\(\);[\s\S]*?this\.refreshCombatLogEntryVisibility\(\)/);
 });
 
 test('combat history appends one row and updates visibility only while scrolling', () => {

@@ -353,6 +353,8 @@ unit.name.sherman76,谢尔曼 76,Sherman 76
 unit.name.sherman_jumbo,谢尔曼巨无霸,M4A3E2 Sherman Jumbo
 unit.name.m26_pershing,M26E1 潘兴,M26E1 Pershing
 unit.name.t34,T-34/76,T-34/76
+unit.name.t34_85,T-34/85,T-34/85
+unit.name.su152,SU-152 突击炮,SU-152 Assault Gun
 unit.name.tiger,虎式,Tiger
 unit.name.tigerking,虎王坦克,Tiger II
 unit.name.maus,鼠式坦克,Panzer VIII Maus
@@ -819,9 +821,75 @@ floater.suppressionSkip,受压制：跳过本回合,PINNED: TURN SKIPPED
 battleLog.combat.suppressed,{attacker} 主炮高爆弹压制了 {target},{attacker}'s main-gun HE shell suppressed {target}
 battleLog.combat.heResult,{actor} HE：命中 {hitRoll}/{hitNeed}；效果 {effectRoll}/{effectNeed}；{result},{actor} HE: hit {hitRoll}/{hitNeed}; effect {effectRoll}/{effectNeed}; {result}
 battleLog.combat.suppressionSkip,{target} 受压制，本回合所有行动跳过,{target} is suppressed and forfeits every action this turn
-"action.reloadSmoke","装填SMK","Load SMK"
-"status.val.smoke","炮射烟雾弹","Smoke Shell"
-"floater.noSmokeAmmo","炮射烟雾弹已耗尽","No smoke shells remaining"
-"ammo.tooltip.smoke.title","炮射烟雾弹","Smoke Shell"
-"ammo.tooltip.smoke.description","默认备弹7发。向射界内目标格发射，不造成伤害；烟雾效果与投掷烟雾弹相同。","7 rounds by default. Fire at a hex in the firing arc without damage. Same effect as thrown smoke grenades."
-"battleLog.attack.smoke","向（{q}，{r}）发射炮射烟雾弹","Fired smoke shell at ({q}, {r})"
+action.reloadSmoke,装填SMK,Load SMK
+status.val.smoke,炮射烟雾弹,Smoke Shell
+floater.noSmokeAmmo,炮射烟雾弹已耗尽,No smoke shells remaining
+ammo.tooltip.smoke.title,炮射烟雾弹,Smoke Shell
+ammo.tooltip.smoke.description,默认备弹7发。向射界内目标格发射，不造成伤害；烟雾效果与投掷烟雾弹相同。,7 rounds by default. Fire at a hex in the firing arc without damage. Same effect as thrown smoke grenades.
+battleLog.attack.smoke,向（{q}，{r}）发射炮射烟雾弹,"Fired smoke shell at ({q}, {r})"
+unit.name.panzer3_m,三号M型,Panzer III Ausf. M
+turnEnd.panel.event,事件判定,Event check
+turnEnd.panel.eventTable,事件表,Event table
+turnEnd.panel.immune,免疫,Immune
+turnEnd.panel.aa,对空射击,AA fire
+turnEnd.panel.hit,轰炸命中,Bomb hit
+turnEnd.panel.pen,穿甲判定,Penetration
+turnEnd.panel.aaNeed,击落需 ≥{n},Shoot down ≥{n}
+turnEnd.panel.shotDown,击落,Shot down
+turnEnd.panel.notShotDown,未击落,Not shot down
+turnEnd.panel.notPenetrated,未击穿,No penetration
+turnEnd.panel.crew,阵亡检定,Crew check
+turnEnd.panel.damage,伤害判定,Damage check
+turnEnd.panel.crewTable,乘员表,Crew table
+turnEnd.panel.damageTable,伤害表,Damage table
+turnEnd.panel.reinforce,增援位置,Reinforcement
+turnEnd.panel.tile,格位 {n},Tile {n}
+turnEnd.panel.finalResult,最终结果：{result}。确认后应用。,Result: {result}. Confirm to apply.
+turnEnd.panel.shotDownSummary,斯图卡被击落。后续轰炸与伤害无需判定。,Stuka shot down. No further bombing or damage checks.
+turnEnd.panel.missSummary,轰炸未命中。后续穿甲与伤害无需判定。,Bomb missed. No penetration or damage checks needed.
+turnEnd.panel.ricSummary,未击穿装甲。无需伤害判定，坦克状态不变。,Armor not penetrated. No damage check; tank unchanged.
+menu.operations.back,返回,Back
+menu.operations.mission,关卡,Missions
+menu.operations.campaign,战役,Campaigns
+menu.operations.pvp,联机对战,Multiplayer
+menu.operations.settings,设置,Settings
+menu.operations.tests,测试功能,Test tools
+menu.operations.selectHint,选择任务 · 查看情报 · 准备出击,Select a mission · Review intelligence · Deploy
+menu.operations.tab.europe,欧洲战场,European theater
+menu.operations.tab.pacific,太平洋战场,Pacific theater
+menu.operations.tab.random,随机关卡,Random missions
+menu.operations.tab.custom,自定义关卡,Custom missions
+menu.operations.campaignHint,连续作战，携带乘员与升级推进战线。战役固定使用硬核模式。,Carry your crew and upgrades through consecutive battles. Campaigns always use Hardcore rules.
+menu.operations.catalog,任务列表,MISSION CATALOG
+menu.operations.empty,还没有自定义关卡,No custom missions yet
+menu.operations.emptyHint,进入关卡编辑器创建并保存地图，之后即可在这里预览与游玩。,Create and save a map in the editor to preview and play it here.
+menu.operations.editor,关卡编辑器,Level editor
+menu.operations.saveHint,选择只更新预览；点击出击按钮后才开始新游戏。关卡与战役分别保存。,Selection updates the preview. Deploy to start a new game. Missions and campaigns have separate saves.
+menu.operations.testsHint,开发与测试工具,Development and testing tools
+menu.operations.tankDebug,坦克图片调试,Tank art debugger
+menu.operations.tankDebugHint,检查炮塔、车体、击毁状态与图片位置。,"Inspect turrets, hulls, wrecks and image alignment."
+menu.operations.editorHint,创建地图，配置地形、天气、敌军与任务目标。,"Create maps and configure terrain, weather, enemies and objectives."
+menu.operations.tankPickerHint,选择单人游戏使用的主角坦克。,Choose the player tank for new single-player battles.
+menu.operations.testBattleHint,进入测试地图，验证单位与战斗规则。,Open the test battlefield to check units and combat rules.
+menu.operations.openTool,打开工具  →,Open tool  →
+menu.operations.loading,正在读取任务情报…,Loading mission intelligence…
+menu.operations.loadError,任务数据读取失败，请重试。,Unable to load mission data. Please retry.
+menu.operations.retry,重试,Retry
+menu.operations.unknownEnemies,敌方兵力不详,Enemy strength unknown
+menu.operations.noEnemies,无初始敌军,No initial enemy units
+menu.operations.randomDescription,尚未获得战场地图。出击后生成地形、任务目标与敌军配置。,"The battlefield is uncharted. Terrain, objectives and enemy forces are generated on deployment."
+menu.operations.briefing,任务简介,BRIEFING
+menu.operations.enemies,初始敌军配置,INITIAL ENEMY FORCES
+menu.operations.hardcoreOnly,硬核模式 · 战役固定规则,Hardcore · Campaign rules
+menu.operations.startCampaign,开始战役,Start campaign
+menu.operations.startMission,进入关卡,Deploy
+menu.operations.locked,尚未解锁,Locked
+menu.operations.saveTitle,已有游戏存档,Saved game found
+menu.operations.saveSummary,{name} · 第 {turn} 回合,{name} · Turn {turn}
+menu.operations.overwriteHint,继续当前进度，或选择新游戏。开始新局将覆盖此类存档。,Continue your progress or choose a new game. Starting a new run replaces this save.
+menu.operations.newGame,新游戏,New game
+menu.operations.saveUnavailable,存档对应的关卡已不存在。请返回并选择新游戏。,The mission used by this save is unavailable. Return and choose a new game.
+menu.operations.destroyAll,消灭战场上的全部敌军，包括后续增援。,"Eliminate all enemy forces, including reinforcements."
+menu.operations.destroyTargets,消灭所有目标单位：{targets}。,Eliminate all target units: {targets}.
+menu.operations.evacuate,从指定撤离位置沿指定方向驶出战场。,Leave the battlefield from the designated evacuation point and direction.
+menu.operations.mapSize,地图范围：{cols} 列 × {rows} 行。,Map bounds: {cols} columns × {rows} rows.

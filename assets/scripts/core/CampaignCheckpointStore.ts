@@ -38,6 +38,11 @@ function checkpointKey(campaignId: string): string {
   return `${getActiveSaveKey()}${CAMPAIGN_CHECKPOINT_SUFFIX}:${encodeURIComponent(campaignId)}`;
 }
 
+export function clearCampaignCheckpoint(campaignId: string): void {
+  if (!hasLocalStorage()) return;
+  localStorage.removeItem(checkpointKey(campaignId));
+}
+
 function hasLocalStorage(): boolean {
   try {
     return typeof localStorage !== 'undefined' && !!localStorage;

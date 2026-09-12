@@ -45,9 +45,9 @@
       "title": "随机岛屿",
       "generator": "pacific_random_island",
       "segmentGeneration": [
-        { "theater": "pacific", "pacificBattleType": "landing", "objectiveKinds": ["direct_evac", "target_evac"], "enemyThreatPoints": 10 },
-        { "theater": "pacific", "pacificBattleType": "inland", "objectiveKinds": ["direct_evac", "target_evac"], "enemyThreatPoints": 13 },
-        { "theater": "pacific", "pacificBattleType": "inland", "objectiveKinds": ["destroy_all"], "enemyThreatPoints": 16 }
+        { "theater": "pacific", "pacificBattleType": "landing", "objectiveKinds": ["direct_evac", "target_evac"], "enemyThreatPoints": 7 },
+        { "theater": "pacific", "pacificBattleType": "inland", "objectiveKinds": ["direct_evac", "target_evac"], "enemyThreatPoints": 10 },
+        { "theater": "pacific", "pacificBattleType": "inland", "objectiveKinds": ["destroy_all"], "enemyThreatPoints": 13 }
       ],
       "segmentCount": 3,
       "transitionSeconds": 2

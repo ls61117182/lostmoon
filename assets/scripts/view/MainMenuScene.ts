@@ -1,5 +1,7 @@
+import { createMenuBackground } from './MenuBackground';
+import { BUILD_FEATURES } from '../core/BuildProfile';
 /**
- * MainMenuScene —— 游戏主菜单（标题 / 继续游戏 / 12 关卡栅格 / 设置 / 说明）。
+ * MainMenuScene —— 主菜单、全屏任务选择、独立存档入口与工具子页面。
  *
  * 使用方式（见 docs/MainMenuSetup.md）：
  *   1. 在 `main.scene` 的 Canvas 下新建空节点（例如 "menu"）
@@ -13,9 +15,9 @@
  *   - 跨场景状态通过 `GameSession` 传递，BattleScene 启动时读取
  *
  * 交互：
- *   - 继续游戏：读取当前账号对应的本地战斗存档；无存档时按钮灰态
- *   - 关卡按钮：未解锁 / 已解锁 / 已通关 三态；点击后切战斗场景
- *   - 顶部 ⚙ / ?：弹出模态面板，点击 ✕ 或遮罩空白处关闭
+ *   - 关卡 / 战役：有对应存档时选择继续或新游戏，否则直接打开选择页
+ *   - MenuOperations 展示列表与地图预览；确认进入后才切换战斗场景
+ *   - 设置沿用原面板；测试工具在独立全屏页面中集中管理
  */
 
 import {
@@ -25,7 +27,7 @@ import {
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
-import { GameMode } from '../core/GameMode';
+import { DEFAULT_GAME_MODE, GameMode, normalizeSelectedGameMode } from '../core/GameMode';
 import {
   PVP_DEFAULT_MISSION_PATH,
   PVP_FACTIONS,
@@ -55,10 +57,13 @@ import {
 import { SaveData } from '../core/SaveLoad';
 import { loginServer, registerServer, ServerProfile, syncServerProfile } from '../core/AuthService';
 import { readActiveSaveRaw } from '../core/SaveSlot';
+import { readCampaignRun } from '../core/CampaignRunStore';
+import { MenuOperations } from './MenuOperations';
 import { normalizeWeather } from '../core/Weather';
 import { normalizeUnitLevel } from '../core/UnitLevel';
 import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
 import { selectablePlayerTankKinds } from '../core/PlayerTankSelection';
+import { fixedTankCommanderHatchTransform } from '../core/CommanderHatch';
 import {
   ACTIVE_TERRAIN_CATEGORIES,
   ActiveTerrainCategory,
@@ -225,7 +230,9 @@ export class MainMenuScene extends Component {
   private continueTitleLabel: Label | null = null;
   private continueSubLabel: Label | null = null;
   private continueEnabled: boolean = false;
-  private gameMode: GameMode = 'classic';
+  private gameMode: GameMode = DEFAULT_GAME_MODE;
+  private operations: MenuOperations | null = null;
+  private battleLoading = false;
   private classicModeBtn: ButtonRefs | null = null;
   private hardcoreModeBtn: ButtonRefs | null = null;
   private pvpEntryBtn: ButtonRefs | null = null;
@@ -301,11 +308,7 @@ export class MainMenuScene extends Component {
 
     this.buildBackground();
     this.buildTitle();
-    this.buildContinueButton();
-    this.buildGameModeSwitch();
-    this.buildPvpEntryButton();
-    this.buildChapterTabs();
-    this.buildLevelGrid();
+    this.buildHomeNavigation();
     this.buildTopIcons();
     this.buildVersion();
     this.resolutionUnsubscribe = subscribeAdaptiveResolution(() => this.rebuildBackgroundForResolution());
@@ -315,6 +318,9 @@ export class MainMenuScene extends Component {
 
     initGameAudio();
     playBgmMenu();
+
+    const returnPage = GameSession.consumeBattleMenuReturn();
+    if (returnPage) this.operations?.open(returnPage.kind, returnPage.tab);
 
     if (GameSession.consumePvpSelectionRequest()) {
       this.openPvpHome();
@@ -327,6 +333,7 @@ export class MainMenuScene extends Component {
   }
 
   onDestroy() {
+    this.operations?.close();
     this.resolutionUnsubscribe?.();
     this.resolutionUnsubscribe = null;
   }
@@ -335,64 +342,7 @@ export class MainMenuScene extends Component {
   // 背景：双段渐变（Graphics 画多条横条模拟）+ 顶部一条装饰线
   // ================================================================
   private buildBackground() {
-    const { width: backgroundW, height: backgroundH } = visibleSizeInRootSpace(UI_ROOT_SCALE);
-    const n = new Node('MenuBG');
-    n.layer = this.node.layer;
-    const ut = n.addComponent(UITransform);
-    ut.setContentSize(backgroundW, backgroundH);
-    n.setPosition(0, 0, 0);
-    const g = n.addComponent(Graphics);
-
-    // 把画布纵向分成 N 段，每段取 top/bottom 间插值颜色 —— 简易渐变
-    const STEPS = 24;
-    for (let i = 0; i < STEPS; i++) {
-      const tRatio = i / (STEPS - 1);
-      const c = tRatio < 0.5
-        ? lerp(BG_TOP, BG_MID, tRatio * 2)
-        : lerp(BG_MID, BG_BOTTOM, (tRatio - 0.5) * 2);
-      const y = backgroundH / 2 - (i + 1) * (backgroundH / STEPS);
-      g.fillColor = c;
-      g.rect(-backgroundW / 2, y, backgroundW, backgroundH / STEPS + 1);
-      g.fill();
-    }
-
-    // 装饰线条：顶部 + 底部各一条橄榄绿
-    g.strokeColor = MENU_DIVIDER;
-    g.lineWidth = 1;
-    g.moveTo(-backgroundW / 2 + 60, backgroundH / 2 - 80);
-    g.lineTo( backgroundW / 2 - 60, backgroundH / 2 - 80);
-    g.stroke();
-    g.moveTo(-backgroundW / 2 + 60, -backgroundH / 2 + 60);
-    g.lineTo( backgroundW / 2 - 60, -backgroundH / 2 + 60);
-    g.stroke();
-
-    // Faint operations-map grid and route marks.
-    g.strokeColor = new Color(210, 198, 150, 32);
-    g.lineWidth = 1;
-    for (let x = -560; x <= 560; x += 80) {
-      g.moveTo(x, -300);
-      g.lineTo(x + 90, 300);
-      g.stroke();
-    }
-    for (let y = -260; y <= 260; y += 52) {
-      g.moveTo(-560, y);
-      g.lineTo(560, y + 18);
-      g.stroke();
-    }
-
-    g.strokeColor = new Color(230, 205, 130, 80);
-    g.lineWidth = 2;
-    g.moveTo(-440, 118);
-    g.bezierCurveTo(-260, 190, -130, 56, 20, 112);
-    g.bezierCurveTo(145, 158, 245, 40, 410, 92);
-    g.stroke();
-    for (const [x, y] of [[-440, 118], [-125, 78], [105, 126], [410, 92]]) {
-      g.circle(x, y, 5);
-      g.stroke();
-    }
-
-    this.node.addChild(n);
-    this.bgNode = n;
+    this.bgNode = createMenuBackground(this.node, 'MenuBG', UI_ROOT_SCALE);
   }
 
   private rebuildBackgroundForResolution() {
@@ -457,7 +407,74 @@ export class MainMenuScene extends Component {
       0, -13, 400, 20, 15, TEXT_PRIMARY);
   }
 
+  private buildHomeNavigation() {
+    this.operations = new MenuOperations(this.node, {
+      back: () => {},
+      start: level => this.onClickLevel(level),
+      mode: () => this.gameMode,
+      setMode: mode => this.selectGameMode(mode),
+      editor: () => this.loadLevelEditorScene(),
+      tankDebug: () => this.openTankVisualDebugger(),
+      tankPicker: () => this.openPlayerTankPicker(),
+    });
+    const entries: Array<[string, string, () => void]> = [
+      ['Missions', 'menu.operations.mission', () => this.openOperationsEntry('mission')],
+      ['Campaigns', 'menu.operations.campaign', () => this.openOperationsEntry('campaign')],
+      ['Pvp', 'menu.operations.pvp', () => this.openPvpHome()],
+      ['Editor', 'menu.operations.editor', () => this.loadLevelEditorScene()],
+      ['Settings', 'menu.operations.settings', () => this.openSettings()],
+    ];
+    if (BUILD_FEATURES.testChapter || BUILD_FEATURES.tankVisualDebugger || BUILD_FEATURES.playerTankSelection) {
+      entries.push(['Tests', 'menu.operations.tests', () => this.operations?.openTests()]);
+    }
+    entries.forEach(([name, key, open], i) => {
+      const button = this.makeRectButton(this.node, 0, 92 - i * 66, 240, 50,
+        new Color(145, 105, 0, 255), open);
+      button.node.name = `Home${name}`;
+      this.makeLabel(button.node, t(key), 0, 0, 224, 42, 28, TEXT_PRIMARY);
+    });
+  }
+
+  private openOperationsEntry(kind: 'mission' | 'campaign', tab = 'europe') {
+    const missionSave = kind === 'mission' ? readSaveSafe() : null;
+    const campaignSave = kind === 'campaign' ? readCampaignRun() : null;
+    if (!missionSave && !campaignSave) {
+      this.operations?.open(kind, tab);
+      return;
+    }
+    this.closeModal();
+    const { panel } = this.openModal(t('menu.operations.saveTitle'), 640, 300);
+    const name = campaignSave
+      ? t(campaignSave.runtime.campaign.titleKey)
+      : missionSave?.missionSource?.type === 'custom'
+        ? CustomMissionStore.load(missionSave.missionSource.packageId)?.mission.name ?? t('menu.operations.tab.custom')
+        : t(LEVELS.find(level => level.missionId === missionSave?.missionId)?.titleKey ?? 'menu.operations.mission');
+    const turn = campaignSave?.save.turn ?? missionSave?.turn ?? 1;
+    this.makeLabel(panel, t('menu.operations.saveSummary', { name, turn }), 0, 40, 560, 50, 22, TEXT_TITLE);
+    this.makeLabel(panel, t('menu.operations.overwriteHint'), 0, -9, 560, 46, 17, TEXT_SUBTITLE);
+    const resume = this.makeRectButton(panel, -145, -89, 250, 48, BTN_LEVEL_COMPLETED, () => {
+      this.closeModal();
+      if (campaignSave) {
+        GameSession.resumeCampaign(campaignSave);
+        this.loadBattleScene();
+      } else this.onClickContinue();
+    });
+    this.makeLabel(resume.node, t('menu.continue'), 0, 0, 230, 38, 23, TEXT_PRIMARY);
+    const fresh = this.makeRectButton(panel, 145, -89, 250, 48, BTN_CONTINUE, () => {
+      this.closeModal();
+      this.operations?.open(kind, tab);
+    });
+    this.makeLabel(fresh.node, t('menu.operations.newGame'), 0, 0, 230, 38, 23, TEXT_PRIMARY);
+  }
+
+  private showSaveUnavailable() {
+    this.closeModal();
+    const { panel } = this.openModal(t('menu.operations.saveTitle'), 580, 240);
+    this.makeLabel(panel, t('menu.operations.saveUnavailable'), 0, -5, 510, 108, 20, TEXT_SUBTITLE);
+  }
+
   private buildGameModeSwitch() {
+    if (!BUILD_FEATURES.gameModeSelection) return;
     const x = 390;
     this.makeLabel(this.node, t('menu.mode.title'), x, 158, 280, 22, 16, TEXT_SUBTITLE);
     this.classicModeBtn = this.makeRectButton(
@@ -478,6 +495,7 @@ export class MainMenuScene extends Component {
   }
 
   private selectGameMode(mode: GameMode) {
+    if (!BUILD_FEATURES.gameModeSelection) return;
     if (mode === this.gameMode) return;
     this.gameMode = mode;
     GameSession.setGameMode(mode);
@@ -988,12 +1006,11 @@ export class MainMenuScene extends Component {
   }
 
   private onClickContinue() {
-    if (!this.continueEnabled) return;
+    if (this.battleLoading) return;
     const save = readSaveSafe();
     if (!save) return;
-    const savedMode: GameMode = save.gameMode === 'hardcore' ? 'hardcore' : 'classic';
+    const savedMode: GameMode = normalizeSelectedGameMode(save.gameMode);
     this.gameMode = savedMode;
-    GameSession.setGameMode(savedMode);
     MenuProgress.setGameMode(savedMode);
     // A continued battle must load the same protagonist kind before applying
     // its snapshot; otherwise SaveLoad correctly rejects the kind mismatch.
@@ -1001,18 +1018,24 @@ export class MainMenuScene extends Component {
     if (save.missionSource?.type === 'custom') {
       const pkg = CustomMissionStore.load(save.missionSource.packageId);
       if (pkg) {
+        GameSession.setMissionMenuTab(save.missionSource.packageId.startsWith('generated_random_') ? 'random' : 'custom');
         GameSession.resumeCustomMission(save.missionSource.packageId);
+        GameSession.setGameMode(savedMode);
         this.loadBattleScene();
         return;
       }
+      this.showSaveUnavailable();
+      return;
     }
     const lvl = LEVELS.find(l => l.missionId === save.missionId);
     if (!lvl) {
-      // 存档指向的关卡已不在配置里（版本差异）；按新局进入默认关卡兜底
-      GameSession.selectMission(1, LEVELS[0].missionPath);
+      this.showSaveUnavailable();
+      return;
     } else {
+      GameSession.setMissionMenuTab(lvl.chapterId === 'pacific' ? 'pacific' : 'europe');
       GameSession.resumeMission(lvl.id, lvl.missionPath);
     }
+    GameSession.setGameMode(savedMode);
     this.loadBattleScene();
   }
 
@@ -1226,14 +1249,14 @@ export class MainMenuScene extends Component {
   }
 
   private rebuildLevelGridBehindModal() {
-    this.buildLevelGrid();
-    this.refreshLevelButtons();
+    this.operations?.refreshCustomCatalog();
     if (this.modalRoot && this.modalRoot.isValid) {
       this.modalRoot.setSiblingIndex(this.node.children.length - 1);
     }
   }
 
   private onClickLevel(meta: LevelMeta) {
+    if (this.battleLoading) return;
     if (!meta.alwaysUnlocked && meta.entryKind !== 'random' && !MenuProgress.isUnlocked(meta.id, meta.chapterId)) {
       console.log('[Menu] 关卡未解锁:', meta.id);
       return;
@@ -1242,6 +1265,9 @@ export class MainMenuScene extends Component {
       this.loadLevelEditorScene();
       return;
     }
+    GameSession.setMissionMenuTab(meta.entryKind === 'random' ? 'random'
+      : meta.entryKind === 'custom' ? 'custom'
+      : meta.chapterId === 'pacific' ? 'pacific' : 'europe');
     if (meta.entryKind === 'custom') {
       if (!meta.customPackageId || !CustomMissionStore.load(meta.customPackageId)) {
         console.warn('[Menu] custom mission missing:', meta.customPackageId);
@@ -1249,6 +1275,7 @@ export class MainMenuScene extends Component {
         return;
       }
       GameSession.selectCustomMission(meta.customPackageId);
+      GameSession.setGameMode(this.gameMode);
       this.loadBattleScene();
       return;
     }
@@ -1268,6 +1295,7 @@ export class MainMenuScene extends Component {
           pkg,
         );
         GameSession.selectCustomMission(packageId);
+        GameSession.setGameMode(this.gameMode);
         this.loadBattleScene();
       } catch (error) {
         console.error('[Menu] random mission generation failed:', meta.randomTheater, error);
@@ -1279,11 +1307,12 @@ export class MainMenuScene extends Component {
         console.warn('[Menu] campaign entry missing campaignId:', meta.id);
         return;
       }
-      GameSession.selectCampaign(meta.id, meta.campaignId);
+      if (!GameSession.selectCampaign(meta.id, meta.campaignId)) return;
       this.loadBattleScene();
       return;
     }
     GameSession.selectMission(meta.id, meta.missionPath);
+    GameSession.setGameMode(this.gameMode);
     this.loadBattleScene();
   }
 
@@ -1291,38 +1320,12 @@ export class MainMenuScene extends Component {
   // 右上角 icon 按钮（⚙ 设置、? 说明）
   // ================================================================
   private buildTopIcons() {
-    const debugBtn = this.makeRectButton(this.node, -500, 320, 180, 38, ICON_BTN_BG, () => this.openTankVisualDebugger());
-    debugBtn.node.name = 'TankVisualDebugButton';
-    const debugLabel = this.makeLabel(debugBtn.node, '坦克图片调试', 0, 0, 160, 28, 17, TEXT_PRIMARY);
-    debugLabel.overflow = Label.Overflow.SHRINK;
-    debugLabel.enableOutline = true;
-    debugLabel.outlineColor = TEXT_OUTLINE;
-    debugLabel.outlineWidth = 2;
-    const tankSelectBtn = this.makeRectButton(
-      this.node, -500, 270, 180, 42, ICON_BTN_BG, () => this.openPlayerTankPicker(),
-    );
-    tankSelectBtn.node.name = 'PlayerTankSelectButton';
-    this.playerTankSelectBtn = tankSelectBtn;
-    this.playerTankSelectLabel = this.makeLabel(tankSelectBtn.node, '', 0, 0, 164, 30, 17, TEXT_PRIMARY);
-    this.playerTankSelectLabel.overflow = Label.Overflow.SHRINK;
-    this.playerTankSelectLabel.enableOutline = true;
-    this.playerTankSelectLabel.outlineColor = TEXT_OUTLINE;
-    this.playerTankSelectLabel.outlineWidth = 2;
-    this.refreshPlayerTankSelectButton();
-    const settings = this.makeCircleButton(this.node, 580, 320, 24, '⚙', () => this.openSettings());
-    settings.node.name = 'SettingsIcon';
-
-    const help = this.makeCircleButton(this.node, 520, 320, 24, '?', () => this.openHelp());
+    const help = this.makeCircleButton(this.node, 602, 320, 24, '?', () => this.openHelp());
     help.node.name = 'HelpIcon';
-
-    const account = this.makeCircleButton(this.node, 460, 320, 24, 'ID', () => this.openLoginGate());
+    const account = this.makeCircleButton(this.node, 542, 320, 24, 'ID', () => this.openLoginGate());
     account.node.name = 'AccountIcon';
-    this.authNameLabel = this.makeLabel(this.node, '', 350, 320, 180, 24, 16, TEXT_SUBTITLE);
+    this.authNameLabel = this.makeLabel(this.node, '', 422, 320, 170, 24, 16, TEXT_SUBTITLE);
     this.authNameLabel.horizontalAlign = HorizontalTextAlignment.RIGHT;
-
-    void settings;
-    void help;
-    void account;
   }
 
   private refreshPlayerTankSelectButton() {
@@ -1333,18 +1336,19 @@ export class MainMenuScene extends Component {
   }
 
   private openPlayerTankPicker() {
+    if (!BUILD_FEATURES.playerTankSelection) return;
     this.closeModal();
-    const { panel } = this.openModal(t('menu.tankSelect.title'), 780, 560);
-    this.makeLabel(panel, t('menu.tankSelect.hint'), 0, 180, 700, 28, 16, TEXT_SUBTITLE);
+    const { panel } = this.openModal(t('menu.tankSelect.title'), CANVAS_W, CANVAS_H);
+    this.makeLabel(panel, t('menu.tankSelect.hint'), 0, 258, 1000, 28, 16, TEXT_SUBTITLE);
 
     const kinds = selectablePlayerTankKinds();
-    const columns = 3;
+    const columns = 4;
     const buttonW = 214;
     const buttonH = 48;
     const gapX = 22;
     const gapY = 62;
-    const startX = -buttonW - gapX;
-    const startY = 126;
+    const startX = -(buttonW + gapX) * 1.5;
+    const startY = 196;
     for (let i = 0; i < kinds.length; i++) {
       const kind = kinds[i]!;
       const col = i % columns;
@@ -1378,6 +1382,7 @@ export class MainMenuScene extends Component {
   }
 
   private selectPlayerTank(kind: UnitKind) {
+    if (!BUILD_FEATURES.playerTankSelection) return;
     if (!isTankKind(kind)) return;
     this.selectedPlayerTankKind = kind;
     GameSession.setSelectedPlayerTankKind(kind);
@@ -1411,6 +1416,7 @@ export class MainMenuScene extends Component {
   }
 
   private openTankVisualDebugger() {
+    if (!BUILD_FEATURES.tankVisualDebugger) return;
     this.closeModal();
     const panelW = CANVAS_W;
     const panelH = CANVAS_H;
@@ -1472,9 +1478,9 @@ export class MainMenuScene extends Component {
         turretPivotY: geometry?.pivot.bodyY ?? 0,
         muzzleSpriteX: geometry?.muzzle.spriteX ?? top.muzzle.spriteX,
         muzzleSpriteY: geometry?.muzzle.spriteY ?? top.muzzle.spriteY,
-        commanderHatchSpriteX: split?.commanderHatchSpriteX ?? 0,
-        commanderHatchSpriteY: split?.commanderHatchSpriteY ?? 0,
-        commanderHatchScale: split?.commanderHatchScale ?? 0,
+        commanderHatchSpriteX: split?.commanderHatchSpriteX ?? top.commanderHatchSpriteX,
+        commanderHatchSpriteY: split?.commanderHatchSpriteY ?? top.commanderHatchSpriteY,
+        commanderHatchScale: split?.commanderHatchScale ?? top.commanderHatchScale,
         exhaustPort1Forward: exhaustPorts[0]?.forward ?? 0,
         exhaustPort1Right: exhaustPorts[0]?.right ?? 0,
         exhaustPort2Forward: exhaustPorts[1]?.forward ?? 0,
@@ -1900,6 +1906,7 @@ export class MainMenuScene extends Component {
       refreshPreview();
     };
     const beginDrag = (mode: 'body' | 'turret', ev: EventTouch | EventMouse) => {
+      if (mode === 'turret' && isTankKind(selectedKind) && !splitKindSet.has(selectedKind)) return;
       dragMode = mode;
       ev.propagationStopped = true;
       updateDragAngle(ev);
@@ -2073,7 +2080,9 @@ export class MainMenuScene extends Component {
       const offsetUnit = hexR * Math.sqrt(3);
       selectedLabel.string = `${tankVisualAssetName(selectedKind)} / ${selectedKind}`;
       bodyAngleLabel.string = `车身 ${Math.round(normalizeAngleDeg(bodyAngleDeg))}°`;
-      turretAngleLabel.string = `炮塔 ${Math.round(normalizeAngleDeg(turretAngleDeg))}°`;
+      turretAngleLabel.string = isTankKind(selectedKind) && !splitKindSet.has(selectedKind)
+        ? '固定炮塔（随车身）'
+        : `炮塔 ${Math.round(normalizeAngleDeg(turretAngleDeg))}°`;
       lastPivot = { x: 0, y: 0 };
 
       if (showDestroyed && loaded.destroyed) {
@@ -2251,6 +2260,19 @@ export class MainMenuScene extends Component {
           0.5,
           'body',
         );
+        const commanderHatchFrame = commanderHatchState === 'open-dead'
+          ? emptyCommanderHatchFrame
+          : commanderHatchFrames[getUnitStats(selectedKind).commanderSpritePath ?? ''];
+        if (isTankKind(selectedKind) && commanderHatchState !== 'closed'
+            && commanderHatchFrame && draft.commanderHatchScale > 0) {
+          const hatch = fixedTankCommanderHatchTransform(
+            draft, displayW, displayH,
+            (tw0 * k) / (displayW || 1), (th0 / k) / (displayH || 1),
+            (body.deg + 180) * Math.PI / 180, commanderHatchState === 'open-dead',
+          );
+          addSprite(livingTankLayer, commanderHatchFrame, hatch.size, hatch.size,
+            baseX + hatch.x, baseY + hatch.y, hatch.angle);
+        }
         if (showMuzzleFlash) {
           if (draft.muzzleSpriteX !== 0 || draft.muzzleSpriteY !== 0) {
             const scaleX = (tw0 * k) / (displayW || 1);
@@ -2679,6 +2701,9 @@ export class MainMenuScene extends Component {
 
   /** 切语言后整个重建一次文字（不重建背景 / 按钮骨架） */
   private rebuildAllText() {
+    this.operations?.close();
+    this.operations = null;
+    this.resolutionUnsubscribe?.();
     // 简单做法：把 menu 全部拆了重建。因为所有东西都在 this.node 下，清子节点即可。
     for (const c of [...this.node.children]) c.destroy();
     this.levelBtns = [];
@@ -2776,7 +2801,7 @@ export class MainMenuScene extends Component {
   // ================================================================
   // 模态基础设施（与 BattleScene DiceShow 同构：全屏遮罩 + 居中面板 + ✕）
   // ================================================================
-  private openModal(titleText: string, panelW: number, panelH: number): {
+  private openModal(titleText: string, panelW: number, panelH: number, showCloseButton = true): {
     panel: Node;
     /** 面板内"标题下方"可用起始 y，向下布局更直观 */
     contentY: number;
@@ -2788,12 +2813,15 @@ export class MainMenuScene extends Component {
     this.node.addChild(root);
 
     // 全屏遮罩
-    const { node: backdrop } = createAdaptiveFullscreenMask(
+    const isFullscreen = panelW >= CANVAS_W && panelH >= CANVAS_H;
+    const backdrop = isFullscreen
+      ? createMenuBackground(root, 'Backdrop', UI_ROOT_SCALE)
+      : createAdaptiveFullscreenMask(
       root,
       'Backdrop',
       MODAL_BACKDROP,
       UI_ROOT_SCALE,
-    );
+    ).node;
     backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
       // 点遮罩空白处关闭模态
       this.closeModal();
@@ -2804,7 +2832,7 @@ export class MainMenuScene extends Component {
     panel.layer = this.node.layer;
     panel.addComponent(UITransform).setContentSize(panelW, panelH);
     const pg = panel.addComponent(Graphics);
-    drawFieldPanel(pg, panelW, panelH, MODAL_PANEL_BG, MODAL_PANEL_BORDER, MENU_DIVIDER);
+    if (!isFullscreen) drawFieldPanel(pg, panelW, panelH, MODAL_PANEL_BG, MODAL_PANEL_BORDER, MENU_DIVIDER);
     // 标题下方装饰横线（复用同一个 Graphics，Cocos 限制一节点只能挂一份）
     pg.strokeColor = MENU_DIVIDER;
     pg.lineWidth = 1;
@@ -2825,11 +2853,18 @@ export class MainMenuScene extends Component {
     titleLab.outlineWidth = 2;
 
     // 右上角 ✕
-    const closeBtn = this.makeRectButton(
-      panel, panelW / 2 - 28, panelH / 2 - 28, 36, 36,
-      MODAL_CLOSE_BG, () => this.closeModal(),
-    );
-    this.makeLabel(closeBtn.node, '✕', 0, 0, 36, 36, 22, TEXT_PRIMARY);
+    if (showCloseButton) {
+      const closeBtn = this.makeRectButton(
+        panel, panelW / 2 - 28, panelH / 2 - 28, 36, 36,
+        MODAL_CLOSE_BG, () => this.closeModal(),
+      );
+      this.makeLabel(closeBtn.node, '✕', 0, 0, 36, 36, 22, TEXT_PRIMARY);
+    }
+    if (panelW >= CANVAS_W && panelH >= CANVAS_H) {
+      const back = this.makeRectButton(panel, -panelW / 2 + 82, panelH / 2 - 30,
+        118, 38, ICON_BTN_BG, () => this.closeModal());
+      this.makeLabel(back.node, t('menu.operations.back'), 0, 0, 110, 32, 18, TEXT_PRIMARY);
+    }
 
     this.modalRoot = root;
     return { panel, contentY: panelH / 2 - 80 };
@@ -2849,12 +2884,15 @@ export class MainMenuScene extends Component {
   // 场景切换
   // ================================================================
   private loadBattleScene() {
+    if (this.battleLoading) return;
+    this.battleLoading = true;
     console.log('[Menu] load battle scene:', this.battleSceneName,
       '  mission =', GameSession.selectedMissionPath,
       '  source =', GameSession.selectedMissionSource,
       '  mode =', GameSession.gameMode,
       '  resume =', GameSession.resumeFromSave);
     director.loadScene(this.battleSceneName, (err) => {
+      this.battleLoading = false;
       if (err) console.error('[Menu] 加载战斗场景失败:', this.battleSceneName, err);
     });
   }
@@ -2867,7 +2905,7 @@ export class MainMenuScene extends Component {
     this.closeModal();
     const panelW = CANVAS_W;
     const panelH = CANVAS_H;
-    const { panel, contentY } = this.openModal(t('level.custom.editor.title'), panelW, panelH);
+    const { panel, contentY } = this.openModal(t('level.custom.editor.title'), panelW, panelH, false);
 
     type EditorTile = TileDef | null;
     type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null };
@@ -3024,12 +3062,15 @@ export class MainMenuScene extends Component {
       sherman_jumbo: 'Sherman Jumbo',
       m26_pershing: 'M26E1 Pershing',
       t34: 'T-34/76',
+      t34_85: 'T-34/85',
+      su152: 'SU-152',
       tiger: 'Tiger',
       tigerking: 'Tiger II',
       panther: 'Panther G',
       panzer4: 'Pz IV',
       stug3: 'StuG III G',
       panzer3: 'Pz III',
+      panzer3_m: 'Pz III M',
       truck: 'Truck',
       infantry: 'Infantry',
       german_infantry: 'German Inf',
@@ -5157,7 +5198,10 @@ function readSaveSafe(): SaveData | null {
   try {
     const raw = readActiveSaveRaw();
     if (!raw) return null;
-    return JSON.parse(raw) as SaveData;
+    const save = JSON.parse(raw) as SaveData;
+    if (!save?.sherman || typeof save.missionId !== 'string'
+      || !Number.isFinite(save.turn) || !Array.isArray(save.enemies)) return null;
+    return save;
   } catch (e) {
     console.warn('[Menu] 存档读取失败', e);
     return null;
@@ -5171,12 +5215,15 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'sherman_jumbo': return 'Sherman Jumbo';
     case 'm26_pershing': return 'M26E1 潘兴';
     case 't34': return 'T-34/76';
+    case 't34_85': return 'T-34/85';
+    case 'su152': return 'SU-152';
     case 'tiger': return 'Tiger';
     case 'tigerking': return 'Tiger II';
     case 'maus': return '鼠式坦克';
     case 'panther': return '豹式坦克';
     case 'panzer4': return 'Panzer IV';
     case 'panzer3': return 'Panzer III';
+    case 'panzer3_m': return '三号坦克 M 型';
     case 'type97': return 'Type 97';
       case 'at_gun': return 'AT Gun';
       case 'pak38': return 'pak38';

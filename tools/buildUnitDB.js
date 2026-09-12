@@ -27,8 +27,8 @@ const CREW_MEMBER_FIELD = 'crewMembers';
 const FACTIONS = ['usa', 'soviet', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
 const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, 'mobility', ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
-const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'pak38', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
-const TANK_KINDS = new Set(['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'type95', 'type97', 'type4']);
+const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'pak38', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
+const TANK_KINDS = new Set(['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'type95', 'type97', 'type4']);
 
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);

@@ -1,3 +1,4 @@
+import { BUILD_FEATURES } from '../core/BuildProfile';
 /**
  * BattleScene —— 把 mission_01.json 渲染为六角格地图，支持骰子驱动的"移动阶段 /
  * 攻击阶段"双子阶段、敌方贪心 AI 与存读档。
@@ -146,6 +147,7 @@ import {
   createCustomTurnEndEventProvider,
   OfficialTurnEndEventProvider,
 } from '../core/TurnEndEventRuntime';
+import { turnEndRowPresentation, turnEndSummaryKey } from '../core/TurnEndPresentation';
 import type { TurnEndEventProvider } from '../core/TurnEndEventRuntime';
 
 /** 回合结束事件表弹窗：效果类型 → lang key */
@@ -199,7 +201,7 @@ import {
 import type { CampaignUpgradeDefinition, CampaignUpgradeId } from '../core/CampaignUpgrade';
 import { getGameModeConfig } from '../core/GameMode';
 import { firstDamagedRepairableComponent, repairableComponentById, repairableComponentsFor, RepairableComponentId } from '../core/RepairableComponents';
-import { commanderHatchVisualState, shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
+import { commanderHatchVisualState, fixedTankCommanderHatchTransform, shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
 import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
 import { factionUiFor } from '../core/FactionUI';
@@ -254,8 +256,9 @@ import {
   mainGunRecoilOffset,
 } from './MainGunRecoil';
 import { syncServerProfile } from '../core/AuthService';
-import { readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
-import { readCampaignCheckpoint, writeCampaignCheckpoint } from '../core/CampaignCheckpointStore';
+import { clearCompletedMissionSave, readActiveSaveRaw, writeActiveSaveRaw } from '../core/SaveSlot';
+import { clearCampaignCheckpoint, readCampaignCheckpoint, writeCampaignCheckpoint } from '../core/CampaignCheckpointStore';
+import { clearCompletedCampaignRun, readCampaignRun, writeCampaignRun } from '../core/CampaignRunStore';
 import {
   SPLIT_TANK_KINDS,
   EMPTY_COMMANDER_HATCH_SPRITE_SIZE,
@@ -580,6 +583,9 @@ function resolvedCrewDeathLabel(report: AttackReport): { text: string; color: Co
 
 /** 战斗记录只显示阵亡检定的最终结算，不显示“阵亡检定”这个中间步骤。 */
 function combatLogDamageOutcomeLabel(report: AttackReport): { text: string; color: Color } {
+  if (report.overpenetrated && !report.damageEffect && !report.damageEffects?.length) {
+    return overpenetrationOutcomeLabel();
+  }
   if (report.damageEffect !== 'crewCheck') return damageOutcomeLabel(report.damageEffect);
   const crewCheck = report.crewCheck ?? report.stagedCrewCheck;
   if (crewCheck) return crewOutcomeLabel(crewCheck);
@@ -2112,8 +2118,9 @@ export class BattleScene extends Component {
     apply: () => void;
     extraPhases: TurnEndExtraDicePhase[];
     extraIdx: number;
-    extraSection: Node | null;
-    extraCaptionLabel: Label | null;
+    eventVerdictLabel: Label;
+    eventResult: string;
+    extraRows: { root: Node; dice: Label[]; value: Label; verdict: Label; result: string; highlight: Node }[];
     extraDieLabels: Label[];
     germanTruckMoveSegments?: GermanTruckMoveSegment[];
     /** 与 german_truck_move.escapeDrive 配对：仅在驶离动画的最后一移上判负 */
@@ -3839,6 +3846,38 @@ export class BattleScene extends Component {
 
     this.resetCampaignUpgradeRuntime();
 
+    const resumed = GameSession.campaignResume;
+    if (resumed) {
+      this.campaignRuntime = resumed.runtime;
+      this.activeCampaignSegmentIndex = resumed.segmentIndex;
+      this.campaignViewSegmentIndexOverride = null;
+      this.campaignTransitionActive = false;
+      this.campaignPanAnim = null;
+      this.campaignUpgradeIds = [...resumed.upgradeIds];
+      this.campaignUpgradeChosenSegments = new Set(resumed.chosenSegments);
+      this.missionSource = resumed.save.missionSource ?? { type: 'resource', missionPath: '' };
+      this.turnEndEventProvider = resumed.packages
+        ? createCustomTurnEndEventProvider(resumed.packages.flatMap(pkg => pkg.turnEndEvents))
+        : OfficialTurnEndEventProvider;
+      this.loadAndDraw(resumed.mission);
+      const result = applySave(this.mission!, this.missionId, resumed.save);
+      if (!result.ok) {
+        console.error('[Campaign] Resume failed:', result.reason);
+        this.flashBattleSettingsHint(t('battle.load.fail', { reason: result.reason ?? '' }));
+        return;
+      }
+      this.restoreAppliedSave(result, true);
+      this.retainedCampaignAttackDiePip = resumed.retainedAttackDiePip ?? null;
+      if (resumed.paralyzedProtectionAvailable !== undefined) this.mission!.sherman.campaignParalyzedProtectionAvailable = resumed.paralyzedProtectionAvailable;
+      if (resumed.commanderShieldAvailable !== undefined) this.mission!.sherman.campaignCommanderShieldAvailable = resumed.commanderShieldAvailable;
+      this.applyCampaignSegmentView(resumed.segmentIndex);
+      if (resumed.checkpoint) writeCampaignCheckpoint(resumed.checkpoint);
+      this.refreshCampaignUpgradeStatusSlots();
+      GameSession.clearResumeFlag();
+      this.openCampaignUpgradeChoiceForCurrentSegment();
+      return;
+    }
+
     const loaded: MissionData[] = [];
     const finishLoading = (eventProvider: TurnEndEventProvider) => {
       this.campaignRuntime = stitchCampaignMissions(campaign, loaded);
@@ -3973,6 +4012,7 @@ export class BattleScene extends Component {
         save,
       });
       this.battleLog(`[Campaign] 已保存第 ${this.activeCampaignSegmentIndex + 1} 小关检查点`);
+      this.writeCurrentSave({ silent: true });
     } catch (e) {
       console.error('[Campaign] 写入小关检查点失败:', e);
     }
@@ -4666,6 +4706,7 @@ export class BattleScene extends Component {
   }
 
   private debugSkipCampaignSegment() {
+    if (!BUILD_FEATURES.campaignDebugSkip) return;
     if (!this.campaignRuntime || !this.mission) return;
     if (this.isBusy()) return;
     if (this.activeCampaignSegmentIndex >= this.campaignRuntime.segments.length - 1) return;
@@ -4766,7 +4807,10 @@ export class BattleScene extends Component {
   }
 
   private resumeAfterMissionLoadedIfNeeded() {
-    if (!GameSession.resumeFromSave) return;
+    if (!GameSession.resumeFromSave) {
+      if (!GameSession.isPvp) this.writeCurrentSave({ silent: true });
+      return;
+    }
     this.onLoad_Save(/* skipHint */ true);
     GameSession.clearResumeFlag();
   }
@@ -4884,9 +4928,12 @@ export class BattleScene extends Component {
         turn: this.turn,
         phase: this.phase,
       });
-    } else {
-      // 新战斗的第一个玩家回合也应经过与换回合相同的横幅提示。
-      this.showTurnTransition(this.mission.sherman.faction, 'player', () => this.beginPlayerPhaseForNewTurn());
+    } else if (!GameSession.resumeFromSave) {
+      // A resume restores its saved phase/dice; a delayed new-turn callback would erase them.
+      this.showTurnTransition(this.mission.sherman.faction, 'player', () => {
+        this.beginPlayerPhaseForNewTurn();
+        this.writeCurrentSave({ silent: true });
+      });
     }
   }
 
@@ -7102,7 +7149,7 @@ export class BattleScene extends Component {
 
   private flushPendingInfantryBloodDecals(): void {
     if (!this.infantryBloodSpriteFrames.some(sf => sf !== null)) return;
-    const pending = [...this.pendingInfantryBloodDecals.values()];
+    const pending = Array.from(this.pendingInfantryBloodDecals.values());
     for (const request of pending) {
       this.spawnInfantryBloodDecalsAt(
         request.unit,
@@ -11690,9 +11737,10 @@ export class BattleScene extends Component {
           offsetRight: visual.hullOffsetRight,
         };
       }
-      case 't34': {
-        const geometry = splitTankGeometryConfigOf('t34');
-        const visual = splitTankVisualConfigOf('t34');
+      case 't34':
+      case 't34_85': {
+        const geometry = splitTankGeometryConfigOf(kind);
+        const visual = splitTankVisualConfigOf(kind);
         return {
           trimW: geometry.topTrim.w,
           trimH: geometry.topTrim.h,
@@ -11750,6 +11798,17 @@ export class BattleScene extends Component {
           offsetForward: PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetForward,
           offsetRight: PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetRight,
         };
+      case 'panzer3_m': {
+        const geometry = splitTankGeometryConfigOf('panzer3_m');
+        const visual = splitTankVisualConfigOf('panzer3_m');
+        return {
+          trimW: geometry.topTrim.w,
+          trimH: geometry.topTrim.h,
+          fitScale: visual.hullFitScale,
+          offsetForward: visual.hullOffsetForward,
+          offsetRight: visual.hullOffsetRight,
+        };
+      }
       case 'panzer3':
         return {
           trimW: BattleScene.PANZER3_TOP_TRIM_W,
@@ -12075,19 +12134,13 @@ export class BattleScene extends Component {
     const recoil = this.mainGunRecoilOffsetFor(u, 'whole');
     const baseX = c.x + forwardOffset * body.ux + rightOffset * body.uy + recoil.x;
     const baseY = c.y + forwardOffset * body.uy - rightOffset * body.ux + recoil.y;
-    const localX = (cfg.commanderHatchSpriteX - w / 2) * scaleX;
-    const localY = (h / 2 - cfg.commanderHatchSpriteY) * scaleY;
     const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
-    const cos = Math.cos(bodyAngle);
-    const sin = Math.sin(bodyAngle);
-    const spriteX = baseX + localX * cos - localY * sin;
-    const spriteY = baseY + localX * sin + localY * cos;
-    const occupiedSize = cfg.commanderHatchScale * Math.sqrt(scaleX * scaleY);
-    const shermanCommanderScale = splitTankVisualConfigOf('sherman').commanderHatchScale || 1;
-    const size = visualState === 'empty'
-      ? occupiedSize * (EMPTY_COMMANDER_HATCH_SPRITE_SIZE
-        * SHERMAN_EMPTY_COMMANDER_HATCH_SCALE / shermanCommanderScale)
-      : occupiedSize;
+    const hatch = fixedTankCommanderHatchTransform(
+      cfg, w, h, scaleX, scaleY, bodyAngle, visualState === 'empty',
+    );
+    const spriteX = baseX + hatch.x;
+    const spriteY = baseY + hatch.y;
+    const size = hatch.size;
 
     const node = slot.node;
     const sp = slot.sprite;
@@ -12098,7 +12151,7 @@ export class BattleScene extends Component {
     ut.setContentSize(size, size);
     ut.setAnchorPoint(0.5, 0.5);
     node.setScale(1, 1, 1);
-    const angle = bodyAngle * 180 / Math.PI - 90;
+    const angle = hatch.angle;
     node.setPosition(spriteX, spriteY, 0);
     node.angle = angle;
     node.active = true;
@@ -13247,6 +13300,7 @@ export class BattleScene extends Component {
   }
 
   private buildCampaignDebugSkipButton() {
+    if (!BUILD_FEATURES.campaignDebugSkip) return;
     const btn = this.makeBattleRectButton(
       this.hudParent(),
       CANVAS_W * 0.5 - 100,
@@ -13268,6 +13322,7 @@ export class BattleScene extends Component {
   private refreshCampaignDebugSkipButton() {
     if (!this.campaignDebugSkipBtn) return;
     this.campaignDebugSkipBtn.active = !!this.campaignRuntime
+      && BUILD_FEATURES.campaignDebugSkip
       && this.outcome === 'ongoing'
       && !this.campaignTransitionActive
       && this.activeCampaignSegmentIndex < this.campaignRuntime.segments.length - 1;
@@ -13884,7 +13939,10 @@ export class BattleScene extends Component {
     for (const oldEntry of removed) {
       if (!this.combatLogIsVisible(oldEntry)) continue;
       const oldNode = this.combatLogEntryNodes.shift();
-      if (oldNode?.isValid) oldNode.destroy();
+      if (oldNode?.isValid) {
+        oldNode.active = false;
+        oldNode.destroy();
+      }
       renderedRowsChanged = true;
     }
     if (this.combatLogIsVisible(entry)) {
@@ -13898,7 +13956,10 @@ export class BattleScene extends Component {
 
   private refreshCombatLogText() {
     if (!this.combatLogContent) return;
-    for (const node of this.combatLogEntryNodes) if (node.isValid) node.destroy();
+    for (const node of this.combatLogEntryNodes) if (node.isValid) {
+      node.active = false;
+      node.destroy();
+    }
     this.combatLogEntryNodes = [];
     const entries = this.combatLogLines.filter(entry => this.combatLogIsVisible(entry));
     const width = this.getCombatLogBodyWidth();
@@ -14014,10 +14075,10 @@ export class BattleScene extends Component {
       }
     }
     ut.setContentSize(width, contentHeight);
-    // 新记录创建后默认 active；先按当前滚动位置同步一次，避免等到下一帧时在顶部闪现。
+    // 高度和贴底位置必须同帧提交，避免先用旧偏移显示一帧、下一帧再跳到新位置。
+    this.syncCombatLogScrollAfterLayout();
+    // 新记录创建后默认 active；按最终滚动位置裁剪，避免在顶部闪现。
     this.refreshCombatLogEntryVisibility();
-    this.scheduleOnce(() => this.syncCombatLogScrollAfterLayout(), 0);
-    this.scheduleOnce(() => this.refreshCombatLogEntryVisibility(), 0);
   }
 
   /**
@@ -14049,6 +14110,7 @@ export class BattleScene extends Component {
     const vh = viewN.getComponent(UITransform)!.contentSize.height;
     const cut = contentN.getComponent(UITransform)!;
     const h = Math.max(40, cut.contentSize.height);
+    sv.stopAutoScroll();
     contentN.setPosition(this.getCombatLogBodyWidth() * 0.5, vh, 0);
     const eps = 2;
     if (h > vh + eps) sv.scrollToBottom(0);
@@ -14132,9 +14194,17 @@ export class BattleScene extends Component {
       };
       return true;
     }
-    const refs = this.buildTurnEndEventPanel(replay.dice, replay.extraPhases.length > 0);
+    const refs = this.buildTurnEndEventPanel(replay.dice, replay.extraPhases, replay.bodyKey, replay.bodyParams, replay.effectKey);
     replay.dice.forEach((die, i) => this.setDieLabelFace(refs.dieLabels[i], die));
-    refs.sumLabel.string = t('turnEnd.sumLine', { sum: replay.dice.reduce((a, b) => a + b, 0), dice: replay.dice.join('+') });
+    refs.sumLabel.string = '= ' + replay.dice.reduce((a, b) => a + b, 0);
+    refs.eventVerdictLabel.string = refs.eventResult;
+    replay.extraPhases.forEach((phase, index) => {
+      const row = refs.extraRows[index];
+      row.root.active = true;
+      phase.dice.forEach((die, i) => this.setDieLabelFace(row.dice[i], die));
+      row.value.string = '= ' + phase.dice.reduce((a, b) => a + b, 0);
+      row.verdict.string = row.result;
+    });
     refs.bodyLabel.string = this.turnEndBodyText(replay.bodyKey, replay.bodyParams);
     refs.confirmButton.active = true;
     this.turnEndEventUI = {
@@ -14875,7 +14945,12 @@ export class BattleScene extends Component {
         && !(this.mission.playerTankEvacuated || this.mission.shermanEvacuated)) {
         if (!this.campaignAutoEvacActive) {
           this.campaignAutoEvacActive = true;
-          this.beginCampaignAutoEvac();
+          const completedMission = this.mission;
+          // Give the player a moment to register completion before moving out.
+          this.scheduleOnce(() => {
+            if (this.mission !== completedMission) return;
+            this.beginCampaignAutoEvac();
+          }, 1);
         }
         return 'ongoing';
       }
@@ -15023,6 +15098,17 @@ export class BattleScene extends Component {
       ? findLevelByMissionId(this.missionId)
       : undefined;
     if (!GameSession.isPvp && this.outcome === 'victory') {
+      try {
+        if (this.campaignRuntime) {
+          const campaignId = this.campaignRuntime.campaign.id;
+          clearCompletedCampaignRun(campaignId);
+          clearCampaignCheckpoint(campaignId);
+        } else {
+          clearCompletedMissionSave(this.missionId, this.missionSource);
+        }
+      } catch (e) {
+        console.error('[Save] 清除通关存档失败:', e);
+      }
       if (this.campaignRuntime) {
         MenuProgress.markCompleted(GameSession.selectedLevelId, CAMPAIGN_CHAPTER_ID);
       } else if (completedLevel) {
@@ -15093,6 +15179,8 @@ export class BattleScene extends Component {
   }
 
   private onBackToMenu() {
+    GameSession.requestBattleMenuReturn();
+    if (!GameSession.isPvp) this.writeCurrentSave({ silent: true });
     this.battleLog('[BattleScene] 返回主菜单');
     stopBattleSfx();
     if (this.pvpBattleUnlisten) this.pvpBattleUnlisten();
@@ -20001,7 +20089,7 @@ export class BattleScene extends Component {
 
   /** @returns 是否已成功写入 localStorage */
   private writeCurrentSave(opts: { silent?: boolean } = {}): boolean {
-    if (!this.mission) return false;
+    if (!this.mission || GameSession.isPvp) return false;
     if (this.isBusy()) {
       if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.busy'));
       return false;
@@ -20032,7 +20120,24 @@ export class BattleScene extends Component {
       missionSource: this.missionSource,
     });
     try {
-      writeActiveSaveRaw(JSON.stringify(data));
+      if (this.campaignRuntime) {
+        writeCampaignRun({
+          version: 1,
+          runtime: this.campaignRuntime,
+          mission: this.mission.data,
+          segmentIndex: this.activeCampaignSegmentIndex,
+          save: data,
+          packages: GameSession.selectedCampaignPackages,
+          upgradeIds: [...this.campaignUpgradeIds],
+          chosenSegments: Array.from(this.campaignUpgradeChosenSegments),
+          checkpoint: readCampaignCheckpoint(this.campaignRuntime.campaign.id),
+          retainedAttackDiePip: this.retainedCampaignAttackDiePip,
+          paralyzedProtectionAvailable: this.mission.sherman.campaignParalyzedProtectionAvailable,
+          commanderShieldAvailable: this.mission.sherman.campaignCommanderShieldAvailable,
+        });
+      } else {
+        writeActiveSaveRaw(JSON.stringify(data));
+      }
       this.battleLog(`[Save] 已存档：回合 ${data.turn}`);
       if (!opts.silent) this.flashBattleSettingsHint(t('battle.save.ok'));
       return true;
@@ -20054,7 +20159,10 @@ export class BattleScene extends Component {
       this.flashBattleSettingsHint(t('battle.load.busy'));
       return;
     }
-    const raw = readActiveSaveRaw();
+    const campaignSave = this.campaignRuntime ? readCampaignRun()?.save : null;
+    const raw = this.campaignRuntime
+      ? (campaignSave ? JSON.stringify(campaignSave) : null)
+      : readActiveSaveRaw();
     if (!raw) {
       this.flashBattleSettingsHint(t('battle.load.none'));
       return;
@@ -23330,6 +23438,8 @@ export class BattleScene extends Component {
   }
 
   private damageTargetClassForRule(show: DiceShow): DamageTargetClass | null {
+    const recorded = show.report.damageTargetClass;
+    if (recorded && recorded in DAMAGE_TABLE) return recorded;
     if (show.report.protagonistTarget) return 'protagonist';
     const configured = show.target?.stats.damageTargetClass;
     if (configured && configured in DAMAGE_TABLE) return configured as DamageTargetClass;
@@ -25287,7 +25397,7 @@ export class BattleScene extends Component {
     const effectKey = turnEndListEffectKey(row.effectType, this.mission.data.theater);
     const effectName = t(effectKey);
     this.destroyTurnEndEventUI();
-    const refs = this.buildTurnEndEventPanel(primaryDice, extraPhases.length > 0);
+    const refs = this.buildTurnEndEventPanel(primaryDice, extraPhases, prepared.bodyKey, prepared.bodyParams, effectKey);
     for (const lab of refs.dieLabels) this.setDieLabelFace(lab, '?');
     refs.sumLabel.string = '';
     refs.bodyLabel.string = '';
@@ -25308,8 +25418,9 @@ export class BattleScene extends Component {
       apply: prepared.apply,
       extraPhases,
       extraIdx: 0,
-      extraSection: refs.extraSection,
-      extraCaptionLabel: refs.extraCaptionLabel,
+      eventVerdictLabel: refs.eventVerdictLabel,
+      eventResult: refs.eventResult,
+      extraRows: refs.extraRows,
       extraDieLabels: refs.extraDieLabels,
       germanTruckMoveSegments: prepared.germanTruckMoveSegments,
       germanTruckDefeatAfterExitMove: prepared.germanTruckDefeatAfterExitMove,
@@ -25326,158 +25437,87 @@ export class BattleScene extends Component {
     playDiceRoll();
   }
 
-  private buildTurnEndEventPanel(primaryDice: number[], hasExtraDice: boolean): {
-    root: Node;
-    dieLabels: Label[];
-    sumLabel: Label;
-    bodyLabel: Label;
-    confirmButton: Node;
-    extraSection: Node | null;
-    extraCaptionLabel: Label | null;
-    extraDieLabels: Label[];
-  } {
+  private buildTurnEndEventPanel(
+    primaryDice: number[], extraPhases: TurnEndExtraDicePhase[], bodyKey: string,
+    bodyParams: Record<string, string | number>, effectKey: string,
+  ) {
     const root = new Node('TurnEndEventPanel');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    root.setPosition(0, 0, 0);
     this.node.addChild(root);
     root.setSiblingIndex(this.node.children.length - 1);
-
-    const { node: mask } = createAdaptiveFullscreenMask(
-      root,
-      'Mask',
-      DICE_BACKDROP,
-      UI_ROOT_SCALE,
-    );
+    const { node: mask } = createAdaptiveFullscreenMask(root, 'Mask', DICE_BACKDROP, UI_ROOT_SCALE);
     mask.addComponent(BlockInputEvents);
 
+    const pw = Math.min(820, CANVAS_W - 40);
+    const rowGap = 66;
+    const bodyText = this.turnEndBodyText(bodyKey, bodyParams);
+    const bodyHeight = Math.max(48, this.measureBattleModalText(bodyText, 18, 24, pw - 64).height);
+    const ph = 172 + (1 + extraPhases.length) * rowGap + bodyHeight;
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
     root.addChild(panel);
-    const pw = Math.min(720, CANVAS_W - 40);
-    const ph = Math.min(420, CANVAS_H - 80);
     panel.addComponent(UITransform).setContentSize(pw, ph);
-    const panelG = panel.addComponent(Graphics);
-    drawDicePopupPanel(panelG, pw, ph, DICE_PANEL_BG, DICE_PANEL_BORDER);
+    const panelScale = Math.min(1, (CANVAS_H - 40) / ph);
+    panel.setScale(panelScale, panelScale, 1);
+    drawDicePopupPanel(panel.addComponent(Graphics), pw, ph, DICE_PANEL_BG, DICE_PANEL_BORDER);
+    this.makeCenteredLabel(panel, t('turnEnd.title'), 0, ph / 2 - 30, pw - 48, 36, 26, HUD_TEXT_COLOR);
 
-    const title = new Node('Title');
-    title.layer = this.node.layer;
-    panel.addChild(title);
-    const titleL = title.addComponent(Label);
-    titleL.string = t('turnEnd.title');
-    titleL.fontSize = 26;
-    titleL.color = new Color(240, 240, 240, 255);
-    title.setPosition(0, ph * 0.5 - 32);
-
-    const dieWrap = new Node('DieWrap');
-    dieWrap.layer = this.node.layer;
-    panel.addChild(dieWrap);
-    dieWrap.setPosition(0, ph * 0.5 - 98);
-    const gap = 56;
-    const startX = -((primaryDice.length - 1) * gap) * 0.5;
-    const dieLabels: Label[] = [];
-    for (let i = 0; i < primaryDice.length; i++) {
-      dieLabels.push(this.makeDieSquare(dieWrap, startX + i * gap, 0, 48));
-    }
-
-    /** 正文区左右留白略大于面板边线，避免「贴边太满」；与主骰行同宽便于对齐 */
-    const textBlockW = Math.min(560, pw - 96);
-    const sumLabelN = new Node('SumLabel');
-    sumLabelN.layer = this.node.layer;
-    panel.addChild(sumLabelN);
-    sumLabelN.addComponent(UITransform).setContentSize(textBlockW, 30);
-    const sumL = sumLabelN.addComponent(Label);
-    sumL.fontSize = 20;
-    sumL.lineHeight = 24;
-    sumL.color = new Color(200, 210, 220, 255);
-    sumL.horizontalAlign = HorizontalTextAlignment.CENTER;
-    sumL.verticalAlign = VerticalTextAlignment.CENTER;
-    sumL.overflow = Label.Overflow.CLAMP;
-    sumL.string = '';
-    sumLabelN.setPosition(0, ph * 0.5 - 154);
-
-    let extraSection: Node | null = null;
-    let extraCaptionLabel: Label | null = null;
-    const extraDieLabels: Label[] = [];
-    const bodyTopY = hasExtraDice ? ph * 0.5 - 268 : ph * 0.5 - 176;
-    if (hasExtraDice) {
-      extraSection = new Node('ExtraSection');
-      extraSection.layer = this.node.layer;
-      panel.addChild(extraSection);
-      extraSection.setPosition(0, ph * 0.5 - 206);
-      extraSection.active = false;
-
-      const capN = new Node('ExtraCaption');
-      capN.layer = this.node.layer;
-      extraSection.addChild(capN);
-      capN.addComponent(UITransform).setContentSize(textBlockW, 26);
-      extraCaptionLabel = capN.addComponent(Label);
-      extraCaptionLabel.fontSize = 18;
-      extraCaptionLabel.lineHeight = 22;
-      extraCaptionLabel.color = new Color(190, 200, 215, 255);
-      extraCaptionLabel.horizontalAlign = HorizontalTextAlignment.CENTER;
-      extraCaptionLabel.verticalAlign = VerticalTextAlignment.CENTER;
-      extraCaptionLabel.overflow = Label.Overflow.CLAMP;
-      extraCaptionLabel.string = '';
-      capN.setPosition(0, 18);
-
-      const extraDieWrap = new Node('ExtraDieWrap');
-      extraDieWrap.layer = this.node.layer;
-      extraSection.addChild(extraDieWrap);
-      extraDieWrap.setPosition(0, -16);
-      const egap = 56;
-      const estart = -egap * 0.5;
-      extraDieLabels.push(this.makeDieSquare(extraDieWrap, estart, 0, 48));
-      extraDieLabels.push(this.makeDieSquare(extraDieWrap, estart + egap, 0, 48));
-    }
-
-    const bodyN = new Node('BodyLabel');
-    bodyN.layer = this.node.layer;
-    panel.addChild(bodyN);
-    const bodyUt = bodyN.addComponent(UITransform);
-    bodyUt.setAnchorPoint(0.5, 1);
-    bodyUt.setContentSize(textBlockW, 1);
-    const bodyL = bodyN.addComponent(Label);
-    bodyL.fontSize = 19;
-    bodyL.lineHeight = 24;
-    bodyL.color = new Color(220, 225, 230, 255);
-    bodyL.overflow = Label.Overflow.RESIZE_HEIGHT;
-    bodyL.horizontalAlign = HorizontalTextAlignment.LEFT;
-    bodyL.verticalAlign = VerticalTextAlignment.TOP;
-    bodyL.string = '';
-    bodyN.setPosition(0, bodyTopY);
-
-    const confirmB = this.makeBattleRectButton(
-      panel,
-      0,
-      -ph * 0.5 + 52,
-      200,
-      44,
-      BATTLE_BTN_ACCENT,
-      () => this.onTurnEndConfirmClick(),
-    );
-    const confirmLab = this.makeBattleModalLabel(
-      confirmB.node,
-      t('turnEnd.confirm'),
-      0,
-      0,
-      200,
-      44,
-      22,
-      Color.WHITE,
-    );
-    this.mirrorBattleModalButtonLabel(confirmLab, () => this.onTurnEndConfirmClick());
+    const makeRow = (dice: number[], phase: TurnEndExtraDicePhase | null, index: number) => {
+      const presentation = turnEndRowPresentation(phase, bodyKey, bodyParams, effectKey, t);
+      const y = ph / 2 - 96 - index * rowGap;
+      const rowRoot = new Node('ResolutionRow');
+      rowRoot.layer = panel.layer;
+      panel.addChild(rowRoot);
+      rowRoot.active = phase === null;
+      const makeLabel = (text: string, x: number, labelY: number, w: number, h: number, size: number, color: Color) => {
+        const label = this.makeCenteredLabel(rowRoot, text, x, labelY, w, h, size, color);
+        label.overflow = Label.Overflow.SHRINK;
+        label.enableWrapText = true;
+        return label;
+      };
+      const highlight = new Node('ActiveRow');
+      highlight.layer = panel.layer;
+      rowRoot.addChild(highlight);
+      highlight.setPosition(0, y);
+      const g = highlight.addComponent(Graphics);
+      g.fillColor = new Color(145, 95, 44, 45);
+      g.roundRect(-pw / 2 + 16, -30, pw - 32, 60, 4);
+      g.fill();
+      highlight.active = false;
+      makeLabel(presentation.label, -310, y, 138, 54, 18, DICE_INFO_TEXT);
+      const labels = dice.map((_, i) => {
+        const lab = this.makeDieSquare(rowRoot, -170 + (i - (dice.length - 1) / 2) * 56, y, 48);
+        this.setDieLabelFace(lab, '?');
+        return lab;
+      });
+      const value = makeLabel('', 10, presentation.condition ? y + 12 : y, 200, 26, 24, DICE_INFO_TEXT);
+      if (presentation.condition) {
+        makeLabel(presentation.condition, 10, y - 15, 200, 26, 17, DICE_INFO_TEXT);
+      }
+      const color = presentation.tone === 'safe' ? DICE_OK_TEXT
+        : presentation.tone === 'danger' ? new Color(255, 155, 130, 255) : DICE_INFO_TEXT;
+      const verdict = makeLabel('', 265, y, 238, 54, 24, color);
+      return { root: rowRoot, dice: labels, value, verdict, result: presentation.result, highlight };
+    };
+    const primary = makeRow(primaryDice, null, 0);
+    const extraRows = extraPhases.map((phase, index) => makeRow(phase.dice, phase, index + 1));
+    const bodyLabel = this.makeCenteredLabel(panel, '', 0,
+      ph / 2 - 96 - (extraPhases.length + 1) * rowGap - bodyHeight / 2 + 24,
+      pw - 64, bodyHeight, 18, DICE_INFO_TEXT);
+    bodyLabel.lineHeight = 24;
+    bodyLabel.overflow = Label.Overflow.CLAMP;
+    bodyLabel.enableWrapText = true;
+    const confirmB = this.makeBattleRectButton(panel, 0, -ph / 2 + 36, 200, 44,
+      BATTLE_BTN_ACCENT, () => this.onTurnEndConfirmClick());
+    const confirmLabel = this.makeBattleModalLabel(confirmB.node, t('turnEnd.confirm'), 0, 0, 200, 44, 22, Color.WHITE);
+    this.mirrorBattleModalButtonLabel(confirmLabel, () => this.onTurnEndConfirmClick());
     confirmB.node.active = false;
-
     return {
-      root,
-      dieLabels,
-      sumLabel: sumL,
-      bodyLabel: bodyL,
-      confirmButton: confirmB.node,
-      extraSection,
-      extraCaptionLabel,
-      extraDieLabels,
+      root, dieLabels: primary.dice, sumLabel: primary.value, bodyLabel,
+      confirmButton: confirmB.node, eventVerdictLabel: primary.verdict, eventResult: primary.result,
+      extraRows,
+      extraDieLabels: [] as Label[],
     };
   }
 
@@ -25554,29 +25594,16 @@ export class BattleScene extends Component {
         params.result = t(resultKey);
       }
     }
-    return t(bodyKey, params);
+    return t(turnEndSummaryKey(bodyKey), params);
   }
 
-  private setupTurnEndExtraRoll(ui: {
-    extraPhases: TurnEndExtraDicePhase[];
-    extraIdx: number;
-    extraDieLabels: Label[];
-    extraCaptionLabel: Label | null;
-  }) {
+  private setupTurnEndExtraRoll(ui: NonNullable<BattleScene['turnEndEventUI']>) {
     const phase = ui.extraPhases[ui.extraIdx];
-    if (!phase) return;
-    const n = phase.dice.length;
-    for (let i = 0; i < ui.extraDieLabels.length; i++) {
-      const lab = ui.extraDieLabels[i];
-      if (!lab) continue;
-      this.setDieLabelFace(lab, '?');
-      const cont = lab.node.parent;
-      if (cont) cont.active = i < n;
-    }
-    if (ui.extraCaptionLabel) {
-      ui.extraCaptionLabel.string = t(phase.captionKey);
-    }
-    if (n > 0) playDiceRoll();
+    const row = ui.extraRows[ui.extraIdx];
+    if (!phase || !row) return;
+    ui.extraDieLabels = row.dice;
+    ui.extraRows.forEach((entry, index) => { entry.highlight.active = index === ui.extraIdx; });
+    if (phase.dice.length) playDiceRoll();
   }
 
   private advanceTurnEndEventUI(dt: number) {
@@ -25599,7 +25626,9 @@ export class BattleScene extends Component {
         if (lab) this.setDieLabelFace(lab, ui.primaryDice[i] ?? '?');
       }
       const s = ui.primaryDice.reduce((a, b) => a + b, 0);
-      ui.sumLabel.string = t('turnEnd.sumLine', { sum: s, dice: ui.primaryDice.join('+') });
+      ui.sumLabel.string = '= ' + s;
+      ui.eventVerdictLabel.string = ui.eventResult;
+      ui.extraRows.forEach(row => { row.root.active = true; });
       ui.bodyLabel.string = '';
       if (ui.effectType === 'sniper' && ui.sniperWillKill && ui.sniperAttackerId && this.mission) {
         const attacker = this.mission.enemies.find(unit => unit.id === ui.sniperAttackerId);
@@ -25674,7 +25703,6 @@ export class BattleScene extends Component {
     if (ui.stage === 'wait_after_primary') {
       ui.t += dt;
       if (ui.t < PAUSE_AFTER_PRIMARY) return;
-      if (ui.extraSection) ui.extraSection.active = true;
       ui.extraIdx = 0;
       ui.stage = 'roll_extra';
       ui.t = 0;
@@ -25704,6 +25732,10 @@ export class BattleScene extends Component {
         const lab = ui.extraDieLabels[i];
         if (lab) this.setDieLabelFace(lab, phase.dice[i] ?? '?');
       }
+      const row = ui.extraRows[ui.extraIdx];
+      row.value.string = '= ' + phase.dice.reduce((a, b) => a + b, 0);
+      row.verdict.string = row.result;
+      row.highlight.active = false;
       ui.stage = 'wait_after_extra';
       ui.t = 0;
       return;
@@ -25720,7 +25752,6 @@ export class BattleScene extends Component {
         return;
       }
       ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
-      if (ui.extraCaptionLabel) ui.extraCaptionLabel.string = '';
       ui.stage = 'hold';
       ui.confirmButton.active = true;
     }
@@ -26000,6 +26031,10 @@ export class BattleScene extends Component {
           });
         }
         if (report.overpenetrated && !effect && !(report.damageEffects?.length)) {
+          this.battleLogI18n('battleLog.combat.damage', {
+            ...damageParams,
+            effectKey: 'dmg.outcome.overpenetration',
+          }, replay);
           const out = overpenetrationOutcomeLabel();
           text = out.text;
           color = out.color;

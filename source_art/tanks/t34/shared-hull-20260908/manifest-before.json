@@ -1,0 +1,55 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "t34",
+  "notes": "User-approved 2026-09-08 mild simplification. Exact normal-preview paint extracted into layers; generated fill used only under removed turret. Wreck registered to hull canvas and alpha. Installed after explicit user confirmation.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/t34/preview-20260908/hull-installed-source.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/t34/preview-20260908/turret-installed-source.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/t34/preview-20260908/destroyed-installed-source.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.08128654970760234,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      710,
+      399
+    ],
+    "turretPivot": [
+      880,
+      399
+    ],
+    "muzzle": [
+      1,
+      399
+    ],
+    "commanderHatch": [
+      900,
+      494
+    ]
+  }
+}
