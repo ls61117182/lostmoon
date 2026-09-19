@@ -47,7 +47,7 @@ for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
   assert(!sees(shared, 0, 2), `${kind} must not receive off-axis radio vision`);
 }
 
-const scene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
+const scene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8').replace(/\r\n/g, '\n');
 const beginTurn = scene.match(/private\s+beginCurrentEnemyTurn\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
 assert(beginTurn, 'enemy turn entry should exist');
 assert.match(beginTurn[0], /GameSession\.gameMode === 'hardcore' && isHeavyArtilleryUnit\(enemy\)[\s\S]*?this\.enemyDice = \[\][\s\S]*?runHardcoreHeavyArtilleryTurn\(enemy\)/,
@@ -61,7 +61,7 @@ assert.match(turn[0], /selectHardcoreHeavyArtilleryTarget[\s\S]*?tryEnemyAttack\
 const select = scene.match(/private\s+selectHardcoreHeavyArtilleryTarget\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
 assert(select, 'heavy-artillery target selector should exist');
 assert.match(select[0], /distance > HEAVY_ARTILLERY_VISION_RANGE/);
-assert.match(select[0], /fireDirectionTo\(artillery\.pos, target\.pos\) !== artillery\.facing/);
+assert(!select[0].includes('!== artillery.facing'), 'target selection must allow the two diagonal firing rays');
 assert.match(select[0], /visible\.has\(HexMap\.keyOf\(target\.pos\)\)/);
 assert.match(select[0], /canAttack\(\{/);
 

@@ -30,13 +30,20 @@ export function tankTrackStyleForTerrain(
     case 'clear':
       return 'shallow';
     case 'road':
+    case 'urban_road':
     case 'airstrip':
       return 'faint';
+    case 'urban_ground':
+      return 'shallow';
+    case 'urban_rubble':
+      return 'strong';
     case 'water':
     case 'deep_water':
     case 'beach':
     case 'forest':
     case 'rocky':
+    case 'urban_indestructible':
+    case 'urban_destructible':
     default:
       return 'none';
   }
@@ -104,19 +111,6 @@ export function tankTrackTraversalKey(
   return `${unitId}:${tankTrackEdgeKey(fromQ, fromR, toQ, toR)}`;
 }
 
-/** Only opposite axial vectors form a straight continuation through a shared hex centre. */
-export function tankTrackEdgesContinueStraight(
-  vertexQ: number,
-  vertexR: number,
-  firstOtherQ: number,
-  firstOtherR: number,
-  secondOtherQ: number,
-  secondOtherR: number,
-): boolean {
-  return firstOtherQ - vertexQ === -(secondOtherQ - vertexQ)
-    && firstOtherR - vertexR === -(secondOtherR - vertexR);
-}
-
 export interface TankTrackSweptSegment {
   fromX: number;
   fromY: number;
@@ -124,7 +118,10 @@ export interface TankTrackSweptSegment {
   toY: number;
 }
 
-/** Return the hull-swept portion reached at a normalized movement progress. */
+/**
+ * Cover the full hull swept along the movement direction.
+ * Forward: initial rear to animated front. Reverse: initial front to animated rear.
+ */
 export function tankTrackProgressSegment(
   fromX: number,
   fromY: number,
@@ -132,8 +129,6 @@ export function tankTrackProgressSegment(
   toY: number,
   halfBodyLength: number,
   progress: number,
-  extendFrom = true,
-  extendTo = true,
 ): TankTrackSweptSegment {
   const dx = toX - fromX;
   const dy = toY - fromY;
@@ -142,11 +137,8 @@ export function tankTrackProgressSegment(
   const ux = dx / length;
   const uy = dy / length;
   const p = Math.max(0, Math.min(1, progress));
-  const startDistance = extendFrom ? -halfBodyLength : 0;
-  const reachedLeadingEdge = length * p + halfBodyLength;
-  const endDistance = extendTo
-    ? reachedLeadingEdge
-    : Math.min(length, reachedLeadingEdge);
+  const startDistance = -halfBodyLength;
+  const endDistance = length * p + halfBodyLength;
   return {
     fromX: fromX + ux * startDistance,
     fromY: fromY + uy * startDistance,
@@ -156,8 +148,8 @@ export function tankTrackProgressSegment(
 }
 
 /**
- * Expand a centre-to-centre move to the full ground area swept by the hull.
- * The start is the initial trailing edge and the end is the final leading edge.
+ * Expand a centre-to-centre move by half a hull at both ends.
+ * The destination retains a full hull-length footprint after the tank moves or turns.
  */
 export function tankTrackSweptSegment(
   fromX: number,
@@ -165,8 +157,6 @@ export function tankTrackSweptSegment(
   toX: number,
   toY: number,
   halfBodyLength: number,
-  extendFrom = true,
-  extendTo = true,
 ): TankTrackSweptSegment {
   return tankTrackProgressSegment(
     fromX,
@@ -175,7 +165,5 @@ export function tankTrackSweptSegment(
     toY,
     halfBodyLength,
     1,
-    extendFrom,
-    extendTo,
   );
 }

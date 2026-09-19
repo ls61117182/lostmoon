@@ -1,0 +1,48 @@
+{
+  "generator": "built-in image_gen",
+  "runtimeSize": [
+    222,
+    256
+  ],
+  "images": [
+    {
+      "key": "market",
+      "label": "玻璃顶市场",
+      "file": "urban_dense_indestructible_market_v1.png",
+      "prompt": "Use case: stylized-concept. Create ONE new indestructible urban building tile sprite for a WWII-era European 2D strategy game. Input images are ONLY style references, not shapes to reproduce. Match their hand-painted simplified rendering, thick near-black outlines and crisp readable material details. Strict 90-degree orthographic overhead roof-plan camera, NO isometric perspective, NO visible wall facades. Dense compact layout fitting a POINTY-TOP hex cell: broad central mass and narrower upper/lower ends, no L-shaped missing quadrant and no large empty courtyard. Occupy approximately 80-85% of image with the entire building centered and a safe transparent margin. Portrait aspect 222:256. Genuine transparent alpha background, no ground slab or hex border, no text, people, vehicles, flags, ruins or church towers. Details must read at 222x256. Period-appropriate building services, no futuristic equipment. Covered municipal MARKET HALL. Dominant distinctive muted TURQUOISE and teal-green glass roof with broad steel ribs: one large longitudinal central rectangular glass nave with chamfered roof ends, flanked by two shorter lower parallel glass bays and small warm masonry entrance annexes top and bottom. The large repeated glass panels are the visual signature. Dense unified building footprint, not scattered stalls. Subtle off-white structural ribs, dark patinated metal edging; do not use factory sawtooth roofs or a church silhouette.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-e2d286c5-7d9e-4fef-a5aa-e458c7f0172b.png"
+    },
+    {
+      "key": "theater",
+      "label": "剧院",
+      "file": "urban_dense_indestructible_theater_v1.png",
+      "prompt": "Use case: stylized-concept. Create ONE new indestructible urban building tile sprite for a WWII-era European 2D strategy game. Input images are ONLY style references, not shapes to reproduce. Match their hand-painted simplified rendering, thick near-black outlines and crisp readable material details. Strict 90-degree orthographic overhead roof-plan camera, NO isometric perspective, NO visible wall facades. Dense compact layout fitting a POINTY-TOP hex cell: broad central mass and narrower upper/lower ends, no L-shaped missing quadrant and no large empty courtyard. Occupy approximately 80-85% of image with the entire building centered and a safe transparent margin. Portrait aspect 222:256. Genuine transparent alpha background, no ground slab or hex border, no text, people, vehicles, flags, ruins or church towers. Details must read at 222x256. Period-appropriate building services, no futuristic equipment. Secular municipal THEATER. Dominant muted PLUM PURPLE and dark mauve roof, a broad fan-shaped auditorium at upper center with a few strong radial roof seams, attached to a compact wide rectangular stage-house at the bottom and two small pale stone side service wings. Fan is visibly broader than stage-house, and the cluster is compact and filled. Simplified art-deco era massing, cream roof edging. No spire, no cross, no towers, no signage, no central garden. The fan-shaped plum roof is its instantly recognizable signature.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-8f9b3c5f-81f1-488d-9145-91162d8c920b.png"
+    },
+    {
+      "key": "post_office",
+      "label": "邮局",
+      "file": "urban_dense_indestructible_post_office_v1.png",
+      "prompt": "Use case: stylized-concept. Create ONE new indestructible urban building tile sprite for a WWII-era European 2D strategy game. Input images are ONLY style references, not shapes to reproduce. Match their hand-painted simplified rendering, thick near-black outlines and crisp readable material details. Strict 90-degree orthographic overhead roof-plan camera, NO isometric perspective, NO visible wall facades. Dense compact layout fitting a POINTY-TOP hex cell: broad central mass and narrower upper/lower ends, no L-shaped missing quadrant and no large empty courtyard. Occupy approximately 80-85% of image with the entire building centered and a safe transparent margin. Portrait aspect 222:256. Genuine transparent alpha background, no ground slab or hex border, no text, people, vehicles, flags, ruins or church towers. Details must read at 222x256. Period-appropriate building services, no futuristic equipment. Substantial urban POST OFFICE block. Dominant GOLDEN MUSTARD / ochre yellow standing-seam hipped roofs with dark charcoal eaves and brick red short chimneys. A broad compact central roof mass, two shorter offset side roof wings and short upper/lower entrance roof extensions arranged into a filled roughly hexagonal silhouette. A narrow long glazed roof lantern along the main ridge, just a few simple roof seams. No ring courtyard, no decorative corner pillars, no towers, no spires or text. Warm yellow roofs must clearly differ from red apartments, brown warehouses and beige flat-roof offices.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-679de0fb-a4e6-4400-a907-6c3017354d88.png"
+    },
+    {
+      "key": "waterworks",
+      "label": "水厂",
+      "file": "urban_dense_indestructible_waterworks_v1.png",
+      "prompt": "Use case: stylized-concept. Create ONE new indestructible urban building tile sprite for a WWII-era European 2D strategy game. Input images are ONLY style references, not shapes to reproduce. Match their hand-painted simplified rendering, thick near-black outlines and crisp readable material details. Strict 90-degree orthographic overhead roof-plan camera, NO isometric perspective, NO visible wall facades. Dense compact layout fitting a POINTY-TOP hex cell: broad central mass and narrower upper/lower ends, no L-shaped missing quadrant and no large empty courtyard. Occupy approximately 80-85% of image with the entire building centered and a safe transparent margin. Portrait aspect 222:256. Genuine transparent alpha background, no ground slab or hex border, no text, people, vehicles, flags, ruins or church towers. Details must read at 222x256. Period-appropriate building services, no futuristic equipment. Compact industrial WATERWORKS / pumping station. Three large SILVER GRAY circular covered water tanks viewed EXACTLY from above (perfect circles), tightly arranged in a triangular cluster with upper central tank and lower left/right tanks. Each roof has just a few simple radial seams and a small dark central inspection cap. Short substantial NAVY BLUE flat-roof pump-house annexes fill gaps between the tanks, thick restrained dark pipes connect tanks. Dense compact filled footprint. Tanks and roofs only, NO visible tall tank sides, no scaffolding or legs. No huge ground pad. Silver circular roofs and navy connector buildings form a unique silhouette.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-c47e72fa-c13a-4aa1-a03f-155029b9ce13.png"
+    }
+  ],
+  "previewFile": "indestructible_expansion_preview.png",
+  "preview": [
+    "urban_dense_indestructible_apartment_v1.png",
+    "urban_dense_indestructible_factory_v1.png",
+    "urban_dense_indestructible_office_l_v1.png",
+    "urban_dense_indestructible_warehouse_v1.png",
+    "urban_dense_indestructible_market_v1.png",
+    "urban_dense_indestructible_theater_v1.png",
+    "urban_dense_indestructible_post_office_v1.png",
+    "urban_dense_indestructible_waterworks_v1.png"
+  ]
+}

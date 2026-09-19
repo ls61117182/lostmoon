@@ -46,7 +46,7 @@ export type ActionDiceSubPhase = 'movement' | 'attack' | 'misc';
 
 export interface PlayerDicePoolConfig {
   /** 移动 / 攻击 / 杂项 → 各地形数值；硬核三阶段列为修正，经典模式列为基础骰数。 */
-  baseByPhaseTerrain: Record<ActionDiceSubPhase, Record<TerrainType, number>>;
+  baseByPhaseTerrain: Record<ActionDiceSubPhase, Partial<Record<TerrainType, number>>>;
   /** 移动阶段：驾驶员 / 副驾驶存活、开舱 各加多少（通常为 1） */
   moveMods: { driver: number; codriver: number; hatch: number };
   /** 攻击阶段：炮手 / 装填手存活、开舱 */

@@ -145,8 +145,9 @@ function buildStukaExtraDicePhases(sim: {
 function findShermanLosInfantry(mission: LoadedMission): Unit | null {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
-    // 「徒步类」单位都纳入狙击手视线检查。
+    // 仅检查距玩家坦克 2 格以内的「徒步类」单位。
     if (e.destroyed || isAttachedATGunCrew(e) || !isFootUnit(e)) continue;
+    if (hexDistance(e.pos, sh.pos) > 2) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return e;
   }

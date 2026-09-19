@@ -1,3 +1,4 @@
+import { crewRoleAlive } from "./types";
 /**
  * 战斗结算 —— 纯函数，不依赖 Cocos，可直接 Jest 测。
  *
@@ -15,6 +16,7 @@
  */
 
 import { RNG } from './Dice';
+import { turretTurnDistance } from './TurretTraverse';
 import { ATTACK_DIRECTION_RULES } from './AttackDirectionDB';
 import type { ArmorFace, AttackDirectionRule, DamageCheckType } from './AttackDirectionDB';
 import { DAMAGE_TABLE } from './DamageTableDB';
@@ -25,6 +27,7 @@ import {
   directionTo,
   fireDirectionStep,
   fireDirectionTo,
+  fireDirectionVector,
   HexMap,
   hexDistance,
   hexLine,
@@ -133,6 +136,8 @@ export interface AttackReport {
   commanderShieldBlocked?: boolean;
   /** Infantry small-arms fire resolves on the hit roll without an armour check. */
   smallArms?: boolean;
+  /** A hit destroys this unarmoured emplacement without a penetration roll. */
+  directHitDestroy?: boolean;
   /** 本次伤害是否按主角受伤表结算；用于 applyAttack 区分同型号队友。 */
   protagonistTarget?: boolean;
   statusChange: HitStatusChange;
@@ -208,7 +213,7 @@ export function selectTankMachineGun(
   // forward ray in every rules mode.
   if (attacker.stats.visionType === 'fixed' && targetDirection !== attacker.facing) return null;
   const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection;
-  const hullMachineGunOperational = attacker.crew?.coDriver !== false;
+  const hullMachineGunOperational = crewRoleAlive(attacker, 'coDriver');
   // A forward target uses both guns only when the intact turret is already
   // aligned or can finish aligning during this action. Otherwise the hull MG
   // may fire alone while an intact turret still attempts its partial traverse.
@@ -224,6 +229,7 @@ export function selectTankMachineGun(
       rotateTurret: !attacker.turretDamaged && turretFacing !== targetDirection,
     };
   }
+  if (attacker.turretDamaged && isDiagonalFireDirection(turretFacing)) return null;
   if (turretFacing === targetDirection) return { weapon: 'coaxial', rotateTurret: false };
   if (attacker.turretDamaged || !turretCanReachTarget) return null;
   return { weapon: 'coaxial', rotateTurret: true };
@@ -237,7 +243,7 @@ export interface HitThresholdModifierDetail {
 /** Rules-facing firing direction. Flank targets retain the current halfway turret direction. */
 export function attackFireDirection(ctx: AttackContext): FireDirection | null {
   const { attacker, target, map } = ctx;
-  if (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted') {
+  if (isHeavyArtilleryUnit(attacker) || (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted')) {
     const flankDirection = diagonalMainGunDirectionForHex(
       map, attacker, target.pos, ctx.weather, ctx.smokeHexes,
     );
@@ -362,7 +368,8 @@ export type AttackDenyReason =
   | 'attack.reason.outOfRange'
   | 'attack.reason.turretDamaged'
   | 'attack.reason.camouflageNet'
-  | 'attack.reason.precisionInvalidTarget';
+  | 'attack.reason.precisionInvalidTarget'
+  | 'attack.reason.bunkerSlitAngle';
 
 function isForwardOnlyGun(unit: Unit): boolean {
   // A controlled hardcore AT gun is represented as turreted only while its
@@ -385,6 +392,10 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (ctx.precisionFire === true
     && (isFootUnit(target) || (isAntiTankGunUnit(target) && ctx.shellType === 'he'))) {
     return { ok: false, reason: 'attack.reason.precisionInvalidTarget' };
+  }
+  if (ctx.precisionFire && ctx.hardcoreHeavyArtilleryRules && isHeavyArtilleryUnit(target)
+    && !isBunkerShootingPortAttack(ctx)) {
+    return { ok: false, reason: 'attack.reason.bunkerSlitAngle' };
   }
   const infantryAttack = isFootUnit(attacker);
   const suppressionAttack = ctx.mainGunSuppressesInfantry === true
@@ -421,17 +432,21 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
       : { ok: false, reason: 'attack.reason.blocked' };
   }
   // 经典模式沿用六条轴向射线；硬核模式的炮塔主炮另可使用六条夹角射线。
-  const flankDirection = ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'
+  const flankDirection = (isHeavyArtilleryUnit(attacker) || (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted'))
     ? diagonalMainGunDirectionForHex(map, attacker, target.pos, ctx.weather, raySmokeHexes)
     : null;
   const fireDir = flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
-  if (isForwardOnlyGun(attacker) && attacker.facing !== fireDir) {
+  if (isHeavyArtilleryUnit(attacker)
+    ? attacker.facing === null || turretTurnDistance(attacker.facing, fireDir) > 1
+    : isForwardOnlyGun(attacker) && attacker.facing !== fireDir) {
     return { ok: false, reason: 'attack.reason.fixedGunFacing' };
   }
-  const hasSight = flankDirection !== null || (ctx.expandedTurretDirections
-    && attacker.stats.visionType === 'turreted'
-    && isDiagonalFireDirection(fireDir)
+  // Bunkers share tank halfway-ray and flank-path visibility.
+  const useDiagonalSight = isHeavyArtilleryUnit(attacker)
+    ? fireDirectionTo(attacker.pos, target.pos) === fireDir && isDiagonalFireDirection(fireDir)
+    : ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted' && isDiagonalFireDirection(fireDir);
+  const hasSight = flankDirection !== null || (useDiagonalSight
     ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, raySmokeHexes)
     : map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
@@ -476,11 +491,11 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const distance = hexDistance(attacker.pos, target.pos);
   const hedges = map.countHedgesAlong(attacker.pos, target.pos);
   const targetTile = map.get(target.pos);
-  const building = targetTile?.hasBuilding ? 1 : 0;
-  const size = ctx.hardcoreHeavyArtilleryRules === true
-    && ctx.precisionFire === true
-    && isHeavyArtilleryUnit(target)
-    ? (target.stats.shootingPortHitThreshold ?? 6)
+  const building = targetTile?.hasBuilding
+    || targetTile?.terrain === 'urban_indestructible'
+    || targetTile?.terrain === 'urban_destructible' ? 1 : 0;
+  const size = isBunkerShootingPortAttack(ctx)
+    ? (target.stats.shootingPortHitThreshold ?? 10)
     : target.stats.size;
   const smoke = usesHardcoreSmokeRules(ctx)
     ? (unitIsInSmoke(ctx, attacker) || unitIsInSmoke(ctx, target) ? 2 : 0)
@@ -655,8 +670,33 @@ function isWithinThirtyDegreeArc(incomingStep: number, facing: FireDirection): b
   return Math.min(delta, 12 - delta) <= 1;
 }
 
+/** A bunker slit can only be aimed at from its physical front +/-30 degrees.
+ * Use positions and hull facing, never the attacker's turret or a rounded ray.
+ */
+export function isBunkerShootingPortAttack(ctx: AttackContext): boolean {
+  const { target, attacker } = ctx;
+  if (!ctx.hardcoreHeavyArtilleryRules || !ctx.precisionFire
+    || !isHeavyArtilleryUnit(target) || target.facing == null) return false;
+  const forward = fireDirectionVector(target.facing);
+  const dq = attacker.pos.q - target.pos.q;
+  const dr = attacker.pos.r - target.pos.r;
+  const x = dq + dr / 2;
+  const y = Math.sqrt(3) * dr / 2;
+  const fx = forward.q + forward.r / 2;
+  const fy = Math.sqrt(3) * forward.r / 2;
+  const dot = x * fx + y * fy;
+  return dot > 0 && 4 * dot * dot >= 3 * (x * x + y * y) * (fx * fx + fy * fy) - 1e-9;
+}
+
 export function effectiveArmorValue(ctx: AttackContext, face: ArmorFace): number {
   return armorValue(ctx.target, face) + gunMantletArmorBonus(ctx);
+}
+
+/** Shared by bunker HE resolution and its damage-threshold preview. */
+export function bunkerHighExplosiveThresholds(ctx: AttackContext): { fireThreshold: number; destroyThreshold: number } {
+  const armor = effectiveArmorValue(ctx, attackDirectionRuleFor(ctx).armorFace);
+  const power = ctx.attacker.stats.highExplosivePower ?? 0;
+  return { fireThreshold: armor - power - 2, destroyThreshold: armor - power + 2 };
 }
 
 export type HighExplosiveOutcome =
@@ -698,6 +738,8 @@ export interface HighExplosiveReport {
   effectThreshold?: number;
   destroyThreshold?: number;
   suppressThreshold?: number;
+  /** Crew at a gun uses 8; ordinary infantry retains its existing base 6. */
+  suppressBase?: number;
   fireThreshold?: number;
   /** 坦克 HE 的低档结果阈值；达到更高的 fireThreshold 时由起火取代瘫痪。 */
   paralyzeThreshold?: number;
@@ -718,7 +760,8 @@ export function infantryHighExplosiveCoverSource(
   ctx: AttackContext,
 ): InfantryHighExplosiveCoverSource | undefined {
   const tile = ctx.map.get(ctx.target.pos);
-  if (tile?.hasBuilding) return 'building';
+  if (tile?.hasBuilding || tile?.terrain === 'urban_destructible'
+    || tile?.terrain === 'urban_indestructible') return 'building';
   if (tile?.terrain === 'forest') return 'forest';
   if (tile?.terrain === 'trees') return 'trees';
   return ctx.units?.some(unit => unit !== ctx.target
@@ -743,6 +786,7 @@ export function rollHighExplosiveInfantryOutcome(
   coverValue: number,
   highExplosivePower: number,
   rng: RNG,
+  suppressBase = 6,
 ): {
   dice: [number, number];
   roll: number;
@@ -753,7 +797,7 @@ export function rollHighExplosiveInfantryOutcome(
   const dice: [number, number] = [rng.d6(), rng.d6()];
   const roll = dice[0] + dice[1];
   const destroyThreshold = 12 + coverValue - highExplosivePower;
-  const suppressThreshold = 6 + coverValue - highExplosivePower;
+  const suppressThreshold = suppressBase + coverValue - highExplosivePower;
   const outcome = roll >= destroyThreshold
     ? 'destroyed'
     : roll >= suppressThreshold ? 'suppressed' : 'none';
@@ -764,9 +808,7 @@ export function rollHighExplosiveInfantryOutcome(
 export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplosiveReport {
   const { attacker, target } = ctx;
   const lockedHitBreakdown = hitBreakdown(ctx);
-  const shootingPortAttack = ctx.hardcoreHeavyArtilleryRules === true
-    && ctx.precisionFire === true
-    && isHeavyArtilleryUnit(target);
+  const shootingPortAttack = isBunkerShootingPortAttack(ctx);
   const automaticHit = (isFootUnit(target) && target.kind !== 'officer')
     || isAntiTankGunUnit(target)
     || (ctx.hardcoreHeavyArtilleryRules === true && isHeavyArtilleryUnit(target) && !shootingPortAttack);
@@ -800,7 +842,8 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   if (isFootUnit(target)) {
     const infantryCoverSource = infantryHighExplosiveCoverSource(ctx);
     const infantryCoverValue = infantryCoverSource ? 1 : 0;
-    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryCoverValue, power, rng);
+    const suppressBase = target.attachedToATGunId ? 8 : 6;
+    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryCoverValue, power, rng, suppressBase);
     const effectRoll = infantryEffect.roll;
     const effectThreshold = infantryEffect.outcome === 'destroyed'
       ? infantryEffect.destroyThreshold
@@ -815,6 +858,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
       effectThreshold,
       destroyThreshold: infantryEffect.destroyThreshold,
       suppressThreshold: infantryEffect.suppressThreshold,
+      suppressBase,
       outcome: infantryEffect.outcome,
     };
   }
@@ -846,8 +890,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   if (isHeavyArtilleryUnit(target)) {
     const effectDice: [number, number] = [rng.d6(), rng.d6()];
     const effectRoll = effectDice[0] + effectDice[1];
-    const destroyThreshold = 2 + armor - power;
-    const fireThreshold = -2 + armor - power;
+    const { destroyThreshold, fireThreshold } = bunkerHighExplosiveThresholds(ctx);
     const rolledOutcome: HighExplosiveOutcome = effectRoll >= destroyThreshold
       ? 'destroyed'
       : effectRoll >= fireThreshold ? 'fire' : 'none';
@@ -957,7 +1000,7 @@ function isEffectApplicable(target: Unit, effect: DamageTableEffect): boolean {
     case 'radio':
       return target.stats.hasRadio !== false && target.radioDamaged !== true;
     case 'crew':
-      return !!effect.crew?.some(role => !target.crew || isCrewAlive(target.crew, crewRoleSlot(role)));
+      return !!effect.crew?.some(role => crewRoleAlive(target, role));
   }
 }
 
@@ -966,7 +1009,7 @@ function damageEffectStepFrom(target: Unit, effect: DamageTableEffect): DamageEf
     effect: effect.kind === 'crew' ? 'crewCheck' : effect.kind,
     ...(effect.kind === 'crew'
       ? (() => {
-        const crewPriority = (effect.crew ?? []).map(crewRoleSlot);
+        const crewPriority = (effect.crew ?? []).flatMap(role => target.stats.crewRoleAssignments?.[role] ?? [crewRoleSlot(role)]);
         return { crewPriority, crewSlot: firstAliveCrewSlot(target, crewPriority) };
       })()
       : {}),
@@ -1026,7 +1069,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const pacific = isPacificCombat(ctx);
   const protagonistTarget = isProtagonistTarget(ctx);
   const heavyArtilleryRules = ctx.hardcoreHeavyArtilleryRules === true && isHeavyArtilleryUnit(target);
-  const shootingPortAttack = heavyArtilleryRules && ctx.precisionFire === true;
+  const shootingPortAttack = isBunkerShootingPortAttack(ctx);
   const automaticHit = heavyArtilleryRules && !shootingPortAttack;
   const d1 = automaticHit ? 0 : rng.d6();
   const d2 = automaticHit ? 0 : rng.d6();
@@ -1103,6 +1146,24 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
       commanderShieldBlocked: false,
       protagonistTarget,
       statusChange: 'destroyed',
+    };
+  }
+
+  // AP/HVAP only needs to land an effective hit on an anti-tank gun. The gun
+  // carriage's token armour no longer adds a redundant penetration roll;
+  // attached operators are released separately when the destroyed body is applied.
+  if (isAntiTankGunUnit(target) && (ctx.shellType === 'ap' || ctx.shellType === 'hvap')) {
+    return {
+      dice: [d1, d2], roll, threshold, hit, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta,
+      penetrated: hit,
+      damageEffect: hit ? 'destroyed' : undefined,
+      damageEffects: hit ? [{ effect: 'destroyed' }] : [],
+      commanderKilledByHitDoubles: false,
+      commanderShieldBlocked: false,
+      directHitDestroy: true,
+      protagonistTarget,
+      statusChange: hit ? 'destroyed' : 'none',
     };
   }
 
@@ -1355,13 +1416,13 @@ export function resolveCrewCheck(target: Unit, rng: RNG): CrewDeathResult {
   const MAX_REROLL = 12;
   for (let i = 0; i < MAX_REROLL; i++) {
     const die = rng.d6();
-    const slot = mapCrewDie(die, !!target.hatchOpen);
+    const slot = die === 6 && (target.stats.crewMembers ?? [1, 2, 3, 4, 5]).includes(6) ? 6 : mapCrewDie(die, !!target.hatchOpen);
     if (slot === null) {
       // 舱盖关闭时的 6 = 虚惊，规则上不再重抛：直接返回
       return { die, slot: null, rerolled };
     }
     // 有具体乘员编号：若已死，按脚注重抛；否则接受结果
-    if (!crew || isCrewAlive(crew, slot)) {
+    if ((target.stats.crewMembers ?? [1, 2, 3, 4, 5]).includes(slot) && (!crew || isCrewAlive(crew, slot))) {
       return { die, slot, rerolled };
     }
     rerolled = true;
@@ -1384,6 +1445,7 @@ export function isCrewAlive(crew: ShermanCrew, slot: CrewSlot): boolean {
     case 3: return crew.loader;
     case 4: return crew.driver;
     case 5: return crew.coDriver;
+    case 6: return crew.secondLoader === true;
   }
 }
 
@@ -1395,13 +1457,14 @@ export function killCrewSlot(crew: ShermanCrew, slot: CrewSlot): void {
     case 3: crew.loader = false;    break;
     case 4: crew.driver = false;    break;
     case 5: crew.coDriver = false;  break;
+    case 6: crew.secondLoader = false; break;
   }
 }
 
 function firstAliveCrewSlot(target: Unit, priority: readonly CrewSlot[] | undefined): CrewSlot | null {
   if (!priority || priority.length === 0) return null;
   for (const slot of priority) {
-    if (!target.crew || isCrewAlive(target.crew, slot)) return slot;
+    if ((target.stats.crewMembers ?? [1, 2, 3, 4, 5]).includes(slot) && (!target.crew || isCrewAlive(target.crew, slot))) return slot;
   }
   return null;
 }
@@ -1593,25 +1656,31 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   const distance = hexDistance(attacker.pos, target.pos);
   if (distance === 0 || distance > MG_MAX_RANGE) return { ok: false, reason: 'attack.reason.mgRange' };
   const raySmokeHexes = firingRaySmokeHexes(ctx);
-  const flankDirection = ctx.expandedTurretDirections
+  const flankDirection = ctx.expandedTurretDirections && !attacker.turretDamaged
     ? diagonalGunnerRuleDirectionForVisibleHex(map, attacker, target.pos, ctx.weather, raySmokeHexes)
     : null;
-  const fireDir = flankDirection ?? attackFireDirection(ctx);
+  const fireDir = attacker.turretDamaged
+    ? fireDirectionTo(attacker.pos, target.pos)
+    : flankDirection ?? attackFireDirection(ctx);
   if (fireDir === null) return { ok: false, reason: 'attack.reason.notStraight' };
   if (isTankUnit(attacker)
     && attacker.stats.visionType === 'fixed'
     && attacker.facing !== fireDir) {
     return { ok: false, reason: 'attack.reason.mgDirection' };
   }
+  if (isTankUnit(attacker) && attacker.turretDamaged
+    && !selectTankMachineGun(attacker, fireDir, false)) {
+    return { ok: false, reason: 'attack.reason.mgDirection' };
+  }
   if (ctx.hardcoreTankMachineGuns && isTankUnit(attacker)) {
     const turretFacing = (attacker.turretFacing ?? attacker.facing) as FireDirection | null;
-    const hullMachineGunOperational = attacker.crew?.coDriver !== false;
+    const hullMachineGunOperational = crewRoleAlive(attacker, 'coDriver');
     if (!ctx.tankMachineGun
       || (ctx.tankMachineGun === 'hull'
         && (!hullMachineGunOperational || fireDir !== attacker.facing))
       || (ctx.tankMachineGun === 'coaxial'
-        && fireDir !== turretFacing
-        && (attacker.turretDamaged || !ctx.tankMachineGunWillTraverse))
+        && ((attacker.turretDamaged && isDiagonalFireDirection(turretFacing!))
+          || (fireDir !== turretFacing && (attacker.turretDamaged || !ctx.tankMachineGunWillTraverse))))
       || (ctx.tankMachineGun === 'both'
         && (!hullMachineGunOperational
           || attacker.turretDamaged

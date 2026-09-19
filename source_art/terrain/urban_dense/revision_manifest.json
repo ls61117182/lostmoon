@@ -1,0 +1,115 @@
+{
+  "generator": "built-in image_gen",
+  "date": "2026-09-18",
+  "runtimeSize": [
+    222,
+    256
+  ],
+  "note": "Existing rowhouses_l and office_l filenames retained for compatibility; new silhouettes are compact. Old untyped rubble files are legacy assets; use individual variant rubble mappings below.",
+  "images": [
+    {
+      "key": "row",
+      "file": "urban_dense_destructible_rowhouses_l_intact_v1.png",
+      "prompt": "Use case: precise-object-edit. Edit the reference into a replacement game terrain sprite. Keep the same hand-painted 2D strategy-game icon style, heavy near-black outlines, simple crisp roof details, strict orthographic overhead view (roof plans only, NO visible vertical walls), same scale and centered composition. Replace the sparse inverted L-shaped rowhouses with a dense compact cluster of 5-6 red-orange tiled rowhouse roofs arranged in staggered rows that collectively fill a POINTY-TOP hexagonal footprint, wide middle and tapered upper/lower ends, only narrow lanes between roofs, no large missing quadrant, no large courtyard. Buildings occupy about 80% of canvas width/height. No hex border or ground tile; genuine transparent alpha background. Square canvas. No text. This is the intact state.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-4a8ff955-5817-457d-a61e-d3611cffc2ca.png"
+    },
+    {
+      "key": "apartment",
+      "file": "urban_dense_indestructible_apartment_v1.png",
+      "prompt": "Use case: precise-object-edit. Replacement isolated 2D strategy game terrain sprite. Reference is style/scale input; redesign subject as specified. Match bold dark outlines, simplified hand-painted materials, readable at 222x256 pixels. STRICT 90-degree orthographic TOP DOWN, only roof plans, no visible wall facades, no isometric perspective. Genuine transparent background, no floor tile, no hex border, no text. Center entire intact building with comfortable margin, footprint should fit a pointy-top hexagonal grid and densely occupy its broad center. A solid urban apartment block with warm BURGUNDY RED and ochre tile roof masses, cream plaster edges, four simple joined residential wings around a TINY lightwell. Ordinary apartment chimneys, NO towers, NO stone corner turrets, NO church or palace details. Compact almost hexagonal footprint with broad center and chamfered corners.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-2b41c773-80dd-453d-a24e-0bf726380ed6.png"
+    },
+    {
+      "key": "factory",
+      "file": "urban_dense_indestructible_factory_v1.png",
+      "prompt": "Use case: precise-object-edit. Replacement isolated 2D strategy game terrain sprite. Reference is style/scale input; redesign subject as specified. Match bold dark outlines, simplified hand-painted materials, readable at 222x256 pixels. STRICT 90-degree orthographic TOP DOWN, only roof plans, no visible wall facades, no isometric perspective. Genuine transparent background, no floor tile, no hex border, no text. Center entire intact building with comfortable margin, footprint should fit a pointy-top hexagonal grid and densely occupy its broad center. A heavy industrial factory, muted SAGE GREEN corrugated metal sawtooth roof bays, brick red utility annex, two dark circular industrial vents, a short squat smokestack viewed straight down. Asymmetric functional silhouette, broad central shed with shorter end annexes to fill a hexagonal footprint. NO tiled church roofs, NO towers, NO decorative stone pillars.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-edfdd122-ccd0-4a40-bb35-d7dfae0ecd4e.png"
+    },
+    {
+      "key": "office",
+      "file": "urban_dense_indestructible_office_l_v1.png",
+      "prompt": "Use case: precise-object-edit. Replacement isolated 2D strategy game terrain sprite. Reference is style/scale input; redesign subject as specified. Match bold dark outlines, simplified hand-painted materials, readable at 222x256 pixels. STRICT 90-degree orthographic TOP DOWN, only roof plans, no visible wall facades, no isometric perspective. Genuine transparent background, no floor tile, no hex border, no text. Center entire intact building with comfortable margin, footprint should fit a pointy-top hexagonal grid and densely occupy its broad center. A substantial secular municipal OFFICE block, predominantly SAND BEIGE and cream FLAT concrete roofs, ochre parapets, one rectangular blue-gray skylight and small utility roof boxes. Replace L footprint with compact broad chamfered block filling a hexagonal cell. NO pointed roof, NO towers, NO church, NO repeating ornamental stone pillars.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-4b4dfa7f-ed78-4ba4-aa0a-a9a6d81540ce.png"
+    },
+    {
+      "key": "warehouse",
+      "file": "urban_dense_indestructible_warehouse_v1.png",
+      "prompt": "Use case: precise-object-edit. Replacement isolated 2D strategy game terrain sprite. Reference is style/scale input; redesign subject as specified. Match bold dark outlines, simplified hand-painted materials, readable at 222x256 pixels. STRICT 90-degree orthographic TOP DOWN, only roof plans, no visible wall facades, no isometric perspective. Genuine transparent background, no floor tile, no hex border, no text. Center entire intact building with comfortable margin, footprint should fit a pointy-top hexagonal grid and densely occupy its broad center. A logistics WAREHOUSE compound with two wide barrel-vault corrugated roof sheds in warm DARK BROWN and rust ochre, pale narrow roof skylights, brick loading annexes hugging the outer sides. Compact broad filled footprint for a hex cell. Distinct simple utilitarian industrial silhouette. NO blue slate roofs, NO towers or corner pillars, NO church details.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-406ab234-5c1a-4c02-8014-d393e1197615.png"
+    },
+    {
+      "key": "row_damaged",
+      "file": "urban_dense_destructible_rowhouses_l_damaged_v1.png",
+      "prompt": "Use case: precise-object-edit. Edit the provided intact building into its corresponding destruction state for a 2D strategy game. LOCK orthographic 90-degree overhead camera, building orientation, exact placement and framing, footprint and scale of reference. Match its bold dark outline and simplified handpainted style, readable as a 222x256 game sprite. Genuine transparent alpha background, no ground tile or hex border, no smoke, no fire, no text. PARTIALLY DAMAGED state: keep at least 60 percent of original roof surfaces intact, two irregular shell holes exposing timber, scorched tiles and small localized debris. Preserve every building position and the exact overall silhouette.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-302e0723-3372-4e73-a074-8e1960f4fd1c.png"
+    },
+    {
+      "key": "row_rubble",
+      "file": "urban_dense_destructible_rowhouses_l_rubble_v1.png",
+      "prompt": "Use case: precise-object-edit. Edit the provided intact building into its corresponding destruction state for a 2D strategy game. LOCK orthographic 90-degree overhead camera, building orientation, exact placement and framing, footprint and scale of reference. Match its bold dark outline and simplified handpainted style, readable as a 222x256 game sprite. Genuine transparent alpha background, no ground tile or hex border, no smoke, no fire, no text. FULLY DESTROYED rubble state: collapse all seven roof masses into low foundation outlines, red-orange tile heaps and dark timber beams, preserving their exact arrangement and tight alleys. Roof islands and house-shaped foundation cells should remain discernible. No intact roofs, no tall standing buildings.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-35a0bd75-7362-4a5a-94ff-8c180d11ca65.png"
+    },
+    {
+      "key": "courtyard_rubble",
+      "file": "urban_dense_destructible_courtyard_rubble_v1.png",
+      "prompt": "Use case: precise-object-edit. Edit the provided intact building into its corresponding destruction state for a 2D strategy game. LOCK orthographic 90-degree overhead camera, building orientation, exact placement and framing, footprint and scale of reference. Match its bold dark outline and simplified handpainted style, readable as a 222x256 game sprite. Genuine transparent alpha background, no ground tile or hex border, no smoke, no fire, no text. FULLY DESTROYED rubble state: preserve the exact small central courtyard and surrounding crooked ring of house footprints, collapse roofs into red tile rubble around that still recognizable open courtyard, broken perimeter walls and timber beams. Do not fill the courtyard with a generic pile. No intact roofs or tall buildings.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-42576446-0b2f-4da2-8e78-b5ad4a3ba20d.png"
+    },
+    {
+      "key": "workshop_rubble",
+      "file": "urban_dense_destructible_workshop_rubble_v1.png",
+      "prompt": "Use case: precise-object-edit. Edit the provided intact building into its corresponding destruction state for a 2D strategy game. LOCK orthographic 90-degree overhead camera, building orientation, exact placement and framing, footprint and scale of reference. Match its bold dark outline and simplified handpainted style, readable as a 222x256 game sprite. Genuine transparent alpha background, no ground tile or hex border, no smoke, no fire, no text. FULLY DESTROYED rubble state: preserve the three original workshop footprints and positions; crushed RUST RED and gray corrugated sheet metal, broken long skylight frames, surviving round vent wreckage, industrial roof trusses and small brick debris, exact recognizable offset shed foundations. No residential tile heaps, no intact roofs or tall buildings.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-bbd31138-9441-4b11-b1a4-f4815b258382.png"
+    },
+    {
+      "key": "block_rubble",
+      "file": "urban_dense_destructible_block_rubble_v1.png",
+      "prompt": "Use case: precise-object-edit. Edit the provided intact building into its corresponding destruction state for a 2D strategy game. LOCK orthographic 90-degree overhead camera, building orientation, exact placement and framing, footprint and scale of reference. Match its bold dark outline and simplified handpainted style, readable as a 222x256 game sprite. Genuine transparent alpha background, no ground tile or hex border, no smoke, no fire, no text. FULLY DESTROYED rubble state: preserve exact original layout of four tightly packed residential roofs, their individual four room foundations and narrow central junction; collapsed orange roof tiles, broken wooden roof beams, partially standing low brick wall outlines in those exact four locations. No intact roofs, no generic circular debris mound.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-a4f9ac97-c510-490c-9868-b920aaeb1a2e.png"
+    }
+  ],
+  "variants": [
+    {
+      "type": "rowhouses_l",
+      "intact": "urban_dense_destructible_rowhouses_l_intact_v1.png",
+      "damaged": "urban_dense_destructible_rowhouses_l_damaged_v1.png",
+      "rubble": "urban_dense_destructible_rowhouses_l_rubble_v1.png"
+    },
+    {
+      "type": "courtyard",
+      "intact": "urban_dense_destructible_courtyard_intact_v1.png",
+      "damaged": "urban_dense_destructible_courtyard_damaged_v1.png",
+      "rubble": "urban_dense_destructible_courtyard_rubble_v1.png"
+    },
+    {
+      "type": "workshop",
+      "intact": "urban_dense_destructible_workshop_intact_v1.png",
+      "damaged": "urban_dense_destructible_workshop_damaged_v1.png",
+      "rubble": "urban_dense_destructible_workshop_rubble_v1.png"
+    },
+    {
+      "type": "block",
+      "intact": "urban_dense_destructible_intact_topdown_v2.png",
+      "damaged": "urban_dense_destructible_damaged_topdown_v2.png",
+      "rubble": "urban_dense_destructible_block_rubble_v1.png"
+    }
+  ],
+  "preview": [
+    "urban_dense_indestructible_apartment_v1.png",
+    "urban_dense_indestructible_factory_v1.png",
+    "urban_dense_indestructible_office_l_v1.png",
+    "urban_dense_indestructible_warehouse_v1.png",
+    "urban_dense_destructible_rowhouses_l_intact_v1.png",
+    "urban_dense_destructible_courtyard_intact_v1.png",
+    "urban_dense_destructible_workshop_intact_v1.png",
+    "urban_dense_destructible_intact_topdown_v2.png",
+    "urban_dense_destructible_rowhouses_l_damaged_v1.png",
+    "urban_dense_destructible_courtyard_damaged_v1.png",
+    "urban_dense_destructible_workshop_damaged_v1.png",
+    "urban_dense_destructible_damaged_topdown_v2.png",
+    "urban_dense_destructible_rowhouses_l_rubble_v1.png",
+    "urban_dense_destructible_courtyard_rubble_v1.png",
+    "urban_dense_destructible_workshop_rubble_v1.png",
+    "urban_dense_destructible_block_rubble_v1.png"
+  ]
+}

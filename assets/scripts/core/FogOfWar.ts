@@ -3,6 +3,7 @@ import { CAMPAIGN_UPGRADE_BY_ID } from './CampaignUpgradeDB';
 import { getGameModeConfig, GameMode } from './GameMode';
 import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isSameSide, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
+import { turretTurnDistance } from './TurretTraverse';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
@@ -97,6 +98,23 @@ export function computeUnitVisibleHexes(
     ? HEAVY_ARTILLERY_VISION_RANGE
     : currentVisionRange(unit, weather));
 
+  // Use the same halfway rays and flank paths as tank turrets, limited by the fixed body.
+  // regardless of where its barrel was aimed during the previous attack.
+  if (heavyArtillery) {
+    if (unit.facing === null) return visible;
+    for (const tile of map.all()) {
+      if (hexDistance(unit.pos, tile.pos) > commanderVisionRange) continue;
+      const flank = diagonalMainGunDirectionForHex(map, unit, tile.pos, weather, smokeHexes);
+      const direction = flank ?? fireDirectionTo(unit.pos, tile.pos);
+      if (direction === null || turretTurnDistance(unit.facing, direction) > 1) continue;
+      const visiblePath = flank !== null || (isDiagonalFireDirection(direction)
+        ? map.hasDiagonalLineOfSight(unit.pos, tile.pos, direction, smokeHexes)
+        : map.hasLineOfSight(unit.pos, tile.pos, smokeHexes));
+      if (visiblePath) add(tile.pos);
+    }
+    return visible;
+  }
+
   if (openHatch) {
     for (const tile of map.all()) {
       if (hexDistance(unit.pos, tile.pos) > commanderVisionRange) continue;
@@ -164,7 +182,8 @@ export function diagonalMainGunDirectionForHex(
   weather?: WeatherType,
   smokeHexes?: ReadonlySet<string>,
 ): FireDirection | null {
-  if ((!isTankUnit(unit) && !isControlledATGun(unit)) || unit.stats.visionType !== 'turreted') return null;
+  if (!isHeavyArtilleryUnit(unit)
+    && ((!isTankUnit(unit) && !isControlledATGun(unit)) || unit.stats.visionType !== 'turreted')) return null;
   const direction = diagonalFlankFireDirectionTo(unit.pos, target);
   if (direction === null) return null;
   return diagonalGunnerClickPreference(map, unit, direction, target, smokeHexes, hexDistance(unit.pos, target)) !== null

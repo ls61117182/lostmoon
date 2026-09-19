@@ -97,7 +97,9 @@ assert.strictEqual(selectTankMachineGun({ ...attacker, turretDamaged: true }, 1,
 assert.deepStrictEqual(selectTankMachineGun({ ...attacker, turretDamaged: true }, 3, false), {
   weapon: 'coaxial',
   rotateTurret: false,
-}, 'a damaged turret retains coaxial fire in its existing direction');
+}, 'a damaged turret retains coaxial fire in its existing 60-degree direction');
+assert.strictEqual(selectTankMachineGun({ ...attacker, turretDamaged: true, turretFacing: 6 }, 6, false), null,
+  'a damaged turret at a halfway angle cannot fire its coaxial MG');
 assert.deepStrictEqual(selectTankMachineGun({ ...attacker, turretDamaged: true, turretFacing: 0 }, 0, true), {
   weapon: 'hull',
   rotateTurret: false,

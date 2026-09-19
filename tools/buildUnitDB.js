@@ -18,7 +18,7 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
 
-const NUM_FIELDS = ['size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'highExplosivePower', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
+const NUM_FIELDS = ['firepower', 'size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'highExplosivePower', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'commanderSpritePath', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
@@ -26,8 +26,8 @@ const ACTION_TABLE_FIELD = 'action_table';
 const CREW_MEMBER_FIELD = 'crewMembers';
 const FACTIONS = ['usa', 'soviet', 'german', 'japanese'];
 const VISION_TYPES = ['turreted', 'fixed', 'infantry'];
-const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, 'mobility', ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'notes'];
-const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'pak38', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
+const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, 'mobility', ...BOOL_FIELDS, ...STRING_FIELDS, ...BONUS_FIELDS, ACTION_TABLE_FIELD, CREW_MEMBER_FIELD, 'crewRoleAssignments', 'shootingPortHitThreshold', 'notes'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'pak38', 'flak88', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
 const TANK_KINDS = new Set(['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'type95', 'type97', 'type4']);
 
 function readCsvSmart(filePath) {
@@ -164,8 +164,8 @@ function parseCrewMembers(rec) {
   const seen = new Set();
   for (const member of members) {
     const n = Number(member);
-    if (!Number.isInteger(n) || n < 1 || n > 5) {
-      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${CREW_MEMBER_FIELD}="${raw}" must contain crew slots 1..5 separated by |`);
+    if (!Number.isInteger(n) || n < 1 || n > 6) {
+      throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${CREW_MEMBER_FIELD}="${raw}" must contain crew slots 1..6 separated by |`);
     }
     if (seen.has(n)) {
       throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: ${CREW_MEMBER_FIELD}="${raw}" contains duplicate crew slot ${n}`);
@@ -269,6 +269,7 @@ function build() {
 
   for (const rec of records) {
     for (const f of NUM_FIELDS) intOrThrow(rec, f);
+    if (!Number.isInteger(Number(rec.firepower)) || Number(rec.firepower) < 0) throw new Error("firepower must be a non-negative integer");
     if (TANK_KINDS.has(rec.unitKind)) intOrThrow(rec, 'mobility');
     for (const f of BONUS_FIELDS) intOrThrow(rec, f);
     const turretTraverseSpeed = intOrThrow(rec, 'turretTraverseSpeed');
@@ -295,7 +296,7 @@ function build() {
     lines.push(`  ${k}: { // ${name}${note}`);
     lines.push(`    faction: ${jsString(r.faction)},`);
     lines.push(
-      `    size: ${r.size}, ` +
+      `    firepower: ${r.firepower}, size: ${r.size}, ` +
       `armorFront: ${r.armorFront}, ` +
       `armorFrontSide: ${r.armorFrontSide}, ` +
       `armorRearSide: ${r.armorRearSide}, ` +
@@ -311,6 +312,11 @@ function build() {
       `gunnerVisionRange: ${optionalInt(r, 'gunnerVisionRange', 4)}, ` +
       `interiorVisionRange: ${optionalInt(r, 'interiorVisionRange', 1)},`
     );
+    if (String(r.shootingPortHitThreshold ?? '').trim()) {
+      const threshold = optionalInt(r, 'shootingPortHitThreshold', 10);
+      if (threshold < 1) throw new Error('shootingPortHitThreshold must be positive');
+      lines.push(`    shootingPortHitThreshold: ${threshold},`);
+    }
     for (const f of BOOL_FIELDS) {
       lines.push(`    ${f}: ${boolOrThrow(r, f)},`);
     }
@@ -325,6 +331,14 @@ function build() {
       lines.push(`    actionTable: { attack: ${jsString(actionTable.attack)}, move: ${jsString(actionTable.move)}, misc: ${jsString(actionTable.misc)} },`);
     }
     lines.push(`    crewMembers: [${parseCrewMembers(r).join(', ')}],`);
+    const roles = {};
+    for (const entry of String(r.crewRoleAssignments || '').split(';').filter(Boolean)) {
+      const [role, ids] = entry.split('=');
+      if (!['commander', 'gunner', 'loader', 'driver', 'coDriver'].includes(role) || !ids) throw new Error('Invalid crew role assignment: ' + entry);
+      roles[role] = ids.split('|').map(Number);
+      if (!roles[role].every(id => parseCrewMembers(r).includes(id))) throw new Error('Crew duty refers to absent member: ' + entry);
+    }
+    if (Object.keys(roles).length) lines.push('    crewRoleAssignments: ' + JSON.stringify(roles) + ',');
     lines.push('  },');
   }
   lines.push('};');

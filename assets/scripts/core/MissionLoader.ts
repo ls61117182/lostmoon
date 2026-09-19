@@ -8,6 +8,7 @@
 
 import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
 import {
+  createTankCrew,
   Axial,
   BattleSideId,
   DEFAULT_VISION_RANGE,
@@ -33,6 +34,7 @@ import {
 import { getUnitStats } from './UnitDB';
 import { RNG } from './Dice';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
+import { createUrbanVariantAllocator } from './UrbanTerrain';
 
 /** TileDef 简写（不含已废弃的整格 b）→ TerrainType */
 const TERRAIN_MAP = {
@@ -47,6 +49,10 @@ const TERRAIN_MAP = {
   H: 'rocky',
   dw: 'deep_water',
   a: 'airstrip',
+  u: 'urban_ground',
+  ur: 'urban_road',
+  ui: 'urban_indestructible',
+  ud: 'urban_destructible',
 } as const;
 
 let currentMissionTheater: MissionData['theater'] = 'europe';
@@ -175,7 +181,8 @@ function normalizeStartEids(missionId: string, raw: UnitPlacement['startEids'], 
     }
     seen.add(eid);
   }
-  return [...seen].sort((a, b) => a - b);
+  // Cocos release builds assume array spread operands are arrays, not Sets.
+  return Array.from(seen).sort((a, b) => a - b);
 }
 
 function normalizeStartRids(missionId: string, raw: UnitPlacement['startRids'], ctxLabel: string): number[] | null {
@@ -193,7 +200,7 @@ function normalizeStartRids(missionId: string, raw: UnitPlacement['startRids'], 
     }
     seen.add(rid);
   }
-  return [...seen].sort((a, b) => a - b);
+  return Array.from(seen).sort((a, b) => a - b);
 }
 
 function pickRestrictedNumberedSlot(
@@ -238,6 +245,7 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
   // 1. 构建 HexMap
   const map = new HexMap(data.cols, data.rows);
+  const urbanVariants = createUrbanVariantAllocator(data.id);
   for (let row = 0; row < data.rows; row++) {
     for (let col = 0; col < data.cols; col++) {
       const def: TileDef | null | undefined = data.tiles[row]?.[col];
@@ -269,6 +277,16 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         ...(facing !== undefined ? { enemyStartFacing: facing } : {}),
         ...(bridgeEnds ? { bridgeEnds } : {}),
       };
+      if (terrain === 'urban_ground') tile.urbanKind = 'ground';
+      else if (terrain === 'urban_road') tile.urbanKind = 'road';
+      else if (terrain === 'urban_indestructible') {
+        tile.urbanKind = 'indestructible';
+        tile.urbanVariant = urbanVariants.nextIndestructible();
+      } else if (terrain === 'urban_destructible') {
+        tile.urbanKind = 'destructible';
+        tile.urbanVariant = urbanVariants.nextDestructible();
+        tile.urbanStructure = 2;
+      }
       map.set(tile);
     }
   }
@@ -458,7 +476,7 @@ function validateTruckPath(data: MissionData, map: HexMap) {
     const isRoad = t.terrain === 'road';
     const isBridge = tileHasBridge(t);
     if (!isRoad && !isBridge) {
-      throw new Error(`任务 ${data.id}：truckPath[${i}] 非公路或桥梁格（须 t="r"，或 t="w" + br=[a,b]）`);
+      throw new Error(`任务 ${data.id}：truckPath[${i}] 非公路或桥梁格（须 t="r" / t="ur"，或 t="w" + br=[a,b]）`);
     }
     // exitDir 仅末格生效：中间格写了直接抛错（避免误以为可以中途换出口）
     if (o.exitDir !== undefined) {
@@ -687,7 +705,7 @@ function parseRoadFlags(
   raw: TileDef['rd'],
 ): Tile['roads'] {
   if (raw === undefined || raw === null) return undefined;
-  if (terrain !== 'road' && terrain !== 'airstrip' && !hasBridge) {
+  if (terrain !== 'road' && terrain !== 'urban_road' && terrain !== 'airstrip' && !hasBridge) {
     throw new Error(
       `任务 ${missionId}：tile (${pos.col},${pos.row}) 配置了道路方向 rd='${raw}'，但基底地形非公路（t='${terrain}'）。`
       + `公路视觉字段仅允许在 t='r' 或叠桥水域上使用`,
@@ -768,26 +786,8 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: Un
       : u.facing) as Unit['turretFacing'];
   }
   if (isTankKind(p.kind)) {
-    u.crew = {
-      commander: true,
-      loader: true,
-      gunner: true,
-      driver: true,
-      coDriver: true,
-    };
-    if (p.crew) {
-      const slots: (keyof ShermanCrew)[] = [
-        'commander',
-        'loader',
-        'gunner',
-        'driver',
-        'coDriver',
-      ];
-      for (const slot of slots) {
-        const v = p.crew[slot];
-        if (v === false || v === true) u.crew![slot] = v;
-      }
-    }
+    u.crew = createTankCrew(stats, p.crew);
+
     // Preserve explicit mission placement values, while keeping the player's
     // default open hatch across every game mode.
     u.hatchOpen = p.hatchOpen ?? role.controller === 'local_player';

@@ -34,3 +34,6 @@ asset_backups/
 tmp/
 outputs/
 output/
+.firecrawl/
+site-release/
+disk-audit-c.json

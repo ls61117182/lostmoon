@@ -99,8 +99,8 @@ assert.match(
 
 assert.match(
   source,
-  /const\s+turretCanRotate\s*=\s*this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| precisionGunSelection\)/,
-  'a damaged turret must not show the blue rotation mask for machine-gun selection',
+  /const\s+turretCanRotate\s*=\s*this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)/,
+  'a damaged turret must still show its legal machine-gun range',
 );
 
 assert.doesNotMatch(

@@ -1,0 +1,14 @@
+{
+  "surfaces": 63,
+  "baseTiles": 1,
+  "dimensions": [
+    222,
+    256
+  ],
+  "roadWidth": 61.44,
+  "turnCenterlineRadius": 48,
+  "verifiedMouths": 378,
+  "verifiedMouthWidthProfiles": 192,
+  "transparentCorners": true,
+  "demoConnections": "reciprocal"
+}

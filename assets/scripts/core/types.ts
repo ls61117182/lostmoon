@@ -40,7 +40,14 @@ export type TerrainType =
   | 'trees'
   | 'beach'
   | 'rocky'
-  | 'airstrip';
+  | 'airstrip'
+  | 'urban_ground'
+  | 'urban_road'
+  | 'urban_indestructible'
+  | 'urban_destructible'
+  | 'urban_rubble';
+
+export type UrbanTileKind = 'ground' | 'road' | 'indestructible' | 'destructible';
 
 export interface Tile {
   pos: Axial;
@@ -49,6 +56,12 @@ export interface Tile {
   displayOnly?: boolean;
   /** 建筑叠加：非独立地形；坦克可入；视线仅路径中间格阻挡；目标仍 +1 掩护 */
   hasBuilding?: boolean;
+  /** 城市格分类；建筑具体美术式样由关卡加载器从同类池中分配。 */
+  urbanKind?: UrbanTileKind;
+  /** 对应城市美术式样 id；可破坏建筑的 intact/damaged/rubble 共用此 id。 */
+  urbanVariant?: string;
+  /** 可破坏建筑结构值：2=完整、1=受损、0=废墟。 */
+  urbanStructure?: number;
   /** 沿 6 条边是否有树篱（按 Direction 索引） */
   hedges?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** Pacific breakwater edge flags; same axial 0..5 index as hedges. */
@@ -98,6 +111,11 @@ export function tileForbidsSmokeOrConcealment(tile: Tile | undefined | null): bo
 export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType {
   if (!tile) return 'field';
   if (tileHasBridge(tile)) return 'road';
+  if (tile.terrain === 'urban_road') return 'road';
+  if (tile.terrain === 'urban_ground') return 'field';
+  if (tile.terrain === 'urban_indestructible') return 'forest';
+  if (tile.terrain === 'urban_destructible') return 'forest';
+  if (tile.terrain === 'urban_rubble') return 'mud';
   return tile.terrain;
 }
 
@@ -150,6 +168,7 @@ export type UnitKind =
   | 'type4'
   | 'at_gun'
   | 'pak38'
+  | 'flak88'
   | 'japanese_infantry'
   | 'american_infantry'
   | 'heavy_artillery'
@@ -209,10 +228,16 @@ export function infantryKindForFaction(faction: Faction): ATGunCrewKind {
 const ANTI_TANK_GUN_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
   'at_gun',
   'pak38',
+  'flak88',
 ]);
 
 export function isAntiTankGunKind(kind: UnitKind): boolean {
   return ANTI_TANK_GUN_KINDS.has(kind);
+}
+
+/** Permanently emplaced gun: movement and base rotation cannot be repaired/unlocked. */
+export function isImmobileGunUnit(u: Pick<Unit, 'kind'>): boolean {
+  return u.kind === 'flak88' || isHeavyArtilleryUnit(u);
 }
 
 export function isAntiTankGunUnit(u: Pick<Unit, 'kind'>): boolean {
@@ -276,7 +301,7 @@ export interface UnitStats {
   gunMantletArmor?: number;
   penetration: number;     // 穿甲值
   highExplosivePower: number; // 高爆威力；仅硬核模式 HE 结算使用
-  /** 重炮碉堡射击孔精确命中的 size 替代值；未配置时按 6。 */
+  /** 重炮碉堡正面±30°射击孔精确命中的 size 替代值；未配置时按 10。 */
   shootingPortHitThreshold?: number;
   effectiveRange: number;  // 有效射程；超出后每格使本次攻击穿甲值 -1
   /** Maximum turret traverse per action, in 30-degree steps (0..6). */
@@ -298,7 +323,9 @@ export interface UnitStats {
   /** 关舱时的车内环形观察距离；默认 1 格。 */
   interiorVisionRange?: number;
   hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
-  crewMembers: CrewSlot[];   // 单位乘员槽位：1=车长, 2=炮手, 3=装填手, 4=驾驶员, 5=副驾驶
+  crewMembers: CrewSlot[];   // 实际乘员：1车长 2炮手 3装填手 4驾驶员 5机电员 6第二装填手
+  firepower?: number;       // 基础火力值（非负整数）；旧配置缺省6
+  crewRoleAssignments?: Partial<Record<keyof ShermanCrew, CrewSlot[]>>;
 }
 
 /** 非玩家单位等级；玩家控制坦克不使用整车等级。 */
@@ -307,13 +334,14 @@ export type UnitLevel = 'recruit' | 'veteran' | 'elite';
 /** 硬核模式主炮弹种。经典模式继续只使用 loaded。 */
 export type ShellType = 'ap' | 'he' | 'hvap' | 'smoke';
 
-/** 玩家坦克五名乘员的独立等级。非玩家坦克通过单位等级即时继承，不单独配置。 */
+/** 玩家坦克实际乘员的独立等级。非玩家坦克通过单位等级即时继承，不单独配置。 */
 export interface CrewLevels {
   commander: UnitLevel;
   loader: UnitLevel;
   gunner: UnitLevel;
   driver: UnitLevel;
   coDriver: UnitLevel;
+  secondLoader?: UnitLevel;
 }
 
 /** 可配置在任一乘员槽位上的技能；只有该乘员存活时技能才生效。 */
@@ -384,7 +412,7 @@ export interface Unit {
   /** 当前车内环形观察范围；只受车内/车长观察装备修改。 */
   interiorVisionRange?: number;
   radioDamaged?: boolean;   // 无线电损坏；缺省 false 即完好
-  crew?: ShermanCrew;       // 坦克单位五乘员；非坦克无乘员
+  crew?: ShermanCrew;       // 坦克实际乘员；非坦克无乘员
   /** 当前加载实例已应用的硬核战役强化；用于防止刷新时重复叠加永久数值。 */
   campaignUpgradeIds?: string[];
   /** 被击穿后忽略“摧毁”伤害结果，但不重新查找其它结果。 */
@@ -442,7 +470,7 @@ export function isPlayerControlled(unit: Pick<Unit, 'controller' | 'id'>): boole
 
 // ---------- 谢尔曼乘员 ----------
 /** 1=车长, 2=炮手, 3=装填手, 4=驾驶员, 5=副驾驶 */
-export type CrewSlot = 1 | 2 | 3 | 4 | 5;
+export type CrewSlot = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface ShermanCrew {
   commander: boolean;   // 1
@@ -450,6 +478,31 @@ export interface ShermanCrew {
   gunner: boolean;      // 2
   driver: boolean;      // 4
   coDriver: boolean;    // 5
+  secondLoader?: boolean; // 6
+}
+
+export const CREW_SLOT_ROLES = ['commander', 'gunner', 'loader', 'driver', 'coDriver', 'secondLoader'] as const;
+
+/** Physical people are stored separately from the duties they can perform. */
+export function createTankCrew(stats: UnitStats, saved?: Partial<ShermanCrew>): ShermanCrew {
+  const crew: ShermanCrew = { commander: false, gunner: false, loader: false, driver: false, coDriver: false };
+  for (const slot of stats.crewMembers ?? [1, 2, 3, 4, 5] as CrewSlot[]) {
+    const role = CREW_SLOT_ROLES[slot - 1];
+    crew[role] = saved?.[role] ?? true;
+  }
+  return crew;
+}
+
+export function crewRoleAlive(unit: Unit, role: keyof ShermanCrew): boolean {
+  const owners = unit.stats.crewRoleAssignments?.[role];
+  if (owners) return owners.some(slot => unit.crew?.[CREW_SLOT_ROLES[slot - 1]] !== false);
+  const slot = CREW_SLOT_ROLES.indexOf(role) + 1;
+  return (unit.stats.crewMembers ?? [1, 2, 3, 4, 5]).includes(slot as CrewSlot) && unit.crew?.[role] !== false;
+}
+
+export function effectiveTankCrew(unit: Unit): ShermanCrew {
+  return { commander: crewRoleAlive(unit, 'commander'), gunner: crewRoleAlive(unit, 'gunner'),
+    loader: crewRoleAlive(unit, 'loader'), driver: crewRoleAlive(unit, 'driver'), coDriver: crewRoleAlive(unit, 'coDriver') };
 }
 
 /** A tank with no surviving crew remains on the map as an abandoned vehicle. */
@@ -459,7 +512,8 @@ export function hasLivingTankCrew(u: Pick<Unit, 'kind' | 'crew'>): boolean {
     || u.crew.loader
     || u.crew.gunner
     || u.crew.driver
-    || u.crew.coDriver;
+    || u.crew.coDriver
+    || u.crew.secondLoader === true;
 }
 
 export function isAbandonedTank(u: Pick<Unit, 'kind' | 'crew' | 'destroyed'>): boolean {
@@ -477,13 +531,7 @@ export function neutralizeUncrewedTank(u: Unit): boolean {
 
 export function restoreFullTankCrew(u: Unit): void {
   if (!isTankKind(u.kind)) return;
-  u.crew = {
-    commander: true,
-    loader: true,
-    gunner: true,
-    driver: true,
-    coDriver: true,
-  };
+  u.crew = createTankCrew(u.stats);
 }
 
 // ---------- 任务 ----------
@@ -643,7 +691,8 @@ export interface TileDef {
    * 基底地形简写：r=公路 f=田地 m=泥地 F=林地 w=水域。
    * 旧版 `b` 表示「整格为建筑」已废弃，见 MissionLoader 会转为 f+建筑。
    */
-  t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b' | 'c' | 'T' | 'B' | 'H' | 'dw' | 'a';
+  t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b' | 'c' | 'T' | 'B' | 'H' | 'dw' | 'a'
+    | 'u' | 'ur' | 'ui' | 'ud';
   /**
    * 建筑叠加在基底上：`1` 表示有建筑（坦克可进入；命中+1；视线仅路径「中间格」阻挡）。
    * 田/泥+建筑在任务表述上为「农场」，公路+建筑为「村庄」。

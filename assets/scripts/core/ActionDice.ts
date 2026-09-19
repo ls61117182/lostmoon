@@ -120,6 +120,8 @@ export interface ActionDicePoolOpts {
   /** 硬核模式使用独立骰池，并在移动阶段加入当前坦克机动属性。 */
   hardcore?: boolean;
   mobility?: number;
+  /** 基础火力6为基准；玩家通过骰数体现火力差异。 */
+  firepower?: number;
 }
 
 /** 硬核玩家攻击阶段不随地形变化的基础骰数。地形表中的 attack_* 仅表示火力值修正。 */
@@ -137,7 +139,7 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
   let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
 
   if (opts.hardcore && opts.subPhase === 'movement') n += opts.mobility ?? 0;
-  if (opts.hardcore && opts.subPhase === 'attack') n += HARDCORE_PLAYER_ATTACK_BASE_DICE;
+  if (opts.hardcore && opts.subPhase === 'attack') n += HARDCORE_PLAYER_ATTACK_BASE_DICE + (opts.firepower ?? 6) - 6;
   if (opts.hardcore && opts.subPhase === 'misc') n += HARDCORE_PLAYER_MISC_BASE_DICE;
 
   /** 舱盖加骰仅在车长存活时成立（车长阵亡后 `hatchOpen` 可能未及时清位） */

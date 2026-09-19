@@ -1,7 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
-const source = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
+const source = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8').replace(/\r\n/g, '\n');
 
 assert.match(
   source,
@@ -9,7 +9,7 @@ assert.match(
   'status title construction must tolerate the HUD being built before the mission loads',
 );
 
-const buildStatusPanel = source.match(/private buildStatusPanel\(\) \{[\s\S]*?\n  \}\n\n  private loadCrewStatusRankFrames/);
+const buildStatusPanel = source.match(/private buildStatusPanel\(\) \{[\s\S]*?\n  \}\n\n/);
 assert(buildStatusPanel, 'buildStatusPanel should remain discoverable');
 assert.match(buildStatusPanel[0], /this\.playerTankStatusTitle\(\)/);
 assert.doesNotMatch(buildStatusPanel[0], /this\.mission\.playerTank\.kind/,

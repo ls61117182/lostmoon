@@ -1,3 +1,4 @@
+import { crewRoleAlive } from "./types";
 /**
  * 德军坦克 AI —— 纯 TypeScript，不依赖 Cocos。
  *
@@ -19,6 +20,7 @@
  */
 
 import { RNG } from './Dice';
+import { PLAYER_HARDCORE_DICE_POOL } from './PlayerActionDB';
 import {
   AI_DICE_COUNT,
   AIActionEntry,
@@ -43,7 +45,7 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, battleSideIdOf, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isAttachedATGunCrew, isFootUnit, isHostile, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { Axial, battleSideIdOf, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isImmobileGunUnit, isAttachedATGunCrew, isFootUnit, isHostile, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
 import { commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
 
 // ---------- 行动分类 ----------
@@ -96,6 +98,12 @@ export function rollAIDice(rng: RNG, count: number): number[] {
 export interface EnemyAIDie {
   type: EnemyTankDieType;
   pip: number;
+  attackFirepower?: number;
+}
+
+function effectiveAIFirepower(unit: Unit, terrain: TerrainType): number {
+  return Math.max(0, Math.trunc((unit.stats.firepower ?? 6)
+    + PLAYER_HARDCORE_DICE_POOL.baseByPhaseTerrain.attack[terrain]));
 }
 
 export function hardcoreTankDiceTerrain(terrain: TerrainType): HardcoreTankDiceTerrain {
@@ -113,7 +121,7 @@ export function hardcoreTankDiceTerrain(terrain: TerrainType): HardcoreTankDiceT
 }
 
 function crewAlive(unit: Unit, slot: 'commander' | 'loader' | 'gunner' | 'driver' | 'coDriver'): boolean {
-  return unit.crew?.[slot] !== false;
+  return crewRoleAlive(unit, slot);
 }
 
 export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { attack: number; move: number; misc: number } {
@@ -129,7 +137,7 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
   const base = HARDCORE_TANK_AI_DICE_COUNT[key];
   const rank = nonPlayerTankDiceBonus(unit);
   return {
-    attack: Math.max(1, base.attack + rank.attack),
+    attack: Math.max(1, base.attack + rank.attack) + Math.max(0, Math.ceil(effectiveAIFirepower(unit, terrain) / 6) - 1),
     move: Math.max(1, (unit.stats.mobility ?? 0) + base.move + (crewAlive(unit, 'driver') ? 1 : 0) + rank.move),
     misc: Math.max(1, base.misc + (crewAlive(unit, 'commander') ? 1 : 0) + rank.misc),
   };
@@ -138,7 +146,13 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
 export function rollHardcoreTankAIDice(rng: RNG, unit: Unit, terrain: TerrainType): EnemyAIDie[] {
   const count = hardcoreTankAIDiceCount(unit, terrain);
   const out: EnemyAIDie[] = [];
-  for (let i = 0; i < count.attack; i++) out.push({ type: 'attack', pip: rng.d6() });
+  const firepower = effectiveAIFirepower(unit, terrain);
+  const extra = Math.max(0, Math.ceil(firepower / 6) - 1);
+  const baseCount = Math.max(1, count.attack - extra);
+  for (let i = 0; i < count.attack; i++) {
+    const attackFirepower = Math.min(6, Math.max(0, firepower - Math.max(0, i - baseCount + 1) * 6));
+    out.push({ type: 'attack', pip: rng.d6(), attackFirepower });
+  }
   for (let i = 0; i < count.move; i++) out.push({ type: 'move', pip: rng.d6() });
   for (let i = 0; i < count.misc; i++) out.push({ type: 'misc', pip: rng.d6() });
   return out;
@@ -151,11 +165,11 @@ export function actionFor(table: AIActionTable, col: AIColumn, pip: number): AIA
 }
 
 /**
- * 火力值负修正会从高点数开始令攻击骰失效：-1 无效 6，-2 无效 5~6。
- * 正修正与 0 均不改变原行动表含义。
+ * 单颗攻击骰的有效点数为1..6；超额火力由掷骰函数分配给额外骰。
+ * 玩家使用ActionDice中的骰数修正，不调用此函数。
  */
-export function hardcoreAttackDieIsInvalid(pip: number, firepowerModifier: number): boolean {
-  const penalty = Math.max(0, -Math.trunc(firepowerModifier));
+export function hardcoreAttackDieIsInvalid(pip: number, firepowerModifier: number, firepower = 6): boolean {
+  const penalty = 6 - Math.min(6, Math.max(0, Math.trunc(firepower + firepowerModifier)));
   return penalty > 0 && pip > Math.max(0, 6 - penalty);
 }
 
@@ -164,8 +178,9 @@ export function actionForHardcoreTankDie(
   type: EnemyTankDieType,
   pip: number,
   firepowerModifier = 0,
+  attackFirepower?: number,
 ): AIActionEntry {
-  if (type === 'attack' && hardcoreAttackDieIsInvalid(pip, firepowerModifier)) {
+  if (type === 'attack' && hardcoreAttackDieIsInvalid(pip, attackFirepower === undefined ? firepowerModifier : 0, attackFirepower ?? unit.stats.firepower ?? 6)) {
     return { primary: 'none' };
   }
   const tableId = (unit.stats.actionTable?.[type] ?? DEFAULT_HARDCORE_TANK_ACTION_TABLE[type]) as keyof typeof HARDCORE_TANK_AI_TABLE;
@@ -416,6 +431,7 @@ export function canExecuteAction(
   smokeHexes?: ReadonlySet<string>,
 ): boolean {
   if (enemy.destroyed) return false;
+  if (isImmobileGunUnit(enemy) && ['turn', 'advance', 'reverse', 'advance_to_building', 'infantry_move'].includes(action)) return false;
   const currentTile = map.get(enemy.pos);
   switch (action) {
     case 'none':   return false;

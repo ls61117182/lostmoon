@@ -7,7 +7,7 @@ const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleS
 const lang = fs.readFileSync(path.join(root, 'data/lang.csv'), 'utf8');
 
 const inspectText = battleScene.match(
-  /private buildTileInspectTerrainText\(tile: Tile\): string \{[\s\S]*?\n  \}\n\n  \/\*\* 左栏多行文本/,
+  /private buildTileInspectTerrainText\(tile: Tile\): string \{[\s\S]*?\r?\n  \}\r?\n\r?\n  \/\*\* 左栏多行文本/,
 );
 assert.ok(inspectText, 'tile-inspection text builder should exist');
 assert.match(

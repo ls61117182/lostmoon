@@ -187,11 +187,11 @@ const bunkerHEContext = {
 };
 report = rollHighExplosiveAttack(bunkerHEContext, rng([3, 3]));
 assert.strictEqual(report.automaticHit, true);
-assert.strictEqual(report.fireThreshold, 6);
-assert.strictEqual(report.destroyThreshold, 10);
-assert.strictEqual(report.outcome, 'fire');
+assert.strictEqual(report.fireThreshold, 10);
+assert.strictEqual(report.destroyThreshold, 14);
+assert.strictEqual(report.outcome, 'none');
 report = rollHighExplosiveAttack(bunkerHEContext, rng([5, 5]));
-assert.strictEqual(report.outcome, 'destroyed');
+assert.strictEqual(report.outcome, 'fire');
 
 const burningArtillery = { ...artillery, id: 'burning-artillery', fireLevel: 1 };
 const burningBunkerHEContext = {
@@ -199,7 +199,7 @@ const burningBunkerHEContext = {
   target: burningArtillery,
   units: [sherman, burningArtillery],
 };
-report = rollHighExplosiveAttack(burningBunkerHEContext, rng([3, 3]));
+report = rollHighExplosiveAttack(burningBunkerHEContext, rng([5, 5]));
 assert.strictEqual(report.outcome, 'destroyed', 'a second heavy-artillery fire result must destroy it');
 assert.strictEqual(report.destroyedByRepeatFire, true);
 applyHighExplosiveAttack(burningArtillery, report);
@@ -207,7 +207,7 @@ assert.strictEqual(burningArtillery.destroyed, true);
 
 report = rollHighExplosiveAttack({
   ...bunkerHEContext, precisionFire: true, hitThresholdModifier: -2,
-}, rng([3, 3]));
+}, rng([5, 5]));
 assert.strictEqual(report.shootingPortHit, true);
 assert.strictEqual(report.outcome, 'destroyed');
 assert.strictEqual(report.effectDice, undefined, 'a shooting-port hit destroys before the HE power check');
@@ -217,7 +217,7 @@ report = rollHighExplosiveAttack({
 }, rng([1, 1, 5, 5]));
 assert.strictEqual(report.shootingPortHit, false);
 assert.strictEqual(report.hit, true, 'a shooting-port miss must still hit the bunker body');
-assert.strictEqual(report.outcome, 'destroyed', 'the failed port attempt must continue into the HE power check');
+assert.strictEqual(report.outcome, 'fire', 'the failed port attempt must continue into the HE power check');
 
 let apReport = rollAttack({
   attacker: sherman, target: artillery, map,
@@ -244,7 +244,7 @@ apReport = rollAttack({
   hardcoreHeavyArtilleryRules: true,
   precisionFire: true,
   hitThresholdModifier: -2,
-}, rng([3, 3]));
+}, rng([5, 5]));
 assert.strictEqual(apReport.shootingPortHit, true);
 assert.strictEqual(apReport.damageEffect, 'destroyed');
 assert.strictEqual(apReport.penDice, undefined);

@@ -376,7 +376,8 @@ export class HexMap {
   canTankEnter(p: Axial, faction?: Faction): boolean {
     if (!this.canUnitEnter(p, faction)) return false;
     const t = this.get(p)!;
-    if (t.terrain === 'forest' || t.terrain === 'rocky') return false;
+    if (t.terrain === 'forest' || t.terrain === 'rocky'
+      || t.terrain === 'urban_indestructible' || t.terrain === 'urban_destructible') return false;
     return true;
   }
 
@@ -425,7 +426,8 @@ export class HexMap {
    * 建筑在起止格不调用本方法故不挡视线（含：建筑格内的单位可作为视线起点向外射击）。
    */
   lineOfSightBlockedByTile(t: Tile): boolean {
-    if (t.terrain === 'forest' || t.terrain === 'rocky') return true;
+    if (t.terrain === 'forest' || t.terrain === 'rocky'
+      || t.terrain === 'urban_indestructible' || t.terrain === 'urban_destructible') return true;
     if (t.hasBuilding) return true;
     return false;
   }

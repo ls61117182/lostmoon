@@ -1,7 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 
-const battleScene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
+const battleScene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8').replace(/\r\n/g, '\n');
 const eventApply = fs.readFileSync('assets/scripts/core/TurnEndEventApply.ts', 'utf8');
 const gameAudio = fs.readFileSync('assets/scripts/audio/GameAudio.ts', 'utf8');
 
@@ -16,8 +16,8 @@ assert.match(
 );
 assert.match(
   eventApply,
-  /case 'sniper':[\s\S]*?sniperAttackerId:\s*willKill\s*\?\s*sniper\?\.id\s*:\s*undefined[\s\S]*?sniperWillKill:\s*willKill/,
-  'only a sniper event that can kill should expose its attacker to the presentation layer',
+  /case 'sniper':[\s\S]*?sniperAttackerId:\s*threatened\s*\?\s*sniper\?\.id\s*:\s*undefined[\s\S]*?sniperWillKill:\s*threatened/,
+  'a threatening sniper exposes its attacker even when the commander is shielded',
 );
 
 const spawn = battleScene.match(/private\s+spawnSniperBulletTrace\s*\([\s\S]*?\n  }\n\n/);
@@ -36,7 +36,7 @@ assert.match(
   /private\s+playTurnEndSniperShot[\s\S]*?spawnSniperBulletTrace\(attacker, target, onImpact\)[\s\S]*?playSniperFire\(\)/,
   'the single bullet and supplied sound should start together',
 );
-assert.match(battleScene, /ui\.root\.active\s*=\s*false[\s\S]*?ui\.stage\s*=\s*'pause_for_sniper'/);
+assert.match(battleScene, /this\.startTurnEndEventPresentation\(this\.turnEndEventUI\)/);
 assert.match(
   battleScene,
   /if\s*\(!trace\.impacted\s*&&\s*p\s*>=\s*0\.68\)[\s\S]*?trace\.onImpact\(\)/,
@@ -44,7 +44,7 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /ui\.apply\(\);[\s\S]*?ui\.effectApplied\s*=\s*true;[\s\S]*?refreshStatusPanel\(\)[\s\S]*?redraw\(\)/,
+  /playTurnEndSniperShot\(attacker, this\.mission\.sherman,[\s\S]*?this\.applyTurnEndEventEffects\(ui, finish\)/,
   'sniper impact should apply the death and redraw the commander presentation immediately',
 );
 assert.match(

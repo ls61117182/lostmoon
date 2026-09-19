@@ -32,6 +32,11 @@ export function terrainMoveCost(t: TerrainType): number {
     case 'beach':    return 1;
     case 'rocky':    return Infinity;
     case 'airstrip': return 1;
+    case 'urban_ground': return 1;
+    case 'urban_road': return 1;
+    case 'urban_indestructible': return Infinity;
+    case 'urban_destructible': return Infinity;
+    case 'urban_rubble': return 2;
   }
 }
 

@@ -27,7 +27,12 @@ export const AudioKeys = {
   sniperFire: 'audio/sniper_fire',
   tankHitRicochet: 'audio/tank_hit_ricochet',
   tankHitPenetration: 'audio/tank_hit_penetration',
+  highExplosiveHit: 'audio/high_explosive_hit',
+  buildingCollapse: 'audio/building_collapse',
+  tankExplosion: 'audio/tank_explosion',
+  smokeDeploy: 'audio/smoke_deploy',
   stukaFlyover: 'audio/stuka',
+  stukaCannonFire: 'audio/stuka_cannon_fire',
   /** 主炮装填完成（玩家消耗装填骰 / 对子装填手） */
   cannonReload: 'audio/cannon_reload',
   commanderHatchOpen: 'audio/hatch_open',
@@ -334,9 +339,34 @@ export function playTankHitPenetration(): void {
   playSfxKey(AudioKeys.tankHitPenetration, 3.0, 3.0);
 }
 
+/** 高爆弹命中时与落点爆炸特效同步播放。 */
+export function playHighExplosiveHit(): void {
+  playSfxKey(AudioKeys.highExplosiveHit);
+}
+
+/** 可破坏建筑受损或垮塌时播放。 */
+export function playBuildingCollapse(): void {
+  playSfxKey(AudioKeys.buildingCollapse);
+}
+
+/** 坦克被击毁或殉爆：原素材前 5 秒，去掉开头约 0.62 秒静音以同步击毁瞬间。 */
+export function playTankExplosion(): void {
+  playSfxKey(AudioKeys.tankExplosion);
+}
+
+/** 烟雾升起时播放；素材保留 0～2 秒及 7 秒之后的部分。 */
+export function playSmokeDeploy(): void {
+  playSfxKey(AudioKeys.smokeDeploy);
+}
+
 /** One-shot siren/engine cue for the Stuka flyover presentation. */
 export function playStukaFlyover(): void {
   playSfxKey(AudioKeys.stukaFlyover, 1.4, 1.4);
+}
+
+/** 斯图卡机炮开始扫射时播放一次，素材截取第 10～11.5 秒，共 1.5 秒。 */
+export function playStukaCannonFire(): void {
+  playSfxKey(AudioKeys.stukaCannonFire);
 }
 
 /** 装填：相对默认 SFX 约 +150%（2.5×），上限同步放宽 */

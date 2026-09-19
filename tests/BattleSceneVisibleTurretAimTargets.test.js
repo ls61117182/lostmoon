@@ -117,8 +117,8 @@ assert.match(
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
-  'blue masks and the angle ring must only be shown when the player turret can rotate',
+  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
+  'machine-gun masks survive turret damage while the angle ring requires rotation',
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
@@ -137,12 +137,12 @@ assert.match(
 );
 assert.match(
   source,
-  /visibleUnitsOnTile\.length === 0 \|\| unloadedGunRotation[\s\S]*?this\.tryAimShermanTurretAtFogTile\(direction, target\.pos, mgSel\)/,
+  /visibleUnitsOnTile\.length === 0 && !legalUrbanBuildingTarget[\s\S]*?\|\| unloadedGunRotation[\s\S]*?this\.tryAimShermanTurretAtFogTile\(direction, target\.pos, mgSel\)/,
   'clicking a marked visible empty hex must rotate the selected turret weapon instead of opening inspection',
 );
 assert.match(
   methodBody('onTouchMap'),
-  /const unloadedGunRotation = gunSel[\s\S]*?!isMainGunLoaded\(this\.mission\.sherman, GameSession\.gameMode === 'hardcore'\);[\s\S]*?visibleUnitsOnTile\.length === 0 \|\| unloadedGunRotation[\s\S]*?tryAimShermanTurretAtFogTile/,
+  /const unloadedGunRotation = gunSel[\s\S]*?!isMainGunLoaded\(this\.mission\.sherman, GameSession\.gameMode === 'hardcore'\);[\s\S]*?visibleUnitsOnTile\.length === 0 && !legalUrbanBuildingTarget[\s\S]*?\|\| unloadedGunRotation[\s\S]*?tryAimShermanTurretAtFogTile/,
   'an unloaded main gun must rotate instead of trying to fire when a visible enemy hex is clicked',
 );
 assert.match(
@@ -152,7 +152,7 @@ assert.match(
 );
 assert.match(
   methodBody('onTouchMap'),
-  /const legalMainGunTarget = gunSel[\s\S]*?const mainGunRotationOnly = gunSel && visibleUnitsOnTile\.length > 0 && !legalMainGunTarget;[\s\S]*?mainGunRotationOnly[\s\S]*?tryAimShermanTurretAtFogTile/,
+  /const legalMainGunTarget = gunSel[\s\S]*?const mainGunRotationOnly = gunSel && visibleUnitsOnTile\.length > 0[\s\S]*?&& !legalMainGunTarget && !legalUrbanBuildingTarget;[\s\S]*?mainGunRotationOnly[\s\S]*?tryAimShermanTurretAtFogTile/,
   'a loaded AP gun must treat an otherwise invalid infantry hex as rotation-only instead of firing',
 );
 assert.match(
@@ -172,7 +172,7 @@ assert.match(
 );
 assert.match(
   methodBody('onTouchMap'),
-  /precisionGunSelection = gunSel && this\.selectedGunHitThresholdModifier < 0[\s\S]*?if \(precisionGunSelection\)[\s\S]*?!targetVisible \|\| !legalMainGunTarget[\s\S]*?openTileInspectModal\(target\)[\s\S]*?\} else \{[\s\S]*?tryAimShermanTurretAtFogTile/,
+  /precisionGunSelection = gunSel && this\.selectedGunHitThresholdModifier < 0[\s\S]*?if \(precisionGunSelection\)[\s\S]*?!targetVisible \|\| \(!legalMainGunTarget && !legalUrbanBuildingTarget\)[\s\S]*?openTileInspectModal\(target\)[\s\S]*?\} else \{[\s\S]*?tryAimShermanTurretAtFogTile/,
   'precision fire must keep the range preview without permitting empty or fog hexes to consume its paired dice as rotation-only actions',
 );
 assert.match(
@@ -192,8 +192,23 @@ assert.match(
 );
 assert.match(
   methodBody('playerWeaponTargetHexKeys'),
-  /selectedMGDieIdx[\s\S]*?canMGAttack[\s\S]*?keys\.add[\s\S]*?selectedGunDieIdx[\s\S]*?isMainGunLoaded\(sherman, GameSession\.gameMode === 'hardcore'\)[\s\S]*?canAttack[\s\S]*?keys\.add/,
+  /selectedMGDieIdx[\s\S]*?canMGAttack[\s\S]*?keys\.add[\s\S]*?selectedGunDieIdx[\s\S]*?isMainGunLoaded\(sherman, GameSession\.gameMode === 'hardcore'\)[\s\S]*?canPlayerMainGunAttack[\s\S]*?keys\.add/,
   'green enemy masks must follow machine-gun and loaded main-gun legality',
+);
+assert.match(
+  methodBody('playerWeaponTargetHexKeys'),
+  /map\.all\(\)[\s\S]*?canDirectlyAttackUrbanBuilding\(tile\)[\s\S]*?keys\.add\(HexMap\.keyOf\(tile\.pos\)\)/,
+  'legal destructible buildings must participate in the selected HE target set',
+);
+assert.match(
+  methodBody('drawAttackableHighlights'),
+  /legalUnitTargetKeys[\s\S]*?canDirectlyAttackUrbanBuilding\(tile\)[\s\S]*?\|\| legalUnitTargetKeys\.has[\s\S]*?attack\.preview\.destroyBuilding/,
+  'a destructible building without a legal unit target must show the demolish prompt',
+);
+assert.match(
+  methodBody('onTouchMap'),
+  /legalUrbanBuildingTarget = gunSel && this\.canDirectlyAttackUrbanBuilding\(target\)[\s\S]*?visibleUnitsOnTile\.length === 0 && !legalUrbanBuildingTarget[\s\S]*?if \(attackOrMisc && legalUrbanBuildingTarget\)[\s\S]*?tryAttackUrbanBuilding\(target\)/,
+  'an empty legal HE building target must bypass rotation-only handling and fire at the building',
 );
 assert.doesNotMatch(
   methodBody('drawAttackableHighlights'),

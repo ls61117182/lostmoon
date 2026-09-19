@@ -449,6 +449,15 @@ for (const theater of ['europe', 'pacific']) {
     const mission = pkg.mission;
     if (theater === 'europe') for (const enemy of mission.enemies) observedGermanKinds.add(enemy.kind);
     assert.strictEqual(mission.theater, theater);
+    for (const specialKind of ['truck', 'officer']) {
+      const isTarget = mission.objective.type === 'destroy_kind_evac'
+        && mission.objective.kind === specialKind;
+      if (!isTarget) assert(!mission.enemies.some(enemy => enemy.kind === specialKind),
+        mission.id + ': non-target special unit must not spawn: ' + specialKind);
+      if (specialKind === 'truck' && isTarget) assert.strictEqual(
+        mission.enemies.filter(enemy => enemy.kind === 'truck').length, 1,
+        mission.id + ': truck mission must contain exactly one target truck');
+    }
     assert.strictEqual(mission.cols, 8);
     assert.strictEqual(mission.rows, 6);
     assert.deepStrictEqual(mission.sherman.at, { col: 0, row: 3 });
@@ -578,4 +587,4 @@ assert(directionThreeShare >= 0.55 && directionThreeShare <= 0.77,
 console.log('random mission generator tests passed');
 
 const { getAllUnitKinds, getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
-assert.deepStrictEqual([...observedGermanKinds].sort(), getAllUnitKinds().filter(kind => getUnitStats(kind).faction === 'german').sort(), 'European random missions must be able to generate every current German unit');
+assert.deepStrictEqual([...observedGermanKinds].sort(), getAllUnitKinds().filter(kind => getUnitStats(kind).faction === 'german' && kind !== 'officer').sort(), 'European random missions must generate all eligible German units; no officer objective exists');

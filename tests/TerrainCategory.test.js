@@ -15,6 +15,11 @@ assert.match(
   /id: 'pacific',[\s\S]*?terrainCodes: \['c', 'a', 'T', 'B', 'H', 'dw'\]/,
   'Pacific terrain category must contain the existing Pacific battlefield tiles',
 );
+assert.match(
+  catalog,
+  /id: 'urban',[\s\S]*?terrainCodes: \['u', 'ur', 'ui', 'ud'\]/,
+  'Urban terrain category must expose one brush for each city tile role',
+);
 assert.match(catalog, /id: 'north_africa',[\s\S]*?available: false/, 'North Africa must have an extension slot');
 assert.match(catalog, /id: 'soviet',[\s\S]*?available: false/, 'Soviet battlefield must have an extension slot');
 assert.match(
@@ -24,18 +29,24 @@ assert.match(
 );
 assert.match(
   editor,
-  /draftTerrainCategory = activeTerrainCategoryForTheater\(mission\.theater\)/,
+  /draftTerrainCategory = activeTerrainCategoryForMission\(mission\.theater, mission\.tiles\)/,
   'imported missions must restore their terrain category',
 );
 assert.match(
   editor,
-  /theater: draftTerrainCategory/,
-  'saved custom missions must persist their terrain category',
+  /theater: draftTerrainCategory === 'urban' \? 'europe' : draftTerrainCategory/,
+  'saved urban missions must keep a valid theater while their tile codes preserve the city category',
+);
+assert.strictEqual(
+  (editor.match(/const allowsRoadDirs = tile\.t === 'r' \|\| tile\.t === 'ur';/g) ?? []).length,
+  2,
+  'both tile-property layouts must expose the six road-direction buttons for urban roads',
 );
 
 const expectedCodes = {
   europe: new Set(['f', 'r', 'm', 'F', 'w']),
   pacific: new Set(['c', 'a', 'T', 'B', 'H', 'dw']),
+  urban: new Set(['u', 'ur', 'ui', 'ud']),
 };
 const missionFiles = [];
 const collectMissionFiles = (dir) => {

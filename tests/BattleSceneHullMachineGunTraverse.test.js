@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
+const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8').replace(/\r\n/g, '\n');
 
 const onTouchMap = battleScene.match(
   /private onTouchMap\(event: EventTouch\) \{[\s\S]*?\n  \}\n\n  \/\*\*\n   \* 玩家主炮 \/ 机枪/,

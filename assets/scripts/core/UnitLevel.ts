@@ -15,6 +15,7 @@ export function uniformCrewLevels(level: UnitLevel): CrewLevels {
     gunner: level,
     driver: level,
     coDriver: level,
+    secondLoader: level,
   };
 }
 
@@ -26,6 +27,7 @@ export function normalizePlayerCrewLevels(value?: Partial<CrewLevels>): CrewLeve
     gunner: normalizeUnitLevel(value?.gunner),
     driver: normalizeUnitLevel(value?.driver),
     coDriver: normalizeUnitLevel(value?.coDriver),
+    secondLoader: normalizeUnitLevel(value?.secondLoader),
   };
 }
 

@@ -22,7 +22,6 @@ const {
   renderedTankBodyWidth,
   tankTrackAlphaAfterTurns,
   tankTrackEdgeKey,
-  tankTrackEdgesContinueStraight,
   tankTrackHalfGap,
   tankTrackLineWidth,
   tankTrackProgressSegment,
@@ -59,38 +58,43 @@ assert.strictEqual(tankTrackAlphaAfterTurns(78, 2), 20, 'decay should compound f
 assert.deepStrictEqual(
   tankTrackSweptSegment(0, 0, 100, 0, 20),
   { fromX: -20, fromY: 0, toX: 120, toY: 0 },
-  'forward movement should cover the initial hull rear through the final hull front',
+  'forward tracks should cover the initial rear through the final front',
 );
 assert.deepStrictEqual(
   tankTrackSweptSegment(100, 0, 0, 0, 20),
   { fromX: 120, fromY: 0, toX: -20, toY: 0 },
-  'reverse movement should cover the initial hull front through the final hull rear',
+  'reversing a right-facing tank should cover the initial front through the final rear',
 );
 assert.deepStrictEqual(
-  tankTrackSweptSegment(0, 0, 100, 0, 20, false, true),
-  { fromX: 0, fromY: 0, toX: 120, toY: 0 },
-  'a connected start should meet the previous mark at the shared hex centre without overlap',
-);
-assert.deepStrictEqual(
-  tankTrackSweptSegment(0, 0, 100, 0, 20, true, false),
-  { fromX: -20, fromY: 0, toX: 100, toY: 0 },
-  'a connected end should meet the next mark at the shared hex centre without overlap',
+  tankTrackProgressSegment(0, 0, 100, 0, 20, 0),
+  { fromX: -20, fromY: 0, toX: 20, toY: 0 },
+  'starting movement should include the full initial hull footprint',
 );
 assert.deepStrictEqual(
   tankTrackProgressSegment(0, 0, 100, 0, 20, 0.25),
   { fromX: -20, fromY: 0, toX: 45, toY: 0 },
-  'the mark should grow with the moving tank instead of appearing at arrival',
+  'the growing endpoint must reach the leading edge of the moving hull',
 );
-assert.strictEqual(
-  tankTrackEdgesContinueStraight(0, 0, -1, 0, 1, 0),
-  true,
-  'opposite directions through a shared centre form one straight run',
-);
-assert.strictEqual(
-  tankTrackEdgesContinueStraight(0, 0, -1, 0, 0, 1),
-  false,
-  'a turn must retain both directional half-hull marks',
-);
+for (const [dx, dy] of [[100, 0], [-100, 0], [50, 80], [-50, 80], [50, -80], [-50, -80]]) {
+  const length = Math.hypot(dx, dy);
+  const ux = dx / length;
+  const uy = dy / length;
+  for (const progress of [0, 0.4, 1]) {
+    const segment = tankTrackProgressSegment(0, 0, dx, dy, 20, progress);
+    assert(Math.abs(segment.fromX * ux + segment.fromY * uy + 20) < 1e-9,
+      'the initial trailing edge must be included in every movement direction');
+    assert(Math.abs(segment.toX * ux + segment.toY * uy - (length * progress + 20)) < 1e-9,
+      'the entire animated hull must be covered, including its leading half');
+    assert(Math.abs(Math.hypot(segment.toX - segment.fromX, segment.toY - segment.fromY)
+      - (length * progress + 40)) < 1e-9,
+      'the swept trail must include one full hull length beyond centre travel');
+  }
+  const forward = tankTrackSweptSegment(0, 0, dx, dy, 20);
+  const reverse = tankTrackSweptSegment(dx, dy, 0, 0, 20);
+  assert(Math.hypot(forward.fromX - reverse.toX, forward.fromY - reverse.toY) < 1e-9);
+  assert(Math.hypot(forward.toX - reverse.fromX, forward.toY - reverse.fromY) < 1e-9,
+    'forward and reverse traversal must cover the same full ground footprint');
+}
 assert.strictEqual(
   tankTrackEdgeKey(1, 2, 2, 2),
   tankTrackEdgeKey(2, 2, 1, 2),

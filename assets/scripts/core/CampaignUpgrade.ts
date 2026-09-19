@@ -123,11 +123,11 @@ export function campaignUpgradeHitThresholdModifier(ids: readonly CampaignUpgrad
 
 /** Revive the first dead crew member in the campaign's canonical 1..5 order. */
 export function reviveFirstCampaignCrewMember(
-  sherman: { crew?: Partial<NonNullable<Unit['crew']>> },
+  sherman: { crew?: Partial<NonNullable<Unit['crew']>>; stats?: Unit['stats'] },
 ): keyof NonNullable<Unit['crew']> | null {
   if (!sherman.crew) return null;
-  const order: Array<keyof NonNullable<Unit['crew']>> = ['commander', 'gunner', 'loader', 'driver', 'coDriver'];
-  const slot = order.find(candidate => sherman.crew?.[candidate] === false);
+  const order: Array<keyof NonNullable<Unit['crew']>> = ['commander', 'gunner', 'loader', 'driver', 'coDriver', 'secondLoader'];
+  const slot = order.find((candidate, index) => (!sherman.stats || sherman.stats.crewMembers.includes((index + 1) as 1 | 2 | 3 | 4 | 5 | 6)) && sherman.crew?.[candidate] === false);
   if (!slot) return null;
   sherman.crew[slot] = true;
   return slot;

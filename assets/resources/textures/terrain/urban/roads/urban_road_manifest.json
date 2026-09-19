@@ -1,0 +1,602 @@
+{
+  "size": [
+    222,
+    256
+  ],
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "base": "urban_road_tile_base_v1.png",
+  "directionOrder": [
+    "E",
+    "SE",
+    "SW",
+    "W",
+    "NW",
+    "NE"
+  ],
+  "roadHalfWidth": 30.72,
+  "curbWidth": 3.2,
+  "endpointRadius": 49.152,
+  "turnCenterlineRadius": 48,
+  "junctionBlend": 36,
+  "note": "rd characters follow Tile.roads order (E,SE,SW,W,NW,NE), NOT a conventional binary integer string. Place base and one surface at identical center and size; do not trim. All 63 surfaces are pre-oriented. No rotation required. 000000 uses base only.",
+  "variants": [
+    {
+      "rd": "000000",
+      "directions": [],
+      "surface": null
+    },
+    {
+      "rd": "100000",
+      "directions": [
+        "E"
+      ],
+      "surface": "urban_road_surface_100000_v1.png"
+    },
+    {
+      "rd": "010000",
+      "directions": [
+        "SE"
+      ],
+      "surface": "urban_road_surface_010000_v1.png"
+    },
+    {
+      "rd": "110000",
+      "directions": [
+        "E",
+        "SE"
+      ],
+      "surface": "urban_road_surface_110000_v1.png"
+    },
+    {
+      "rd": "001000",
+      "directions": [
+        "SW"
+      ],
+      "surface": "urban_road_surface_001000_v1.png"
+    },
+    {
+      "rd": "101000",
+      "directions": [
+        "E",
+        "SW"
+      ],
+      "surface": "urban_road_surface_101000_v1.png"
+    },
+    {
+      "rd": "011000",
+      "directions": [
+        "SE",
+        "SW"
+      ],
+      "surface": "urban_road_surface_011000_v1.png"
+    },
+    {
+      "rd": "111000",
+      "directions": [
+        "E",
+        "SE",
+        "SW"
+      ],
+      "surface": "urban_road_surface_111000_v1.png"
+    },
+    {
+      "rd": "000100",
+      "directions": [
+        "W"
+      ],
+      "surface": "urban_road_surface_000100_v1.png"
+    },
+    {
+      "rd": "100100",
+      "directions": [
+        "E",
+        "W"
+      ],
+      "surface": "urban_road_surface_100100_v1.png"
+    },
+    {
+      "rd": "010100",
+      "directions": [
+        "SE",
+        "W"
+      ],
+      "surface": "urban_road_surface_010100_v1.png"
+    },
+    {
+      "rd": "110100",
+      "directions": [
+        "E",
+        "SE",
+        "W"
+      ],
+      "surface": "urban_road_surface_110100_v1.png"
+    },
+    {
+      "rd": "001100",
+      "directions": [
+        "SW",
+        "W"
+      ],
+      "surface": "urban_road_surface_001100_v1.png"
+    },
+    {
+      "rd": "101100",
+      "directions": [
+        "E",
+        "SW",
+        "W"
+      ],
+      "surface": "urban_road_surface_101100_v1.png"
+    },
+    {
+      "rd": "011100",
+      "directions": [
+        "SE",
+        "SW",
+        "W"
+      ],
+      "surface": "urban_road_surface_011100_v1.png"
+    },
+    {
+      "rd": "111100",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W"
+      ],
+      "surface": "urban_road_surface_111100_v1.png"
+    },
+    {
+      "rd": "000010",
+      "directions": [
+        "NW"
+      ],
+      "surface": "urban_road_surface_000010_v1.png"
+    },
+    {
+      "rd": "100010",
+      "directions": [
+        "E",
+        "NW"
+      ],
+      "surface": "urban_road_surface_100010_v1.png"
+    },
+    {
+      "rd": "010010",
+      "directions": [
+        "SE",
+        "NW"
+      ],
+      "surface": "urban_road_surface_010010_v1.png"
+    },
+    {
+      "rd": "110010",
+      "directions": [
+        "E",
+        "SE",
+        "NW"
+      ],
+      "surface": "urban_road_surface_110010_v1.png"
+    },
+    {
+      "rd": "001010",
+      "directions": [
+        "SW",
+        "NW"
+      ],
+      "surface": "urban_road_surface_001010_v1.png"
+    },
+    {
+      "rd": "101010",
+      "directions": [
+        "E",
+        "SW",
+        "NW"
+      ],
+      "surface": "urban_road_surface_101010_v1.png"
+    },
+    {
+      "rd": "011010",
+      "directions": [
+        "SE",
+        "SW",
+        "NW"
+      ],
+      "surface": "urban_road_surface_011010_v1.png"
+    },
+    {
+      "rd": "111010",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NW"
+      ],
+      "surface": "urban_road_surface_111010_v1.png"
+    },
+    {
+      "rd": "000110",
+      "directions": [
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_000110_v1.png"
+    },
+    {
+      "rd": "100110",
+      "directions": [
+        "E",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_100110_v1.png"
+    },
+    {
+      "rd": "010110",
+      "directions": [
+        "SE",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_010110_v1.png"
+    },
+    {
+      "rd": "110110",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_110110_v1.png"
+    },
+    {
+      "rd": "001110",
+      "directions": [
+        "SW",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_001110_v1.png"
+    },
+    {
+      "rd": "101110",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_101110_v1.png"
+    },
+    {
+      "rd": "011110",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_011110_v1.png"
+    },
+    {
+      "rd": "111110",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "surface": "urban_road_surface_111110_v1.png"
+    },
+    {
+      "rd": "000001",
+      "directions": [
+        "NE"
+      ],
+      "surface": "urban_road_surface_000001_v1.png"
+    },
+    {
+      "rd": "100001",
+      "directions": [
+        "E",
+        "NE"
+      ],
+      "surface": "urban_road_surface_100001_v1.png"
+    },
+    {
+      "rd": "010001",
+      "directions": [
+        "SE",
+        "NE"
+      ],
+      "surface": "urban_road_surface_010001_v1.png"
+    },
+    {
+      "rd": "110001",
+      "directions": [
+        "E",
+        "SE",
+        "NE"
+      ],
+      "surface": "urban_road_surface_110001_v1.png"
+    },
+    {
+      "rd": "001001",
+      "directions": [
+        "SW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_001001_v1.png"
+    },
+    {
+      "rd": "101001",
+      "directions": [
+        "E",
+        "SW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_101001_v1.png"
+    },
+    {
+      "rd": "011001",
+      "directions": [
+        "SE",
+        "SW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_011001_v1.png"
+    },
+    {
+      "rd": "111001",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_111001_v1.png"
+    },
+    {
+      "rd": "000101",
+      "directions": [
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_000101_v1.png"
+    },
+    {
+      "rd": "100101",
+      "directions": [
+        "E",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_100101_v1.png"
+    },
+    {
+      "rd": "010101",
+      "directions": [
+        "SE",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_010101_v1.png"
+    },
+    {
+      "rd": "110101",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_110101_v1.png"
+    },
+    {
+      "rd": "001101",
+      "directions": [
+        "SW",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_001101_v1.png"
+    },
+    {
+      "rd": "101101",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_101101_v1.png"
+    },
+    {
+      "rd": "011101",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_011101_v1.png"
+    },
+    {
+      "rd": "111101",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "surface": "urban_road_surface_111101_v1.png"
+    },
+    {
+      "rd": "000011",
+      "directions": [
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_000011_v1.png"
+    },
+    {
+      "rd": "100011",
+      "directions": [
+        "E",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_100011_v1.png"
+    },
+    {
+      "rd": "010011",
+      "directions": [
+        "SE",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_010011_v1.png"
+    },
+    {
+      "rd": "110011",
+      "directions": [
+        "E",
+        "SE",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_110011_v1.png"
+    },
+    {
+      "rd": "001011",
+      "directions": [
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_001011_v1.png"
+    },
+    {
+      "rd": "101011",
+      "directions": [
+        "E",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_101011_v1.png"
+    },
+    {
+      "rd": "011011",
+      "directions": [
+        "SE",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_011011_v1.png"
+    },
+    {
+      "rd": "111011",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_111011_v1.png"
+    },
+    {
+      "rd": "000111",
+      "directions": [
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_000111_v1.png"
+    },
+    {
+      "rd": "100111",
+      "directions": [
+        "E",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_100111_v1.png"
+    },
+    {
+      "rd": "010111",
+      "directions": [
+        "SE",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_010111_v1.png"
+    },
+    {
+      "rd": "110111",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_110111_v1.png"
+    },
+    {
+      "rd": "001111",
+      "directions": [
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_001111_v1.png"
+    },
+    {
+      "rd": "101111",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_101111_v1.png"
+    },
+    {
+      "rd": "011111",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_011111_v1.png"
+    },
+    {
+      "rd": "111111",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "surface": "urban_road_surface_111111_v1.png"
+    }
+  ]
+}

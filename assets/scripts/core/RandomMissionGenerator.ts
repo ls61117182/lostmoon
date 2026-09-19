@@ -43,7 +43,7 @@ export interface RandomMissionGenerationOptions {
   playerTankFaction?: Faction;
 }
 
-export const RANDOM_MISSION_GENERATOR_VERSION = '25';
+export const RANDOM_MISSION_GENERATOR_VERSION = '26';
 export const RANDOM_MISSION_TRANSIENT_IDS: Record<RandomMissionTheater, string> = {
   europe: 'generated_random_europe',
   pacific: 'generated_random_pacific',
@@ -652,7 +652,7 @@ function generateEuropeLayout(
   const protectedPath = findTankPath(tiles, START, EVAC);
   if (!protectedPath) throw new Error('water/road layout disconnected player route');
   const protectedKeys = new Set(protectedPath.map(key));
-  const occupied = new Set([...waterKeys, ...roadPath.filter(p => key(p) !== key(bridge ?? { col: -1, row: -1 })).map(key)]);
+  const occupied = new Set(Array.from(waterKeys).concat(roadPath.filter(p => key(p) !== key(bridge ?? { col: -1, row: -1 })).map(key)));
 
   const forestCandidates = ACTIVE.filter(p => !occupied.has(key(p)) && !protectedKeys.has(key(p)) && !reserved.has(key(p)));
   const forest = pickSparseForest(forestCandidates, counts.forest, rng) ?? [];
@@ -931,7 +931,7 @@ function selectHighValueTarget(
   if (objective.kind !== 'target_evac') return;
   const counts = new Map<UnitKind, number>();
   for (const enemy of enemies) counts.set(enemy.kind, (counts.get(enemy.kind) ?? 0) + 1);
-  const kinds = [...counts.keys()].filter(kind => threatForKind(theater, kind) > 0);
+  const kinds = Array.from(counts.keys()).filter(kind => threatForKind(theater, kind) > 0);
   if (kinds.length === 0) throw new Error('target evacuation mission has no valuable enemy target');
   const maxSingleThreat = Math.max(...kinds.map(kind => threatForKind(theater, kind)));
   const maxAggregateThreat = Math.max(...kinds.map(kind => threatForKind(theater, kind) * counts.get(kind)!));
@@ -957,7 +957,9 @@ function buildEnemyRoster(
 ): UnitPlacement[] {
   const budget = enemyBudget(theater, objective, exactThreatPoints);
   const pool = (theater === 'europe' ? EUROPE_ENEMY_POOL : PACIFIC_ENEMY_POOL)
-    .filter(entry => objective.kind !== 'truck' || entry.kind !== 'truck');
+    // The truck objective adds its single mission truck after the escort roster.
+    .filter(entry => entry.kind !== 'truck')
+    .filter(entry => entry.kind !== 'officer' || objective.targetKind === 'officer');
   const threatOf = (kind: UnitKind) => threatForKind(theater, kind);
   const minCount = theater === 'europe' ? 2 : 3;
   const maxCount = theater === 'europe' ? 8 : 6;

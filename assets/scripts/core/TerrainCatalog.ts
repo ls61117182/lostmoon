@@ -4,7 +4,7 @@ import type { Theater, TileDef } from './types';
  * 地形资源所属的战场分类。后续新增北非、苏联地形时，只需向对应分组追加代码，
  * 不需要再改关卡编辑器的布局和筛选逻辑。
  */
-export type TerrainCategory = Theater;
+export type TerrainCategory = Theater | 'urban';
 export type ActiveTerrainCategory = TerrainCategory;
 
 export interface TerrainCategoryDefinition {
@@ -27,6 +27,12 @@ export const TERRAIN_CATEGORIES: readonly TerrainCategoryDefinition[] = [
     available: true,
     label: { zh: '太平洋战场', en: 'Pacific' },
     terrainCodes: ['c', 'a', 'T', 'B', 'H', 'dw'],
+  },
+  {
+    id: 'urban',
+    available: true,
+    label: { zh: '城市', en: 'Urban' },
+    terrainCodes: ['u', 'ur', 'ui', 'ud'],
   },
   {
     id: 'north_africa',
@@ -52,5 +58,13 @@ export function terrainCategoryForCode(code: TileDef['t']): TerrainCategory | un
 }
 
 export function activeTerrainCategoryForTheater(theater: Theater | undefined): ActiveTerrainCategory {
-  return TERRAIN_CATEGORIES.some(category => category.id === theater) ? theater! : 'europe';
+  return theater === 'pacific' ? 'pacific' : 'europe';
+}
+
+export function activeTerrainCategoryForMission(
+  theater: Theater | undefined,
+  tiles: ReadonlyArray<ReadonlyArray<TileDef | null>> | undefined,
+): ActiveTerrainCategory {
+  if (tiles?.some(row => row.some(tile => !!tile && terrainCategoryForCode(tile.t) === 'urban'))) return 'urban';
+  return activeTerrainCategoryForTheater(theater);
 }

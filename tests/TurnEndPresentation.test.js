@@ -60,10 +60,13 @@ function method(name, next) {
   return scene.slice(start, end);
 }
 const harnessCode = compile(`class Harness {
+  ${method('startTurnEndEventPresentation', 'buildTurnEndEventPanel')}
+  ${method('applyTurnEndEventEffects', 'enqueueTankReinforceMoveAnim')}
   ${method('setupTurnEndExtraRoll', 'advanceTurnEndEventUI')}
   ${method('advanceTurnEndEventUI', 'onTurnEndConfirmClick')}
 }`);
-const Harness = new Function('t', 'DICE_ROLL_DUR', 'playDiceRoll', `${harnessCode}; return Harness;`)(t, 0.6, () => {});
+let mineSoundCount = 0;
+const Harness = new Function('t', 'DICE_ROLL_DUR', 'playDiceRoll', 'playHighExplosiveHit', `${harnessCode}; return Harness;`)(t, 0.6, () => {}, () => mineSoundCount++);
 const label = () => ({ string: '', node: {} });
 function harness(phases) {
   const h = new Harness();
@@ -71,9 +74,9 @@ function harness(phases) {
   h.turnEndBodyText = () => '最终结果';
   h.turnEndEventUI = {
     stage: 'roll_primary', t: 0, primaryDice: [4, 6], dieLabels: [label(), label()],
-    sumLabel: label(), eventVerdictLabel: label(), eventResult: '斯图卡空袭', bodyLabel: label(),
+    eventVerdictLabel: label(), eventResult: '斯图卡空袭', bodyLabel: label(),
     confirmButton: { active: false }, extraPhases: phases, extraIdx: 0,
-    extraRows: phases.map((phase, i) => ({ root: { active: false }, dice: phase.dice.map(label), value: label(), verdict: label(), result: `结果${i}`, highlight: { active: false } })),
+    extraRows: phases.map((phase, i) => ({ root: { active: false }, dice: phase.dice.map(label), verdict: label(), result: `结果${i}`, highlight: { active: false } })),
   };
   return h;
 }
@@ -95,7 +98,76 @@ test('real event animation preserves earlier dice and reveals confirmation only 
   assert.equal(ui.stage, 'hold');
   assert.equal(ui.confirmButton.active, true);
   assert.deepEqual(ui.extraRows.map(r => r.dice.map(d => Number(d.string))), [[2, 3], [5, 4], [2]]);
-  assert.deepEqual(ui.extraRows.map(r => r.value.string), ['= 5', '= 9', '= 2']);
+  assert.deepEqual(ui.dieLabels.map(d => Number(d.string)), [4, 6]);
+});
+
+test('mine explosions start before dice and confirmation, excluding skipped and replayed events', () => {
+  for (const bodyKey of ['turnEnd.mine.hit', 'turnEnd.mine.ric', 'turnEnd.clearMine.hit', 'turnEnd.mine.skip', 'turnEnd.mine.protected', 'turnEnd.clearMine.skip', 'turnEnd.clearMine.protected']) {
+    for (const historyReplay of [false, true]) {
+      const h = harness([]);
+      Object.assign(h.turnEndEventUI, { bodyKey, historyReplay });
+      h.mission = { sherman: { id: 'tank', pos: { q: 2, r: 3 } } };
+      h.project = (q, r) => ({ x: q * 10, y: r * 10 });
+      h.hashStringToSeed = () => 42;
+      const blasts = [];
+      h.spawnHighExplosiveBlast = (...args) => blasts.push(args);
+      h.snapshotDestroyedUnitIds = () => new Set();
+      h.registerNewlyDestroyedSince = () => {};
+      h.refreshStatusPanel = h.redraw = () => {};
+      let applied = 0;
+      h.turnEndEventUI.apply = () => applied++;
+      mineSoundCount = 0;
+      h.startTurnEndEventPresentation(h.turnEndEventUI);
+      h.startTurnEndEventPresentation(h.turnEndEventUI);
+      assert.equal(applied, historyReplay ? 0 : 1);
+      h.advanceTurnEndEventUI(1);
+      h.advanceTurnEndEventUI(1);
+      const explodes = !historyReplay && ['turnEnd.mine.hit', 'turnEnd.mine.ric', 'turnEnd.clearMine.hit'].includes(bodyKey);
+      assert.equal(mineSoundCount, explodes ? 1 : 0, bodyKey);
+      assert.deepEqual(blasts, explodes ? [[20, 30, 42]] : [], bodyKey);
+      if (!historyReplay) {
+        h.applyTurnEndEventEffects(h.turnEndEventUI, () => {});
+        assert.equal(applied, 1, 'confirmation must not apply the event again');
+      }
+    }
+  }
+});
+
+test('reinforcement movement begins immediately and finishes without confirmation', () => {
+  const h = harness([]);
+  const unit = { id: 'reinforcement' };
+  h.mission = { allies: [], enemies: [] };
+  h.canMoveToBattleTile = () => true;
+  h.snapshotDestroyedUnitIds = () => new Set();
+  h.registerNewlyDestroyedSince = h.refreshStatusPanel = h.redraw = () => {};
+  let applications = 0;
+  h.turnEndEventUI.apply = () => { applications++; h.mission.enemies.push(unit); };
+  const move = { unitId: unit.id, to: { q: 1, r: 2 } };
+  h.turnEndEventUI.tankReinforceMove = move;
+  let moves = 0;
+  h.enqueueTankReinforceMoveAnim = (actor, path) => {
+    assert.equal(actor, unit); assert.equal(path, move); moves++;
+  };
+  h.startTurnEndEventPresentation(h.turnEndEventUI);
+  assert.equal(moves, 1);
+  assert.equal(applications, 1);
+  assert.equal(h.turnEndEventUI.presentationPending, true);
+  h.startTurnEndEventPresentation(h.turnEndEventUI);
+  assert.equal(moves, 1);
+  h.pendingAfterAnimChain();
+  assert.equal(h.turnEndEventUI.presentationPending, false);
+  h.applyTurnEndEventEffects(h.turnEndEventUI, () => {});
+  assert.equal(applications, 1);
+  assert.equal(moves, 1);
+});
+
+test('adjacent infantry retains its individual resolution flow', () => {
+  const h = harness([]);
+  h.mission = {};
+  h.turnEndEventUI.adjacentInfantryVolleys = [{}];
+  h.turnEndEventUI.apply = () => assert.fail('must not apply adjacent volleys at startup');
+  h.startTurnEndEventPresentation(h.turnEndEventUI);
+  assert.equal(h.turnEndEventUI.effectApplied, undefined);
 });
 
 test('a mechanical event finishes immediately after its only dice row', () => {

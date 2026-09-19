@@ -66,6 +66,7 @@ import { selectablePlayerTankKinds } from '../core/PlayerTankSelection';
 import { fixedTankCommanderHatchTransform } from '../core/CommanderHatch';
 import {
   ACTIVE_TERRAIN_CATEGORIES,
+  activeTerrainCategoryForMission,
   ActiveTerrainCategory,
   activeTerrainCategoryForTheater,
   terrainCategoryForCode,
@@ -2926,6 +2927,10 @@ export class MainMenuScene extends Component {
       { code: 'B', key: 'terrain.beach', color: new Color(165, 143, 94, 235), spriteKey: 'beach' },
       { code: 'H', key: 'terrain.rocky', color: new Color(120, 118, 112, 235), spriteKey: 'rocky' },
       { code: 'dw', key: 'terrain.deep_water', color: new Color(56, 98, 118, 235), spriteKey: null },
+      { code: 'u', key: 'terrain.urban_ground', color: new Color(142, 140, 132, 235), spriteKey: 'urban_ground' },
+      { code: 'ur', key: 'terrain.urban_road', color: new Color(86, 87, 84, 235), spriteKey: 'urban_road' },
+      { code: 'ui', key: 'terrain.urban_indestructible', color: new Color(112, 103, 96, 235), spriteKey: 'urban_indestructible' },
+      { code: 'ud', key: 'terrain.urban_destructible', color: new Color(151, 91, 63, 235), spriteKey: 'urban_destructible' },
     ];
     const terrainSpritePaths: Record<string, string> = {
       road: 'textures/terrain/terrain_road/spriteFrame',
@@ -2942,6 +2947,10 @@ export class MainMenuScene extends Component {
       mud_snow: 'textures/terrain/terrain_mud_snow/spriteFrame',
       forest_snow: 'textures/terrain/terrain_forest_snow/spriteFrame',
       water_snow: 'textures/terrain/terrain_water_snow/spriteFrame',
+      urban_ground: 'textures/terrain/urban/urban_floor_base_v1/spriteFrame',
+      urban_road: 'textures/terrain/urban/roads/urban_road_tile_base_v1/spriteFrame',
+      urban_indestructible: 'textures/terrain/urban/urban_dense_indestructible_apartment_v1/spriteFrame',
+      urban_destructible: 'textures/terrain/urban/urban_dense_destructible_rowhouses_l_intact_v1/spriteFrame',
     };
     const weatherOptions: EditorWeatherOption[] = [
       { id: 'clear', label: '无', desc: '不使用天气修正' },
@@ -3000,7 +3009,9 @@ export class MainMenuScene extends Component {
     let draftTruckPath = cloneJson(existingPackage?.mission.truckPath ?? []);
     let draftWeather: WeatherType = normalizeWeather(existingPackage?.mission.weather);
     let draftSeason: SeasonType = existingPackage?.mission.season === 'winter' ? 'winter' : 'summer';
-    let draftTerrainCategory: ActiveTerrainCategory = activeTerrainCategoryForTheater(existingPackage?.mission.theater);
+    let draftTerrainCategory: ActiveTerrainCategory = activeTerrainCategoryForMission(
+      existingPackage?.mission.theater, existingPackage?.mission.tiles,
+    );
     let editorTab: 'terrain' | 'tile' | 'mission' | 'units' = 'terrain';
     let unitKindPickerTarget: { group: 'player' | 'enemy' | 'ally'; index: number } | null = null;
     let unitRandomPickerTarget: { group: 'enemy' | 'ally'; index: number } | null = null;
@@ -3060,7 +3071,7 @@ export class MainMenuScene extends Component {
       sherman: 'Sherman',
       sherman76: 'Sherman 76',
       sherman_jumbo: 'Sherman Jumbo',
-      m26_pershing: 'M26E1 Pershing',
+      m26_pershing: 'M26 Pershing',
       t34: 'T-34/76',
       t34_85: 'T-34/85',
       su152: 'SU-152',
@@ -3081,6 +3092,7 @@ export class MainMenuScene extends Component {
       maus: 'Panzer VIII Maus',
       at_gun: 'AT Gun',
       pak38: 'pak38',
+      flak88: '88mm高射炮',
       japanese_infantry: 'JP Inf',
       american_infantry: 'US Inf',
       heavy_artillery: 'Artillery',
@@ -3207,10 +3219,11 @@ export class MainMenuScene extends Component {
       const tile = draftTiles[selectedRow]?.[selectedCol];
       if (!tile) return;
       if (tile.bd !== 1 || ['w', 'dw', 'B'].includes(tile.t)) delete tile.bd;
+      if (['u', 'ur', 'ui', 'ud'].includes(tile.t)) delete tile.bd;
       if (tile.t === 'dw') delete tile.h;
       if (tile.t !== 'c' && tile.t !== 'T') delete tile.bw;
       if (tile.t !== 'w') delete tile.br;
-      if (tile.t !== 'r' && tile.t !== 'a') {
+      if (tile.t !== 'r' && tile.t !== 'ur' && tile.t !== 'a') {
         delete tile.rd;
       }
       if (tile.t === 'dw') {
@@ -3322,7 +3335,8 @@ export class MainMenuScene extends Component {
           this.makeLabel(propRoot, '先选择战场分类，再选择地形刷子。', 0, 154, 310, 28, 13, TEXT_SUBTITLE);
           for (let i = 0; i < ACTIVE_TERRAIN_CATEGORIES.length; i++) {
             const category = ACTIVE_TERRAIN_CATEGORIES[i]!;
-            addPlainBtn(category.label[getLang()], -78 + i * 156, 122, 144, 30, category.id === draftTerrainCategory, () => {
+            const categoryX = (i - (ACTIVE_TERRAIN_CATEGORIES.length - 1) / 2) * 104;
+            addPlainBtn(category.label[getLang()], categoryX, 122, 96, 30, category.id === draftTerrainCategory, () => {
               draftTerrainCategory = category.id;
               if (category.id !== 'europe') draftSeason = 'summer';
               selectedTool = null;
@@ -3702,7 +3716,7 @@ export class MainMenuScene extends Component {
         };
         const allowsBuilding = !['w', 'dw', 'B'].includes(tile.t);
         const allowsHedge = tile.t !== 'dw';
-        const allowsRoadDirs = tile.t === 'r';
+        const allowsRoadDirs = tile.t === 'r' || tile.t === 'ur';
         const allowsAirstripDirs = tile.t === 'a';
         const allowsBridge = tile.t === 'w';
         const allowsBreakwater = tile.t === 'c' || tile.t === 'T';
@@ -3813,7 +3827,7 @@ export class MainMenuScene extends Component {
       };
       const allowsBuilding = !['w', 'dw', 'B'].includes(tile.t);
       const allowsHedge = tile.t !== 'dw';
-      const allowsRoadDirs = tile.t === 'r';
+      const allowsRoadDirs = tile.t === 'r' || tile.t === 'ur';
       const allowsAirstripDirs = tile.t === 'a';
       const allowsBridge = tile.t === 'w';
       const allowsBreakwater = tile.t === 'c' || tile.t === 'T';
@@ -4133,6 +4147,17 @@ export class MainMenuScene extends Component {
           outlineGraphics.fillColor = winter ? new Color(225, 235, 238, 250) : new Color(92, 68, 44, 245);
           outlineGraphics.rect(-8, -7, 16, 14);
           outlineGraphics.fill();
+        }
+        if (tile.t === 'ui' || tile.t === 'ud') {
+          outlineGraphics.fillColor = tile.t === 'ui'
+            ? new Color(66, 76, 84, 245)
+            : new Color(183, 94, 55, 245);
+          outlineGraphics.circle(0, -1, 10);
+          outlineGraphics.fill();
+          outlineGraphics.strokeColor = new Color(240, 224, 194, 250);
+          outlineGraphics.lineWidth = 2;
+          outlineGraphics.circle(0, -1, 10);
+          outlineGraphics.stroke();
         }
         if (tile.eid !== undefined || tile.rid !== undefined) {
           outlineGraphics.fillColor = tile.eid !== undefined
@@ -4495,7 +4520,7 @@ export class MainMenuScene extends Component {
       draftSeason = mission.season === 'winter' && activeTerrainCategoryForTheater(mission.theater) === 'europe'
         ? 'winter'
         : 'summer';
-      draftTerrainCategory = activeTerrainCategoryForTheater(mission.theater);
+      draftTerrainCategory = activeTerrainCategoryForMission(mission.theater, mission.tiles);
       selectedRow = 0;
       selectedCol = 0;
       for (let row = 0; row < rows; row++) {
@@ -4858,7 +4883,7 @@ export class MainMenuScene extends Component {
         id: missionId,
         name: draftName || fallbackName,
         description: draftDescription || draftName || fallbackName,
-        theater: draftTerrainCategory,
+        theater: draftTerrainCategory === 'urban' ? 'europe' : draftTerrainCategory,
         cols,
         rows,
         tiles: cloneJson(draftTiles) as MissionData['tiles'],
@@ -5213,7 +5238,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'sherman': return 'Sherman';
     case 'sherman76': return 'Sherman 76';
     case 'sherman_jumbo': return 'Sherman Jumbo';
-    case 'm26_pershing': return 'M26E1 潘兴';
+    case 'm26_pershing': return 'M26 潘兴';
     case 't34': return 'T-34/76';
     case 't34_85': return 'T-34/85';
     case 'su152': return 'SU-152';
@@ -5227,6 +5252,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'type97': return 'Type 97';
       case 'at_gun': return 'AT Gun';
       case 'pak38': return 'pak38';
+      case 'flak88': return '88mm高射炮';
     case 'heavy_artillery': return 'Artillery';
     case 'german_heavy_artillery': return 'German Artillery';
     case 'truck': return 'Truck';

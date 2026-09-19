@@ -1,0 +1,15 @@
+{
+  "generator": "built-in image_gen",
+  "materials": [
+    {
+      "key": "pavers",
+      "prompt": "Use case: stylized-concept. Create a seamless repeating square texture swatch for the SIDEWALK BASE of a WWII European city road hex tile in a hand-painted 2D top-down strategy game. Strict flat overhead. Entire canvas filled edge to edge with small regular staggered rectangular light warm GRAY limestone paving blocks, softly worn edges, dark thin mortar joints, subtle desaturated variation, simple readable painted style. Consistent even lighting, no cast shadows, no perspective, no border, no hex shape, no road markings, no objects, no grass, no large cracks. Fine scale: roughly 24-30 small paving blocks across the image, each broader than tall. Low contrast within material so dark asphalt road overlay reads strongly on top. Opaque full-square material swatch only. Reference shows the existing art's stone style; make stones smaller more regular and less yellow.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-aba6bddc-4cb6-4d9d-9244-41f2050695b9.png"
+    },
+    {
+      "key": "asphalt",
+      "prompt": "Use case: stylized-concept. Create a seamless repeating square material texture for the DRIVING SURFACE of a WWII European urban road in a hand-painted 2D overhead strategy game. Entire canvas filled edge to edge with uniform muted DARK charcoal gray aged asphalt, subtle fine aggregate grain and sparse tiny shallow hairline cracks. Flat 90 degree overhead, even neutral lighting. Clearly dark compared with pale gray limestone sidewalks, but not black. Restrained illustrative texture matching the reference terrain art, clean readable when reduced to 222x256 pixels. No paving blocks, no curbs, no road outline, no text, no painted lane markings, no gutters, no objects, no dramatic holes, no major cracks, no lighting vignette. Opaque full-square material swatch only, not a hex tile.",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a0b426-de4a-7052-b22a-78be38a70aca\\exec-8b391f52-89e3-48e8-b8ec-7bef4deb774a.png"
+    }
+  ]
+}

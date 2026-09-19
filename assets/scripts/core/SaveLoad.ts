@@ -2,7 +2,7 @@ import { profileStorageKey } from './BuildProfile';
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
 import type { ATGunCrewKind, BattleSideId, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitController, UnitKind, UnitLevel } from './types';
-import { isAntiTankGunKind, isTankKind, neutralizeUncrewedTank } from './types';
+import { createTankCrew, isAntiTankGunKind, isTankKind, neutralizeUncrewedTank } from './types';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
@@ -96,6 +96,8 @@ export interface SaveData {
   smokeHexes?: string[];
   /** v5: side that deployed each active smoke hex, for phase-based clearing. */
   smokeHexOwners?: Record<string, 'friendly' | 'enemy'>;
+  /** 可破坏城市建筑结构值，键为 HexMap.keyOf(pos)。 */
+  urbanStructures?: Record<string, number>;
   /** v3：杂项阶段是否已结束 */
   miscDone?: boolean;
   /** v3：玩家回合子状态 */
@@ -231,7 +233,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   if (s.gunnerVisionRange !== undefined) live.gunnerVisionRange = s.gunnerVisionRange;
   if (s.interiorVisionRange !== undefined) live.interiorVisionRange = s.interiorVisionRange;
   live.radioDamaged = s.radioDamaged ?? false;
-  if (s.crew) live.crew = { ...s.crew };
+  if (isTankKind(live.kind)) live.crew = createTankCrew(live.stats, s.crew ?? live.crew);
   if (live.controller === 'local_player') {
     live.crewLevels = normalizePlayerCrewLevels(s.crewLevels ?? live.crewLevels);
   } else if (isAntiTankGunKind(live.kind)) {
@@ -270,13 +272,7 @@ function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMissi
     stats,
   };
   if (isTankKind(s.kind)) {
-    unit.crew = {
-      commander: true,
-      loader: true,
-      gunner: true,
-      driver: true,
-      coDriver: true,
-    };
+    unit.crew = createTankCrew(stats);
   }
   applyUnitSnapshot(unit, s);
   return unit;
@@ -312,6 +308,9 @@ export function captureSave(p: SnapshotParams): SaveData {
     enemies: p.mission.enemies.map(captureUnit),
     smokeHexes: Array.from(p.mission.smokeHexes ?? []),
     smokeHexOwners: captureSmokeHexOwners(p.mission),
+    urbanStructures: Object.fromEntries(p.mission.map.all()
+      .filter(tile => tile.urbanKind === 'destructible')
+      .map(tile => [HexMap.keyOf(tile.pos), tile.urbanStructure ?? 2])),
     shermanEvacuated: p.mission.playerTankEvacuated ?? p.mission.shermanEvacuated ?? false,
     truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
     usCasualties: p.mission.usCasualties ?? 0,
@@ -477,7 +476,7 @@ export function applySave(
     if (ss.gunnerVisionRange !== undefined) sh.gunnerVisionRange = ss.gunnerVisionRange;
     if (ss.interiorVisionRange !== undefined) sh.interiorVisionRange = ss.interiorVisionRange;
     sh.radioDamaged = ss.radioDamaged ?? false;
-    if (ss.crew) sh.crew = { ...ss.crew };
+    if (ss.crew) sh.crew = createTankCrew(sh.stats, ss.crew);
     sh.crewLevels = normalizePlayerCrewLevels(ss.crewLevels ?? sh.crewLevels);
     if (ss.crewSkills) sh.crewSkills = Object.fromEntries(
       Object.entries(ss.crewSkills).map(([slot, skills]) => [slot, skills?.slice()]),
@@ -495,6 +494,13 @@ export function applySave(
   }
 
   mission.smokeHexes.clear();
+  for (const tile of mission.map.all()) {
+    if (tile.urbanKind !== 'destructible') continue;
+    const structure = save.urbanStructures?.[HexMap.keyOf(tile.pos)];
+    if (structure === undefined) continue;
+    tile.urbanStructure = Math.max(0, Math.min(2, structure));
+    tile.terrain = tile.urbanStructure === 0 ? 'urban_rubble' : 'urban_destructible';
+  }
   mission.smokeHexOwners.clear();
   for (const key of save.smokeHexes ?? []) {
     mission.smokeHexes.add(key);
