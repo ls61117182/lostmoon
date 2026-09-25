@@ -22,12 +22,16 @@ const {
   renderedTankBodyWidth,
   tankTrackAlphaAfterTurns,
   tankTrackEdgeKey,
+  tankTrackEdgesContinueStraight,
   tankTrackHalfGap,
   tankTrackLineWidth,
   tankTrackProgressSegment,
   tankTrackStyleForTerrain,
   tankTrackSweptSegment,
+  tankTrackTurnArcPoints,
+  tankTrackVisibleIntervals,
   tankTrackTraversalKey,
+  TANK_TRACK_TURN_INSET_SCALE,
   TANK_TRACK_STYLE_ORDER,
 } = loaded.exports;
 
@@ -55,6 +59,48 @@ assert.strictEqual(tankTrackLineWidth(50), 10, 'very wide hulls should use the c
 assert.strictEqual(tankTrackAlphaAfterTurns(78, 0), 78, 'new marks should use their terrain base alpha');
 assert.strictEqual(tankTrackAlphaAfterTurns(78, 1), 39, 'one completed turn should retain 50% alpha');
 assert.strictEqual(tankTrackAlphaAfterTurns(78, 2), 20, 'decay should compound from the current alpha');
+const quarterTurnArcs = tankTrackTurnArcPoints(10, 20, 30, 12, 0, Math.PI / 2, 1);
+assert.strictEqual(quarterTurnArcs.length, 4, 'turning should trace both sides at the front and rear');
+const expectedInsetStarts = [
+  [37, 30.8], [37, 9.2], [-17, 30.8], [-17, 9.2],
+];
+quarterTurnArcs.forEach((arc, index) => {
+  assert(Math.abs(arc[0].x - expectedInsetStarts[index][0]) < 1e-9);
+  assert(Math.abs(arc[0].y - expectedInsetStarts[index][1]) < 1e-9);
+});
+const outerCornerRadius = Math.hypot(30, 12);
+assert(Math.abs(Math.hypot(
+  quarterTurnArcs[0][0].x - 10,
+  quarterTurnArcs[0][0].y - 20,
+) - outerCornerRadius * TANK_TRACK_TURN_INSET_SCALE) < 1e-9,
+  'turn arcs should use a smaller radius inside the hull footprint');
+for (const arc of quarterTurnArcs) {
+  assert(arc.length > 2, 'turn marks should be curved polylines rather than straight chords');
+  const startRadius = Math.hypot(arc[0].x - 10, arc[0].y - 20);
+  const end = arc[arc.length - 1];
+  assert(Math.abs(Math.hypot(end.x - 10, end.y - 20) - startRadius) < 1e-9,
+    'each track endpoint should follow a circular arc around the hull centre');
+}
+const halfTurnProgress = tankTrackTurnArcPoints(0, 0, 30, 12, 0, Math.PI / 2, 0.5);
+const halfTurnEnd = halfTurnProgress[0][halfTurnProgress[0].length - 1];
+assert(Math.abs(Math.atan2(halfTurnEnd.y, halfTurnEnd.x) - Math.PI / 2 * 0.5
+  - Math.atan2(12, 30)) < 1e-9,
+  'turn arcs should grow with the animated hull angle');
+const crossingIntervals = tankTrackVisibleIntervals(
+  { fromX: 0, fromY: 50, toX: 100, toY: 50, lineWidth: 8 },
+  [{ fromX: 50, fromY: 0, toX: 50, toY: 100, lineWidth: 8 }],
+);
+assert.strictEqual(crossingIntervals.length, 2, 'a crossing stroke should be split around prior tracks');
+assert(crossingIntervals[0].to < 0.5 && crossingIntervals[1].from > 0.5,
+  'the transparent overlap region should be removed from the later track');
+assert.deepStrictEqual(
+  tankTrackVisibleIntervals(
+    { fromX: 0, fromY: 0, toX: 50, toY: 0, lineWidth: 8 },
+    [{ fromX: 50, fromY: 0, toX: 50, toY: 50, lineWidth: 8 }],
+  ),
+  [{ from: 0, to: 1 }],
+  'intentional endpoint joins should remain continuous',
+);
 assert.deepStrictEqual(
   tankTrackSweptSegment(0, 0, 100, 0, 20),
   { fromX: -20, fromY: 0, toX: 120, toY: 0 },
@@ -74,6 +120,31 @@ assert.deepStrictEqual(
   tankTrackProgressSegment(0, 0, 100, 0, 20, 0.25),
   { fromX: -20, fromY: 0, toX: 45, toY: 0 },
   'the growing endpoint must reach the leading edge of the moving hull',
+);
+assert.deepStrictEqual(
+  tankTrackSweptSegment(0, 0, 100, 0, 20, true, false),
+  { fromX: -20, fromY: 0, toX: 80, toY: 0 },
+  'the older segment should stop at the newer tank rear',
+);
+assert.deepStrictEqual(
+  tankTrackSweptSegment(100, 0, 200, 0, 20, true, true),
+  { fromX: 80, fromY: 0, toX: 220, toY: 0 },
+  'the newer segment should start at its rear without overlapping the older mark',
+);
+assert.deepStrictEqual(
+  tankTrackSweptSegment(100, 0, 200, 0, 20, false, true),
+  { fromX: 120, fromY: 0, toX: 220, toY: 0 },
+  'an older segment trimmed at its start should also yield ownership at the rear edge',
+);
+assert.strictEqual(
+  tankTrackEdgesContinueStraight(0, 0, -1, 0, 1, 0),
+  true,
+  'opposite edges should form one non-overlapping straight run',
+);
+assert.strictEqual(
+  tankTrackEdgesContinueStraight(0, 0, -1, 0, 0, 1),
+  false,
+  'turning paths must retain their distinct directional footprints',
 );
 for (const [dx, dy] of [[100, 0], [-100, 0], [50, 80], [-50, 80], [50, -80], [-50, -80]]) {
   const length = Math.hypot(dx, dy);
@@ -116,6 +187,20 @@ assert(
 );
 
 const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
+const tankVisualDb = fs.readFileSync(path.join(root, 'assets/scripts/core/TankVisualDB.ts'), 'utf8');
+assert(
+  /stug3: \{[^\n]*trackBodyLengthScale: 0\.82, trackBodyWidthScale: 1/.test(tankVisualDb),
+  'StuG III tracks should use the hull length instead of the gun-inclusive sprite length',
+);
+assert(
+  /su152: \{[^\n]*trackBodyLengthScale: 0\.78, trackBodyWidthScale: 1/.test(tankVisualDb),
+  'SU-152 tracks should use the hull length instead of the gun-inclusive sprite length',
+);
+assert(
+  battleScene.includes('* cfg.trackBodyLengthScale')
+    && battleScene.includes('* cfg.trackBodyWidthScale'),
+  'single-sprite tank tracks should apply independent hull geometry scales',
+);
 assert(battleScene.includes("new Node('TankTracks')"), 'BattleScene should create one permanent track layer');
 assert(
   battleScene.includes("new Node('VisibleTrackMask')"),
@@ -128,6 +213,18 @@ assert(
 assert(
   battleScene.includes('const swept = tankTrackProgressSegment('),
   'BattleScene should draw only the ground area reached by current movement progress',
+);
+assert(
+  battleScene.includes('const arcs = tankTrackTurnArcPoints('),
+  'BattleScene should draw curved marks at the front and rear track endpoints while turning',
+);
+assert(
+  battleScene.includes('records.sort((a, b) => b.track.serial - a.track.serial);'),
+  'newer tracks should claim crossings before older tracks are clipped',
+);
+assert(
+  battleScene.includes('this.activeTankTurnTrack.progress = this.hullTurnRenderedAngularProgress('),
+  'turn marks should end at the hull track endpoints throughout the rendered turn animation',
 );
 assert(
   battleScene.includes('this.clearTankTracks();'),

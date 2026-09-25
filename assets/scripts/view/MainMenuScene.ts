@@ -2954,7 +2954,7 @@ export class MainMenuScene extends Component {
     };
     const weatherOptions: EditorWeatherOption[] = [
       { id: 'clear', label: '无', desc: '不使用天气修正' },
-      { id: 'rain', label: '雨天', desc: '命中-1 / 视野-1' },
+      { id: 'rain', label: '雨天', desc: '主炮命中-1 / 视野-1' },
       { id: 'light_snow', label: '小雪', desc: '轻度飘雪视觉效果' },
       { id: 'heavy_snow', label: '大雪', desc: '三倍雪量 / 飘落速度+50%' },
     ];
@@ -3261,16 +3261,6 @@ export class MainMenuScene extends Component {
       normalizeSelectedTile();
       redrawAllCells();
       refreshPropertyPanel();
-    };
-    const toggleArrayDirection = (arr: [number, number] | undefined, dir: number): [number, number] | undefined => {
-      const current = Array.isArray(arr) ? arr.filter(v => Number.isInteger(v) && v >= 0 && v <= 5) : [];
-      if (current.length === 0) return [dir, (dir + 3) % 6];
-      const index = current.indexOf(dir);
-      if (index >= 0) current.splice(index, 1);
-      else if (current.length < 2) current.push(dir);
-      else current[0] = dir;
-      if (current.length === 1) current.push((current[0]! + 3) % 6);
-      return current.length === 2 ? [current[0]!, current[1]!] : undefined;
     };
     const cycleNumber = (value: number | undefined, max: number) => {
       if (value === undefined || value === null) return 1;
@@ -3757,7 +3747,8 @@ export class MainMenuScene extends Component {
         if (allowsBridge) {
           const bridgeX = allowsHedge ? 78 : 0;
           addDirHexButtons(bridgeX, sectionY, '桥梁\nbr', (i) => !!tile.br?.includes(i), (i) => {
-            tile.br = toggleArrayDirection(tile.br, i);
+            if (tile.br?.includes(i)) delete tile.br;
+            else tile.br = [i, (i + 3) % 6];
           });
         }
         if (allowsBreakwater) {
@@ -3857,7 +3848,8 @@ export class MainMenuScene extends Component {
       if (allowsBridge) {
         const bridgeX = allowsHedge ? 78 : 0;
         addDirHexButtons(bridgeX, sectionY, '桥梁\nbr', (i) => !!tile.br?.includes(i), (i) => {
-          tile.br = toggleArrayDirection(tile.br, i);
+          if (tile.br?.includes(i)) delete tile.br;
+          else tile.br = [i, (i + 3) % 6];
         });
       }
       if (allowsBreakwater) {

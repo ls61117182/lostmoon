@@ -99,13 +99,18 @@ assert.match(
 );
 assert.match(
   battleSceneSource,
-  /private playerTurretCanRotate[\s\S]*?visionType === 'turreted'[\s\S]*?turretDamaged !== true/,
-  'fixed-gun tanks must never qualify for the blue turret-rotation overlay',
+  /private playerHasFixedWeaponArc[\s\S]*?isTankUnit\(sherman\)[\s\S]*?visionType === 'fixed'[\s\S]*?facing !== null/,
+  'fixed-gun tanks must qualify for a forward-only blue weapon overlay',
 );
 assert.match(
   battleSceneSource,
-  /if \(attackOrMisc[\s\S]*?&& this\.playerTurretCanRotate\(\)[\s\S]*?&& this\.hasTurretReconGunSelection\(\)\)/,
-  'fixed-gun map clicks must bypass every rotation-only action that consumes a selected weapon die',
+  /const canUseDirectionalWeaponMask = this\.playerTurretCanRotate\(\)[\s\S]*?\|\| this\.playerHasFixedWeaponArc\(\)[\s\S]*?if \(attackOrMisc[\s\S]*?&& canUseDirectionalWeaponMask[\s\S]*?&& this\.hasTurretReconGunSelection\(\)\)/,
+  'fixed-gun map clicks must be routed through their forward-only weapon mask',
+);
+assert.match(
+  battleSceneSource,
+  /const turretWillRotate = this\.playerTurretCanRotate\(\) && currentFacing !== direction;[\s\S]*?if \(!turretWillRotate\)[\s\S]*?return;[\s\S]*?usePhaseDice/,
+  'clicking an already-covered blue hex must return before consuming the selected weapon die',
 );
 assert.match(
   battleSceneSource,

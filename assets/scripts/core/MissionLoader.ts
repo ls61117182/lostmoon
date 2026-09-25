@@ -651,7 +651,7 @@ function parseTileDefBase(def: TileDef): { terrain: TerrainType; hasBuilding: bo
 /**
  * 解析 `TileDef.br` → `Tile.bridgeEnds`，并强校验 GDD §3.2「桥梁」字段：
  * - 仅水域格允许带桥梁；任何非水域基底配 `br` 立即抛错（避免「公路上又叠桥」这类无意义配置悄悄忽略）；
- * - `br` 必须为长度 2 的数组，每项是 0..5 整数，且两端方向不能相同；
+ * - `br` 必须为长度 2 的数组，每项是 0..5 整数，且两端方向必须相反；
  * - 通过校验则归一为 `[Direction, Direction]`，未配置则返回 undefined。
  */
 function parseBridgeEnds(
@@ -683,9 +683,9 @@ function parseBridgeEnds(
       `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁 br=${JSON.stringify(raw)} 非法，方向须 0..5（0=E,1=SE,2=SW,3=W,4=NW,5=NE）`,
     );
   }
-  if (aRaw === bRaw) {
+  if ((aRaw + 3) % 6 !== bRaw) {
     throw new Error(
-      `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁两端方向相同 (${aRaw})，须填两个不同方向`,
+      `任务 ${missionId}：tile (${pos.col},${pos.row}) 桥梁 br=${JSON.stringify(raw)} 非法，两端方向必须相反（[0,3] / [1,4] / [2,5]）`,
     );
   }
   return [aRaw as Direction, bRaw as Direction];

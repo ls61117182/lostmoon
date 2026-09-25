@@ -85,7 +85,7 @@ export interface Tile {
    * 桥梁两端方向（仅水域格 `terrain==='water'` 上有效；GDD §3.2「桥梁」叠加项）：
    * 桥梁本身不是独立地形，叠加在水域格上 → 该格对坦克 / 卡车变为可入；移动 / 攻击 / 杂项的基础骰数与公路相同（见 `effectiveDiceTerrain`），移动力消耗与公路相同（见 `terrainMoveCost`）。
    * 两端方向 `[a, b]` 决定哪两条格边「贯通」：车辆只能从这两个方向之一驶入 / 驶出本格，其余 4 条边仍视为水面。
-   * 关卡 JSON 字段：`TileDef.br = [a, b]`；MissionLoader 强校验「水域基底 + 两个 0..5 不重复方向」。
+   * 关卡 JSON 字段：`TileDef.br = [a, b]`；MissionLoader 强校验「水域基底 + 两个相反方向」。
    */
   bridgeEnds?: [Direction, Direction];
 }
@@ -726,7 +726,7 @@ export interface TileDef {
   /**
    * 桥梁两端方向 `[a, b]`（GDD §3.2 桥梁；运行时归一为 `Tile.bridgeEnds`）：
    * - **仅水域格** (`t === "w"`) 允许配置；其他基底基为非法，MissionLoader 抛错；
-   * - `a`、`b` 须为 0..5 整数（0=E, 1=SE, 2=SW, 3=W, 4=NW, 5=NE）且**互不相同**；
+   * - `a`、`b` 须为 0..5 整数（0=E, 1=SE, 2=SW, 3=W, 4=NW, 5=NE）且必须互为相反方向；
    * - 配置后该水域格视为可通行，骰子基数与移动力按公路计算；车辆仅能从 `a` / `b` 两端方向驶入 / 驶出本格。
    */
   br?: [number, number];

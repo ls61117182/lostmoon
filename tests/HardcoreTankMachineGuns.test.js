@@ -13,6 +13,7 @@ const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
 const {
   canMGAttack,
   mgHitThreshold,
+  rollSelectedTankMachineGunAttacks,
   selectTankMachineGun,
 } = require('../assets/scripts/core/Combat.ts');
 
@@ -162,7 +163,24 @@ const coaxialNeed = mgHitThreshold({
 });
 assert.strictEqual(hullNeed, coaxialNeed,
   'hull-only and coaxial-only fire should use the same unmodified hit threshold');
-assert.strictEqual(bothNeed, hullNeed - 1,
-  'only combined hull and coaxial fire receives the -1 hit-threshold effect');
+assert.strictEqual(bothNeed, hullNeed,
+  'combined coverage no longer reduces the hit threshold');
+
+const rolls = [6, 1];
+const dualReports = rollSelectedTankMachineGunAttacks({
+  ...common,
+  attacker: { ...attacker, turretFacing: 0 },
+  target: frontTarget,
+  tankMachineGun: 'both',
+}, { d6: () => rolls.shift() });
+assert.deepStrictEqual(dualReports.map(item => item.weapon), ['coaxial', 'hull'],
+  'combined coverage resolves coaxial and hull MG attacks independently');
+assert.deepStrictEqual(dualReports.map(item => item.report.roll), [6, 1],
+  'both selected machine guns always consume their own roll');
+assert.strictEqual(dualReports[0].report.hit, true);
+assert.strictEqual(dualReports[1].report.hit, false,
+  'the second attack is still resolved after the first attack destroys the target');
+assert.strictEqual(dualReports[0].report.threshold, dualReports[1].report.threshold,
+  'each combined-fire attack uses the same threshold as that weapon firing alone');
 
 console.log('Hardcore tank machine-gun tests passed');

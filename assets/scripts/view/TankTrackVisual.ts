@@ -111,11 +111,125 @@ export function tankTrackTraversalKey(
   return `${unitId}:${tankTrackEdgeKey(fromQ, fromR, toQ, toR)}`;
 }
 
+/** Only opposite axial vectors form one straight run through a shared hex. */
+export function tankTrackEdgesContinueStraight(
+  vertexQ: number,
+  vertexR: number,
+  firstOtherQ: number,
+  firstOtherR: number,
+  secondOtherQ: number,
+  secondOtherR: number,
+): boolean {
+  return firstOtherQ - vertexQ === -(secondOtherQ - vertexQ)
+    && firstOtherR - vertexR === -(secondOtherR - vertexR);
+}
+
 export interface TankTrackSweptSegment {
   fromX: number;
   fromY: number;
   toX: number;
   toY: number;
+}
+
+export interface TankTrackPoint {
+  x: number;
+  y: number;
+}
+
+export interface TankTrackRenderedSegment {
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  lineWidth: number;
+}
+
+/**
+ * Return the portions of a new centreline that do not overlap existing crossing strokes.
+ * Parallel runs are handled by movement-segment joining; endpoint contacts remain connected.
+ */
+export function tankTrackVisibleIntervals(
+  segment: TankTrackRenderedSegment,
+  drawn: readonly TankTrackRenderedSegment[],
+): Array<{ from: number; to: number }> {
+  const dx = segment.toX - segment.fromX;
+  const dy = segment.toY - segment.fromY;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.001) return [];
+  const blocked: Array<{ from: number; to: number }> = [];
+  for (const prior of drawn) {
+    const px = prior.toX - prior.fromX;
+    const py = prior.toY - prior.fromY;
+    const priorLength = Math.hypot(px, py);
+    if (priorLength < 0.001) continue;
+    const denominator = dx * py - dy * px;
+    if (Math.abs(denominator) < 1e-6) continue;
+    const rx = prior.fromX - segment.fromX;
+    const ry = prior.fromY - segment.fromY;
+    const t = (rx * py - ry * px) / denominator;
+    const u = (rx * dy - ry * dx) / denominator;
+    // Shared endpoints are intentional joins, not crossings that need clipping.
+    if (t <= 1e-4 || t >= 1 - 1e-4 || u <= 1e-4 || u >= 1 - 1e-4) continue;
+    const sine = Math.abs(denominator) / (length * priorLength);
+    const halfGapDistance = (segment.lineWidth + prior.lineWidth) * 0.5
+      / Math.max(0.2, sine);
+    const halfGapT = halfGapDistance / length;
+    blocked.push({
+      from: Math.max(0, t - halfGapT),
+      to: Math.min(1, t + halfGapT),
+    });
+  }
+  if (blocked.length === 0) return [{ from: 0, to: 1 }];
+  blocked.sort((a, b) => a.from - b.from);
+  const visible: Array<{ from: number; to: number }> = [];
+  let cursor = 0;
+  for (const interval of blocked) {
+    if (interval.from > cursor) visible.push({ from: cursor, to: interval.from });
+    cursor = Math.max(cursor, interval.to);
+  }
+  if (cursor < 1) visible.push({ from: cursor, to: 1 });
+  return visible.filter(interval => interval.to - interval.from > 1e-4);
+}
+
+/** Keep pivot marks under the hull instead of tracing its outer corner radius. */
+export const TANK_TRACK_TURN_INSET_SCALE = 0.90;
+
+/** Trace four inset front/rear track points while a tank pivots around its hex centre. */
+export function tankTrackTurnArcPoints(
+  centerX: number,
+  centerY: number,
+  halfBodyLength: number,
+  halfGap: number,
+  fromAngle: number,
+  toAngle: number,
+  progress: number,
+): TankTrackPoint[][] {
+  let angleDelta = toAngle - fromAngle;
+  while (angleDelta > Math.PI) angleDelta -= Math.PI * 2;
+  while (angleDelta < -Math.PI) angleDelta += Math.PI * 2;
+  const completedDelta = angleDelta * Math.max(0, Math.min(1, progress));
+  const sampleCount = Math.max(1, Math.ceil(Math.abs(completedDelta) / (Math.PI / 36)));
+  const insetHalfLength = halfBodyLength * TANK_TRACK_TURN_INSET_SCALE;
+  const insetHalfGap = halfGap * TANK_TRACK_TURN_INSET_SCALE;
+  const endpoints: readonly [number, number][] = [
+    [insetHalfLength, insetHalfGap],
+    [insetHalfLength, -insetHalfGap],
+    [-insetHalfLength, insetHalfGap],
+    [-insetHalfLength, -insetHalfGap],
+  ];
+  return endpoints.map(([forward, right]) => {
+    const points: TankTrackPoint[] = [];
+    for (let i = 0; i <= sampleCount; i++) {
+      const angle = fromAngle + completedDelta * (i / sampleCount);
+      const ux = Math.cos(angle);
+      const uy = Math.sin(angle);
+      points.push({
+        x: centerX + ux * forward - uy * right,
+        y: centerY + uy * forward + ux * right,
+      });
+    }
+    return points;
+  });
 }
 
 /**
@@ -129,6 +243,8 @@ export function tankTrackProgressSegment(
   toY: number,
   halfBodyLength: number,
   progress: number,
+  extendFrom = true,
+  extendTo = true,
 ): TankTrackSweptSegment {
   const dx = toX - fromX;
   const dy = toY - fromY;
@@ -137,8 +253,13 @@ export function tankTrackProgressSegment(
   const ux = dx / length;
   const uy = dy / length;
   const p = Math.max(0, Math.min(1, progress));
-  const startDistance = -halfBodyLength;
-  const endDistance = length * p + halfBodyLength;
+  // When a newer straight segment owns the shared hull footprint, trim the
+  // older endpoint to that newer segment's rear edge instead of the hex centre.
+  const startDistance = extendFrom ? -halfBodyLength : halfBodyLength;
+  const reachedLeadingEdge = length * p + halfBodyLength;
+  const endDistance = extendTo
+    ? reachedLeadingEdge
+    : Math.min(Math.max(0, length - halfBodyLength), reachedLeadingEdge);
   return {
     fromX: fromX + ux * startDistance,
     fromY: fromY + uy * startDistance,
@@ -157,6 +278,8 @@ export function tankTrackSweptSegment(
   toX: number,
   toY: number,
   halfBodyLength: number,
+  extendFrom = true,
+  extendTo = true,
 ): TankTrackSweptSegment {
   return tankTrackProgressSegment(
     fromX,
@@ -165,5 +288,7 @@ export function tankTrackSweptSegment(
     toY,
     halfBodyLength,
     1,
+    extendFrom,
+    extendTo,
   );
 }

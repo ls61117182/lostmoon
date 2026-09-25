@@ -359,6 +359,22 @@ function reconcileLegacyScenarioATGunCrews(units: Unit[]): void {
   }
 }
 
+/** Repair saves where a directly targeted attached infantry died without neutralizing its gun. */
+function neutralizeGunsWithDeadControllers(units: Unit[]): void {
+  const byId = new Map(units.map(unit => [unit.id, unit]));
+  for (const gun of units) {
+    if (!isAntiTankGunKind(gun.kind) || gun.atGunCrewAlive !== true || !gun.atGunControllerUnitId) continue;
+    const controller = byId.get(gun.atGunControllerUnitId);
+    if (!controller?.destroyed) continue;
+    controller.attachedToATGunId = undefined;
+    gun.atGunCrewAlive = false;
+    gun.atGunControllerUnitId = undefined;
+    gun.atGunCrewLevel = undefined;
+    gun.faction = 'neutral';
+    gun.visionRange = 0;
+  }
+}
+
 /**
  * 将存档应用到当前 mission（就地修改 Unit 对象，保持引用稳定，
  * 这样外部保存的 Unit 指针/Set 缓存不会失效）。
@@ -458,6 +474,7 @@ export function applySave(
     reconcileLegacyScenarioATGunCrews(mission.enemies);
     reconcileLegacyScenarioATGunCrews(mission.allies);
   }
+  neutralizeGunsWithDeadControllers([...mission.enemies, ...mission.allies]);
 
   if (save.version >= 3) {
     const sh = playerTank;

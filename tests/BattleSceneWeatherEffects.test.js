@@ -21,11 +21,11 @@ assert(
 );
 
 assert(
-  /雨天\s+命中-1\s*\/\s*视野-1/.test(battleScene)
-    && /Rain\s+Hit -1\s*\/\s*Vision -1/.test(battleScene)
+  /雨天\s+主炮命中-1\s*\/\s*视野-1/.test(battleScene)
+    && /Rain\s+Main Gun Hit -1\s*\/\s*Vision -1/.test(battleScene)
     && !/雨天\s+命中\+1\s*\/\s*视野-1/.test(battleScene)
     && !/Rain\s+Hit \+1\s*\/\s*Vision -1/.test(battleScene),
-  'Rain HUD should describe the hit chance penalty as Hit -1 instead of threshold +1',
+  'Rain HUD should identify the main gun as the weapon affected by the hit penalty',
 );
 
 const drawWeatherEffects = battleScene.match(

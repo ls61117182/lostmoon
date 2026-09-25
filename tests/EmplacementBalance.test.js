@@ -152,10 +152,47 @@ test('direct AT-gun destruction skips the penetration row and ends after the hit
   assert.match(sceneText, /if \(!mg && !directHitDestroy && \(!highExplosiveReport \|\| heHasEffectRow\)\)/);
   assert.match(sceneText, /show\.report\.directHitDestroy \|\| show\.report\.shootingPortHit === true[\s\S]*?enterDiceShowHold\(show\)/);
 });
-const names = ['rollHighExplosiveCollateralResults', 'applyHighExplosiveAttackResult', 'atGunController', 'killATGunCrew', 'releaseATGunCrew'];
+const names = ['rollHighExplosiveCollateralResults', 'applyHighExplosiveAttackResult', 'atGunController', 'killATGunCrew', 'releaseATGunCrew', 'playerMainGunTargets'];
 const methods = names.map(name => sceneClass.members.find(m => m.name?.getText(source) === name).getText(source));
 const js = ts.transpileModule(`class Scene { ${methods.join('\n')} }`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 const Scene = vm.runInNewContext(js + '\nScene', { ...types, ...combat });
+test('attached AT-gun crew cannot be targeted directly or revived by crushing the gun', () => {
+  const gun = unit('pak38');
+  const crew = unit('german_infantry');
+  gun.atGunCrewAlive = true;
+  gun.atGunControllerUnitId = crew.id;
+  crew.attachedToATGunId = gun.id;
+  const scene = new Scene();
+  Object.assign(scene, {
+    mission: { enemies: [gun, crew], allies: [] },
+    allUnits: () => [gun, crew],
+  });
+  assert.deepEqual(Array.from(scene.playerMainGunTargets()), [gun]);
+  crew.destroyed = true; // Simulates a legacy save with an inconsistent direct MG kill.
+  assert.equal(scene.releaseATGunCrew(gun), null);
+  assert.equal(crew.destroyed, true);
+  assert.equal(gun.atGunCrewAlive, false);
+  assert.equal(gun.faction, 'neutral');
+});
+test('loading an old direct MG kill neutralizes the still crewed gun', () => {
+  const saveText = fs.readFileSync(require.resolve('../assets/scripts/core/SaveLoad.ts'), 'utf8');
+  const saveSource = ts.createSourceFile('SaveLoad.ts', saveText, ts.ScriptTarget.ES2020, true);
+  const helper = saveSource.statements.find(statement => statement.name?.getText(saveSource) === 'neutralizeGunsWithDeadControllers');
+  assert.ok(helper);
+  const code = ts.transpileModule(`${helper.getText(saveSource)}\nneutralizeGunsWithDeadControllers`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const reconcile = vm.runInNewContext(code, { isAntiTankGunKind: types.isAntiTankGunKind });
+  const gun = unit('pak38');
+  const crew = unit('german_infantry');
+  Object.assign(gun, { atGunCrewAlive: true, atGunControllerUnitId: crew.id });
+  Object.assign(crew, { attachedToATGunId: gun.id, destroyed: true });
+  reconcile([gun, crew]);
+  assert.equal(gun.atGunCrewAlive, false);
+  assert.equal(gun.faction, 'neutral');
+  assert.equal(crew.destroyed, true);
+  assert.equal(crew.attachedToATGunId, undefined);
+});
 test('precision target selection excludes side bunkers; clicking them consumes no dice or ammunition', () => {
   const methods = ['playerWeaponTargetHexKeys', 'canPlayerMainGunAttack', 'canDirectlyAttackUrbanBuilding', 'tryAttack'].map(name => sceneClass.members.find(m => m.name?.getText(source) === name).getText(source));
   const code = ts.transpileModule(`class PreviewScene { ${methods.join('\n')} }`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;

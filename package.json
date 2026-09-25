@@ -11,6 +11,7 @@
     "tank:build": "node tools/buildTankVisualDB.js",
     "tank:audit": "node tools/auditTankAssets.cjs",
     "tank:validate": "pnpm run tank:build && pnpm run tank:audit && node --test tests/prepareTankArt.test.js tests/MausBattleRendering.test.js tests/topDownTankFacing.test.js && pnpm run typecheck",
+    "road:prepare": "node tools/prepareEuropeanRoadArt.cjs",
     "generate-winter-terrain": "node tools/generateWinterTerrain.cjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:tests": "tsc --noEmit -p tests/tsconfig.json"

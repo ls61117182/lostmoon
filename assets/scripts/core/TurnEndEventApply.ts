@@ -145,8 +145,8 @@ function buildStukaExtraDicePhases(sim: {
 function findShermanLosInfantry(mission: LoadedMission): Unit | null {
   const sh = mission.sherman;
   for (const e of mission.enemies) {
-    // 仅检查距玩家坦克 2 格以内的「徒步类」单位。
-    if (e.destroyed || isAttachedATGunCrew(e) || !isFootUnit(e)) continue;
+    // 仅检查未被压制、距玩家坦克 2 格以内的「徒步类」单位。
+    if (e.destroyed || e.suppressed || isAttachedATGunCrew(e) || !isFootUnit(e)) continue;
     if (hexDistance(e.pos, sh.pos) > 2) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return e;
@@ -354,13 +354,13 @@ function cloneUnitForSim(u: Unit): Unit {
  * 相邻步兵集火：预掷骰并返回每发战报（BattleScene 用主炮同款 DiceShow 播放）；返回待应用的战报表；
  * 与原先「确认后再掷骰」等价 RNG，仅在克隆谢尔曼上演练 applyAttack 以保持顺序与终止条件。
  */
-/** 是否存在与谢尔曼六角相邻的存活敌军步兵（事件触发时用于文案：无相邻则无射击条件） */
+/** 是否存在与谢尔曼六角相邻、存活且未被压制的敌军步兵（事件触发时用于文案） */
 function hasInfantryAdjacentToSherman(mission: LoadedMission, includeSameHex = false): boolean {
   const sh = mission.sherman;
   if (sh.destroyed) return false;
   // 步兵 / 军官都计入「相邻徒步单位」 —— 任务 8 起军官在相邻齐射事件中与步兵同等参与。
   return mission.enemies.some(
-    e => !e.destroyed && !isAttachedATGunCrew(e) && isFootUnit(e)
+    e => !e.destroyed && !e.suppressed && !isAttachedATGunCrew(e) && isFootUnit(e)
       && (hexDistance(e.pos, sh.pos) === 1 || (includeSameHex && hexDistance(e.pos, sh.pos) === 0)),
   );
 }
@@ -385,9 +385,9 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   }
 
   const simTarget = cloneUnitForSim(sh);
-  // 任务 8 起：军官与步兵同属「徒步类」，相邻齐射时也参与。
+  // 任务 8 起：军官与步兵同属「徒步类」，未被压制时参与相邻齐射。
   const infs = mission.enemies.filter(
-    e => !e.destroyed && !isAttachedATGunCrew(e) && isFootUnit(e)
+    e => !e.destroyed && !e.suppressed && !isAttachedATGunCrew(e) && isFootUnit(e)
       && (hexDistance(e.pos, sh.pos) === 1 || (sameHexInfantryTankAttack && hexDistance(e.pos, sh.pos) === 0)),
   );
 

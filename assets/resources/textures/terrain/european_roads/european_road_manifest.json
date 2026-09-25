@@ -1,0 +1,873 @@
+{
+  "size": [
+    222,
+    256
+  ],
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "directionOrder": [
+    "E",
+    "SE",
+    "SW",
+    "W",
+    "NW",
+    "NE"
+  ],
+  "roadHalfWidth": 23.04,
+  "edgeWidth": 1.8,
+  "mouthBleed": 5,
+  "endpointRadius": 36.864,
+  "turnCenterlineRadius": 43,
+  "junctionBlend": 30,
+  "canonicalSurfaceCountPerSeason": 13,
+  "seasons": [
+    "summer",
+    "winter"
+  ],
+  "bridge": {
+    "shapeCountPerSeason": 1,
+    "canonicalEnds": [
+      "E",
+      "W"
+    ],
+    "summer": "european_bridge_surface_summer_v1.png",
+    "winter": "european_bridge_surface_winter_v1.png",
+    "note": "Straight bridge only; rotate the E-W sprite by 0, -60, or -120 degrees at runtime."
+  },
+  "note": "63 direction masks reuse 13 canonical transparent surfaces per season and rotate them at runtime.",
+  "variants": [
+    {
+      "rd": "000000",
+      "directions": [],
+      "canonicalRd": null,
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": null,
+      "winter": null
+    },
+    {
+      "rd": "100000",
+      "directions": [
+        "E"
+      ],
+      "canonicalRd": "100000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_100000_v1.png",
+      "winter": "european_road_surface_winter_100000_v1.png"
+    },
+    {
+      "rd": "010000",
+      "directions": [
+        "SE"
+      ],
+      "canonicalRd": "100000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_100000_v1.png",
+      "winter": "european_road_surface_winter_100000_v1.png"
+    },
+    {
+      "rd": "110000",
+      "directions": [
+        "E",
+        "SE"
+      ],
+      "canonicalRd": "110000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_110000_v1.png",
+      "winter": "european_road_surface_winter_110000_v1.png"
+    },
+    {
+      "rd": "001000",
+      "directions": [
+        "SW"
+      ],
+      "canonicalRd": "100000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_100000_v1.png",
+      "winter": "european_road_surface_winter_100000_v1.png"
+    },
+    {
+      "rd": "101000",
+      "directions": [
+        "E",
+        "SW"
+      ],
+      "canonicalRd": "101000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_101000_v1.png",
+      "winter": "european_road_surface_winter_101000_v1.png"
+    },
+    {
+      "rd": "011000",
+      "directions": [
+        "SE",
+        "SW"
+      ],
+      "canonicalRd": "110000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_110000_v1.png",
+      "winter": "european_road_surface_winter_110000_v1.png"
+    },
+    {
+      "rd": "111000",
+      "directions": [
+        "E",
+        "SE",
+        "SW"
+      ],
+      "canonicalRd": "111000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_111000_v1.png",
+      "winter": "european_road_surface_winter_111000_v1.png"
+    },
+    {
+      "rd": "000100",
+      "directions": [
+        "W"
+      ],
+      "canonicalRd": "100000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_100000_v1.png",
+      "winter": "european_road_surface_winter_100000_v1.png"
+    },
+    {
+      "rd": "100100",
+      "directions": [
+        "E",
+        "W"
+      ],
+      "canonicalRd": "100100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_100100_v1.png",
+      "winter": "european_road_surface_winter_100100_v1.png"
+    },
+    {
+      "rd": "010100",
+      "directions": [
+        "SE",
+        "W"
+      ],
+      "canonicalRd": "101000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_101000_v1.png",
+      "winter": "european_road_surface_winter_101000_v1.png"
+    },
+    {
+      "rd": "110100",
+      "directions": [
+        "E",
+        "SE",
+        "W"
+      ],
+      "canonicalRd": "110100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_110100_v1.png",
+      "winter": "european_road_surface_winter_110100_v1.png"
+    },
+    {
+      "rd": "001100",
+      "directions": [
+        "SW",
+        "W"
+      ],
+      "canonicalRd": "110000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_110000_v1.png",
+      "winter": "european_road_surface_winter_110000_v1.png"
+    },
+    {
+      "rd": "101100",
+      "directions": [
+        "E",
+        "SW",
+        "W"
+      ],
+      "canonicalRd": "101100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_101100_v1.png",
+      "winter": "european_road_surface_winter_101100_v1.png"
+    },
+    {
+      "rd": "011100",
+      "directions": [
+        "SE",
+        "SW",
+        "W"
+      ],
+      "canonicalRd": "111000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_111000_v1.png",
+      "winter": "european_road_surface_winter_111000_v1.png"
+    },
+    {
+      "rd": "111100",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W"
+      ],
+      "canonicalRd": "111100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_111100_v1.png",
+      "winter": "european_road_surface_winter_111100_v1.png"
+    },
+    {
+      "rd": "000010",
+      "directions": [
+        "NW"
+      ],
+      "canonicalRd": "100000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_100000_v1.png",
+      "winter": "european_road_surface_winter_100000_v1.png"
+    },
+    {
+      "rd": "100010",
+      "directions": [
+        "E",
+        "NW"
+      ],
+      "canonicalRd": "101000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_101000_v1.png",
+      "winter": "european_road_surface_winter_101000_v1.png"
+    },
+    {
+      "rd": "010010",
+      "directions": [
+        "SE",
+        "NW"
+      ],
+      "canonicalRd": "100100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_100100_v1.png",
+      "winter": "european_road_surface_winter_100100_v1.png"
+    },
+    {
+      "rd": "110010",
+      "directions": [
+        "E",
+        "SE",
+        "NW"
+      ],
+      "canonicalRd": "101100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_101100_v1.png",
+      "winter": "european_road_surface_winter_101100_v1.png"
+    },
+    {
+      "rd": "001010",
+      "directions": [
+        "SW",
+        "NW"
+      ],
+      "canonicalRd": "101000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_101000_v1.png",
+      "winter": "european_road_surface_winter_101000_v1.png"
+    },
+    {
+      "rd": "101010",
+      "directions": [
+        "E",
+        "SW",
+        "NW"
+      ],
+      "canonicalRd": "101010",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_101010_v1.png",
+      "winter": "european_road_surface_winter_101010_v1.png"
+    },
+    {
+      "rd": "011010",
+      "directions": [
+        "SE",
+        "SW",
+        "NW"
+      ],
+      "canonicalRd": "110100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_110100_v1.png",
+      "winter": "european_road_surface_winter_110100_v1.png"
+    },
+    {
+      "rd": "111010",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NW"
+      ],
+      "canonicalRd": "111010",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_111010_v1.png",
+      "winter": "european_road_surface_winter_111010_v1.png"
+    },
+    {
+      "rd": "000110",
+      "directions": [
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "110000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_110000_v1.png",
+      "winter": "european_road_surface_winter_110000_v1.png"
+    },
+    {
+      "rd": "100110",
+      "directions": [
+        "E",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "110100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_110100_v1.png",
+      "winter": "european_road_surface_winter_110100_v1.png"
+    },
+    {
+      "rd": "010110",
+      "directions": [
+        "SE",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "101100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_101100_v1.png",
+      "winter": "european_road_surface_winter_101100_v1.png"
+    },
+    {
+      "rd": "110110",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "110110",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_110110_v1.png",
+      "winter": "european_road_surface_winter_110110_v1.png"
+    },
+    {
+      "rd": "001110",
+      "directions": [
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "111000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_111000_v1.png",
+      "winter": "european_road_surface_winter_111000_v1.png"
+    },
+    {
+      "rd": "101110",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "111010",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_111010_v1.png",
+      "winter": "european_road_surface_winter_111010_v1.png"
+    },
+    {
+      "rd": "011110",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "111100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_111100_v1.png",
+      "winter": "european_road_surface_winter_111100_v1.png"
+    },
+    {
+      "rd": "111110",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalRd": "111110",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_111110_v1.png",
+      "winter": "european_road_surface_winter_111110_v1.png"
+    },
+    {
+      "rd": "000001",
+      "directions": [
+        "NE"
+      ],
+      "canonicalRd": "100000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_100000_v1.png",
+      "winter": "european_road_surface_winter_100000_v1.png"
+    },
+    {
+      "rd": "100001",
+      "directions": [
+        "E",
+        "NE"
+      ],
+      "canonicalRd": "110000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_110000_v1.png",
+      "winter": "european_road_surface_winter_110000_v1.png"
+    },
+    {
+      "rd": "010001",
+      "directions": [
+        "SE",
+        "NE"
+      ],
+      "canonicalRd": "101000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_101000_v1.png",
+      "winter": "european_road_surface_winter_101000_v1.png"
+    },
+    {
+      "rd": "110001",
+      "directions": [
+        "E",
+        "SE",
+        "NE"
+      ],
+      "canonicalRd": "111000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_111000_v1.png",
+      "winter": "european_road_surface_winter_111000_v1.png"
+    },
+    {
+      "rd": "001001",
+      "directions": [
+        "SW",
+        "NE"
+      ],
+      "canonicalRd": "100100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_100100_v1.png",
+      "winter": "european_road_surface_winter_100100_v1.png"
+    },
+    {
+      "rd": "101001",
+      "directions": [
+        "E",
+        "SW",
+        "NE"
+      ],
+      "canonicalRd": "110100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_110100_v1.png",
+      "winter": "european_road_surface_winter_110100_v1.png"
+    },
+    {
+      "rd": "011001",
+      "directions": [
+        "SE",
+        "SW",
+        "NE"
+      ],
+      "canonicalRd": "101100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_101100_v1.png",
+      "winter": "european_road_surface_winter_101100_v1.png"
+    },
+    {
+      "rd": "111001",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NE"
+      ],
+      "canonicalRd": "111100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_111100_v1.png",
+      "winter": "european_road_surface_winter_111100_v1.png"
+    },
+    {
+      "rd": "000101",
+      "directions": [
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "101000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_101000_v1.png",
+      "winter": "european_road_surface_winter_101000_v1.png"
+    },
+    {
+      "rd": "100101",
+      "directions": [
+        "E",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "101100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_101100_v1.png",
+      "winter": "european_road_surface_winter_101100_v1.png"
+    },
+    {
+      "rd": "010101",
+      "directions": [
+        "SE",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "101010",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_101010_v1.png",
+      "winter": "european_road_surface_winter_101010_v1.png"
+    },
+    {
+      "rd": "110101",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "111010",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_111010_v1.png",
+      "winter": "european_road_surface_winter_111010_v1.png"
+    },
+    {
+      "rd": "001101",
+      "directions": [
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "110100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_110100_v1.png",
+      "winter": "european_road_surface_winter_110100_v1.png"
+    },
+    {
+      "rd": "101101",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "110110",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_110110_v1.png",
+      "winter": "european_road_surface_winter_110110_v1.png"
+    },
+    {
+      "rd": "011101",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "111010",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_111010_v1.png",
+      "winter": "european_road_surface_winter_111010_v1.png"
+    },
+    {
+      "rd": "111101",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalRd": "111110",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "summer": "european_road_surface_summer_111110_v1.png",
+      "winter": "european_road_surface_winter_111110_v1.png"
+    },
+    {
+      "rd": "000011",
+      "directions": [
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "110000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_110000_v1.png",
+      "winter": "european_road_surface_winter_110000_v1.png"
+    },
+    {
+      "rd": "100011",
+      "directions": [
+        "E",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_111000_v1.png",
+      "winter": "european_road_surface_winter_111000_v1.png"
+    },
+    {
+      "rd": "010011",
+      "directions": [
+        "SE",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "110100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_110100_v1.png",
+      "winter": "european_road_surface_winter_110100_v1.png"
+    },
+    {
+      "rd": "110011",
+      "directions": [
+        "E",
+        "SE",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_111100_v1.png",
+      "winter": "european_road_surface_winter_111100_v1.png"
+    },
+    {
+      "rd": "001011",
+      "directions": [
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "101100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_101100_v1.png",
+      "winter": "european_road_surface_winter_101100_v1.png"
+    },
+    {
+      "rd": "101011",
+      "directions": [
+        "E",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111010",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_111010_v1.png",
+      "winter": "european_road_surface_winter_111010_v1.png"
+    },
+    {
+      "rd": "011011",
+      "directions": [
+        "SE",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "110110",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_110110_v1.png",
+      "winter": "european_road_surface_winter_110110_v1.png"
+    },
+    {
+      "rd": "111011",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111110",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "summer": "european_road_surface_summer_111110_v1.png",
+      "winter": "european_road_surface_winter_111110_v1.png"
+    },
+    {
+      "rd": "000111",
+      "directions": [
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_111000_v1.png",
+      "winter": "european_road_surface_winter_111000_v1.png"
+    },
+    {
+      "rd": "100111",
+      "directions": [
+        "E",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_111100_v1.png",
+      "winter": "european_road_surface_winter_111100_v1.png"
+    },
+    {
+      "rd": "010111",
+      "directions": [
+        "SE",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111010",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_111010_v1.png",
+      "winter": "european_road_surface_winter_111010_v1.png"
+    },
+    {
+      "rd": "110111",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111110",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "summer": "european_road_surface_summer_111110_v1.png",
+      "winter": "european_road_surface_winter_111110_v1.png"
+    },
+    {
+      "rd": "001111",
+      "directions": [
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_111100_v1.png",
+      "winter": "european_road_surface_winter_111100_v1.png"
+    },
+    {
+      "rd": "101111",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111110",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "summer": "european_road_surface_summer_111110_v1.png",
+      "winter": "european_road_surface_winter_111110_v1.png"
+    },
+    {
+      "rd": "011111",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111110",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "summer": "european_road_surface_summer_111110_v1.png",
+      "winter": "european_road_surface_winter_111110_v1.png"
+    },
+    {
+      "rd": "111111",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalRd": "111111",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "summer": "european_road_surface_summer_111111_v1.png",
+      "winter": "european_road_surface_winter_111111_v1.png"
+    }
+  ]
+}

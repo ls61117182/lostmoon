@@ -53,6 +53,9 @@ let currentManeuverKey: string | null = null;
 let turretTraverseSource: AudioSource | null = null;
 /** 短转向可能先结束再完成异步加载；代次用于取消迟到的播放回调。 */
 let turretTraversePlayId = 0;
+/** 斯图卡攻击音效使用独立音源，便于飞行动画结束时精确停止。 */
+let stukaAttackSource: AudioSource | null = null;
+let stukaAttackPlayId = 0;
 let sfxPool: AudioSource[] = [];
 let sfxIdx = 0;
 let sfxPlayId = 0;
@@ -122,6 +125,12 @@ function ensureRoot(): void {
   turretTraverseSource.playOnAwake = false;
   turretTraverseSource.loop = true;
 
+  const stukaAttackN = new Node('StukaAttack');
+  root.addChild(stukaAttackN);
+  stukaAttackSource = stukaAttackN.addComponent(AudioSource);
+  stukaAttackSource.playOnAwake = false;
+  stukaAttackSource.loop = false;
+
   refreshVolumes();
 }
 
@@ -132,6 +141,7 @@ function refreshVolumes(): void {
   if (bgmSource) bgmSource.volume = bgm;
   if (maneuverSource) maneuverSource.volume = sfx;
   if (turretTraverseSource) turretTraverseSource.volume = sfx;
+  if (stukaAttackSource) stukaAttackSource.volume = sfx;
   for (const a of sfxPool) a.volume = sfx;
 }
 
@@ -281,6 +291,7 @@ export function stopBattleSfx(): void {
   sfxPlayId++;
   stopManeuverSound();
   stopTurretTraverseSound();
+  stopStukaCannonFire();
   for (const a of sfxPool) a.stop();
 }
 
@@ -364,9 +375,25 @@ export function playStukaFlyover(): void {
   playSfxKey(AudioKeys.stukaFlyover, 1.4, 1.4);
 }
 
-/** 斯图卡机炮开始扫射时播放一次，素材截取第 10～11.5 秒，共 1.5 秒。 */
+/** 斯图卡扫射前播放攻击音效；使用独立音源，由飞行动画负责停止。 */
 export function playStukaCannonFire(): void {
-  playSfxKey(AudioKeys.stukaCannonFire);
+  ensureRoot();
+  const s = MenuProgress.load();
+  if (s.sfxVolume <= 0) return;
+  const myId = ++stukaAttackPlayId;
+  getClip(AudioKeys.stukaCannonFire, (clip) => {
+    if (myId !== stukaAttackPlayId || !clip || !stukaAttackSource) return;
+    refreshVolumes();
+    stukaAttackSource.stop();
+    stukaAttackSource.clip = clip;
+    stukaAttackSource.play();
+  });
+}
+
+/** 停止当前斯图卡攻击音效，并取消尚未完成的异步播放。 */
+export function stopStukaCannonFire(): void {
+  stukaAttackPlayId++;
+  if (stukaAttackSource) stukaAttackSource.stop();
 }
 
 /** 装填：相对默认 SFX 约 +150%（2.5×），上限同步放宽 */

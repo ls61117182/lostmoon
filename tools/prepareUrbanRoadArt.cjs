@@ -17,6 +17,19 @@ const VERTICES = [[111,0],[222,64],[222,192],[111,256],[0,192],[0,64]];
 const RAYS = EDGES.map(([x,y]) => {const d = Math.hypot(x-111,y-128); return [(x-111)/d,(y-128)/d];});
 const flags = mask => Array.from({length:6}, (_,i) => (mask >> i) & 1).join('');
 const file = mask => `urban_road_surface_${flags(mask)}_v1.png`;
+const rotateMask = (mask, clockwiseSteps) => {
+  const steps=((clockwiseSteps%6)+6)%6, normalized=mask&63;
+  return steps ? ((normalized<<steps)|(normalized>>(6-steps)))&63 : normalized;
+};
+const canonicalTransform = mask => {
+  let canonicalMask=mask&63, rotationSteps=0;
+  for(let steps=1;steps<6;steps++) {
+    const candidate=rotateMask(mask,-steps);
+    if(candidate<canonicalMask) { canonicalMask=candidate; rotationSteps=steps; }
+  }
+  return {canonicalMask,rotationSteps,rotationDegrees:rotationSteps===0?0:-rotationSteps*60};
+};
+const CANONICAL_MASKS=[...new Set(Array.from({length:63},(_,i)=>canonicalTransform(i+1).canonicalMask))].sort((a,b)=>a-b);
 function hexInset(x, y) {
   let result = Infinity;
   for (let i=0;i<6;i++) {
@@ -79,8 +92,11 @@ function metaFor(filename) {
   frame.trimType='none'; frame.packable=false;
   fs.writeFileSync(output,JSON.stringify(meta,null,2)+'\n');
 }
+async function encode(data) {
+  return sharp(data,{raw:{width:W*S,height:H*S,channels:4}}).resize(W,H).png().toBuffer();
+}
 async function save(data,filename) {
-  await sharp(data,{raw:{width:W*S,height:H*S,channels:4}}).resize(W,H).png().toFile(path.join(OUT,filename));
+  await fs.promises.writeFile(path.join(OUT,filename),await encode(data));
   metaFor(filename);
 }
 function titleSvg(text,width,height=28) {
@@ -116,7 +132,9 @@ async function main() {
   await save(base,baseName);
   const entries=[];
   const composites=[];
+  const surfacePngs=new Map();
   for(let mask=0;mask<64;mask++) {
+    let surfacePng=null;
     if(mask) {
       const data=Buffer.alloc(N*4), distanceAt=shapeFor(mask);
       for(let i=0;i<N;i++) {
@@ -128,15 +146,35 @@ async function main() {
         for(let c=0;c<3;c++) data[i*4+c]=color ? color[c] : texture[i*3+c];
         data[i*4+3]=255;
       }
-      await save(data,file(mask));
+      surfacePng=await encode(data);
+      surfacePngs.set(mask,surfacePng);
+      if(CANONICAL_MASKS.includes(mask)) {
+        await fs.promises.writeFile(path.join(OUT,file(mask)),surfacePng);
+        metaFor(file(mask));
+      }
     }
-    const composite=await sharp(path.join(OUT,baseName)).composite(mask ? [{input:path.join(OUT,file(mask))}] : []).png().toBuffer();
+    const composite=await sharp(path.join(OUT,baseName)).composite(surfacePng ? [{input:surfacePng}] : []).png().toBuffer();
     composites.push(composite);
-    entries.push({rd:flags(mask),directions:DIRECTIONS.filter((_,i)=>mask&(1<<i)),surface:mask?file(mask):null});
+    const transform=mask ? canonicalTransform(mask) : null;
+    entries.push({
+      rd:flags(mask),
+      directions:DIRECTIONS.filter((_,i)=>mask&(1<<i)),
+      surface:transform?file(transform.canonicalMask):null,
+      canonicalRd:transform?flags(transform.canonicalMask):null,
+      rotationSteps:transform?.rotationSteps??0,
+      rotationDegrees:transform?.rotationDegrees??0,
+    });
+  }
+  const retained=new Set(CANONICAL_MASKS.flatMap(mask=>[file(mask),`${file(mask)}.meta`]));
+  for(const name of fs.readdirSync(OUT)) {
+    if(/^urban_road_surface_[01]{6}_v1\.png(?:\.meta)?$/.test(name)&&!retained.has(name)) {
+      fs.unlinkSync(path.join(OUT,name));
+    }
   }
   const manifest={size:[W,H],pivot:[.5,.5],base:baseName,directionOrder:DIRECTIONS,
     roadHalfWidth:HALF,curbWidth:CURB,endpointRadius:HALF*1.6,turnCenterlineRadius:TURN_RADIUS,junctionBlend:JUNCTION_BLEND,
-    note:'rd characters follow Tile.roads order (E,SE,SW,W,NW,NE), NOT a conventional binary integer string. Place base and one surface at identical center and size; do not trim. All 63 surfaces are pre-oriented. No rotation required. 000000 uses base only.',variants:entries};
+    canonicalSurfaceCount:CANONICAL_MASKS.length,
+    note:'rd characters follow Tile.roads order (E,SE,SW,W,NW,NE). The 63 direction masks reuse 13 canonical surfaces; rotate each surface by rotationDegrees at runtime. 000000 uses base only.',variants:entries};
   fs.writeFileSync(path.join(OUT,'urban_road_manifest.json'),JSON.stringify(manifest,null,2)+'\n');
   // Compact catalogue of every possible road mask, including the empty base.
   const catalogue=[];
@@ -181,8 +219,8 @@ async function main() {
   await sharp({create:{width:1160,height:1120,channels:4,background:'#404b45'}}).composite(map).png().toFile(path.join(SOURCE,'urban_roads_neighbourhood_preview.png'));
   // Verify actual exported images: every mouth center matches the rd flag, no fill outside hex.
   let checkedMouths=0, checkedProfiles=0;
-  const mouthReferences=await Promise.all(RAYS.map((_,d)=>sharp(path.join(OUT,file(1<<d))).raw().toBuffer()));
-  for(let mask=1;mask<64;mask++) {
+  const mouthReferences=await Promise.all(RAYS.map((_,d)=>sharp(surfacePngs.get(1<<d)).raw().toBuffer()));
+  for(const mask of CANONICAL_MASKS) {
     const p=path.join(OUT,file(mask));
     const {data,info}=await sharp(p).raw().toBuffer({resolveWithObject:true});
     if(info.width!==W||info.height!==H||info.channels!==4) throw Error('Wrong image dimensions: '+file(mask));
@@ -204,8 +242,8 @@ async function main() {
     }
     if(data[3]!==0||data[(W-1)*4+3]!==0) throw Error('Opaque corner '+file(mask));
   }
-  fs.writeFileSync(path.join(SOURCE,'urban_roads_validation.json'),JSON.stringify({surfaces:63,baseTiles:1,dimensions:[W,H],roadWidth:HALF*2,turnCenterlineRadius:TURN_RADIUS,verifiedMouths:checkedMouths,verifiedMouthWidthProfiles:checkedProfiles,transparentCorners:true,demoConnections:'reciprocal'},null,2)+'\n');
-  console.log(`Exported base + 63 transparent surfaces; verified ${checkedMouths} direction mouths. Preview sheets and neighbourhood saved.`);
+  fs.writeFileSync(path.join(SOURCE,'urban_roads_validation.json'),JSON.stringify({surfaces:CANONICAL_MASKS.length,directionMappings:63,baseTiles:1,dimensions:[W,H],roadWidth:HALF*2,turnCenterlineRadius:TURN_RADIUS,verifiedMouths:checkedMouths,verifiedMouthWidthProfiles:checkedProfiles,transparentCorners:true,demoConnections:'reciprocal'},null,2)+'\n');
+  console.log(`Exported base + ${CANONICAL_MASKS.length} canonical transparent surfaces for 63 direction masks; verified ${checkedMouths} direction mouths.`);
 }
 if(require.main===module) main().catch(e=>{console.error(e);process.exitCode=1;});
-module.exports={hexInset,roadDistance,shapeFor,flags,EDGES,RAYS,HALF,CURB};
+module.exports={hexInset,roadDistance,shapeFor,flags,rotateMask,canonicalTransform,CANONICAL_MASKS,EDGES,RAYS,HALF,CURB};

@@ -99,7 +99,7 @@ assert.match(
 
 assert.match(
   source,
-  /const\s+turretCanRotate\s*=\s*this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)/,
+  /const\s+turretCanRotate\s*=\s*this\.playerTurretCanRotate\(\);[\s\S]*?const\s+fixedWeaponArc\s*=\s*this\.playerHasFixedWeaponArc\(\);[\s\S]*?&& \(turretCanRotate \|\| fixedWeaponArc \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)/,
   'a damaged turret must still show its legal machine-gun range',
 );
 

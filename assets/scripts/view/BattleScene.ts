@@ -92,7 +92,7 @@ import {
   rollActionDice,
 } from '../core/ActionDice';
 import { PLAYER_DICE_POOL, PLAYER_HARDCORE_DICE_POOL } from '../core/PlayerActionDB';
-import { applyAttack, applyHighExplosiveAttack, applyMGAttack, AttackReport, bunkerHighExplosiveThresholds, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, HighExplosiveReport, isBunkerShootingPortAttack, hitBreakdown, hitThreshold, HVAP_EFFECTIVE_RANGE_BONUS, HVAP_PENETRATION_BONUS, infantryHighExplosiveCoverValue, maxMGHitRoll, MG_MAX_RANGE, mgHitBreakdown, mgHitThreshold, mgHitThresholdModifierDetails, nonPlayerTankWeaponForTarget, previewAttack, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollHighExplosiveAttack, rollMGAttack, selectTankMachineGun, TankMachineGunSelection } from '../core/Combat';
+import { applyAttack, applyHighExplosiveAttack, applyMGAttack, AttackReport, bunkerHighExplosiveThresholds, canAttack, canMGAttack, CrewDeathResult, DamageEffect, effectivePenetrationBreakdown, HighExplosiveReport, isBunkerShootingPortAttack, hitBreakdown, hitThreshold, HVAP_EFFECTIVE_RANGE_BONUS, HVAP_PENETRATION_BONUS, infantryHighExplosiveCoverValue, maxMGHitRoll, MG_MAX_RANGE, mgHitBreakdown, mgHitThreshold, mgHitThresholdModifierDetails, nonPlayerTankWeaponForTarget, previewAttack, probHit2d6, resolveCrewCheck, resolveDamageEffect, rollAttack, rollHighExplosiveAttack, rollMGAttack, rollSelectedTankMachineGunAttacks, selectTankMachineGun, TankMachineGunSelection } from '../core/Combat';
 import { DAMAGE_TABLE } from '../core/DamageTableDB';
 import type { DamageTableEffect, DamageTargetClass } from '../core/DamageTableDB';
 import { fireCheckProfileFor, resolveFireCheckEffect, resolveFireCheckLowest, FireCheckEffect } from '../core/FireCheck';
@@ -241,11 +241,14 @@ import {
   renderedTankBodyWidth,
   tankTrackAlphaAfterTurns,
   tankTrackEdgeKey,
+  tankTrackEdgesContinueStraight,
   tankTrackHalfGap,
   tankTrackLineWidth,
   tankTrackProgressSegment,
+  tankTrackTurnArcPoints,
+  tankTrackVisibleIntervals,
   tankTrackStyleForTerrain,
-  TANK_TRACK_STYLE_ORDER,
+  TankTrackRenderedSegment,
   TankTrackStyle,
 } from './TankTrackVisual';
 import {
@@ -304,6 +307,7 @@ import {
   playTankHitRicochet,
   playStukaFlyover,
   playStukaCannonFire,
+  stopStukaCannonFire,
   startManeuverSound,
   startTurretTraverseSound,
   stopManeuverSound,
@@ -312,7 +316,16 @@ import {
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel, visualFireEffectLevel } from '../core/UnitVisualState';
 import { commanderHasSkill, crewLevelFor, infantryTurnActions, normalizePlayerCrewLevels, normalizeUnitLevel, unitLevelOf } from '../core/UnitLevel';
-import { applyUrbanStructureDamage, urbanBuildingSpritePath, urbanBuildingSpriteScale } from '../core/UrbanTerrain';
+import {
+  applyUrbanStructureDamage,
+  europeanRoadSurfaceClearance,
+  ROAD_CANONICAL_MASKS,
+  URBAN_ROAD_CANONICAL_MASKS,
+  roadSpriteTransform,
+  urbanBuildingSpritePath,
+  urbanBuildingSpriteScale,
+  urbanRoadSpriteTransform,
+} from '../core/UrbanTerrain';
 import {
   advanceAttackPositionMemory,
   AttackPositionMemory,
@@ -707,6 +720,7 @@ interface DestroyedTurretVisual {
 
 /** Permanent ground mark for one completed hex-to-hex tank movement. */
 interface TankTrackMove {
+  serial: number;
   unitId: string;
   fromQ: number;
   fromR: number;
@@ -718,9 +732,27 @@ interface TankTrackMove {
   halfBodyLength: number;
   /** Quantized from rendered hull width so similar tanks still share a stroke batch. */
   lineWidth: number;
+  /** A false endpoint is trimmed so the newer straight segment owns the shared hull footprint. */
+  extendFrom: boolean;
+  extendTo: boolean;
   /** Uses the same eased 0..1 progress as the tank's movement animation. */
   progress: number;
   /** Number of completed full turns since this mark was created. */
+  fadeSteps: number;
+}
+
+/** Permanent curved marks swept by the four track ends during an in-place turn. */
+interface TankTrackTurn {
+  serial: number;
+  unitId: string;
+  q: number;
+  r: number;
+  halfGap: number;
+  halfBodyLength: number;
+  lineWidth: number;
+  fromAngle: number;
+  toAngle: number;
+  progress: number;
   fadeSteps: number;
 }
 
@@ -873,6 +905,8 @@ interface DiceShow {
    *   - 底部大字改用 MG 专属文案（"步兵击毙 / MISS"）
   */
   mg: boolean;
+  /** Second independent MG result when coaxial and hull weapons cover one target. */
+  secondaryMGReport: AttackReport | null;
   attackSound: string;
   /** Precision fire already played cannon audio/muzzle flash after its aim hold. */
   fireEffectPlayed: boolean;
@@ -883,6 +917,8 @@ interface DiceShow {
   onDone: () => void;        // 确认/自动关闭回调：确保已结算并继续后续调度
   /** 骰面最终结果揭示时立即写入状态；确认按钮不负责延迟展示结果。 */
   onHold: (() => void) | null;
+  /** HE 炮弹到达目标并生成爆炸后，再同帧落地伤害表现。 */
+  onHighExplosiveImpact: (() => void) | null;
   requireManualClose: boolean;
   finalized: boolean;        // 保险位，避免 onDone 被回调多次
   holdNotified: boolean;
@@ -894,6 +930,9 @@ interface DiceShow {
   hitNeedLabel: Label;       // "需≥N"
   hitVerdictLabel: Label;    // "命中！" / "未命中"
   hitSpecialLabel: Label | null;
+  secondaryMGDieLabel: Label | null;
+  secondaryMGNeedLabel: Label | null;
+  secondaryMGVerdictLabel: Label | null;
   penDieLabels: Label[];    // 穿甲骰（2 颗）
   penNeedLabel: Label | null;
   penVerdictLabel: Label | null;
@@ -923,7 +962,7 @@ type CombatLogEntry = string | CombatLogI18nEntry;
 type CombatLogTone = 'good' | 'bad' | 'neutral';
 type CombatLogUnitTone = 'player' | 'ally' | 'enemy';
 type CombatLogReplay =
-  | { kind: 'attack'; report: AttackReport; attackerKind: UnitKind; targetKind: UnitKind; mg: boolean; attackerTone?: CombatLogUnitTone; targetTone?: CombatLogUnitTone; highExplosiveReport?: HighExplosiveReport; highExplosiveCollateral?: HighExplosiveCollateralResult[] }
+  | { kind: 'attack'; report: AttackReport; attackerKind: UnitKind; targetKind: UnitKind; mg: boolean; attackerTone?: CombatLogUnitTone; targetTone?: CombatLogUnitTone; highExplosiveReport?: HighExplosiveReport; highExplosiveCollateral?: HighExplosiveCollateralResult[]; secondaryMGReport?: AttackReport }
   | { kind: 'fire'; dice: number[]; introKey: string; introParams: Record<string, string | number>; bodyText: string; resultKey: string; resultParams?: Record<string, string | number> }
   | { kind: 'turnEnd'; dice: number[]; extraPhases: TurnEndExtraDicePhase[]; bodyKey: string; bodyParams: Record<string, string | number>; effectKey: string }
   | { kind: 'casualty'; dice: number[]; providerText: string; resultText: string; hits: number; limit: number };
@@ -991,6 +1030,7 @@ interface StukaFlyover {
   t: number;
   dur: number;
   cannonT: number;
+  cannonSoundStarted: boolean;
   cannonSeed: number;
   onDone: () => void;
 }
@@ -1310,6 +1350,8 @@ const BREAKWATER_LIGHT    = new Color(166, 154, 128, 255);
 const ROAD_GRIT_LIGHT     = new Color(238, 225, 195, 120);
 const ROAD_GRIT_MID       = new Color(220, 208, 178, 110);
 const ROAD_GRIT_DARK      = new Color(195, 182, 158, 130);
+/** Slight overscan hides the baked hex border at rotated road and bridge mouths. */
+const ROAD_SURFACE_OVERLAP_SCALE = 1.025;
 const WINTER_ROAD_GRIT_LIGHT = new Color(244, 249, 250, 150);
 const WINTER_ROAD_GRIT_MID = new Color(208, 220, 224, 125);
 const WINTER_ROAD_GRIT_DARK = new Color(166, 180, 184, 115);
@@ -1693,9 +1735,12 @@ export class BattleScene extends Component {
   });
   private tankExhaustSerial = 0;
   private tankTrackGraphics: Graphics | null = null;
+  private tankTrackSerial = 0;
   private tankTracks: TankTrackMove[] = [];
+  private tankTurnTracks: TankTrackTurn[] = [];
   private activeTankTrackAnim: MoveAnim | null = null;
   private activeTankTrack: TankTrackMove | null = null;
+  private activeTankTurnTrack: TankTrackTurn | null = null;
   private mapOcclusionGraphics: Graphics | null = null;
   private mapDeepShadowGraphics: Graphics | null = null;
   private infantryBloodDecalLayerNode: Node | null = null;
@@ -1746,6 +1791,8 @@ export class BattleScene extends Component {
   private winterTerrainSpriteFrames: Partial<Record<TerrainType, SpriteFrame | null>> = {};
   private terrainSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private terrainSpritePoolNext = 0;
+  private bridgeSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private bridgeSpritePoolNext = 0;
   private urbanBuildingSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private urbanBuildingSpritePoolNext = 0;
   /** Pause map painting until the terrain texture batch has fully settled. */
@@ -2291,6 +2338,7 @@ export class BattleScene extends Component {
   private static readonly EN_LABEL_SAFE_PAD = 8;
   private static readonly PLAYER_DICE_SORT_DUR = 0.5;
   private static readonly TERRAIN_SPRITE_POOL = 384;
+  private static readonly BRIDGE_SPRITE_POOL = 64;
   private static readonly FOLIAGE_SPRITE_POOL = 384;
   private static readonly TIGER_TURRET_PIVOT_X = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.bodyX;
   private static readonly TIGER_TURRET_PIVOT_Y = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.bodyY;
@@ -2481,6 +2529,23 @@ export class BattleScene extends Component {
     this.g.lineWidth = 2;
     this.node.addChild(gNode);
     this.mapNode = gNode;
+
+    // Bridge sprites must sit above MapGraphics' riverbanks, but below tracks,
+    // blood decals, buildings, foliage and units.
+    const bridgeLayerNode = new Node('BridgeSprites');
+    bridgeLayerNode.layer = this.node.layer;
+    bridgeLayerNode.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(bridgeLayerNode);
+    for (let i = 0; i < BattleScene.BRIDGE_SPRITE_POOL; i++) {
+      const n = new Node(`Bridge_${i}`);
+      n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(1, 1);
+      const sp = n.addComponent(Sprite);
+      sp.sizeMode = Sprite.SizeMode.CUSTOM;
+      n.active = false;
+      this.bridgeSpritePool.push({ node: n, sprite: sp });
+      bridgeLayerNode.addChild(n);
+    }
 
     // Permanent tank tracks sit above terrain but below buildings, foliage,
     // units, campaign darkness and fog. They are redrawn only when movement
@@ -2826,11 +2891,21 @@ export class BattleScene extends Component {
       'textures/terrain/urban/urban_dense_destructible_block_rubble_v1/spriteFrame',
     );
     const urbanRoadPaths: string[] = [];
-    for (let mask = 1; mask < 64; mask++) {
+    for (const mask of URBAN_ROAD_CANONICAL_MASKS) {
       const rd = Array.from({ length: 6 }, (_, i) => (mask & (1 << i)) ? '1' : '0').join('');
       urbanRoadPaths.push(`textures/terrain/urban/roads/urban_road_surface_${rd}_v1/spriteFrame`);
     }
-    const urbanOverlayPaths = [...urbanBuildingPaths, ...urbanDestructiblePaths, ...urbanRoadPaths];
+    const europeanRoadPaths: string[] = [];
+    for (const season of ['summer', 'winter']) {
+      for (const mask of ROAD_CANONICAL_MASKS) {
+        const rd = Array.from({ length: 6 }, (_, i) => (mask & (1 << i)) ? '1' : '0').join('');
+        europeanRoadPaths.push(`textures/terrain/european_roads/european_road_surface_${season}_${rd}_v1/spriteFrame`);
+      }
+      europeanRoadPaths.push(`textures/terrain/european_roads/european_bridge_surface_${season}_v1/spriteFrame`);
+    }
+    const urbanOverlayPaths = [
+      ...urbanBuildingPaths, ...urbanDestructiblePaths, ...urbanRoadPaths, ...europeanRoadPaths,
+    ];
     this.pendingTerrainSpriteLoads = Object.keys(terrainPaths).length
       + Object.keys(winterTerrainPaths).length + urbanOverlayPaths.length;
     const finishTerrainSpriteLoad = () => {
@@ -5028,6 +5103,8 @@ export class BattleScene extends Component {
     this.unitGraphics.clear();
     this.terrainSpritePoolNext = 0;
     for (const { node } of this.terrainSpritePool) node.active = false;
+    this.bridgeSpritePoolNext = 0;
+    for (const { node } of this.bridgeSpritePool) node.active = false;
     this.urbanBuildingSpritePoolNext = 0;
     for (const { node } of this.urbanBuildingSpritePool) node.active = false;
     this.foliageSpritePoolNext = 0;
@@ -5120,23 +5197,45 @@ export class BattleScene extends Component {
     for (const t of tiles) {
       if (!tileHasBridge(t)) continue;
       const c = this.project(t.pos.q, t.pos.r);
-      this.drawBridgeOverlay(c.x, c.y, this.hexSize, t.bridgeEnds!);
+      const info = this.bridgeSurfaceSpriteInfo(t);
+      if (info) {
+        this.drawBridgeSpriteFrame(
+          c.x, c.y, this.hexSize * ROAD_SURFACE_OVERLAP_SCALE, info.frame, info.rotationDegrees,
+        );
+      } else {
+        this.drawBridgeOverlay(c.x, c.y, this.hexSize, t.bridgeEnds!);
+      }
     }
 
-    // 1a-road. 公路条带：按 `Tile.roads` 方向位绘制；单方向时格心叠绘"道路尽头"圆形（说明书图例）。
+    // 1a-road. 欧洲与城市公路使用预制方向贴图；桥梁等特殊地形仍保留 Graphics 兜底。
     // 在建筑之前画，避免村庄房屋被路压到；与树篱互不干扰（树篱画在格边外缘，路画在格内）。
-    for (const t of tiles) {
-      if (!t.roads) continue;
-      const c = this.project(t.pos.q, t.pos.r);
-      if (t.terrain === 'airstrip') {
-        this.drawAirstripOverlay(c.x, c.y, this.hexSize, t.roads, t);
-      } else if (t.terrain === 'urban_road') {
-        const rd = t.roads.map(bit => bit ? '1' : '0').join('');
-        const path = `textures/terrain/urban/roads/urban_road_surface_${rd}_v1/spriteFrame`;
-        const frame = this.urbanOverlaySpriteFrames[path];
-        if (frame) this.drawTerrainSpriteFrame(c.x, c.y, this.hexSize, frame);
-      } else {
-        this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads, t);
+    // Two explicit passes keep city streets above European roads at mixed
+    // interfaces, independent of the mission tile serialization order.
+    for (const urbanRoadPass of [false, true]) {
+      for (const t of tiles) {
+        if (!t.roads || (t.terrain === 'urban_road') !== urbanRoadPass) continue;
+        // The prebuilt bridge already contains the same seasonal road surface.
+        if (tileHasBridge(t) && this.bridgeSurfaceSpriteInfo(t)) continue;
+        const c = this.project(t.pos.q, t.pos.r);
+        if (t.terrain === 'airstrip') {
+          this.drawAirstripOverlay(c.x, c.y, this.hexSize, t.roads, t);
+        } else if (t.terrain === 'urban_road') {
+          const transform = urbanRoadSpriteTransform(t.roads);
+          if (!transform) continue;
+          const path = `textures/terrain/urban/roads/urban_road_surface_${transform.canonicalFlags}_v1/spriteFrame`;
+          const frame = this.urbanOverlaySpriteFrames[path];
+          if (frame) this.drawTerrainSpriteFrame(
+            c.x, c.y, this.hexSize * ROAD_SURFACE_OVERLAP_SCALE, frame, transform.rotationDegrees,
+          );
+        } else if (t.terrain === 'road') {
+          const info = this.roadSurfaceSpriteInfo(t);
+          if (info) this.drawTerrainSpriteFrame(
+            c.x, c.y, this.hexSize * ROAD_SURFACE_OVERLAP_SCALE, info.frame, info.rotationDegrees,
+          );
+          else this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads, t);
+        } else {
+          this.drawRoadOverlay(c.x, c.y, this.hexSize, t.roads, t);
+        }
       }
     }
 
@@ -5811,9 +5910,10 @@ export class BattleScene extends Component {
       && GameSession.gameMode === 'hardcore'
       && resolvedLoadedShell(this.mission.sherman) === 'smoke';
     const turretCanRotate = this.playerTurretCanRotate();
+    const fixedWeaponArc = this.playerHasFixedWeaponArc();
     const machineGunSelection = this.selectedMGDieIdx >= 0;
     const showTurretAimMarkers = this.hasTurretReconGunSelection()
-      && (turretCanRotate || machineGunSelection || precisionGunSelection || smokeGunSelection)
+      && (turretCanRotate || fixedWeaponArc || machineGunSelection || precisionGunSelection || smokeGunSelection)
       && !this.turretAimAnim
       && !this.turretTargetOverlaySuppressed;
     overlayNode.active = showTurretAimMarkers;
@@ -5829,7 +5929,7 @@ export class BattleScene extends Component {
       const originKey = HexMap.keyOf(this.mission.sherman.pos);
       const reachableKeys = new Set<string>();
       const reachableTiles: Tile[] = [];
-      if (turretCanRotate || machineGunSelection || precisionGunSelection || smokeGunSelection) {
+      if (turretCanRotate || fixedWeaponArc || machineGunSelection || precisionGunSelection || smokeGunSelection) {
         for (const tile of this.mission.map.all()) {
           if (this.isDeepShadowTile(tile)) continue;
           const tileKey = HexMap.keyOf(tile.pos);
@@ -6217,7 +6317,7 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     const units = this.allUnits();
     for (const e of enemies) {
-      if (e.destroyed) continue;
+      if (e.destroyed || isAttachedATGunCrew(e)) continue;
       if (!this.isUnitVisible(e)) continue;
       const machineGun = this.tankMachineGunSelection(sherman, e);
       const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore', ...this.tankMachineGunContext(sherman, e, machineGun) };
@@ -7966,6 +8066,7 @@ export class BattleScene extends Component {
     attacker: Unit,
     target: Unit,
     report?: HighExplosiveReport,
+    onImpact?: () => void,
   ) {
     this.rememberAttackPosition(attacker);
     this.startMainGunRecoil(attacker, target);
@@ -7978,6 +8079,17 @@ export class BattleScene extends Component {
     const seed = this.hashStringToSeed(
       `he-impact:${attacker.id}:${target.id}:${report?.roll ?? 0}:${report?.effectRoll ?? 0}`,
     );
+    let impactHandled = false;
+    const handleImpact = (x: number, y: number) => {
+      if (impactHandled) return;
+      impactHandled = true;
+      playHighExplosiveHit();
+      this.spawnHighExplosiveBlast(x, y, seed);
+      // Commit the hit only after the blast exists, so destroyed infantry and
+      // blood decals first appear underneath the explosion on the same frame.
+      onImpact?.();
+    };
+    const traceCount = this.projectileTraces.length;
     this.spawnProjectileTrace(
       attacker,
       target,
@@ -7985,13 +8097,16 @@ export class BattleScene extends Component {
       {
         skipPenetrationImpact: hit,
         onPenetrationImpact: hit
-          ? (x, y) => {
-            playHighExplosiveHit();
-            this.spawnHighExplosiveBlast(x, y, seed);
-          }
+          ? handleImpact
           : undefined,
       },
     );
+    // Visibility/resource edge cases can prevent a tracer from being created.
+    // Preserve both the blast and combat resolution instead of waiting forever.
+    if (hit && this.projectileTraces.length === traceCount) {
+      const pos = this.project(target.pos.q, target.pos.r);
+      handleImpact(pos.x, pos.y);
+    }
     playConfiguredAttackSound(attacker.stats.attackSound);
   }
 
@@ -9409,7 +9524,7 @@ export class BattleScene extends Component {
       : screenLeft - offscreenPad;
     this.stukaFlyover = {
       target: { ...target.pos }, fromX, toX, y: targetPoint.y + mapPos.y,
-      t: 0, dur: 4, cannonT: -1,
+      t: 0, dur: 4, cannonT: -1, cannonSoundStarted: false,
       cannonSeed: this.hashStringToSeed(`stuka:${target.id}:${this.turn}`),
       onDone,
     };
@@ -9432,9 +9547,15 @@ export class BattleScene extends Component {
     // approaching while its cannon tracers converge on the tank.
     const attackLead = this.hexSize * Math.sqrt(3) * 3;
     const attackStartX = targetX - direction * attackLead;
+    const attackStartT = pass.dur * Math.abs(
+      (attackStartX - pass.fromX) / (pass.toX - pass.fromX),
+    );
+    if (!pass.cannonSoundStarted && pass.t >= Math.max(0, attackStartT - 1)) {
+      pass.cannonSoundStarted = true;
+      playStukaCannonFire();
+    }
     if (pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
       pass.cannonT = 0;
-      playStukaCannonFire();
     }
     if (pass.cannonT >= 0) {
       pass.cannonT += dt;
@@ -9459,6 +9580,7 @@ export class BattleScene extends Component {
     if (p < 1) return;
     if (plane) plane.active = false;
     if (this.stukaBlastNode) this.stukaBlastNode.active = false;
+    stopStukaCannonFire();
     this.stukaFlyover = null;
     pass.onDone();
   }
@@ -10298,10 +10420,9 @@ export class BattleScene extends Component {
   /**
    * 格内俯视方形建筑（村庄 / 农场图案）：
    * - 在六角格内随机布置 2~4 个旋转矩形作为建筑屋顶；
-   * - 公路格（`tile.roads` 不为空）会避开格内的道路条带（含「道路尽头」格心圆）；
+   * - 公路格（`tile.roads` 不为空）会避开预制道路的直线、圆弧与路口扩宽轮廓；
    * - 用格 axial 坐标做种子保证同格视觉稳定（重绘时不会抖动 / 数量不变）；
-   * - 与 `drawHedgeEdge` / `drawBridgeOverlay` 同一套「-30°+60°·i」轴向→几何边映射，
-   *   确保公路条带轴线与 `drawRoadOverlay` 完全一致。
+   * - 避让轮廓与 `prepareEuropeanRoadArt.cjs` 使用同一套六方向几何参数。
    *
    * 颜色：屋顶 `BUILDING_ROOF_FILL` 深棕；外缘描边 `BUILDING_OUTLINE`；
    * 屋脊（沿矩形长边方向中线一笔）`BUILDING_WALL_FILL` 浅棕，叠在屋顶上做轻微立体感。
@@ -10314,57 +10435,11 @@ export class BattleScene extends Component {
       ((tile.pos.q | 0) * 374761393 + (tile.pos.r | 0) * 668265263 + 0x9e3779b9) >>> 0;
     const rng = new RNG(seedRaw === 0 ? 1 : seedRaw);
 
-    // ---- 2) 收集本格公路条带轴线段，供建筑避让（与 drawRoadOverlay 同步） ----
+    // ---- 2) 使用与预制公路贴图相同的圆弧 / 路口轮廓计算净空 ----
     const roads = tile.roads;
-    const roadHalfW = size * 0.18; // 与 drawRoadOverlay 一致
-    let dirCount = 0;
-    if (roads) for (let a = 0; a < 6; a++) if (roads[a]) dirCount++;
-    const endR = dirCount === 1 ? roadHalfW * 1.6 : roadHalfW;
-    const roadSegs: { ax: number; ay: number; bx: number; by: number }[] = [];
-    if (roads && dirCount > 0) {
-      const edgeMid = (axOrEdge: number) => {
-        const edge = HEDGE_DRAW_EDGE_BY_AXIAL[axOrEdge];
-        const a1 = ((-30 + 60 * edge) * Math.PI) / 180;
-        const a2 = ((-30 + 60 * (edge + 1)) * Math.PI) / 180;
-        const x0 = cx + size * Math.cos(a1);
-        const y0 = cy + size * Math.sin(a1);
-        const x1 = cx + size * Math.cos(a2);
-        const y1 = cy + size * Math.sin(a2);
-        return { mx: (x0 + x1) / 2, my: (y0 + y1) / 2 };
-      };
-      for (let a = 0; a < 3; a++) {
-        const fwd = !!roads[a];
-        const bwd = !!roads[a + 3];
-        if (fwd && bwd) {
-          const A = edgeMid(a);
-          const B = edgeMid(a + 3);
-          roadSegs.push({ ax: A.mx, ay: A.my, bx: B.mx, by: B.my });
-        } else if (fwd) {
-          const A = edgeMid(a);
-          roadSegs.push({ ax: A.mx, ay: A.my, bx: cx, by: cy });
-        } else if (bwd) {
-          const A = edgeMid(a + 3);
-          roadSegs.push({ ax: A.mx, ay: A.my, bx: cx, by: cy });
-        }
-      }
-    }
-
-    /** 点到线段最短距离（避道路条带用） */
-    const distToSeg = (
-      px: number,
-      py: number,
-      ax: number,
-      ay: number,
-      bx: number,
-      by: number,
-    ): number => {
-      const dx = bx - ax;
-      const dy = by - ay;
-      const len2 = dx * dx + dy * dy;
-      if (len2 === 0) return Math.hypot(px - ax, py - ay);
-      const tt = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
-      return Math.hypot(px - (ax + tt * dx), py - (ay + tt * dy));
-    };
+    const roadClearanceAt = (px: number, py: number): number => roads
+      ? europeanRoadSurfaceClearance(roads, (px - cx) / size, (py - cy) / size) * size
+      : Number.POSITIVE_INFINITY;
 
     // ---- 3) 候选采样：拒绝采样直到放满目标数量（或达到尝试上限） ----
     /** 目标 2..4：rng.intRange 闭区间 */
@@ -10414,20 +10489,8 @@ export class BattleScene extends Component {
         }
         if (!okOther) continue;
 
-        // 与道路条带互斥（点到线段距离 ≥ 路面半宽 + 建筑外接圆 + padding）
-        let okRoad = true;
-        const minDistToRoad = roadHalfW + halfDiag + roadPadding;
-        for (const seg of roadSegs) {
-          if (distToSeg(bx, by, seg.ax, seg.ay, seg.bx, seg.by) < minDistToRoad) {
-            okRoad = false;
-            break;
-          }
-        }
-        if (!okRoad) continue;
-        // 单方向公路尽头额外避开格心圆（半径放大版）
-        if (dirCount === 1) {
-          if (Math.hypot(bx - cx, by - cy) < endR + halfDiag + roadPadding) continue;
-        }
+        // 建筑外接圆必须完全离开当前预制道路的实际轮廓。
+        if (roadClearanceAt(bx, by) < halfDiag + roadPadding) continue;
 
         // 屋顶颜色：从调色板按种子选一索引（屋脊高光从同序的 RIDGE 调色板取）
         const colorIdx = rng.intRange(0, BUILDING_ROOF_PALETTE.length - 1);
@@ -10441,44 +10504,47 @@ export class BattleScene extends Component {
 
     // ---- 4) 绘制每栋建筑：双坡瓦顶分层（底面 → 阴坡 → 瓦楞 → 外缘 + 屋脊高光） ----
     if (placed.length === 0) {
-      const w = size * 0.34;
-      const h = size * 0.24;
-      const halfDiag = Math.hypot(w, h) * 0.5;
-      const rMax = Math.max(0, innerRadius - halfDiag);
-      const fallbackOffsets: Array<[number, number]> = [
-        [0.00, -0.42],
-        [0.34, -0.22],
-        [-0.34, -0.22],
-        [0.34, 0.22],
-        [-0.34, 0.22],
-        [0.00, 0.42],
-        [0.00, 0.00],
-      ];
-      let best = fallbackOffsets[fallbackOffsets.length - 1];
-      let bestScore = Number.NEGATIVE_INFINITY;
-      for (const off of fallbackOffsets) {
-        const ox = off[0] * size;
-        const oy = off[1] * size;
-        if (Math.hypot(ox, oy) > rMax) continue;
-        let score = roadSegs.length === 0 ? -Math.hypot(ox, oy) : Number.POSITIVE_INFINITY;
-        for (const seg of roadSegs) {
-          score = Math.min(score, distToSeg(cx + ox, cy + oy, seg.ax, seg.ay, seg.bx, seg.by) - roadHalfW);
-        }
-        if (score > bestScore) {
-          bestScore = score;
-          best = off;
+      const fallbackOffsets: Array<[number, number]> = [[0, 0]];
+      for (const radius of [0.28, 0.42, 0.56, 0.68]) {
+        for (let step = 0; step < 12; step++) {
+          const angle = step * Math.PI / 6;
+          fallbackOffsets.push([radius * Math.cos(angle), radius * Math.sin(angle)]);
         }
       }
-      const colorIdx = (seedRaw >>> 3) % BUILDING_ROOF_PALETTE.length;
-      placed.push({
-        cx: cx + best[0] * size,
-        cy: cy + best[1] * size,
-        w,
-        h,
-        angle: (seedRaw % 6) * Math.PI / 6,
-        r: halfDiag,
-        colorIdx,
-      });
+      // First retain the former fallback size, then try smaller roofs in narrow
+      // gaps. A dense junction is allowed to omit decoration if none is safe.
+      for (const [widthScale, heightScale] of [[0.34, 0.24], [0.28, 0.20], [0.22, 0.16]]) {
+        const w = size * widthScale;
+        const h = size * heightScale;
+        const halfDiag = Math.hypot(w, h) * 0.5;
+        const rMax = Math.max(0, innerRadius - halfDiag);
+        let best: [number, number] | null = null;
+        let bestScore = Number.NEGATIVE_INFINITY;
+        for (const off of fallbackOffsets) {
+          const ox = off[0] * size;
+          const oy = off[1] * size;
+          if (Math.hypot(ox, oy) > rMax) continue;
+          const score = roads ? roadClearanceAt(cx + ox, cy + oy) : -Math.hypot(ox, oy);
+          if (score > bestScore) {
+            bestScore = score;
+            best = off;
+          }
+        }
+        // Do not force a building onto a road merely to guarantee one roof.
+        // Non-road tiles keep the original nearest-to-center fallback behavior.
+        if (!best || (roads && bestScore < halfDiag + roadPadding)) continue;
+        const colorIdx = (seedRaw >>> 3) % BUILDING_ROOF_PALETTE.length;
+        placed.push({
+          cx: cx + best[0] * size,
+          cy: cy + best[1] * size,
+          w,
+          h,
+          angle: (seedRaw % 6) * Math.PI / 6,
+          r: halfDiag,
+          colorIdx,
+        });
+        break;
+      }
     }
 
     for (const b of placed) {
@@ -11705,13 +11771,17 @@ export class BattleScene extends Component {
   }
 
   private clearTankTracks() {
+    this.tankTrackSerial = 0;
     this.tankTracks.length = 0;
+    this.tankTurnTracks.length = 0;
     this.activeTankTrackAnim = null;
     this.activeTankTrack = null;
+    this.activeTankTurnTrack = null;
     this.tankTrackGraphics?.clear();
   }
 
   private tankBodyDisplaySizePx(unit: Unit): { length: number; width: number } {
+    const trackBodyConfig = tankVisualConfigOf(unit.kind);
     const splitBasis = this.splitHullDisplayBasis(unit.kind);
     if (splitBasis) {
       return {
@@ -11720,13 +11790,13 @@ export class BattleScene extends Component {
           splitBasis.trimW,
           splitBasis.trimH,
           splitBasis.fitScale,
-        ),
+        ) * trackBodyConfig.trackBodyLengthScale,
         width: renderedTankBodyWidth(
           this.hexSize,
           splitBasis.trimW,
           splitBasis.trimH,
           splitBasis.fitScale,
-        ),
+        ) * trackBodyConfig.trackBodyWidthScale,
       };
     }
 
@@ -11737,14 +11807,19 @@ export class BattleScene extends Component {
         const h = meta.dh > 0 ? meta.dh : meta.sf.height;
         const cfg = tankVisualConfigOf(unit.kind);
         return {
-          length: renderedTankBodyLength(this.hexSize, w, h, cfg.fitScale, cfg.aspectRatioMul),
-          width: renderedTankBodyWidth(this.hexSize, w, h, cfg.fitScale, cfg.aspectRatioMul),
+          length: renderedTankBodyLength(this.hexSize, w, h, cfg.fitScale, cfg.aspectRatioMul)
+            * cfg.trackBodyLengthScale,
+          width: renderedTankBodyWidth(this.hexSize, w, h, cfg.fitScale, cfg.aspectRatioMul)
+            * cfg.trackBodyWidthScale,
         };
       }
     }
 
     // Vector/future tank fallback; track spacing still scales with the board.
-    return { length: this.hexSize * 1.05, width: this.hexSize * 0.62 };
+    return {
+      length: this.hexSize * 1.05 * trackBodyConfig.trackBodyLengthScale,
+      width: this.hexSize * 0.62 * trackBodyConfig.trackBodyWidthScale,
+    };
   }
 
   private addTankTrack(unit: Unit, anim: MoveAnim): TankTrackMove | null {
@@ -11764,6 +11839,7 @@ export class BattleScene extends Component {
     ) !== edgeKey);
     const body = this.tankBodyDisplaySizePx(unit);
     const track: TankTrackMove = {
+      serial: this.tankTrackSerial++,
       unitId: unit.id,
       fromQ: anim.fromQ,
       fromR: anim.fromR,
@@ -11772,12 +11848,88 @@ export class BattleScene extends Component {
       halfGap: tankTrackHalfGap(body.width),
       halfBodyLength: body.length * 0.5,
       lineWidth: tankTrackLineWidth(body.width),
+      extendFrom: true,
+      extendTo: true,
       progress: 0,
       fadeSteps: 0,
     };
     this.tankTracks.push(track);
+    this.recalculateTankTrackExtensions();
     this.redrawTankTracks();
     return track;
+  }
+
+  private addTankTurnTrack(unit: Unit, anim: MoveAnim): TankTrackTurn | null {
+    if (anim.turnFrom === undefined || anim.turnTo === undefined) return null;
+    const body = this.tankBodyDisplaySizePx(unit);
+    const center = this.project(anim.fromQ, anim.fromR);
+    const fromAngle = this.directionScreenAngle(unit.pos, center, anim.turnFrom);
+    const toAngle = this.directionScreenAngle(unit.pos, center, anim.turnTo);
+    const halfGap = tankTrackHalfGap(body.width);
+    const halfBodyLength = body.length * 0.5;
+    const sameAngle = (a: number, b: number) =>
+      Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) < 1e-6;
+    this.tankTurnTracks = this.tankTurnTracks.filter(candidate => {
+      if (candidate.q !== anim.fromQ || candidate.r !== anim.fromR
+        || Math.abs(candidate.halfGap - halfGap) >= 0.01
+        || Math.abs(candidate.halfBodyLength - halfBodyLength) >= 0.01) return true;
+      const sameDirection = sameAngle(candidate.fromAngle, fromAngle)
+        && sameAngle(candidate.toAngle, toAngle);
+      const reverseDirection = sameAngle(candidate.fromAngle, toAngle)
+        && sameAngle(candidate.toAngle, fromAngle);
+      return !sameDirection && !reverseDirection;
+    });
+    const track: TankTrackTurn = {
+      serial: this.tankTrackSerial++,
+      unitId: unit.id,
+      q: anim.fromQ,
+      r: anim.fromR,
+      halfGap,
+      halfBodyLength,
+      lineWidth: tankTrackLineWidth(body.width),
+      fromAngle,
+      toAngle,
+      progress: 0,
+      fadeSteps: 0,
+    };
+    this.tankTurnTracks.push(track);
+    this.redrawTankTracks();
+    return track;
+  }
+
+  private recalculateTankTrackExtensions() {
+    for (const track of this.tankTracks) {
+      track.extendFrom = true;
+      track.extendTo = true;
+    }
+    // Records are stored oldest to newest. At a straight connection the newer
+    // record keeps its full initial hull footprint; only the older record is
+    // shortened, placing age/color boundaries at the newer tank's rear edge.
+    for (let olderIndex = 0; olderIndex < this.tankTracks.length; olderIndex++) {
+      const older = this.tankTracks[olderIndex]!;
+      for (let newerIndex = olderIndex + 1; newerIndex < this.tankTracks.length; newerIndex++) {
+        const newer = this.tankTracks[newerIndex]!;
+        if (older.unitId !== newer.unitId) continue;
+        for (const olderAtFrom of [true, false]) {
+          const q = olderAtFrom ? older.fromQ : older.toQ;
+          const r = olderAtFrom ? older.fromR : older.toR;
+          const olderOtherQ = olderAtFrom ? older.toQ : older.fromQ;
+          const olderOtherR = olderAtFrom ? older.toR : older.fromR;
+          for (const newerAtFrom of [true, false]) {
+            const newerQ = newerAtFrom ? newer.fromQ : newer.toQ;
+            const newerR = newerAtFrom ? newer.fromR : newer.toR;
+            if (q !== newerQ || r !== newerR) continue;
+            const newerOtherQ = newerAtFrom ? newer.toQ : newer.fromQ;
+            const newerOtherR = newerAtFrom ? newer.toR : newer.fromR;
+            if (!tankTrackEdgesContinueStraight(
+              q, r, olderOtherQ, olderOtherR, newerOtherQ, newerOtherR,
+            )) continue;
+            if (olderAtFrom) older.extendFrom = false;
+            else older.extendTo = false;
+          }
+        }
+      }
+    }
   }
 
   private beginTankTrackAnimation(anim: MoveAnim) {
@@ -11786,12 +11938,24 @@ export class BattleScene extends Component {
     this.activeTankTrack = anim.kind === 'move' && isTankUnit(anim.unit)
       ? this.addTankTrack(anim.unit, anim)
       : null;
+    this.activeTankTurnTrack = anim.kind === 'turn' && isTankUnit(anim.unit)
+      ? this.addTankTurnTrack(anim.unit, anim)
+      : null;
   }
 
   private advanceTankTrackAnimation(anim: MoveAnim) {
     this.beginTankTrackAnimation(anim);
-    if (!this.activeTankTrack) return;
-    this.activeTankTrack.progress = easeOutCubic(Math.max(0, Math.min(1, anim.t)));
+    const moveProgress = easeOutCubic(Math.max(0, Math.min(1, anim.t)));
+    if (this.activeTankTrack) this.activeTankTrack.progress = moveProgress;
+    if (this.activeTankTurnTrack && anim.turnFrom !== undefined && anim.turnTo !== undefined) {
+      this.activeTankTurnTrack.progress = this.hullTurnRenderedAngularProgress(
+        anim.unit.pos,
+        anim.turnFrom,
+        anim.turnTo,
+        anim.t,
+      );
+    }
+    if (!this.activeTankTrack && !this.activeTankTurnTrack) return;
     this.redrawTankTracks();
   }
 
@@ -11799,6 +11963,7 @@ export class BattleScene extends Component {
     this.advanceTankTrackAnimation(anim);
     this.activeTankTrackAnim = null;
     this.activeTankTrack = null;
+    this.activeTankTurnTrack = null;
   }
 
   private redrawTankTracks() {
@@ -11807,91 +11972,136 @@ export class BattleScene extends Component {
     if (!g || !map) return;
 
     g.clear();
-    const lineWidths = Array.from(new Set(this.tankTracks.map(track => track.lineWidth)))
-      .sort((a, b) => a - b);
-    const fadeSteps = Array.from(new Set(this.tankTracks.map(track => track.fadeSteps)))
-      .sort((a, b) => a - b);
-
-    for (const style of TANK_TRACK_STYLE_ORDER) {
+    const drawnSegments: TankTrackRenderedSegment[] = [];
+    const setStroke = (
+      style: Exclude<TankTrackStyle, 'none'>,
+      fadeSteps: number,
+      lineWidth: number,
+    ) => {
       const baseColor = TANK_TRACK_COLORS[style];
-      for (const fadeStep of fadeSteps) {
-        g.strokeColor = new Color(
-          baseColor.r,
-          baseColor.g,
-          baseColor.b,
-          tankTrackAlphaAfterTurns(baseColor.a, fadeStep),
+      g.strokeColor = new Color(
+        baseColor.r,
+        baseColor.g,
+        baseColor.b,
+        tankTrackAlphaAfterTurns(baseColor.a, fadeSteps),
+      );
+      g.lineWidth = lineWidth;
+    };
+    const records: Array<
+      { kind: 'move'; track: TankTrackMove }
+      | { kind: 'turn'; track: TankTrackTurn }
+    > = [
+      ...this.tankTracks.map(track => ({ kind: 'move' as const, track })),
+      ...this.tankTurnTracks.map(track => ({ kind: 'turn' as const, track })),
+    ];
+    records.sort((a, b) => b.track.serial - a.track.serial);
+
+    // Newest geometry claims each crossing first. Older records are clipped
+    // against it, so the visible gap always belongs to the earlier trail.
+    for (const record of records) {
+      if (record.kind === 'move') {
+        const track = record.track;
+        const fromCenter = this.project(track.fromQ, track.fromR);
+        const toCenter = this.project(track.toQ, track.toR);
+        const swept = tankTrackProgressSegment(
+          fromCenter.x,
+          fromCenter.y,
+          toCenter.x,
+          toCenter.y,
+          track.halfBodyLength,
+          track.progress,
+          track.extendFrom,
+          track.extendTo,
         );
-        for (const lineWidth of lineWidths) {
-          g.lineWidth = lineWidth;
-          let hasPath = false;
+        const moveDx = toCenter.x - fromCenter.x;
+        const moveDy = toCenter.y - fromCenter.y;
+        const moveLength = Math.hypot(moveDx, moveDy) || 1;
+        const moveUx = moveDx / moveLength;
+        const moveUy = moveDy / moveLength;
+        const reachedDistance = (swept.toX - fromCenter.x) * moveUx
+          + (swept.toY - fromCenter.y) * moveUy;
+        const reachedBoundary = reachedDistance >= moveLength * 0.5;
+        const boundaryX = (fromCenter.x + toCenter.x) * 0.5;
+        const boundaryY = (fromCenter.y + toCenter.y) * 0.5;
+        const fromTile = map.get({ q: track.fromQ, r: track.fromR });
+        const toTile = map.get({ q: track.toQ, r: track.toR });
+        const fromStyle = tankTrackStyleForTerrain(fromTile?.terrain, tileHasBridge(fromTile));
+        if (fromStyle !== 'none') {
+          setStroke(fromStyle, track.fadeSteps, track.lineWidth);
+          if (this.appendTankTrackPair(
+            g,
+            swept.fromX,
+            swept.fromY,
+            reachedBoundary ? boundaryX : swept.toX,
+            reachedBoundary ? boundaryY : swept.toY,
+            track.halfGap,
+            drawnSegments,
+          )) g.stroke();
+        }
+        const toStyle = tankTrackStyleForTerrain(toTile?.terrain, tileHasBridge(toTile));
+        if (reachedBoundary && toStyle !== 'none') {
+          setStroke(toStyle, track.fadeSteps, track.lineWidth);
+          if (this.appendTankTrackPair(
+            g,
+            boundaryX,
+            boundaryY,
+            swept.toX,
+            swept.toY,
+            track.halfGap,
+            drawnSegments,
+          )) g.stroke();
+        }
+        continue;
+      }
 
-          for (const track of this.tankTracks) {
-            if (track.lineWidth !== lineWidth || track.fadeSteps !== fadeStep) continue;
-          const fromCenter = this.project(track.fromQ, track.fromR);
-          const toCenter = this.project(track.toQ, track.toR);
-          const swept = tankTrackProgressSegment(
-            fromCenter.x,
-            fromCenter.y,
-            toCenter.x,
-            toCenter.y,
-            track.halfBodyLength,
-            track.progress,
-          );
-          const moveDx = toCenter.x - fromCenter.x;
-          const moveDy = toCenter.y - fromCenter.y;
-          const moveLength = Math.hypot(moveDx, moveDy) || 1;
-          const moveUx = moveDx / moveLength;
-          const moveUy = moveDy / moveLength;
-          const reachedDistance = (swept.toX - fromCenter.x) * moveUx
-            + (swept.toY - fromCenter.y) * moveUy;
-          const boundaryDistance = moveLength * 0.5;
-          const reachedBoundary = reachedDistance >= boundaryDistance;
-          // Terrain changes at the real shared hex edge. Before the animated
-          // leading edge reaches it, only the source terrain portion exists.
-          const boundaryX = (fromCenter.x + toCenter.x) * 0.5;
-          const boundaryY = (fromCenter.y + toCenter.y) * 0.5;
-          const fromTile = map.get({ q: track.fromQ, r: track.fromR });
-          const toTile = map.get({ q: track.toQ, r: track.toR });
-
-          if (tankTrackStyleForTerrain(fromTile?.terrain, tileHasBridge(fromTile)) === style) {
-            this.appendTankTrackPair(
-              g,
-              swept.fromX,
-              swept.fromY,
-              reachedBoundary ? boundaryX : swept.toX,
-              reachedBoundary ? boundaryY : swept.toY,
-              track.halfGap,
-            );
-            hasPath = true;
-          }
-          if (reachedBoundary
-            && tankTrackStyleForTerrain(toTile?.terrain, tileHasBridge(toTile)) === style) {
-            this.appendTankTrackPair(
-              g,
-              boundaryX,
-              boundaryY,
-              swept.toX,
-              swept.toY,
-              track.halfGap,
-            );
-            hasPath = true;
-          }
-          }
-
-          if (hasPath) g.stroke();
+      const track = record.track;
+      const tile = map.get({ q: track.q, r: track.r });
+      const style = tankTrackStyleForTerrain(tile?.terrain, tileHasBridge(tile));
+      if (style === 'none') continue;
+      setStroke(style, track.fadeSteps, track.lineWidth);
+      const center = this.project(track.q, track.r);
+      const arcs = tankTrackTurnArcPoints(
+        center.x,
+        center.y,
+        track.halfBodyLength,
+        track.halfGap,
+        track.fromAngle,
+        track.toAngle,
+        track.progress,
+      );
+      let hasPath = false;
+      for (const arc of arcs) {
+        for (let i = 1; i < arc.length; i++) {
+          const from = arc[i - 1]!;
+          const to = arc[i]!;
+          if (this.appendTankTrackSegment(
+            g, from.x, from.y, to.x, to.y, track.lineWidth, drawnSegments,
+          )) hasPath = true;
         }
       }
+      if (hasPath) g.stroke();
     }
   }
 
   private fadeTankTracksAtTurnEnd(turns = 1) {
     const completedTurns = Math.max(0, Math.floor(turns));
-    if (completedTurns === 0 || this.tankTracks.length === 0) return;
+    if (completedTurns === 0
+      || (this.tankTracks.length === 0 && this.tankTurnTracks.length === 0)) return;
     for (const track of this.tankTracks) track.fadeSteps += completedTurns;
+    for (const track of this.tankTurnTracks) track.fadeSteps += completedTurns;
     // Graphics rounds alpha to an integer. Drop marks once both terrain halves
     // are fully transparent so later movement never redraws invisible history.
     this.tankTracks = this.tankTracks.filter(track => this.tankTrackRemainsVisible(track));
+    this.tankTurnTracks = this.tankTurnTracks.filter(track => this.tankTurnTrackRemainsVisible(track));
+    this.recalculateTankTrackExtensions();
     this.redrawTankTracks();
+  }
+
+  private tankTurnTrackRemainsVisible(track: TankTrackTurn): boolean {
+    const tile = this.mission?.map.get({ q: track.q, r: track.r });
+    const style = tankTrackStyleForTerrain(tile?.terrain, tileHasBridge(tile));
+    return style !== 'none'
+      && tankTrackAlphaAfterTurns(TANK_TRACK_COLORS[style].a, track.fadeSteps) > 0;
   }
 
   private tankTrackRemainsVisible(track: TankTrackMove): boolean {
@@ -11914,18 +12124,64 @@ export class BattleScene extends Component {
     toX: number,
     toY: number,
     halfGap: number,
-  ) {
+    drawnSegments: TankTrackRenderedSegment[],
+  ): boolean {
     const dx = toX - fromX;
     const dy = toY - fromY;
     const length = Math.hypot(dx, dy);
-    if (length < 0.001) return;
+    if (length < 0.001) return false;
 
     const offsetX = -dy / length * halfGap;
     const offsetY = dx / length * halfGap;
-    g.moveTo(fromX + offsetX, fromY + offsetY);
-    g.lineTo(toX + offsetX, toY + offsetY);
-    g.moveTo(fromX - offsetX, fromY - offsetY);
-    g.lineTo(toX - offsetX, toY - offsetY);
+    const drewFirst = this.appendTankTrackSegment(
+      g,
+      fromX + offsetX,
+      fromY + offsetY,
+      toX + offsetX,
+      toY + offsetY,
+      g.lineWidth,
+      drawnSegments,
+    );
+    const drewSecond = this.appendTankTrackSegment(
+      g,
+      fromX - offsetX,
+      fromY - offsetY,
+      toX - offsetX,
+      toY - offsetY,
+      g.lineWidth,
+      drawnSegments,
+    );
+    return drewFirst || drewSecond;
+  }
+
+  private appendTankTrackSegment(
+    g: Graphics,
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    lineWidth: number,
+    drawnSegments: TankTrackRenderedSegment[],
+  ): boolean {
+    const segment: TankTrackRenderedSegment = {
+      fromX, fromY, toX, toY, lineWidth,
+    };
+    const intervals = tankTrackVisibleIntervals(segment, drawnSegments);
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    for (const interval of intervals) {
+      const visible: TankTrackRenderedSegment = {
+        fromX: fromX + dx * interval.from,
+        fromY: fromY + dy * interval.from,
+        toX: fromX + dx * interval.to,
+        toY: fromY + dy * interval.to,
+        lineWidth,
+      };
+      g.moveTo(visible.fromX, visible.fromY);
+      g.lineTo(visible.toX, visible.toY);
+      drawnSegments.push(visible);
+    }
+    return intervals.length > 0;
   }
 
   private splitHullDisplayBasis(kind: UnitKind): { trimW: number; trimH: number; fitScale: number; offsetForward: number; offsetRight: number } | null {
@@ -12719,6 +12975,15 @@ export class BattleScene extends Component {
     return !!sherman
       && sherman.stats.visionType === 'turreted'
       && sherman.turretDamaged !== true;
+  }
+
+  /** Fixed-gun tanks still expose their forward firing ray even though they cannot traverse a turret. */
+  private playerHasFixedWeaponArc(): boolean {
+    const sherman = this.mission?.sherman;
+    return !!sherman
+      && isTankUnit(sherman)
+      && sherman.stats.visionType === 'fixed'
+      && sherman.facing !== null;
   }
 
   /** Fixed-gun tanks can aim both their main gun and MG only along the hull's forward ray. */
@@ -14402,6 +14667,7 @@ export class BattleScene extends Component {
         showSettled: true,
         highExplosiveReport: replay.highExplosiveReport,
         highExplosiveCollateral: replay.highExplosiveCollateral,
+        secondaryMGReport: replay.secondaryMGReport,
       });
       return true;
     }
@@ -15073,7 +15339,7 @@ export class BattleScene extends Component {
     } else if (weather === 'heavy_snow') {
       label.string = getLang() === 'zh' ? '大雪' : 'Heavy Snow';
     } else {
-      label.string = getLang() === 'zh' ? '雨天  命中-1 / 视野-1' : 'Rain  Hit -1 / Vision -1';
+    label.string = getLang() === 'zh' ? '雨天  主炮命中-1 / 视野-1' : 'Rain  Main Gun Hit -1 / Vision -1';
     }
   }
 
@@ -16583,14 +16849,14 @@ export class BattleScene extends Component {
       color: Color;
       onClick: () => void;
       unavailableReason: string | null;
-      compactTurn: boolean;
+      compactPair: boolean;
       badge?: string;
       ammoTooltip?: ShellType;
     };
     const items: Item[] = [];
     const nonDoublesEffects = new Set<string>();
     const addItem = (text: string, color: Color, onClick: () => void,
-      unavailableReason: string | null = null, compactTurn = false,
+      unavailableReason: string | null = null, compactPair = false,
       effectId?: string, doubles = false, badge?: string, ammoTooltip?: ShellType) => {
       // A matching-dice action must not repeat an effect already offered by this
       // die alone. Keep the cheaper single-die action and omit the duplicate pair.
@@ -16601,7 +16867,7 @@ export class BattleScene extends Component {
         color: unavailableReason ? DIE_ACTION_UNAVAILABLE : color,
         onClick,
         unavailableReason,
-        compactTurn,
+        compactPair,
         badge,
         ammoTooltip,
       });
@@ -16650,19 +16916,22 @@ export class BattleScene extends Component {
         addItem(t('action.turnCW'), PHASE_BTN_MOVE,
           () => this.tryTurnSherman(idx, +1), this.turnActionUnavailable(), true);
       } else if (a === 'drive') {
-        addItem(t('action.advance'), PHASE_BTN_MOVE,
-          () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
         if (transmissionAllowsBothDirections) {
+          addItem(t('action.reverse'), PHASE_BTN_MOVE,
+            () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1), true);
+        }
+        addItem(t('action.advance'), PHASE_BTN_MOVE,
+          () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1), transmissionAllowsBothDirections);
+      } else if (a === 'reverse') {
+        if (transmissionAllowsBothDirections) {
+          addItem(t('action.reverse'), PHASE_BTN_MOVE,
+            () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1), true);
+          addItem(t('action.advance'), PHASE_BTN_MOVE,
+            () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1), true);
+        } else {
           addItem(t('action.reverse'), PHASE_BTN_MOVE,
             () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1));
         }
-      } else if (a === 'reverse') {
-        if (transmissionAllowsBothDirections) {
-          addItem(t('action.advance'), PHASE_BTN_MOVE,
-            () => this.tryDriveSherman(idx, +1), this.driveActionUnavailable(+1));
-        }
-        addItem(t('action.reverse'), PHASE_BTN_MOVE,
-          () => this.tryDriveSherman(idx, -1), this.driveActionUnavailable(-1));
       }
       // §3.6 A 列对子：驾驶员前进 / 副驾驶 ↻ 60° / 副驾驶 ↺ 60°
       if (hasDoublesPartner) {
@@ -16805,13 +17074,13 @@ export class BattleScene extends Component {
     if (items.length === 0) return;
 
     const ITEM_W = 180, ITEM_H = 40, GAP = 6;
-    // 两个转向按钮加上中间隔后总宽正好等于普通按钮，左右边缘对齐。
-    const TURN_ITEM_W = (ITEM_W - GAP) / 2;
+    // 成对的转向或移动按钮加上中间隔后总宽等于普通按钮，左右边缘对齐。
+    const PAIR_ITEM_W = (ITEM_W - GAP) / 2;
     const rows: Item[][] = [];
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const next = items[i + 1];
-      if (item.compactTurn && next?.compactTurn) {
+      if (item.compactPair && next?.compactPair) {
         rows.push([item, next]);
         i++;
       } else {
@@ -16839,12 +17108,12 @@ export class BattleScene extends Component {
       const row = rows[rowIndex];
       for (let columnIndex = 0; columnIndex < row.length; columnIndex++) {
         const it = row[columnIndex];
-        const itemW = row.length === 2 ? TURN_ITEM_W : ITEM_W;
+        const itemW = row.length === 2 ? PAIR_ITEM_W : ITEM_W;
         const btn = new Node(`DieAction${itemIndex++}`);
         btn.layer = this.node.layer;
         btn.addComponent(UITransform).setContentSize(itemW, ITEM_H);
         const x = row.length === 2
-          ? (columnIndex === 0 ? -1 : 1) * (TURN_ITEM_W + GAP) / 2
+          ? (columnIndex === 0 ? -1 : 1) * (PAIR_ITEM_W + GAP) / 2
           : 0;
         btn.setPosition(x, panelH / 2 - ITEM_H / 2 - rowIndex * (ITEM_H + GAP), 0);
         const bg = btn.addComponent(Graphics);
@@ -17548,7 +17817,10 @@ export class BattleScene extends Component {
     const maxRoll = maxMGHitRoll(ctx);
     const impossibleThreshold = mgHitThreshold(ctx);
     const impossible = maxRoll < impossibleThreshold;
-    const report = impossible
+    const dualWeaponReports = machineGun?.weapon === 'both'
+      ? rollSelectedTankMachineGunAttacks(ctx, this.rng)
+      : null;
+    const report = dualWeaponReports?.[0]?.report ?? (impossible
       ? {
           dice: [0, 0] as [number, number],
           hitDiceCount: maxRoll <= 7 ? 1 : 2,
@@ -17559,21 +17831,26 @@ export class BattleScene extends Component {
           hitBreakdown: mgHitBreakdown(ctx),
           hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
-      : rollMGAttack(ctx, this.rng);
+      : rollMGAttack(ctx, this.rng));
+    const secondaryReport = dualWeaponReports?.[1]?.report;
+    const hit = report.hit || secondaryReport?.hit === true;
     this.battleLogI18n('battleLog.combatMg', {
       d1: report.dice[0],
       d2: report.dice[1],
-      diceExpr: impossible ? `max ${maxRoll}` : this.mgDiceExpr(report),
+      diceExpr: impossible && !secondaryReport ? `max ${maxRoll}` : this.mgDiceExpr(report),
       roll: report.roll,
       need: report.threshold,
-      resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
+      resultKey: hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
     }, {
-      kind: 'attack', report: { ...report, statusChange: report.hit ? 'destroyed' : 'none' } as AttackReport,
+      kind: 'attack', report: { ...report, statusChange: hit ? 'destroyed' : 'none' } as AttackReport,
       attackerKind: sherman.kind, targetKind: target.kind, mg: true,
       attackerTone: 'player', targetTone: this.combatLogUnitTone(target),
+      secondaryMGReport: secondaryReport
+        ? { ...secondaryReport, statusChange: secondaryReport.hit ? 'destroyed' : 'none' } as AttackReport
+        : undefined,
     });
 
-    if (impossible) {
+    if (impossible && !secondaryReport) {
       this.playMachineGunFireCue(sherman, target, false);
       this.usePhaseDice([this.selectedMGDieIdx]);
       this.selectedMGDieIdx = -1;
@@ -17605,8 +17882,19 @@ export class BattleScene extends Component {
       hit: report.hit,
       hitBreakdown: report.hitBreakdown,
       hitModifiers: report.hitModifiers,
-      statusChange: report.hit ? 'destroyed' : 'none',
+      statusChange: hit ? 'destroyed' : 'none',
     };
+    const secondaryPanelReport: AttackReport | undefined = secondaryReport ? {
+      dice: secondaryReport.dice,
+      hitDiceCount: secondaryReport.hitDiceCount,
+      hitBonus: secondaryReport.hitBonus,
+      roll: secondaryReport.roll,
+      threshold: secondaryReport.threshold,
+      hit: secondaryReport.hit,
+      hitBreakdown: secondaryReport.hitBreakdown,
+      hitModifiers: secondaryReport.hitModifiers,
+      statusChange: secondaryReport.hit ? 'destroyed' : 'none',
+    } : undefined;
 
     const capturedDieIdx = this.selectedMGDieIdx;
     let attackApplied = false;
@@ -17614,13 +17902,13 @@ export class BattleScene extends Component {
       if (!this.mission) return;
       if (!attackApplied) {
         attackApplied = true;
-        this.applyMachineGunAttackResult(target, report);
+        this.applyMachineGunAttackResult(target, { hit });
         if (target.destroyed) this.registerImpactDestroyWreckVisual(target, sherman);
         this.usePhaseDice([capturedDieIdx]);
         this.selectedMGDieIdx = -1;
         // Reveal the target state together with the settled dice; confirmation
         // only closes the report and advances the phase.
-        if (report.hit) {
+        if (hit) {
           this.spawnFloater(target.pos.q, target.pos.r, t('floater.mgHit'),
             new Color(255, 120, 120, 255), { size: 32, dur: 1.0, rise: 48 });
         } else {
@@ -17633,8 +17921,9 @@ export class BattleScene extends Component {
           type: 'machine_gun',
           attackerId: sherman.id,
           targetId: target.id,
-          report,
-          hit: report.hit,
+          report: { ...report, hit },
+          reports: secondaryReport ? [report, secondaryReport] : undefined,
+          hit,
         });
         this.refreshPhaseUI();
         this.updateHUD();
@@ -17654,6 +17943,7 @@ export class BattleScene extends Component {
       // attacks. Confirm may be pressed immediately to skip the remaining roll.
       {
         mg: true,
+        secondaryMGReport: secondaryPanelReport,
         attacker: sherman,
         target,
         requireManualClose: true,
@@ -18069,7 +18359,10 @@ export class BattleScene extends Component {
   private playerMainGunTargets(): Unit[] {
     if (!this.mission) return [];
     const abandonedTanks = this.allUnits().filter(isAbandonedTank);
-    return Array.from(new Set([...this.mission.enemies, ...abandonedTanks]));
+    // An attached AT-gun controller is represented by the gun, not a second
+    // independently targetable infantry unit in the same hex.
+    return Array.from(new Set([...this.mission.enemies, ...abandonedTanks]))
+      .filter(unit => !isAttachedATGunCrew(unit));
   }
 
   /** One click/preview target per hex; non-infantry takes precedence over infantry. */
@@ -19259,10 +19552,18 @@ export class BattleScene extends Component {
     }
     if (tile.terrain === 'mud' && !hasTerrainSprite) this.drawMudOverlay(cx, cy, hexR, tile);
     if (tile.terrain === 'road' && !hasTerrainSprite) this.drawRoadHexOverlay(cx, cy, hexR, tile);
-    if (tileHasBridge(tile)) this.drawBridgeOverlay(cx, cy, hexR, tile.bridgeEnds!);
+    if (tileHasBridge(tile) && !this.bridgeSurfaceSpriteInfo(tile)) {
+      this.drawBridgeOverlay(cx, cy, hexR, tile.bridgeEnds!);
+    }
     if (tile.roads) {
       if (tile.terrain === 'airstrip') this.drawAirstripOverlay(cx, cy, hexR, tile.roads, tile);
-      else this.drawRoadOverlay(cx, cy, hexR, tile.roads, tile);
+      else if (tileHasBridge(tile) && this.bridgeSurfaceSpriteInfo(tile)) {
+        // Road surface is already composited into the bridge sprite.
+      } else if (tile.terrain !== 'road' && tile.terrain !== 'urban_road') {
+        this.drawRoadOverlay(cx, cy, hexR, tile.roads, tile);
+      } else if (!this.roadSurfaceSpriteInfo(tile)) {
+        this.drawRoadOverlay(cx, cy, hexR, tile.roads, tile);
+      }
     }
     if (tile.hasBuilding) this.drawBuildingOverlay(cx, cy, hexR, tile);
     if (tile.breakwaters) {
@@ -19423,6 +19724,72 @@ export class BattleScene extends Component {
     parent.addChild(n);
   }
 
+  private roadSurfaceSpriteInfo(tile: Tile): { frame: SpriteFrame; rotationDegrees: number } | null {
+    if (!tile.roads) return null;
+    if (tile.terrain === 'urban_road') {
+      const transform = urbanRoadSpriteTransform(tile.roads);
+      if (!transform) return null;
+      const path = `textures/terrain/urban/roads/urban_road_surface_${transform.canonicalFlags}_v1/spriteFrame`;
+      const frame = this.urbanOverlaySpriteFrames[path];
+      return frame ? { frame, rotationDegrees: transform.rotationDegrees } : null;
+    }
+    if (tile.terrain !== 'road') return null;
+    const transform = roadSpriteTransform(tile.roads);
+    if (!transform) return null;
+    const season = this.usesWinterTerrainVisuals() ? 'winter' : 'summer';
+    const path = `textures/terrain/european_roads/european_road_surface_${season}_${transform.canonicalFlags}_v1/spriteFrame`;
+    const frame = this.urbanOverlaySpriteFrames[path];
+    return frame ? { frame, rotationDegrees: transform.rotationDegrees } : null;
+  }
+
+  private bridgeSurfaceSpriteInfo(tile: Tile): { frame: SpriteFrame; rotationDegrees: number } | null {
+    if (!tileHasBridge(tile)) return null;
+    const bridgeRoads = Array.from({ length: 6 }, (_, direction) =>
+      tile.bridgeEnds!.includes(direction as Direction));
+    const transform = roadSpriteTransform(bridgeRoads);
+    if (!transform || transform.canonicalMask !== 9) return null;
+    const season = this.usesWinterTerrainVisuals() ? 'winter' : 'summer';
+    const path = `textures/terrain/european_roads/european_bridge_surface_${season}_v1/spriteFrame`;
+    const frame = this.urbanOverlaySpriteFrames[path];
+    return frame ? { frame, rotationDegrees: transform.rotationDegrees } : null;
+  }
+
+  private addTileInspectBridgeSurfaceSprite(parent: Node, tile: Tile, cx: number, cy: number, hexR: number) {
+    const info = this.bridgeSurfaceSpriteInfo(tile);
+    if (!info) return;
+    const n = new Node('TileInspectBridgeSurfaceSprite');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    const sp = n.addComponent(Sprite);
+    sp.spriteFrame = info.frame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(
+      hexR * Math.sqrt(3) * ROAD_SURFACE_OVERLAP_SCALE,
+      hexR * 2 * ROAD_SURFACE_OVERLAP_SCALE,
+    );
+    n.setPosition(cx, cy, 0);
+    n.setRotationFromEuler(0, 0, info.rotationDegrees);
+    parent.addChild(n);
+  }
+
+  private addTileInspectRoadSurfaceSprite(parent: Node, tile: Tile, cx: number, cy: number, hexR: number) {
+    const info = this.roadSurfaceSpriteInfo(tile);
+    if (!info) return;
+    const n = new Node('TileInspectRoadSurfaceSprite');
+    n.layer = this.node.layer;
+    const ut = n.addComponent(UITransform);
+    const sp = n.addComponent(Sprite);
+    sp.spriteFrame = info.frame;
+    sp.sizeMode = Sprite.SizeMode.CUSTOM;
+    ut.setContentSize(
+      hexR * Math.sqrt(3) * ROAD_SURFACE_OVERLAP_SCALE,
+      hexR * 2 * ROAD_SURFACE_OVERLAP_SCALE,
+    );
+    n.setPosition(cx, cy, 0);
+    n.setRotationFromEuler(0, 0, info.rotationDegrees);
+    parent.addChild(n);
+  }
+
   private addTileInspectUrbanBuildingSprite(
     parent: Node, tile: Tile, cx: number, cy: number, hexR: number,
   ) {
@@ -19451,6 +19818,8 @@ export class BattleScene extends Component {
 
     const hexCY = 24;
     this.addTileInspectTerrainSprite(preview, tile, 0, hexCY, hexR);
+    this.addTileInspectBridgeSurfaceSprite(preview, tile, 0, hexCY, hexR);
+    this.addTileInspectRoadSurfaceSprite(preview, tile, 0, hexCY, hexR);
     const overlay = new Node('TilePreviewOverlay');
     overlay.layer = this.node.layer;
     overlay.addComponent(UITransform).setContentSize(132, h);
@@ -20879,14 +21248,31 @@ export class BattleScene extends Component {
     return true;
   }
 
-  private drawTerrainSpriteFrame(cx: number, cy: number, size: number, frame: SpriteFrame): boolean {
+  private drawTerrainSpriteFrame(
+    cx: number, cy: number, size: number, frame: SpriteFrame, rotationDegrees = 0,
+  ): boolean {
     if (this.terrainSpritePoolNext >= this.terrainSpritePool.length) return false;
     const slot = this.terrainSpritePool[this.terrainSpritePoolNext++];
     slot.sprite.spriteFrame = frame;
     const ut = slot.node.getComponent(UITransform);
     if (ut) ut.setContentSize(size * Math.sqrt(3), size * 2.0);
     slot.node.setPosition(cx, cy, 0);
-    slot.node.setRotationFromEuler(0, 0, 0);
+    slot.node.setRotationFromEuler(0, 0, rotationDegrees);
+    slot.node.setScale(1, 1, 1);
+    slot.node.active = true;
+    return true;
+  }
+
+  private drawBridgeSpriteFrame(
+    cx: number, cy: number, size: number, frame: SpriteFrame, rotationDegrees = 0,
+  ): boolean {
+    if (this.bridgeSpritePoolNext >= this.bridgeSpritePool.length) return false;
+    const slot = this.bridgeSpritePool[this.bridgeSpritePoolNext++];
+    slot.sprite.spriteFrame = frame;
+    const ut = slot.node.getComponent(UITransform);
+    if (ut) ut.setContentSize(size * Math.sqrt(3), size * 2.0);
+    slot.node.setPosition(cx, cy, 0);
+    slot.node.setRotationFromEuler(0, 0, rotationDegrees);
     slot.node.setScale(1, 1, 1);
     slot.node.active = true;
     return true;
@@ -21800,9 +22186,19 @@ export class BattleScene extends Component {
     const crewFaction = gun.faction;
     let infantry = this.atGunController(gun);
     if (infantry) {
+      // Older saves can contain a controller killed by direct MG targeting
+      // while the composite gun was still marked as crewed. Never revive it.
+      if (infantry.destroyed) {
+        infantry.attachedToATGunId = undefined;
+        gun.atGunCrewAlive = false;
+        gun.atGunControllerUnitId = undefined;
+        gun.atGunCrewLevel = undefined;
+        gun.faction = 'neutral';
+        gun.visionRange = 0;
+        return null;
+      }
       infantry.pos = { ...gun.pos };
       infantry.attachedToATGunId = undefined;
-      infantry.destroyed = false;
     } else {
       infantry = this.atGunCrewProxy(gun);
       infantry.id = `${gun.id}:released:${gun.atGunCrewGeneration ?? 0}`;
@@ -21965,8 +22361,11 @@ export class BattleScene extends Component {
     const hullMGCanFireWhileTurretPartiallyTraverses = GameSession.gameMode === 'hardcore'
       && legalMGSelection?.weapon === 'hull';
 
+    const canUseDirectionalWeaponMask = this.playerTurretCanRotate()
+      || this.playerHasFixedWeaponArc()
+      || mgSel;
     if (attackOrMisc
-      && this.playerTurretCanRotate()
+      && canUseDirectionalWeaponMask
       && this.hasTurretReconGunSelection()) {
       const precisionGunSelection = gunSel && this.selectedGunHitThresholdModifier < 0;
       // Precision fire uses the common range overlay and traverse ring, but it
@@ -22113,8 +22512,7 @@ export class BattleScene extends Component {
   private tryAimShermanTurretAtFogTile(direction: FireDirection, targetPos: Axial, useMG = false) {
     const dieIdx = useMG ? this.selectedMGDieIdx : this.selectedGunDieIdx;
     if (!this.mission || dieIdx < 0) return;
-    if (useMG && (this.machineGunAimDirection(targetPos) !== direction
-      || !this.playerTurretCanRotate())) return;
+    if (useMG && this.machineGunAimDirection(targetPos) !== direction) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     const doublesPartnerIdx = useMG ? -1 : this.selectedGunDoublesIdx;
@@ -22125,6 +22523,24 @@ export class BattleScene extends Component {
       targetPos,
       this.mission.smokeHexes,
     );
+    const sherman = this.mission.sherman;
+    const currentFacing = this.playerHasFixedWeaponArc()
+      ? (sherman.facing ?? direction) as FireDirection
+      : this.currentTurretFacingFor(sherman, direction);
+    const turretWillRotate = this.playerTurretCanRotate() && currentFacing !== direction;
+    if (!turretWillRotate) {
+      // The blue mask also describes the already-covered direction. Selecting
+      // it may update a diagonal gunner preference, but it is not an action and
+      // must leave the selected main-gun/MG die available.
+      if (currentFacing === direction) {
+        this.startShermanTurretAimDirection(direction, () => {
+          this.refreshPhaseUI();
+          this.updateHUD();
+          this.redraw();
+        }, undefined, false, clickedSidePreference ?? undefined);
+      }
+      return;
+    }
     this.hideTurretTargetOverlayForCommittedAction();
     this.startShermanTurretAimDirection(direction, () => {
       this.usePhaseDice(doublesPartnerIdx >= 0 ? [dieIdx, doublesPartnerIdx] : [dieIdx]);
@@ -22599,8 +23015,15 @@ export class BattleScene extends Component {
       const doublesPartnerIdx = this.selectedGunDoublesIdx;
       const panelReport = this.highExplosivePanelReport(report);
       let attackApplied = false;
+      let heImpactReached = !report.hit;
+      let completeAfterHEImpact = false;
+      let heActionCompleted = false;
       const applyAndSyncHEAttack = (completeAction: boolean) => {
         if (!this.mission) return;
+        if (completeAction) completeAfterHEImpact = true;
+        // The confirm button may be pressed during the short projectile flight.
+        // Keep that intent queued instead of revealing casualties before impact.
+        if (!heImpactReached) return;
         if (!attackApplied) {
           attackApplied = true;
           this.applyHighExplosiveAttackResult(target, report, collateralResults);
@@ -22657,7 +23080,14 @@ export class BattleScene extends Component {
           this.redraw();
           this.refreshStatusPanel();
         }
-        if (completeAction) this.completePhaseDiceAction();
+        if (completeAfterHEImpact && !heActionCompleted) {
+          heActionCompleted = true;
+          this.completePhaseDiceAction();
+        }
+      };
+      const applyHEAtImpact = () => {
+        heImpactReached = true;
+        applyAndSyncHEAttack(false);
       };
       this.startShermanTurretAim(target, () => {
         if (!this.mission || target.destroyed) return;
@@ -22671,7 +23101,10 @@ export class BattleScene extends Component {
           autoResolveWithoutPanel: !this.popupPlayerAttackResults,
           highExplosiveReport: report,
           highExplosiveCollateral: collateralResults,
-          onHold: () => applyAndSyncHEAttack(false),
+          onHighExplosiveImpact: applyHEAtImpact,
+          onHold: () => {
+            if (!report.hit) applyAndSyncHEAttack(false);
+          },
         });
       });
       this.updateHUD();
@@ -22927,7 +23360,10 @@ export class BattleScene extends Component {
           highExplosiveReport: report,
           highExplosiveCollateral: collateralResults,
           autoResolveWithoutPanel: true,
-          onHold: applyAndPresentHEAttack,
+          onHighExplosiveImpact: applyAndPresentHEAttack,
+          onHold: () => {
+            if (!report.hit) applyAndPresentHEAttack();
+          },
         });
       };
       if (splitTurretReady) this.startEnemyTurretAim(enemy, target, fire);
@@ -23071,12 +23507,16 @@ export class BattleScene extends Component {
     onDone: () => void,
     opts: {
       mg?: boolean;
+      /** Independent hull-MG result shown beside the primary coaxial result. */
+      secondaryMGReport?: AttackReport;
       keepTurnEndPanel?: boolean;
       attackSound?: string;
       attacker?: Unit | null;
       target?: Unit | null;
       fireEffectPlayed?: boolean;
       onHold?: () => void;
+      /** Resolve a successful HE attack at projectile impact, after spawning its blast. */
+      onHighExplosiveImpact?: () => void;
       requireManualClose?: boolean;
       /** AI 单位自动结算：播放攻击表现并写入战报，但不创建骰子详情弹窗。 */
       autoResolveWithoutPanel?: boolean;
@@ -23105,7 +23545,12 @@ export class BattleScene extends Component {
       }
       if (!opts.fireEffectPlayed) {
         if (opts.highExplosiveReport && opts.attacker && opts.target) {
-          this.playHighExplosiveSuppressionCue(opts.attacker, opts.target, opts.highExplosiveReport);
+          this.playHighExplosiveSuppressionCue(
+            opts.attacker,
+            opts.target,
+            opts.highExplosiveReport,
+            opts.onHighExplosiveImpact,
+          );
         } else {
           this.playAttackFireCue(
             opts.attacker,
@@ -23131,7 +23576,12 @@ export class BattleScene extends Component {
     if (opts.autoResolveWithoutPanel) {
       if (!opts.fireEffectPlayed) {
         if (opts.highExplosiveReport && opts.attacker && opts.target) {
-          this.playHighExplosiveSuppressionCue(opts.attacker, opts.target, opts.highExplosiveReport);
+          this.playHighExplosiveSuppressionCue(
+            opts.attacker,
+            opts.target,
+            opts.highExplosiveReport,
+            opts.onHighExplosiveImpact,
+          );
         } else {
           this.playAttackFireCue(
             opts.attacker ?? null,
@@ -23156,6 +23606,7 @@ export class BattleScene extends Component {
       mg,
       opts.highExplosiveReport,
       opts.highExplosiveCollateral,
+      opts.secondaryMGReport,
     );
     this.liftEnemyDiceTrayIntoDiceShowIfNeeded(panel.root);
     const show: DiceShow = {
@@ -23167,6 +23618,7 @@ export class BattleScene extends Component {
       attackerLabel,
       targetLabel,
       mg,
+      secondaryMGReport: opts.secondaryMGReport ?? null,
       attackSound: opts.attackSound ?? '',
       fireEffectPlayed: opts.fireEffectPlayed === true,
       attacker: opts.attacker ?? null,
@@ -23174,6 +23626,7 @@ export class BattleScene extends Component {
       targetCommanderExposed: opts.target?.hatchOpen === true && opts.target.crew?.commander !== false,
       onDone,
       onHold: opts.onHold ?? null,
+      onHighExplosiveImpact: opts.onHighExplosiveImpact ?? null,
       requireManualClose: !!opts.requireManualClose,
       finalized: false,
       holdNotified: false,
@@ -23184,6 +23637,9 @@ export class BattleScene extends Component {
       hitNeedLabel: panel.hitNeedLabel,
       hitVerdictLabel: panel.hitVerdictLabel,
       hitSpecialLabel: panel.hitSpecialLabel,
+      secondaryMGDieLabel: panel.secondaryMGDieLabel,
+      secondaryMGNeedLabel: panel.secondaryMGNeedLabel,
+      secondaryMGVerdictLabel: panel.secondaryMGVerdictLabel,
       penDieLabels: panel.penDieLabels,
       penNeedLabel: panel.penNeedLabel,
       penVerdictLabel: panel.penVerdictLabel,
@@ -23232,6 +23688,7 @@ export class BattleScene extends Component {
     mg: boolean = false,
     highExplosiveReport?: HighExplosiveReport,
     highExplosiveCollateral: HighExplosiveCollateralResult[] = [],
+    secondaryMGReport?: AttackReport,
   ): {
     root: Node;
     hitDieLabels: Label[];
@@ -23239,6 +23696,9 @@ export class BattleScene extends Component {
     hitNeedLabel: Label;
     hitVerdictLabel: Label;
     hitSpecialLabel: Label | null;
+    secondaryMGDieLabel: Label | null;
+    secondaryMGNeedLabel: Label | null;
+    secondaryMGVerdictLabel: Label | null;
     penDieLabels: Label[];
     penNeedLabel: Label | null;
     penVerdictLabel: Label | null;
@@ -23276,7 +23736,10 @@ export class BattleScene extends Component {
     const basePanelH = compactPanel ? 280 : needsCrewRow ? 520 : 420;
     // A collateral infantry result needs its own caption and die row. Reserve
     // enough vertical space so neither touches the primary tank dice.
-    const PANEL_H = Math.min(680, basePanelH + highExplosiveCollateral.length * 116);
+    const PANEL_H = Math.min(
+      680,
+      basePanelH + (secondaryMGReport ? 80 : 0) + highExplosiveCollateral.length * 116,
+    );
 
     // 半透明全屏遮罩 + 面板：都是 Graphics，不需要 Sprite 资源
     const root = new Node('DiceShow');
@@ -23315,7 +23778,9 @@ export class BattleScene extends Component {
 
     // 命中需求：机枪使用专用语言键，主炮走原来的命中阈值行
     const hitNeedText = mg
-      ? t('dice.panel.mgHitNeed', { n: report.threshold })
+      ? secondaryMGReport
+        ? t('dice.panel.coaxialMGHitNeed', { n: report.threshold })
+        : t('dice.panel.mgHitNeed', { n: report.threshold })
       : report.shootingPortHit !== undefined
         ? t('dice.panel.shootingPortHitNeed', { n: report.threshold })
         : t('dice.panel.hitNeed', { n: report.threshold });
@@ -23336,7 +23801,7 @@ export class BattleScene extends Component {
 
     const hitDiceCount = Math.max(1, Math.min(2, report.hitDiceCount ?? 2));
 
-    // 命中骰：主炮 2d6；机枪 1d6（正面 -1 已计入命中所需）。
+    // 命中骰：主炮 2d6；每挺机枪各用 1d6。
     const d1 = this.makeDieSquare(panel, DIE_COL_1, hitDiceY, DIE_SIZE);
     const d2 = this.makeDieSquare(panel, DIE_COL_2, hitDiceY, DIE_SIZE);
     if (hitDiceCount === 1) {
@@ -23367,6 +23832,39 @@ export class BattleScene extends Component {
       hitSum.node.active = false;
       hitNeed.node.active = false;
       hitVerdict.node.active = false;
+    }
+
+    let secondaryMGDie: Label | null = null;
+    let secondaryMGNeed: Label | null = null;
+    let secondaryMGVerdict: Label | null = null;
+    if (mg && secondaryMGReport) {
+      const secondaryY = hitDiceY - ROW_GAP;
+      secondaryMGDie = this.makeDieSquare(
+        panel,
+        DIE_COL_1 + (DIE_SIZE + DIE_GAP) / 2,
+        secondaryY,
+        DIE_SIZE,
+      );
+      secondaryMGNeed = this.makeCenteredLabel(
+        panel,
+        t('dice.panel.hullMGHitNeed', { n: secondaryMGReport.threshold }),
+        MID_COL_X,
+        secondaryY,
+        MID_COL_W,
+        40,
+        CHECK_FONT_SIZE,
+        DICE_INFO_TEXT,
+      );
+      secondaryMGVerdict = this.makeCenteredLabel(
+        panel,
+        '',
+        RESULT_COL_X,
+        secondaryY,
+        RESULT_COL_W,
+        40,
+        VERDICT_FONT_SIZE,
+        DICE_OK_TEXT,
+      );
     }
 
     // 2d6 穿甲 / 伤害 / 阵亡检定三行只在主炮模式需要；机枪扫射只有命中这一段。
@@ -23499,6 +23997,9 @@ export class BattleScene extends Component {
       hitNeedLabel: hitNeed,
       hitVerdictLabel: hitVerdict,
       hitSpecialLabel: hitSpecial,
+      secondaryMGDieLabel: secondaryMGDie,
+      secondaryMGNeedLabel: secondaryMGNeed,
+      secondaryMGVerdictLabel: secondaryMGVerdict,
       penDieLabels: penDice,
       penNeedLabel: penNeed,
       penVerdictLabel: penVerdict,
@@ -24124,6 +24625,7 @@ export class BattleScene extends Component {
     this.setDieLabelFace(show.hitDieLabels[0], show.report.dice[0]);
     if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], show.report.dice[1]);
     show.hitSumLabel.string = '';
+    this.revealSecondaryMachineGunResult(show);
 
     if (show.report.shootingPortHit !== undefined) {
       show.hitVerdictLabel.string = show.report.shootingPortHit
@@ -24150,10 +24652,11 @@ export class BattleScene extends Component {
     }
 
     if (show.mg) {
-      show.outcomeLabel.string = show.report.hit
+      const hit = show.report.hit || show.secondaryMGReport?.hit === true;
+      show.outcomeLabel.string = hit
         ? t('dice.panel.outcomeMGKill')
         : t('dice.panel.outcomeMiss');
-      show.outcomeLabel.color = show.report.hit ? DICE_OUTCOME_HIT : DICE_OUTCOME_MISS;
+      show.outcomeLabel.color = hit ? DICE_OUTCOME_HIT : DICE_OUTCOME_MISS;
     } else {
       this.revealMainGunDiceRows(show);
       this.setMainGunDiceOutcome(show);
@@ -24161,6 +24664,16 @@ export class BattleScene extends Component {
     // 当前结果面板沿用游戏内布局：最终结论由各判定行呈现，底部只保留确认按钮。
     show.outcomeLabel.node.active = false;
     if (show.confirmButton) show.confirmButton.active = true;
+  }
+
+  private revealSecondaryMachineGunResult(show: DiceShow) {
+    const report = show.secondaryMGReport;
+    if (!report || !show.secondaryMGDieLabel || !show.secondaryMGVerdictLabel) return;
+    this.setDieLabelFace(show.secondaryMGDieLabel, report.dice[0]);
+    show.secondaryMGVerdictLabel.string = report.hit
+      ? t('dice.panel.hitYes')
+      : t('dice.panel.hitNo');
+    show.secondaryMGVerdictLabel.color = report.hit ? DICE_OK_TEXT : DICE_FAIL_TEXT;
   }
 
   private revealMainGunDiceRows(show: DiceShow) {
@@ -24360,7 +24873,10 @@ export class BattleScene extends Component {
         && target !== undefined
         && isAntiTankGunUnit(target)
         && target.atGunCrewAlive === true) return;
-    if (!target || !this.applyAttackDestroyedVisualAtImpact(show.report, show.attacker, target, show.mg)) return;
+    const visualReport = show.mg && !show.report.hit && show.secondaryMGReport?.hit
+      ? show.secondaryMGReport
+      : show.report;
+    if (!target || !this.applyAttackDestroyedVisualAtImpact(visualReport, show.attacker, target, show.mg)) return;
     show.earlyDestroyedVisualApplied = true;
   }
 
@@ -24780,6 +25296,7 @@ export class BattleScene extends Component {
         const p2 = ((frame * 23) % 6) + 1;
         this.setDieLabelFace(show.hitDieLabels[0], p1);
         if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], p2);
+        if (show.secondaryMGDieLabel) this.setDieLabelFace(show.secondaryMGDieLabel, p2);
         show.hitSumLabel.string = '';
         if (!show.mg) this.spinMainGunDiceRows(show, frame);
         if (show.t >= DICE_ROLL_DUR) {
@@ -24787,6 +25304,7 @@ export class BattleScene extends Component {
           show.t = 0;
           this.setDieLabelFace(show.hitDieLabels[0], show.report.dice[0]);
           if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], show.report.dice[1]);
+          this.revealSecondaryMachineGunResult(show);
           show.hitSumLabel.string = '';
           if (show.report.shootingPortHit !== undefined) {
             show.hitVerdictLabel.string = show.report.shootingPortHit
@@ -24818,7 +25336,12 @@ export class BattleScene extends Component {
           // 射击音效与「骰子落定」同步：主炮 / 机枪在命中与未命中时均播放（onDone 过晚且机枪曾仅命中播）
           if (!show.fireEffectPlayed) {
             if (show.highExplosiveReport && show.attacker && show.target) {
-              this.playHighExplosiveSuppressionCue(show.attacker, show.target, show.highExplosiveReport);
+              this.playHighExplosiveSuppressionCue(
+                show.attacker,
+                show.target,
+                show.highExplosiveReport,
+                show.onHighExplosiveImpact ?? undefined,
+              );
             } else {
               this.playAttackFireCue(show.attacker, show.target, show.mg, show.attackSound, show.report);
             }
@@ -24832,7 +25355,7 @@ export class BattleScene extends Component {
           if (show.mg) {
             // 机枪模式：2d6 一段式，hit-show 结束后直接到 hold；
             // 命中 = 步兵击毙，未命中 = MISS。不会进入 pen/dmg/crew。
-            if (show.report.hit) {
+            if (show.report.hit || show.secondaryMGReport?.hit) {
               show.outcomeLabel.string = t('dice.panel.outcomeMGKill');
               show.outcomeLabel.color = DICE_OUTCOME_HIT;
             } else {
@@ -25746,7 +26269,10 @@ export class BattleScene extends Component {
     const maxRoll = maxMGHitRoll(ctx);
     const threshold = mgHitThreshold(ctx);
     const impossible = maxRoll < threshold;
-    const report = impossible
+    const dualWeaponReports = machineGun?.weapon === 'both'
+      ? rollSelectedTankMachineGunAttacks(ctx, this.rng)
+      : null;
+    const report = dualWeaponReports?.[0]?.report ?? (impossible
       ? {
           dice: [0, 0] as [number, number],
           hitDiceCount: 1,
@@ -25757,7 +26283,9 @@ export class BattleScene extends Component {
           hitBreakdown: mgHitBreakdown(ctx),
           hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
-      : rollMGAttack(ctx, this.rng);
+      : rollMGAttack(ctx, this.rng));
+    const secondaryReport = dualWeaponReports?.[1]?.report;
+    const hit = report.hit || secondaryReport?.hit === true;
     const actorLabel = actor.sideId === 'enemy'
       ? t('actor.enemyPrefix', { name: unitDisplayName(actor.kind) })
       : t('actor.allyPrefix', { name: unitDisplayName(actor.kind) });
@@ -25768,13 +26296,16 @@ export class BattleScene extends Component {
         : t('actor.allyPrefix', { name: unitDisplayName(target.kind) });
     this.battleLogI18n('battleLog.combatMgAI', {
       actor: actorLabel,
-      diceExpr: impossible ? `max ${maxRoll}` : this.mgDiceExpr(report),
+      diceExpr: impossible && !secondaryReport ? `max ${maxRoll}` : this.mgDiceExpr(report),
       need: report.threshold,
-      resultKey: report.hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
+      resultKey: hit ? 'battleLog.combatMg.hit' : 'battleLog.combatMg.miss',
     }, {
-      kind: 'attack', report: { ...report, statusChange: report.hit ? 'destroyed' : 'none' } as AttackReport,
+      kind: 'attack', report: { ...report, statusChange: hit ? 'destroyed' : 'none' } as AttackReport,
       attackerKind: actor.kind, targetKind: target.kind, mg: true,
       attackerTone: this.combatLogUnitTone(actor), targetTone: this.combatLogUnitTone(target),
+      secondaryMGReport: secondaryReport
+        ? { ...secondaryReport, statusChange: secondaryReport.hit ? 'destroyed' : 'none' } as AttackReport
+        : undefined,
     });
 
     let attackApplied = false;
@@ -25782,15 +26313,15 @@ export class BattleScene extends Component {
       if (!this.mission) return;
       if (attackApplied) return;
       attackApplied = true;
-      this.applyMachineGunAttackResult(target, report);
+      this.applyMachineGunAttackResult(target, { hit });
       if (target.destroyed) this.registerImpactDestroyWreckVisual(target, actor);
       if (this.isUnitVisible(target)) {
         this.spawnFloater(
           target.pos.q,
           target.pos.r,
-          report.hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss'),
-          report.hit ? new Color(255, 120, 120, 255) : new Color(220, 220, 220, 255),
-          { size: 32, dur: report.hit ? 1.0 : 0.9, rise: report.hit ? 48 : 44 },
+          hit ? t('floater.mgHit') : t('dice.panel.outcomeMiss'),
+          hit ? new Color(255, 120, 120, 255) : new Color(220, 220, 220, 255),
+          { size: 32, dur: hit ? 1.0 : 0.9, rise: hit ? 48 : 44 },
         );
       }
       this.outcome = this.computeOutcome();
@@ -25813,7 +26344,7 @@ export class BattleScene extends Component {
       }
     };
 
-    if (impossible) {
+    if (impossible && !secondaryReport) {
       const revealKey = HexMap.keyOf(actor.pos);
       const hiddenActor = !this.isUnitVisible(actor);
       if (hiddenActor) this.transientFogRevealKeys.add(revealKey);
@@ -25835,10 +26366,22 @@ export class BattleScene extends Component {
       hit: report.hit,
       hitBreakdown: report.hitBreakdown,
       hitModifiers: report.hitModifiers,
-      statusChange: report.hit ? 'destroyed' : 'none',
+      statusChange: hit ? 'destroyed' : 'none',
     };
+    const secondaryPanelReport: AttackReport | undefined = secondaryReport ? {
+      dice: secondaryReport.dice,
+      hitDiceCount: secondaryReport.hitDiceCount,
+      hitBonus: secondaryReport.hitBonus,
+      roll: secondaryReport.roll,
+      threshold: secondaryReport.threshold,
+      hit: secondaryReport.hit,
+      hitBreakdown: secondaryReport.hitBreakdown,
+      hitModifiers: secondaryReport.hitModifiers,
+      statusChange: secondaryReport.hit ? 'destroyed' : 'none',
+    } : undefined;
     this.startDiceShow(panelReport, actorLabel, targetLabel, finish, {
       mg: true,
+      secondaryMGReport: secondaryPanelReport,
       attacker: actor,
       target,
       autoResolveWithoutPanel: true,

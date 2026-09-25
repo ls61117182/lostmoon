@@ -117,7 +117,7 @@ assert.match(
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?&& \(turretCanRotate \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
+  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?const fixedWeaponArc = this\.playerHasFixedWeaponArc\(\);[\s\S]*?&& \(turretCanRotate \|\| fixedWeaponArc \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
   'machine-gun masks survive turret damage while the angle ring requires rotation',
 );
 assert.match(
@@ -167,8 +167,8 @@ assert.match(
 );
 assert.match(
   methodBody('onTouchMap'),
-  /this\.playerTurretCanRotate\(\)[\s\S]*?this\.hasTurretReconGunSelection\(\)/,
-  'map clicks may enter rotation-only handling only when the player turret can rotate',
+  /const canUseDirectionalWeaponMask = this\.playerTurretCanRotate\(\)[\s\S]*?\|\| this\.playerHasFixedWeaponArc\(\)[\s\S]*?\|\| mgSel;[\s\S]*?this\.hasTurretReconGunSelection\(\)/,
+  'map clicks must support fixed forward arcs and MG masks in addition to traversable turrets',
 );
 assert.match(
   methodBody('onTouchMap'),

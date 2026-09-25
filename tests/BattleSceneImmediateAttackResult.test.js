@@ -36,7 +36,11 @@ for (const [method, nextMethod, callback] of [
 const playerMainGun = methodBody('tryAttack', 'startDiceShow');
 assert.match(playerMainGun, /onHold:\s*\(\)\s*=>\s*applyAndSyncAttack\(false\)/,
   'player AP attacks must apply while their result panel remains open');
-assert.match(playerMainGun, /onHold:\s*\(\)\s*=>\s*applyAndSyncHEAttack\(false\)/,
-  'player HE attacks must apply while their result panel remains open');
+assert.match(playerMainGun, /const applyHEAtImpact[\s\S]*?heImpactReached = true;[\s\S]*?applyAndSyncHEAttack\(false\)[\s\S]*?onHighExplosiveImpact:\s*applyHEAtImpact/,
+  'successful player HE attacks must apply at projectile impact');
+assert.match(playerMainGun, /if \(completeAction\) completeAfterHEImpact = true;[\s\S]*?if \(!heImpactReached\) return;/,
+  'confirmation during HE projectile flight must wait for impact before settling the action');
+assert.match(playerMainGun, /onHold:\s*\(\)\s*=>\s*\{\s*if \(!report\.hit\) applyAndSyncHEAttack\(false\)/,
+  'missed player HE attacks must still settle while their result panel remains open');
 
 console.log('BattleScene immediate attack-result presentation tests passed');

@@ -151,7 +151,7 @@ export interface AttackContext {
   units?: readonly Unit[];
   /** HexMap.keyOf(pos) entries containing active smoke screens. */
   smokeHexes?: ReadonlySet<string>;
-  /** Fixed mission weather. Rain makes attacks harder to hit. */
+  /** Fixed mission weather. Rain raises the hit threshold for tank main guns. */
   weather?: WeatherType;
   /** 玩家直接控制的主角单位；未传时为兼容旧调用，仍以 kind==='sherman' 兜底。 */
   protagonist?: Unit;
@@ -508,7 +508,9 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
   const frontArcModifier = opts.frontArcModifier ?? 0;
   const actionModifier = ctx.hitThresholdModifier ?? 0;
-  const weather = weatherHitThresholdModifier(ctx.weather);
+  const weather = ctx.attackKind !== 'mg' && isTankUnit(attacker)
+    ? weatherHitThresholdModifier(ctx.weather)
+    : 0;
   const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
   return {
     size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
@@ -1607,7 +1609,7 @@ export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
 // 相对主炮攻击的差异：
 //   - 目标仅限机枪步兵目标（欧洲徒步类 / Pacific 日本步兵），且必须在 2 格内的同一直线可视范围内
 //   - 单段 1d6 检定：点数 ≥ 命中公式 = 命中；命中即直接击毙（徒步单位无装甲）
-//   - 吃距离 / 树篱 / 建筑 / 烟雾 / 隐蔽修正；硬核坦克仅两挺机枪齐射时命中所需 -1
+//   - 吃距离 / 树篱 / 建筑 / 烟雾 / 隐蔽修正；硬核坦克的两挺机枪各自独立判定
 //   - 不消耗 `loaded`、不受 `turretDamaged` 限制（机枪与主炮独立）
 //
 // canMGAttack 返回的 reason 同样是 i18n key，由 UI 层翻译。
@@ -1707,6 +1709,11 @@ export interface MGReport {
   hitModifiers?: HitThresholdModifierDetail[];
 }
 
+export interface TankMachineGunAttackReport {
+  weapon: Exclude<TankMachineGun, 'both'>;
+  report: MGReport;
+}
+
 export function mgHitThreshold(ctx: AttackContext): number {
   const base = mgHitBreakdown(ctx);
   return base.threshold
@@ -1724,8 +1731,10 @@ function atGunShieldModifier(ctx: AttackContext): number {
 }
 
 export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
+  // In hardcore mode the hull and coaxial guns are separate attacks. A target
+  // covered by both weapons no longer receives the old combined-fire -1 bonus.
   const frontArcModifier = ctx.hardcoreTankMachineGuns && isTankUnit(ctx.attacker)
-    ? (ctx.tankMachineGun === 'both' ? -1 : 0)
+    ? 0
     : (isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0);
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
   const hitContext = atGunCrewTarget
@@ -1752,6 +1761,24 @@ export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
     hitBreakdown: mgHitBreakdown(ctx),
     hitModifiers: mgHitThresholdModifierDetails(ctx),
   };
+}
+
+/**
+ * Resolve every weapon selected by a hardcore tank MG action. Combined fire is
+ * deliberately expanded before applying either result, so a coaxial kill can
+ * never suppress the independent hull-MG roll (or vice versa).
+ */
+export function rollSelectedTankMachineGunAttacks(
+  ctx: AttackContext,
+  rng: RNG,
+): TankMachineGunAttackReport[] {
+  const weapons: Array<Exclude<TankMachineGun, 'both'>> = ctx.tankMachineGun === 'both'
+    ? ['coaxial', 'hull']
+    : [ctx.tankMachineGun === 'hull' ? 'hull' : 'coaxial'];
+  return weapons.map(weapon => ({
+    weapon,
+    report: rollMGAttack({ ...ctx, tankMachineGun: weapon }, rng),
+  }));
 }
 
 export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {

@@ -1,5 +1,6 @@
 {
-  "surfaces": 63,
+  "surfaces": 13,
+  "directionMappings": 63,
   "baseTiles": 1,
   "dimensions": [
     222,
@@ -7,8 +8,8 @@
   ],
   "roadWidth": 61.44,
   "turnCenterlineRadius": 48,
-  "verifiedMouths": 378,
-  "verifiedMouthWidthProfiles": 192,
+  "verifiedMouths": 78,
+  "verifiedMouthWidthProfiles": 42,
   "transparentCorners": true,
   "demoConnections": "reciprocal"
 }

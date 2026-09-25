@@ -21,26 +21,36 @@
   "endpointRadius": 49.152,
   "turnCenterlineRadius": 48,
   "junctionBlend": 36,
-  "note": "rd characters follow Tile.roads order (E,SE,SW,W,NW,NE), NOT a conventional binary integer string. Place base and one surface at identical center and size; do not trim. All 63 surfaces are pre-oriented. No rotation required. 000000 uses base only.",
+  "canonicalSurfaceCount": 13,
+  "note": "rd characters follow Tile.roads order (E,SE,SW,W,NW,NE). The 63 direction masks reuse 13 canonical surfaces; rotate each surface by rotationDegrees at runtime. 000000 uses base only.",
   "variants": [
     {
       "rd": "000000",
       "directions": [],
-      "surface": null
+      "surface": null,
+      "canonicalRd": null,
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "100000",
       "directions": [
         "E"
       ],
-      "surface": "urban_road_surface_100000_v1.png"
+      "surface": "urban_road_surface_100000_v1.png",
+      "canonicalRd": "100000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "010000",
       "directions": [
         "SE"
       ],
-      "surface": "urban_road_surface_010000_v1.png"
+      "surface": "urban_road_surface_100000_v1.png",
+      "canonicalRd": "100000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "110000",
@@ -48,14 +58,20 @@
         "E",
         "SE"
       ],
-      "surface": "urban_road_surface_110000_v1.png"
+      "surface": "urban_road_surface_110000_v1.png",
+      "canonicalRd": "110000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "001000",
       "directions": [
         "SW"
       ],
-      "surface": "urban_road_surface_001000_v1.png"
+      "surface": "urban_road_surface_100000_v1.png",
+      "canonicalRd": "100000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101000",
@@ -63,7 +79,10 @@
         "E",
         "SW"
       ],
-      "surface": "urban_road_surface_101000_v1.png"
+      "surface": "urban_road_surface_101000_v1.png",
+      "canonicalRd": "101000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "011000",
@@ -71,7 +90,10 @@
         "SE",
         "SW"
       ],
-      "surface": "urban_road_surface_011000_v1.png"
+      "surface": "urban_road_surface_110000_v1.png",
+      "canonicalRd": "110000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111000",
@@ -80,14 +102,20 @@
         "SE",
         "SW"
       ],
-      "surface": "urban_road_surface_111000_v1.png"
+      "surface": "urban_road_surface_111000_v1.png",
+      "canonicalRd": "111000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "000100",
       "directions": [
         "W"
       ],
-      "surface": "urban_road_surface_000100_v1.png"
+      "surface": "urban_road_surface_100000_v1.png",
+      "canonicalRd": "100000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "100100",
@@ -95,7 +123,10 @@
         "E",
         "W"
       ],
-      "surface": "urban_road_surface_100100_v1.png"
+      "surface": "urban_road_surface_100100_v1.png",
+      "canonicalRd": "100100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "010100",
@@ -103,7 +134,10 @@
         "SE",
         "W"
       ],
-      "surface": "urban_road_surface_010100_v1.png"
+      "surface": "urban_road_surface_101000_v1.png",
+      "canonicalRd": "101000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "110100",
@@ -112,7 +146,10 @@
         "SE",
         "W"
       ],
-      "surface": "urban_road_surface_110100_v1.png"
+      "surface": "urban_road_surface_110100_v1.png",
+      "canonicalRd": "110100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "001100",
@@ -120,7 +157,10 @@
         "SW",
         "W"
       ],
-      "surface": "urban_road_surface_001100_v1.png"
+      "surface": "urban_road_surface_110000_v1.png",
+      "canonicalRd": "110000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101100",
@@ -129,7 +169,10 @@
         "SW",
         "W"
       ],
-      "surface": "urban_road_surface_101100_v1.png"
+      "surface": "urban_road_surface_101100_v1.png",
+      "canonicalRd": "101100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "011100",
@@ -138,7 +181,10 @@
         "SW",
         "W"
       ],
-      "surface": "urban_road_surface_011100_v1.png"
+      "surface": "urban_road_surface_111000_v1.png",
+      "canonicalRd": "111000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111100",
@@ -148,14 +194,20 @@
         "SW",
         "W"
       ],
-      "surface": "urban_road_surface_111100_v1.png"
+      "surface": "urban_road_surface_111100_v1.png",
+      "canonicalRd": "111100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "000010",
       "directions": [
         "NW"
       ],
-      "surface": "urban_road_surface_000010_v1.png"
+      "surface": "urban_road_surface_100000_v1.png",
+      "canonicalRd": "100000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "100010",
@@ -163,7 +215,10 @@
         "E",
         "NW"
       ],
-      "surface": "urban_road_surface_100010_v1.png"
+      "surface": "urban_road_surface_101000_v1.png",
+      "canonicalRd": "101000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "010010",
@@ -171,7 +226,10 @@
         "SE",
         "NW"
       ],
-      "surface": "urban_road_surface_010010_v1.png"
+      "surface": "urban_road_surface_100100_v1.png",
+      "canonicalRd": "100100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "110010",
@@ -180,7 +238,10 @@
         "SE",
         "NW"
       ],
-      "surface": "urban_road_surface_110010_v1.png"
+      "surface": "urban_road_surface_101100_v1.png",
+      "canonicalRd": "101100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "001010",
@@ -188,7 +249,10 @@
         "SW",
         "NW"
       ],
-      "surface": "urban_road_surface_001010_v1.png"
+      "surface": "urban_road_surface_101000_v1.png",
+      "canonicalRd": "101000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101010",
@@ -197,7 +261,10 @@
         "SW",
         "NW"
       ],
-      "surface": "urban_road_surface_101010_v1.png"
+      "surface": "urban_road_surface_101010_v1.png",
+      "canonicalRd": "101010",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "011010",
@@ -206,7 +273,10 @@
         "SW",
         "NW"
       ],
-      "surface": "urban_road_surface_011010_v1.png"
+      "surface": "urban_road_surface_110100_v1.png",
+      "canonicalRd": "110100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111010",
@@ -216,7 +286,10 @@
         "SW",
         "NW"
       ],
-      "surface": "urban_road_surface_111010_v1.png"
+      "surface": "urban_road_surface_111010_v1.png",
+      "canonicalRd": "111010",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "000110",
@@ -224,7 +297,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_000110_v1.png"
+      "surface": "urban_road_surface_110000_v1.png",
+      "canonicalRd": "110000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "100110",
@@ -233,7 +309,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_100110_v1.png"
+      "surface": "urban_road_surface_110100_v1.png",
+      "canonicalRd": "110100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "010110",
@@ -242,7 +321,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_010110_v1.png"
+      "surface": "urban_road_surface_101100_v1.png",
+      "canonicalRd": "101100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "110110",
@@ -252,7 +334,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_110110_v1.png"
+      "surface": "urban_road_surface_110110_v1.png",
+      "canonicalRd": "110110",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "001110",
@@ -261,7 +346,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_001110_v1.png"
+      "surface": "urban_road_surface_111000_v1.png",
+      "canonicalRd": "111000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101110",
@@ -271,7 +359,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_101110_v1.png"
+      "surface": "urban_road_surface_111010_v1.png",
+      "canonicalRd": "111010",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "011110",
@@ -281,7 +372,10 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_011110_v1.png"
+      "surface": "urban_road_surface_111100_v1.png",
+      "canonicalRd": "111100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111110",
@@ -292,14 +386,20 @@
         "W",
         "NW"
       ],
-      "surface": "urban_road_surface_111110_v1.png"
+      "surface": "urban_road_surface_111110_v1.png",
+      "canonicalRd": "111110",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     },
     {
       "rd": "000001",
       "directions": [
         "NE"
       ],
-      "surface": "urban_road_surface_000001_v1.png"
+      "surface": "urban_road_surface_100000_v1.png",
+      "canonicalRd": "100000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "100001",
@@ -307,7 +407,10 @@
         "E",
         "NE"
       ],
-      "surface": "urban_road_surface_100001_v1.png"
+      "surface": "urban_road_surface_110000_v1.png",
+      "canonicalRd": "110000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "010001",
@@ -315,7 +418,10 @@
         "SE",
         "NE"
       ],
-      "surface": "urban_road_surface_010001_v1.png"
+      "surface": "urban_road_surface_101000_v1.png",
+      "canonicalRd": "101000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "110001",
@@ -324,7 +430,10 @@
         "SE",
         "NE"
       ],
-      "surface": "urban_road_surface_110001_v1.png"
+      "surface": "urban_road_surface_111000_v1.png",
+      "canonicalRd": "111000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "001001",
@@ -332,7 +441,10 @@
         "SW",
         "NE"
       ],
-      "surface": "urban_road_surface_001001_v1.png"
+      "surface": "urban_road_surface_100100_v1.png",
+      "canonicalRd": "100100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101001",
@@ -341,7 +453,10 @@
         "SW",
         "NE"
       ],
-      "surface": "urban_road_surface_101001_v1.png"
+      "surface": "urban_road_surface_110100_v1.png",
+      "canonicalRd": "110100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "011001",
@@ -350,7 +465,10 @@
         "SW",
         "NE"
       ],
-      "surface": "urban_road_surface_011001_v1.png"
+      "surface": "urban_road_surface_101100_v1.png",
+      "canonicalRd": "101100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "111001",
@@ -360,7 +478,10 @@
         "SW",
         "NE"
       ],
-      "surface": "urban_road_surface_111001_v1.png"
+      "surface": "urban_road_surface_111100_v1.png",
+      "canonicalRd": "111100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "000101",
@@ -368,7 +489,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_000101_v1.png"
+      "surface": "urban_road_surface_101000_v1.png",
+      "canonicalRd": "101000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "100101",
@@ -377,7 +501,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_100101_v1.png"
+      "surface": "urban_road_surface_101100_v1.png",
+      "canonicalRd": "101100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "010101",
@@ -386,7 +513,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_010101_v1.png"
+      "surface": "urban_road_surface_101010_v1.png",
+      "canonicalRd": "101010",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "110101",
@@ -396,7 +526,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_110101_v1.png"
+      "surface": "urban_road_surface_111010_v1.png",
+      "canonicalRd": "111010",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "001101",
@@ -405,7 +538,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_001101_v1.png"
+      "surface": "urban_road_surface_110100_v1.png",
+      "canonicalRd": "110100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101101",
@@ -415,7 +551,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_101101_v1.png"
+      "surface": "urban_road_surface_110110_v1.png",
+      "canonicalRd": "110110",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "011101",
@@ -425,7 +564,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_011101_v1.png"
+      "surface": "urban_road_surface_111010_v1.png",
+      "canonicalRd": "111010",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111101",
@@ -436,7 +578,10 @@
         "W",
         "NE"
       ],
-      "surface": "urban_road_surface_111101_v1.png"
+      "surface": "urban_road_surface_111110_v1.png",
+      "canonicalRd": "111110",
+      "rotationSteps": 5,
+      "rotationDegrees": -300
     },
     {
       "rd": "000011",
@@ -444,7 +589,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_000011_v1.png"
+      "surface": "urban_road_surface_110000_v1.png",
+      "canonicalRd": "110000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "100011",
@@ -453,7 +601,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_100011_v1.png"
+      "surface": "urban_road_surface_111000_v1.png",
+      "canonicalRd": "111000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "010011",
@@ -462,7 +613,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_010011_v1.png"
+      "surface": "urban_road_surface_110100_v1.png",
+      "canonicalRd": "110100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "110011",
@@ -472,7 +626,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_110011_v1.png"
+      "surface": "urban_road_surface_111100_v1.png",
+      "canonicalRd": "111100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "001011",
@@ -481,7 +638,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_001011_v1.png"
+      "surface": "urban_road_surface_101100_v1.png",
+      "canonicalRd": "101100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101011",
@@ -491,7 +651,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_101011_v1.png"
+      "surface": "urban_road_surface_111010_v1.png",
+      "canonicalRd": "111010",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "011011",
@@ -501,7 +664,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_011011_v1.png"
+      "surface": "urban_road_surface_110110_v1.png",
+      "canonicalRd": "110110",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111011",
@@ -512,7 +678,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_111011_v1.png"
+      "surface": "urban_road_surface_111110_v1.png",
+      "canonicalRd": "111110",
+      "rotationSteps": 4,
+      "rotationDegrees": -240
     },
     {
       "rd": "000111",
@@ -521,7 +690,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_000111_v1.png"
+      "surface": "urban_road_surface_111000_v1.png",
+      "canonicalRd": "111000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "100111",
@@ -531,7 +703,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_100111_v1.png"
+      "surface": "urban_road_surface_111100_v1.png",
+      "canonicalRd": "111100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "010111",
@@ -541,7 +716,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_010111_v1.png"
+      "surface": "urban_road_surface_111010_v1.png",
+      "canonicalRd": "111010",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "110111",
@@ -552,7 +730,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_110111_v1.png"
+      "surface": "urban_road_surface_111110_v1.png",
+      "canonicalRd": "111110",
+      "rotationSteps": 3,
+      "rotationDegrees": -180
     },
     {
       "rd": "001111",
@@ -562,7 +743,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_001111_v1.png"
+      "surface": "urban_road_surface_111100_v1.png",
+      "canonicalRd": "111100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "101111",
@@ -573,7 +757,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_101111_v1.png"
+      "surface": "urban_road_surface_111110_v1.png",
+      "canonicalRd": "111110",
+      "rotationSteps": 2,
+      "rotationDegrees": -120
     },
     {
       "rd": "011111",
@@ -584,7 +771,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_011111_v1.png"
+      "surface": "urban_road_surface_111110_v1.png",
+      "canonicalRd": "111110",
+      "rotationSteps": 1,
+      "rotationDegrees": -60
     },
     {
       "rd": "111111",
@@ -596,7 +786,10 @@
         "NW",
         "NE"
       ],
-      "surface": "urban_road_surface_111111_v1.png"
+      "surface": "urban_road_surface_111111_v1.png",
+      "canonicalRd": "111111",
+      "rotationSteps": 0,
+      "rotationDegrees": 0
     }
   ]
 }

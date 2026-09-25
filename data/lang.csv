@@ -154,8 +154,8 @@ die.hint.codriverMG,机枪,MG
 die.hint.none,—,—
 action.turnCW,↻ 60°,↻ 60°
 action.turnCCW,↺ 60°,↺ 60°
-action.advance,▲ 前进 1 格,▲ Advance 1
-action.reverse,▼ 后退 1 格,▼ Reverse 1
+action.advance,▲ 前进,▲ Advance
+action.reverse,▼ 后退,▼ Reverse
 action.reload,装填主炮,Reload Gun
 action.reloadAP,装填AP,Load AP
 action.reloadHE,装填HE,Load HE
@@ -244,6 +244,8 @@ attack.preview.destroyBuilding,破坏,Demolish
 preview.impossible,≥{n}\n几乎不可能,≥{n}\nImpossible
 dice.panel.hitNeed,命中需 ≥{n},Hit ≥{n}
 dice.panel.mgHitNeed,命中需 ≥{n},MG Burst · Hit ≥{n}
+dice.panel.coaxialMGHitNeed,同轴机枪 ≥{n},Coaxial MG ≥{n}
+dice.panel.hullMGHitNeed,航向机枪 ≥{n},Hull MG ≥{n}
 dice.panel.outcomeMGKill,步兵击毙,Infantry Down
 dice.panel.hitYes,命中,Hit
 dice.panel.hitNo,未命中,Miss

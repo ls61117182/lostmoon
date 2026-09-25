@@ -23,6 +23,8 @@ const NUM_FIELDS = [
   'offsetForward',
   'offsetRight',
   'aspectRatioMul',
+  'trackBodyLengthScale',
+  'trackBodyWidthScale',
   'hullFitScale',
   'turretScale',
   'hullOffsetForward',
@@ -188,6 +190,8 @@ function build() {
     for (const field of NUM_FIELDS) {
       rec[field] = field === 'destroyedFitScale'
         ? numberOrDefault(rec, field, 1)
+        : (field === 'trackBodyLengthScale' || field === 'trackBodyWidthScale')
+          ? numberOrDefault(rec, field, 1)
         : numberOrThrow(rec, field);
     }
     for (const field of STRING_FIELDS) {
@@ -233,6 +237,8 @@ function build() {
   lines.push('  offsetForward: number;');
   lines.push('  offsetRight: number;');
   lines.push('  aspectRatioMul: number;');
+  lines.push('  trackBodyLengthScale: number;');
+  lines.push('  trackBodyWidthScale: number;');
   lines.push('  muzzle: { spriteX: number; spriteY: number };');
   lines.push('  destroyedOffsetForward: number;');
   lines.push('  destroyedOffsetRight: number;');
@@ -267,6 +273,8 @@ function build() {
   lines.push('  offsetForward: 0,');
   lines.push('  offsetRight: 0,');
   lines.push('  aspectRatioMul: 1,');
+  lines.push('  trackBodyLengthScale: 1,');
+  lines.push('  trackBodyWidthScale: 1,');
   lines.push('  muzzle: { spriteX: 0, spriteY: 0 },');
   lines.push('  destroyedOffsetForward: 0,');
   lines.push('  destroyedOffsetRight: 0,');
@@ -294,7 +302,7 @@ function build() {
     const exhaustLiteral = exhaustPorts
       .map(port => `{ forward: ${emitNum(port.forward)}, right: ${emitNum(port.right)} }`)
       .join(', ');
-    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)}, commanderHatchSpriteX: ${emitNum(r.commanderHatchSpriteX)}, commanderHatchSpriteY: ${emitNum(r.commanderHatchSpriteY)}, commanderHatchScale: ${emitNum(r.commanderHatchScale)}, exhaustPorts: [${exhaustLiteral}] },`);
+    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, trackBodyLengthScale: ${emitNum(r.trackBodyLengthScale)}, trackBodyWidthScale: ${emitNum(r.trackBodyWidthScale)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)}, commanderHatchSpriteX: ${emitNum(r.commanderHatchSpriteX)}, commanderHatchSpriteY: ${emitNum(r.commanderHatchSpriteY)}, commanderHatchScale: ${emitNum(r.commanderHatchScale)}, exhaustPorts: [${exhaustLiteral}] },`);
   }
   lines.push('};');
   lines.push('');

@@ -85,7 +85,7 @@ export function breakwaterFlagsFromMapJson(s: string | undefined): Tile['breakwa
  * 将关卡 JSON 的 `rd` 字串解析为六条边方向上的"公路绘制"标记（与 `Tile.roads` 一致）。
  *
  * 与 `h` / `ef` 同序（轴向 0..5），第 i 位为 `'1'` 表示在本格内沿「第 i 向邻边中点 → 格心」绘制道路条带。
- * 仅作视觉，不影响移动 / 视线 / 骰子；具体绘制及"单方向画圆形道路尽头"逻辑在 `BattleScene.drawRoadOverlay` 中。
+ * 仅作视觉，不影响移动 / 视线 / 骰子；普通公路使用方向贴图，特殊地形由 `BattleScene.drawRoadOverlay` 兜底。
  */
 export function roadFlagsFromMapJson(s: string | undefined): Tile['roads'] {
   if (!s || s.length !== 6) return undefined;

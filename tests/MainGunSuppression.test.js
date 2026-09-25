@@ -264,8 +264,8 @@ const coLocatedInfantry = make('german_infantry', 'german', 2, 3, null);
 assert.deepStrictEqual(selectMainGunTargetsByHex([coLocatedInfantry, truck]).map(unit => unit.id), [truck.id]);
 
 assert.match(battleSceneSource,
-  /if \(loadedShell === 'he'\)[\s\S]*?highExplosivePanelReport\(report\)[\s\S]*?startDiceShow\(panelReport[\s\S]*?highExplosiveReport: report[\s\S]*?onHold: \(\) => applyAndSyncHEAttack\(false\)/,
-  'player HE must use the AP-style result panel and apply its result while the panel waits for confirmation');
+  /if \(loadedShell === 'he'\)[\s\S]*?highExplosivePanelReport\(report\)[\s\S]*?const applyHEAtImpact[\s\S]*?startDiceShow\(panelReport[\s\S]*?highExplosiveReport: report[\s\S]*?onHighExplosiveImpact: applyHEAtImpact/,
+  'player HE must use the AP-style result panel and apply a hit when its projectile impacts');
 assert.match(battleSceneSource,
   /if \(automaticWeapon === 'he'\)[\s\S]*?highExplosivePanelReport\(report\)[\s\S]*?startDiceShow\(panelReport[\s\S]*?highExplosiveReport: report[\s\S]*?runNextEnemyStep\(\)/,
   'AI HE must wait for the shared result panel confirmation before continuing its turn');
@@ -343,8 +343,11 @@ assert.match(battleSceneSource,
   /const totals = spec\.totals[\s\S]*?drawDiceRuleDivider[\s\S]*?for \(const total of totals\)/,
   'formula detail modals must draw a divider before rendering all summarized thresholds');
 assert.match(battleSceneSource,
-  /playHighExplosiveSuppressionCue\([\s\S]*?report\?: HighExplosiveReport[\s\S]*?const hit = report\?\.hit \?\? true[\s\S]*?\{ hit, penetrated: hit[\s\S]*?onPenetrationImpact: hit[\s\S]*?spawnHighExplosiveBlast/,
-  'HE must create its target-side blast only on a reported hit while preserving legacy replay cues');
+  /playHighExplosiveSuppressionCue\([\s\S]*?report\?: HighExplosiveReport[\s\S]*?onImpact\?: \(\) => void[\s\S]*?const hit = report\?\.hit \?\? true[\s\S]*?spawnHighExplosiveBlast\(x, y, seed\)[\s\S]*?onImpact\?\.\(\)[\s\S]*?\{ hit, penetrated: hit[\s\S]*?onPenetrationImpact: hit[\s\S]*?\? handleImpact/,
+  'HE must spawn its target-side blast before committing a reported hit at projectile impact');
+assert.match(battleSceneSource,
+  /if \(hit && this\.projectileTraces\.length === traceCount\)[\s\S]*?handleImpact\(pos\.x, pos\.y\)/,
+  'HE hits must fall back to immediate synchronized resolution when no tracer can be created');
 assert.match(battleSceneSource,
   /drawHighExplosiveBlast[\s\S]*?smokeLobes[\s\S]*?pressure ring[\s\S]*?shockProgress/,
   'HE hits must combine fire, smoke/debris, and an expanding pressure ring');

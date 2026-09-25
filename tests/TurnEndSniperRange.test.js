@@ -13,7 +13,7 @@ require.extensions['.ts'] = (module, filename) => {
 const { prepareTurnEndEvent } = require('../assets/scripts/core/TurnEndEventApply.ts');
 const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
 
-function prepare(distances, { hatchOpen = true, shield = false, blocked = false } = {}) {
+function prepare(distances, { hatchOpen = true, shield = false, blocked = false, suppressed = [] } = {}) {
   const map = new HexMap(8, 8);
   for (let q = 0; q < 8; q++) for (let r = 0; r < 8; r++) {
     map.set({ pos: { q, r }, terrain: blocked && q === 1 ? 'forest' : 'field' });
@@ -25,6 +25,7 @@ function prepare(distances, { hatchOpen = true, shield = false, blocked = false 
   };
   const enemies = distances.map((distance, index) => ({
     id: `infantry-${index}`, kind: 'german_infantry', pos: { q: distance, r: 0 },
+    suppressed: suppressed.includes(index),
   }));
   const event = prepareTurnEndEvent({ effectType: 'sniper' }, [2, 3], 5, {
     mission: { sherman, enemies, map }, rng: () => 0.5, nextEnemyId: () => 'unused',
@@ -45,6 +46,17 @@ test('snipers at 1 and 2 hexes can kill; infantry at 3 hexes cannot', () => {
 test('out-of-range infantry is skipped when selecting the actual shooter', () => {
   const { event } = prepare([3, 2]);
   assert.equal(event.sniperAttackerId, 'infantry-1');
+});
+
+test('suppressed infantry cannot perform the sniper event', () => {
+  const onlySuppressed = prepare([2], { suppressed: [0] });
+  assert.equal(onlySuppressed.event.sniperWillKill, false);
+  assert.equal(onlySuppressed.event.sniperAttackerId, undefined);
+  onlySuppressed.event.apply();
+  assert.equal(onlySuppressed.sherman.crew.commander, true);
+
+  const mixed = prepare([1, 2], { suppressed: [0] });
+  assert.equal(mixed.event.sniperAttackerId, 'infantry-1');
 });
 
 test('closed hatch and blocked sight still prevent sniper casualties', () => {
