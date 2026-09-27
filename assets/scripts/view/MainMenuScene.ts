@@ -1536,7 +1536,7 @@ export class MainMenuScene extends Component {
       }
     }
     const commanderSpritePaths = new Set(
-      SPLIT_TANK_KINDS
+      TANK_VISUAL_KINDS
         .map((kind) => getUnitStats(kind).commanderSpritePath ?? '')
         .filter((path) => !!path),
     );
@@ -3074,6 +3074,8 @@ export class MainMenuScene extends Component {
       m26_pershing: 'M26 Pershing',
       t34: 'T-34/76',
       t34_85: 'T-34/85',
+      kv1: 'KV-1',
+      is2: 'IS-2',
       su152: 'SU-152',
       tiger: 'Tiger',
       tigerking: 'Tiger II',
@@ -5233,6 +5235,8 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'm26_pershing': return 'M26 潘兴';
     case 't34': return 'T-34/76';
     case 't34_85': return 'T-34/85';
+    case 'kv1': return 'KV-1';
+    case 'is2': return 'IS-2';
     case 'su152': return 'SU-152';
     case 'tiger': return 'Tiger';
     case 'tigerking': return 'Tiger II';

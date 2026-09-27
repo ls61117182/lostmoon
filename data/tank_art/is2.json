@@ -1,0 +1,24 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "is2",
+  "notes": "IS-2 model 1944 from supplied three-view. Shared-scale olive-green hull, turret and 122 mm gun; hull-aligned wreck.",
+  "inputs": {
+    "hull": { "path": "source_art/tanks/is2/hull-selected.png", "background": "alpha" },
+    "turret": { "path": "source_art/tanks/is2/turret-selected.png", "background": "alpha" },
+    "destroyed": { "path": "source_art/tanks/is2/destroyed-selected.png", "background": "alpha" }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.075,
+    "outlinePixels": 0,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [1120, 445],
+    "turretPivot": [1120, 475],
+    "muzzle": [10, 467],
+    "commanderHatch": [1230, 555]
+  }
+}

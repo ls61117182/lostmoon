@@ -12229,7 +12229,9 @@ export class BattleScene extends Component {
       }
       case 'flak88':
       case 't34':
-      case 't34_85': {
+      case 't34_85':
+      case 'kv1':
+      case 'is2': {
         const geometry = splitTankGeometryConfigOf(kind);
         const visual = splitTankVisualConfigOf(kind);
         return {

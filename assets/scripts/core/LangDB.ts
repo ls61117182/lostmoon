@@ -368,6 +368,8 @@ export const LANG_DB: Record<string, LangEntry> = {
   'unit.name.m26_pershing': { zh: "M26 潘兴", en: "M26 Pershing" },
   'unit.name.t34': { zh: "T-34/76", en: "T-34/76" },
   'unit.name.t34_85': { zh: "T-34/85", en: "T-34/85" },
+  'unit.name.kv1': { zh: "KV-1 重型坦克", en: "KV-1 Heavy Tank" },
+  'unit.name.is2': { zh: "IS-2 重型坦克", en: "IS-2 Heavy Tank" },
   'unit.name.su152': { zh: "SU-152 突击炮", en: "SU-152 Assault Gun" },
   'unit.name.tiger': { zh: "虎式", en: "Tiger" },
   'unit.name.tigerking': { zh: "虎王坦克", en: "Tiger II" },

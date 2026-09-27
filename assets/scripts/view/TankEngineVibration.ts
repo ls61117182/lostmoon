@@ -19,6 +19,8 @@ export function unitKindHasEngineVibration(kind: UnitKind): boolean {
     || kind === 'sherman_jumbo'
     || kind === 't34'
     || kind === 't34_85'
+    || kind === 'kv1'
+    || kind === 'is2'
     || kind === 'su152'
     || kind === 'tiger'
     || kind === 'tigerking'

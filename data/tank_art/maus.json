@@ -1,0 +1,33 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "maus",
+  "notes": "250px Maus redraw from the existing split sprite; both layers retain the previous 100:38 and 96:34 target proportions. The source images in source_art/tanks/maus/250px are kept for repeatable preparation.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/maus/250px/hull-source.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/maus/250px/turret-source.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/maus/250px/destroyed-aligned.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 1,
+    "outlinePixels": 0,
+    "hullPadding": [0, 0, 0, 0],
+    "turretPadding": [0, 0, 0, 0]
+  },
+  "sourceGeometry": {
+    "hullPivot": [143, 48],
+    "turretPivot": [180, 43],
+    "muzzle": [0, 44],
+    "commanderHatch": [167, 54]
+  }
+}

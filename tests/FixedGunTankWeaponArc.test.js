@@ -61,6 +61,8 @@ assert.deepStrictEqual(canAttack({ attacker, target: sideTank, map }), {
 // Use the actual Soviet unit configuration so a missing tank registration or
 // accidentally traversable casemate is caught as part of combat behavior.
 const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
+const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
+const { TANK_VISUAL_KINDS, SPLIT_TANK_KINDS, tankVisualAssetConfigOf } = require('../assets/scripts/core/TankVisualDB.ts');
 const su152 = {
   ...attacker, id: 'su152', kind: 'su152', faction: 'soviet',
   stats: getUnitStats('su152'), turretFacing: 1,
@@ -71,6 +73,21 @@ assert.deepStrictEqual(canAttack({ attacker: su152, target: sideTank, map }), {
   ok: false,
   reason: 'attack.reason.fixedGunFacing',
 }, 'SU-152 must follow its hull even when a stale turret direction points at the target');
+assert.ok(TANK_VISUAL_KINDS.includes('su152'));
+assert.ok(!SPLIT_TANK_KINDS.includes('su152'), 'SU-152 must use one fixed body sprite');
+assert.deepStrictEqual(
+  [tankVisualAssetConfigOf('su152').hullSpritePath, tankVisualAssetConfigOf('su152').turretSpritePath],
+  ['', ''],
+);
+const suMissionData = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../assets/resources/missions/mission_03.json'), 'utf8'));
+suMissionData.id = 'su152_fixed_gun_integration';
+suMissionData.enemyStartByDice = false;
+suMissionData.enemies = [];
+suMissionData.sherman.kind = 'su152';
+const loadedSuMission = loadMission(suMissionData);
+assert.strictEqual(loadedSuMission.sherman.kind, 'su152');
+assert.strictEqual(loadedSuMission.sherman.stats.visionType, 'fixed');
+assert.strictEqual(loadedSuMission.sherman.turretFacing, undefined);
 
 const frontInfantry = unitAt('front-infantry', 'infantry', 1, 0);
 const sideInfantry = unitAt('side-infantry', 'infantry', 0, 1);
@@ -87,6 +104,8 @@ const battleSceneSource = fs.readFileSync(
   path.resolve(__dirname, '../assets/scripts/view/BattleScene.ts'),
   'utf8',
 );
+const menuSceneSource = fs.readFileSync(path.resolve(__dirname, '../assets/scripts/view/MainMenuScene.ts'), 'utf8');
+assert.match(menuSceneSource, /const commanderSpritePaths = new Set\(\s*TANK_VISUAL_KINDS/, 'fixed-gun tank commander art must load in the visual debugger');
 assert.match(
   battleSceneSource,
   /private canWeaponAimDirection[\s\S]*?isTankUnit\(unit\)[\s\S]*?visionType === 'fixed'[\s\S]*?target === unit\.facing/,

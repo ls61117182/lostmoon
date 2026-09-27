@@ -8,6 +8,7 @@ const sharp = require('sharp');
 const {
   alphaBounds,
   composeTop,
+  maxHullContentEdge,
   parseArgs,
   transformPoint,
   validateManifest,
@@ -43,6 +44,11 @@ test('accepts pnpm separator and parses a dry-run manifest invocation', () => {
     parseArgs(['--', '--manifest', 'data/tank_art/panzer4.json', '--dry-run']),
     { dryRun: true, kind: '', manifest: 'data/tank_art/panzer4.json' },
   );
+});
+
+test('allows the Maus 250px hull while retaining the standard 150px limit', () => {
+  assert.equal(maxHullContentEdge('maus'), 250);
+  assert.equal(maxHullContentEdge('panzer4'), 150);
 });
 
 test('validates the single-tank manifest contract', () => {

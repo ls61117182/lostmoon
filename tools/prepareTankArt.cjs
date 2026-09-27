@@ -20,7 +20,12 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const GENERATED_DB = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 const UNITS_DIR = path.join(ROOT, 'assets', 'resources', 'textures', 'units');
-const MAX_HULL_CONTENT_EDGE = 150;
+const DEFAULT_MAX_HULL_CONTENT_EDGE = 150;
+const MAX_HULL_CONTENT_EDGE_BY_KIND = Object.freeze({ maus: 250 });
+
+function maxHullContentEdge(kind) {
+  return MAX_HULL_CONTENT_EDGE_BY_KIND[kind] ?? DEFAULT_MAX_HULL_CONTENT_EDGE;
+}
 
 function fail(message) {
   throw new Error(message);
@@ -509,8 +514,9 @@ async function createPlan(manifest, manifestPath) {
     manifest.processing.outlinePixels,
     targetPaint,
   );
-  if (Math.max(hull.content.width, hull.content.height) > MAX_HULL_CONTENT_EDGE) {
-    fail(`prepared hull content ${hull.content.width}x${hull.content.height} exceeds ${MAX_HULL_CONTENT_EDGE}px`);
+  const hullLimit = maxHullContentEdge(manifest.kind);
+  if (Math.max(hull.content.width, hull.content.height) > hullLimit) {
+    fail(`prepared hull content ${hull.content.width}x${hull.content.height} exceeds ${hullLimit}px`);
   }
   const turret = await preparedLayer(
     turretSource,
@@ -640,6 +646,7 @@ if (require.main === module) {
 module.exports = {
   alphaBounds,
   composeTop,
+  maxHullContentEdge,
   parseArgs,
   transformPoint,
   validateManifest,

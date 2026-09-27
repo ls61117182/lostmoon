@@ -1,0 +1,24 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "kv1",
+  "notes": "KV-1 Soviet heavy tank. Hull corrected to the measured overhead ratio 577:284. Turret keeps its original aspect ratio under uniform scaling, with rear machine gun. Wreck damage is composited onto the exact current hull pixels.",
+  "inputs": {
+    "hull": { "path": "source_art/tanks/kv1/hull-selected.png", "background": "alpha" },
+    "turret": { "path": "source_art/tanks/kv1/turret-selected.png", "background": "alpha" },
+    "destroyed": { "path": "source_art/tanks/kv1/destroyed-selected.png", "background": "alpha" }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.089,
+    "outlinePixels": 0,
+    "hullPadding": [1, 1, 1, 1],
+    "turretPadding": [1, 1, 1, 1]
+  },
+  "sourceGeometry": {
+    "hullPivot": [900, 445],
+    "turretPivot": [1050, 465],
+    "muzzle": [426, 465],
+    "commanderHatch": [1104, 470]
+  }
+}
