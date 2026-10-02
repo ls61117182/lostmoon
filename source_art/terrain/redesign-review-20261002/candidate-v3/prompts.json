@@ -1,0 +1,91 @@
+{
+  "mode": "built-in image_gen",
+  "styleReference": "../terrain-redesign-v2-transitions.png",
+  "specs": [
+    {
+      "id": "grass",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Asset type: reusable seamless square ground material texture for an existing 2D WWII overhead hex tank game. Create ONLY one flat olive meadow ground texture filling the entire SQUARE image. No hexagon, no frame, no tile border, no vignette, no object shadow, no text, no transparent margins. Perfectly vertical overhead. Simplified hand-drawn 2D strategy-game art matching a tiny olive tank sprite with sparse dark contour details. Broad flat muted olive patches close to #979A62 and #8C9259, a few khaki exposed-earth patches, ONLY about 12 small simple grass tufts scattered over the entire square, no tiny individual grass blades, no foliage closeups, no photographic textures, no noise/grain. Low contrast and flat light so the tank sprites stand out. This material will be sampled across multiple contiguous map cells so edge colors must match and be uniform, all four edges seamlessly tile, no distinct features cut off at edges. Aim deliberately simpler than the reference tank. Reference image 1 tank is STYLE reference only, never draw a tank. Reference image 2 is approved map STYLE reference only; produce just the olive meadow substrate without roads rivers buildings or trees."
+    },
+    {
+      "id": "soil",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless ground material texture, edge to edge. Muted warm khaki compacted dirt (#B4A17B). Broad nearly flat patches, about 8 tiny sparse pebbles across entire image, very restrained scuffs. No tracks, no road lines, no vegetation, no objects. All four edges must repeat seamlessly. Used for road surfaces and bare ground."
+    },
+    {
+      "id": "mud",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless ground material texture, edge to edge. Muted grey-brown wet mud (#88765D), 4 broad irregular darker damp patches, 2 flat shallow dull-grey puddles, restrained shallow rut strokes, no tiny pebbles or noise. No raised edges, no shore ring, no plants. All four edges repeat seamlessly."
+    },
+    {
+      "id": "sand",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless ground material texture, edge to edge. Warm desaturated light khaki tropical sand (#C5B48B), 5 broad understated darker patches and a few short faint curved wind marks. No water, no shoreline, no trees, no small grain particles. Four edges repeat seamlessly."
+    },
+    {
+      "id": "water",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless flat water material texture, edge to edge. Muted desaturated blue-teal (#638B92). ONLY about 18 simple very short light strokes as gentle ripple suggestions over broad flat blue. No foam, no rocks, no banks, no coast, no wave realism or shadows. All four edges repeat seamlessly."
+    },
+    {
+      "id": "deep_water",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless flat deep water material texture, edge to edge. Muted slate blue (#496D7B), broad flat color and ONLY about 14 very short slightly lighter thin curved ripple strokes. No foam, no rocks, no banks, no coast, no wave realism, no highlights, no strong dark/light contrast. All four edges repeat seamlessly."
+    },
+    {
+      "id": "paving",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless overhead old European paving material texture, edge to edge. Muted greige (#999A8D), LARGE roughly rectangular old stone slabs about 7 columns by 6 rows across entire image with very thin subtle grey joint lines. A few slabs vary slightly in tone, three simple cracks maximum, no individual cobble granularity, no grass, no objects or sidewalk boundary. Low contrast. Four edges repeat seamlessly."
+    },
+    {
+      "id": "snow",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless overhead winter snow ground material, edge to edge. Muted pale ivory-grey (#D9DBCD), 5 very broad slightly blue-grey shallow irregular snow drifts as flat color patches. No exposed ground, no grass, no tracks, no snow crystals, no realistic shadows, very low contrast. Four edges repeat seamlessly."
+    },
+    {
+      "id": "winter_water",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless overhead winter river water material, edge to edge. Muted slate blue-grey (#778F98), very sparse short cool light ripple strokes, 3 broad flat pale ice fragments, low contrast. No banks, no snow shoreline, no all-around ice rim, no cracks network, no photographic texture. Four edges repeat seamlessly."
+    },
+    {
+      "id": "timber",
+      "alpha": false,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. Full square seamless flat overhead wooden bridge deck material. Muted light brown (#A49372), exactly 8 wide vertical wooden planks covering entire square, very simple thin dark joins and a few understated grain strokes. No perspective, no side faces, no shadow, no frame, no nails. Four edges repeat seamlessly."
+    },
+    {
+      "id": "tree_deciduous",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated deciduous TREE CROWN overhead game sprite centered with generous transparent margins. Strictly overhead canopy only, no trunk or side view. Asymmetric rounded crown made of 7 to 10 broad overlapping olive-green flat blobs, restrained dark thin outline, 3 broad muted highlight patches. Few simple branching contour curves, NO leaf details, no texture dots. A tiny soft narrow shadow may sit immediately around base but no long cast shadow. One tree, not a forest or cluster. Transparent background, no ground disc."
+    },
+    {
+      "id": "tree_palm",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated tropical PALM CROWN overhead game sprite centered with generous transparent margins. Strictly overhead radial star-like arrangement of 7 broad curved olive-green fronds, each represented by 2 or 3 simple flat green shapes and one restrained dark central vein. No serrated leaflets, no visible trunk, no side view, no tall 3D shape. No ground, no soil disc, transparent background. Low detail and bold readable silhouette."
+    },
+    {
+      "id": "rocks",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated small GROUP of 3 low rock outcrops overhead game sprite centered with generous transparent margins. Strictly overhead, simple irregular grey shapes, each 2 to 3 broad flat desaturated greige facets and sparse dark contour, no tiny fissures or grain. No cliffs, no side faces, no 3D depth, no ground disc, no plants, transparent background. Readable compact shape."
+    },
+    {
+      "id": "building_solid",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated WWII European sturdy rectangular civic building ROOF overhead game sprite centered with transparent margins. Strictly vertical overhead, absolutely no visible facades or walls. Simple grey-green slate hip roof on roughly 3:2 rectangular footprint, with 4 broad flat roof planes, muted warm stone perimeter lip, 2 small chimneys. Sparse contour, only 4 to 6 slate line hints, no fine roof tile repetition. No background ground, no courtyard, no trees, no street, no shadows extending far. Roof scale and drawing must be as simple as tiny tank art."
+    },
+    {
+      "id": "building_intact",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated WWII European modest HOUSE ROOF overhead game sprite centered with transparent margins. Strictly vertical overhead, absolutely no visible facades, windows on walls, walls or side faces. Simple muted terracotta gabled roof on 3:2 rectangle footprint, one dark central ridge, 2 broad flat roof planes, one small chimney and 4 to 6 restrained roof tile line hints. Crisp simple contour, no fine tile grid, no courtyard or ground or trees. No full hex cell. Compact low-detail game sprite."
+    },
+    {
+      "id": "building_damaged",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated WWII European modest HOUSE ROOF PARTIALLY DAMAGED overhead sprite centered with transparent margins. Strict overhead, rectangular 3:2 footprint, terracotta gabled roof with 2 broad flat planes and one chimney, same simple silhouette as an intact modest red roof house. Rightmost one-third roof collapsed exposing 3 simple dark wooden rafters and a few broad brick chunks, remaining two-thirds roof intact. No tiny debris, no soot clouds, no flames, no visible wall facades. No ground, no trees, no courtyard. Bold simple shapes and sparse outline, low detail game sprite."
+    },
+    {
+      "id": "building_rubble",
+      "alpha": true,
+      "prompt": "Use case: stylized-concept. Create one production source image for a 2D WWII top-down hex tank game. Match approved reference 1 map style: simple flat color blocks, restrained sparse outlines, muted colors, low contrast ground, deliberately low detail to match tiny olive Sherman sprites. NOT photorealistic, NOT 3D, NOT isometric, no tiny noise or grain, no watercolor paper grain, no microscopic detail. Absolutely vertical overhead orthographic view. No text, no labels, no border, no hexagon frame, no vignette. ONE isolated WWII European HOUSE RUINS overhead game sprite centered with transparent margins. Strict overhead, former 3:2 rectangular red-roof house footprint now completely collapsed. Only about 12 broad muted terracotta and grey masonry chunks, 3 dark simple roof beam shapes, low broken rectangular stone foundation trace. No intact roof, no standing facades, no fine rubble granularity, no tiny debris, no smoke or fire, no surrounding ground, no plants. Readable low-detail flat game sprite."
+    }
+  ]
+}

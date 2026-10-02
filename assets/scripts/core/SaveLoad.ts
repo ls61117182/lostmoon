@@ -68,6 +68,7 @@ interface UnitSnapshot {
   ambushAttackedSinceTurnEnd?: boolean;
   ambushObscuredSinceTurnEnd?: boolean;
   ambushReadyThisTurn?: boolean;
+  ambushEnteredOrder?: number;
   ambushActedThisTurn?: boolean;
   atGunCrewAlive?: boolean;
   atGunCrewKind?: ATGunCrewKind;
@@ -170,6 +171,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     ambushAttackedSinceTurnEnd: u.ambushAttackedSinceTurnEnd,
     ambushObscuredSinceTurnEnd: u.ambushObscuredSinceTurnEnd,
     ambushReadyThisTurn: u.ambushReadyThisTurn,
+    ambushEnteredOrder: u.ambushEnteredOrder,
     ambushActedThisTurn: u.ambushActedThisTurn,
     atGunCrewAlive: u.atGunCrewAlive,
     atGunCrewKind: u.atGunCrewKind,
@@ -248,6 +250,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.ambushAttackedSinceTurnEnd = s.ambushAttackedSinceTurnEnd ?? false;
   live.ambushObscuredSinceTurnEnd = s.ambushObscuredSinceTurnEnd ?? false;
   live.ambushReadyThisTurn = s.ambushReadyThisTurn ?? false;
+  live.ambushEnteredOrder = s.ambushEnteredOrder;
   live.ambushActedThisTurn = s.ambushActedThisTurn ?? false;
   if (s.atGunCrewAlive !== undefined) live.atGunCrewAlive = s.atGunCrewAlive;
   if (s.atGunCrewKind !== undefined) live.atGunCrewKind = s.atGunCrewKind;
@@ -501,6 +504,7 @@ export function applySave(
     sh.ambushAttackedSinceTurnEnd = ss.ambushAttackedSinceTurnEnd ?? false;
     sh.ambushObscuredSinceTurnEnd = ss.ambushObscuredSinceTurnEnd ?? false;
     sh.ambushReadyThisTurn = ss.ambushReadyThisTurn ?? false;
+    sh.ambushEnteredOrder = ss.ambushEnteredOrder;
     sh.ambushActedThisTurn = ss.ambushActedThisTurn ?? false;
     neutralizeUncrewedTank(sh);
     if (ss.smoked !== undefined) sh.smoked = ss.smoked;
@@ -541,6 +545,22 @@ export function applySave(
   }
   for (const u of [mission.sherman, ...mission.allies, ...mission.enemies]) {
     u.smoked = false;
+  }
+
+  // Older sessions restarted the reinforcement sequence after loading. Give
+  // duplicate reinforcement tanks independent IDs before visual maps use them.
+  const units = [playerTank, ...mission.allies, ...mission.enemies];
+  const reservedIds = new Set(units.map(unit => unit.id));
+  const seenIds = new Set<string>();
+  for (const unit of units) {
+    if (seenIds.has(unit.id) && unit.id.startsWith('turnend_') && isTankKind(unit.kind)) {
+      const originalId = unit.id;
+      let suffix = 1;
+      while (reservedIds.has(`${originalId}_restored_${suffix}`)) suffix++;
+      unit.id = `${originalId}_restored_${suffix}`;
+      reservedIds.add(unit.id);
+    }
+    seenIds.add(unit.id);
   }
 
   return {

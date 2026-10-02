@@ -1,0 +1,111 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: sprite-vs:vert
+      frag: sprite-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.01 }
+        uvBounds: { value: [0, 0, 1, 1] }
+        outlineStep: { value: [0.002, 0, 0, 0.002] }
+}%
+
+CCProgram sprite-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  #if SAMPLE_FROM_RT
+    #include <common/common-define>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+  out vec2 uv0;
+
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1);
+
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+
+    #if USE_PIXEL_ALIGNMENT
+      pos = cc_matView * pos;
+      pos.xyz = floor(pos.xyz);
+      pos = cc_matProj * pos;
+    #else
+      pos = cc_matViewProj * pos;
+    #endif
+
+    uv0 = a_texCoord;
+    #if SAMPLE_FROM_RT
+      CC_HANDLE_RT_SAMPLE_FLIP(uv0);
+    #endif
+    color = a_color;
+
+    return pos;
+  }
+}%
+
+CCProgram sprite-fs %{
+  precision highp float;
+  #include <builtin/internal/embedded-alpha>
+  #include <builtin/internal/alpha-test>
+
+  in vec4 color;
+
+  #if USE_TEXTURE
+    in vec2 uv0;
+    #pragma builtin(local)
+    layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  #endif
+
+  uniform OutlineParams {
+    vec4 uvBounds;
+    vec4 outlineStep;
+  };
+
+  float unitAlpha(vec2 uv) {
+    // Do not sample a neighboring sprite when dynamic atlasing is enabled.
+    if (uv.x < uvBounds.x || uv.y < uvBounds.y || uv.x > uvBounds.z || uv.y > uvBounds.w) return 0.0;
+    #if USE_TEXTURE
+      return CCSampleWithAlphaSeparated(cc_spriteTexture, uv).a;
+    #else
+      return 1.0;
+    #endif
+  }
+
+  vec4 frag () {
+    #if USE_TEXTURE
+      // An inward two-screen-pixel contour preserves thin gun barrels and
+      // needs no expanded sprite quad. Interior pixels remain transparent.
+      vec2 dx = outlineStep.xy;
+      vec2 dy = outlineStep.zw;
+      float center = unitAlpha(uv0);
+      float interior = min(unitAlpha(uv0 + dx), unitAlpha(uv0 - dx));
+      interior = min(interior, min(unitAlpha(uv0 + dy), unitAlpha(uv0 - dy)));
+      interior = min(interior, min(unitAlpha(uv0 + dx + dy), unitAlpha(uv0 - dx - dy)));
+      interior = min(interior, min(unitAlpha(uv0 + dx - dy), unitAlpha(uv0 - dx + dy)));
+      vec4 o = vec4(color.rgb, center * (1.0 - interior) * color.a);
+    #else
+      vec4 o = vec4(0.0);
+    #endif
+    ALPHA_TEST(o);
+    return o;
+  }
+}%

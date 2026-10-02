@@ -1,0 +1,914 @@
+{
+  "version": 3,
+  "status": "awaiting-art-approval",
+  "frameSize": [
+    222,
+    256
+  ],
+  "gameHexRadius": 60,
+  "coordinateSystem": "pointy-top axial, E SE SW W NW NE",
+  "materials": [
+    "grass",
+    "soil",
+    "mud",
+    "sand",
+    "water",
+    "deep_water",
+    "paving",
+    "snow",
+    "winter_water",
+    "timber"
+  ],
+  "objects": [
+    "tree_deciduous",
+    "tree_palm",
+    "rocks",
+    "building_solid",
+    "building_intact",
+    "building_damaged",
+    "building_rubble"
+  ],
+  "tiles": [
+    {
+      "id": "road",
+      "label": "公路",
+      "file": "exports/tiles/terrain_road.png",
+      "winter": false
+    },
+    {
+      "id": "field",
+      "label": "草地",
+      "file": "exports/tiles/terrain_field.png",
+      "winter": false
+    },
+    {
+      "id": "mud",
+      "label": "泥地",
+      "file": "exports/tiles/terrain_mud.png",
+      "winter": false
+    },
+    {
+      "id": "forest",
+      "label": "森林",
+      "file": "exports/tiles/terrain_forest.png",
+      "winter": false
+    },
+    {
+      "id": "water",
+      "label": "浅水",
+      "file": "exports/tiles/terrain_water.png",
+      "winter": false
+    },
+    {
+      "id": "deep_water",
+      "label": "深水",
+      "file": "exports/tiles/terrain_deep_water.png",
+      "winter": false
+    },
+    {
+      "id": "clear",
+      "label": "开阔地",
+      "file": "exports/tiles/terrain_clear.png",
+      "winter": false
+    },
+    {
+      "id": "trees",
+      "label": "热带树林",
+      "file": "exports/tiles/terrain_trees.png",
+      "winter": false
+    },
+    {
+      "id": "beach",
+      "label": "海滩",
+      "file": "exports/tiles/terrain_beach.png",
+      "winter": false
+    },
+    {
+      "id": "rocky",
+      "label": "岩地",
+      "file": "exports/tiles/terrain_rocky.png",
+      "winter": false
+    },
+    {
+      "id": "airstrip",
+      "label": "机场跑道",
+      "file": "exports/tiles/terrain_airstrip.png",
+      "winter": false
+    },
+    {
+      "id": "urban_ground",
+      "label": "城市地面",
+      "file": "exports/tiles/terrain_urban_ground.png",
+      "winter": false
+    },
+    {
+      "id": "urban_road",
+      "label": "城市道路",
+      "file": "exports/tiles/terrain_urban_road.png",
+      "winter": false
+    },
+    {
+      "id": "urban_indestructible",
+      "label": "坚固建筑",
+      "file": "exports/tiles/terrain_urban_indestructible.png",
+      "winter": false
+    },
+    {
+      "id": "urban_destructible",
+      "label": "可毁建筑",
+      "file": "exports/tiles/terrain_urban_destructible.png",
+      "winter": false
+    },
+    {
+      "id": "urban_rubble",
+      "label": "建筑废墟",
+      "file": "exports/tiles/terrain_urban_rubble.png",
+      "winter": false
+    },
+    {
+      "id": "road",
+      "label": "冬季公路",
+      "file": "exports/tiles/terrain_road_snow.png",
+      "winter": true
+    },
+    {
+      "id": "field",
+      "label": "冬季草地",
+      "file": "exports/tiles/terrain_field_snow.png",
+      "winter": true
+    },
+    {
+      "id": "mud",
+      "label": "冬季泥地",
+      "file": "exports/tiles/terrain_mud_snow.png",
+      "winter": true
+    },
+    {
+      "id": "forest",
+      "label": "冬季森林",
+      "file": "exports/tiles/terrain_forest_snow.png",
+      "winter": true
+    },
+    {
+      "id": "water",
+      "label": "冬季浅水",
+      "file": "exports/tiles/terrain_water_snow.png",
+      "winter": true
+    },
+    {
+      "id": "bridge",
+      "label": "桥梁",
+      "file": "exports/tiles/terrain_bridge.png",
+      "winter": false
+    },
+    {
+      "id": "damaged",
+      "label": "受损建筑",
+      "file": "exports/tiles/terrain_damaged.png",
+      "winter": false
+    },
+    {
+      "id": "hedge",
+      "label": "树篱",
+      "file": "exports/tiles/terrain_hedge.png",
+      "winter": false
+    }
+  ],
+  "roadCanonicalMasks": [
+    "100000",
+    "110000",
+    "101000",
+    "111000",
+    "100100",
+    "110100",
+    "101100",
+    "111100",
+    "101010",
+    "111010",
+    "110110",
+    "111110",
+    "111111"
+  ],
+  "bridgeAxes": [
+    0,
+    60,
+    120
+  ],
+  "transitionMaskCount": 64,
+  "previewMap": [
+    {
+      "q": 0,
+      "r": 0,
+      "row": 0,
+      "col": 0,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 1,
+      "r": 0,
+      "row": 0,
+      "col": 1,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 2,
+      "r": 0,
+      "row": 0,
+      "col": 2,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 3,
+      "r": 0,
+      "row": 0,
+      "col": 3,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 4,
+      "r": 0,
+      "row": 0,
+      "col": 4,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 5,
+      "r": 0,
+      "row": 0,
+      "col": 5,
+      "terrain": "water",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 6,
+      "r": 0,
+      "row": 0,
+      "col": 6,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 7,
+      "r": 0,
+      "row": 0,
+      "col": 7,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 8,
+      "r": 0,
+      "row": 0,
+      "col": 8,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 9,
+      "r": 0,
+      "row": 0,
+      "col": 9,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 10,
+      "r": 0,
+      "row": 0,
+      "col": 10,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 0,
+      "r": 1,
+      "row": 1,
+      "col": 0,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 1,
+      "r": 1,
+      "row": 1,
+      "col": 1,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 2,
+      "r": 1,
+      "row": 1,
+      "col": 2,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 3,
+      "r": 1,
+      "row": 1,
+      "col": 3,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 4,
+      "r": 1,
+      "row": 1,
+      "col": 4,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 5,
+      "r": 1,
+      "row": 1,
+      "col": 5,
+      "terrain": "water",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 6,
+      "r": 1,
+      "row": 1,
+      "col": 6,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 7,
+      "r": 1,
+      "row": 1,
+      "col": 7,
+      "terrain": "urban_indestructible",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 8,
+      "r": 1,
+      "row": 1,
+      "col": 8,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 2
+    },
+    {
+      "q": 9,
+      "r": 1,
+      "row": 1,
+      "col": 9,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 10,
+      "r": 1,
+      "row": 1,
+      "col": 10,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": -1,
+      "r": 2,
+      "row": 2,
+      "col": 0,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 0,
+      "r": 2,
+      "row": 2,
+      "col": 1,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 1,
+      "r": 2,
+      "row": 2,
+      "col": 2,
+      "terrain": "forest",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 2,
+      "r": 2,
+      "row": 2,
+      "col": 3,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 3,
+      "r": 2,
+      "row": 2,
+      "col": 4,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 4,
+      "r": 2,
+      "row": 2,
+      "col": 5,
+      "terrain": "water",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 5,
+      "r": 2,
+      "row": 2,
+      "col": 6,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 6,
+      "r": 2,
+      "row": 2,
+      "col": 7,
+      "terrain": "urban_destructible",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 7,
+      "r": 2,
+      "row": 2,
+      "col": 8,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 8,
+      "r": 2,
+      "row": 2,
+      "col": 9,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 18
+    },
+    {
+      "q": 9,
+      "r": 2,
+      "row": 2,
+      "col": 10,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": -1,
+      "r": 3,
+      "row": 3,
+      "col": 0,
+      "terrain": "road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 0,
+      "r": 3,
+      "row": 3,
+      "col": 1,
+      "terrain": "road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 1,
+      "r": 3,
+      "row": 3,
+      "col": 2,
+      "terrain": "road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 2,
+      "r": 3,
+      "row": 3,
+      "col": 3,
+      "terrain": "road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 3,
+      "r": 3,
+      "row": 3,
+      "col": 4,
+      "terrain": "road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 4,
+      "r": 3,
+      "row": 3,
+      "col": 5,
+      "terrain": "water",
+      "damaged": false,
+      "hedge": false,
+      "bridgeAxis": 0,
+      "roads": 9
+    },
+    {
+      "q": 5,
+      "r": 3,
+      "row": 3,
+      "col": 6,
+      "terrain": "road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 6,
+      "r": 3,
+      "row": 3,
+      "col": 7,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 7,
+      "r": 3,
+      "row": 3,
+      "col": 8,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": 8,
+      "r": 3,
+      "row": 3,
+      "col": 9,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 27
+    },
+    {
+      "q": 9,
+      "r": 3,
+      "row": 3,
+      "col": 10,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 9
+    },
+    {
+      "q": -2,
+      "r": 4,
+      "row": 4,
+      "col": 0,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": -1,
+      "r": 4,
+      "row": 4,
+      "col": 1,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 0,
+      "r": 4,
+      "row": 4,
+      "col": 2,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 1,
+      "r": 4,
+      "row": 4,
+      "col": 3,
+      "terrain": "mud",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 2,
+      "r": 4,
+      "row": 4,
+      "col": 4,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 3,
+      "r": 4,
+      "row": 4,
+      "col": 5,
+      "terrain": "water",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 4,
+      "r": 4,
+      "row": 4,
+      "col": 6,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 5,
+      "r": 4,
+      "row": 4,
+      "col": 7,
+      "terrain": "urban_destructible",
+      "damaged": true,
+      "hedge": false
+    },
+    {
+      "q": 6,
+      "r": 4,
+      "row": 4,
+      "col": 8,
+      "terrain": "urban_ground",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 7,
+      "r": 4,
+      "row": 4,
+      "col": 9,
+      "terrain": "urban_rubble",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 8,
+      "r": 4,
+      "row": 4,
+      "col": 10,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 18
+    },
+    {
+      "q": -2,
+      "r": 5,
+      "row": 5,
+      "col": 0,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": -1,
+      "r": 5,
+      "row": 5,
+      "col": 1,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": true
+    },
+    {
+      "q": 0,
+      "r": 5,
+      "row": 5,
+      "col": 2,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 1,
+      "r": 5,
+      "row": 5,
+      "col": 3,
+      "terrain": "mud",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 2,
+      "r": 5,
+      "row": 5,
+      "col": 4,
+      "terrain": "water",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 3,
+      "r": 5,
+      "row": 5,
+      "col": 5,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 4,
+      "r": 5,
+      "row": 5,
+      "col": 6,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 5,
+      "r": 5,
+      "row": 5,
+      "col": 7,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 6,
+      "r": 5,
+      "row": 5,
+      "col": 8,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 7,
+      "r": 5,
+      "row": 5,
+      "col": 9,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 8,
+      "r": 5,
+      "row": 5,
+      "col": 10,
+      "terrain": "urban_road",
+      "damaged": false,
+      "hedge": false,
+      "roads": 16
+    },
+    {
+      "q": -3,
+      "r": 6,
+      "row": 6,
+      "col": 0,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": -2,
+      "r": 6,
+      "row": 6,
+      "col": 1,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": -1,
+      "r": 6,
+      "row": 6,
+      "col": 2,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 0,
+      "r": 6,
+      "row": 6,
+      "col": 3,
+      "terrain": "mud",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 1,
+      "r": 6,
+      "row": 6,
+      "col": 4,
+      "terrain": "deep_water",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 2,
+      "r": 6,
+      "row": 6,
+      "col": 5,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 3,
+      "r": 6,
+      "row": 6,
+      "col": 6,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 4,
+      "r": 6,
+      "row": 6,
+      "col": 7,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 5,
+      "r": 6,
+      "row": 6,
+      "col": 8,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 6,
+      "r": 6,
+      "row": 6,
+      "col": 9,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    },
+    {
+      "q": 7,
+      "r": 6,
+      "row": 6,
+      "col": 10,
+      "terrain": "field",
+      "damaged": false,
+      "hedge": false
+    }
+  ],
+  "sourceTank": [
+    "assets/resources/textures/units/sherman_top_hull.png",
+    "assets/resources/textures/units/sherman_top_turret.png"
+  ],
+  "tankScaleSource": "assets/scripts/core/TankVisualDB.ts"
+}

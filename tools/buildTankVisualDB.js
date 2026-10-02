@@ -16,8 +16,8 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'panzer3', 'panzer3_m', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'flak88', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
-const SPLIT_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer3', 'panzer3_m', 'type97', 'type95', 'type4', 'flak88', 'heavy_artillery', 'german_heavy_artillery'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'stug3', 'sturmtiger', 'jagdtiger', 'jagdpanther', 'elefant', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'flak88', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
+const SPLIT_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'type97', 'type95', 'type4', 'flak88', 'heavy_artillery', 'german_heavy_artillery'];
 const NUM_FIELDS = [
   'fitScale',
   'offsetForward',

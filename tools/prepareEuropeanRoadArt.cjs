@@ -15,6 +15,7 @@ const EDGE = 1.8;
 const MOUTH_BLEED = 5;
 const TURN_RADIUS = 43;
 const JUNCTION_BLEND = 30;
+const ROAD_VARIANT_COUNT = 3;
 const DIRECTIONS = ['E', 'SE', 'SW', 'W', 'NW', 'NE'];
 const EDGES = [[222, 128], [166.5, 224], [55.5, 224], [0, 128], [55.5, 32], [166.5, 32]];
 const VERTICES = [[111, 0], [222, 64], [222, 192], [111, 256], [0, 192], [0, 64]];
@@ -36,7 +37,8 @@ const STYLES = {
 };
 
 const flags = mask => Array.from({ length: 6 }, (_, i) => (mask >> i) & 1).join('');
-const file = (season, mask) => `european_road_surface_${season}_${flags(mask)}_v1.png`;
+const file = (season, mask, variant) =>
+  `european_road_surface_${season}_${flags(mask)}_v${variant + 1}.png`;
 const rotateMask = (mask, clockwiseSteps) => {
   const steps = ((clockwiseSteps % 6) + 6) % 6;
   const normalized = mask & 63;
@@ -96,6 +98,24 @@ function jsonMetaFor(filename) {
   }, null, 2) + '\n');
 }
 
+async function writeFileIfChanged(output, data) {
+  try {
+    if ((await fs.promises.readFile(output)).equals(data)) return false;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    try {
+      await fs.promises.writeFile(output, data);
+      return true;
+    } catch (error) {
+      if (!['EBUSY', 'EPERM', 'UNKNOWN'].includes(error.code) || attempt === 19) throw error;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  return false;
+}
+
 function hexInset(x, y) {
   let result = Infinity;
   for (let i = 0; i < 6; i++) {
@@ -105,7 +125,38 @@ function hexInset(x, y) {
   return result;
 }
 
-function shapeFor(mask) {
+function warpRoadPoint(x, y, variantIndex) {
+  const variant = ((variantIndex % ROAD_VARIANT_COUNT) + ROAD_VARIANT_COUNT) % ROAD_VARIANT_COUNT;
+  // Work in Cocos local coordinates (y-up) so this stays identical to the
+  // runtime clearance calculation in UrbanTerrain.ts.
+  const localX = x / 128, localY = -y / 128;
+  const ax = Math.abs(localX), ay = Math.abs(localY);
+  const edgeInset = Math.min(
+    0.8660254037844386 - ax,
+    0.8660254037844386 - ax * .5 - ay * 0.8660254037844386,
+  );
+  // One broad bend per tile reads as a natural route when many random
+  // variants are chained together; smoothstep keeps the mouths calm.
+  const t = Math.max(0, Math.min(1, edgeInset / .78));
+  const envelope = t * t * (3 - 2 * t);
+  const configs = [
+    { ax: .032, ay: .055, px: .35, py: 1.15 },
+    { ax: -.045, ay: .043, px: 1.80, py: -.40 },
+    { ax: .052, ay: -.046, px: -1.05, py: 2.20 },
+  ];
+  const config = configs[variant];
+  const dx = envelope * (
+    config.ax * Math.sin(localY * 1.65 + config.px)
+    + config.ay * .18 * Math.sin((localX + localY) * 1.25 - config.py)
+  );
+  const dy = envelope * (
+    config.ay * Math.sin(localX * 1.55 + config.py)
+    - config.ax * .16 * Math.sin((localX - localY) * 1.35 + config.px)
+  );
+  return [(localX + dx) * 128, -(localY + dy) * 128];
+}
+
+function shapeFor(mask, variantIndex = 0) {
   const dirs = RAYS.filter((_, d) => mask & (1 << d));
   const pairs = [];
   for (let a = 0; a < dirs.length; a++) for (let b = a + 1; b < dirs.length; b++) {
@@ -126,6 +177,7 @@ function shapeFor(mask) {
   }
   return (x, y) => {
     x -= 111; y -= 128;
+    if (variantIndex !== null) [x, y] = warpRoadPoint(x, y, variantIndex);
     if (turn) {
       const { tangent, cx, cy, start, sweep } = turn;
       let distance = Infinity;
@@ -165,9 +217,9 @@ async function sourceTexture(style) {
   return { data, mean: sum / (data.length / 3) };
 }
 
-async function renderSurface(mask, style, texture) {
+async function renderSurface(mask, style, texture, variantIndex = 0) {
   const data = Buffer.alloc(W * H * S * S * 4);
-  const distanceAt = shapeFor(mask);
+  const distanceAt = shapeFor(mask, variantIndex);
   for (let y = 0; y < H * S; y++) for (let x = 0; x < W * S; x++) {
     const px = (x + .5) / S, py = (y + .5) / S;
     const inset = hexInset(px, py);
@@ -241,15 +293,18 @@ async function main() {
   for (const [season, style] of Object.entries(STYLES)) {
     const texture = await sourceTexture(style);
     for (const mask of CANONICAL_MASKS) {
-      const png = await renderSurface(mask, style, texture);
-      const filename = file(season, mask);
-      await fs.promises.writeFile(path.join(OUT, filename), png);
-      imageMetaFor(filename);
-      rendered[season].set(mask, png);
+      for (let variant = 0; variant < ROAD_VARIANT_COUNT; variant++) {
+        const png = await renderSurface(mask, style, texture, variant);
+        const filename = file(season, mask, variant);
+        await writeFileIfChanged(path.join(OUT, filename), png);
+        imageMetaFor(filename);
+        rendered[season].set(`${mask}:${variant}`, png);
+      }
     }
     const bridgeFilename = `european_bridge_surface_${season}_v1.png`;
-    const bridgePng = await renderBridge(season, rendered[season].get(9));
-    await fs.promises.writeFile(path.join(OUT, bridgeFilename), bridgePng);
+    const straightRoad = await renderSurface(9, style, texture, null);
+    const bridgePng = await renderBridge(season, straightRoad);
+    await writeFileIfChanged(path.join(OUT, bridgeFilename), bridgePng);
     imageMetaFor(bridgeFilename);
   }
 
@@ -260,8 +315,12 @@ async function main() {
       canonicalRd: transform ? flags(transform.canonicalMask) : null,
       rotationSteps: transform?.rotationSteps ?? 0,
       rotationDegrees: transform?.rotationDegrees ?? 0,
-      summer: transform ? file('summer', transform.canonicalMask) : null,
-      winter: transform ? file('winter', transform.canonicalMask) : null,
+      summer: transform ? file('summer', transform.canonicalMask, 0) : null,
+      winter: transform ? file('winter', transform.canonicalMask, 0) : null,
+      summerVariants: transform ? Array.from({ length: ROAD_VARIANT_COUNT }, (_, variant) =>
+        file('summer', transform.canonicalMask, variant)) : [],
+      winterVariants: transform ? Array.from({ length: ROAD_VARIANT_COUNT }, (_, variant) =>
+        file('winter', transform.canonicalMask, variant)) : [],
     };
   });
   const manifestName = 'european_road_manifest.json';
@@ -269,7 +328,9 @@ async function main() {
     size: [W, H], pivot: [.5, .5], directionOrder: DIRECTIONS,
     roadHalfWidth: HALF, edgeWidth: EDGE, mouthBleed: MOUTH_BLEED, endpointRadius: HALF * 1.6,
     turnCenterlineRadius: TURN_RADIUS, junctionBlend: JUNCTION_BLEND,
-    canonicalSurfaceCountPerSeason: CANONICAL_MASKS.length,
+    canonicalShapeCount: CANONICAL_MASKS.length,
+    variantsPerShape: ROAD_VARIANT_COUNT,
+    canonicalSurfaceCountPerSeason: CANONICAL_MASKS.length * ROAD_VARIANT_COUNT,
     seasons: Object.keys(STYLES),
     bridge: {
       shapeCountPerSeason: 1,
@@ -278,7 +339,7 @@ async function main() {
       winter: 'european_bridge_surface_winter_v1.png',
       note: 'Straight bridge only; rotate the E-W sprite by 0, -60, or -120 degrees at runtime.',
     },
-    note: '63 direction masks reuse 13 canonical transparent surfaces per season and rotate them at runtime.',
+    note: '63 direction masks reuse 13 canonical shapes with 3 interior curve variants per season; all variants share fixed road mouths and rotate at runtime.',
     variants,
   }, null, 2) + '\n');
   jsonMetaFor(manifestName);
@@ -286,18 +347,21 @@ async function main() {
   const cells = [];
   for (let i = 0; i < CANONICAL_MASKS.length; i++) {
     const mask = CANONICAL_MASKS[i];
-    for (let row = 0; row < 2; row++) {
-      const season = row ? 'winter' : 'summer';
+    for (let row = 0; row < 2 * ROAD_VARIANT_COUNT; row++) {
+      const season = row >= ROAD_VARIANT_COUNT ? 'winter' : 'summer';
+      const variant = row % ROAD_VARIANT_COUNT;
       const left = 18 + i * 118;
-      const top = 18 + row * 166;
-      const surface = await sharp(rendered[season].get(mask)).resize(111, 128).png().toBuffer();
+      const top = 18 + row * 150;
+      const surface = await sharp(rendered[season].get(`${mask}:${variant}`)).resize(111, 128).png().toBuffer();
       cells.push({ input: await sharp(STYLES[season].source).resize(111, 128).composite([{ input: surface }]).png().toBuffer(), left, top });
-      cells.push({ input: Buffer.from(`<svg width="111" height="24"><text x="55" y="17" font-family="sans-serif" font-size="13" fill="#eee" text-anchor="middle">${flags(mask)}</text></svg>`), left, top: top + 130 });
+      cells.push({ input: Buffer.from(`<svg width="111" height="20"><text x="55" y="15" font-family="sans-serif" font-size="12" fill="#eee" text-anchor="middle">${flags(mask)} v${variant + 1}</text></svg>`), left, top: top + 128 });
     }
   }
-  await sharp({ create: { width: 1570, height: 356, channels: 4, background: '#404842' } }).composite(cells).png().toFile(path.join(PREVIEW_OUT, 'european_roads_canonical_preview.png'));
-  console.log(`Exported ${CANONICAL_MASKS.length} summer + ${CANONICAL_MASKS.length} winter European road surfaces.`);
+  const preview = await sharp({ create: { width: 1570, height: 918, channels: 4, background: '#404842' } })
+    .composite(cells).png().toBuffer();
+  await writeFileIfChanged(path.join(PREVIEW_OUT, 'european_roads_canonical_preview.png'), preview);
+  console.log(`Exported ${CANONICAL_MASKS.length} shapes x ${ROAD_VARIANT_COUNT} variants for summer and winter.`);
 }
 
 if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
-module.exports = { flags, rotateMask, canonicalTransform, CANONICAL_MASKS, shapeFor, HALF, EDGE, MOUTH_BLEED, TURN_RADIUS, EDGES, RAYS };
+module.exports = { flags, rotateMask, canonicalTransform, CANONICAL_MASKS, ROAD_VARIANT_COUNT, shapeFor, HALF, EDGE, MOUTH_BLEED, TURN_RADIUS, EDGES, RAYS };

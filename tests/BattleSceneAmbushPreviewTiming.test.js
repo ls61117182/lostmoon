@@ -2,34 +2,23 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const source = fs.readFileSync(
-  path.resolve(__dirname, '../assets/scripts/view/BattleScene.ts'),
-  'utf8',
-);
-
-const start = source.indexOf('  private tryAttack(target: Unit)');
-const end = source.indexOf('\n  /**', start + 1);
-assert.ok(start >= 0 && end > start, 'tryAttack must exist');
+const source = fs.readFileSync(path.resolve(__dirname, '../assets/scripts/view/BattleScene.ts'), 'utf8');
+const afterMove = source.indexOf("if (anim.kind === 'move' && !anim.evacExit");
+const resumeEnemy = source.indexOf('this.runNextEnemyStep();', afterMove);
+const resumePlayer = source.indexOf('this.completePhaseDiceAction();', afterMove);
+assert.ok(afterMove >= 0 && resumeEnemy > afterMove && resumePlayer > afterMove,
+  'reaction must resolve after a move before subsequent action dice');
+const start = source.indexOf('private tryResolveAmbushAfterMove(');
+const end = source.indexOf('private tryEnterAmbush(', start);
 const body = source.slice(start, end);
+assert.ok(body.includes('isInAmbushSight(mover.pos, sight, HexMap.keyOf)'),
+  'movement ending in the aimed sight range must trigger');
+assert.ok(body.includes('orderedAmbushers(this.allUnits(), mover)'),
+  'multiple ambushers must resolve in activation order');
+assert.ok(body.includes('if (!mover.destroyed && this.tryResolveAmbushAfterMove(mover, resume)) return;'),
+  'destroyed movers cannot be targeted by later ambushers');
+assert.ok(body.includes('rollAttack({') && body.includes('rollHighExplosiveAttack({'),
+  'AP and HE reactions use ordinary gun reports');
+assert.ok(body.includes('markAmbushAction(watcher)'), 'triggered stance ends');
 
-const ambushCapture = body.lastIndexOf(
-  'const ambushModifier = ambushHitThresholdModifier(sherman, GameSession.gameMode);',
-);
-const reportRoll = body.lastIndexOf('const report = rollAttack({');
-const aimStart = body.indexOf('this.startShermanTurretAim(target, () => {', reportRoll);
-const consumeAmbush = body.indexOf('markAmbushAction(sherman);', aimStart);
-
-assert.ok(ambushCapture >= 0, 'the current attack must capture its ambush modifier');
-assert.ok(reportRoll > ambushCapture, 'the attack report must use the captured ambush modifier');
-assert.ok(aimStart > reportRoll, 'turret aiming must start after the report is locked');
-assert.ok(
-  consumeAmbush > aimStart,
-  'ambush eligibility must remain active during turret rotation and be consumed in the firing callback',
-);
-assert.strictEqual(
-  body.slice(ambushCapture, aimStart).includes('markAmbushAction(sherman);'),
-  false,
-  'committing a target must not change the live hit preview before turret rotation finishes',
-);
-
-console.log('BattleScene ambush preview timing tests passed');
+console.log('BattleScene ambush timing tests passed');

@@ -44,7 +44,7 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /applySplitTankTurretSprite\([\s\S]*?mainGunRecoilOffsetFor\(u, 'turret'\)[\s\S]*?baseX \+ pivotLocalX \* cos - pivotLocalY \* sin \+ recoil\.x/,
+  /applySplitTankTurretSprite\([\s\S]*?mainGunRecoilOffsetFor\(u, 'turret'\)[\s\S]*?splitTankTurretPivot\(u, c, cfg, geometry, bodyFacingLerp\)[\s\S]*?turretPivot\.x \+ recoil\.x/,
   'split-turret recoil should be composed into turret placement only',
 );
 assert.match(

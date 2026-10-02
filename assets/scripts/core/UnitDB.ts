@@ -8,7 +8,7 @@
 import { Theater, UnitKind, UnitStats } from './types';
 
 const DB: Record<UnitKind, UnitStats> = {
-  sherman: { // 谢尔曼 M4 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  sherman: { // 谢尔曼 - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "usa",
     firepower: 6, size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 2, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 4, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -21,7 +21,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  sherman76: { // 谢尔曼 76 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  sherman76: { // 谢尔曼76 - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "usa",
     firepower: 6, size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 4, highExplosivePower: 1, effectiveRange: 3, turretTraverseSpeed: 4, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -34,7 +34,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  sherman_jumbo: { // 谢尔曼巨无霸 M4A3E2 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  sherman_jumbo: { // 巨无霸 - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "usa",
     firepower: 6, size: 4, armorFront: 14, armorFrontSide: 12, armorRearSide: 10, armorRear: 8, gunMantletArmor: 1, penetration: 2, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 4, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -47,7 +47,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  m26_pershing: { // M26 潘兴 - 欧洲战场普通M26；90毫米M3主炮；现有美术保留
+  m26_pershing: { // 潘兴 - 欧洲战场普通M26；90毫米M3主炮；现有美术保留
     faction: "usa",
     firepower: 5, size: 3, armorFront: 13, armorFrontSide: 11, armorRearSide: 10, armorRear: 9, gunMantletArmor: 1, penetration: 5, highExplosivePower: 3, effectiveRange: 4, turretTraverseSpeed: 3, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -87,7 +87,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  kv1: { // KV-1 重型坦克 - KV-1 重型坦克；五人车组；76 毫米炮
+  kv1: { // KV-1 - KV-1 重型坦克；五人车组；76 毫米炮
     faction: "soviet",
     firepower: 4, size: 3, armorFront: 13, armorFrontSide: 12, armorRearSide: 11, armorRear: 10, gunMantletArmor: 1, penetration: 2, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 2, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -100,7 +100,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  is2: { // IS-2 重型坦克 - IS-2 重型坦克；五人车组；122 毫米 D-25T 炮
+  is2: { // IS-2 - IS-2 重型坦克；五人车组；122 毫米 D-25T 炮
     faction: "soviet",
     firepower: 3, size: 4, armorFront: 16, armorFrontSide: 13, armorRearSide: 11, armorRear: 10, gunMantletArmor: 1, penetration: 5, highExplosivePower: 6, effectiveRange: 3, turretTraverseSpeed: 2, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -113,7 +113,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  su152: { // SU-152 突击炮 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  su152: { // SU-152 - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "soviet",
     firepower: 3, size: 4, armorFront: 11, armorFrontSide: 10, armorRearSide: 10, armorRear: 10, gunMantletArmor: 0, penetration: 5, highExplosivePower: 6, effectiveRange: 3, turretTraverseSpeed: 0, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -140,7 +140,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  tigerking: { // 虎王坦克 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  tigerking: { // 虎王 - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "german",
     firepower: 4, size: 2, armorFront: 16, armorFrontSide: 13, armorRearSide: 11, armorRear: 11, gunMantletArmor: 0, penetration: 8, highExplosivePower: 3, effectiveRange: 5, turretTraverseSpeed: 2, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -153,7 +153,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  maus: { // 鼠式坦克 - 鼠式试验车；六人车组含两名装填手
+  maus: { // 鼠式 - 鼠式试验车；六人车组含两名装填手
     faction: "german",
     firepower: 3, size: 0, armorFront: 18, armorFrontSide: 17, armorRearSide: 16, armorRear: 16, gunMantletArmor: 0, penetration: 9, highExplosivePower: 5, effectiveRange: 5, turretTraverseSpeed: 1, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -167,7 +167,7 @@ const DB: Record<UnitKind, UnitStats> = {
     crewMembers: [1, 2, 3, 4, 5, 6],
     crewRoleAssignments: {"loader":[3,6]},
   },
-  panther: { // 豹式坦克 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  panther: { // 豹式 - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "german",
     firepower: 5, size: 3, armorFront: 14, armorFrontSide: 11, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 6, highExplosivePower: 2, effectiveRange: 4, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -180,7 +180,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer4: { // 四号坦克G型 - 按后期加强装甲G型配置
+  panzer4: { // 4号G - 按后期加强装甲G型配置
     faction: "german",
     firepower: 6, size: 4, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, penetration: 4, highExplosivePower: 2, effectiveRange: 3, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -193,7 +193,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  stug3: { // 三号突击炮G型 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  stug3: { // 3号突击炮G - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "german",
     firepower: 5, size: 6, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, penetration: 4, highExplosivePower: 2, effectiveRange: 3, turretTraverseSpeed: 0, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -206,7 +206,61 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4],
   },
-  panzer3: { // 三号坦克 - 按短50毫米炮型配置
+  sturmtiger: { // 突击虎 - 独立突击虎美术单位；固定主炮；战斗参数暂沿用stug3，待单独平衡
+    faction: "german",
+    firepower: 2, size: 3, armorFront: 13, armorFrontSide: 12, armorRearSide: 11, armorRear: 11, gunMantletArmor: 0, penetration: 4, highExplosivePower: 10, effectiveRange: 3, turretTraverseSpeed: 0, mobility: 2, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "fixed",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
+  },
+  jagdtiger: { // 猎虎 - 猎虎固定128毫米炮；虎王装甲基础与128毫米火力暂定，待单独平衡
+    faction: "german",
+    firepower: 2, size: 2, armorFront: 16, armorFrontSide: 13, armorRearSide: 11, armorRear: 11, gunMantletArmor: 0, penetration: 9, highExplosivePower: 5, effectiveRange: 5, turretTraverseSpeed: 0, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "fixed",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5, 6],
+    crewRoleAssignments: {"loader":[3,6]},
+  },
+  jagdpanther: { // 追猎者坦克歼击车 - 追猎者固定主炮；五人乘员；装甲机动沿用豹式、穿甲沿用象式的暂定游戏值，待平衡
+    faction: "german",
+    firepower: 4, size: 3, armorFront: 14, armorFrontSide: 11, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 8, highExplosivePower: 3, effectiveRange: 4, turretTraverseSpeed: 0, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "fixed",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
+  },
+  elefant: { // 象式坦克歼击车 - 1944象式；固定88毫米PaK43/2 L71；六人双装填手；200毫米正面与80毫米侧后装甲映射为暂定游戏值，待平衡
+    faction: "german",
+    firepower: 3, size: 2, armorFront: 16, armorFrontSide: 12, armorRearSide: 11, armorRear: 11, gunMantletArmor: 0, penetration: 8, highExplosivePower: 3, effectiveRange: 5, turretTraverseSpeed: 0, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "fixed",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5, 6],
+    crewRoleAssignments: {"loader":[3,6]},
+  },
+  panzer3: { // 3号 - 按短50毫米炮型配置
     faction: "german",
     firepower: 6, size: 5, armorFront: 10, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, penetration: 1, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -219,9 +273,48 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer3_m: { // 三号坦克M型 - 谢尔曼基准史实方案；火力值表示装填与人机效率
+  panzer3_m: { // 3号M - 谢尔曼基准史实方案；火力值表示装填与人机效率
     faction: "german",
     firepower: 6, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "turreted",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
+  },
+  panzer3_m_no_schurzen: { // 3号M - 仅移除车体侧裙与炮塔外围附加装甲；本体装甲和M型战斗参数沿用原单位
+    faction: "german",
+    firepower: 6, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "turreted",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
+  },
+  panzer3_n: { // 3号N - 三号坦克N型；短75毫米KwK 37 L/24；沿用对应M型车身及装甲数据
+    faction: "german",
+    firepower: 6, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, penetration: 1, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    hasRadio: true,
+    moveSound: "audio/tank_move",
+    attackSound: "audio/cannon_fire",
+    commanderSpritePath: "textures/units/german_commander_hatch_open/spriteFrame",
+    visionType: "turreted",
+    damageTargetClass: "german_tank",
+    infantryTankCoordination: 1,
+    actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
+    crewMembers: [1, 2, 3, 4, 5],
+  },
+  panzer3_n_schurzen: { // 3号N - 三号坦克N型；短75毫米KwK 37 L/24；沿用对应M型车身及装甲数据
+    faction: "german",
+    firepower: 6, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, penetration: 1, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -292,7 +385,7 @@ const DB: Record<UnitKind, UnitStats> = {
     infantryTankCoordination: 0,
     crewMembers: [],
   },
-  type95: { // 九五式轻战车 - 谢尔曼基准史实方案；火力值表示装填与人机效率；37毫米高爆弹降为HE0；0代表最弱高爆档而非无高爆弹
+  type95: { // 九五式 - 谢尔曼基准史实方案；火力值表示装填与人机效率；37毫米高爆弹降为HE0；0代表最弱高爆档而非无高爆弹
     faction: "japanese",
     firepower: 3, size: 6, armorFront: 5, armorFrontSide: 5, armorRearSide: 4, armorRear: 4, gunMantletArmor: 0, penetration: 0, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 2, mobility: 3, usCasualtyDice: 1, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -306,7 +399,7 @@ const DB: Record<UnitKind, UnitStats> = {
     crewMembers: [1, 4, 5],
     crewRoleAssignments: {"gunner":[1],"loader":[1]},
   },
-  type97: { // 九七式中战车 - 原型九七式；57毫米主炮；车长兼炮手
+  type97: { // 九七式 - 原型九七式；57毫米主炮；车长兼炮手
     faction: "japanese",
     firepower: 4, size: 5, armorFront: 7, armorFrontSide: 6, armorRearSide: 5, armorRear: 5, gunMantletArmor: 0, penetration: 0, highExplosivePower: 1, effectiveRange: 1, turretTraverseSpeed: 2, mobility: 3, usCasualtyDice: 1, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -320,7 +413,7 @@ const DB: Record<UnitKind, UnitStats> = {
     crewMembers: [1, 3, 4, 5],
     crewRoleAssignments: {"gunner":[1]},
   },
-  type4: { // 四式中战车 - 四式试制型；未实战验证
+  type4: { // 四式 - 四式试制型；未实战验证
     faction: "japanese",
     firepower: 5, size: 3, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, penetration: 4, highExplosivePower: 2, effectiveRange: 3, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -333,7 +426,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  at_gun: { // 反坦克炮 - 谢尔曼基准史实方案；火力值表示装填与人机效率；尺寸表示AP有效命中难度；HE本体与炮组独立判定；按一式47毫米反坦克炮；HE弹装药87克；HE0仍可杀伤与压制
+  at_gun: { // 反坦克炮 - 谢尔曼基准史实方案；火力值表示装填与人机效率；命中难度表示AP有效命中所需点数；HE本体与炮组独立判定；按一式47毫米反坦克炮；HE弹装药87克；HE0仍可杀伤与压制
     faction: "japanese",
     firepower: 6, size: 8, armorFront: 4, armorFrontSide: 4, armorRearSide: 2, armorRear: 2, gunMantletArmor: 0, penetration: 1, highExplosivePower: 0, effectiveRange: 2, turretTraverseSpeed: 2, mobility: 0, usCasualtyDice: 1, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -346,7 +439,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "at_gun1", move: "at_gun1", misc: "at_gun1" },
     crewMembers: [],
   },
-  pak38: { // pak38 - 谢尔曼基准史实方案；火力值表示装填与人机效率；尺寸表示AP有效命中难度；HE本体与炮组独立判定
+  pak38: { // pak38 - 谢尔曼基准史实方案；火力值表示装填与人机效率；命中难度表示AP有效命中所需点数；HE本体与炮组独立判定
     faction: "german",
     firepower: 6, size: 8, armorFront: 4, armorFrontSide: 4, armorRearSide: 2, armorRear: 2, gunMantletArmor: 0, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 2, mobility: 0, usCasualtyDice: 1, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -359,7 +452,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "at_gun1", move: "at_gun1", misc: "at_gun1" },
     crewMembers: [],
   },
-  flak88: { // 88mm高射炮 - 谢尔曼基准史实方案；火力值表示装填与人机效率；尺寸表示AP有效命中难度；HE本体与炮组独立判定
+  flak88: { // 88mm高射炮 - 谢尔曼基准史实方案；火力值表示装填与人机效率；命中难度表示AP有效命中所需点数；HE本体与炮组独立判定
     faction: "german",
     firepower: 6, size: 8, armorFront: 4, armorFrontSide: 4, armorRearSide: 2, armorRear: 2, gunMantletArmor: 0, penetration: 5, highExplosivePower: 3, effectiveRange: 4, turretTraverseSpeed: 2, mobility: 0, usCasualtyDice: 1, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,

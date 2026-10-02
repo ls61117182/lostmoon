@@ -24,8 +24,13 @@ assert(
 );
 
 assert(
-  /mapInputNode\.on\(Node\.EventType\.TOUCH_START,\s*this\.onMapPanStart,\s*this\);[\s\S]*mapInputNode\.on\(Node\.EventType\.TOUCH_MOVE,\s*this\.onMapPanMove,\s*this\);[\s\S]*mapInputNode\.on\(Node\.EventType\.TOUCH_END,\s*this\.onTouchMap,\s*this\);/.test(battleScene),
-  'MapInput should own the map pan and map click listeners',
+  /mapInputNode\.on\(Node\.EventType\.TOUCH_END,\s*this\.onTouchMap,\s*this\);/.test(battleScene),
+  'MapInput should own the map click listener',
+);
+
+assert(
+  !/onMapPanStart|onMapPanMove|mapPanEnabled/.test(battleScene),
+  'BattleScene should not allow manual map panning',
 );
 
 assert(

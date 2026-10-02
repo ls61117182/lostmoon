@@ -1,0 +1,69 @@
+{
+  "tool": "built-in image_gen",
+  "prompts": [
+    {
+      "id": "snow",
+      "prompt": "Single square seamless ground material, STRICT vertical 90 degree overhead. Match the supplied reference's simplified painterly tabletop hex strategy-map style and small fine detail scale, not photorealism. This is a European WWII winter version. Entire square is one uniform material, NOT a grid or atlas. Edge-to-edge texture, no edge colour strips, borders, hex outlines, trees, buildings, objects, text or cast shadows. Subject: Soft ivory-white settled snow, cool very pale blue-gray shallow undulations and subtle painted grain. Quiet low-contrast, no footprints, no cracks, no ice slabs."
+    },
+    {
+      "id": "winter_ground",
+      "prompt": "Single square seamless ground material, STRICT vertical 90 degree overhead. Match the supplied reference's simplified painterly tabletop hex strategy-map style and small fine detail scale, not photorealism. This is a European WWII winter version. Entire square is one uniform material, NOT a grid or atlas. Edge-to-edge texture, no edge colour strips, borders, hex outlines, trees, buildings, objects, text or cast shadows. Subject: Frozen light gray-beige European field earth with subdued tiny dry grass stippling, very sparse, NO green grass, a few fine scattered powder-snow flecks. Bare ground substrate to be blended with snow separately; not a snow-covered whole landscape."
+    },
+    {
+      "id": "winter_mud",
+      "prompt": "Single square seamless ground material, STRICT vertical 90 degree overhead. Match the supplied reference's simplified painterly tabletop hex strategy-map style and small fine detail scale, not photorealism. This is a European WWII winter version. Entire square is one uniform material, NOT a grid or atlas. Edge-to-edge texture, no edge colour strips, borders, hex outlines, trees, buildings, objects, text or cast shadows. Subject: Cold desaturated medium gray-brown muddy earth with small soft flat broken patches, tiny indistinct grit, no large rocks or ridges. Some fine frosty flecks. NO grass or green."
+    },
+    {
+      "id": "winter_forest",
+      "prompt": "Single square seamless ground material, STRICT vertical 90 degree overhead. Match the supplied reference's simplified painterly tabletop hex strategy-map style and small fine detail scale, not photorealism. This is a European WWII winter version. Entire square is one uniform material, NOT a grid or atlas. Edge-to-edge texture, no edge colour strips, borders, hex outlines, trees, buildings, objects, text or cast shadows. Subject: Muted cool taupe-gray frozen woodland earth, fine sparse brown leaf litter and indistinct twigs, no distinct big leaves. Sparse soft powder-snow flecks. NO green carpet, no trees."
+    },
+    {
+      "id": "winter_water",
+      "prompt": "Single square seamless ground material, STRICT vertical 90 degree overhead. Match the supplied reference's simplified painterly tabletop hex strategy-map style and small fine detail scale, not photorealism. This is a European WWII winter version. Entire square is one uniform material, NOT a grid or atlas. Edge-to-edge texture, no edge colour strips, borders, hex outlines, trees, buildings, objects, text or cast shadows. Subject: Winter river surface, subdued steel-blue water with loosely painted small wave forms, thin pale translucent ice veils scattered irregularly, quiet pale blue fractured ice motifs and soft snow flecks. No shore boundary, no giant white central ice island, no hard straight lines."
+    },
+    {
+      "id": "winter_soil",
+      "prompt": "Single square seamless ground material, STRICT vertical 90 degree overhead. Match the supplied reference's simplified painterly tabletop hex strategy-map style and small fine detail scale, not photorealism. This is a European WWII winter version. Entire square is one uniform material, NOT a grid or atlas. Edge-to-edge texture, no edge colour strips, borders, hex outlines, trees, buildings, objects, text or cast shadows. Subject: Cold pale gray-beige worn country-road gravel surface, fine subdued mottled grains, hints of compacted dry earth, scattered light frost, no large rocks. Flat quiet understated material, no actual road shape or lane markings."
+    },
+    {
+      "id": "tree_01_snow",
+      "prompt": "Use case: lighting-weather. Edit target: the supplied European tree sprite. Make its winter version in exactly the same slightly cartoon painterly strategy game style. Preserve crown silhouette, overhead 90 degree view, footprint and fine brush scale. Leafless brown gray branches and a little muted gray olive remaining foliage, irregular soft white snow resting on upper branch clusters. Recognizable winter deciduous tree, no lush green canopy. No ground, no text. Genuine transparent background, centered single tree, no perspective or side view.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/europe_tree_01.png"
+    },
+    {
+      "id": "tree_02_snow",
+      "prompt": "Use case: lighting-weather. Edit target: the supplied European tree sprite. Make its winter version in exactly the same slightly cartoon painterly strategy game style. Preserve crown silhouette, overhead 90 degree view, footprint and fine brush scale. Leafless brown gray branches and a little muted gray olive remaining foliage, irregular soft white snow resting on upper branch clusters. Recognizable winter deciduous tree, no lush green canopy. No ground, no text. Genuine transparent background, centered single tree, no perspective or side view.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/europe_tree_02.png"
+    },
+    {
+      "id": "tree_03_snow",
+      "prompt": "Use case: lighting-weather. Edit target: the supplied European tree sprite. Make its winter version in exactly the same slightly cartoon painterly strategy game style. Preserve crown silhouette, overhead 90 degree view, footprint and fine brush scale. Leafless brown gray branches and a little muted gray olive remaining foliage, irregular soft white snow resting on upper branch clusters. Recognizable winter deciduous tree, no lush green canopy. No ground, no text. Genuine transparent background, centered single tree, no perspective or side view.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/europe_tree_03.png"
+    },
+    {
+      "id": "tree_04_snow",
+      "prompt": "Use case: lighting-weather. Edit target: the supplied European tree sprite. Make its winter version in exactly the same slightly cartoon painterly strategy game style. Preserve crown silhouette, overhead 90 degree view, footprint and fine brush scale. Leafless brown gray branches and a little muted gray olive remaining foliage, irregular soft white snow resting on upper branch clusters. Recognizable winter deciduous tree, no lush green canopy. No ground, no text. Genuine transparent background, centered single tree, no perspective or side view.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/europe_tree_04.png"
+    },
+    {
+      "id": "rural_roof_01_snow",
+      "prompt": "Use case: lighting-weather. Edit target: supplied European rural roof sprite. Create snowy winter version of this exact roof. Preserve footprint, roof geometry, tile brushwork, chimney position and strictly 90 degree overhead viewpoint; never show exterior walls. Soft cool off-white irregular snow covers about 65 percent of roof planes, with original roofing visible at some ridge, eaves and patches; muted painterly game artwork same as original. Genuine transparent background. Single roof, no ground, no text.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/rural_roof_01.png"
+    },
+    {
+      "id": "rural_roof_02_snow",
+      "prompt": "Use case: lighting-weather. Edit target: supplied European rural roof sprite. Create snowy winter version of this exact roof. Preserve footprint, roof geometry, tile brushwork, chimney position and strictly 90 degree overhead viewpoint; never show exterior walls. Soft cool off-white irregular snow covers about 65 percent of roof planes, with original roofing visible at some ridge, eaves and patches; muted painterly game artwork same as original. Genuine transparent background. Single roof, no ground, no text.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/rural_roof_02.png"
+    },
+    {
+      "id": "rural_roof_03_snow",
+      "prompt": "Use case: lighting-weather. Edit target: supplied European rural roof sprite. Create snowy winter version of this exact roof. Preserve footprint, roof geometry, tile brushwork, chimney position and strictly 90 degree overhead viewpoint; never show exterior walls. Soft cool off-white irregular snow covers about 65 percent of roof planes, with original roofing visible at some ridge, eaves and patches; muted painterly game artwork same as original. Genuine transparent background. Single roof, no ground, no text.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/rural_roof_03.png"
+    },
+    {
+      "id": "rural_roof_04_snow",
+      "prompt": "Use case: lighting-weather. Edit target: supplied European rural roof sprite. Create snowy winter version of this exact roof. Preserve footprint, roof geometry, tile brushwork, chimney position and strictly 90 degree overhead viewpoint; never show exterior walls. Soft cool off-white irregular snow covers about 65 percent of roof planes, with original roofing visible at some ridge, eaves and patches; muted painterly game artwork same as original. Genuine transparent background. Single roof, no ground, no text.",
+      "ref": "E:/cocos/Project/Sherman/assets/resources/textures/terrain/redesign_v3/rural_roof_04.png"
+    }
+  ]
+}

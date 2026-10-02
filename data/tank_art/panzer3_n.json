@@ -1,0 +1,55 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "panzer3_n",
+  "notes": "Ausf. N turret independently redrawn from user three-view; short 7.5 cm gun. Matching Ausf. M hull and wreck retained. No external Schurzen rails or supports.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/panzer3_m/no-addon-armor/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/panzer3_n/panzer3_n-turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/panzer3_m/no-addon-armor/destroyed-selected.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.1,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      854,
+      441
+    ],
+    "turretPivot": [
+      944,
+      469
+    ],
+    "muzzle": [
+      518,
+      505
+    ],
+    "commanderHatch": [
+      1174,
+      505
+    ]
+  }
+}

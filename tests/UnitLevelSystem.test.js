@@ -87,9 +87,9 @@ try {
   assert.strictEqual(normalizeUnitLevel('invalid'), 'recruit');
 
   actor.unitLevel = 'veteran';
-  assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 1, move: 1, misc: 0 });
+  assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 0, move: 1, misc: 0 });
   actor.unitLevel = 'elite';
-  assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 2, move: 1, misc: 1 });
+  assert.deepStrictEqual(nonPlayerTankDiceBonus(actor), { attack: 0, move: 1, misc: 1 });
   const recruitDice = hardcoreTankAIDiceCount({ ...actor, unitLevel: 'recruit' }, 'clear');
   const eliteDice = hardcoreTankAIDiceCount(actor, 'clear');
   const minimumDice = hardcoreTankAIDiceCount({
@@ -104,7 +104,7 @@ try {
     attack: eliteDice.attack - recruitDice.attack,
     move: eliteDice.move - recruitDice.move,
     misc: eliteDice.misc - recruitDice.misc,
-  }, { attack: 2, move: 1, misc: 1 });
+  }, { attack: 1, move: 1, misc: 1 });
 
   const infantry = { ...actor, kind: 'german_infantry', crew: undefined, unitLevel: 'veteran' };
   assert.deepStrictEqual(infantryTurnActions(infantry), ['attack_or_move', 'move']);

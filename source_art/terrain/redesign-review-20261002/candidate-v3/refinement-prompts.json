@@ -1,0 +1,16 @@
+{
+  "mode": "built-in image_gen",
+  "selected": [
+    {
+      "asset": "snow",
+      "prompt": "Use case: lighting-weather. Edit target: attached square snow ground texture. Preserve its seamless full-square coverage, flat simple strategy-game style, and exact broad patch shapes. Change ONLY the contrast and colors: the base is pale grey ivory #D9DBD0 and the existing blue-grey patches must become a nearly identical pale grey #CED2C8. Maximum difference in RGB channels approximately 12 between patches and background. NO BLUE color and NO icy ponds. This is very subtle snow-on-snow material, not a landscape with ice patches. Opaque square image filling all edges, no border, no text, no shadow, no vegetation, no transparency."
+    }
+  ],
+  "discarded": [
+    {
+      "asset": "building_solid",
+      "reason": "External soft shadow remained; original source retained. Export normalization crops empty margins tightly.",
+      "prompt": "Use case: background-extraction. Edit target: attached simple overhead grey roof building sprite. Preserve the exact roof geometry, roof planes, outlines, stone lip, both chimneys, colors, detail level, orientation and camera. REMOVE ALL the external beige-grey glow/haze, diffuse drop shadow and any ground around the object. All pixels outside the crisp outer building roof perimeter must be genuinely transparent, with only a very narrow anti-alias edge of 1-2 source pixels. No large soft shadow. Roof interior should be fully opaque. Do not redraw or add anything. Return this same isolated roof as clean transparent game sprite."
+    }
+  ]
+}

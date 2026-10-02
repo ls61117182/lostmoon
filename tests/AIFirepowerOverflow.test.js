@@ -14,6 +14,29 @@ function unit(firepower) {
   return { kind: 'sherman', stats, crew: createTankCrew(stats), faction: stats.faction };
 }
 
+test('veteran tank gains two firepower with terrain and partial overflow faces', () => {
+  for (const [power, terrain, faces] of [[3, 'road', [5]], [5, 'road', [6, 1]], [5, 'mud', [6]]]) {
+    const actor = { ...unit(power), unitLevel: 'veteran' };
+    const attacks = rollHardcoreTankAIDice({ d6: () => 6 }, actor, terrain).filter(d => d.type === 'attack');
+    assert.deepEqual(attacks.map(d => d.attackFirepower), faces);
+    assert.equal(hardcoreTankAIDiceCount(actor, terrain).attack, faces.length);
+  }
+  const player = { ...unit(5), unitLevel: 'veteran', crewLevels: { gunner: 'veteran' } };
+  assert.deepEqual(rollHardcoreTankAIDice({ d6: () => 6 }, player, 'road').filter(d => d.type === 'attack').map(d => d.attackFirepower), [5]);
+});
+
+test('elite tank gains four firepower rather than two full attack dice', () => {
+  for (const [power, terrain, faces] of [[1, 'road', [5]], [6, 'road', [6, 4]], [6, 'mud', [6, 3]], [9, 'road', [6, 6, 1]]]) {
+    const actor = { ...unit(power), unitLevel: 'elite' };
+    const attacks = rollHardcoreTankAIDice({ d6: () => 6 }, actor, terrain).filter(d => d.type === 'attack');
+    assert.deepEqual(attacks.map(d => d.attackFirepower), faces);
+    assert.equal(hardcoreTankAIDiceCount(actor, terrain).attack, faces.length);
+    assert.equal(actionForHardcoreTankDie(actor, 'attack', 6, 0, faces.at(-1)).primary, 'none');
+  }
+  const player = { ...unit(6), unitLevel: 'elite', crewLevels: { gunner: 'elite' } };
+  assert.deepEqual(rollHardcoreTankAIDice({ d6: () => 6 }, player, 'road').filter(d => d.type === 'attack').map(d => d.attackFirepower), [6]);
+});
+
 test('AI firepower splits into full dice and a remainder die at every six-point boundary', () => {
   for (const [power, faces] of [[0,[0]], [1,[1]], [6,[6]], [7,[6,1]], [8,[6,2]], [12,[6,6]], [14,[6,6,2]], [18,[6,6,6]], [20,[6,6,6,2]]]) {
     const actor = unit(power);

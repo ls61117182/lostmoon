@@ -39,8 +39,8 @@ assert.match(
 );
 assert.match(
   muzzle,
-  /isAntiTankGunUnit\(attacker\) \|\| preciseTurretAim[\s\S]*?targetScreenAngle\(attacker\.pos, target\.pos\)/,
-  'precise turret aim should point at the actual target hex',
+  /preciseTurretAim[\s\S]*?turretVisualScreenAngle\(attacker, target\.pos\)/,
+  'precise turret aim should share the rendered turret pivot-to-target heading',
 );
 
 const shermanAim = methodBody('startShermanTurretAim', 'startShermanTurretAimDirection');

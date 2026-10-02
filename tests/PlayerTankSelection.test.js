@@ -36,6 +36,11 @@ assert(selectable.includes('tiger'));
 assert(selectable.includes('type97'));
 assert(selectable.includes('panzer3'));
 assert(selectable.includes('panzer3_m'));
+assert(selectable.includes('panzer3_m_no_schurzen'));
+assert(selectable.includes('panzer3_n'));
+assert(selectable.includes('panzer3_n_schurzen'));
+assert(selectable.includes('jagdtiger'));
+assert(selectable.includes('elefant'));
 assert(!selectable.includes('truck'));
 assert(!selectable.includes('infantry'));
 
@@ -83,6 +88,14 @@ assert.strictEqual(ausfM.playerTank.kind, 'panzer3_m');
 assert.strictEqual(ausfM.playerTank.faction, 'german');
 assert.strictEqual(ausfM.playerTank.controller, 'local_player');
 assert.strictEqual(ausfMMission.enemies[0].kind, 'panzer3', 'selecting M must preserve the existing Panzer III enemy');
+const noSchurzen = loadMission(missionWithSelectedPlayerTank(sourceMission, 'panzer3_m_no_schurzen'));
+assert.strictEqual(noSchurzen.playerTank.kind, 'panzer3_m_no_schurzen');
+assert.strictEqual(noSchurzen.playerTank.faction, 'german');
+for (const kind of ['panzer3_n', 'panzer3_n_schurzen']) {
+  const ausfN = loadMission(missionWithSelectedPlayerTank(sourceMission, kind));
+  assert.strictEqual(ausfN.playerTank.kind, kind);
+  assert.strictEqual(ausfN.playerTank.faction, 'german');
+}
 assert.strictEqual(loaded.playerTank.kind, 'tiger');
 assert.strictEqual(loaded.playerTank.faction, 'german');
 assert.strictEqual(loaded.playerTank.sideId, 'player');
@@ -96,6 +109,10 @@ MenuProgress.setSelectedPlayerTankKind('panther');
 assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'panther');
 MenuProgress.setSelectedPlayerTankKind('panzer3_m');
 assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'panzer3_m', 'M selection must survive persistence');
+MenuProgress.setSelectedPlayerTankKind('panzer3_m_no_schurzen');
+assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'panzer3_m_no_schurzen');
+MenuProgress.setSelectedPlayerTankKind('panzer3_n_schurzen');
+assert.strictEqual(MenuProgress.load().selectedPlayerTankKind, 'panzer3_n_schurzen');
 const persisted = JSON.parse(storage.get(MENU_STATE_KEY));
 persisted.selectedPlayerTankKind = 'infantry';
 storage.set(MENU_STATE_KEY, JSON.stringify(persisted));

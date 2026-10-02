@@ -1,5 +1,10 @@
 import { createTankCrew, crewRoleAlive, effectiveTankCrew } from "../core/types";
 import { BUILD_FEATURES } from '../core/BuildProfile';
+import { TerrainGroundRenderer } from './TerrainGroundRenderer';
+import { ObjectShadowRenderer } from './ObjectShadowRenderer';
+import type { TerrainMaterialBundle } from './TerrainGroundRaster';
+import { europeanCountryRoadDistance } from './TerrainGroundRaster';
+import { ruralBuildingLayout, ruralVillageProps, RuralBuilding, RuralProp } from '../core/RuralBuildings';
 /**
  * BattleScene —— 把 mission_01.json 渲染为六角格地图，支持骰子驱动的"移动阶段 /
  * 攻击阶段"双子阶段、敌方贪心 AI 与存读档。
@@ -33,11 +38,15 @@ import { BUILD_FEATURES } from '../core/BuildProfile';
  *                 movesPerTurn（仅敌方 AI 用） / rngSeed
  */
 
+import { OcclusionShape, UnitOcclusionRenderer } from './UnitOcclusionRenderer';
+
 import {
   _decorator,
   BlockInputEvents,
   Color,
   Component,
+  EffectAsset,
+  Material,
   EventMouse,
   EventTouch,
   Graphics,
@@ -315,10 +324,12 @@ import {
   playUiClick,
 } from '../audio/GameAudio';
 import { visualDamageSmokeLevel, visualFireEffectLevel } from '../core/UnitVisualState';
-import { commanderHasSkill, crewLevelFor, infantryTurnActions, normalizePlayerCrewLevels, normalizeUnitLevel, unitLevelOf } from '../core/UnitLevel';
+import { commanderHasSkill, crewLevelFor, infantryTurnActions, normalizePlayerCrewLevels, normalizeUnitLevel, nonPlayerTankFirepowerBonus, unitLevelOf } from '../core/UnitLevel';
 import {
   applyUrbanStructureDamage,
   europeanRoadSurfaceClearance,
+  europeanRoadVariantIndex,
+  EUROPEAN_ROAD_VARIANT_COUNT,
   ROAD_CANONICAL_MASKS,
   URBAN_ROAD_CANONICAL_MASKS,
   roadSpriteTransform,
@@ -334,9 +345,10 @@ import {
   previousEnemyAttackPosition,
   recordAttackPosition as recordAttackPositionForMemory,
 } from '../core/AttackPositionMemory';
-import { ambushHitThresholdModifier, ambushHitThresholdModifierDetails, beginAmbushTurn, endAmbushTurn, markAmbushAction, markAmbushTargeted } from '../core/Ambush';
+import { ambushHitThresholdModifier, ambushHitThresholdModifierDetails, beginAmbushTurn, canEnterAmbush, isInAmbushSight, orderedAmbushers, enterAmbush, endAmbushTurn, markAmbushAction, markAmbushTargeted } from '../core/Ambush';
 import { applyInfantrySuppression, consumeInfantryTurnSuppression, isMainGunSuppressionAttack, selectMainGunTargetsByHex } from '../core/Suppression';
-import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAntiTankGunKind, isAntiTankGunUnit, isImmobileGunUnit, isAttachedATGunCrew, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isMainGunLoaded, isSameSide, isTankUnit, MissionData, neutralizeUncrewedTank, resolvedLoadedShell, restoreFullTankCrew, ShellType, TerrainType, Tile, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import { Axial, Direction, effectiveDiceTerrain, Faction, FireDirection, infantryKindForFaction, isAbandonedATGun, isAbandonedTank, isAntiTankGunKind, isAntiTankGunUnit, isImmobileGunUnit, isAttachedATGunCrew, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isMainGunLoaded, isPlayerControlled, isSameSide, isTankUnit, MissionData, neutralizeUncrewedTank, resolvedLoadedShell, restoreFullTankCrew, ShellType, TerrainType, Tile, tileForbidsConcealment, tileForbidsSmokeOrConcealment, tileHasBridge, Unit, UnitKind, UnitPlacement, WeatherType } from '../core/types';
+import { supportMarkerVisuals } from './SupportMarkerVisual';
 
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 function drawMiniHexTerrain(g: Graphics, cx: number, cy: number, size: number, fill: Color, stroke: Color) {
@@ -496,6 +508,7 @@ function describeEntry(entry: AIActionEntry): string {
   const name = (a: EnemyAction): string => {
     switch (a) {
       case 'shoot':   return '射击';
+      case 'ambush':  return '伏击';
       case 'turn':    return '转向';
       case 'advance': return '前进';
       case 'reverse': return '后退';
@@ -1023,6 +1036,10 @@ interface Floater {
 
 /** A map-local Stuka pass. The plane is deliberately separate from unit redraws. */
 interface StukaFlyover {
+  shotDown: boolean;
+  defender: Unit;
+  aaBurst?: MachineGunBurst;
+  aaAttackStarted?: boolean;
   target: Axial;
   fromX: number;
   toX: number;
@@ -1211,7 +1228,7 @@ const TERRAIN_COLORS: Record<TerrainType, Color> = {
   deep_water: new Color( 92, 136, 142, 255),
   clear:    new Color(210, 188, 132, 255),
   trees:    new Color( 78, 132,  64, 255),
-  beach:    new Color(220, 202, 154, 255),
+  beach:    new Color(121, 173, 183, 255),
   rocky:    new Color(120, 118, 112, 255),
   airstrip: new Color(210, 188, 132, 255),
   urban_ground: new Color(150, 148, 140, 255),
@@ -1233,20 +1250,18 @@ const TANK_TRACK_COLORS: Record<Exclude<TankTrackStyle, 'none'>, Color> = {
   shallow: new Color(48, 40, 28, 23),
   faint: new Color(20, 18, 15, 14),
 };
-/** 林地表冠层（多圆+阴影示意俯视树丛，Y 轴向上） */
+/** 林地表冠层（战斗地图与格子详情共用，Y 轴向上） */
 const FOREST_TREE_DARK  = new Color( 28,  88,  30, 255);
 const FOREST_TREE_MID   = new Color( 45, 118,  42, 255);
 const FOREST_TREE_LIGHT = new Color( 70, 148,  58, 255);
 const FOREST_SHADE      = new Color(  0,   0,   0,  50);
+const FOREST_CANOPY_SCALE = 0.82;
 const FOREST_CANOPY_LAYOUT: ReadonlyArray<{ ox: number; oy: number; scale: number }> = [
-  { ox: -0.38, oy:  0.25, scale: 0.64 },
-  { ox:  0.00, oy:  0.38, scale: 0.70 },
-  { ox:  0.38, oy:  0.25, scale: 0.64 },
-  { ox: -0.30, oy: -0.05, scale: 0.68 },
-  { ox:  0.08, oy:  0.02, scale: 0.74 },
-  { ox:  0.38, oy: -0.12, scale: 0.62 },
-  { ox: -0.25, oy: -0.39, scale: 0.58 },
-  { ox:  0.22, oy: -0.38, scale: 0.64 },
+  { ox: 0, oy: .64, scale: .78 },
+  { ox: -.47, oy: .35, scale: .84 }, { ox: .47, oy: .35, scale: .80 },
+  { ox: -.58, oy: -.16, scale: .85 }, { ox: 0, oy: .12, scale: .90 }, { ox: .58, oy: -.16, scale: .82 },
+  { ox: -.32, oy: -.54, scale: .85 }, { ox: .32, oy: -.54, scale: .82 },
+  { ox: 0, oy: -.10, scale: .79 },
 ];
 const FOG_OVERLAY_COLOR = new Color( 68,  72,  76, 145);
 const CAMPAIGN_SHADOW_COLOR = new Color(8, 10, 14, 190);
@@ -1336,7 +1351,7 @@ const ROAD_PATH_FILL      = new Color(212, 200, 178, 255);
 const ROAD_PATH_OUTLINE   = new Color( 60,  44,  26, 255);
 const WINTER_ROAD_PATH_FILL = new Color(205, 211, 212, 255);
 const WINTER_ROAD_PATH_OUTLINE = new Color(92, 98, 98, 255);
-const AIRSTRIP_FILL       = new Color(200, 196, 178, 255);
+const AIRSTRIP_FILL       = new Color(225, 219, 195, 255);
 const AIRSTRIP_OUTLINE    = new Color(112, 104,  86, 235);
 const DEEP_WATER_LIGHT    = new Color(190, 214, 214, 70);
 const BREAKWATER_DARK     = new Color(72, 66, 58, 255);
@@ -1484,10 +1499,8 @@ const DIE_HINT_GREEN = new Color( 70, 180,  70, 255);
 const DIE_HINT_RED   = new Color(220, 100,  80, 255);
 const DIE_HINT_GREY  = new Color(130, 130, 130, 255);
 
-// 驾驶候选格高亮：前进 = 亮绿，后退 = 琥珀（让玩家一眼区分两个方向）
-const DRIVE_FWD_COLOR = new Color(120, 230, 120, 255);
-const DRIVE_BWD_COLOR = new Color(240, 190,  80, 255);
-const DRIVE_BLOCKED   = new Color(200,  80,  80, 200);
+// 鼠标所在战场格子的边框。
+const HOVER_TILE_COLOR = new Color(120, 230, 120, 255);
 const ACTIVE_UNIT_PLAYER_FRAME = new Color(150, 245, 170, 255);
 const ACTIVE_UNIT_ALLIED_FRAME = new Color(125, 220, 255, 255);
 const ACTIVE_UNIT_ENEMY_FRAME  = new Color(255, 230, 135, 255);
@@ -1572,10 +1585,8 @@ const STATUS_TEXT_OUT  = new Color(  0,   0,   0, 220);
 type TankStatusBadgeKind = 'paralyzed' | 'turret';
 type AIMoveState = 'turn_cw' | 'turn_ccw' | 'advance' | 'reverse';
 
-const TANK_BADGE_CELL = 17;
-const TANK_BADGE_GAP = 4;
-const BADGE_BG = new Color(18, 20, 26, 235);
-const BADGE_FRAME = new Color(0, 0, 0, 220);
+const TANK_BADGE_CELL = 22;
+const TANK_BADGE_GAP = 5;
 // 单位名字标签：常驻显示在每个棋子正下方，方便玩家一眼识别兵种
 /** 名字 Label 中心相对格心的 Y 偏移（向下为正方向用减法）：原为 1.3×hex，间距缩短 40% → 0.78×hex */
 const UNIT_NAME_OFFSET_HEX = 1.3 * 0.6;
@@ -1653,7 +1664,7 @@ export class BattleScene extends Component {
   @property({ tooltip: '点击"返回主菜单"跳转到的场景名（与 Build Settings 保持一致）' })
   mainMenuSceneName: string = 'main';
 
-  @property({ tooltip: '是否在谢尔曼周围高亮可移动的相邻格' })
+  @property({ tooltip: '【已废弃】前后移动候选格提示已移除，保留仅为场景资源兼容' })
   showReachable: boolean = true;
 
   @property({ tooltip: '坦克移动一格 / 转向 60° 的过程动画时长（秒），敌我共用' })
@@ -1680,7 +1691,11 @@ export class BattleScene extends Component {
   private terrainLayerNode: Node | null = null;
   private mapNode: Node | null = null;
   private mapInputNode: Node | null = null;
+  private hoveredTile: Tile | null = null;
+  private hoverTileGraphics: Graphics | null = null;
+  private outsideMapTurretInputNodes: Node[] = [];
   private turretAimOverlayNode: Node | null = null;
+  private ambushSightOverlayGraphics: Graphics | null = null;
   private smokeTargetIconNode: Node | null = null;
   private smokeTargetIconGraphics: Graphics | null = null;
   private turretAimOverlayGraphics: Graphics | null = null;
@@ -1690,6 +1705,17 @@ export class BattleScene extends Component {
   private unitVisibilityMaskGraphics: Graphics | null = null;
   private trackVisibilityMaskGraphics: Graphics | null = null;
   private unitGraphics: Graphics | null = null;
+  private unitOcclusion: UnitOcclusionRenderer | null = null;
+  private tankContentNode: Node | null = null;
+  private infantryContentNode: Node | null = null;
+  private tankVisibilityGraphics: Graphics | null = null;
+  private tankGraphics: Graphics | null = null;
+  private buildingGraphics: Graphics | null = null;
+  private silhouetteVisibilityGraphics: Graphics | null = null;
+  private silhouetteSources = new Map<Sprite, Color>();
+  private silhouetteClaimed = new Set<Sprite>();
+  private occlusionShapes: OcclusionShape[] = [];
+  private vectorSilhouettes: Array<{ circle: [number, number, number]; color: Color }> = [];
   /** Exhaust is clipped with units but drawn below every hull sprite. */
   private tankExhaustGraphics: Graphics | null = null;
   private tankExhaustParticles: TankExhaustParticle[] = Array.from(
@@ -1789,16 +1815,23 @@ export class BattleScene extends Component {
   };
   private urbanOverlaySpriteFrames: Record<string, SpriteFrame | null> = {};
   private winterTerrainSpriteFrames: Partial<Record<TerrainType, SpriteFrame | null>> = {};
+  private continuousTerrain: TerrainGroundRenderer | null = null;
+  private sceneryShadows: ObjectShadowRenderer | null = null;
+  private vehicleShadows: ObjectShadowRenderer | null = null;
+  private redesignObjectFrames: Record<string, SpriteFrame | null> = {};
   private terrainSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private terrainSpritePoolNext = 0;
   private bridgeSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private bridgeSpritePoolNext = 0;
   private urbanBuildingSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private urbanBuildingSpritePoolNext = 0;
+  private ruralLayoutCache = new Map<string, RuralBuilding[]>();
+  private ruralPropCache = new Map<string, RuralProp[]>();
   /** Pause map painting until the terrain texture batch has fully settled. */
   private pendingTerrainSpriteLoads = 0;
   private terrainSpriteBatchReady = false;
   private treeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
+  private europeanSummerTreeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private winterTreeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private foliageSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private foliageSpritePoolNext = 0;
@@ -1895,14 +1928,11 @@ export class BattleScene extends Component {
   private retainedCampaignAttackDiePip: number | null = null;
   private offsetX = 0;
   private offsetY = 0;
-  private mapPanEnabled = false;
-  private mapPanMoved = false;
-  private mapPanDistance = 0;
-  private mapPanMinX = 0;
-  private mapPanMaxX = 0;
-  private mapPanMinY = 0;
-  private mapPanMaxY = 0;
+  private standardHexSize = 0;
   private anim: MoveAnim | null = null;
+  private leavingBattle = false;
+  private resolvingAmbush = false;
+  private ambushSightHighlightUntil = new Map<string, number>();
   private turretAimAnim: TurretAimAnim | null = null;
   private shermanTurretFacing: FireDirection | null = null;
   private enemyTurretFacing = new Map<string, FireDirection>();
@@ -2069,6 +2099,9 @@ export class BattleScene extends Component {
   // 命中预览 Label 池：常驻显示，随 redraw 整批重建
   private previewLabels: Node[] = [];
   private previewLabelNext = 0;
+  private supportMarkerLayer: Node | null = null;
+  private supportMarkerLabels: Node[] = [];
+  private supportMarkerLabelNext = 0;
   // 单位状态文字池（仅已毁短标签）：随 redraw 整批重建
   private statusLabels: Node[] = [];
   private statusLabelNext = 0;
@@ -2164,7 +2197,7 @@ export class BattleScene extends Component {
   private diePopoverDieIdx: number = -1;
   /** 攻击掷骰动画面板；非 null 时锁定所有输入 */
   private diceShow: DiceShow | null = null;
-  /** 回合结束事件：主骰 →（若有）额外掷骰各一段动画 → 完整说明，确认后 apply */
+  /** 回合结束事件：普通事件逐段掷骰；斯图卡的各行骰子同播同揭示。 */
   private turnEndEventUI: {
     root: Node;
     stage:
@@ -2339,7 +2372,7 @@ export class BattleScene extends Component {
   private static readonly PLAYER_DICE_SORT_DUR = 0.5;
   private static readonly TERRAIN_SPRITE_POOL = 384;
   private static readonly BRIDGE_SPRITE_POOL = 64;
-  private static readonly FOLIAGE_SPRITE_POOL = 384;
+  private static readonly FOLIAGE_SPRITE_POOL = 2048;
   private static readonly TIGER_TURRET_PIVOT_X = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.bodyX;
   private static readonly TIGER_TURRET_PIVOT_Y = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.bodyY;
   private static readonly TIGER_TURRET_SPRITE_PIVOT_X = TIGER_SPLIT_GEOMETRY_CONFIG.pivot.spriteX;
@@ -2573,6 +2606,13 @@ export class BattleScene extends Component {
     // Reusing the track visibility mask also keeps it hidden by fog.
     trackMaskNode.addChild(bloodDecalNode);
 
+    // Brief friendly ambush sight tint shares the turret target overlay's depth.
+    const ambushSightOverlayNode = new Node('AmbushSightOverlay');
+    ambushSightOverlayNode.layer = this.node.layer;
+    ambushSightOverlayNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.ambushSightOverlayGraphics = ambushSightOverlayNode.addComponent(Graphics);
+    gNode.addChild(ambushSightOverlayNode);
+
     // Targetable/rotatable hex tint: above terrain and permanent decals, but
     // below MapOcclusion (buildings, forest canopies and hedges), foliage sprites,
     // units, status/name labels and hit-chance previews.
@@ -2593,10 +2633,12 @@ export class BattleScene extends Component {
     // sprite pool belongs to TerrainSprites below MapGraphics, which would put
     // persistent infantry blood decals above the buildings.
     const urbanBuildingLayerNode = new Node('UrbanBuildingSprites');
+    this.sceneryShadows = new ObjectShadowRenderer(gNode, 'SceneryGroundShadows');
     urbanBuildingLayerNode.layer = this.node.layer;
     urbanBuildingLayerNode.addComponent(UITransform).setContentSize(1280, 720);
     gNode.addChild(urbanBuildingLayerNode);
-    for (let i = 0; i < BattleScene.TERRAIN_SPRITE_POOL; i++) {
+    this.buildingGraphics = urbanBuildingLayerNode.addComponent(Graphics);
+    for (let i = 0; i < BattleScene.TERRAIN_SPRITE_POOL * 3; i++) {
       const n = new Node(`UrbanBuilding_${i}`);
       n.layer = this.node.layer;
       n.addComponent(UITransform).setContentSize(1, 1);
@@ -2634,11 +2676,35 @@ export class BattleScene extends Component {
     // Keep inactive-campaign/display-only darkness in its own compositing layer.
     // It must sit above buildings and foliage so those overlays cannot appear lit
     // inside a shadowed hex, while units and the regular fog layer remain separate.
+    const silhouetteRoot = new Node('OccludedUnitSilhouettes');
+    silhouetteRoot.layer = this.node.layer;
+    silhouetteRoot.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(silhouetteRoot);
+    const silhouetteVisibility = silhouetteRoot.addComponent(Mask);
+    silhouetteVisibility.type = Mask.Type.GRAPHICS_STENCIL;
+    this.silhouetteVisibilityGraphics = silhouetteVisibility.subComp as Graphics;
+    this.unitOcclusion = new UnitOcclusionRenderer(silhouetteRoot);
+    resources.load('effects/unit-silhouette', EffectAsset, (err, effect) => {
+      if (err || !effect || !this.node.isValid) return;
+      const material = new Material();
+      material.initialize({ effectAsset: effect, defines: { USE_TEXTURE: true } });
+      this.unitOcclusion?.setMaterial(material);
+      this.redraw();
+    });
+
     const deepShadowNode = new Node('MapDeepShadow');
     deepShadowNode.layer = this.node.layer;
     deepShadowNode.addComponent(UITransform).setContentSize(1280, 720);
     this.mapDeepShadowGraphics = deepShadowNode.addComponent(Graphics);
     gNode.addChild(deepShadowNode);
+
+    // Ground markers sit below unit bodies, roofs and tree canopies.
+    // Insert before buildings so the later unit layers also render above them.
+    const supportMarkerLayer = new Node('SupportMarkers');
+    supportMarkerLayer.layer = this.node.layer;
+    supportMarkerLayer.addComponent(UITransform).setContentSize(1280, 720);
+    this.supportMarkerLayer = supportMarkerLayer;
+    gNode.insertChild(supportMarkerLayer, urbanBuildingLayerNode.getSiblingIndex());
 
     // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上。
     // Units are always rendered, then clipped to the union of currently visible hexes.
@@ -2646,7 +2712,7 @@ export class BattleScene extends Component {
     const unitMaskNode = new Node('VisibleUnitMask');
     unitMaskNode.layer = this.node.layer;
     unitMaskNode.addComponent(UITransform).setContentSize(1280, 720);
-    gNode.addChild(unitMaskNode);
+    gNode.insertChild(unitMaskNode, urbanBuildingLayerNode.getSiblingIndex());
     const unitMask = unitMaskNode.addComponent(Mask);
     unitMask.type = Mask.Type.GRAPHICS_STENCIL;
     this.unitVisibilityMaskNode = unitMaskNode;
@@ -2657,6 +2723,23 @@ export class BattleScene extends Component {
     unitContentNode.addComponent(UITransform).setContentSize(1280, 720);
     this.unitGraphics = unitContentNode.addComponent(Graphics);
     unitMaskNode.addChild(unitContentNode);
+    this.infantryContentNode = unitContentNode;
+    // Tanks sit above roofs, but below forest canopies and hedges.
+    const tankMaskNode = new Node('VisibleTankMask');
+    tankMaskNode.layer = this.node.layer;
+    tankMaskNode.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.insertChild(tankMaskNode, urbanBuildingLayerNode.getSiblingIndex() + 1);
+    const tankMask = tankMaskNode.addComponent(Mask);
+    tankMask.type = Mask.Type.GRAPHICS_STENCIL;
+    this.tankVisibilityGraphics = tankMask.subComp as Graphics;
+    const tankContent = new Node('TankContent');
+    tankContent.layer = this.node.layer;
+    tankContent.addComponent(UITransform).setContentSize(1280, 720);
+    this.tankGraphics = tankContent.addComponent(Graphics);
+    tankMaskNode.addChild(tankContent);
+    this.tankContentNode = tankContent;
+    // Shadows precede unit graphics and all hull/turret sprites within the mask.
+    this.vehicleShadows = new ObjectShadowRenderer(unitMaskNode, 'VehicleGroundShadows', 0);
 
     const tankExhaustNode = new Node('TankEngineExhaust');
     tankExhaustNode.layer = this.node.layer;
@@ -2743,7 +2826,7 @@ export class BattleScene extends Component {
       const graphics = markNode.addComponent(Graphics);
       markNode.active = false;
       this.suppressionMarkPool.push({ node: markNode, graphics });
-      unitContentNode.addChild(markNode);
+      silhouetteRoot.addChild(markNode);
     }
 
     // 独立状态特效层：位于单位贴图之上、状态文字和战争迷雾之下。
@@ -2836,6 +2919,11 @@ export class BattleScene extends Component {
     });
 
     ['tree_01', 'tree_02', 'tree_03', 'tree_04'].forEach((name, idx) => {
+      resources.load(`textures/terrain/redesign_v3/europe_${name}/spriteFrame`, SpriteFrame, (err, sf) => {
+        if (!this.isValid || err || !sf) return;
+        this.europeanSummerTreeSpriteFrames[idx] = sf;
+        this.redraw();
+      });
       resources.load(`textures/terrain/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
         if (err || !sf) {
           console.warn(`[BattleScene] tree sprite load failed (${name}), fallback to Graphics:`, err);
@@ -2861,6 +2949,7 @@ export class BattleScene extends Component {
       mud: 'textures/terrain/terrain_mud/spriteFrame',
       forest: 'textures/terrain/terrain_forest/spriteFrame',
       water: 'textures/terrain/terrain_water/spriteFrame',
+      deep_water: 'textures/terrain/terrain_deep_water/spriteFrame',
       clear: 'textures/terrain/pacific_sand/spriteFrame',
       airstrip: 'textures/terrain/pacific_sand/spriteFrame',
       trees: 'textures/terrain/pacific_trees/spriteFrame',
@@ -2899,7 +2988,11 @@ export class BattleScene extends Component {
     for (const season of ['summer', 'winter']) {
       for (const mask of ROAD_CANONICAL_MASKS) {
         const rd = Array.from({ length: 6 }, (_, i) => (mask & (1 << i)) ? '1' : '0').join('');
-        europeanRoadPaths.push(`textures/terrain/european_roads/european_road_surface_${season}_${rd}_v1/spriteFrame`);
+        for (let variant = 1; variant <= EUROPEAN_ROAD_VARIANT_COUNT; variant++) {
+          europeanRoadPaths.push(
+            `textures/terrain/european_roads/european_road_surface_${season}_${rd}_v${variant}/spriteFrame`,
+          );
+        }
       }
       europeanRoadPaths.push(`textures/terrain/european_roads/european_bridge_surface_${season}_v1/spriteFrame`);
     }
@@ -2907,13 +3000,34 @@ export class BattleScene extends Component {
       ...urbanBuildingPaths, ...urbanDestructiblePaths, ...urbanRoadPaths, ...europeanRoadPaths,
     ];
     this.pendingTerrainSpriteLoads = Object.keys(terrainPaths).length
-      + Object.keys(winterTerrainPaths).length + urbanOverlayPaths.length;
+      + Object.keys(winterTerrainPaths).length + urbanOverlayPaths.length + 24;
     const finishTerrainSpriteLoad = () => {
       this.pendingTerrainSpriteLoads = Math.max(0, this.pendingTerrainSpriteLoads - 1);
       if (this.pendingTerrainSpriteLoads !== 0) return;
       this.terrainSpriteBatchReady = true;
       this.redraw();
     };
+    resources.load('textures/terrain/redesign_v3/materials', JsonAsset, (err, asset) => {
+      if (!this.isValid) return;
+      if (err || !asset || !this.terrainLayerNode) {
+        console.warn('[BattleScene] V3 terrain material load failed; using sprite fallback:', err);
+      } else {
+        try {
+          this.continuousTerrain = new TerrainGroundRenderer(this.terrainLayerNode, asset.json as TerrainMaterialBundle);
+        } catch (error) {
+          console.warn('[BattleScene] V3 terrain material decode failed; using sprite fallback:', error);
+        }
+      }
+      finishTerrainSpriteLoad();
+    });
+    for (const name of ['tree_palm', 'tree_palm_2', 'tree_palm_3', 'tree_palm_4', 'rocks', 'building_intact', 'europe_building_intact', 'rural_roof_01', 'rural_roof_02', 'rural_roof_03', 'rural_roof_04', 'rural_hay', 'rural_well', 'rural_yard_patch', 'pacific_roof_01', 'pacific_roof_02', 'pacific_roof_03', 'pacific_roof_04', 'rural_roof_01_snow', 'rural_roof_02_snow', 'rural_roof_03_snow', 'rural_roof_04_snow', 'rural_yard_patch_snow']) {
+      resources.load(`textures/terrain/redesign_v3/${name}/spriteFrame`, SpriteFrame, (err, frame) => {
+        if (!this.isValid) return;
+        if (err) console.warn(`[BattleScene] V3 decoration load failed (${name}):`, err);
+        else this.redesignObjectFrames[name] = frame;
+        finishTerrainSpriteLoad();
+      });
+    }
     (Object.keys(terrainPaths) as TerrainType[]).forEach((terrain) => {
       resources.load(terrainPaths[terrain]!, SpriteFrame, (err, sf) => {
         if (err || !sf) {
@@ -2952,9 +3066,9 @@ export class BattleScene extends Component {
     this.mapInputNode = mapInputNode;
 
     // Register map touches on a root-level layer so campaign camera offsets do not move the hit area.
-    mapInputNode.on(Node.EventType.TOUCH_START, this.onMapPanStart, this);
-    mapInputNode.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
     mapInputNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
+    mapInputNode.on(Node.EventType.MOUSE_MOVE, this.onMouseMoveMap, this);
+    mapInputNode.on(Node.EventType.MOUSE_LEAVE, this.clearHoveredTile, this);
 
     this.buildWeatherEffectLayer();
     this.createHudRoot();
@@ -2974,6 +3088,12 @@ export class BattleScene extends Component {
   }
 
   onDestroy() {
+    this.unitOcclusion?.destroy();
+    this.unitOcclusion = null;
+    this.continuousTerrain?.destroy();
+    this.continuousTerrain = null;
+    // GameAudioRoot survives scene changes, so looped battle sounds must not outlive this scene.
+    stopBattleSfx();
     this.resolutionUnsubscribe?.();
     this.resolutionUnsubscribe = null;
   }
@@ -3756,6 +3876,7 @@ export class BattleScene extends Component {
       ) : undefined,
       ambushAttackedSinceTurnEnd: !!src.ambushAttackedSinceTurnEnd,
       ambushReadyThisTurn: !!src.ambushReadyThisTurn,
+      ambushEnteredOrder: src.ambushEnteredOrder,
       ambushActedThisTurn: !!src.ambushActedThisTurn,
       unitLevel: src.role === 'support' && !isAntiTankGunKind(src.kind) ? normalizeUnitLevel(src.unitLevel) : undefined,
       atGunCrewLevel: isAntiTankGunKind(src.kind) ? normalizeUnitLevel(src.atGunCrewLevel ?? src.unitLevel) : undefined,
@@ -3796,6 +3917,7 @@ export class BattleScene extends Component {
       ) : undefined,
       ambushAttackedSinceTurnEnd: unit.ambushAttackedSinceTurnEnd,
       ambushReadyThisTurn: unit.ambushReadyThisTurn,
+      ambushEnteredOrder: unit.ambushEnteredOrder,
       ambushActedThisTurn: unit.ambushActedThisTurn,
       unitLevel: role === 'support' && !isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
       atGunCrewLevel: isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
@@ -3849,6 +3971,7 @@ export class BattleScene extends Component {
         crewSkills: unit.crewSkills,
         ambushAttackedSinceTurnEnd: unit.ambushAttackedSinceTurnEnd,
         ambushReadyThisTurn: unit.ambushReadyThisTurn,
+        ambushEnteredOrder: unit.ambushEnteredOrder,
         ambushActedThisTurn: unit.ambushActedThisTurn,
         unitLevel: !unit.crewLevels && !isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
         atGunCrewLevel: isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
@@ -4920,6 +5043,40 @@ export class BattleScene extends Component {
     return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
   }
 
+  /** Fit the playable hex footprint into the standard 36-hex board. */
+  private mapFitScale(): number {
+    const bounds = (positions: ReadonlyArray<Axial>) => {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const pos of positions) {
+        const p = axialToPixel(pos, 1);
+        minX = Math.min(minX, p.x - Math.sqrt(3) / 2);
+        maxX = Math.max(maxX, p.x + Math.sqrt(3) / 2);
+        minY = Math.min(minY, p.y - 1);
+        maxY = Math.max(maxY, p.y + 1);
+      }
+      return { width: maxX - minX, height: maxY - minY };
+    };
+    const standard: Axial[] = [];
+    const standardColumns: ReadonlyArray<readonly [number, number]> = [
+      [2, 6], [1, 6], [1, 7], [0, 6], [1, 6], [1, 5],
+    ];
+    for (let row = 0; row < standardColumns.length; row++) {
+      const [first, last] = standardColumns[row];
+      for (let col = first; col <= last; col++) standard.push(offsetToAxial({ col, row }, 0));
+    }
+    const standardBounds = bounds(standard);
+    const groups = this.campaignRuntime
+      ? this.campaignRuntime.segments.map((_, index) => this.cameraReferenceTilesForSegment(index))
+      : [this.cameraReferenceTiles()];
+    let scale = 1;
+    for (const tiles of groups) {
+      if (tiles.length === 0) continue;
+      const size = bounds(tiles.map(tile => tile.pos));
+      scale = Math.min(scale, standardBounds.width / size.width, standardBounds.height / size.height);
+    }
+    return scale;
+  }
+
   private isCampaignNextSegmentEntry(pos: Axial): boolean {
     if (!this.mission || !this.campaignRuntime) return false;
     const nextIndex = this.activeCampaignSegmentIndex + 1;
@@ -4978,9 +5135,8 @@ export class BattleScene extends Component {
     if (this.campaignUpgradesEnabled()) {
       applyCampaignUpgradesToSherman(this.mission.sherman, this.campaignUpgradeIds);
     }
-    this.mapPanEnabled = this.campaignRuntime ? false : data.allowMapPan === true || data.cols > 8 || data.rows > 6;
-    this.mapPanMoved = false;
-    this.mapPanDistance = 0;
+    if (this.standardHexSize <= 0) this.standardHexSize = this.hexSize;
+    this.hexSize = this.standardHexSize * this.mapFitScale();
     const { sherman: sh0 } = this.mission;
     this.resetTurretFacingState();
     this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
@@ -4993,10 +5149,10 @@ export class BattleScene extends Component {
     this.offsetX = -center.x;
     // Cocos Y 朝上，但我们希望 row 0 在屏幕顶部 → Y 取负
     this.offsetY = center.y + BOARD_CENTER_OFFSET_Y;
-    this.updateMapPanBounds(data);
     this.applyMapViewPosition(0, 0);
 
     // 初始化回合状态
+    this.ambushSightHighlightUntil.clear();
     this.turn = 1;
     this.attackPositionMemory = createAttackPositionMemory();
     this.phase = 'player';
@@ -5101,6 +5257,12 @@ export class BattleScene extends Component {
     occlusionGraphics.clear();
     this.mapDeepShadowGraphics.clear();
     this.unitGraphics.clear();
+    this.tankGraphics?.clear();
+    this.buildingGraphics?.clear();
+    this.silhouetteSources.clear();
+    this.silhouetteClaimed.clear();
+    this.occlusionShapes.length = 0;
+    this.vectorSilhouettes.length = 0;
     this.terrainSpritePoolNext = 0;
     for (const { node } of this.terrainSpritePool) node.active = false;
     this.bridgeSpritePoolNext = 0;
@@ -5133,6 +5295,8 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     const tiles = map.all();
 
+    const usingContinuousTerrain = this.drawContinuousTerrain(tiles);
+    if (!usingContinuousTerrain) {
     // 1. 地形格：分两遍绘制，避免「每格 fill+stroke 紧挨」时邻格 fill 盖住共享边上的描边
     //    （同色草地会整片「熔合」、看起来像格线突然没了；掷骰后 redraw 变多更明显）。
     const spriteBackedTileKeys = new Set<string>();
@@ -5156,7 +5320,6 @@ export class BattleScene extends Component {
     g.lineWidth = TILE_BORDER_WIDTH;
     g.strokeColor = TILE_BORDER;
     for (const t of tiles) {
-      if (spriteBackedTileKeys.has(`${t.pos.q},${t.pos.r}`)) continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawTileBorder(c.x, c.y, this.hexSize, t, map);
     }
@@ -5239,12 +5402,41 @@ export class BattleScene extends Component {
       }
     }
 
+    } else {
+      // Urban tiles and rocky highlands retain their original authored images, above
+      // the continuous countryside ground and below buildings and units.
+      for (const t of tiles) {
+        if (!t.terrain.startsWith('urban_') && t.terrain !== 'rocky') continue;
+        const c = this.project(t.pos.q, t.pos.r);
+        this.drawTerrainTileSprite(c.x, c.y, this.hexSize, t.terrain);
+      }
+      for (const t of tiles) {
+        if (t.terrain !== 'urban_road' || !t.roads) continue;
+        const transform = urbanRoadSpriteTransform(t.roads);
+        if (!transform) continue;
+        const path = `textures/terrain/urban/roads/urban_road_surface_${transform.canonicalFlags}_v1/spriteFrame`;
+        const frame = this.urbanOverlaySpriteFrames[path];
+        if (!frame) continue;
+        const c = this.project(t.pos.q, t.pos.r);
+        this.drawTerrainSpriteFrame(c.x, c.y, this.hexSize * ROAD_SURFACE_OVERLAP_SCALE, frame, transform.rotationDegrees);
+      }
+      // Grid lines remain independent of ground material and road textures.
+      for (const t of tiles) {
+        const c = this.project(t.pos.q, t.pos.r);
+        this.drawTileBorder(c.x, c.y, this.hexSize, t, map);
+      }
+    }
     this.g = occlusionGraphics;
     // 1a. 林地表冠层：示意树木，绘制在血迹之上。
     for (const t of tiles) {
       if (t.terrain !== 'forest') continue;
       const c = this.project(t.pos.q, t.pos.r);
       this.drawForestCanopy(c.x, c.y, this.hexSize, t);
+    }
+    for (const t of tiles) {
+      if (t.terrain !== 'trees') continue;
+      const c = this.project(t.pos.q, t.pos.r);
+      this.drawRedesignNaturalObjects(c.x, c.y, this.hexSize, t);
     }
 
     // 1b. 城市建筑图案：建筑格与城市道路共用砖面底座，透明建筑贴图在专用层按式样缩放。
@@ -5260,7 +5452,9 @@ export class BattleScene extends Component {
       }
       if (!t.hasBuilding) continue;
       const c = this.project(t.pos.q, t.pos.r);
+      this.g = this.buildingGraphics;
       this.drawBuildingOverlay(c.x, c.y, this.hexSize, t);
+      this.g = occlusionGraphics;
     }
 
     // 2. 树篱（`Tile.hedges` 为轴向 0..5；`drawHedgeEdge` 的边号见 `HEDGE_DRAW_EDGE_BY_AXIAL`）
@@ -5288,13 +5482,6 @@ export class BattleScene extends Component {
       }
     }
 
-    // 3. 驾驶候选格高亮：仅"移动阶段"+ 未在动画 + 胜负未决；两格方向分色
-    if (this.showReachable && !this.anim
-        && this.phase === 'player' && this.playerStep === 'movement'
-        && this.outcome === 'ongoing') {
-      this.drawDriveCandidates();
-    }
-
     // 4. 可攻击目标高亮：仅"攻击阶段 / 杂项阶段 + 已选中主炮骰"时展示
     //    —— 避免玩家在装填未做/未选骰时被红圈误导以为能直接点敌人开火
     if (!this.anim && this.phase === 'player'
@@ -5312,6 +5499,9 @@ export class BattleScene extends Component {
       this.drawMGTargetHighlights();
     }
 
+    // Brief friendly ambush sight tint uses a dedicated overlay beneath units and fog.
+    this.drawAmbushSightHighlights();
+
     // 4c. 谢尔曼出生格入场箭头（固定画在 JSON 出生格，谢尔曼离开后仍保留；在机体之下绘制）
     this.drawShermanSpawnEntryArrow();
     // 4d. destroy_kind_evac：撤离格红色箭头（与出生箭头同尺度，方向指向网格外）
@@ -5327,17 +5517,34 @@ export class BattleScene extends Component {
     const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
     this.g = this.unitGraphics;
     for (const u of units) {
-      if (u.destroyed) this.drawUnitMaybeAnim(u);
+      if (u.destroyed) {
+        this.g = isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
+        this.drawUnitMaybeAnim(u);
+        this.captureSilhouetteSources(u);
+      }
     }
     for (const u of units) {
-      if (!u.destroyed) this.drawUnitMaybeAnim(u);
+      if (!u.destroyed) {
+        this.g = isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
+        this.drawUnitMaybeAnim(u);
+        this.captureSilhouetteSources(u);
+      }
     }
     // Controlled AT guns are always rendered as a composite: gun sprite first,
     // then the three operator infantry sprites using the controlling faction's visuals.
+    this.g = this.unitGraphics;
     for (const u of units) {
-      if (isControlledATGun(u)) this.drawATGunCrewMaybeAnim(u);
+      if (isControlledATGun(u)) {
+        this.drawATGunCrewMaybeAnim(u);
+        this.captureSilhouetteSources(u);
+      }
     }
     this.g = g;
+    this.unitOcclusion?.sync(this.silhouetteSources, [
+      ...this.urbanBuildingSpritePool.map(slot => slot.sprite),
+      ...this.foliageSpritePool.map(slot => slot.sprite),
+    ], this.occlusionShapes, this.vectorSilhouettes);
+    this.redrawObjectShadows();
     this.placeUnitEffectLayerAboveUnits();
     this.syncUnitEffects(0);
     this.drawUnitEffects();
@@ -5363,58 +5570,48 @@ export class BattleScene extends Component {
     // 9. 刷新独立的炮塔目标底层与战争迷雾；烟幕层随后置于迷雾之下。
     this.redrawFogOverlay();
     this.placeSmokeScreenEffectLayerBelowFog();
+    this.drawHoveredTile();
     this.maybeSendPvpActionResult();
   }
 
-  private updateMapPanBounds(data: MissionData) {
-    this.mapNode?.getComponent(UITransform)?.setContentSize(CANVAS_W, CANVAS_H);
-    if (!this.mapPanEnabled || data.cols <= 0 || data.rows <= 0) {
-      this.mapPanMinX = this.mapPanMaxX = 0;
-      this.mapPanMinY = this.mapPanMaxY = 0;
-      return;
-    }
-
-    const halfHexW = this.hexSize * Math.sqrt(3) / 2;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    const rowParityOffset = data.rowParityOffset === 1 ? 1 : 0;
-    // null 格不进入 HexMap，但仍是编辑器画布的一部分，用来控制游戏内可拖动边界。
-    for (let row = 0; row < data.rows; row++) {
-      for (let col = 0; col < data.cols; col++) {
-        const pos = offsetToAxial({ col, row }, rowParityOffset);
-        const center = this.project(pos.q, pos.r);
-        minX = Math.min(minX, center.x - halfHexW);
-        maxX = Math.max(maxX, center.x + halfHexW);
-        minY = Math.min(minY, center.y - this.hexSize);
-        maxY = Math.max(maxY, center.y + this.hexSize);
+  private redrawObjectShadows() {
+    const scenery = this.sceneryShadows;
+    if (scenery) {
+      scenery.begin();
+      for (let i = 0; i < this.urbanBuildingSpritePoolNext; i++) {
+        const sprite = this.urbanBuildingSpritePool[i].sprite;
+        const groundProp = sprite.spriteFrame === this.redesignObjectFrames.rural_hay
+          || sprite.spriteFrame === this.redesignObjectFrames.rural_well;
+        scenery.draw(sprite, groundProp ? 'groundProp' : 'building', this.hexSize);
       }
+      for (let i = 0; i < this.foliageSpritePoolNext; i++) {
+        scenery.draw(this.foliageSpritePool[i].sprite, 'tree', this.hexSize);
+      }
+      scenery.end();
     }
-
-    const mapCenterX = (minX + maxX) / 2;
-    const mapCenterY = (minY + maxY) / 2;
-    this.mapNode?.getComponent(UITransform)?.setContentSize(
-      Math.max(CANVAS_W, maxX - minX + Math.abs(mapCenterX) * 2),
-      Math.max(CANVAS_H, maxY - minY + Math.abs(mapCenterY) * 2),
-    );
-
-    if (maxX - minX > CANVAS_W) {
-      this.mapPanMinX = Math.min(0, CANVAS_W / 2 - maxX);
-      this.mapPanMaxX = Math.max(0, -CANVAS_W / 2 - minX);
-    } else {
-      this.mapPanMinX = this.mapPanMaxX = 0;
-    }
-    if (maxY - minY > CANVAS_H) {
-      this.mapPanMinY = Math.min(0, CANVAS_H / 2 - maxY);
-      this.mapPanMaxY = Math.max(0, -CANVAS_H / 2 - minY);
-    } else {
-      this.mapPanMinY = this.mapPanMaxY = 0;
+    const vehicles = this.vehicleShadows;
+    if (vehicles) {
+      vehicles.begin();
+      if (this.shermanTopSprite) vehicles.draw(this.shermanTopSprite, 'vehicle', this.hexSize);
+      // A split tank casts one hull shadow; turret/hatch layers must not darken it twice.
+      const turrets = new Set(Object.values(this.splitTankSprites).map(assets => assets?.turret));
+      for (let i = 0; i < this.enemyTopPoolNext; i++) {
+        const sprite = this.enemyTopSpritePool[i].sprite;
+        if (!turrets.has(sprite.spriteFrame)) vehicles.draw(sprite, 'vehicle', this.hexSize);
+      }
+      for (let i = 0; i < this.infantryTopPoolNext; i++) {
+        vehicles.draw(this.infantryTopSpritePool[i].sprite, 'infantry', this.hexSize);
+      }
+      for (let i = 0; i < this.officerTopPoolNext; i++) {
+        vehicles.draw(this.officerTopSpritePool[i].sprite, 'infantry', this.hexSize);
+      }
+      vehicles.end();
     }
   }
 
   private applyMapViewPosition(x: number, y: number) {
-    const clampedX = this.campaignRuntime ? x : Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, x));
-    const clampedY = this.campaignRuntime ? y : Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, y));
-    this.terrainLayerNode?.setPosition(clampedX, clampedY, 0);
-    this.mapNode?.setPosition(clampedX, clampedY, 0);
+    this.terrainLayerNode?.setPosition(x, y, 0);
+    this.mapNode?.setPosition(x, y, 0);
   }
 
   private campaignSegmentPanTarget(index: number): { x: number; y: number } {
@@ -5427,10 +5624,7 @@ export class BattleScene extends Component {
     };
     const rawX = -center.x;
     const rawY = BOARD_CENTER_OFFSET_Y - center.y;
-    if (this.campaignRuntime) return { x: rawX, y: rawY };
-    const x = Math.max(this.mapPanMinX, Math.min(this.mapPanMaxX, rawX));
-    const y = Math.max(this.mapPanMinY, Math.min(this.mapPanMaxY, rawY));
-    return { x, y };
+    return { x: rawX, y: rawY };
   }
 
   private applyCampaignSegmentView(index: number) {
@@ -5513,23 +5707,6 @@ export class BattleScene extends Component {
     if (!sherman || anim.unit !== sherman || to === undefined) return;
     this.shermanTurretFacing = to;
     sherman.turretFacing = to;
-  }
-
-  private onMapPanStart() {
-    if (!this.mapPanEnabled) return;
-    this.mapPanMoved = false;
-    this.mapPanDistance = 0;
-  }
-
-  private onMapPanMove(event: EventTouch) {
-    if (!this.mapPanEnabled || !this.mapNode) return;
-    const delta = event.getDelta();
-    const x = this.mapNode.position.x + delta.x;
-    const y = this.mapNode.position.y + delta.y;
-    this.applyMapViewPosition(x, y);
-    this.mapPanDistance += Math.hypot(delta.x, delta.y);
-    this.mapPanMoved = this.mapPanDistance > 6;
-    event.propagationStopped = true;
   }
 
   private refreshPlayerVisibility() {
@@ -5704,6 +5881,23 @@ export class BattleScene extends Component {
     return !!sherman && sherman.crew?.commander !== false && sherman.hatchOpen === true;
   }
 
+  /** Off-map neighbors are direction selectors, without terrain or firing targets. */
+  private outsideMapTurretAimDirection(pos: Axial): FireDirection | null {
+    if (!this.mission || this.phase !== 'player'
+      || (this.playerStep !== 'attack' && this.playerStep !== 'misc')
+      || !this.hasTurretReconGunSelection() || !this.playerTurretCanRotate()
+      || this.turretAimAnim || this.turretTargetOverlaySuppressed
+      || (this.selectedGunDieIdx >= 0 && this.selectedGunHitThresholdModifier < 0)) return null;
+    const { map, sherman } = this.mission;
+    const distance = hexDistance(sherman.pos, pos);
+    const weaponRange = this.selectedMGDieIdx >= 0
+      ? MG_MAX_RANGE
+      : currentGunnerVisionRange(sherman);
+    if (map.get(pos) || distance < 1 || distance > Math.min(2, weaponRange)) return null;
+    const direction = fireDirectionTo(sherman.pos, pos);
+    return direction !== null && this.canWeaponAimDirection(sherman, direction) ? direction : null;
+  }
+
   private fogTurretAimDirection(pos: Axial): FireDirection | null {
     if (!this.mission || !fogOfWarEnabled(GameSession.gameMode)) return null;
     if (this.isHexVisible(pos)) return null;
@@ -5832,8 +6026,10 @@ export class BattleScene extends Component {
 
   private redrawUnitVisibilityMask() {
     if (!this.mission) return;
+    if (this.tankVisibilityGraphics) this.redrawVisibleHexMask(this.tankVisibilityGraphics, true);
     if (this.unitVisibilityMaskGraphics) this.redrawVisibleHexMask(this.unitVisibilityMaskGraphics, true);
     if (this.trackVisibilityMaskGraphics) this.redrawVisibleHexMask(this.trackVisibilityMaskGraphics);
+    if (this.silhouetteVisibilityGraphics) this.redrawVisibleHexMask(this.silhouetteVisibilityGraphics, true);
   }
 
   private playerTankEvacVisibilityExtension(): Axial | null {
@@ -5855,9 +6051,22 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     mask.clear();
     mask.fillColor = new Color(255, 255, 255, 0);
+    const outsideUnitHexes = new Map<string, Axial>();
     for (const tile of this.mission.map.all()) {
       if (!this.isHexVisible(tile.pos)) continue;
       const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
+      mask.fill();
+      // Unit silhouettes may overhang the board, just like edge foliage.
+      // Extend only into absent tiles: real fog-hidden tiles stay clipped.
+      if (includePlayerEvacExit) {
+        for (const pos of neighbors(tile.pos)) {
+          if (!this.mission.map.has(pos)) outsideUnitHexes.set(`${pos.q},${pos.r}`, pos);
+        }
+      }
+    }
+    for (const pos of outsideUnitHexes.values()) {
+      const c = this.project(pos.q, pos.r);
       this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
       mask.fill();
     }
@@ -5894,9 +6103,11 @@ export class BattleScene extends Component {
       fogNode.setSiblingIndex(this.mapNode.children.length - 1);
     }
     this.redrawTurretAimOverlay();
+    this.redrawSupportMarkers(this.mission.map.all());
   }
 
   private redrawTurretAimOverlay() {
+    for (const node of this.outsideMapTurretInputNodes) node.active = false;
     const overlay = this.turretAimOverlayGraphics;
     const overlayNode = this.turretAimOverlayNode;
     const smokeIcons = this.smokeTargetIconGraphics;
@@ -5961,6 +6172,12 @@ export class BattleScene extends Component {
         }
       }
       if (turretCanRotate) {
+        for (const pos of this.outsideMapTurretAimPositions()) {
+          if (this.outsideMapTurretAimDirection(pos) === null) continue;
+          const c = this.project(pos.q, pos.r);
+          this.drawTurretAimHex(overlay, c.x, c.y);
+          this.showOutsideMapTurretInput(pos, c);
+        }
         const origin = this.project(this.mission.sherman.pos.q, this.mission.sherman.pos.r);
         const turretFacing = this.currentTurretFacingFor(
           this.mission.sherman,
@@ -5992,6 +6209,55 @@ export class BattleScene extends Component {
         }
       }
     }
+  }
+
+  private outsideMapTurretAimPositions(): Axial[] {
+    if (!this.mission) return [];
+    const origin = this.mission.sherman.pos;
+    const positions: Axial[] = [];
+    for (let dq = -2; dq <= 2; dq++) {
+      for (let dr = Math.max(-2, -dq - 2); dr <= Math.min(2, -dq + 2); dr++) {
+        const pos = { q: origin.q + dq, r: origin.r + dr };
+        if (this.outsideMapTurretAimDirection(pos) !== null) positions.push(pos);
+      }
+    }
+    return positions;
+  }
+
+  private showOutsideMapTurretInput(pos: Axial, center: { x: number; y: number }) {
+    const mapTransform = this.mapNode?.getComponent(UITransform);
+    const rootTransform = this.node.getComponent(UITransform);
+    if (!mapTransform || !rootTransform || !this.mapInputNode) return;
+    let node = this.outsideMapTurretInputNodes.find(candidate => !candidate.active);
+    if (!node) {
+      node = new Node('OutsideMapTurretInput');
+      node.layer = this.node.layer;
+      node.addComponent(UITransform);
+      this.node.addChild(node);
+      this.outsideMapTurretInputNodes.push(node);
+    }
+    node.active = true;
+    // Above the map's input/visual layers, below HUD buttons and modal dialogs.
+    node.setSiblingIndex(this.mapInputNode.getSiblingIndex() + 1);
+    const world = mapTransform.convertToWorldSpaceAR(new Vec3(center.x, center.y, 0));
+    node.setPosition(rootTransform.convertToNodeSpaceAR(world));
+    node.getComponent(UITransform)!.setContentSize(Math.sqrt(3) * this.hexSize, 2 * this.hexSize);
+    node.off(Node.EventType.TOUCH_END);
+    const targetPos = { ...pos };
+    node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+      if (this.isBusy() || this.outcome !== 'ongoing') return;
+      const start = event.getStartLocation();
+      const end = event.getLocation();
+      if (Math.hypot(end.x - start.x, end.y - start.y) > 6) return;
+      const ui = event.getUILocation();
+      const local = mapTransform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0));
+      if (!axialEquals(this.pixelToNearestAxial(local.x, local.y), targetPos)) return;
+      const direction = this.outsideMapTurretAimDirection(targetPos);
+      if (direction === null) return;
+      event.propagationStopped = true;
+      this.closeDiePopover();
+      this.tryAimShermanTurretAtFogTile(direction, targetPos, this.selectedMGDieIdx >= 0);
+    }, this);
   }
 
   private playerWeaponTargetHexKeys(): Set<string> {
@@ -6108,7 +6374,7 @@ export class BattleScene extends Component {
 
   private drawTurretAimHex(g: Graphics, cx: number, cy: number) {
     g.fillColor = TURRET_AIM_HEX_FILL;
-    this.traceHexPathOn(g, cx, cy, this.hexSize * 0.96);
+    this.traceHexPathOn(g, cx, cy, this.hexSize);
     g.fill();
   }
 
@@ -6487,6 +6753,46 @@ export class BattleScene extends Component {
     if (drewAny) g.lineWidth = 2;
   }
 
+  /** The highlighted hexes are exactly the sight used by ambush reactions. */
+  private drawAmbushSightHighlights() {
+    const g = this.ambushSightOverlayGraphics;
+    if (!g) return;
+    g.clear();
+    if (!this.mission || GameSession.gameMode !== 'hardcore') return;
+    const now = Date.now();
+    for (const watcher of this.allUnits()) {
+      if (!watcher.ambushReadyThisTurn || watcher.destroyed
+        || !isSameSide(watcher, this.mission.sherman)
+        || !this.isUnitVisible(watcher)
+        || (this.ambushSightHighlightUntil.get(watcher.id) ?? 0) <= now) continue;
+      const sight = this.ambushGunnerSightKeys(watcher);
+      g.fillColor = new Color(235, 45, 45, 150);
+      g.strokeColor = new Color(255, 90, 80, 255);
+      g.lineWidth = 2.5;
+      for (const tile of this.mission.map.all()) {
+        const key = HexMap.keyOf(tile.pos);
+        if (key === HexMap.keyOf(watcher.pos) || !sight.has(key)
+          || !this.isHexVisible(tile.pos) || this.isDeepShadowTile(tile)) continue;
+        const c = this.project(tile.pos.q, tile.pos.r);
+        this.traceHexPathOn(g, c.x, c.y, this.hexSize * 0.92);
+        g.fill();
+        g.stroke();
+      }
+    }
+    g.lineWidth = 2;
+  }
+
+  private showAmbushSightBriefly(unit: Unit) {
+    if (!this.mission || !isSameSide(unit, this.mission.sherman)) return;
+    const until = Date.now() + 1500;
+    this.ambushSightHighlightUntil.set(unit.id, until);
+    this.scheduleOnce(() => {
+      if (this.ambushSightHighlightUntil.get(unit.id) !== until) return;
+      this.ambushSightHighlightUntil.delete(unit.id);
+      this.redraw();
+    }, 1.5);
+  }
+
   private setActiveActingUnit(unit: Unit | null) {
     this.activeActingUnit = unit && !unit.destroyed ? unit : null;
     this.syncActiveActingUnitFrame();
@@ -6622,6 +6928,46 @@ export class BattleScene extends Component {
     for (const n of this.previewLabels) n.active = false;
   }
 
+  private redrawSupportMarkers(tiles: Tile[]) {
+    const layer = this.supportMarkerLayer;
+    if (!layer) return;
+    this.supportMarkerLabelNext = 0;
+    for (const tile of tiles) {
+      if (this.isDeepShadowTile(tile)) continue;
+      const center = this.project(tile.pos.q, tile.pos.r);
+      const markers = supportMarkerVisuals(
+        tile.reinforceId, tile.reinforceFacing,
+        tile.enemyStartId, tile.enemyStartFacing, this.hexSize,
+      );
+      for (const marker of markers) {
+        let node = this.supportMarkerLabels[this.supportMarkerLabelNext++];
+        let label = node?.getComponent(Label) ?? null;
+        if (!node || !label) {
+          node = new Node('SupportMarker');
+          node.layer = this.node.layer;
+          node.addComponent(UITransform).setContentSize(32, 32);
+          label = node.addComponent(Label);
+          label.horizontalAlign = HorizontalTextAlignment.CENTER;
+          label.verticalAlign = VerticalTextAlignment.CENTER;
+          label.enableOutline = false;
+          this.supportMarkerLabels[this.supportMarkerLabelNext - 1] = node;
+          layer.addChild(node);
+        }
+        label.fontSize = Math.max(13, Math.round(this.hexSize * 0.36));
+        label.lineHeight = label.fontSize + 3;
+        label.color = marker.kind === 'rid'
+          ? new Color(190, 25, 30, 255)
+          : new Color(22, 22, 22, 255);
+        label.string = marker.text;
+        node.setPosition(center.x + marker.x, center.y + marker.y, 0);
+        node.active = true;
+      }
+    }
+    for (let i = this.supportMarkerLabelNext; i < this.supportMarkerLabels.length; i++) {
+      this.supportMarkerLabels[i]!.active = false;
+    }
+  }
+
   // ---------- 单位状态常驻文字 ----------
 
   /** Visual-only smoke level: real fire uses fireLevel; damaged non-player tanks show level-2 black smoke. */
@@ -6699,7 +7045,7 @@ export class BattleScene extends Component {
     return out;
   }
 
-  /** 在格心略下方绘制一排小方标（矢量），不遮挡俯视车体 */
+  /** 在格心略下方绘制一排状态线稿，不遮挡俯视车体 */
   private spawnStatusBadgesIfAny(u: Unit) {
     if (!this.mapNode) return;
     if (!this.isUnitVisible(u)) return;
@@ -6709,7 +7055,7 @@ export class BattleScene extends Component {
     const c = (this.anim && this.anim.unit === u)
       ? this.interpolatedPos(u)
       : this.project(u.pos.q, u.pos.r);
-    const rowY = c.y - this.hexSize * 0.56;
+    const rowY = c.y - this.hexSize * 0.50;
     const cell = TANK_BADGE_CELL;
     const gap = TANK_BADGE_GAP;
     const totalW = kinds.length * cell + (kinds.length - 1) * gap;
@@ -6741,43 +7087,71 @@ export class BattleScene extends Component {
     n.active = true;
   }
 
-  /** 单枚状态标：深色底框 + 中心符号 */
+  /** 单枚状态标：透明底，深色描线紧贴亮色符号。 */
   private drawTankStatusBadge(g: Graphics, kind: TankStatusBadgeKind, cx: number, cy: number, half: number) {
     const h = half;
-    g.fillColor = BADGE_BG;
-    g.strokeColor = BADGE_FRAME;
-    g.lineWidth = 1.25;
-    g.rect(cx - h, cy - h, h * 2, h * 2);
-    g.fill();
-    g.stroke();
-
-    const r = h * 0.55;
-    g.lineWidth = 1.5;
     switch (kind) {
       case 'paralyzed': {
-        g.fillColor = new Color(160, 110, 220, 255);
-        g.circle(cx, cy, r * 0.75);
-        g.fill();
-        g.strokeColor = new Color(255, 255, 255, 240);
-        g.lineWidth = 1.4;
-        g.moveTo(cx - h * 0.45, cy + h * 0.15);
-        g.lineTo(cx - h * 0.1, cy - h * 0.25);
-        g.lineTo(cx + h * 0.15, cy + h * 0.1);
-        g.lineTo(cx + h * 0.45, cy - h * 0.2);
-        g.stroke();
+        // 深紫色只贴合线稿作对比，不形成方框或底板。
+        const track = () => {
+          g.moveTo(cx - h * 0.66, cy - h * 0.4);
+          g.lineTo(cx + h * 0.66, cy - h * 0.4);
+          g.moveTo(cx - h * 0.66, cy + h * 0.4);
+          g.lineTo(cx - h * 0.15, cy + h * 0.4);
+          g.moveTo(cx + h * 0.18, cy + h * 0.49);
+          g.lineTo(cx + h * 0.66, cy + h * 0.49);
+          g.moveTo(cx - h * 0.5, cy - h * 0.38);
+          g.lineTo(cx - h * 0.5, cy + h * 0.38);
+          g.moveTo(cx + h * 0.5, cy - h * 0.38);
+          g.lineTo(cx + h * 0.5, cy + h * 0.48);
+          g.stroke();
+        };
+        g.strokeColor = new Color(67, 32, 89, 255);
+        g.lineWidth = 4;
+        track();
+        g.strokeColor = new Color(241, 212, 255, 255);
+        g.lineWidth = 2.25;
+        track();
+        const breakMark = () => {
+          g.moveTo(cx - h * 0.04, cy + h * 0.6);
+          g.lineTo(cx + h * 0.11, cy + h * 0.24);
+          g.stroke();
+        };
+        g.strokeColor = new Color(67, 32, 89, 255);
+        g.lineWidth = 3.5;
+        breakMark();
+        g.strokeColor = new Color(255, 241, 184, 255);
+        g.lineWidth = 1.8;
+        breakMark();
         break;
       }
       case 'turret': {
-        g.strokeColor = new Color(90, 85, 75, 255);
-        g.lineWidth = 2;
-        g.moveTo(cx - h * 0.55, cy - h * 0.15);
-        g.lineTo(cx + h * 0.35, cy - h * 0.15);
-        g.stroke();
-        g.strokeColor = new Color(230, 55, 55, 255);
-        g.lineWidth = 1.6;
-        const d = h * 0.35;
-        g.moveTo(cx - d, cy + h * 0.15); g.lineTo(cx + d, cy + h * 0.45); g.stroke();
-        g.moveTo(cx - d, cy + h * 0.45); g.lineTo(cx + d, cy + h * 0.15); g.stroke();
+        const turretOutline = () => {
+          g.circle(cx - h * 0.13, cy, h * 0.43);
+          g.stroke();
+          g.moveTo(cx + h * 0.29, cy);
+          g.lineTo(cx + h * 0.76, cy);
+          g.stroke();
+        };
+        g.strokeColor = new Color(94, 44, 18, 255);
+        g.lineWidth = 4;
+        turretOutline();
+        g.strokeColor = new Color(255, 213, 125, 255);
+        g.lineWidth = 2.2;
+        turretOutline();
+        const crack = () => {
+          g.moveTo(cx - h * 0.25, cy + h * 0.37);
+          g.lineTo(cx - h * 0.06, cy + h * 0.08);
+          g.lineTo(cx - h * 0.18, cy - h * 0.07);
+          g.lineTo(cx + h * 0.02, cy - h * 0.36);
+          g.stroke();
+        };
+        g.strokeColor = new Color(94, 44, 18, 255);
+        g.lineWidth = 3.5;
+        crack();
+        g.strokeColor = new Color(255, 246, 199, 255);
+        g.lineWidth = 1.8;
+        crack();
         break;
       }
       default:
@@ -6787,7 +7161,7 @@ export class BattleScene extends Component {
 
   /**
    * 在单位格子正下方挂一条单位名字（"谢尔曼" / "虎式" …），常驻显示。
-   * 状态图标在格心下约 hex*0.56；已毁短标签约 hex*0.65；名字在其下，偏移 `UNIT_NAME_OFFSET_HEX`×hex。
+   * 状态图标在格心下约 hex*0.50；已毁短标签约 hex*0.65；名字在其下，偏移 `UNIT_NAME_OFFSET_HEX`×hex。
    */
   private spawnUnitNameLabels(units: Unit[]) {
     const priority = (u: Unit): number => {
@@ -6849,7 +7223,7 @@ export class BattleScene extends Component {
     const isPvpOpponentHero = GameSession.isPvp && u === this.pvpOpponentProtagonist();
     l.string = `${t(`unit.name.${u.kind}`)}${isPvpOpponentHero ? ' 主角' : isPvpAiUnit ? ' AI' : ''}`;
     this.drawUnitRankMarker(n, l.string, unitLevelOf(u));
-    // 叠放：车体 → 状态图标条(hex*0.56) → 已毁字(hex*0.65) → 名字（UNIT_NAME_OFFSET_HEX×hex）
+    // 叠放：车体 → 状态图标条(hex*0.50) → 已毁字(hex*0.65) → 名字（UNIT_NAME_OFFSET_HEX×hex）
     n.setPosition(c.x, c.y - this.hexSize * UNIT_NAME_OFFSET_HEX - row * UNIT_NAME_ROW_GAP, 0);
     n.active = true;
     return true;
@@ -7093,11 +7467,72 @@ export class BattleScene extends Component {
       if (v.fireAlpha > 0) this.drawFireEffect(g, c.x, c.y, v);
       if (v.smokeAlpha > 0) this.drawSmokeScreenEffect(g, c.x, c.y, v);
     }
+    this.drawAmbushMuzzleReticles(g);
     const smokeScreenGraphics = this.smokeScreenEffectGraphics;
     if (!smokeScreenGraphics) return;
     smokeScreenGraphics.clear();
     this.drawSmokeScreenEffects(smokeScreenGraphics);
     this.placeSmokeScreenEffectLayerBelowFog();
+  }
+
+  /** Tactical readiness stays at the barrel, separate from the damage status row. */
+  private drawAmbushMuzzleReticles(g: Graphics) {
+    if (!this.mission || GameSession.gameMode !== 'hardcore') return;
+    const pulse = (1 + Math.cos(this.unitEffectTime * Math.PI * 2 / 1.2)) / 2;
+    const radius = Math.max(6, this.hexSize * 0.12) * (1.12 - pulse * 0.22);
+    const alpha = Math.round(170 + pulse * 85);
+    for (const unit of this.allUnits()) {
+      if (!unit.ambushReadyThisTurn || unit.destroyed || unit.turretDamaged
+        || !isTankUnit(unit) || !this.isUnitVisible(unit)) continue;
+      const muzzle = this.ambushMuzzlePosition(unit);
+      // A small forward offset keeps the barrel tip visible inside the reticle.
+      const cx = muzzle.x + muzzle.ux * this.hexSize * 0.06;
+      const cy = muzzle.y + muzzle.uy * this.hexSize * 0.06;
+      const reticle = () => {
+        g.circle(cx, cy, radius);
+        g.stroke();
+        for (let i = 0; i < 4; i++) {
+          const angle = i * Math.PI / 2;
+          const ux = Math.cos(angle), uy = Math.sin(angle);
+          g.moveTo(cx + ux * radius * 0.65, cy + uy * radius * 0.65);
+          g.lineTo(cx + ux * radius * 1.45, cy + uy * radius * 1.45);
+        }
+        g.stroke();
+      };
+      g.fillColor = new Color(62, 233, 208, Math.round(25 + pulse * 25));
+      g.circle(cx, cy, radius * 1.65);
+      g.fill();
+      g.strokeColor = new Color(12, 35, 35, alpha);
+      g.lineWidth = 4.5;
+      reticle();
+      g.strokeColor = new Color(110, 255, 225, alpha);
+      g.lineWidth = 2;
+      reticle();
+      g.fillColor = new Color(235, 255, 248, alpha);
+      g.circle(cx, cy, Math.max(1.5, radius * 0.18));
+      g.fill();
+    }
+    g.lineWidth = 2;
+  }
+
+  /** Use the same sprite geometry and animated turret direction as the tank rendering. */
+  private ambushMuzzlePosition(unit: Unit): { x: number; y: number; ux: number; uy: number } {
+    const c = this.interpolatedPos(unit);
+    const turretLerp = unit.stats.visionType === 'turreted'
+      ? (unit === this.mission?.sherman
+        ? this.currentShermanTurretLerp(unit) : this.currentEnemyTurretLerp(unit))
+      : null;
+    const aim = this.topDownForwardVec(unit, c, turretLerp);
+    if (this.enemySupportsSplitTurret(unit)) {
+      const precise = this.splitTankMuzzlePosition(unit, c,
+        splitTankVisualConfigOf(unit.kind as SplitTankKind),
+        splitTankGeometryConfigOf(unit.kind as SplitTankKind), aim);
+      if (precise) return precise;
+    }
+    const precise = this.topSpriteMuzzlePosition(unit, c, tankVisualConfigOf(unit.kind), aim);
+    if (precise) return precise;
+    const distance = this.hexSize * 0.72;
+    return { x: c.x + aim.ux * distance, y: c.y + aim.uy * distance, ...aim };
   }
 
   private drawSmokeScreenEffects(g: Graphics) {
@@ -7223,13 +7658,42 @@ export class BattleScene extends Component {
   }
 
   /** 锁定特效层在全部单位贴图之上；名称、浮字和战争迷雾仍可继续排在其上。 */
+  private unitSilhouetteColor(unit: Unit): Color {
+    return isHostile(unit, this.mission!.sherman) ? new Color(240, 65, 65, 255)
+      : unit === this.mission!.sherman || isPlayerControlled(unit) ? new Color(65, 225, 95, 255)
+      : new Color(70, 155, 255, 255);
+  }
+
+  private recordVectorSilhouette(unit: Unit, x: number, y: number, radius: number) {
+    if (this.g !== this.unitGraphics || unit.destroyed || !this.isUnitVisible(unit)) return;
+    this.vectorSilhouettes.push({ circle: [x, y, radius], color: this.unitSilhouetteColor(unit) });
+  }
+
+  private captureSilhouetteSources(unit: Unit) {
+    if (!this.mission) return;
+    const color = this.unitSilhouetteColor(unit);
+    const sprites = [this.shermanTopSprite, this.shermanTurretTopSprite,
+      ...this.enemyTopSpritePool.map(slot => slot.sprite),
+      ...this.commanderHatchSpritePool.map(slot => slot.sprite),
+      ...this.infantryTopSpritePool.map(slot => slot.sprite),
+      ...this.officerTopSpritePool.map(slot => slot.sprite)];
+    for (const sprite of sprites) {
+      if (sprite?.node.active && !this.silhouetteClaimed.has(sprite)) {
+        this.silhouetteClaimed.add(sprite);
+        const parent = isTankUnit(unit) ? this.tankContentNode : this.infantryContentNode;
+        if (parent && sprite.node.parent !== parent) parent.addChild(sprite.node);
+        if (!isTankUnit(unit) && !unit.destroyed && this.isUnitVisible(unit)) this.silhouetteSources.set(sprite, color);
+      }
+    }
+  }
+
   private placeUnitEffectLayerAboveUnits() {
     const effectNode = this.unitEffectNode;
     const mapNode = this.mapNode;
     if (!effectNode || !mapNode || effectNode.parent !== mapNode) return;
     const unitMaskNode = this.unitVisibilityMaskNode;
     if (unitMaskNode?.parent === mapNode) {
-      effectNode.setSiblingIndex(unitMaskNode.getSiblingIndex() + 1);
+      effectNode.setSiblingIndex((this.unitOcclusion?.root ?? unitMaskNode).getSiblingIndex() + 1);
       return;
     }
     const unitNodes: Node[] = [
@@ -7281,6 +7745,10 @@ export class BattleScene extends Component {
       ? { from: this.anim.turnFrom!, to: this.anim.turnTo!, t: this.anim.t }
       : null;
     const origin = this.tankTurretPivotPosition(u, { x: cx, y: cy }, bodyFacingLerp);
+    this.drawFireSmoke(g, origin, visualLevel, v.seed, v.fireAlpha);
+  }
+
+  private drawFireSmoke(g: Graphics, origin: { x: number; y: number }, visualLevel: number, seed: number, alpha: number) {
     const count = Math.min(24, 6 + visualLevel * 3);
     const width = this.hexSize * Math.min(0.30, 0.10 + visualLevel * 0.035);
     const height = this.hexSize * Math.min(0.92, 0.54 + visualLevel * 0.065);
@@ -7289,7 +7757,7 @@ export class BattleScene extends Component {
 
     for (let i = 0; i < count; i++) {
       const phase = (this.unitEffectTime * (0.26 + (i % 3) * 0.018)
-        + i / count + (v.seed % 37) * 0.013) % 1;
+        + i / count + (seed % 37) * 0.013) % 1;
       const curl = Math.sin(phase * Math.PI * 2 + i * 1.43);
       const x = origin.x + curl * width * (0.25 + phase * 0.75)
         + Math.sin(this.unitEffectTime * 0.43 + i) * 1.2;
@@ -7301,11 +7769,11 @@ export class BattleScene extends Component {
       const shade = Math.max(20, 62 - visualLevel * 7) + (i % 3) * 7;
 
       g.fillColor = new Color(shade, shade + 2, shade + 3,
-        Math.round(v.fireAlpha * density * bodyOpacity));
+        Math.round(alpha * density * bodyOpacity));
       g.circle(x, y, r);
       g.fill();
       g.fillColor = new Color(88, 91, 92,
-        Math.round(v.fireAlpha * density * highlightOpacity));
+        Math.round(alpha * density * highlightOpacity));
       g.circle(x - r * 0.20, y + r * 0.24, r * 0.56);
       g.fill();
     }
@@ -8144,11 +8612,11 @@ export class BattleScene extends Component {
     this.redraw();
   }
 
-  private spawnMachineGunBurst(attacker: Unit | null, target: Unit | null, hit: boolean) {
+  private spawnMachineGunBurst(attacker: Unit | null, target: Unit | null, hit: boolean, targetPoint?: { x: number; y: number }): MachineGunBurst | undefined {
     if (!this.mapNode || !attacker || !target || attacker.destroyed) return;
     if (!this.isUnitVisible(attacker)) return;
     const a = this.project(attacker.pos.q, attacker.pos.r);
-    const b = this.project(target.pos.q, target.pos.r);
+    const b = targetPoint ?? this.project(target.pos.q, target.pos.r);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
@@ -8184,6 +8652,7 @@ export class BattleScene extends Component {
     };
     this.drawMachineGunBurst(burst, 0);
     this.machineGunBursts.push(burst);
+    return burst;
   }
 
   /**
@@ -8414,7 +8883,9 @@ export class BattleScene extends Component {
     // use that same exact vector or the shell visibly leaves along the hidden
     // rules-facing direction instead of through the rotated barrel.
     const preciseTurretAim = isTankUnit(attacker) && attacker.stats.visionType === 'turreted';
-    const aimAngle = isAntiTankGunUnit(attacker) || isHeavyArtilleryUnit(attacker) || preciseTurretAim
+    const aimAngle = preciseTurretAim
+      ? this.turretVisualScreenAngle(attacker, target.pos)
+      : isAntiTankGunUnit(attacker) || isHeavyArtilleryUnit(attacker)
       ? this.targetScreenAngle(attacker.pos, target.pos)
       : this.directionScreenAngle(attacker.pos, c, dir);
     const aim = { ux: Math.cos(aimAngle), uy: Math.sin(aimAngle) };
@@ -8568,6 +9039,40 @@ export class BattleScene extends Component {
     };
   }
 
+  /** The same hull transform used to place the rendered turret's rotation anchor. */
+  private splitTankTurretPivot(
+    u: Unit,
+    c: { x: number; y: number },
+    cfg: SplitTankVisualConfig,
+    geometry: SplitTankGeometryConfig,
+    bodyFacingLerp?: DirectionLerp | null,
+  ): { x: number; y: number } {
+    const topTrim = geometry.topTrim;
+    const body = this.topDownForwardVec(u, c, bodyFacingLerp);
+    const scale = this.hexSize * 1.8 * cfg.hullFitScale / (Math.max(topTrim.w, topTrim.h) || 1);
+    const offsetUnit = this.hexSize * Math.sqrt(3);
+    const baseX = c.x + cfg.hullOffsetForward * offsetUnit * body.ux
+      + cfg.hullOffsetRight * offsetUnit * body.uy;
+    const baseY = c.y + cfg.hullOffsetForward * offsetUnit * body.uy
+      - cfg.hullOffsetRight * offsetUnit * body.ux;
+    const localX = (geometry.pivot.bodyX - (topTrim.x + topTrim.w / 2)) * scale;
+    const localY = ((topTrim.y + topTrim.h / 2) - geometry.pivot.bodyY) * scale;
+    const angle = Math.atan2(body.uy, body.ux) + Math.PI;
+    return {
+      x: baseX + localX * Math.cos(angle) - localY * Math.sin(angle),
+      y: baseY + localX * Math.sin(angle) + localY * Math.cos(angle),
+    };
+  }
+
+  private turretVisualScreenAngle(u: Unit, target: Axial): number {
+    const c = this.project(u.pos.q, u.pos.r);
+    const pivot = isSplitTankKind(u.kind)
+      ? this.splitTankTurretPivot(u, c, splitTankVisualConfigOf(u.kind), splitTankGeometryConfigOf(u.kind))
+      : c;
+    const end = this.project(target.q, target.r);
+    return Math.atan2(end.y - pivot.y, end.x - pivot.x);
+  }
+
   private splitTankMuzzlePosition(
     u: Unit,
     c: { x: number; y: number },
@@ -8579,26 +9084,15 @@ export class BattleScene extends Component {
     const turretTrim = geometry.turretTrim;
     if (topTrim.w <= 0 || topTrim.h <= 0 || turretTrim.w <= 0 || turretTrim.h <= 0) return null;
 
-    const body = this.topDownForwardVec(u, c, null);
     const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const scale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
     const turretScale = scale * cfg.turretScale;
     const offsetUnit = this.hexSize * Math.sqrt(3);
-    const hullF = cfg.hullOffsetForward * offsetUnit;
-    const hullR = cfg.hullOffsetRight * offsetUnit;
     const turretF = cfg.turretOffsetForward * offsetUnit;
     const turretR = cfg.turretOffsetRight * offsetUnit;
-    const baseX = c.x + hullF * body.ux + hullR * body.uy;
-    const baseY = c.y + hullF * body.uy + hullR * (-body.ux);
 
     const pivot = geometry.pivot;
-    const pivotLocalX = (pivot.bodyX - (topTrim.x + topTrim.w / 2)) * scale;
-    const pivotLocalY = ((topTrim.y + topTrim.h / 2) - pivot.bodyY) * scale;
-    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
-    const cos = Math.cos(bodyAngle);
-    const sin = Math.sin(bodyAngle);
-    const pivotX = baseX + pivotLocalX * cos - pivotLocalY * sin;
-    const pivotY = baseY + pivotLocalX * sin + pivotLocalY * cos;
+    const { x: pivotX, y: pivotY } = this.splitTankTurretPivot(u, c, cfg, geometry);
 
     const localX = (geometry.muzzle.spriteX - pivot.spriteX) * turretScale - turretF;
     const localY = (pivot.spriteY - geometry.muzzle.spriteY) * turretScale + turretR;
@@ -9505,7 +9999,7 @@ export class BattleScene extends Component {
    * Plays a Stuka across the target row. `attackerIsPlayer` makes the same
    * presentation usable by future player/PvP air-strike events.
    */
-  private playStukaFlyover(target: Unit, attackerIsPlayer: boolean, onDone: () => void) {
+  private playStukaFlyover(target: Unit, attackerIsPlayer: boolean, onDone: () => void, shotDown = false) {
     if (!this.mission || !this.mapNode || this.stukaFlyover) {
       onDone();
       return;
@@ -9523,6 +10017,7 @@ export class BattleScene extends Component {
       ? screenRight + offscreenPad
       : screenLeft - offscreenPad;
     this.stukaFlyover = {
+      shotDown, defender: target,
       target: { ...target.pos }, fromX, toX, y: targetPoint.y + mapPos.y,
       t: 0, dur: 4, cannonT: -1, cannonSoundStarted: false,
       cannonSeed: this.hashStringToSeed(`stuka:${target.id}:${this.turn}`),
@@ -9550,11 +10045,11 @@ export class BattleScene extends Component {
     const attackStartT = pass.dur * Math.abs(
       (attackStartX - pass.fromX) / (pass.toX - pass.fromX),
     );
-    if (!pass.cannonSoundStarted && pass.t >= Math.max(0, attackStartT - 1)) {
+    if (!pass.shotDown && !pass.cannonSoundStarted && pass.t >= Math.max(0, attackStartT - 1)) {
       pass.cannonSoundStarted = true;
       playStukaCannonFire();
     }
-    if (pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
+    if (!pass.shotDown && pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
       pass.cannonT = 0;
     }
     if (pass.cannonT >= 0) {
@@ -9563,6 +10058,7 @@ export class BattleScene extends Component {
       // deliberately a compact burst: combat resolution stays unchanged.
       this.drawStukaCannonBurst(pass);
     }
+    if (pass.shotDown && p < 1) this.drawStukaShotDown(pass, x);
     const plane = this.stukaSpriteNode;
     if (plane) {
       const sprite = plane.getComponent(Sprite);
@@ -9578,6 +10074,10 @@ export class BattleScene extends Component {
       plane.setScale(1, 1, 1);
     }
     if (p < 1) return;
+    if (pass.aaBurst && pass.aaBurst.t < pass.aaBurst.dur) {
+      pass.aaBurst.node.destroy();
+      this.machineGunBursts = this.machineGunBursts.filter(b => b !== pass.aaBurst);
+    }
     if (plane) plane.active = false;
     if (this.stukaBlastNode) this.stukaBlastNode.active = false;
     stopStukaCannonFire();
@@ -9590,6 +10090,38 @@ export class BattleScene extends Component {
    * screen-space overlay so it stays readable above the unit sprite while the
    * map/camera moves.  Eight visible tracers stand in for the full fire rate.
    */
+  private drawStukaShotDown(pass: StukaFlyover, x: number) {
+    if (!this.mapNode) return;
+    const mapPos = this.mapNode.position;
+    const target = { x: x - mapPos.x, y: pass.y - mapPos.y };
+    if (!pass.aaAttackStarted) {
+      pass.aaAttackStarted = true;
+      pass.aaBurst = this.spawnMachineGunBurst(pass.defender, pass.defender, true, target);
+      if (pass.aaBurst) playMgFire();
+    }
+    const burst = pass.aaBurst;
+    if (burst && burst.t < burst.dur) {
+      const source = this.project(pass.defender.pos.q, pass.defender.pos.r);
+      const dx = target.x - source.x;
+      const dy = target.y - source.y;
+      const len = Math.hypot(dx, dy) || 1;
+      burst.ux = dx / len;
+      burst.uy = dy / len;
+      const muzzle = machineGunBurstStartPoint(source, burst.ux, burst.uy, this.hexSize);
+      burst.startX = muzzle.x;
+      burst.startY = muzzle.y;
+      burst.targetX = target.x;
+      burst.targetY = target.y;
+    }
+    const g = this.stukaBlastGraphics;
+    if (g && this.stukaBlastNode) {
+      this.stukaBlastNode.active = true;
+      this.stukaBlastNode.setSiblingIndex(this.stukaSpriteNode?.getSiblingIndex() + 1);
+      g.clear();
+      this.drawFireSmoke(g, { x, y: pass.y }, 3, pass.cannonSeed, 1);
+    }
+  }
+
   private drawStukaCannonBurst(pass: StukaFlyover) {
     const node = this.stukaBlastNode;
     const g = this.stukaBlastGraphics;
@@ -9788,6 +10320,7 @@ export class BattleScene extends Component {
   }
 
   update(dt: number) {
+    if (this.leavingBattle) return;
     if (this.campaignUpgradeChoiceRoot || this.campaignUpgradeDetailRoot) return;
     this.advanceFogVisionTransition(dt);
     this.advanceEngineVibration(dt);
@@ -9806,6 +10339,7 @@ export class BattleScene extends Component {
     if (this.sniperBulletTraces.length > 0) this.advanceSniperBulletTraces(dt);
     if (this.mainGunRecoils.size > 0) this.advanceMainGunRecoils(dt);
     this.advanceUnitEffects(dt);
+    this.unitOcclusion?.syncTransforms();
     if (GameSession.isPvp) this.advancePvpTurnTimer();
     if (this.campaignPanAnim) {
       this.advanceCampaignPanAnim(dt);
@@ -10007,6 +10541,25 @@ export class BattleScene extends Component {
       finishManeuverSound(this.anim);
       return;
     }
+    if (anim.kind === 'move' && !anim.evacExit && !anim.truckExitDefeat
+      && this.outcome === 'ongoing' && this.tryResolveAmbushAfterMove(
+        finishedUnit, () => {
+          if (this.outcome !== 'ongoing') {
+            this.updateOutcomeOverlay();
+            return;
+          }
+          if (this.phase === 'ally' || this.phase === 'enemy') {
+            this.enemyDiceHighlightIdx = -1;
+            this.refreshEnemyDiceTray();
+            this.runNextEnemyStep();
+          } else if (this.phase === 'player') {
+            this.updateHUD();
+            this.completePhaseDiceAction();
+          }
+        })) {
+      finishManeuverSound();
+      return;
+    }
     this.redraw();
     if (GameSession.isPvp) {
       finishManeuverSound();
@@ -10037,41 +10590,37 @@ export class BattleScene extends Component {
     }
   }
 
-  /**
-   * 移动阶段的"前进 / 后退候选"高亮。
-   *
-   * 新规则：玩家不再自由点任意邻格，而是通过骰子托盘里的"驾驶骰"沿坦克当前朝向
-   * ±1 格移动。这里把两个候选格画出来：
-   *   - 前进（沿 facing）=> 绿圈
-   *   - 后退（facing+3）=> 琥珀圈
-   *   - 如果该方向的目标格越界 / 林地或水域不可入 / 有活着的敌人 => 画红描边提示不可入
-   */
-  private drawDriveCandidates() {
-    if (!this.g || !this.mission) return;
-    const { map, sherman } = this.mission;
-    if (sherman.facing === null) return;
-    const cands: Array<{ dir: number; color: Color }> = [
-      { dir: sherman.facing,                    color: DRIVE_FWD_COLOR },
-      { dir: rotateDirection(sherman.facing, 3), color: DRIVE_BWD_COLOR },
-    ];
+  private onMouseMoveMap(event: EventMouse): void {
+    const tile = this.pickTileAtScreenUi(event);
+    const target = this.isEffectiveBattleTile(tile) ? tile : null;
+    if (this.hoveredTile === target) return;
+    this.hoveredTile = target;
+    this.drawHoveredTile();
+  }
 
-    for (const c of cands) {
-      const pos = neighbor(sherman.pos, c.dir as 0 | 1 | 2 | 3 | 4 | 5);
-      const tile = map.get(pos);
-      const dirSign = c.dir === sherman.facing ? 1 : -1;
-      const isEvacExit = !GameSession.isPvp && isPlayerTankEvacDrive(this.mission, sherman.pos, sherman.facing as Direction, dirSign as 1 | -1, pos, {
-        canExitTo: (target) => this.isCampaignNextSegmentEntry(target),
-      });
-      const blocked = !isEvacExit && (!tile
-        || !this.canMoveToBattleTile(pos)
-        || !map.canTankCrossEdge(sherman.pos, pos, { faction: sherman.faction }) // 桥梁边向校验：水域+桥梁需 dir 落在 br 端，详见 GDD §3.2
-        || this.findMoveBlocker(sherman, pos) !== null);
-      const p = this.project(pos.q, pos.r);
-      this.g.strokeColor = blocked ? DRIVE_BLOCKED : c.color;
-      this.g.lineWidth = 3;
-      this.drawHexOutline(p.x, p.y, this.hexSize - 3);
+  private clearHoveredTile(): void {
+    this.hoveredTile = null;
+    this.hoverTileGraphics?.clear();
+  }
+
+  private drawHoveredTile(): void {
+    this.hoverTileGraphics?.clear();
+    const tile = this.hoveredTile;
+    if (!this.mapNode || !this.mission || !tile
+        || this.mission.map.get(tile.pos) !== tile || !this.isEffectiveBattleTile(tile)) return;
+    if (!this.hoverTileGraphics) {
+      const node = new Node('HoveredTile');
+      node.layer = this.mapNode.layer;
+      this.mapNode.addChild(node);
+      this.hoverTileGraphics = node.addComponent(Graphics);
     }
-    this.g.lineWidth = 2;
+    const g = this.hoverTileGraphics;
+    g.node.setSiblingIndex(this.mapNode.children.length - 1);
+    const center = this.project(tile.pos.q, tile.pos.r);
+    g.strokeColor = HOVER_TILE_COLOR;
+    g.lineWidth = 3;
+    this.traceHexPathOn(g, center.x, center.y, this.hexSize - 3);
+    g.stroke();
   }
 
   /** 六边形路径（moveTo 首顶点 + close） */
@@ -10104,9 +10653,47 @@ export class BattleScene extends Component {
     return true;
   }
 
+  private drawContinuousTerrain(tiles: Tile[]): boolean {
+    if (!this.continuousTerrain) return false;
+    try {
+      this.continuousTerrain.draw(tiles, this.usesWinterTerrainVisuals(), this.hexSize, this.offsetX, this.offsetY, this.usesEuropeanSummerVisuals());
+      return true;
+    } catch (error) {
+      console.warn('[BattleScene] V3 terrain rendering failed; using sprite fallback:', error);
+      this.continuousTerrain.destroy();
+      this.continuousTerrain = null;
+      return false;
+    }
+  }
+
+  private drawRedesignNaturalObjects(cx: number, cy: number, size: number, tile: Tile) {
+    if (tile.terrain !== 'trees') return;
+    const frame = this.redesignObjectFrames.tree_palm;
+    if (!frame) return;
+    // Sparse palms leave open ground visible, unlike the dense forest canopy.
+    const layouts = [[-0.43, 0.32, 0.60], [0.43, 0.28, 0.56], [0, -0.44, 0.62]];
+    let variant = 0;
+    for (const [dx, dy, scale] of layouts) {
+      if (this.foliageSpritePoolNext >= this.foliageSpritePool.length) break;
+      const slot = this.foliageSpritePool[this.foliageSpritePoolNext++];
+      const index = (Math.abs(tile.pos.q * 31 + tile.pos.r * 17) + variant++) % 4;
+      const chosen = this.redesignObjectFrames[index === 0 ? 'tree_palm' : `tree_palm_${index + 1}`] ?? frame;
+      slot.sprite.spriteFrame = chosen;
+      const aspect = chosen.rect.height / Math.max(1, chosen.rect.width);
+      slot.node.getComponent(UITransform)!.setContentSize(size * scale, size * scale * aspect);
+      slot.node.setPosition(cx + dx * size, cy + dy * size, 0);
+      slot.node.setRotationFromEuler(0, 0, 0);
+      slot.node.setScale(1, 1, 1);
+      slot.node.active = true;
+    }
+  }
+
   private usesWinterTerrainVisuals(): boolean {
     const data = this.mission?.data;
     return data?.season === 'winter' && (data.theater ?? 'europe') === 'europe';
+  }
+  private usesEuropeanSummerVisuals(): boolean {
+    return (this.mission?.data.theater ?? 'europe') === 'europe' && !this.usesWinterTerrainVisuals();
   }
 
   private terrainSpriteFrameFor(terrain: TerrainType): SpriteFrame | null {
@@ -10123,6 +10710,7 @@ export class BattleScene extends Component {
   }
 
   private activeTreeSpriteFrames(): Array<SpriteFrame | null> {
+    if (this.usesEuropeanSummerVisuals() && this.europeanSummerTreeSpriteFrames.every(Boolean)) return this.europeanSummerTreeSpriteFrames;
     if (!this.usesWinterTerrainVisuals()) return this.treeSpriteFrames;
     return this.winterTreeSpriteFrames.some(Boolean) ? this.winterTreeSpriteFrames : this.treeSpriteFrames;
   }
@@ -10151,18 +10739,9 @@ export class BattleScene extends Component {
     for (let edge = 0; edge < 6; edge++) {
       const axialDir = HEDGE_DRAW_EDGE_BY_AXIAL[edge] as Direction;
       const n = map.get(neighbor(tile.pos, axialDir));
-      const isSharedWaterBorder = tile.terrain === 'water' && n?.terrain === 'water';
-      // A shared edge belongs to two tiles. Assign it to the stable
-      // lower-coordinate tile so its translucent stroke is blended once.
-      if (n && (
-        tile.pos.q > n.pos.q || (tile.pos.q === n.pos.q && tile.pos.r > n.pos.r)
-      )) {
-        continue;
-      }
-      g.strokeColor =
-        isSharedWaterBorder
-          ? WATER_SHARED_BORDER
-          : TILE_BORDER;
+      // Shared edges are invisible; only the exposed map perimeter is outlined.
+      if (n) continue;
+      g.strokeColor = TILE_BORDER;
       const a0 = (-30 + 60 * edge) * Math.PI / 180;
       const a1 = (-30 + 60 * (edge + 1)) * Math.PI / 180;
       g.moveTo(cx + size * Math.cos(a0), cy + size * Math.sin(a0));
@@ -10366,8 +10945,7 @@ export class BattleScene extends Component {
   }
 
   /**
-   * 林地格上叠画多簇「俯视树冠」（多圆+半透明阴影）。
-   * 冠幅约为原先 2 倍、丛数 2 倍，排布为上下两带，尽量占满格内可绘区域；格 (q,r) 轻微错纹。
+   * 林地格上叠画俯视树冠，外圈略越过格边，让冠层连成一片；格 (q,r) 轻微错纹。
    */
   private drawForestCanopy(cx: number, cy: number, size: number, t: Tile) {
     const seedRaw =
@@ -10378,7 +10956,7 @@ export class BattleScene extends Component {
       const p = FOREST_CANOPY_LAYOUT[i];
       const x = cx + (p.ox + (rng.next() - 0.5) * 0.05) * s;
       const y = cy + (p.oy + (rng.next() - 0.5) * 0.05) * s;
-      const scale = p.scale * (0.92 + rng.next() * 0.18);
+      const scale = p.scale * FOREST_CANOPY_SCALE * (0.92 + rng.next() * 0.18);
       if (!this.drawTreeSprite(x, y, s, seedRaw + i * 101, scale)) {
         this.drawOneTreeClump(x, y, s * scale * 0.34);
       }
@@ -10387,6 +10965,11 @@ export class BattleScene extends Component {
 
   /** 单丛树冠：左下浅影 + 几层相叠的圆 */
   private drawOneTreeClump(x: number, y: number, r: number) {
+    if (this.g === this.mapOcclusionGraphics) {
+      this.occlusionShapes.push({ circle: [x - r * .42, y - r * .42, r * .92] },
+        { circle: [x - r * .1, y + r * .06, r] },
+        { circle: [x + r * .2, y - r * .04, r * .8] });
+    }
     const g = this.g!;
     const winter = this.usesWinterTerrainVisuals();
     const sh = r * 0.42;
@@ -10427,7 +11010,100 @@ export class BattleScene extends Component {
    * 颜色：屋顶 `BUILDING_ROOF_FILL` 深棕；外缘描边 `BUILDING_OUTLINE`；
    * 屋脊（沿矩形长边方向中线一笔）`BUILDING_WALL_FILL` 浅棕，叠在屋顶上做轻微立体感。
    */
+  private ruralBuildingsFor(tile: Tile): RuralBuilding[] {
+    const variant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, (this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals()) ? '' : this.missionId);
+    const curved = this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals();
+    const key = [tile.pos.q, tile.pos.r, tile.terrain, tile.roads?.map(Boolean).join(','), variant, curved].join('|');
+    let layout = this.ruralLayoutCache.get(key);
+    if (!layout) {
+      layout = ruralBuildingLayout(tile.pos.q, tile.pos.r, this.ruralRoadClearanceFor(tile));
+      this.ruralLayoutCache.set(key, layout);
+    }
+    return layout;
+  }
+
+  private ruralRoadClearanceFor(tile: Tile): ((x: number, y: number) => number) | undefined {
+    const variant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, (this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals()) ? '' : this.missionId);
+    const curved = this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals();
+    const roads = tile.roads?.some(Boolean) ? tile.roads : undefined;
+    const runwayAxis = roads?.findIndex((enabled, i) => enabled && roads[(i + 3) % 6]);
+    const runwayAngle = Math.max(0, runwayAxis ?? 0) * Math.PI / 3;
+    return roads && tile.terrain === 'airstrip'
+      ? (x: number, y: number) => Math.abs(-x * Math.sin(runwayAngle) + y * Math.cos(runwayAngle)) - .42
+      : roads ? (x: number, y: number) => curved
+      ? europeanCountryRoadDistance(roads, x, y, variant) - .19
+      : europeanRoadSurfaceClearance(roads, x, y, variant) - .015 : undefined;
+  }
+
+  private ruralPropsFor(tile: Tile): RuralProp[] {
+    const key = [tile.pos.q, tile.pos.r, tile.terrain, tile.roads?.map(Boolean).join(','), this.usesEuropeanSummerVisuals(), this.missionId].join('|');
+    let props = this.ruralPropCache.get(key);
+    if (!props) {
+      props = ruralVillageProps(tile.pos.q, tile.pos.r, this.ruralBuildingsFor(tile), this.ruralRoadClearanceFor(tile));
+      this.ruralPropCache.set(key, props);
+    }
+    return props;
+  }
+
+  private ruralRoofFrame(variant: number): SpriteFrame | null {
+    const prefix = this.mission?.data.theater === 'pacific' ? 'pacific_roof_0' : 'rural_roof_0';
+    const suffix = this.usesWinterTerrainVisuals() ? '_snow' : '';
+    return this.redesignObjectFrames[prefix + (variant + 1) + suffix] ?? null;
+  }
+
+  private drawRuralBuildingSprites(cx: number, cy: number, size: number, tile: Tile, parent?: Node) {
+    const village = !tile.roads?.some(Boolean);
+    const yardFrame = this.redesignObjectFrames[this.usesWinterTerrainVisuals() ? 'rural_yard_patch_snow' : 'rural_yard_patch'];
+    if (parent && village && yardFrame) {
+      const n = new Node('TileInspectRuralYard'); n.layer = this.node.layer;
+      n.addComponent(UITransform).setContentSize(size * 2, size * 2);
+      const sp = n.addComponent(Sprite); sp.sizeMode = Sprite.SizeMode.CUSTOM;
+      sp.spriteFrame = yardFrame;
+      n.setPosition(cx, cy, 0); parent.addChild(n);
+    }
+    for (const b of this.ruralBuildingsFor(tile)) {
+      const frame = this.ruralRoofFrame(b.variant);
+      if (!frame) continue;
+      let n: Node;
+      if (parent) {
+        n = new Node('TileInspectRuralRoof'); n.layer = this.node.layer;
+        n.addComponent(UITransform); const sp = n.addComponent(Sprite);
+        sp.sizeMode = Sprite.SizeMode.CUSTOM; sp.spriteFrame = frame; parent.addChild(n);
+      } else {
+        if (this.urbanBuildingSpritePoolNext >= this.urbanBuildingSpritePool.length) break;
+        const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
+        n = slot.node; slot.sprite.spriteFrame = frame;
+      }
+      n.getComponent(UITransform)!.setContentSize(size * b.width, size * b.height);
+      n.setPosition(cx + size * b.x, cy + size * b.y, 0);
+      n.setRotationFromEuler(0, 0, b.angle * 180 / Math.PI);
+      n.setScale(1, 1, 1); n.active = true;
+    }
+    for (const prop of this.ruralPropsFor(tile)) {
+        const frame = this.redesignObjectFrames[prop.name]; if (!frame) continue;
+        let n: Node;
+        if (parent) {
+          n = new Node('TileInspectVillageProp'); n.layer = this.node.layer;
+          n.addComponent(UITransform); const sp = n.addComponent(Sprite);
+          sp.spriteFrame = frame; sp.sizeMode = Sprite.SizeMode.CUSTOM; parent.addChild(n);
+        } else {
+          if (this.urbanBuildingSpritePoolNext >= this.urbanBuildingSpritePool.length) break;
+          const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
+          n = slot.node; slot.sprite.spriteFrame = frame;
+        }
+        n.getComponent(UITransform)!.setContentSize(size * prop.size, size * prop.size * frame.rect.height / frame.rect.width);
+        n.setPosition(cx + prop.x * size, cy + prop.y * size, 0);
+        n.setRotationFromEuler(0, 0, prop.angle * 180 / Math.PI);
+        n.setScale(1, 1, 1); n.active = true;
+    }
+  }
+
   private drawBuildingOverlay(cx: number, cy: number, size: number, tile: Tile) {
+    if (!tile.urbanKind && !tile.terrain.startsWith('urban_') && this.ruralRoofFrame(0)) {
+      if (this.g === this.mapOcclusionGraphics || this.g === this.buildingGraphics) this.drawRuralBuildingSprites(cx, cy, size, tile);
+      // The inspector adds the same roof sprites after its Graphics preview.
+      return;
+    }
     const g = this.g!;
 
     // ---- 1) 伪随机种子：基于 axial (q,r) 稳定到「同一格永远同样的布置」 ----
@@ -10437,8 +11113,11 @@ export class BattleScene extends Component {
 
     // ---- 2) 使用与预制公路贴图相同的圆弧 / 路口轮廓计算净空 ----
     const roads = tile.roads;
+    const roadVariant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, this.missionId);
     const roadClearanceAt = (px: number, py: number): number => roads
-      ? europeanRoadSurfaceClearance(roads, (px - cx) / size, (py - cy) / size) * size
+      ? europeanRoadSurfaceClearance(
+        roads, (px - cx) / size, (py - cy) / size, roadVariant,
+      ) * size
       : Number.POSITIVE_INFINITY;
 
     // ---- 3) 候选采样：拒绝采样直到放满目标数量（或达到尝试上限） ----
@@ -10561,6 +11240,7 @@ export class BattleScene extends Component {
       const c1 = rotate(hw, -hh);
       const c2 = rotate(hw, hh);
       const c3 = rotate(-hw, hh);
+      if (this.g === this.mapOcclusionGraphics) this.occlusionShapes.push({ polygon: [c0, c1, c2, c3] });
 
       // (4-1) 屋顶底色：整张矩形铺满（亮坡视为屋顶基色）
       g.fillColor = this.usesWinterTerrainVisuals() ? WINTER_BUILDING_ROOF : BUILDING_ROOF_PALETTE[b.colorIdx];
@@ -11288,8 +11968,8 @@ export class BattleScene extends Component {
     this.drawSegmentedHexOutlineOn(g, cx, cy, size, fromT, toT);
   }
 
-  /** 每条六角边上的树篱树木数量：两个端点 + 中点；端点会跨相邻树篱去重共用。 */
-  private static readonly HEDGE_TREES_PER_EDGE = 3;
+  /** 每条六角边放置四棵树；端点跨相邻树篱去重共用。 */
+  private static readonly HEDGE_TREES_PER_EDGE = 4;
 
   /**
    * 第 `edgeIndex` 条**几何边**上的树篱（`edgeIndex` = `-30°+60°·i` 划分法中的 i∈0..5），与**轴向**下标不混用：若表示 `HEX_DIRECTIONS[ax]/Tile.hedges[ax]/h[ax]/ef`，入参应取 `HEDGE_DRAW_EDGE_BY_AXIAL[ax]`。
@@ -11335,11 +12015,11 @@ export class BattleScene extends Component {
       usedKeys.add(key);
       const keySeed = this.hashStringToSeed(key);
       const local = new RNG(keySeed);
-      const along = (local.next() - 0.5) * size * (k === 1 ? 0.08 : 0.025);
+      const along = (local.next() - 0.5) * size * (k === 1 ? 0.04 : 0.025);
       const across = (local.next() - 0.5) * size * 0.14;
       const px = x0 + tx * f + ux * along + nx * across;
       const py = y0 + ty * f + uy * along + ny * across;
-      const scale = 0.40 + local.next() * 0.12;
+      const scale = 0.34 + local.next() * 0.06;
       if (!this.drawTreeSprite(px, py, size, keySeed, scale)) {
         this.drawHedgeTreeClump(px, py, size * scale * 0.30, rng);
       }
@@ -12291,9 +12971,12 @@ export class BattleScene extends Component {
           offsetForward: PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetForward,
           offsetRight: PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetRight,
         };
-      case 'panzer3_m': {
-        const geometry = splitTankGeometryConfigOf('panzer3_m');
-        const visual = splitTankVisualConfigOf('panzer3_m');
+      case 'panzer3_m':
+      case 'panzer3_m_no_schurzen':
+      case 'panzer3_n':
+      case 'panzer3_n_schurzen': {
+        const geometry = splitTankGeometryConfigOf(kind);
+        const visual = splitTankVisualConfigOf(kind);
         return {
           trimW: geometry.topTrim.w,
           trimH: geometry.topTrim.h,
@@ -12472,19 +13155,9 @@ export class BattleScene extends Component {
     const body = this.topDownForwardVec(u, c, bodyFacingLerp);
     const turret = this.topDownForwardVec(u, c, turretFacingLerp);
     const offsetUnit = this.hexSize * Math.sqrt(3);
-    const f = cfg.hullOffsetForward * offsetUnit;
-    const r = cfg.hullOffsetRight * offsetUnit;
     const turretF = cfg.turretOffsetForward * offsetUnit;
     const turretR = cfg.turretOffsetRight * offsetUnit;
-    const baseX = c.x + f * body.ux + r * body.uy;
-    const baseY = c.y + f * body.uy + r * (-body.ux);
     const recoil = this.mainGunRecoilOffsetFor(u, 'turret');
-
-    const pivotLocalX = (pivot.bodyX - (topTrim.x + topTrim.w / 2)) * scale;
-    const pivotLocalY = ((topTrim.y + topTrim.h / 2) - pivot.bodyY) * scale;
-    const bodyAngle = Math.atan2(body.uy, body.ux) + Math.PI;
-    const cos = Math.cos(bodyAngle);
-    const sin = Math.sin(bodyAngle);
 
     sp.spriteFrame = assets.turret;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -12497,8 +13170,9 @@ export class BattleScene extends Component {
       anchorY - turretR / (turretTrim.h * turretScale),
     );
     node.setScale(1, 1, 1);
-    const spriteX = baseX + pivotLocalX * cos - pivotLocalY * sin + recoil.x;
-    const spriteY = baseY + pivotLocalX * sin + pivotLocalY * cos + recoil.y;
+    const turretPivot = this.splitTankTurretPivot(u, c, cfg, geometry, bodyFacingLerp);
+    const spriteX = turretPivot.x + recoil.x;
+    const spriteY = turretPivot.y + recoil.y;
     const angle = (Math.atan2(turret.uy, turret.ux) * 180) / Math.PI + 180;
     node.setPosition(spriteX, spriteY, 0);
     node.angle = angle;
@@ -12677,10 +13351,10 @@ export class BattleScene extends Component {
         return this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
       }
       const a = facingLerp.fromVisualTarget
-        ? this.targetScreenAngle(u.pos, facingLerp.fromVisualTarget)
+        ? this.turretVisualScreenAngle(u, facingLerp.fromVisualTarget)
         : this.directionScreenAngle(u.pos, c, facingLerp.from);
       const b = facingLerp.toVisualTarget
-        ? this.targetScreenAngle(u.pos, facingLerp.toVisualTarget)
+        ? this.turretVisualScreenAngle(u, facingLerp.toVisualTarget)
         : this.directionScreenAngle(u.pos, c, facingLerp.to);
       let d = b - a;
       while (d > Math.PI) d -= Math.PI * 2;
@@ -13203,6 +13877,7 @@ export class BattleScene extends Component {
     g.circle(c.x, c.y, r);
     g.fill();
     g.stroke();
+    this.recordVectorSilhouette(u, c.x, c.y, r);
 
     // PNG 车辆通过炮管/炮塔表达朝向；fallback 矢量车体不再额外画长朝向线，避免出现多余细边线。
   }
@@ -13405,6 +14080,8 @@ export class BattleScene extends Component {
         g.fillColor = FACTION_COLORS[u.faction];
         g.strokeColor = UNIT_BORDER;
         g.lineWidth = 2;
+        this.recordVectorSilhouette(u, cx, cy - bodyR * 0.15, bodyR);
+        this.recordVectorSilhouette(u, cx, cy + headOffset, headR);
         g.circle(cx, cy - bodyR * 0.15, bodyR);
         g.fill(); g.stroke();
         g.circle(cx, cy + headOffset, headR);
@@ -13424,7 +14101,9 @@ export class BattleScene extends Component {
       g.fillColor = FACTION_COLORS[u.faction];
       g.strokeColor = UNIT_BORDER;
       g.lineWidth = 2;
-      g.circle(cx, cy - bodyR * 0.15, bodyR);
+      this.recordVectorSilhouette(u, cx, cy - bodyR * 0.15, bodyR);
+        this.recordVectorSilhouette(u, cx, cy + headOffset, headR);
+        g.circle(cx, cy - bodyR * 0.15, bodyR);
       g.fill(); g.stroke();
       g.circle(cx, cy + headOffset, headR);
       g.fill(); g.stroke();
@@ -13505,6 +14184,8 @@ export class BattleScene extends Component {
 
     const hudTransform = this.hudRoot?.getComponent(UITransform);
     hudTransform?.setContentSize(width, height);
+    // Off-map aim hexes can extend into the extra area exposed by tall/wide windows.
+    this.mapInputNode?.getComponent(UITransform)?.setContentSize(width, height);
 
     this.missionTitleLabel?.node.setPosition(left, top, 0);
     this.weatherHudLabel?.node.setPosition(left + 550, top, 0);
@@ -13895,7 +14576,6 @@ export class BattleScene extends Component {
       if (!this.combatLogTouchTargetsMap) return;
       this.combatLogTouchTargetsMap = false;
       sv.vertical = true;
-      this.mapPanMoved = false;
       this.onTouchMap(event);
       event.propagationStopped = true;
     }, this);
@@ -14647,6 +15327,13 @@ export class BattleScene extends Component {
 
   private shouldCombatLogTouchTargetMap(event: EventTouch): boolean {
     if (this.phase !== 'player' || this.outcome !== 'ongoing') return false;
+    const mapTransform = this.mapNode?.getComponent(UITransform);
+    if (mapTransform) {
+      const ui = event.getUILocation();
+      const local = mapTransform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0));
+      const pos = this.pixelToNearestAxial(local.x, local.y);
+      if (this.outsideMapTurretAimDirection(pos) !== null) return true;
+    }
     return this.pickTileAtScreenUi(event) !== null;
   }
 
@@ -15725,6 +16412,8 @@ export class BattleScene extends Component {
   }
 
   private onBackToMenu() {
+    if (this.leavingBattle) return;
+    this.leavingBattle = true;
     GameSession.requestBattleMenuReturn();
     if (!GameSession.isPvp) this.writeCurrentSave({ silent: true });
     this.battleLog('[BattleScene] 返回主菜单');
@@ -15816,6 +16505,8 @@ export class BattleScene extends Component {
 
   /** PVP 结算后的“再来一局”应重新选择匹配方式，而不是重置当前对局。 */
   private returnToPvpSelection() {
+    if (this.leavingBattle) return;
+    this.leavingBattle = true;
     this.battleLog('[BattleScene] PVP 对局结束，返回 PVP 对战选择');
     stopBattleSfx();
     if (this.pvpBattleUnlisten) this.pvpBattleUnlisten();
@@ -16852,6 +17543,7 @@ export class BattleScene extends Component {
       onClick: () => void;
       unavailableReason: string | null;
       compactPair: boolean;
+      pairGroup?: string;
       badge?: string;
       ammoTooltip?: ShellType;
     };
@@ -16989,8 +17681,17 @@ export class BattleScene extends Component {
         case 'gunner_gun_or_reload':
           // 6 点 C 列：炮手主炮射击 / 装填手装填 → 二选一
           addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell), 'loader');
+          const fireItemIndex = items.length;
           addItem(t(fireActionKey), PHASE_BTN_ATTACK,
             () => this.selectGunDie(idx), this.gunActionUnavailable('gunner'));
+          if (sherman && !sherman.ambushReadyThisTurn && canEnterAmbush(sherman, GameSession.gameMode)) {
+            addItem(t('action.ambush'), PHASE_BTN_ATTACK, () => this.tryEnterAmbush(idx));
+            // Keep these two actions together without pairing fire with the preceding reload button.
+            items[fireItemIndex].compactPair = true;
+            items[fireItemIndex].pairGroup = 'gun-ambush';
+            items[items.length - 1].compactPair = true;
+            items[items.length - 1].pairGroup = 'gun-ambush';
+          }
           break;
         case 'codriver_mg':
           // 4 点 C 列：机枪射击步兵；不要求副驾驶存活。烟幕发射器可追加烟雾弹。
@@ -17059,7 +17760,7 @@ export class BattleScene extends Component {
       if (hasDoublesPartner) {
         const concealReason = !sherman ? t('attack.reason.unknown')
           : sherman.paralyzed ? t('floater.paralyzedNoConceal')
-            : tileForbidsSmokeOrConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.beachNoConceal')
+            : tileForbidsConcealment(this.mission?.map.get(sherman.pos)) ? t('floater.terrainNoConceal')
               : sherman.hidden ? t('floater.alreadyConcealed') : null;
         addItem(t('action.concealPair'), DIE_ACTION_DOUBLES,
           () => this.tryConcealment(idx), concealReason);
@@ -17082,7 +17783,7 @@ export class BattleScene extends Component {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const next = items[i + 1];
-      if (item.compactPair && next?.compactPair) {
+      if (item.compactPair && next?.compactPair && item.pairGroup === next.pairGroup) {
         rows.push([item, next]);
         i++;
       } else {
@@ -17441,12 +18142,134 @@ export class BattleScene extends Component {
 
   // ---------- 攻击阶段动作 ----------
 
-  /**
-   * 装填主炮：消耗一颗装填骰；若已装填则拒绝（浪费骰）。
-   *
-   * 攻击阶段：骰面 = 'reload' (die=1/2) 时合法。
-   * 杂项阶段：骰面 = 'gunner_gun_or_reload' (die=1) 时合法（由 popover 路由）。
-   */
+  /** Gunner-only sight is shared by the visual overlay and reaction trigger. */
+  private ambushGunnerSightKeys(watcher: Unit): Set<string> {
+    if (!this.mission) return new Set();
+    const facing = this.currentTurretFacingFor(watcher, watcher.facing ?? 0);
+    // Suppress commander and interior sight; only the gunner's aimed ray reacts.
+    const sightUnit = { ...watcher, turretFacing: facing, hatchOpen: false, interiorVisionRange: 0 };
+    return computeUnitVisibleHexes(
+      this.mission.map, sightUnit, this.currentWeather(), this.mission.smokeHexes,
+    );
+  }
+
+  /** Resolve reactions after a vehicle's movement die, in stance activation order. */
+  private tryResolveAmbushAfterMove(mover: Unit, resume: () => void): boolean {
+    if (!this.mission || this.resolvingAmbush || GameSession.gameMode !== 'hardcore'
+      || isFootUnit(mover) || mover.destroyed) return false;
+    const { map, smokeHexes } = this.mission;
+    const watchers = orderedAmbushers(this.allUnits(), mover);
+    for (const watcher of watchers) {
+      if (watcher === mover || !watcher.ambushReadyThisTurn || !isHostile(watcher, mover)) continue;
+      if (!canEnterAmbush(watcher, GameSession.gameMode, watcher !== this.mission.sherman)) {
+        markAmbushAction(watcher);
+        continue;
+      }
+      const sight = this.ambushGunnerSightKeys(watcher);
+      if (!isInAmbushSight(mover.pos, sight, HexMap.keyOf)) continue;
+      const facing = this.currentTurretFacingFor(watcher, watcher.facing ?? 0);
+      const sightUnit = { ...watcher, turretFacing: facing, hatchOpen: false, interiorVisionRange: 0 };
+      const shell = resolvedLoadedShell(watcher) === 'he' ? 'he' : 'ap';
+      if (!canAttack({
+        attacker: sightUnit, target: mover, map, smokeHexes,
+        expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
+        shellType: shell, hardcoreHeavyArtilleryRules: true,
+      }).ok) continue;
+      markAmbushAction(watcher);
+      this.resolvingAmbush = true;
+      this.battleLog(`[伏击] ${unitDisplayName(watcher.kind)} → ${unitDisplayName(mover.kind)} (${mover.pos.q},${mover.pos.r})`);
+      this.spawnFloater(watcher.pos.q, watcher.pos.r, t('floater.ambush'),
+        new Color(255, 220, 120, 255), { size: 32, dur: 1, rise: 44 });
+      const context = {
+        attacker: watcher, target: mover, map,
+        protagonist: this.protagonistForAttackTarget(mover),
+        theater: this.mission.data.theater,
+        units: this.allUnits(), smokeHexes, weather: this.currentWeather(),
+        expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
+        hardcoreHeavyArtilleryRules: true,
+      };
+      const actorLabel = watcher === this.mission.sherman ? t('actor.player')
+        : watcher.sideId === 'enemy'
+          ? t('actor.enemyPrefix', { name: unitDisplayName(watcher.kind) })
+          : t('actor.allyPrefix', { name: unitDisplayName(watcher.kind) });
+      const fire = () => {
+        if (shell === 'he') {
+          const report = rollHighExplosiveAttack({
+            ...context, shellType: 'he', mainGunSuppressesInfantry: false,
+            gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
+          }, this.rng);
+          const collateral = this.rollHighExplosiveCollateralResults(watcher, mover);
+          this.startDiceShow(this.highExplosivePanelReport(report), actorLabel, unitDisplayName(mover.kind), () => {
+            this.applyHighExplosiveAttackResult(mover, report, collateral);
+            if (mover.destroyed) this.registerImpactDestroyWreckVisual(mover, watcher);
+            watcher.loaded = false;
+            watcher.loadedShell = null;
+            this.outcome = this.computeOutcome();
+            this.resolvingAmbush = false;
+            this.refreshStatusPanel();
+            this.updateHUD();
+            this.redraw();
+            if (!mover.destroyed && this.tryResolveAmbushAfterMove(mover, resume)) return;
+            resume();
+          }, { attacker: watcher, target: mover, highExplosiveReport: report,
+            highExplosiveCollateral: collateral, autoResolveWithoutPanel: true });
+        } else {
+          const report = rollAttack({
+            ...context, shellType: 'ap',
+            effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
+            overpenetration: getGameModeConfig(GameSession.gameMode).overpenetration,
+            directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
+            gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
+            unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
+          }, this.rng);
+          this.startDiceShow(report, actorLabel, unitDisplayName(mover.kind), () => {
+            this.applyMainGunAttackResult(mover, report);
+            if (mover.destroyed) this.registerImpactDestroyWreckVisual(mover, watcher);
+            watcher.loaded = false;
+            watcher.loadedShell = null;
+            this.presentAttackResult(actorLabel, report, watcher, mover);
+            this.outcome = this.computeOutcome();
+            this.resolvingAmbush = false;
+            this.refreshStatusPanel();
+            this.updateHUD();
+            this.redraw();
+            if (!mover.destroyed && this.tryResolveAmbushAfterMove(mover, resume)) return;
+            resume();
+          }, { attacker: watcher, target: mover, attackSound: watcher.stats.attackSound,
+            autoResolveWithoutPanel: true });
+        }
+      };
+      // Reactions use the same exact-target turret animation as ordinary shots.
+      // Start firing only after the watcher has finished aiming at the mover.
+      if (watcher === this.mission.sherman) {
+        this.startShermanTurretAim(mover, fire);
+      } else {
+        this.startEnemyTurretAim(watcher, mover, fire);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  private tryEnterAmbush(dieIdx: number) {
+    if (!this.mission || this.playerStep !== 'misc') return;
+    const slot = this.phaseDice[dieIdx];
+    if (!slot || slot.used || slot.pip !== 6) return;
+    const sherman = this.mission.sherman;
+    if (sherman.ambushReadyThisTurn
+      || !enterAmbush(sherman, GameSession.gameMode, false, this.allUnits())) return;
+    this.showAmbushSightBriefly(sherman);
+    this.usePhaseDice([dieIdx]);
+    this.closeDiePopover();
+    this.spawnFloater(sherman.pos.q, sherman.pos.r, t('floater.ambush'),
+      new Color(255, 220, 120, 255), { size: 28, dur: 1, rise: 35 });
+    this.refreshPhaseUI();
+    this.updateHUD();
+    this.redraw();
+    this.completePhaseDiceAction();
+  }
+
+  /** Reload the main gun with an attack or misc die. */
   private tryReload(dieIdx: number, shellType?: ShellType) {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
@@ -18017,9 +18840,9 @@ export class BattleScene extends Component {
       this.showDieActionUnavailable(t('floater.paralyzedNoConceal'));
       return;
     }
-    if (tileForbidsSmokeOrConcealment(this.mission.map.get(s.pos))) {
+    if (tileForbidsConcealment(this.mission.map.get(s.pos))) {
       this.closeDiePopover();
-      this.spawnFloater(s.pos.q, s.pos.r, t('floater.beachNoConceal'),
+      this.spawnFloater(s.pos.q, s.pos.r, t('floater.terrainNoConceal'),
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
@@ -18980,6 +19803,7 @@ export class BattleScene extends Component {
       case 'turret':
         if (s !== this.mission?.playerTank) s.damaged = true;
         s.turretDamaged = true;
+        markAmbushAction(s);
         this.spawnFloater(pos.q, pos.r, t('dmg.outcome.turret'), color,
           { size: 22, dur: 0.9, rise: 24 });
         break;
@@ -19054,7 +19878,7 @@ export class BattleScene extends Component {
   }
 
   /** 触点 UI 坐标 → 离格心最近的六角格（空白处返回 null） */
-  private pickTileAtScreenUi(event: EventTouch): Tile | null {
+  private pickTileAtScreenUi(event: EventTouch | EventMouse): Tile | null {
     if (!this.mission || !this.mapNode) return null;
     const ut = this.mapNode.getComponent(UITransform);
     if (!ut) return null;
@@ -19072,6 +19896,12 @@ export class BattleScene extends Component {
       }
     }
     if (!target || minDist > this.hexSize) return null;
+    const center = this.project(target.pos.q, target.pos.r);
+    const dx = Math.abs(localPos.x - center.x);
+    const dy = Math.abs(localPos.y - center.y);
+    // Pointy-top hex bounds prevent hovering empty corners outside the battlefield.
+    if (dx > Math.sqrt(3) * this.hexSize / 2
+        || dy + dx / Math.sqrt(3) > this.hexSize) return null;
     return target;
   }
 
@@ -19467,7 +20297,7 @@ export class BattleScene extends Component {
         const modifier = GameSession.gameMode === 'hardcore' ? PLAYER_HARDCORE_DICE_POOL.baseByPhaseTerrain.attack[terrain] : 0;
         const base = u.stats.firepower ?? 6;
         const { h: fireH } = this.makeTileScrollText(content, x0, y, textW,
-          t(u === this.mission?.sherman ? 'tileInspect.playerFirepower' : 'tileInspect.firepower', { base, value: u === this.mission?.sherman ? base - 6 + modifier : Math.max(0, base + modifier) }), 15);
+          t(u === this.mission?.sherman ? 'tileInspect.playerFirepower' : 'tileInspect.firepower', { base, value: u === this.mission?.sherman ? base - 6 + modifier : Math.max(0, base + modifier + nonPlayerTankFirepowerBonus(u)) }), 15);
         y -= fireH + gapL;
       }
       if (isHeavyArtilleryUnit(u) && GameSession.gameMode === 'hardcore') {
@@ -19623,7 +20453,7 @@ export class BattleScene extends Component {
       const p = FOREST_CANOPY_LAYOUT[i];
       const x = cx + (p.ox + (rng.next() - 0.5) * 0.05) * size;
       const y = cy + (p.oy + (rng.next() - 0.5) * 0.05) * size;
-      const scale = p.scale * (0.92 + rng.next() * 0.18);
+      const scale = p.scale * FOREST_CANOPY_SCALE * (0.92 + rng.next() * 0.18);
       this.addTileInspectTreeSprite(parent, x, y, size, seedRaw + i * 101, scale);
     }
   }
@@ -19703,11 +20533,11 @@ export class BattleScene extends Component {
       usedKeys.add(key);
       const keySeed = this.hashStringToSeed(key);
       const local = new RNG(keySeed);
-      const along = (local.next() - 0.5) * size * (k === 1 ? 0.08 : 0.025);
+      const along = (local.next() - 0.5) * size * (k === 1 ? 0.04 : 0.025);
       const across = (local.next() - 0.5) * size * 0.14;
       const px = baseX + ux * along + nx * across;
       const py = baseY + uy * along + ny * across;
-      const scale = 0.40 + local.next() * 0.12;
+      const scale = 0.34 + local.next() * 0.06;
       this.addTileInspectTreeSprite(parent, px, py, size, keySeed, scale);
     }
   }
@@ -19739,7 +20569,8 @@ export class BattleScene extends Component {
     const transform = roadSpriteTransform(tile.roads);
     if (!transform) return null;
     const season = this.usesWinterTerrainVisuals() ? 'winter' : 'summer';
-    const path = `textures/terrain/european_roads/european_road_surface_${season}_${transform.canonicalFlags}_v1/spriteFrame`;
+    const variant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, (this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals()) ? '' : this.missionId) + 1;
+    const path = `textures/terrain/european_roads/european_road_surface_${season}_${transform.canonicalFlags}_v${variant}/spriteFrame`;
     const frame = this.urbanOverlaySpriteFrames[path];
     return frame ? { frame, rotationDegrees: transform.rotationDegrees } : null;
   }
@@ -19829,7 +20660,27 @@ export class BattleScene extends Component {
     const pvg = overlay.addComponent(Graphics);
     this.paintTileInspectPreview(pvg, tile, 0, hexCY, hexR);
     this.addTileInspectUrbanBuildingSprite(preview, tile, 0, hexCY, hexR);
+    if (tile.hasBuilding && !tile.urbanKind && !tile.terrain.startsWith('urban_') && this.ruralRoofFrame(0)) {
+      this.drawRuralBuildingSprites(0, hexCY, hexR, tile, preview);
+    }
     this.addTileInspectForestSprites(preview, 0, hexCY, hexR, tile);
+    if (tile.terrain === 'trees') {
+      const layout = [[-0.43, 0.32, 0.60], [0.43, 0.28, 0.56], [0, -0.44, 0.62]];
+      for (let i = 0; i < layout.length; i++) {
+        const variant = (Math.abs(tile.pos.q * 31 + tile.pos.r * 17) + i) % 4;
+        const frame = this.redesignObjectFrames[variant === 0 ? 'tree_palm' : `tree_palm_${variant + 1}`];
+        if (!frame) continue;
+        const [dx, dy, scale] = layout[i];
+        const n = new Node('TileInspectNaturalTerrain');
+        n.layer = this.node.layer;
+        const sp = n.addComponent(Sprite);
+        sp.spriteFrame = frame;
+        sp.sizeMode = Sprite.SizeMode.CUSTOM;
+        n.addComponent(UITransform).setContentSize(hexR * scale, hexR * scale * frame.rect.height / frame.rect.width);
+        n.setPosition(dx * hexR, hexCY + dy * hexR, 0);
+        preview.addChild(n);
+      }
+    }
     this.addTileInspectHedgeSprites(preview, 0, hexCY, hexR, tile);
 
     const baseTerrainName = this.usesWinterTerrainVisuals() && ['road', 'field', 'mud', 'forest', 'water'].includes(tile.terrain)
@@ -20879,6 +21730,8 @@ export class BattleScene extends Component {
   /** Apply the runtime state common to normal saves and campaign checkpoints. */
   private restoreAppliedSave(result: ReturnType<typeof applySave>, skipHint?: boolean) {
     // 写回场景状态；中断任何敌方阶段调度 / 骰子态 / 动画
+    this.resolvingAmbush = false;
+    this.ambushSightHighlightUntil.clear();
     this.pendingAutoEndStep = null;
     this.turn = result.turn!;
     this.phase = result.phase!;
@@ -21661,7 +22514,7 @@ export class BattleScene extends Component {
       const chosen = this.chooseActionForEntry(enemy, entry, { commitMoveState: true });
       const entryLabel = describeEntry(entry);
       const invalidAttackDie = this.enemyDiceTypes[dieIdx] === 'attack'
-        && hardcoreAttackDieIsInvalid(pip, 0, this.enemyDiceFirepower[dieIdx] ?? Math.max(0, (enemy.stats.firepower ?? 6) + this.enemyFirepowerModifier));
+        && hardcoreAttackDieIsInvalid(pip, 0, this.enemyDiceFirepower[dieIdx] ?? Math.max(0, (enemy.stats.firepower ?? 6) + nonPlayerTankFirepowerBonus(enemy) + this.enemyFirepowerModifier));
       this.battleLog(
         `[AI] ${unitDisplayName(enemy.kind)} #${dieIdx + 1} d6=${pip} → ${entryLabel}` +
         (chosen ? ` ⇒ ${chosen}` : invalidAttackDie ? ' ⇒ 无效' : ' ⇒ 无可行动作（空转）')
@@ -21739,7 +22592,8 @@ export class BattleScene extends Component {
       if (!this.enemyCrewRequirementMet(enemy, crew)) return null;
       if (a === 'shoot') {
         if (this.canAIExecuteShoot(enemy)) return 'shoot';
-        if (isTankUnit(enemy) && enemy.stats.visionType === 'fixed' && canPerform('turn')) return 'turn';
+        if (entry.fallback !== 'ambush' && isTankUnit(enemy)
+          && enemy.stats.visionType === 'fixed' && canPerform('turn')) return 'turn';
         return null;
       }
       return canPerform(a) ? a : null;
@@ -21781,6 +22635,14 @@ export class BattleScene extends Component {
 
     switch (action) {
       case 'none':
+        return 'done';
+
+      case 'ambush':
+        if (enterAmbush(enemy, GameSession.gameMode, true, this.allUnits())) {
+          this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.ambush'),
+            new Color(255, 220, 120, 255), { size: 28, dur: 1, rise: 35 });
+          this.redraw();
+        }
         return 'done';
 
       case 'shoot': {
@@ -21930,7 +22792,7 @@ export class BattleScene extends Component {
       }
 
       case 'conceal': {
-        if (enemy.paralyzed || tileForbidsSmokeOrConcealment(map.get(enemy.pos))) return 'done';
+        if (enemy.paralyzed || tileForbidsConcealment(map.get(enemy.pos))) return 'done';
         enemy.hidden = true;
         this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 进入隐蔽`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.concealed'),
@@ -22298,14 +23160,26 @@ export class BattleScene extends Component {
    */
   private onTouchMap(event: EventTouch) {
     if (!this.mission || !this.mapNode) return;
-    if (this.mapPanEnabled && this.mapPanMoved) {
-      this.mapPanMoved = false;
-      event.propagationStopped = true;
-      return;
-    }
+    const start = event.getStartLocation();
+    const end = event.getLocation();
+    if (Math.hypot(end.x - start.x, end.y - start.y) > 6) return;
     if (this.isBusy()) return;
     if (this.outcome !== 'ongoing') return;
 
+    const mapTransform = this.mapNode.getComponent(UITransform);
+    if (mapTransform) {
+      const uiPos = event.getUILocation();
+      const localPos = mapTransform.convertToNodeSpaceAR(new Vec3(uiPos.x, uiPos.y, 0));
+      const pos = this.pixelToNearestAxial(localPos.x, localPos.y);
+      const direction = this.outsideMapTurretAimDirection(pos);
+      if (direction !== null) {
+        this.closeDiePopover();
+        this.tryAimShermanTurretAtFogTile(direction, pos, this.selectedMGDieIdx >= 0);
+        return;
+      }
+      // Do not let the nearest map tile absorb clicks in an off-map hex.
+      if (!this.mission.map.get(pos)) return;
+    }
     const target = this.pickTileAtScreenUi(event);
     if (!target) return;
 
@@ -22514,7 +23388,8 @@ export class BattleScene extends Component {
   private tryAimShermanTurretAtFogTile(direction: FireDirection, targetPos: Axial, useMG = false) {
     const dieIdx = useMG ? this.selectedMGDieIdx : this.selectedGunDieIdx;
     if (!this.mission || dieIdx < 0) return;
-    if (useMG && this.machineGunAimDirection(targetPos) !== direction) return;
+    if (useMG && this.machineGunAimDirection(targetPos) !== direction
+      && this.outsideMapTurretAimDirection(targetPos) !== direction) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     const doublesPartnerIdx = useMG ? -1 : this.selectedGunDoublesIdx;
@@ -22670,8 +23545,22 @@ export class BattleScene extends Component {
   }
 
   private beginTurretAimAnim(anim: TurretAimAnim) {
+    // Visual aim can differ from the rules heading, including within one rules
+    // direction. Measure the actual shortest rotation before allowing fire.
+    if (isTankUnit(anim.unit) && anim.unit.stats.visionType === 'turreted') {
+      const c = this.project(anim.unit.pos.q, anim.unit.pos.r);
+      const fromAngle = anim.fromVisualTarget
+        ? this.turretVisualScreenAngle(anim.unit, anim.fromVisualTarget)
+        : this.directionScreenAngle(anim.unit.pos, c, anim.from);
+      const toAngle = anim.toVisualTarget
+        ? this.turretVisualScreenAngle(anim.unit, anim.toVisualTarget)
+        : this.directionScreenAngle(anim.unit.pos, c, anim.to);
+      const delta = Math.abs(Math.atan2(Math.sin(toAngle - fromAngle), Math.cos(toAngle - fromAngle)));
+      const speed = Math.max(1, Math.min(6, anim.unit.stats.turretTraverseSpeed));
+      anim.dur = Math.max(0.01, delta / (Math.PI / 6) / speed);
+    }
     this.turretAimAnim = anim;
-    if (!anim.suppressTurretSound && anim.from !== anim.to) startTurretTraverseSound();
+    if (!anim.suppressTurretSound && (anim.from !== anim.to || anim.dur > 0.01)) startTurretTraverseSound();
   }
 
   private startEnemyMachineGunAim(
@@ -22805,6 +23694,7 @@ export class BattleScene extends Component {
       && isAntiTankGunUnit(target)
       && target.atGunCrewAlive === true;
     applyAttack(target, report);
+    if (target.turretDamaged || target.crew?.gunner === false) markAmbushAction(target);
     if (hadATGunCrew && target.destroyed) {
       // AP destroys the gun body; the operator group survives without HE suppression.
       this.releaseATGunCrew(target);
@@ -22850,6 +23740,7 @@ export class BattleScene extends Component {
   ): void {
     const hadATGunCrew = isAntiTankGunUnit(target) && target.atGunCrewAlive === true;
     applyHighExplosiveAttack(target, report);
+    if (target.turretDamaged || target.crew?.gunner === false) markAmbushAction(target);
     const gunDestroyed = hadATGunCrew && target.destroyed;
     if (hadATGunCrew && target.destroyed) {
       this.releaseATGunCrew(target);
@@ -23368,7 +24259,7 @@ export class BattleScene extends Component {
           },
         });
       };
-      if (splitTurretReady) this.startEnemyTurretAim(enemy, target, fire);
+      if (enemy.stats.visionType === 'turreted') this.startEnemyTurretAim(enemy, target, fire);
       else fire();
       return true;
     }
@@ -23483,7 +24374,7 @@ export class BattleScene extends Component {
         showDice();
       }
     };
-    if (splitTurretReady) {
+    if (enemy.stats.visionType === 'turreted') {
       // Fog hides the turret animation, but the attack still uses the same timing path.
       this.startEnemyTurretAim(enemy, target, afterTurretAim);
     } else {
@@ -24740,12 +25631,13 @@ export class BattleScene extends Component {
       }
       return;
     }
+    // 穿甲骰已在结算时预掷；即使命中失败，也展示实际点数并标记判定无效。
+    if (show.report.penDice?.length) {
+      show.penDieLabels.forEach((label, i) => this.setDieLabelFace(label, show.report.penDice![i]));
+    } else if (show.report.penDie !== undefined) {
+      show.penDieLabels.forEach(label => this.setDieLabelFace(label, show.report.penDie!));
+    }
     if (show.report.hit) {
-      if (show.report.penDice?.length) {
-        show.penDieLabels.forEach((label, i) => this.setDieLabelFace(label, show.report.penDice![i] ?? '?'));
-      } else if (show.report.penDie !== undefined) {
-        show.penDieLabels.forEach(label => this.setDieLabelFace(label, show.report.penDie ?? '?'));
-      }
       if (show.penNeedLabel && show.report.penThreshold !== undefined) {
         const thr = show.report.penThreshold;
         show.penNeedLabel.fontSize = 18;
@@ -24979,6 +25871,9 @@ export class BattleScene extends Component {
     const n = this.enemyDice.length;
     const idx = Array.from({ length: n }, (_, i) => i);
     idx.sort((a, b) => {
+      const miscA = this.enemyDiceTypes[a] === 'misc' ? 1 : 0;
+      const miscB = this.enemyDiceTypes[b] === 'misc' ? 1 : 0;
+      if (miscA !== miscB) return miscA - miscB;
       const va = this.enemyDice[a];
       const vb = this.enemyDice[b];
       if (va !== vb) return va - vb;
@@ -25003,7 +25898,7 @@ export class BattleScene extends Component {
   /** 托盘下方短标签：当前规则下该骰将执行的具体动作（无可行则空转） */
   private enemyDieActionSubtitle(enemy: Unit, dieIdx: number): string {
     if (this.enemyDiceTypes[dieIdx] === 'attack'
-        && hardcoreAttackDieIsInvalid(this.enemyDice[dieIdx], 0, this.enemyDiceFirepower[dieIdx] ?? Math.max(0, (enemy.stats.firepower ?? 6) + this.enemyFirepowerModifier))) {
+        && hardcoreAttackDieIsInvalid(this.enemyDice[dieIdx], 0, this.enemyDiceFirepower[dieIdx] ?? Math.max(0, (enemy.stats.firepower ?? 6) + nonPlayerTankFirepowerBonus(enemy) + this.enemyFirepowerModifier))) {
       return t('dice.panel.invalid');
     }
     const resolved = this.enemyDiceResolvedActions[dieIdx];
@@ -26410,10 +27305,7 @@ export class BattleScene extends Component {
     const ctx = {
       mission: this.mission,
       rng: this.rng,
-      nextEnemyId: () => {
-        this.turnEndUnitSeq += 1;
-        return `turnend_${this.turnEndUnitSeq}`;
-      },
+      nextEnemyId: () => this.nextTurnEndUnitId(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
@@ -26460,10 +27352,19 @@ export class BattleScene extends Component {
     // Start after the event panel has been created; both sequences run in
     // parallel while the root-level UI remains above the battle presentation.
     if (row.effectType === 'stuka') {
-      this.playStukaFlyover(this.mission.sherman, false, () => {});
+      this.playStukaFlyover(this.mission.sherman, false, () => {}, prepared.bodyKey === 'turnEnd.stuka.shotDown');
     }
     this.startTurnEndEventPresentation(this.turnEndEventUI);
     playDiceRoll();
+  }
+
+  private nextTurnEndUnitId(): string {
+    const occupied = new Set(this.allUnits().map(unit => unit.id));
+    let id: string;
+    do {
+      id = `turnend_${++this.turnEndUnitSeq}`;
+    } while (occupied.has(id));
+    return id;
   }
 
   /** Present automatic events immediately; confirmation only acknowledges the result. */
@@ -26685,6 +27586,29 @@ export class BattleScene extends Component {
 
     if (ui.stage === 'roll_primary') {
       ui.t += dt;
+      if (ui.effectType === 'stuka') {
+        // 与主炮结果面板一致：所有实际发生的判定同时滚动，
+        // 使用预掷的结果一次揭示，不等待上一行结束才播放下一行。
+        ui.extraRows.forEach(row => { row.root.active = true; });
+        if (ui.t < DICE_ROLL_DUR) {
+          const frame = Math.floor(ui.t / 0.08);
+          ui.dieLabels.forEach((lab, i) => this.setDieLabelFace(lab, ((frame * (17 + i * 6)) % 6) + 1));
+          ui.extraRows.forEach((row, rowIndex) => row.dice.forEach((lab, dieIndex) => {
+            this.setDieLabelFace(lab, ((frame * (13 + rowIndex * 6 + dieIndex * 4)) % 6) + 1);
+          }));
+          return;
+        }
+        ui.dieLabels.forEach((lab, i) => this.setDieLabelFace(lab, ui.primaryDice[i] ?? '?'));
+        ui.eventVerdictLabel.string = ui.eventResult;
+        ui.extraRows.forEach((row, rowIndex) => {
+          row.dice.forEach((lab, dieIndex) => this.setDieLabelFace(lab, ui.extraPhases[rowIndex]?.dice[dieIndex] ?? '?'));
+          row.verdict.string = row.result;
+        });
+        ui.bodyLabel.string = this.turnEndBodyText(ui.bodyKey, ui.bodyParams);
+        ui.stage = 'hold';
+        ui.confirmButton.active = true;
+        return;
+      }
       if (ui.t < DICE_ROLL_DUR) {
         const tick = Math.floor(ui.t / 0.08) % 6;
         for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
@@ -26892,8 +27816,10 @@ export class BattleScene extends Component {
 
   private enqueueTankReinforceMoveAnim(unit: Unit, move: TurnEndTankReinforceMove) {
     const dur = Math.max(0.05, this.moveDuration);
-    unit.pos = { ...move.from };
+    // Keep the committed destination in the model; drawUnitMaybeAnim uses
+    // fromQ/fromR for the off-map entrance without moving the logical unit out.
     unit.facing = move.facing;
+    if (unit.stats.visionType === 'turreted') unit.turretFacing = move.facing;
     this.animQueue = [];
     if (move.facing !== move.finalFacing) {
       this.animQueue.push({

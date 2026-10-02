@@ -202,6 +202,7 @@ floater.paralyzedBlocked,瘫痪中无法移动,Immobilized: Cannot Move
 floater.paralyzedNoConceal,瘫痪中无法使用隐蔽,Immobilized: Cannot Conceal
 floater.beachNoSmoke,在海里无法使用烟雾,Cannot use smoke in the water
 floater.beachNoRepair,在海里无法使用修复,Cannot repair in the water
+floater.terrainNoConceal,此地形无法使用隐蔽,Cannot conceal on this terrain
 floater.beachNoConceal,在海里无法使用隐蔽,Cannot conceal in the water
 floater.smokeDeployed,施放烟雾,Smoke Deployed
 floater.concealed,进入隐蔽,Concealed
@@ -283,7 +284,7 @@ dice.rule.hitNeedTitle,命中所需点数,Hit Target Number
 dice.rule.penNeedTitle,击穿所需点数,Penetration Target Number
 dice.rule.total,总计,Total
 dice.rule.distance,距离,Distance
-dice.rule.targetSize,目标体积点数,Target Size
+dice.rule.targetSize,命中难度,Hit Difficulty
 dice.rule.hedges,树篱,Hedgerow
 dice.rule.building,建筑,Building
 dice.rule.smoke,烟雾,Smoke
@@ -352,21 +353,21 @@ actor.sherman,谢尔曼,Sherman
 actor.enemyPrefix,敌方 {name},Enemy {name}
 actor.allyPrefix,友军 {name},Allied {name}
 unit.name.sherman,谢尔曼,Sherman
-unit.name.sherman76,谢尔曼 76,Sherman 76
-unit.name.sherman_jumbo,谢尔曼巨无霸,M4A3E2 Sherman Jumbo
-unit.name.m26_pershing,M26 潘兴,M26 Pershing
+unit.name.sherman76,谢尔曼76,Sherman 76
+unit.name.sherman_jumbo,巨无霸,M4A3E2 Sherman Jumbo
+unit.name.m26_pershing,潘兴,M26 Pershing
 unit.name.t34,T-34/76,T-34/76
 unit.name.t34_85,T-34/85,T-34/85
-unit.name.kv1,KV-1 重型坦克,KV-1 Heavy Tank
-unit.name.is2,IS-2 重型坦克,IS-2 Heavy Tank
-unit.name.su152,SU-152 突击炮,SU-152 Assault Gun
+unit.name.kv1,KV-1,KV-1 Heavy Tank
+unit.name.is2,IS-2,IS-2 Heavy Tank
+unit.name.su152,SU-152,SU-152 Assault Gun
 unit.name.tiger,虎式,Tiger
-unit.name.tigerking,虎王坦克,Tiger II
-unit.name.maus,鼠式坦克,Panzer VIII Maus
-unit.name.panther,豹式坦克,Panther G
-unit.name.panzer4,四号坦克G型,Panzer IV Ausf. G
-unit.name.stug3,三号突击炮G型,StuG III Ausf. G
-unit.name.panzer3,三号,Panzer III
+unit.name.tigerking,虎王,Tiger II
+unit.name.maus,鼠式,Panzer VIII Maus
+unit.name.panther,豹式,Panther G
+unit.name.panzer4,4号G,Panzer IV Ausf. G
+unit.name.stug3,3号突击炮G,StuG III Ausf. G
+unit.name.panzer3,3号,Panzer III
 unit.name.truck,卡车,Truck
 unit.name.infantry,步兵,Infantry
 unit.name.german_infantry,德军步兵,German Infantry
@@ -374,7 +375,7 @@ unit.name.soviet_infantry,苏军步兵,Soviet Infantry
 unit.name.officer,军官,Officer
 unit.name.type95,九五式,Type 95 Ha-Go
 unit.name.type97,九七式,Type 97 Chi-Ha
-unit.name.type4,四式中战车,Type 4 Chi-To
+unit.name.type4,四式,Type 4 Chi-To
 unit.name.at_gun,反坦克炮,AT Gun
 unit.name.pak38,pak38,pak38
 unit.name.japanese_infantry,日本步兵,Japanese Infantry
@@ -837,7 +838,7 @@ floater.noSmokeAmmo,炮射烟雾弹已耗尽,No smoke shells remaining
 ammo.tooltip.smoke.title,炮射烟雾弹,Smoke Shell
 ammo.tooltip.smoke.description,默认备弹7发。向射界内目标格发射，不造成伤害；烟雾效果与投掷烟雾弹相同。,7 rounds by default. Fire at a hex in the firing arc without damage. Same effect as thrown smoke grenades.
 battleLog.attack.smoke,向（{q}，{r}）发射炮射烟雾弹,"Fired smoke shell at ({q}, {r})"
-unit.name.panzer3_m,三号M型,Panzer III Ausf. M
+unit.name.panzer3_m,3号M,Panzer III Ausf. M (Additional Armor)
 turnEnd.panel.event,事件判定,Event check
 turnEnd.panel.eventTable,事件表,Event table
 turnEnd.panel.immune,免疫,Immune
@@ -917,3 +918,10 @@ attack.reason.bunkerSlitAngle,射击孔仅可从正面±30°精确射击,Precisi
 preview.heDestroy,击毁≥{n},Destroy ≥{n}
 preview.atGunHE,炮体击毁·炮组另判,Gun kill; crew separate
 tileInspect.bunkerSlit,射击孔：正面±30°；命中基准{n},Firing slit: front ±30°; base hit threshold {n}
+unit.name.panzer3_m_no_schurzen,3号M,Panzer III Ausf. M
+unit.name.panzer3_n,3号N,Panzer III Ausf. N
+unit.name.panzer3_n_schurzen,3号N,Panzer III Ausf. N (Additional Armor)
+unit.name.sturmtiger,突击虎,Sturmtiger
+unit.name.jagdtiger,猎虎,Jagdtiger
+unit.name.elefant,象式坦克歼击车,Elefant
+unit.name.jagdpanther,追猎者坦克歼击车,Hetzer

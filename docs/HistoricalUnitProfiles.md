@@ -34,6 +34,6 @@ m26_pershing保留兼容ID，显示名称为M26潘兴，按欧洲战场90毫米M
 
 ## 验证
 
-反坦克炮尺寸、碉堡装甲/射击孔角度，以及全部单位HE档位的后续校对见 [反坦克炮、碉堡与HE配置](EmplacementHEBalance.md)。
+反坦克炮命中难度、碉堡装甲/射击孔角度，以及全部单位HE档位的后续校对见 [反坦克炮、碉堡与HE配置](EmplacementHEBalance.md)。
 
 新增tests/HistoricalUnitProfiles.test.js覆盖玩家骰池、AI失效阈值、普通M26、实际人数、兼任职责伤亡、六人车组、存档往返及专用火炮火力检定。

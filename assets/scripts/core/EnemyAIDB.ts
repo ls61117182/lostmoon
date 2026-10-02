@@ -8,6 +8,7 @@
 
 export type EnemyAction =
   | 'shoot'
+  | 'ambush'
   | 'turn'
   | 'advance'
   | 'reverse'
@@ -201,7 +202,7 @@ export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {
     1: { primary: 'repair', primaryCrew: 'commander', fallback: 'shoot', fallbackCrew: 'gunner' },
     2: { primary: 'turn', fallback: 'turn', fallbackCrew: 'coDriver' },
     3: { primary: 'advance', primaryCrew: 'coDriver', fallback: 'turn', fallbackCrew: 'coDriver' },
-    4: { primary: 'shoot', primaryCrew: 'gunner' },
+    4: { primary: 'shoot', primaryCrew: 'gunner', fallback: 'ambush', fallbackCrew: 'gunner' },
     5: { primary: 'smoke' },
     6: { primary: 'conceal' },
   },

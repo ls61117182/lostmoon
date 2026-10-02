@@ -1,0 +1,3 @@
+Precise color edit of this seamless compacted village courtyard soil texture. Keep its fine grain, worn-earth pattern, square framing and geometry identical. Change only the palette: substantially lighter pale beige-gray dry packed earth, overall average color around RGB 211,202,183, muted low saturation, soft low-contrast detail. It must read as a light dry inhabited courtyard rather than dark brown mud. No grass, no stones, no objects, no new features, no borders, no text, no shadows. Preserve the existing seamless flat straight-down ground texture character.
+
+Built-in image_gen precise color edit; installed into root and European summer rural_yard materials and regenerated inspector patch with existing alpha coverage.

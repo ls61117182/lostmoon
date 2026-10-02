@@ -41,7 +41,7 @@ export interface TurnEndApplyContext {
   weather?: WeatherType;
 }
 
-/** 主骰播完后依次展示的额外掷骰（点数已预掷，仅用于动画与说明节奏） */
+/** 额外判定骰（点数已预掷；展示节奏由事件面板决定） */
 export interface TurnEndExtraDicePhase {
   dice: number[];
   captionKey: string;
@@ -320,8 +320,10 @@ function prepareTankSpawnEvent(
         faction: stats.faction,
         sideId: side === 'friendly' ? 'player' : 'enemy',
         controller: 'ai',
-        pos: entry ? { ...entry.from } : { ...pos },
-        facing: entry ? entry.facing : face,
+        // Commit the spawn on the battlefield. The scene owns the temporary
+        // off-map entry position while playing the reinforcement animation.
+        pos: { ...pos },
+        facing: face,
         stats,
         hatchOpen: false,
         visionRange: stats.visionRange,

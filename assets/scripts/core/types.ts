@@ -100,6 +100,15 @@ export function tileForbidsSmokeOrConcealment(tile: Tile | undefined | null): bo
   return tile?.terrain === 'beach';
 }
 
+/** Roads, airstrips, bridges, and Pacific beach hexes forbid concealment. */
+export function tileForbidsConcealment(tile: Tile | undefined | null): boolean {
+  return tileForbidsSmokeOrConcealment(tile)
+    || tile?.terrain === 'road'
+    || tile?.terrain === 'urban_road'
+    || tile?.terrain === 'airstrip'
+    || tileHasBridge(tile);
+}
+
 /**
  * 计算掷骰 / 移动力使用的「等效地形」：
  * - 水域 + 桥梁 → 视为公路（GDD §3.2「骰子规则与公路相同」）；
@@ -159,8 +168,15 @@ export type UnitKind =
   | 'panther'
   | 'panzer4'
   | 'stug3'
+  | 'sturmtiger'
+  | 'jagdtiger'
+  | 'jagdpanther'
+  | 'elefant'
   | 'panzer3'
   | 'panzer3_m'
+  | 'panzer3_m_no_schurzen'
+  | 'panzer3_n'
+  | 'panzer3_n_schurzen'
   | 'truck'
   | 'infantry'
   | 'german_infantry'
@@ -276,8 +292,15 @@ export function isTankKind(kind: UnitKind): boolean {
     || kind === 'panther'
     || kind === 'panzer4'
     || kind === 'stug3'
+    || kind === 'sturmtiger'
+    || kind === 'jagdtiger'
+    || kind === 'jagdpanther'
+    || kind === 'elefant'
     || kind === 'panzer3'
     || kind === 'panzer3_m'
+    || kind === 'panzer3_m_no_schurzen'
+    || kind === 'panzer3_n'
+    || kind === 'panzer3_n_schurzen'
     || kind === 'type95'
     || kind === 'type97'
     || kind === 'type4';
@@ -296,7 +319,7 @@ export interface EnemyTankActionTableIds {
 
 export interface UnitStats {
   faction: Faction;          // 阵营
-  size: number;            // 体型
+  size: number;            // 命中难度：数值越高，命中所需点数越高
   armorFront: number;      // 前装甲
   armorFrontSide: number;  // 前侧装甲
   armorRearSide: number;   // 后侧装甲
@@ -385,13 +408,15 @@ export interface Unit {
   crewLevels?: CrewLevels;
   /** 各乘员拥有的技能；非玩家坦克也可由关卡配置。 */
   crewSkills?: CrewSkills;
-  /** 伏击窗口内（上次自身行动结束后）是否成为过攻击目标。 */
+  /** Legacy save field from the former first-shot ambush rule. */
   ambushAttackedSinceTurnEnd?: boolean;
-  /** 上次自身行动结束时是否处于烟雾中；烟雾会阻止下一回合取得伏击资格。 */
+  /** Legacy save field from the former first-shot ambush rule. */
   ambushObscuredSinceTurnEnd?: boolean;
-  /** 本次自身行动开始时锁定的伏击资格。 */
+  /** Explicit ambush stance, active until triggered, interrupted, or the next own action. */
   ambushReadyThisTurn?: boolean;
-  /** 本次自身行动是否已攻击、移动或转向。 */
+  /** Monotonic activation order, used when multiple ambushers can react to one move. */
+  ambushEnteredOrder?: number;
+  /** Legacy save field from the former first-shot ambush rule. */
   ambushActedThisTurn?: boolean;
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
@@ -639,7 +664,7 @@ export interface MissionData {
   tiles: Array<Array<TileDef | null>>;
   /** odd-r 首行奇偶基准；编辑器向地图上方扩展时切换，确保旧格子的几何关系不变。 */
   rowParityOffset?: 0 | 1;
-  /** 允许玩家在战斗中拖动地图，以查看超出初始显示范围的格子。 */
+  /** @deprecated 旧自定义关卡兼容字段；战斗地图现按有效格范围自动缩放。 */
   allowMapPan?: boolean;
   /** 玩家主角坦克初始放置。新关卡使用此字段。 */
   playerTank?: UnitPlacement;

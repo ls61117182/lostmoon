@@ -1,0 +1,20 @@
+{
+  "tool": "built-in image_gen",
+  "prompts": [
+    [
+      "rural_yard",
+      "Square seamless ground material for WWII rural village yard, strict top-down 90 degree flat surface. Muted light taupe tan compacted bare soil, worn earth with fine quiet grain, subtle foot-worn mottling. Soft painted tabletop strategy map style, moderately simple, no large concrete clods. No grass, no plants, no stones, no leaves, no tracks, no objects, no buildings, no text, no borders. Uniform quiet texture across complete square matching existing warm European rural game ground.",
+      "false"
+    ],
+    [
+      "rural_hay",
+      "One compact oval stack of dry golden straw for a WWII rural French/German/Polish village game sprite. STRICT orthographic 90 degree overhead, oval top only, absolutely no vertical side faces or isometric viewpoint. Small bundled hay mound with muted ochre fine straw strokes and subtle top shading, tiny soft contact shadow. Painterly tabletop strategy-map art, no photorealism. Centered isolated object, transparent background. No ground, no trees, no building, no text, no people, no tools.",
+      "true"
+    ],
+    [
+      "rural_well",
+      "One simple small round rural stone water well for WWII European village strategy-map sprite. STRICT 90 degree orthographic straight-down view. Round gray-beige stone rim surrounding dark water hole, small horizontal wooden crossbeam and bucket seen directly from above. No canopy or roof. All visible surfaces viewed from vertically above, no exposed exterior wall, no isometric perspective. Muted painterly tabletop map style, fine readable forms, tiny soft contact shadow, centered isolated object on transparent background, no ground, no grass, no text, no people.",
+      "true"
+    ]
+  ]
+}

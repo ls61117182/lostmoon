@@ -10,9 +10,9 @@ function addRow(file, key, edits) {
   rows.push(row);
   fs.writeFileSync(file, '\ufeff' + rowsToCsv(rows));
 }
-addRow('data/units.csv', 'panzer3_m', {unitKind:'panzer3_m', displayName:'三号坦克M型', notes:'独立M型美术单位；战斗参数暂沿用panzer3，待单独平衡'});
+addRow('data/units.csv', 'panzer3_m', {unitKind:'panzer3_m', displayName:'3号坦克M型（附加装甲）', notes:'独立M型美术单位；战斗参数暂沿用panzer3，待单独平衡'});
 addRow('data/tank_visuals.csv', 'panzer3_m', {
-  kind:'panzer3_m', displayName:'Panzer III Ausf. M',
+  kind:'panzer3_m', displayName:'Panzer III Ausf. M (Additional Armor)',
   ...Object.fromEntries([['topSpritePath','top'],['hullSpritePath','top_hull'],['turretSpritePath','top_turret'],['destroyedSpritePath','top_destroyed']].map(([k,v])=>[k,`textures/units/panzer3_m_${v}/spriteFrame`])),
   turretScale:1, turretOffsetForward:0, commanderHatchScale:20,
   notes:'Independent Ausf M; user technical reference; sand and olive camouflage; spaced skirts; common-scale layers'
@@ -29,11 +29,11 @@ if(!s.includes("kind === 'panzer3_m'")) s=s.replace("|| kind === 'panzer3'", "||
 fs.writeFileSync(types,s);
 const menu='assets/scripts/view/MainMenuScene.ts';
 s=fs.readFileSync(menu,'utf8');
-if(!s.includes("panzer3_m: 'Pz III M'")) s=s.replace("panzer3: 'Pz III',", "panzer3: 'Pz III',\n      panzer3_m: 'Pz III M',");
+if(!s.includes("panzer3_m: '3号坦克M型（附加装甲）'")) s=s.replace("panzer3: 'Pz III',", "panzer3: 'Pz III',\n      panzer3_m: '3号坦克M型（附加装甲）',");
 fs.writeFileSync(menu,s);
 const lang='data/lang.csv';
 s=fs.readFileSync(lang,'utf8');
-if(!s.includes('unit.name.panzer3_m,')) fs.appendFileSync(lang,'\nunit.name.panzer3_m,三号M型,Panzer III Ausf. M\n');
+if(!s.includes('unit.name.panzer3_m,')) fs.appendFileSync(lang,'\nunit.name.panzer3_m,3号坦克M型（附加装甲）,Panzer III Ausf. M (Additional Armor)\n');
 for(const suffix of ['top','top_hull','top_turret','top_destroyed']) {
   const old=`assets/resources/textures/units/panzer3_${suffix}.png`;
   const dest=`assets/resources/textures/units/panzer3_m_${suffix}.png`;

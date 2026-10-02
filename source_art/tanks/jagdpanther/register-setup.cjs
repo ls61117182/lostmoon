@@ -1,0 +1,10 @@
+const fs=require('fs');
+let s=fs.readFileSync('tools/registerElefant.cjs','utf8').replaceAll('elefant','jagdpanther').replaceAll('Elefant','Jagdpanther').replaceAll('象式坦克歼击车','猎豹坦克歼击车').replaceAll("'tigerking', 'jagdpanther'","'panther', 'jagdpanther'");
+s=s.replace('fitScale: 1.02, offsetForward: 0.08','fitScale: 1.02, offsetForward: 0.12').replace('commanderHatchScale: 18','commanderHatchScale: 16');
+s=s.replace('size: 2, mobility: 1','size: 3, mobility: 3').replace('armorFront: 16, armorFrontSide: 12, armorRearSide: 11, armorRear: 11','armorFront: 14, armorFrontSide: 11, armorRearSide: 9, armorRear: 8').replace('firepower: 3','firepower: 4').replace("crewMembers: '1|2|3|4|5|6', crewRoleAssignments: 'loader=3|6'","crewMembers: '1|2|3|4|5', crewRoleAssignments: ''");
+s=s.replace(/notes: '1944 Jagdpanther structure[^']*'/,"notes: 'User three-view Jagdpanther; fixed gun; German gray; rectangular roof hatches; common normal and wreck canvas'");
+s=s.replace(/notes: '1944象式[^']*'/,"notes: '猎豹固定主炮；五人乘员；装甲机动沿用豹式、穿甲沿用象式的暂定游戏值，待平衡'");
+s=s.replace("jagdpanther: '象式'","jagdpanther: '猎豹'");
+fs.writeFileSync('tools/registerJagdpanther.cjs',s);
+fs.writeFileSync('source_art/tanks/jagdpanther/geometry.json',JSON.stringify({width:200,height:80,crop:{left:55,top:70,width:1855,height:695},muzzle:[1,35],hatch:[128,32],trackBodyLengthScale:0.76},null,2));
+fs.writeFileSync('source_art/tanks/jagdpanther/prompt.txt','Built-in image_gen: strict left-facing orthographic Jagdpanther overhead, user three-view geometry, project German gray palette, simplified bold contours. Correct round hatch to reference rectangular hatch pair. Wreck: same canvas and scale, large casemate roof breach, folded armor, damaged rear grille, preserve gray. Common crop recorded in geometry.json.\n');

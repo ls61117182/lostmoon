@@ -18,7 +18,7 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /case 'conceal': \{[\s\S]*?if \(enemy\.paralyzed \|\| tileForbidsSmokeOrConcealment/,
+  /case 'conceal': \{[\s\S]*?if \(enemy\.paralyzed \|\| tileForbidsConcealment/,
   'enemy concealment execution should defensively reject immobilized tanks',
 );
 
@@ -51,6 +51,13 @@ try {
   };
 
   assert.strictEqual(canExecuteAction(enemy, 'conceal', sherman, map, new Set()), true);
+  for (const terrain of ['road', 'urban_road', 'airstrip', 'beach']) {
+    map.set({ pos: enemy.pos, terrain });
+    assert.strictEqual(canExecuteAction(enemy, 'conceal', sherman, map, new Set()), false, terrain);
+  }
+  map.set({ pos: enemy.pos, terrain: 'water', bridgeEnds: [0, 3] });
+  assert.strictEqual(canExecuteAction(enemy, 'conceal', sherman, map, new Set()), false, 'bridge');
+  map.set({ pos: enemy.pos, terrain: 'field' });
   enemy.paralyzed = true;
   assert.strictEqual(
     canExecuteAction(enemy, 'conceal', sherman, map, new Set()),

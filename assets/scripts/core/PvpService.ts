@@ -40,6 +40,7 @@ export interface PvpBattleUnitSnapshot {
   crewSkills?: CrewSkills;
   ambushAttackedSinceTurnEnd?: boolean;
   ambushReadyThisTurn?: boolean;
+  ambushEnteredOrder?: number;
   ambushActedThisTurn?: boolean;
 }
 

@@ -45,8 +45,9 @@ import {
   rotateDirection,
 } from './HexGrid';
 import { tileMoveCost } from './MoveCost';
-import { Axial, battleSideIdOf, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isImmobileGunUnit, isAttachedATGunCrew, isFootUnit, isHostile, Offset, TerrainType, tileForbidsSmokeOrConcealment, Unit } from './types';
-import { commanderHasSkill, nonPlayerTankDiceBonus, unitLevelOf } from './UnitLevel';
+import { Axial, battleSideIdOf, Direction, isAbandonedATGun, isAbandonedTank, isAntiTankGunUnit, isImmobileGunUnit, isAttachedATGunCrew, isFootUnit, isHostile, Offset, TerrainType, tileForbidsConcealment, tileForbidsSmokeOrConcealment, Unit } from './types';
+import { commanderHasSkill, nonPlayerTankDiceBonus, nonPlayerTankFirepowerBonus, unitLevelOf } from './UnitLevel';
+import { canEnterAmbush } from './Ambush';
 
 // ---------- 行动分类 ----------
 
@@ -103,6 +104,7 @@ export interface EnemyAIDie {
 
 function effectiveAIFirepower(unit: Unit, terrain: TerrainType): number {
   return Math.max(0, Math.trunc((unit.stats.firepower ?? 6)
+    + nonPlayerTankFirepowerBonus(unit)
     + PLAYER_HARDCORE_DICE_POOL.baseByPhaseTerrain.attack[terrain]));
 }
 
@@ -436,6 +438,7 @@ export function canExecuteAction(
   switch (action) {
     case 'none':   return false;
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
+    case 'ambush': return canEnterAmbush(enemy, 'hardcore', true) && !enemy.ambushReadyThisTurn;
     case 'turn':   return !enemy.paralyzed;
     case 'smoke':  return commanderHasSkill(enemy, 'use_smoke_grenade')
       && !enemy.smoked
@@ -448,7 +451,7 @@ export function canExecuteAction(
       || !!enemy.radioDamaged
       || (enemy.fireLevel ?? 0) > 0
     );
-    case 'conceal': return !enemy.paralyzed && !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
+    case 'conceal': return !enemy.paralyzed && !enemy.hidden && !tileForbidsConcealment(currentTile);
     case 'shoot_adjacent': return enemy.facing !== null && hexDistance(enemy.pos, sherman.pos) === 1;
     case 'infantry_move':
       return enemy.kind === 'japanese_infantry' || enemy.kind === 'american_infantry';

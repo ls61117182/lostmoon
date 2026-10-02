@@ -80,10 +80,17 @@ export interface RankedDiceBonus {
 export function nonPlayerTankDiceBonus(unit: Unit): RankedDiceBonus {
   if (!isTankUnit(unit) || unit.crewLevels) return { attack: 0, move: 0, misc: 0 };
   switch (unitLevelOf(unit)) {
-    case 'veteran': return { attack: 1, move: 1, misc: 0 };
-    case 'elite': return { attack: 2, move: 1, misc: 1 };
+    case 'veteran': return { attack: 0, move: 1, misc: 0 };
+    case 'elite': return { attack: 0, move: 1, misc: 1 };
     default: return { attack: 0, move: 0, misc: 0 };
   }
+}
+
+/** 非玩家坦克等级提供的火力值加成；玩家使用独立乘员规则。 */
+export function nonPlayerTankFirepowerBonus(unit: Unit): number {
+  if (!isTankUnit(unit) || unit.crewLevels) return 0;
+  const level = unitLevelOf(unit);
+  return level === 'elite' ? 4 : level === 'veteran' ? 2 : 0;
 }
 
 /** Legacy balance helper retained for compatibility; hardcore AT guns no longer roll action dice. */

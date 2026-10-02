@@ -19,6 +19,7 @@ const HARDCORE_TANK_TERRAINS = ['road', 'field', 'mud', 'clear', 'trees', 'beach
 const CREW_SLOTS = ['commander', 'loader', 'gunner', 'driver', 'coDriver'];
 const AI_ACTIONS = [
   'shoot',
+  'ambush',
   'turn',
   'advance',
   'reverse',

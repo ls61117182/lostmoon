@@ -1,4 +1,5 @@
 import { createMenuBackground } from './MenuBackground';
+import { supportMarkerVisuals } from './SupportMarkerVisual';
 import { BUILD_FEATURES } from '../core/BuildProfile';
 /**
  * MainMenuScene —— 主菜单、全屏任务选择、独立存档入口与工具子页面。
@@ -3005,7 +3006,6 @@ export class MainMenuScene extends Component {
     let draftEnemyStartByDice = !!existingPackage?.mission.enemyStartByDice;
     let draftShermanStartByDice = !!existingPackage?.mission.shermanStartByDice;
     let draftEnemyDiceEidMax = existingPackage?.mission.enemyDiceEidMax;
-    let draftAllowMapPan = !!existingPackage?.mission.allowMapPan;
     let draftTruckPath = cloneJson(existingPackage?.mission.truckPath ?? []);
     let draftWeather: WeatherType = normalizeWeather(existingPackage?.mission.weather);
     let draftSeason: SeasonType = existingPackage?.mission.season === 'winter' ? 'winter' : 'summer';
@@ -3068,30 +3068,37 @@ export class MainMenuScene extends Component {
     };
     const selectedOffset = () => ({ col: selectedCol, row: selectedRow });
     const unitKindLabels: Record<UnitKind, string> = {
-      sherman: 'Sherman',
-      sherman76: 'Sherman 76',
-      sherman_jumbo: 'Sherman Jumbo',
-      m26_pershing: 'M26 Pershing',
+      sherman: '谢尔曼',
+      sherman76: '谢尔曼76',
+      sherman_jumbo: '巨无霸',
+      m26_pershing: '潘兴',
       t34: 'T-34/76',
       t34_85: 'T-34/85',
       kv1: 'KV-1',
       is2: 'IS-2',
       su152: 'SU-152',
       tiger: 'Tiger',
-      tigerking: 'Tiger II',
-      panther: 'Panther G',
-      panzer4: 'Pz IV',
-      stug3: 'StuG III G',
-      panzer3: 'Pz III',
-      panzer3_m: 'Pz III M',
+      tigerking: '虎王',
+      panther: '豹式',
+      panzer4: '4号G',
+      stug3: '3号突击炮G',
+      sturmtiger: '突击虎',
+      jagdtiger: '猎虎',
+      jagdpanther: '追猎者',
+      elefant: '象式',
+      panzer3: '3号',
+      panzer3_m: '3号M',
+      panzer3_m_no_schurzen: '3号M',
+      panzer3_n: '3号N',
+      panzer3_n_schurzen: '3号N',
       truck: 'Truck',
       infantry: 'Infantry',
       german_infantry: 'German Inf',
       soviet_infantry: 'Soviet Inf',
-      type95: 'Type95',
-      type97: 'Type97',
-      type4: 'Type 4 Chi-To',
-      maus: 'Panzer VIII Maus',
+      type95: '九五式',
+      type97: '九七式',
+      type4: '四式',
+      maus: '鼠式',
       at_gun: 'AT Gun',
       pak38: 'pak38',
       flak88: '88mm高射炮',
@@ -3173,7 +3180,6 @@ export class MainMenuScene extends Component {
       draftEnemyStartByDice = false;
       draftShermanStartByDice = false;
       draftEnemyDiceEidMax = undefined;
-      draftAllowMapPan = false;
       draftTruckPath = [];
       draftWeather = 'clear';
       draftSeason = 'summer';
@@ -3391,9 +3397,6 @@ export class MainMenuScene extends Component {
           }, 12);
           addPlainBtn(`季节：${seasonLabel(draftSeason)}`, 62, 42, 112, 26, draftSeason === 'winter', () => {
             openSeasonPicker();
-          }, 12);
-          addPlainBtn(`战斗中拖动地图 ${draftAllowMapPan ? '开' : '关'}`, 0, 10, 180, 26, draftAllowMapPan, () => {
-            draftAllowMapPan = !draftAllowMapPan;
           }, 12);
           if (draftObjective.type === 'destroy_kind' || draftObjective.type === 'destroy_kind_evac') {
             addPlainBtn(`目标 ${unitKindLabels[draftObjective.kind ?? 'infantry']}`, -62, -22, 104, 26, true, () => {
@@ -4042,6 +4045,11 @@ export class MainMenuScene extends Component {
       const label = this.makeLabel(node, `${col},${row}`, 0, -2, w - 6, 18, 11, TEXT_PRIMARY);
       label.enableOutline = true;
       label.outlineColor = TEXT_OUTLINE;
+      const ridLabel = this.makeLabel(node, '', 0, 0, 20, 20, 13, new Color(190, 25, 30, 255));
+      const eidLabel = this.makeLabel(node, '', 0, 0, 20, 20, 13, new Color(22, 22, 22, 255));
+      for (const markerLabel of [ridLabel, eidLabel]) {
+        markerLabel.enableOutline = false;
+      }
       const drawHex = (fill: Color) => {
         graphics.clear();
         outlineGraphics.clear();
@@ -4153,13 +4161,6 @@ export class MainMenuScene extends Component {
           outlineGraphics.circle(0, -1, 10);
           outlineGraphics.stroke();
         }
-        if (tile.eid !== undefined || tile.rid !== undefined) {
-          outlineGraphics.fillColor = tile.eid !== undefined
-            ? new Color(60, 46, 42, 235)
-            : new Color(103, 48, 40, 235);
-          outlineGraphics.circle(0, 13, 6);
-          outlineGraphics.fill();
-        }
       };
       const drawUnitMarkers = () => {
         // The editor intentionally shows broad unit roles rather than the exact unit kind:
@@ -4262,6 +4263,14 @@ export class MainMenuScene extends Component {
         spriteNode.active = !!sprite.spriteFrame;
         drawHex(colorForTile(tile));
         drawTileOverlays(tile);
+        const markers = supportMarkerVisuals(tile?.rid, tile?.rf, tile?.eid, tile?.ef, radius);
+        for (const markerLabel of [ridLabel, eidLabel]) markerLabel.node.active = false;
+        for (const marker of markers) {
+          const markerLabel = marker.kind === 'rid' ? ridLabel : eidLabel;
+          markerLabel.string = marker.text;
+          markerLabel.node.setPosition(marker.x, marker.y, 0);
+          markerLabel.node.active = true;
+        }
         drawUnitMarkers();
         if (row === selectedRow && col === selectedCol) {
           outlineGraphics.strokeColor = TEXT_TITLE;
@@ -4508,7 +4517,6 @@ export class MainMenuScene extends Component {
       draftEnemyStartByDice = !!mission.enemyStartByDice;
       draftShermanStartByDice = !!mission.shermanStartByDice;
       draftEnemyDiceEidMax = mission.enemyDiceEidMax;
-      draftAllowMapPan = !!mission.allowMapPan;
       draftTruckPath = cloneJson(mission.truckPath ?? []);
       draftWeather = normalizeWeather(mission.weather);
       draftSeason = mission.season === 'winter' && activeTerrainCategoryForTheater(mission.theater) === 'europe'
@@ -4891,8 +4899,7 @@ export class MainMenuScene extends Component {
       };
       if (draftRowParityOffset === 1) mission.rowParityOffset = 1;
       else delete mission.rowParityOffset;
-      if (draftAllowMapPan) mission.allowMapPan = true;
-      else delete mission.allowMapPan;
+      delete mission.allowMapPan;
       if (draftTruckPath.length) mission.truckPath = cloneJson(draftTruckPath);
       else delete mission.truckPath;
       if (draftAllies.length) mission.allies = cloneJson(draftAllies);
@@ -5229,23 +5236,26 @@ function readSaveSafe(): SaveData | null {
 
 function tankVisualAssetName(kind: TankVisualKind): string {
   switch (kind) {
-    case 'sherman': return 'Sherman';
-    case 'sherman76': return 'Sherman 76';
-    case 'sherman_jumbo': return 'Sherman Jumbo';
-    case 'm26_pershing': return 'M26 潘兴';
+    case 'sherman': return '谢尔曼';
+    case 'sherman76': return '谢尔曼76';
+    case 'sherman_jumbo': return '巨无霸';
+    case 'm26_pershing': return '潘兴';
     case 't34': return 'T-34/76';
     case 't34_85': return 'T-34/85';
     case 'kv1': return 'KV-1';
     case 'is2': return 'IS-2';
     case 'su152': return 'SU-152';
     case 'tiger': return 'Tiger';
-    case 'tigerking': return 'Tiger II';
-    case 'maus': return '鼠式坦克';
-    case 'panther': return '豹式坦克';
-    case 'panzer4': return 'Panzer IV';
-    case 'panzer3': return 'Panzer III';
-    case 'panzer3_m': return '三号坦克 M 型';
-    case 'type97': return 'Type 97';
+    case 'tigerking': return '虎王';
+    case 'maus': return '鼠式';
+    case 'panther': return '豹式';
+    case 'panzer4': return '4号G';
+    case 'panzer3': return '3号';
+    case 'panzer3_m': return '3号M';
+    case 'panzer3_m_no_schurzen': return '3号M';
+    case 'panzer3_n': return '3号N';
+    case 'panzer3_n_schurzen': return '3号N';
+    case 'type97': return '九七式';
       case 'at_gun': return 'AT Gun';
       case 'pak38': return 'pak38';
       case 'flak88': return '88mm高射炮';

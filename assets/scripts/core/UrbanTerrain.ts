@@ -78,16 +78,69 @@ const EUROPEAN_ROAD_RAYS: ReadonlyArray<readonly [number, number]> = [
 const EUROPEAN_ROAD_HALF_WIDTH = 0.18;
 const EUROPEAN_ROAD_TURN_RADIUS = 43 / 128;
 const EUROPEAN_ROAD_JUNCTION_BLEND = 30 / 128;
+export const EUROPEAN_ROAD_VARIANT_COUNT = 3;
+
+/** Stable visual-only choice: the same mission tile never changes shape while redrawing. */
+export function europeanRoadVariantIndex(q: number, r: number, missionId = ''): number {
+  return seedFor(`${missionId}:european-road:${q},${r}`) % EUROPEAN_ROAD_VARIANT_COUNT;
+}
+
+/**
+ * Smoothly warp the road network only inside the hex. The envelope and its
+ * derivative are zero on every edge, so all six road mouths keep an identical
+ * position and tangent across neighbouring tiles.
+ */
+function warpEuropeanRoadPoint(x: number, y: number, variantIndex: number): [number, number] {
+  const variant = ((variantIndex % EUROPEAN_ROAD_VARIANT_COUNT) + EUROPEAN_ROAD_VARIANT_COUNT)
+    % EUROPEAN_ROAD_VARIANT_COUNT;
+  // Pixel generator uses a 128px hex radius. Convert its edge-distance ramp to local units.
+  const ax = Math.abs(x);
+  const ay = Math.abs(y);
+  const edgeInset = Math.min(
+    0.8660254037844386 - ax,
+    0.8660254037844386 - ax * 0.5 - ay * 0.8660254037844386,
+  );
+  // Let one broad bend span most of the tile instead of completing a tight
+  // wave in every hex. The smoothstep keeps curvature calm near each mouth.
+  const t = Math.max(0, Math.min(1, edgeInset / 0.78));
+  const envelope = t * t * (3 - 2 * t);
+  const configs = [
+    { ax: 0.032, ay: 0.055, px: 0.35, py: 1.15 },
+    { ax: -0.045, ay: 0.043, px: 1.80, py: -0.40 },
+    { ax: 0.052, ay: -0.046, px: -1.05, py: 2.20 },
+  ] as const;
+  const config = configs[variant];
+  const dx = envelope * (
+    config.ax * Math.sin(y * 1.65 + config.px)
+    + config.ay * 0.18 * Math.sin((x + y) * 1.25 - config.py)
+  );
+  const dy = envelope * (
+    config.ay * Math.sin(x * 1.55 + config.py)
+    - config.ax * 0.16 * Math.sin((x - y) * 1.35 + config.px)
+  );
+  return [x + dx, y + dy];
+}
 
 /**
  * Distance from a point to the exact centerline used by the prebuilt European
  * road art. Coordinates are local Cocos coordinates measured in hex radii.
  */
 export function europeanRoadCenterlineDistance(
-  roads: readonly boolean[], x: number, y: number,
+  roads: readonly boolean[], x: number, y: number, variantIndex = 0,
 ): number {
-  const dirs = EUROPEAN_ROAD_RAYS.filter((_, direction) => roads[direction]);
-  if (dirs.length === 0) return Number.POSITIVE_INFINITY;
+  const transform = urbanRoadSpriteTransform(roads);
+  if (!transform) return Number.POSITIVE_INFINITY;
+  // The renderer rotates a canonical sprite clockwise. Apply the inverse
+  // rotation here before evaluating its warped centerline.
+  if (transform.rotationSteps !== 0) {
+    const angle = transform.rotationSteps * Math.PI / 3;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    [x, y] = [x * cos - y * sin, x * sin + y * cos];
+  }
+  [x, y] = warpEuropeanRoadPoint(x, y, variantIndex);
+  const dirs = EUROPEAN_ROAD_RAYS.filter((_, direction) =>
+    !!(transform.canonicalMask & (1 << direction)));
   const pairs: Array<[number, number]> = [];
   for (let a = 0; a < dirs.length; a++) for (let b = a + 1; b < dirs.length; b++) {
     if (dirs[a][0] * dirs[b][0] + dirs[a][1] * dirs[b][1] > -.99) pairs.push([a, b]);
@@ -138,9 +191,9 @@ export function europeanRoadCenterlineDistance(
 
 /** Positive outside the rendered road edge, negative on the road surface. */
 export function europeanRoadSurfaceClearance(
-  roads: readonly boolean[], x: number, y: number,
+  roads: readonly boolean[], x: number, y: number, variantIndex = 0,
 ): number {
-  return europeanRoadCenterlineDistance(roads, x, y) - EUROPEAN_ROAD_HALF_WIDTH;
+  return europeanRoadCenterlineDistance(roads, x, y, variantIndex) - EUROPEAN_ROAD_HALF_WIDTH;
 }
 
 function seedFor(text: string): number {

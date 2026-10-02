@@ -28,6 +28,7 @@ assert.strictEqual(TANK_ENGINE_VIBRATION_FREQUENCY_HZ, 4.75, 'preview frequency 
 for (const kind of [
   'sherman', 'sherman76', 't34', 'tiger', 'tigerking', 'maus', 'panther',
   'panzer4', 'stug3', 'panzer3', 'type95', 'type97', 'type4', 'truck',
+  'jagdtiger', 'sturmtiger', 'm26_pershing',
 ]) {
   assert.strictEqual(unitKindHasEngineVibration(kind), true, `${kind} should vibrate while alive`);
 }

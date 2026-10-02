@@ -1,0 +1,2076 @@
+YouTube transcript
+Video ID: tSjRUabe2sg
+Language: en
+Captions: auto-generated
+
+[0:01] Hi everyone, Mike Lambo here. This is
+[0:04] the instructional playthrough
+[0:07] uh for Hellcat Tankers,
+[0:11] which is my um latest tank game. Um
+[0:17] I've got here a print out of the map and
+[0:22] the charts that go with the first
+[0:24] battle.
+[0:25] I'm going to play day one. This game
+[0:28] covers the battle of Aracort uh in
+[0:30] France uh in September 1944. It ran from
+[0:33] the 18th to the 29th for 12 days.
+[0:37] You have in this game 12 battle maps.
+[0:40] And the idea is that uh you can play
+[0:42] them individually, but the idea really
+[0:43] is to play them a campaign. Um and you
+[0:48] sort of roll dice to see which of the
+[0:50] days you will actually face combat and
+[0:52] therefore play those particular battles
+[0:53] and which days you don't.
+[0:56] Um, you'll always start on either day
+[0:58] one or two and you will always finish on
+[1:02] day 12. You must you'll always play day
+[1:04] 12, whatever the dice says. But between
+[1:08] those days, you're going to, you know,
+[1:10] you're going to be selecting at random
+[1:12] various days to play and you'll end up
+[1:14] playing about five to seven battles
+[1:17] usually in a campaign.
+[1:20] Uh, that can be increased if your crew
+[1:23] bail out too often. Um
+[1:29] it's it's tricky to get through the
+[1:31] whole campaign I have to say, but it's
+[1:32] good fun
+[1:34] and the challenges there. So any
+[1:36] individual battle is very winnable, but
+[1:38] to get sort of five, six or seven wins
+[1:40] in a row is quite difficult.
+[1:43] One of the things I want to do with this
+[1:45] game is to maintain the narrative that I
+[1:48] kind of started in Lone Sherman, um
+[1:52] which has been a hugely successful game
+[1:53] for me. Um, and anyone who played that
+[1:56] game know will know that it sort of
+[1:58] creates it's not a narrative game as
+[2:00] such, but it creates a narrative as you
+[2:01] play it. And this is similar or that it
+[2:05] works under a different system, but it's
+[2:08] similar in the way that it creates a
+[2:09] narrative and and in fact more so there
+[2:11] there are more things going on here.
+[2:13] It's more detailed. Uh, and we'll get a
+[2:15] chance to see some of that as we as we
+[2:18] do this play through. But that's what I
+[2:20] wanted to do. I'm to say I think it's
+[2:22] turned out fairly well to be honest. And
+[2:26] part of that is you can level up your
+[2:28] crew members.
+[2:30] So you can see here that I've set up or
+[2:33] I'm in the process of setting up for day
+[2:35] the battle for day one. All I've done so
+[2:36] far is place my five
+[2:39] crew members uh into their relative
+[2:41] positions. So I've got my commander,
+[2:44] my loader, my gunner, my driver, and my
+[2:46] assistant driver. They are numbered one
+[2:48] to five.
+[2:50] Um, and you can see there they all start
+[2:52] uh at at a green level of experience.
+[2:56] Uh, which means they have limited
+[2:58] experience of battle.
+[3:01] Um,
+[3:03] but you can, as I say, increase that or
+[3:05] improve that as you go through. So there
+[3:07] are there are three steps of experience
+[3:09] for each of the crew members. They can
+[3:11] be leveled up to line experience and
+[3:14] then to experienced,
+[3:17] which is the top level. And the counters
+[3:19] come
+[3:21] with the game as ever. You just need to
+[3:23] print them out onto some card somehow
+[3:25] and cut them out. Nice needs to do. You
+[3:28] can see for example the driver there has
+[3:29] a line version and an experienced
+[3:32] version. As they level up, they can
+[3:36] they're more they're more useful. They
+[3:38] can sort of do more things if you like.
+[3:41] Um and we'll see how the action system
+[3:43] works when we get cracking. The map is
+[3:47] larger than the maps for Lone Sherman in
+[3:49] terms of having more hexes. It's the
+[3:51] same size physically, but there are more
+[3:53] hex's on here. Uh we're talking here
+[3:55] nine hex's wide by about the same give
+[3:59] or take uh vertically. So, a lot more
+[4:02] scope for maneuver, a lot more scope for
+[4:04] tactical approaches, for flanking and
+[4:07] that kind of thing.
+[4:09] In terms of what we got on the on the
+[4:11] board, we have on the map in terms of
+[4:13] terrain, we've got woodland, which is
+[4:14] very clear here. hexes packed with
+[4:16] trees. We've got we've got trees hex's
+[4:20] which are these hex's with fewer trees
+[4:22] in them but um or five trees printed in
+[4:25] them. Tanks can't enter woodland but
+[4:28] they can enter trees hexes. The sort of
+[4:30] light tree cover if you like. We've also
+[4:33] got uh hedge rows. Um and in this game
+[4:36] they block line of sight. So that's
+[4:38] different to lone Sherman for example,
+[4:40] but they don't stop movement. So whilst
+[4:43] tanks can't enter woodland, they can
+[4:44] crash through these hedgeros,
+[4:48] but they can't see through them even
+[4:49] when they're adjacent. So you can
+[4:51] literally have, you know, a tank in a
+[4:52] field and a tank on the road and they
+[4:53] cannot see each other if they're the
+[4:55] other side of um a hedger.
+[4:59] What's got buildings hex's and in this
+[5:00] game tanks can't enter those. So they're
+[5:03] sort of meant to be of tightly packed or
+[5:05] large buildings and unsuitable for tanks
+[5:09] to go into. either that or if you prefer
+[5:11] something a bit more
+[5:14] narrative, maybe, you know, we're
+[5:15] concerned about them being full of
+[5:16] infantry and so on. So, we're not going
+[5:18] to go in there. You can't go into
+[5:19] buildings hexes. There's also water on
+[5:22] some maps, and you can't enter those
+[5:23] either in tanks, obviously, um, apart
+[5:26] from at bridges.
+[5:28] The other main hex types are fields,
+[5:31] which are these clear hex's, you know,
+[5:33] sort of green, brown, that kind of woody
+[5:34] grass sort of thing, and road hex's,
+[5:37] which are again fairly clearly marked.
+[5:39] So there are different types of hex's
+[5:40] that have different
+[5:43] um impacts on the game play.
+[5:46] At the top here we got the date and the
+[5:49] the day number of the battle. So as I
+[5:51] say is the first day on the 18th
+[5:52] September 44. We've got a condition here
+[5:55] which is the the condition of your
+[5:57] Hellcat. Six being the maximum as it
+[5:59] says on the map itself on the you don't
+[6:01] need a counter for the top there because
+[6:03] um it's printed on there as six. It's a
+[6:05] starting condition. And the fire level
+[6:08] has a maximum of three and that's
+[6:10] recorded here as well. And there are
+[6:11] counters to
+[6:13] um cover those up with different numbers
+[6:15] as and when they're needed. So condition
+[6:17] obviously reflects the state of your
+[6:19] Hellcat very generally can be repaired.
+[6:23] And again, you know, as as I say in the
+[6:25] book, I'm not suggesting for a minute
+[6:26] that you know, you take a hit from a
+[6:27] tiger or something and it half cripples
+[6:30] you and then you can just jump out and
+[6:31] magically, you know, fix it back up. But
+[6:33] you the crew have the ability to fix
+[6:36] certain things and perhaps make a tank
+[6:38] more operational than it might have been
+[6:39] otherwise. So, you know, this is not
+[6:42] this condition is not recording really,
+[6:44] you know, dents in the hole and that
+[6:46] kind of thing or even holes and stuff.
+[6:48] It's it's it's it's condition it's
+[6:51] damage that stops the tank being as
+[6:53] efficient or working properly.
+[6:56] And the worse your condition, the fewer
+[6:58] dice you roll, fewer dice you roll.
+[6:59] We'll have a look at that when we start
+[7:01] playing.
+[7:03] Um this marker here is to um mark
+[7:06] whether the turret is loaded or not. And
+[7:08] we start always with it loaded.
+[7:12] The commander can be up or down in a
+[7:15] similar way as you saw in Lone Sherman.
+[7:17] Um and different effects for that in
+[7:20] this game or some are similar but but
+[7:22] there are more effects. Um
+[7:25] the Hellcat was an open top tank of
+[7:27] course, so no hatch as such, but still
+[7:28] the commander can be out looking around
+[7:30] or more safely tucked down inside. And
+[7:33] there are there are there's quite a big
+[7:35] advantage of being inside in this game,
+[7:37] which I hope um certainly in lone shar I
+[7:40] think a lot of people tended to go
+[7:42] around with their commander sticking up
+[7:43] because there weren't too many downsides
+[7:45] to being inside other than being safer.
+[7:47] But here actually there is a benefit to
+[7:49] being in Sovat as well as being out up.
+[7:51] So there's a bit more of a decision to
+[7:52] make there.
+[7:55] Okay. So let's carry on with setup very
+[7:57] quickly here. For this first battle, I'm
+[7:59] told over here that the objective is to
+[8:00] reveal all the potential enemies. Um and
+[8:03] there is a counter for a potential
+[8:05] enemy, which is this um question mark
+[8:08] counter. We don't know what that is, but
+[8:12] we have to reveal them. So the objective
+[8:14] is to reveal all of these. There only
+[8:16] two on this particular map. In fact,
+[8:18] there's only two maximum on any map.
+[8:21] These are not maps that going to be
+[8:22] flooded with counters making it awkward
+[8:23] and fiddly. Um, you know, just generally
+[8:26] runs nice and smoothly. Uh, we need to
+[8:29] reveal them, find out what they are, and
+[8:30] then move off the map in the direction
+[8:32] of the red arrow. So, that's all we're
+[8:33] doing at the moment. This is, you know,
+[8:34] early days. We got We're not the only
+[8:35] tech. This is not lone Hellcat. We're
+[8:38] the only one that we're controlling in
+[8:39] the game, but the game acknowledges
+[8:40] there are other um US forces around.
+[8:43] Lots of them, in fact, at that point.
+[8:45] So, you know, we don't we don't
+[8:48] necessarily have to destroy every tank
+[8:49] in every game.
+[8:53] Some battle days require you to destroy
+[8:56] certain types of enemy tank before you
+[8:59] move off. Uh, this one doesn't, but some
+[9:02] do, as well as revealing the potential
+[9:04] enemies. Um, the advantage of destroying
+[9:07] German tanks is that every time you do
+[9:09] so with fire from your Hellcat, you get
+[9:12] to level up one of your crew. And if you
+[9:15] get to the latter stages of the battle
+[9:16] and you haven't really leveled up much,
+[9:18] you're going to struggle with those
+[9:20] later days. So whilst you can get
+[9:22] through the early battles without too
+[9:24] much action if you wanted to, it's best
+[9:26] to
+[9:27] um well actually it's not as easy as I
+[9:29] made that sound, but because the tanks
+[9:31] will come and find you, but um sometimes
+[9:34] it's best to at least engage with one or
+[9:35] two each each battle to to start
+[9:37] leveling up your guys
+[9:40] before you leave it too late.
+[9:44] So, we're going to the instructions,
+[9:45] setup instructions then say to place a
+[9:48] Panza 4. So, I've got one here.
+[9:51] Um, you can see the type of tanks here.
+[9:52] The German tanks, we're going to have
+[9:53] Tigers. Not in this battle. We're not
+[9:55] going to see any early in the game
+[9:57] because they're bit scary. Um, and there
+[10:00] won't be loads of them. You You can get
+[10:01] through a whole campaign and probably
+[10:02] only see two or three. There aren't
+[10:04] there's a few battles later on where you
+[10:06] start with a Tiger on the board, but not
+[10:07] too many. Um,
+[10:10] Panthers, they were the prevalent German
+[10:13] tank at that point in this area. So,
+[10:14] Aracourt is famous for Hellcats versus
+[10:17] Panther tank battles. So, you'll see
+[10:19] lots of Panthers around. Um, I've got
+[10:22] Panza 4s in here. I'm not too sure there
+[10:23] were that many left around at that time,
+[10:25] but I've got them in because I like them
+[10:27] and they're a good sort of medium tank.
+[10:29] Uh, and I needed something light and
+[10:32] fairly weak. Uh, so I've opted to have a
+[10:35] puma sort of armored car thing here with
+[10:38] turreted armored car type thing. Um, and
+[10:40] there are stats on there we'll have a
+[10:41] look at in a minute. So we've got a
+[10:43] panza 4 here. We're going to set this up
+[10:44] by it says placing it um on a random
+[10:48] numbered hex. You can see there are
+[10:49] certain hex's with numbers from 2 to 12.
+[10:52] So 2d6 in other words. So I rolled a
+[10:54] nine there. So I'm going to find hex
+[10:55] nine which is actually the exit hex here
+[10:57] where I'm going to head off to. So
+[10:58] that's going to start on there. And then
+[11:00] it says uh facing a random accessible
+[11:03] hex. So you got this little
+[11:06] compass in the top corner here. So one
+[11:09] is straight up, four is down, and then
+[11:11] you can see two, three, four, five, six
+[11:12] works clockwise clockwise around the
+[11:14] around the compass there. So I'm going
+[11:16] to roll another die and just work out
+[11:18] which way it's facing. It's going to be
+[11:19] facing in direction five, which means
+[11:21] it's going to be facing down there. Now,
+[11:24] when it says facing an accessible hex,
+[11:26] it means facing a hex into which the
+[11:28] tank could move uh if if needed. So, it
+[11:32] wouldn't have started facing there
+[11:33] because that's off map and that's not an
+[11:35] accessible hex. And neither is that for
+[11:37] the same reason. But apart from that,
+[11:39] these four field hex's are all
+[11:41] accessible. So, any one of those would
+[11:43] have done. But we've rolled a five. So,
+[11:45] we're going to start it pointing down
+[11:46] here at the five direction.
+[11:50] And then it says place the two
+[11:53] potential enemies in the same way. So
+[11:56] I'm going to roll a five there and place
+[11:58] this potential enemy right in the middle
+[12:00] of these farm buildings as they are.
+[12:04] This is um farm buildings somewhere near
+[12:06] aracort is where we are. So we're
+[12:08] clearing out this particular area. And
+[12:10] then the other one's going to go not on
+[12:12] five because we're only going to have
+[12:13] one on each hex at any point. Not on
+[12:14] nine either because the panzer four is
+[12:16] already on it. So we'll place him on
+[12:19] seven. So, it's just appeared down this
+[12:21] road here.
+[12:26] Now, in terms of my Hellcat, it says
+[12:28] place the Hellcat on the black arrowed
+[12:30] hex, which is this one.
+[12:33] And I can face that in any direction of
+[12:35] my choice. There's no point facing at
+[12:37] the woods because I can't move into
+[12:38] that. So, that would just be a waste.
+[12:40] So, the options on this one are just
+[12:42] there or there. And I' got to be got to
+[12:45] be a bit careful. And this game is very
+[12:47] much about
+[12:50] sort of hit and run tactics. That's what
+[12:52] Hellcats did. They were fast. They were
+[12:55] fairly powerful. Um, but they were
+[12:58] poorly armored. So, you really don't
+[13:00] want to get into too many fights.
+[13:03] You want to be hitting and then moving
+[13:04] away, which is something you couldn't
+[13:06] really do in Lone Sherman because you
+[13:07] had to do all your maneuvers and then
+[13:08] all your fires and so on. But in this
+[13:10] game, you can mix and match. So you can
+[13:13] sort of move a few hex's then fire and
+[13:14] then move a few more hex's. So you got
+[13:16] to take, you know, real advantage of
+[13:18] that. In actual fact,
+[13:21] um
+[13:24] thinking there's actually line of sight
+[13:25] there. We'll talk about in a minute. Uh
+[13:26] so
+[13:28] what you don't really want to do is end
+[13:29] up, you know, amongst things like that
+[13:32] because you're going to struggle to get
+[13:33] away from them and before you know it,
+[13:36] these will be spotting you and appearing
+[13:38] and that'll be attacking you and all
+[13:39] kinds of stuff. See,
+[13:42] you really want to try and stay
+[13:45] away from the crowd and pick the enemy
+[13:49] off one by one as you go. Now, these
+[13:54] German tanks will move quite craftily.
+[13:56] They I think they move I think I've sort
+[13:58] of perfected this system since Lone
+[14:00] Sherman. I think they move better than
+[14:01] they did in that game. Um they move
+[14:06] quite efficiently, but not always
+[14:08] directly at you. That's not what they do
+[14:09] always. They will certainly flank you,
+[14:12] but they may also charge straight at
+[14:14] you. Um, but they do move, as we'll see
+[14:15] in a moment, generally quite efficiently
+[14:17] and effectively.
+[14:19] The potential enemies, on the other
+[14:21] hand, don't move. They tend to sort of
+[14:23] creep towards you, but move a little bit
+[14:25] erratically. We don't really know what
+[14:26] they are. They may have not be anything.
+[14:27] They may be nothing.
+[14:29] Uh, in this game, they could be a puma.
+[14:31] They could be a Panza 4. They could be a
+[14:32] panther. There won't be a tiger because
+[14:34] there's a dash there. and this column
+[14:35] here next to the tanks tail. You know,
+[14:37] we'll be rolling dice to see what
+[14:38] appears and you can see the numbers
+[14:40] there. Whereas the tiger has a dasher,
+[14:42] but we we're not going to get any of
+[14:43] those. But that could be any three of
+[14:44] those, but it could be nothing at all.
+[14:47] But nonetheless, we don't want to get
+[14:50] too much involved with them.
+[14:53] We don't really want to be either
+[14:55] revealing these whilst this is on the
+[14:57] board. Ideally, we want to get rid of
+[14:58] the patterns of four, then reveal the
+[15:00] next one, then get rid of that, and then
+[15:02] reveal the next one, and get rid of
+[15:03] that. That's the perfect system. But as
+[15:06] with all war games, it's not always easy
+[15:08] to undertake your plans perfectly. These
+[15:12] question marks will try to spot you. And
+[15:13] if they do, they will they will appear
+[15:16] regardless of what else is on here. So
+[15:19] whilst you may you can decide not to
+[15:21] spot them yet and reveal what they are,
+[15:23] they may decide to spot you in the
+[15:25] interim if you're not careful. So again,
+[15:27] you the positioning of your Hellcat at
+[15:29] the end of your turn is really
+[15:31] important. You know, if you leave your
+[15:33] Hellcat out in the road in full line of
+[15:37] sight of one of these potential enemies,
+[15:38] they will almost certainly spot you.
+[15:40] There almost certainly will be something
+[15:42] quite nasty and then they will almost
+[15:44] certainly fire at you as well. So, you
+[15:46] got to be a bit careful with that.
+[15:49] So, for now, I'm thinking,
+[15:52] you know, I could head up this way and
+[15:53] try and get a cheeky shot on this Panza
+[15:55] 4 straight away, and that's very
+[15:56] tempting, although it's a long, long way
+[15:57] away. I should probably explain line of
+[15:59] sight. The line of sight does work um as
+[16:02] it does in quite a few of my games in
+[16:04] that it only runs along complete rows of
+[16:06] hex's. I think again I think I've done
+[16:08] something quite good with this game that
+[16:10] was perhaps missing in lone German.
+[16:12] That's make it more obvious that that's
+[16:13] the case. If you look carefully at this
+[16:15] map there aren't actually many areas
+[16:18] where you'd think where you might think
+[16:19] oh can they see that? Can they? It's
+[16:22] designed to have some quite long
+[16:24] stretches here. Remember you we can see
+[16:26] through let me tell you what blocks line
+[16:29] of sight shall they build buildings and
+[16:31] woodland and as I said earlier hedge
+[16:33] rows block line of sight nothing else so
+[16:36] not any units of any kind and not trees
+[16:40] right so you can see for example here
+[16:44] this column here is a complete clear all
+[16:47] right there are a few trees hexes but
+[16:48] you can see through that down that whole
+[16:50] column there as you can down this column
+[16:53] here where this panza 4 is sat and down
+[16:54] this end colum I've tried to and and
+[16:56] down this road here right across through
+[16:58] the through the sort of farm buildings
+[17:00] and also down here. So there are areas
+[17:02] where you get quite long bits of you
+[17:06] know lines of sight from this hedge to
+[17:08] this hedge for example down here. I've
+[17:09] tried to do that deliberately but there
+[17:11] aren't many areas where there's quite
+[17:13] open ground where you're thinking oh can
+[17:14] I see you know can I see that this funny
+[17:16] angle because generally you just won't
+[17:18] get that so much. The closest you get to
+[17:22] that kind of question is when you have a
+[17:24] diamond of hex's like this,
+[17:27] you know, can can if I'm in hex 4 here,
+[17:30] can I see this road junction here? And
+[17:32] in a lot of war games, you would be able
+[17:33] to because you'd be looking down this
+[17:35] the edge of this hex. Well, you can't in
+[17:37] this because you can only see along
+[17:38] lines of hex's. So like, you know, four
+[17:41] straight lines and that's going down the
+[17:43] edge of this one, which is not a line of
+[17:45] hex's. So you can't. But at least
+[17:47] there's some logic to it because there's
+[17:48] some buildings here and you know these
+[17:50] hexes are quite these hexes are 100
+[17:52] yards wide or something. So you just
+[17:54] have to think well okay the tanks are
+[17:55] like here and here so they can't see
+[17:56] each other around the around the
+[17:57] buildings. But if you just remember and
+[17:59] again the rules are really clear on this
+[18:00] and I know there was some confusion in
+[18:02] Lone Sherman being one of my earlier
+[18:04] games but I hope by now people are used
+[18:06] to how that works. You can only see down
+[18:08] straight lines of hex's. So any any one
+[18:11] time you can only have at the most six
+[18:13] lines of sight. You're going down there,
+[18:15] down there, down there, down there, down
+[18:18] there, and down there, for example.
+[18:20] Although, it wouldn't go far down there
+[18:21] and there, of course, because it's
+[18:22] blocked by these two woods hex's.
+[18:27] So, that's how line of sight works. So,
+[18:29] I have a decision. I've not even placed
+[18:30] my tank yet, but I could go here and try
+[18:32] to get some early fire on this Panza 4.
+[18:36] Now, it is a long way away. These are
+[18:38] one, two, three, four, five, six, seven,
+[18:39] eight, 800 yards away. It's fairly long
+[18:43] range, but doable.
+[18:46] In fact, they're 100 or so, you know,
+[18:49] 150. So, it could even be, you know,
+[18:51] thousand yards or so. It's a fairly long
+[18:53] hit or long shot. Plus, there's some
+[18:55] trees here, which I could do with
+[18:56] getting into so they're not blocking my
+[18:58] line or they're not interfering with my
+[18:59] line of sight. They don't block it, but
+[19:01] they do affect things, which we'll see.
+[19:05] So, I could start facing that way in the
+[19:07] hope that maybe just shuffle around into
+[19:09] these trees, have a pop, and then maybe
+[19:10] just get back behind these woods or down
+[19:12] into this lane here and just wait and
+[19:16] see what they do before then maybe
+[19:17] trying to get around the side. So, I
+[19:19] think I'll start facing that way.
+[19:24] In fact, maybe I'll just start facing
+[19:26] upwards because I can just go there and
+[19:27] there and then if I don't get the right
+[19:28] things, I can whatever. I'll start
+[19:30] there.
+[19:33] So each turn has 11 phases, which sounds
+[19:36] a bit daunting, but a lot of them are
+[19:37] very quick, very simple, very
+[19:39] straightforward, always bookkeeping
+[19:41] elements. The phases are numbered on
+[19:43] here in the in the sort of yellow
+[19:45] numbers with the the gray backgrounds.
+[19:47] So we got one, two, three, four, five,
+[19:50] six, seven, eight, nine, 10, 11. Okay,
+[19:52] so the first phase is remove Hellcat
+[19:54] smoke and the ambush counter or we have
+[19:56] no smoke. We don't we're not done ambush
+[19:58] yet. We'll hopefully get to see how that
+[19:59] works later on.
+[20:01] Second thing I do is position the
+[20:03] commander. So it doesn't really matter
+[20:04] where you start your commander. You can
+[20:06] start your commander up or down, but
+[20:08] because early in the turn, as we are
+[20:10] now, we can now position him. So now it
+[20:12] does matter. Not saying it doesn't
+[20:13] matter where you put him, but it doesn't
+[20:15] matter where you start the game with him
+[20:16] because straight away you get to
+[20:17] position him. So I could leave him
+[20:19] inside, put him up. If he's up, it helps
+[20:22] with
+[20:24] firing. It helps with spotting. Um it
+[20:28] means he can use the machine gun. And
+[20:29] the Hala only has one machine gun. It's
+[20:31] mounted on the top. So in order to use
+[20:34] it, somebody has to be out looking
+[20:36] around. Uh and the the commander is
+[20:40] particularly good at doing that,
+[20:41] especially against attacks from the air
+[20:44] should we get one when the end of turn
+[20:46] events arise. So he can be useful doing
+[20:48] that. If I leave him inside, obviously I
+[20:51] lose those bonuses, but I do get a
+[20:55] potential rolls when I roll my action
+[20:58] dice. that can be really useful. So,
+[21:00] this is to reflect the fact that if he's
+[21:01] down inside the tank, he can communicate
+[21:03] far easier with his fellow crew members
+[21:06] and and make sure they're doing, you
+[21:08] know, what needs to be done and and so
+[21:09] on and so forth. So, he can be more
+[21:12] efficient at operating the tank. So,
+[21:14] there's a tradeoff there. So, if I think
+[21:16] I'm doing a turn where I'm not going to
+[21:18] be doing much fighting,
+[21:21] then maybe I'll put him down inside and
+[21:23] then I can make sure I get the right
+[21:24] dice. what I want to do if you know
+[21:26] particularly if I need to repair for
+[21:28] example the tank or start putting fires
+[21:30] out it could be useful to get him down
+[21:31] inside to you know to say right let's
+[21:33] get that firearm let's mend that let's
+[21:34] do this
+[21:37] for now I'm going to actually leave him
+[21:38] out because if I do get a long shot on
+[21:40] this pan four I want the bonus he brings
+[21:45] so I've decid I've done that
+[21:49] phase three is where I can bail out if I
+[21:52] want to but you can only do that when
+[21:53] the condition of the Hellcat is less
+[21:55] than four. So until it's one or it's
+[21:57] one, two, or three, I can't it's not an
+[22:00] option. Plus, if I bail out, I can't win
+[22:02] the battle. I can only kind of draw it
+[22:05] or tie it, if you like, and it means I
+[22:07] have to replay the battle. So, it's it's
+[22:09] a last resort. It's not something you're
+[22:10] going to choose to do. Well, you will
+[22:12] choose to do it, but you'll choose to do
+[22:13] at the right time when when you're on
+[22:15] the verge of defeat. Uh, and then your
+[22:17] crew will run for it, and they have to
+[22:19] escape here where there's a green arrow
+[22:20] that says C. So, that's the kind of crew
+[22:22] exit point, if you like.
+[22:24] And if they get there, then they're safe
+[22:26] and I can replay the the battle.
+[22:30] So I'm not going to do that. Phase four
+[22:32] then allows me to move the crew if
+[22:34] they're bailed out, which they're not.
+[22:35] So crew, so phases three and four I can
+[22:38] largely ignore. Apart from the other, I
+[22:41] should say four, that's 4 A. 4B is where
+[22:43] I get to do instead of moving the crew,
+[22:45] I get to you know, operate the Hellcat.
+[22:48] So this is the key operational phase for
+[22:51] the Hellcat. So, I get to roll a number
+[22:54] of dice equal to the condition of the
+[22:57] Hellcat.
+[22:59] Uh, I'm fresh out the tracks. So, I've
+[23:02] got out the tracks, I should say. So,
+[23:03] I've got six
+[23:06] dice because my condition is six. So,
+[23:08] I'm going to roll those six dice.
+[23:12] I'm going to roll any that don't land
+[23:13] straight, even if they knock other dice
+[23:15] around because that's the rule I always
+[23:17] have.
+[23:19] So, I'm going to have three or I've got
+[23:21] three twos, a three, a four, and a six.
+[23:24] Okay.
+[23:26] And that's going to influence what I do
+[23:28] this turn. And that's going to tell me
+[23:30] what I can do. Now, this is far more
+[23:32] flexible than Lone Sherman. You're
+[23:34] rarely going to not be able to do
+[23:36] anything that you, you know, nothing of
+[23:37] what you wanted to do or, you know,
+[23:39] you'll often be able to do most of what
+[23:40] you want to do. And particularly as your
+[23:42] crew level up, they will be able to do
+[23:44] more and more things and you'll be able
+[23:45] to do, you know, virtually everything
+[23:46] you want to do. subject to rolling all
+[23:49] six dice. Of course, once your condition
+[23:51] starts deteriorating, you're only
+[23:53] rolling, you know, five, four, three,
+[23:55] and so on, then it gets more difficult.
+[23:59] If my commander was down inside the
+[24:01] tank, as I said earlier, he has a
+[24:03] potential to roll. His choice is to roll
+[24:07] either two or three matching dice. So,
+[24:11] you can't just roll one. So, if you
+[24:12] rolled one, two, three, four, five, six,
+[24:14] you won't be able to reoll any. If
+[24:16] you've got at least a pair, he can
+[24:18] reroll them. If you've got a triple, he
+[24:20] can reroll those. So here, he could
+[24:21] reroll either those or those. You know,
+[24:23] if that was a four,
+[24:26] then he would be able to roll two twos,
+[24:28] three twos, or two fours. Not a two and
+[24:31] a four, but you know, so matching dice,
+[24:36] but he's not down inside the tank. I
+[24:39] took a risk by putting him outside, so
+[24:41] I'm stuck with what I roll the first
+[24:43] time.
+[24:45] These dice give me actions as I say. Now
+[24:47] the key chart here is this one over
+[24:48] here. This action chart
+[24:51] and this works. Let me just remove this
+[24:53] paper because I think that's blocking
+[24:54] the light a bit.
+[24:56] This tells you what you can do. You'll
+[24:59] notice there are numbers next to all the
+[25:00] actions or 11 actions here. And there it
+[25:02] has a grid of numbers next to each
+[25:04] action which looks far more complex than
+[25:06] it is. At the moment, all my crew are
+[25:10] green and therefore they can only
+[25:12] perform the green numbers.
+[25:16] So, for example, I've rolled three twos,
+[25:20] which kind of relates to my loader
+[25:22] because he's he's the two. Okay. So,
+[25:24] that means these are things that the
+[25:26] loader can do.
+[25:32] If he was killed in action or had been
+[25:34] killed in action, I would be removing
+[25:36] those dice immediately from the pool.
+[25:38] You can't use them. But at the moment,
+[25:40] I've got all my crew.
+[25:42] I can use these twos to to do one action
+[25:45] each. So, if I look on here, you can see
+[25:46] there's a green two next to fire turret,
+[25:50] and there's a green two next to load.
+[25:53] Okay, so looking at the second column
+[25:55] with all the twos in. See, there's two
+[25:57] green twos. There's two there's
+[25:58] basically two two green twos, threes,
+[26:00] and fours. There's actually three green
+[26:02] ones for the commander and then there's
+[26:04] two black numbers and there's two red
+[26:06] numbers.
+[26:09] The slight anomaly is that all the green
+[26:11] all the sixes are green. The whole lot
+[26:13] of sixes are green for every action. So
+[26:15] for every six you roll, you have a
+[26:17] choice to do any one action of your
+[26:20] choice regardless of whether your crew
+[26:23] are alive because six doesn't relate to
+[26:25] any particular crew member. So that will
+[26:27] never be removed from your dice pool for
+[26:29] for killed in action
+[26:32] and it doesn't matter about anyone's
+[26:34] experience because again it doesn't
+[26:35] relate to a particular crew member and
+[26:37] all those sixes are green anyway. So I
+[26:40] can always do any action with a six. So
+[26:41] six is like wild if you like. They're
+[26:43] really good to get
+[26:46] to returning to these twos then. So twos
+[26:48] at the moment only allow my loader to to
+[26:50] load as you would expect of course with
+[26:52] a loader or fire. Okay. So he can, you
+[26:55] know, he, in other words, not so much
+[26:56] that he's firing the gun. It would be,
+[26:58] you could say it would be if the the um
+[27:00] gunner wasn't there, but you know, I
+[27:04] guess he's, you know, making it more the
+[27:07] whole firing process more efficient. So
+[27:08] it helps. So you could you, you know,
+[27:10] you could fire, load, and fire. My
+[27:13] turret member is loaded. So this turn I
+[27:15] could, for example, fire, then reload,
+[27:17] then fire, which is a bit how it worked
+[27:19] in Lone Sherman, but how you get there
+[27:21] is slightly different. We've got a three
+[27:23] which relates to the gunner. And again,
+[27:24] as you would expect, three is fire
+[27:27] turret and load. So again, he's got the
+[27:30] same initial actions at level green as
+[27:33] the loader, but he uses a three to do
+[27:35] it. And again, you wouldn't be able to
+[27:38] do that if the gunner had been killed.
+[27:39] The four relates to the driver. Okay,
+[27:44] number four down here. And there are two
+[27:46] green fours. And as you would expect,
+[27:47] one is move then turn, and one is
+[27:50] reverse then turn. So driving the tank
+[27:53] in other words. So that allows us to
+[27:55] move. And then we got this six which is
+[27:57] a say wild. So anybody can do that. So
+[27:59] we're lacking a little in movement dice.
+[28:02] And in fact four, five, and six allows
+[28:05] us to move as does one. So that's one of
+[28:07] the commanders things as well. Again,
+[28:09] it's not so much he's driving the tank
+[28:10] at this stage. Although they might step
+[28:11] in, of course, if the driver was killed,
+[28:13] but he's, you know, instructing them
+[28:16] what to do, just making movement more
+[28:18] efficient. If you lose your commander,
+[28:20] you lose the ability to use lo use use
+[28:22] any ones rolled. We haven't got any here
+[28:24] anyway. So, we we're just lacking a
+[28:26] little bit of movement. It's quite
+[28:27] unusual to get so few movement actions.
+[28:32] And that does kind of affect what I'm
+[28:33] going to do here. Maybe we'll see. I
+[28:37] think what I'm what I will do then is
+[28:40] use the four to move. Okay. So, four is
+[28:44] a move then or turn action. Okay. So
+[28:48] move then or turn means exactly that.
+[28:50] You you move and then you turn or you
+[28:56] just turn. You can't turn then move.
+[29:00] That's not an option. So again that show
+[29:03] you how really important it is to leave
+[29:04] your tank always facing the right edge,
+[29:08] you know, the right hex edge for your
+[29:10] plans. So the four allows me to move and
+[29:14] then turn. Okay. Now unlike in Lone
+[29:18] Sherman for those who played that or any
+[29:20] of those games you can turn as much as
+[29:22] you want. Okay. So I can turn to face
+[29:23] any hex even I could face you know turn
+[29:25] to face back the way I came or I can
+[29:28] turn to face there or down there or
+[29:30] whatever. It's not you don't just turn
+[29:32] one hex edge per because the instruction
+[29:34] is move then turn. So we can turn you
+[29:36] know whatever we like. And the the
+[29:38] Hellcat was a fast you know agile tank
+[29:40] and that's to reflect that as well. So
+[29:43] I'm going to move there and then turn
+[29:44] towards the trees. Okay. You can even
+[29:46] leave it to facing woodland, but I don't
+[29:48] really know why you would do that
+[29:49] because, you know, you can't go into
+[29:52] there. And of course, then next turn,
+[29:54] you'd have to move with one dice. Sorry,
+[29:58] you'd have to turn with one dice if we
+[29:59] could then move off because you can't
+[30:00] turn and move. So, you know, you just
+[30:02] wouldn't do that generally.
+[30:06] Then I'm going to use the six to move.
+[30:10] And if I had another move, I would leave
+[30:12] my Hellc my Hellcat facing that way. so
+[30:16] that I could then move off after I've
+[30:18] engaged this Panza 4, I could then move
+[30:20] off into the road here behind these
+[30:22] hedge for a bit of safety.
+[30:25] But because I haven't got another move,
+[30:28] I'm going to turn to face the Panzer 4.
+[30:31] And that's because I can put my front
+[30:33] armor towards him just in case we get in
+[30:36] a bit of a tit for tap.
+[30:38] Okay, the hel armor is terrible, but the
+[30:41] front armor is slightly less terrible
+[30:44] than the rest of it.
+[30:46] So, it will give me that advantage. I'm
+[30:47] also in trees, which will give me some
+[30:49] cover.
+[30:51] So, that's good. So, that's my movement.
+[30:53] I have to didn't have to use those dice
+[30:55] first. Of course, I could have, you
+[30:56] know, done all my firing and other
+[30:57] things first and then moved away, but I
+[31:00] wanted to move into position first. And
+[31:01] in fact, I'd like to move again. I
+[31:03] shouldn't really leave him in view of
+[31:05] this Panzer 4, but I'm going to do that
+[31:06] because it's only an example game.
+[31:10] So, now what I'm going to do is I'm
+[31:11] going to use one of these twos to fire.
+[31:13] And we said a two up here is green is my
+[31:16] loader doing something and he's helping
+[31:18] to fire. So what you know whatever he's
+[31:21] loaded up he's helping the firing
+[31:23] process.
+[31:25] So I'm going to the Hellcat is going to
+[31:27] fire with a two and
+[31:30] because obviously if you lose your
+[31:31] gunner or your loader you can still
+[31:32] fire. It just becomes more difficult
+[31:34] because you won't be able to use twos
+[31:35] and threes anymore. Only one of them you
+[31:37] know whoever's left. But you can always
+[31:38] use sixes. Again, the six is there to
+[31:41] because it acknowledges that everybody
+[31:42] in the tank is is at least basically
+[31:44] trained to do everybody else's job so
+[31:47] they can step in. You know, if we lose
+[31:48] our driver and assistant driver there,
+[31:50] you know, somebody will step in and
+[31:51] drive the tank. It'd be, you know, silly
+[31:52] if you couldn't. So, we're going to
+[31:54] fire. So, how do we do that? Well, first
+[31:57] we need to check we got line of sight.
+[31:59] And we have because we're running down a
+[32:01] straight row of hex's and there's
+[32:03] nothing here that's blocking. There are
+[32:05] there are no hedge, there are no woods,
+[32:07] there are no buildings. So nothing is
+[32:08] blocking line of sight to this guy.
+[32:13] I then need to There's no ranges in in
+[32:16] the game. Everyone can you can always
+[32:18] fire as far as you need to. Um apart
+[32:20] from small arms fire from infantry, but
+[32:23] we'll deal with that when we get there.
+[32:24] And machine gun fire from tanks, but
+[32:25] when you're firing out a turret, you can
+[32:27] you can fire as far as you need.
+[32:30] Um,
+[32:33] so what you do here is gather together a
+[32:36] number of dice equal to the firepower of
+[32:39] your tank. And if we look at the Hellcat
+[32:40] here, we can see that the red FP or
+[32:43] firepower stat is six. So I'm going to
+[32:46] start with six dice for my Hellcat.
+[32:50] Then we come down to the firing and
+[32:52] spotting modifiers. Okay, we're not
+[32:54] worried about spotting at the moment,
+[32:55] but firing, it's going to tell me that
+[32:58] there are modifiers here. So it tells me
+[32:59] the basic dice equal to FP. That's what
+[33:01] I've got here. So my basic dice are six
+[33:04] equal to my firepower.
+[33:07] Now for Hellcat fire only, then I get an
+[33:11] extra die if the gunner is experienced.
+[33:13] Well, he's not. He's green. Okay, so
+[33:16] he's got to go line and then he goes
+[33:17] experienced. Once he's experienced, I
+[33:18] get an extra die. But I don't get that
+[33:20] yet.
+[33:22] I also get one for
+[33:25] the fact that my
+[33:27] commander is up. So here it says Hellcat
+[33:29] fire um commander up plus one. So I'm
+[33:34] going to get an extra dice extra die for
+[33:36] that. Okay,
+[33:39] there are no other positives here. Um
+[33:41] but there will be some negatives. One of
+[33:43] those is the the range. So one, two,
+[33:45] three, four, five, six, seven. You count
+[33:47] the range in the normal way of a hex
+[33:48] game. So you don't count the hex you're
+[33:49] in, but you count the hex of the target.
+[33:51] So we're going from here, we go one,
+[33:54] two, three, four, five, six, seven. So
+[33:57] he's seven hex's away.
+[33:59] Now here it says if the range is less
+[34:03] than three, so here or here, then you
+[34:06] get an extra die. Just short range,
+[34:09] close range. If the range is greater
+[34:11] than five, which is here at seven, then
+[34:14] I lose a die for that. I lose a die for
+[34:18] that.
+[34:19] There's no smoke involved. He's not pop
+[34:22] smoke. He's not whole down. Um, he's not
+[34:26] through trees, he's not in trees.
+[34:29] So, other than that, it's just his armor
+[34:31] rating I need to look at. So, the armor
+[34:33] ratings are here. And these work in the
+[34:34] same way as it did for Lone Sherman in
+[34:36] terms of how they're set out. So, you've
+[34:39] got the front armor of your Panza 4,
+[34:41] which would be here. And he his front
+[34:44] armor is is rating three. You've got the
+[34:48] front side armor, which is when I'm
+[34:50] attacking from here, as I am now, or
+[34:52] from here. So the sort of front side
+[34:54] angle if you like and that would be two.
+[34:57] You've got the rear side angle which
+[34:59] would be from sort of here and here if
+[35:03] you like those rows of hex's there and
+[35:04] there would be rear side that would be
+[35:07] one rating. And we've got directly from
+[35:09] the rear. So directly behind would be
+[35:11] zero. So that's the weak. So to reflect
+[35:13] the fact that you know tanks were
+[35:15] generally armored more strongly
+[35:17] or more thickly on the front than they
+[35:19] were on the reverse. But it also takes
+[35:22] into account things like sloping armor
+[35:24] which is more effective and so on which
+[35:26] tends to be on the front. So the Panza 4
+[35:30] front side armor is two. So what that
+[35:32] means is I take away two. So on the
+[35:36] modifier it says targets armor rating
+[35:38] firing only minus AR. So you're taking
+[35:41] away the number of die of the armor
+[35:43] rating. The armor rating is two on that
+[35:45] side front side. So we take away two
+[35:47] die. So we're left with four. So, it's a
+[35:51] it's a bit of a long shot, but it's not
+[35:53] too bad. It's fant mainly because it's
+[35:55] nice and clear. If we' had a couple of
+[35:56] trees hex's dotted in here, then we'd
+[35:58] have lost another die for each trees
+[36:00] hex. But we got a nice clear shot,
+[36:03] albeit at range. So, we take those four
+[36:05] attack dice as they're called. And we
+[36:08] roll them. And we're looking for, as it
+[36:10] says here, fives or sixes to hit. So,
+[36:13] fives or sixes to hit. So, we're going
+[36:15] to roll those. They're all jumping out
+[36:18] the uh the old pot. come out. So, I'm
+[36:20] going to roll them again, even if they
+[36:21] knock what's already in there, as usual.
+[36:23] So, there's four dice.
+[36:25] And you can see there that we have one
+[36:28] success. Okay. The others can be
+[36:30] disregarded. So, what you do is you keep
+[36:32] the hits, and they're not they're not
+[36:34] individual hits. We only fired one shot.
+[36:36] So, what we what we say is it's a
+[36:38] strength one hit. In other words, it's
+[36:41] not a, you know, a full-on, you know, a
+[36:43] nice weak turret or whatever to blow it
+[36:46] off and smash the thing to pieces. It's
+[36:47] kind of I don't know it might have
+[36:48] clipped to sort of back right wing of it
+[36:51] or something but it's a one strength
+[36:53] hit. Okay. And then we're going to reoll
+[36:56] that. So any hits we any hit dice or any
+[36:59] success dice should say we gather them
+[37:01] together and we reoll those and then we
+[37:04] add them up and we apply that number to
+[37:07] the damage table. So you can see when
+[37:10] I'm this is a German tanks damage chart.
+[37:13] The Hellcat chart is far more complex
+[37:14] because lots of different things can
+[37:15] happen to your tank in terms of the
+[37:18] condition being reduced, fire starting,
+[37:21] um, and guys being killed in action.
+[37:25] For German tanks, it's really a case of,
+[37:27] you know, am I damaging them? Am I doing
+[37:30] any damage? And if so, am I damaging
+[37:32] them or am I destroying them? I'm only
+[37:33] rolling one dice here, so I can only get
+[37:35] one to six, obviously. So, you can see
+[37:36] here if I roll a one or two, it's no
+[37:39] damage. Three to seven, it's damaged.
+[37:42] But if it was already damaged, it would
+[37:44] be destroyed.
+[37:46] Uh, an eight plus I need to destroy it.
+[37:49] So, I always need at least a two
+[37:50] strength hit to have any chance of
+[37:52] destroying it with one shot. So, I would
+[37:54] have needed to roll two fives or sixes,
+[37:56] but I didn't. I only rolled one. So, the
+[37:59] best I can hope for is a three, four,
+[38:00] five, or six, which means I will damage
+[38:03] the Panza four. So, I'm going to roll
+[38:04] that. And I've got a two, which
+[38:07] unfortunately for me is no damage. So,
+[38:09] we've kind of just, you can call that
+[38:11] what, a deflection, a bounce off,
+[38:14] whatever you like. But, we've been
+[38:15] unlucky. We, let's say we've, you know,
+[38:16] we've hit the front of it and it's just
+[38:18] ricocheted off the sloping fairly thick
+[38:21] Panzer 4 armor.
+[38:24] Okay, back to me then. I'm going to So,
+[38:27] I obviously would unload my turret
+[38:29] because I just fired. Fortunately, I did
+[38:31] roll quite a lot of firing. So, I'm
+[38:33] going to load back with the two. The two
+[38:36] and twos and threes are both fire and
+[38:38] load. And then I'm going to fire again
+[38:40] another two. So that will unload my
+[38:42] turret again. So I gather together again
+[38:45] my six dice. Just very quickly run
+[38:47] through it again. Run get my six dice. I
+[38:49] add one because my commander is up out
+[38:52] the hatch being able to, you know, judge
+[38:55] the distance more easily or whatever
+[38:56] he's doing. Uh but I lose one because
+[38:59] the range is greater than five. I also
+[39:02] lose two because I'm shooting at the
+[39:04] Panza 4's front side armor. So I roll
+[39:08] the four dice again
+[39:10] and this time I miss completely. Yeah,
+[39:13] which is terrible. Unlucky really with
+[39:15] you know when you think about with four
+[39:16] dice it's a one in three chance on each
+[39:18] dice. So unluckily of eight dice I've
+[39:21] only had one hit. I was quite confident
+[39:23] actually about leaving that tank in
+[39:25] tatters if not destroying it but I
+[39:27] didn't. For the final three I might as
+[39:29] well load up. There's nothing else I can
+[39:32] do with a three at the moment because my
+[39:34] gunner is green experience.
+[39:37] As they gradually level up, there are
+[39:39] lots of other actions you can take.
+[39:41] At the moment, not so much. Obviously,
+[39:44] if I roll a six, I can do anything, but
+[39:45] I needed that six to get to the position
+[39:48] I wanted to be in. So, I'm in a bit of
+[39:50] danger. I'm in a spot of bother with
+[39:51] this Panza four. Depending on exactly
+[39:53] what he rolls, he may move off without
+[39:55] firing at me, but there's a fairly
+[39:58] decent chance that he will fire possibly
+[40:00] more than once in my direction.
+[40:06] So, that's our turn. That's our phase
+[40:07] done. Phase five is the fire check
+[40:09] phase. Well, we're not on fire, so we
+[40:11] don't need to do that. Phase six is the
+[40:12] German artillery phase, but there's no
+[40:14] artillery marker on the map, so we don't
+[40:16] need to worry about that. And phase
+[40:18] seven is removing German smoke. We're
+[40:20] not going to do that because it hasn't
+[40:22] popped any smoke. And then we get
+[40:24] through to activate activating
+[40:26] activating sorry if I can say it right.
+[40:29] The German revealed tanks in phase
+[40:32] eight. So this is where the Panzer 4
+[40:34] gets to move. And it says here that
+[40:35] we're going to roll four d6. Now if we
+[40:37] if I'd managed to damage him,
+[40:40] it was unlucky not to. He'd only be
+[40:42] rolling two dice. So straight away you
+[40:43] can see how that would be very
+[40:45] advantageous for me. But he's going to
+[40:46] roll four because he's not damaged. So,
+[40:48] we pop four dice into there. And the
+[40:52] first thing we're going to do is re-roll
+[40:54] once.
+[40:56] It says here, re-roll ones and sixes
+[40:58] once. Well, he hasn't got any ones or
+[41:00] sixes. So, we're not going to reroll
+[41:01] anything. He's going to stick with
+[41:03] these. We put them into order as we used
+[41:05] to in Lone Sherman. So, 2, four, five,
+[41:07] five. And then we're going to work
+[41:08] through them from lowest to highest,
+[41:10] including these duplicates. We're going
+[41:12] to do both of those, not just one of
+[41:13] them. So, he will now do four distinct
+[41:17] things. So, we look at the two row and
+[41:20] it says fire. Okay. So, can he fire?
+[41:24] Yes, he can. We know he can because we
+[41:26] could fire at him. So, he must be able
+[41:27] to fire at us. So, he's got line of
+[41:30] sight to us. Uh, so we're going to use
+[41:32] the two to fire. Then it says if not
+[41:35] move. Well, he is. So, he's not going to
+[41:38] move. So, just for the So, I can discard
+[41:40] that two and he's going to fire. So, he
+[41:42] does the same as we did. So he going to
+[41:45] take a d a number of dice equal to his
+[41:47] firepower. Now Panza 4 has a firepower
+[41:50] of five. So he gets five basic dice.
+[41:54] Okay. Now some of these modifiers down
+[41:55] here don't apply to the German town. A
+[41:57] couple in green and they're in green to
+[41:59] remind you and they do say Hellcat as
+[42:01] well. So it reminds you Hellcat only. So
+[42:04] it remind you these are only for the
+[42:05] Hellcat. That's the gunner being
+[42:07] experienced and the the commander being
+[42:09] out the hatch because they don't have
+[42:10] crew that we know of. So, um,
+[42:15] they don't get those bonuses. Okay. So,
+[42:17] we don't add anything for those. Uh,
+[42:19] however, the range still still applies
+[42:21] and the range is still greater than
+[42:23] five. So, they do lose one for that. And
+[42:26] also, they're firing at my front armor.
+[42:28] Now, if we look at the Hellcat armor and
+[42:30] compare it to some of these German
+[42:31] tanks, we've got front armor of one and
+[42:33] then we've got zero zero zero. So,
+[42:36] pretty awful. When you think a tiger has
+[42:38] five, four, three, two, yeah, we're
+[42:41] going to be struggling when we're
+[42:43] shooting at him with our six firepower
+[42:45] because if we shoot the front of a
+[42:46] tiger, it's going to take five dice away
+[42:48] straight away. So, we really do need to
+[42:49] be flanking that tiger. But anyway, we
+[42:51] can use other things as well. You know,
+[42:52] got get the commander out and get close
+[42:54] up to him and so on. But still, our
+[42:56] armor is terrible. But we have at least
+[42:58] put the front of our tank towards him. I
+[43:00] did that as you saw for a reason. And
+[43:01] that's because he will now lose one die
+[43:04] because I have my front armor of one.
+[43:08] And he'll lose another one because I am
+[43:11] positioned in these trees.
+[43:14] So that makes me slightly more difficult
+[43:15] to see. Maybe there's a chance of, you
+[43:17] know, his shot hitting a tree on the way
+[43:19] in and deflecting off or whatever.
+[43:22] So he's left with only two dice. He's
+[43:25] lost one for the range, one for the
+[43:26] trees, and one for the front armor of my
+[43:28] Hellcat. So he only gets two dice.
+[43:31] So he rolls only the same way he's
+[43:33] looking for fives or sixes. Of course he
+[43:35] gets one. So he does get a one strength
+[43:37] hit. And then he's going to roll this to
+[43:39] see what damage he does to me. Now for
+[43:41] me only a one will be no damage. And
+[43:44] then we've got all sorts of things going
+[43:45] on here. We got fire and the condition
+[43:47] dropping in different degrees. And the
+[43:49] higher you get, the worse it gets. Okay.
+[43:52] But obviously not going to be too bad.
+[43:54] He's only rolling one. So we roll that
+[43:55] dice and he gets a one. Fantastic. no
+[43:58] damage. So, that must be a really close
+[44:01] show. Must have just clipped, you know,
+[44:03] a bit of something sticking off the
+[44:05] turret or something. It just took off,
+[44:07] you know, a bit of, I don't know, a bit
+[44:08] of metal or something. No significant
+[44:10] damage. Very lucky.
+[44:13] His next die is a four. And that's quite
+[44:16] lucky for me because that's the only one
+[44:17] that has him moving first.
+[44:20] Actually, a one would do that as well,
+[44:21] but you know, two, threes, fives, and
+[44:23] sixes are all fired. So, he wants to was
+[44:25] desperate to fire at me with these, but
+[44:26] first he's got to do this. And that's
+[44:27] going to say move then turn. So he's
+[44:31] going to move. Now what happens here is
+[44:33] move means as it does for me move in the
+[44:36] direction you're facing. So this Panzer
+[44:38] 4 will move like that as long as it can.
+[44:42] Okay. If it was facing buildings or
+[44:46] woods or off map or water in a later
+[44:50] map, it wouldn't do that obviously
+[44:52] because it can't move into those hex's
+[44:54] but it would still turn. So you they try
+[44:57] to turn regardless of whether they move
+[44:58] or not. It says move then turn. So
+[45:00] they're going to try and do those
+[45:00] things. He can move so he will and
+[45:02] usually will be able to move because
+[45:03] you'll see they very they rarely
+[45:05] position themselves so that they're
+[45:07] facing inaccessible hex's.
+[45:11] Um one thing that can happen of course
+[45:13] is another unit of some kind either a
+[45:15] tank or a potential enemy can can move
+[45:17] in the way in which case he wouldn't
+[45:18] move there either. But there isn't one
+[45:20] so he will he'll move there.
+[45:22] Four is move then turn. There's not a
+[45:24] condition on the turn. And it's just
+[45:26] turned. So he will always turn. And like
+[45:28] in lone Sherman, German tanks will
+[45:30] always turn towards the Hellcat. And
+[45:34] that means it will turn in the way
+[45:37] towards maybe slightly
+[45:40] confusing term to use. It will turn
+[45:44] in the direction of the Hellcat. That
+[45:47] doesn't mean it's always going to end
+[45:48] up, you know, in a better position
+[45:50] facing it or whatever. You don't you
+[45:51] don't need to work out, oh, he's going
+[45:52] to face the best possible way for him.
+[45:54] There's none of that. It just means
+[45:58] all all it means is I'm trying to work
+[45:59] out whether he he's you he can only turn
+[46:01] left or right, can't he? So, you know,
+[46:03] which direction he's going to turn?
+[46:04] Well, the answer is he's going to turn
+[46:05] the direction that's closest to the
+[46:07] Hellcat. And you can see that, you know,
+[46:09] if he goes right, he's got to go almost
+[46:11] 360 to get facing the Hellcat. Whereas,
+[46:14] if he turned left, you know, the angle
+[46:16] is that, isn't it? That bit compared to
+[46:20] that bit. So, you know that
+[46:24] kind of makes sense, doesn't it? So,
+[46:25] he's always going to turn towards a
+[46:27] Hellcat. So, he's going to go
+[46:30] like that. But he won't stop there
+[46:32] because that's not an accessible hex.
+[46:34] And he will always stop as long as it's
+[46:36] possible facing an accessible hex
+[46:39] wherever that takes him. So, he'll keep
+[46:41] turning
+[46:43] to there and he'll stop there. Had there
+[46:47] been a unit in there, he would have
+[46:48] carried on turning again and stopped
+[46:50] there.
+[46:52] Okay. So, you know, again, potentially
+[46:54] you can they can turn a long way. In
+[46:56] this case, he's turning two hex's past
+[46:57] the buildings to there. So, that's what
+[46:59] a move and turn does. Then he's got a
+[47:03] five
+[47:04] and that says fire. He can't fire
+[47:07] because he has no line of sight.
+[47:08] Remember, you have to be on the same row
+[47:10] of hex's. He can only fire down there
+[47:12] now or down this row of hex's but he
+[47:15] can't because of the buildings but he
+[47:17] you know in theory down this row not he
+[47:19] hasn't got line of sight to my tank
+[47:22] anymore as I say the maps are designed
+[47:23] that way anyway you can see that you
+[47:24] know those buildings are clearly in the
+[47:26] way anyway so he can't fire it says if
+[47:29] not which he hasn't then move
+[47:33] so he's going to move again that means
+[47:35] in the direction he's facing if if
+[47:38] possible if not won't move Then, and
+[47:41] there is a condition here. It says if
+[47:43] blocked, turn. So, for these ones, he'll
+[47:46] only move for five. In fact, two, three,
+[47:48] and five are all the same. They're all
+[47:49] the same instruction completely. So, for
+[47:51] two, three, and five, he will only turn
+[47:54] if his route is now blocked. It's not.
+[47:56] And that means he can't move into that
+[47:58] hex for whatever reason. Whether it be
+[47:59] off map, whether it be woods, buildings,
+[48:03] um, water, a unit, a potential enemy,
+[48:05] you know, the Hellcat even. If
+[48:07] something's blocking his way, he would
+[48:08] turn. But there isn't. So, he won't
+[48:10] turn. He'll stay there.
+[48:13] And that's that dice finished. And then
+[48:15] he's got another five, unfortunately for
+[48:16] us. And that says fire. And now he can
+[48:19] fire, of course. Okay. So, he fired and
+[48:21] then he moved off presumably to reload
+[48:23] or whatever. Now he's come back into
+[48:24] view and he's firing again.
+[48:27] And it says if not moved, so he won't
+[48:29] move. So, he's just got to fire. So, we
+[48:31] can get rid of that dice knowing that
+[48:32] what he's going to do now for his last
+[48:34] action is fire at me.
+[48:37] So again, he gets firepower of five.
+[48:41] I'm in trees, so he loses one. He's
+[48:44] shooting at my front armor, so he loses
+[48:45] another one. And he's still one, two,
+[48:47] three, four, five, six. He's now six
+[48:49] hex's away, but he's still more than
+[48:51] five. So he loses a dice for long range.
+[48:55] So that gives him again two dice to fire
+[48:58] at.
+[49:01] German tanks, by the way, also, and only
+[49:03] German tanks, lose a dice if they fire
+[49:05] to the rear, a bit like they did in Lone
+[49:07] Sherman. So, if you if he's ever firing
+[49:09] for this Panza 4, that would be if he's
+[49:11] firing along that line of sight or
+[49:14] directly backwards or down this line of
+[49:16] sight. So, the three kind of line of
+[49:18] sight lines of sight that run to his
+[49:19] rear. If he's firing on that one or
+[49:22] straight ahead or the one he's firing on
+[49:23] now, he's firing kind of to his front,
+[49:25] he doesn't lose that dice. The Hellcat
+[49:28] never does. The Hellcat can fire
+[49:29] anywhere 360 again to reflect the fact
+[49:31] that it's so maneuverable, so fast, and
+[49:33] its turret spins at a good speed as
+[49:36] well. So, the Panzer 4 doesn't lose a
+[49:37] dive for that here, but it's only got
+[49:39] two again. So, it's going to fire with
+[49:40] those. Unfortunately for me, it gets
+[49:43] snake eyes, and that's a miss.
+[49:47] And he stays parked up in my line of
+[49:49] sight. So, we've both been a bit daff,
+[49:50] both a bit um naive perhaps, but there
+[49:53] we go. That's the way it's gone. So,
+[49:55] that's that. Then we move on to phase
+[49:57] nine, which is activating German
+[49:59] infantry. There aren't any on the map,
+[50:00] so we don't do that. And then phase 10
+[50:03] is activate potential enemies, which are
+[50:05] these things here. So what are they
+[50:07] going to try and do? What they're trying
+[50:09] to do is to spot you. In other words,
+[50:11] they're trying to get to a position
+[50:12] where they've got line of sight to you.
+[50:15] If they do that, they will do a spot
+[50:17] test. And if they succeed at the spot
+[50:19] test, they will turn into probably a
+[50:22] quite nasty tank. If they spot you, then
+[50:26] when you're deciding which German tank
+[50:28] it is, you only roll one die. So you can
+[50:30] see that straight away you'd have a
+[50:32] 50-50 chance of getting a Panther and a
+[50:34] 50/50 chance of getting a Panza 4.
+[50:38] There's no chance of it not being a tank
+[50:40] and it will usually be quite a nasty
+[50:42] tank and later battles, you know, it may
+[50:44] well be a Tiger.
+[50:46] On the other hand, if you spot them
+[50:49] first successfully, again, you run a
+[50:51] spot check and if you're successful, you
+[50:54] roll two dice to decide what sort of
+[50:56] tank it is. So again, you could get a
+[50:58] panther, but only if you roll double one
+[51:00] or one two, two or three. Four to six,
+[51:04] again, still reasonably unlikely, but I
+[51:08] suppose six is fairly you get a Panza
+[51:10] four. If you roll a seven, then you get
+[51:13] a Pummer, which is fairly weak, no armor
+[51:15] at all. And if you get eight or plus,
+[51:18] eight, eight or more, eight plus, you
+[51:20] get nothing at all. You just
+[51:21] disappeared. It was, you know, false
+[51:23] report or whatever.
+[51:25] So much better to spot them before they
+[51:28] spot you. But they're activating this
+[51:31] guy.
+[51:32] Well, they always roll four dice just
+[51:34] like healthy tanks. So, we roll four
+[51:37] dice.
+[51:39] Um,
+[51:40] there's no roll, so you don't reroll
+[51:42] ones and sixes, but you do still put
+[51:44] them into order and deal with them in
+[51:46] that order. And all they do is
+[51:50] they're going to try and move four
+[51:51] times. And between before and after each
+[51:54] one, they're going to try and spot you.
+[51:56] And that means you just have to check
+[51:57] whether they've got line of sight to the
+[51:58] Hellcat or not, which is a really quick
+[52:00] test. So, first of all, has it got line
+[52:02] of sight? No, it hasn't. It's not. You
+[52:04] know, you can only see down here, up
+[52:05] there, into these buildings, into these
+[52:07] buildings up there. You know, you can't
+[52:09] see down there. You can't see me. I'm
+[52:10] not in the same line of H. You can see
+[52:12] straight away we're not on the same line
+[52:13] of hex's. Not an issue. So then he'll
+[52:16] try and move and he'll try and move in
+[52:17] direction three
+[52:19] because he's rolled a three. Looking at
+[52:20] this compass, which is down there. He
+[52:22] can't do that because he can't move into
+[52:23] these buildings. These are potentially
+[52:25] tanks. They're not infantry. They're
+[52:27] never infantry. They're always tanks. So
+[52:29] they can't move into the buildings. They
+[52:31] won't do that. Then we take the four.
+[52:34] Still not got a line of sight. Can it
+[52:37] move in direction of four? Yes, it can.
+[52:38] So, it'll move down there into the
+[52:40] middle of the
+[52:42] farm buildings. Then it's got a five.
+[52:44] Can it move five? No, it can't because
+[52:46] these buildings are in the way. It's got
+[52:48] a six. Can it move six? Yes, it can.
+[52:52] But it won't because it says
+[52:57] for each move, move in that direction if
+[53:00] possible. and and if not further away
+[53:04] from the Hellcat. So at the moment he's
+[53:07] 1 2 3 four hex's away. If he moves in
+[53:10] that direction six,
+[53:13] he's going to be five hex's away. So he
+[53:15] won't do that. He'd move there if he
+[53:17] could. He would have moved there with a
+[53:18] five because he'd still be four hex's
+[53:21] away. So he'll move if he's the same or
+[53:23] if he's coming nearer, but he won't move
+[53:26] if he's moving further away. And in that
+[53:28] way, they sort of creep. Well, they they
+[53:30] tend to creep towards you. Although you
+[53:32] can get a burst. It's amazing how often,
+[53:34] you know, in this situation, you
+[53:35] suddenly roll two threes and he goes
+[53:36] dirt and then he's spotting you. So, you
+[53:38] know, don't underestimate them, but
+[53:41] usually they kind of creep around.
+[53:44] Okay, let's do that again for the other
+[53:45] one. At no point has he been able to
+[53:47] spot me again. You check at the end. You
+[53:49] check before and after every die. So, he
+[53:51] rolls four, five, five, six.
+[53:54] Again, can he see me? No. He's got a
+[53:58] four. Can he move in that direction?
+[53:59] Yes, he can. Straight down. He's got a
+[54:01] five. Can he move there? No, the
+[54:02] buildings are in the way again. Won't do
+[54:04] five. Six. Can he move there? Yes, he
+[54:06] can. Now, that looks a bit like he's
+[54:07] moving further away from me, but
+[54:09] actually he's not. 1 2 3 4 5 six. 1 2 3
+[54:13] 4 5 six. It's actually the same distance
+[54:15] away. So, he will move to there.
+[54:20] And again, you don't need to worry
+[54:21] about, oh, hang on, he's just gone
+[54:22] behind some buildings. You don't ever
+[54:25] need to think about the AI in this game.
+[54:27] You just do what the dice tell you to
+[54:29] do. Trust me, it's hard enough. And they
+[54:32] will still do things that surprise you
+[54:35] from time to time.
+[54:38] So that's them done. And then finally,
+[54:40] we have phase 11, which is the end of
+[54:42] turn events phase. Now, this works in a
+[54:44] similar way to Lone Sherman, but there
+[54:45] are a lot more events. There's something
+[54:47] like 13 or 14 different events. So you
+[54:51] get different ones on different battle
+[54:53] maps. So this changes, this chart at the
+[54:55] bottom here changes quite considerably
+[54:56] from battle to battle. You get, you
+[54:58] know, one's coming, one's disappearing,
+[54:59] and so on.
+[55:02] So you roll two dice, 2d6, and that's a
+[55:05] six. And then you have a look on here,
+[55:07] and it says German infantry.
+[55:10] Okay, max six on map. So you get six of
+[55:14] those tokens the end of the game. Six of
+[55:16] these German infantry tokens. So you can
+[55:18] only ever have six on the map at one
+[55:20] time. It says place in all vacant
+[55:23] buildings or woods hex's adjacent to the
+[55:26] Hellcat. So, we're going to look around
+[55:29] the six hexes adjacent to the Hellcat
+[55:32] and see if there are any woods or
+[55:33] buildings hex's. There are there is one
+[55:36] woods hex. So, we're going to place the
+[55:38] infantry in there. They don't do
+[55:41] anything now. They'll activate in the
+[55:43] next German infantry phase. What they do
+[55:45] when they activate is they never move,
+[55:47] but they will attack the Hellcat if it's
+[55:49] anywhere adjacent to them. So, we're
+[55:51] going to have to move away. And there
+[55:53] are times in this game where they they
+[55:56] appear when it's a real pain in the A.
+[55:59] So, you know, you could, for example, be
+[56:01] quite safely tucked up amongst some
+[56:02] building textes. Um, you've got, you
+[56:05] know, tanks hunting you down and you
+[56:07] think, I'm all right in here. and
+[56:08] suddenly
+[56:10] the buildings are flooded with infantry
+[56:12] and you've got to get out of there and
+[56:14] you were hoping to have to sit there and
+[56:15] kind of repair and so on. So they they
+[56:17] can be a real nuisance. This is not
+[56:18] going to be too bad. I'm going to move
+[56:19] away from here anyway. So that's all
+[56:21] right. And that is the end of the first
+[56:24] turn
+[56:26] and we start again. So we go back to the
+[56:28] start phase one. We're going to remove
+[56:30] the smoke from the Hellcat and the
+[56:31] ambush marker if there is one. There
+[56:33] isn't one. We're going to position the
+[56:34] commander. I'm going to leave him up
+[56:36] because I'm going to almost certainly
+[56:37] take at least one shot at this Panza 4
+[56:40] before I move on. So, I'm going to leave
+[56:42] my commander up.
+[56:44] Um,
+[56:47] I'm not bailing out. My crew haven't
+[56:49] bailed out. So, I'm then get through to
+[56:51] my phase where I do stuff. I'm going to
+[56:53] roll six dice because my condition is
+[56:54] still good.
+[56:58] And I can see I've got a couple of sixes
+[57:00] there, which is always welcome. Gives me
+[57:02] so much more flexibility. Remember, I
+[57:04] can use those for any action I like. So,
+[57:06] I got a good variety here. Um, I've got
+[57:09] generally that's a move action.
+[57:13] Later on, you can load and fire with a
+[57:15] one. You can see here there's a black
+[57:16] one there and a red one there. So, when
+[57:18] your commander is line, you can load
+[57:22] with him. Uh, so he's either doing it
+[57:24] himself or more likely just, you know,
+[57:26] adding to the efficiency of it as he
+[57:28] becomes more experienced. he's learning
+[57:30] that he has to keep his eye on, you
+[57:32] know, things more or whatever. And then
+[57:33] he can actually also do a fire action
+[57:35] when he's experienced as well. So, and
+[57:38] when you know when when someone when a
+[57:40] crew member is lying, it means they can
+[57:42] do both black and green. Obviously, you
+[57:43] know, you don't lose the ability to do
+[57:45] the green ones. And when you're
+[57:46] experienced, you can do all of them.
+[57:49] But for now, we can move with the one
+[57:51] certainly. We can also fire machine
+[57:53] guns. So, we can actually shoot at this.
+[57:55] Machine guns have a range of one heck.
+[57:57] So, we can actually fire at these if we
+[57:58] want to, but they don't really do. As
+[57:59] soon as I move away, they're not going
+[58:00] to do any harm really. Although, they
+[58:02] can snipe sometimes,
+[58:05] but yeah, whatever.
+[58:09] Um, usually find I only kill infantry
+[58:11] when it's when it's a necessity, you
+[58:12] know, when there's no other sort of way
+[58:14] out. Um,
+[58:17] yeah. Okay. So, you know, we've got
+[58:19] options. Uh, I can use a one to spot as
+[58:21] well, but I'm not going to be spotting
+[58:22] this turn. So, what I'm first going to
+[58:23] do then is use this three. In fact, no,
+[58:25] I'm not going to do that. What I'm going
+[58:26] to do is cunningly I'm going to move one
+[58:30] hex forward
+[58:32] and then just have a little think about
+[58:34] where I want to go. I think I'm going to
+[58:35] have to tuck over here. See, this
+[58:37] industry is already slightly an issue
+[58:38] because I would really like to perhaps
+[58:40] escape around here.
+[58:43] Probably not enough anyway, but he's
+[58:45] just a bit in the way. I don't want to
+[58:46] end up next to him. So, I've really got
+[58:47] to go over here. He's sort of blocking
+[58:49] the way out in a way, but or just making
+[58:51] it more difficult. So, I'm going to turn
+[58:54] to face that way. So, so I move there
+[58:56] and turn face that way. The reason I've
+[58:58] moved is just to make the range down to
+[59:00] five, which means I don't lose a die
+[59:02] when I'm firing. Then I'm going to fire
+[59:04] at the Panza 4. You can't fire, by the
+[59:07] way, at these potential enemies. You
+[59:09] have to spot them and find out what they
+[59:10] are first.
+[59:12] Like likewise, they won't fire at you
+[59:14] until they're revealed.
+[59:16] So, I'm using the three. I'm going to
+[59:18] take six dice, six basic dice for my
+[59:20] firepower strength, of course.
+[59:23] Um, just realized actually you probably
+[59:25] can't see the dice at the bottom. It's
+[59:26] probably been a bit annoying for you.
+[59:27] I'll just move them. I'll try and
+[59:28] remember that. We got six basic
+[59:30] firepower dice. Um, I'm going to add one
+[59:33] because my commander is out the hatch or
+[59:35] or I should say out the tank at the top.
+[59:38] Um,
+[59:40] and then I'm not adding anything else.
+[59:44] And I'm taking two away because I'm
+[59:45] still firing at the front side armor of
+[59:47] the Panza 4. All be at the other side
+[59:49] this time. It's the front side armor. So
+[59:50] that's going to be two dice away, but I
+[59:53] get five. So that's, you know, made a
+[59:55] nice difference.
+[59:57] And I'd hope to be able to get with a
+[59:58] bit of luck a double strength hit here.
+[1:00:00] Let's see if we can do that.
+[1:00:03] Oh yes, that's a nice one. That's a
+[1:00:05] full-on whammer. Look. So here I got
+[1:00:08] three hit, five, six, six. I got a
+[1:00:10] triple strength hit on the Panza 4.
+[1:00:14] Okay, so very lucky, but makes up for
+[1:00:16] last time when I was pretty unlucky. So
+[1:00:18] I'm again I'm rolling remember on the
+[1:00:20] German damage chart if I get eight plus
+[1:00:22] he's destroyed and with three dice I've
+[1:00:24] got a fairly good chance of that. You
+[1:00:25] would think that's a 10.
+[1:00:29] That's a 10. So he is indeed destroyed.
+[1:00:32] So I can remove that Panzer 4. Goes up
+[1:00:35] in a ball of flames
+[1:00:38] as my shot pierces his armor and
+[1:00:41] explodes.
+[1:00:43] Um now I've destroyed a German tank. I
+[1:00:46] get a chance to level up one of my crew
+[1:00:47] members, which we were talking about
+[1:00:48] earlier on. So, how you do that is you
+[1:00:51] take
+[1:00:53] 2d6,
+[1:00:54] you roll them, and then you look at the
+[1:00:58] results.
+[1:01:01] If you've rolled a six, it's void. Okay?
+[1:01:04] You discard that dice or those dice. If
+[1:01:06] you if you roll a double six, the worst
+[1:01:08] roll you can do, you don't get to level
+[1:01:09] up. If you roll a six, you lose that
+[1:01:11] dice.
+[1:01:13] any or one dice one to five simply
+[1:01:16] relate to the crew members. So here I
+[1:01:19] can only load up my assistant driver
+[1:01:21] because I've rolled a five on both. In
+[1:01:23] other words, the choice has been taken
+[1:01:25] away from me. So I can replace my
+[1:01:27] assistant driver with his line version.
+[1:01:30] If I'd rolled a one and a five, I'd have
+[1:01:32] a choice to make. I can either level up
+[1:01:34] my commander or my assistant driver. But
+[1:01:37] I didn't get that choice. So I wanted to
+[1:01:40] make it so you got some control. you get
+[1:01:42] some choice from time to time, but
+[1:01:45] actually also it does vary quite a lot
+[1:01:48] from game to game. You know, sometimes I
+[1:01:49] can I can play a a campaign of a few and
+[1:01:52] end up with, you know, couple of guys on
+[1:01:53] green and and three experienced. Other
+[1:01:55] times I'll have a much more balanced
+[1:01:57] crew of, you know, most of them be lying
+[1:01:58] with the odd one who's experienced or
+[1:02:00] whatever. So, it does work quite well, I
+[1:02:03] think, that system.
+[1:02:05] So, we
+[1:02:07] level up my assistant driver and we can
+[1:02:09] see on the chart there are a couple of
+[1:02:11] black fives here. He's in black there
+[1:02:13] just to remind you. Couple of black
+[1:02:15] fives here. So, he can now perform a
+[1:02:17] reverse and turn action. It's amazing
+[1:02:20] how handy reversing can be sometimes.
+[1:02:22] It's quite useful. And also, he can
+[1:02:24] extinguish fire. So, one thing to note
+[1:02:27] is when you start in this game, you can
+[1:02:30] only extinguish on a six. And you don't,
+[1:02:33] you know, once you're on fire, you do
+[1:02:34] want to get it out fairly quickly. Now,
+[1:02:36] you're rolling quite a lot of dice
+[1:02:37] usually, so you can, you know, usually
+[1:02:39] keep it under control, but it's handy
+[1:02:40] just to have an extra dice that you can
+[1:02:42] roll. So, now we got fives and sixes
+[1:02:44] that we can use to extinguish, which is
+[1:02:46] good. So, that's that. What I'm going to
+[1:02:49] do next is I'm going in fact to
+[1:02:55] I think what I'll do is move to here and
+[1:02:59] then turn round to face
+[1:03:09] down the lane
+[1:03:14] with a four. Okay, so I've moved and
+[1:03:16] turned and then I'm going to try and
+[1:03:18] spot this to show you how that works. So
+[1:03:20] I'm going to take this one
+[1:03:23] and
+[1:03:25] I'm going to perform a spot action. See
+[1:03:28] here that one is your commander. So he's
+[1:03:31] generally the one who does the spotting
+[1:03:34] at the start certainly. Uh but always
+[1:03:36] you can do it with a six. So there
+[1:03:38] somebody else can do it if necessary or
+[1:03:39] if you're kind of live you just say he's
+[1:03:41] using the six whatever. But later on you
+[1:03:44] can see for example the driver once he's
+[1:03:46] line experience he's then not just
+[1:03:49] looking where he's going. He starts to
+[1:03:50] keep his eyes out for enemies as well
+[1:03:51] more effectively. So he can spot with a
+[1:03:54] four once you've leveled him up once.
+[1:03:56] And also here your gunner and your
+[1:03:59] assistant driver can also spot but only
+[1:04:02] when they are experienced.
+[1:04:04] But we've got a one here. So we can use
+[1:04:06] that straight away to spot. Now spotting
+[1:04:09] the spotting action says you have to
+[1:04:11] have line of sight. The question mark we
+[1:04:13] have straight down this road. Okay. It's
+[1:04:15] on the same line of hex's and there is
+[1:04:17] nothing between us to stop line of
+[1:04:19] sight. The basic dice I roll is two.
+[1:04:23] Basic number of dice. And I need fives
+[1:04:26] or sixes to spot just like I needed
+[1:04:28] fives or sixes to hit.
+[1:04:31] So for successful spot, I just need to
+[1:04:33] get one. It doesn't matter how many you
+[1:04:34] get. That doesn't have any impact here.
+[1:04:36] I just need one five or six to be
+[1:04:38] successful. However, there are some
+[1:04:40] modifiers that apply to spotting.
+[1:04:44] About all the modifiers do unless they
+[1:04:45] say otherwise. All right. Um so for
+[1:04:49] example, the armor doesn't because it
+[1:04:51] says firing only. Clearly, we don't know
+[1:04:52] what their armor is because an armor
+[1:04:54] wouldn't make any difference anyway.
+[1:04:55] Doesn't matter how thick your armor is,
+[1:04:56] you can still be seen, obviously. So,
+[1:04:59] uh there isn't much that applies here.
+[1:05:01] Um but I have got my commander out the
+[1:05:03] hat out the tank looking around. So, he
+[1:05:05] does add that dice again. Yeah. So, um
+[1:05:09] Hellcat fire or spot if commander up
+[1:05:11] plus one. So, I'm adding him there. I
+[1:05:14] would also get one if it was short
+[1:05:15] range. Like I'd lose one if it was long
+[1:05:17] range. I'd lo um well they these will
+[1:05:20] never pop smoke and they'll never go
+[1:05:21] whole down so we don't need to worry
+[1:05:23] about those. So that's really it through
+[1:05:24] trees as well. If it was through trees
+[1:05:26] I'd lose a dice but it's not or if it
+[1:05:27] was in trees. He's not any of those
+[1:05:29] things. So I get a basic two plus one
+[1:05:31] because my commander is up. I'm going to
+[1:05:33] roll three dice. Remember I just need a
+[1:05:35] five or six just one. And I get a couple
+[1:05:38] of sixes. So that's success. So I have
+[1:05:41] spotted this potential enemy here. So,
+[1:05:44] what I'm going to do then is, as it says
+[1:05:46] here, and as I said earlier, I'm going
+[1:05:48] to roll 2d6 on the German chart. So,
+[1:05:50] we're looking at this chart here. We're
+[1:05:52] looking at the numbers down the left
+[1:05:53] here. I'm going to roll two dice. I get
+[1:05:55] a six. And unfortunately for me, that's
+[1:05:57] a Panza 4. So, not the best roll, but
+[1:06:00] not the worst either. This is not a
+[1:06:02] panther. So, he's going to be he's going
+[1:06:04] to go there. He's going to replace the
+[1:06:05] potential enemy marker. And he's going
+[1:06:07] to have, as it says here, uh he's going
+[1:06:10] to face a random unblocked hex. So, he's
+[1:06:13] going to face one of these four
+[1:06:15] unblocked hex's, not the building. So,
+[1:06:17] I'm just going to roll. I get a one,
+[1:06:19] which is good news for me. He's facing
+[1:06:21] away.
+[1:06:23] And the good news for that is, you know,
+[1:06:24] if I fire at him, I'm going to be
+[1:06:25] looking at his weaker armor. If he um
+[1:06:29] when, you know, when he activates next
+[1:06:31] time, he's likely to move off up here
+[1:06:33] somewhere, which means he's going to
+[1:06:34] take a while to turn himself around and
+[1:06:36] come back after me. Whereas if if I'd
+[1:06:38] rolled a three and he started there, I'd
+[1:06:40] be firing on his thickest armor and
+[1:06:42] he's, you know, he's after me almost
+[1:06:43] straight away next time. So, there's a
+[1:06:46] chance he could reverse and turn and
+[1:06:48] come around here. But that's quite slim.
+[1:06:51] He has to roll a one to do that. Uh, and
+[1:06:54] remember you roll ones once so they
+[1:06:57] don't come out too often. But anyway,
+[1:06:58] that's where he's going.
+[1:07:01] Then what I'm going to do, of course, is
+[1:07:02] I'm going to take a shot at him. I've
+[1:07:04] got one of these sixes to use. So, I can
+[1:07:05] use that for anything, remember? So,
+[1:07:07] I'll use that to fire. I'm loaded from
+[1:07:09] previously. So, I'm going to fire that.
+[1:07:12] It's going to empty my turret. I get my
+[1:07:14] six basic dice. I get an extra one
+[1:07:17] because of my commander is up. Uh, it's
+[1:07:20] not it's three hex's away, so it's not
+[1:07:22] short range because it's not less than
+[1:07:24] three,
+[1:07:25] but at least I don't lose it for long
+[1:07:27] range. But, I do lose one because I'm
+[1:07:31] firing at his rear side armor. Okay,
+[1:07:34] remember that's the rear. This is rear
+[1:07:36] side as is that. So rear side for a
+[1:07:39] Panza four, I'm going to lose one pass.
+[1:07:44] Got six. Should be good. Roll those down
+[1:07:48] there. And I've ended up with a double
+[1:07:51] strength hit. A double strength hit. So
+[1:07:53] I can disregard the one to fours as
+[1:07:55] usual. Keep the two hits. It's a double
+[1:07:58] strength hit. Roll that again. And that
+[1:08:01] is a six. Unfortunately, not an eight.
+[1:08:04] We need eight for destroyed. So, six
+[1:08:07] will be a damaged panther. So, let me
+[1:08:10] find a damaged panther. Sorry, not
+[1:08:13] panther. Panza 4. And replace his token
+[1:08:16] with the damaged. And I rather like
+[1:08:18] these tokens, I have to say. I think my
+[1:08:20] to my counter ability has come on pretty
+[1:08:22] well. I don't know if that I hope that's
+[1:08:24] reasonably clear. Do I need to tilt that
+[1:08:25] towards the light? Maybe. And you can
+[1:08:27] see there it's got a nice big explosion.
+[1:08:29] a few puffs of smoke coming out of it,
+[1:08:30] which is satisfying, I think.
+[1:08:33] So, he's now damaged, which makes him
+[1:08:35] far less efficient than he would have
+[1:08:37] been. Remember, this is battle one on
+[1:08:38] day one, so you're going to face tougher
+[1:08:41] times ahead. I've still got one dice, so
+[1:08:43] it's a six. I can do anything with that.
+[1:08:44] I could load up, but I don't really want
+[1:08:46] to sit in his line of sight because if
+[1:08:48] he rolls something like a two or three,
+[1:08:51] five or six, you know, chances are he's
+[1:08:53] going to fire at me. So, I don't want
+[1:08:54] that to happen. He's his firing ability
+[1:08:56] is not really affected by being damaged.
+[1:08:58] It's just how often he does it, but he
+[1:09:01] can still do it. So, I'm going to move
+[1:09:03] away with the six. I'm going to move
+[1:09:05] down this road in this lane and then
+[1:09:08] just turn around facing back up. In
+[1:09:11] fact, I'm going to face that way. Hope
+[1:09:13] that he moves up there somewhere and I
+[1:09:15] can come behind him,
+[1:09:17] flank him at the rear. So, that's me
+[1:09:19] done. Uh, I'm I'm not on fire, so
+[1:09:21] there's no fire check. There's no German
+[1:09:23] artillery marker. I don't need to worry
+[1:09:25] about that. There's no German smoke, so
+[1:09:27] I don't need to remove that other than
+[1:09:29] the smoke bellowing from the damage fans
+[1:09:31] of four. Ha. Activate tanks. So, it's
+[1:09:34] his turn now because he's damaged.
+[1:09:35] Remember, he only rolls two activation
+[1:09:37] dice. Pop those down the chimney as
+[1:09:40] normal. We would reoll any ones or
+[1:09:42] sixes. Now, a one means one says if
+[1:09:45] damaged, then repair.
+[1:09:47] Um, so if he got a one, he would repair.
+[1:09:49] But remember, if he rolled a one, he'd
+[1:09:50] have to roll it. But if it then ended on
+[1:09:53] a one, he would actually repair and go
+[1:09:54] back to full strength. That's not going
+[1:09:56] to happen very often. It's only about
+[1:09:57] one in 10 chance. So, you're a bit
+[1:09:59] unlucky if tanks repair themselves in
+[1:10:01] this game, German tanks, but they can do
+[1:10:03] it. Um, uh, and it's always inconvenient
+[1:10:06] when they do. And he's rolled two twos.
+[1:10:08] So, good job I did move because he
+[1:10:10] wouldn't he wanted to fire with that.
+[1:10:11] And if he did, he wouldn't move. And
+[1:10:13] then, of course, he'd fire again with
+[1:10:15] the other one. So, he would have fired
+[1:10:16] two shots at me. So, I'm glad I moved.
+[1:10:18] He can't do that because I'm not in line
+[1:10:19] of sight. So, he won't move. It says if
+[1:10:22] not, sorry, he won't fire. If not, move.
+[1:10:24] So, he's going to move. Remember, that
+[1:10:25] means he'll move forward. And then it
+[1:10:27] says if blocked, turn. Well, he's not
+[1:10:29] blocked because the trees hex doesn't
+[1:10:30] block him. So, he won't he won't turn.
+[1:10:33] And then he'll do the same again. He
+[1:10:34] can't fire, so he'll move. And he won't
+[1:10:36] turn because the hex in front of him is
+[1:10:38] clear. So, he's off. I've hit him. He's
+[1:10:41] running away. Who can blame him? Getting
+[1:10:43] away from the action. He might, you
+[1:10:45] know, give him a chance to repair maybe.
+[1:10:47] Then of course we do this guy. Oh,
+[1:10:50] sorry. We actually do infantry next, but
+[1:10:51] because I'm not adjacent to them, they
+[1:10:53] won't do anything. Otherwise, they would
+[1:10:54] fire at me in a similar way the tanks
+[1:10:58] do. You know, we assume they have
+[1:10:59] anti-tank weapons and things and, you
+[1:11:01] know, they're running up to me and
+[1:11:02] chucking grenades and all sorts of stuff
+[1:11:03] at me. Um, but they don't do that
+[1:11:05] because I'm not adjacent. This guy,
+[1:11:07] remember me, rules fear Ford eye
+[1:11:10] and
+[1:11:12] gets
+[1:11:14] a I've realized, by the way, I need to
+[1:11:16] lengthen this. So, I made this I've got
+[1:11:18] a video about how to make this nice
+[1:11:19] quiet dice tower. What I'm going to do
+[1:11:21] is take this front piece off and and
+[1:11:23] lengthen the base a little and build it
+[1:11:24] back up just so the dice have longer to
+[1:11:26] sort of roll before they're chucking
+[1:11:28] each other out because they do bounce
+[1:11:29] out quite often when I'm rolling four or
+[1:11:31] more particularly. Um, so he's rolled
+[1:11:33] three, three, four, six. So, remember he
+[1:11:36] wants to move in direction three. He'll
+[1:11:38] only do that if it doesn't take him
+[1:11:40] further away. Well, it doesn't. He's one
+[1:11:42] two three four five away. And that's one
+[1:11:44] two three four five away. So, he will
+[1:11:46] move down there with the first three. He
+[1:11:49] won't move with the second three because
+[1:11:50] that would take him off map, but he will
+[1:11:52] move with the four, which takes him down
+[1:11:54] there. Uh, and the six he can't move
+[1:11:57] with. He would have he would have
+[1:11:59] because it's the same number of hex's
+[1:12:00] away as he is now. They're both four
+[1:12:02] away. Yeah, four away. But he won't
+[1:12:05] because it's a building section and you
+[1:12:06] can't do that. So, that's him done. And
+[1:12:08] at no point in that action could he spot
+[1:12:10] me
+[1:12:11] because the buildings were in the way
+[1:12:12] and the woods were in the way and now
+[1:12:14] he's not in on the same row of hex's as
+[1:12:16] me. Just have a quick drink of coffee
+[1:12:25] which is stone cold of course. Uh good.
+[1:12:28] So then we move through to the end of
+[1:12:31] turn events and we roll double two dice.
+[1:12:35] We get a four. Okay, this is an
+[1:12:37] interesting one. This is actually quite
+[1:12:38] a really interesting one. This event
+[1:12:41] says civilian points out nearby German
+[1:12:44] tank. Okay, so what we've done here is
+[1:12:46] we've run into and the the book just
+[1:12:48] expands on that slightly the rules just
+[1:12:50] expand on that slightly and tells you
+[1:12:51] that you know this is probably a local
+[1:12:52] French farmer or something, you know,
+[1:12:54] you're careering down one of his country
+[1:12:55] lanes or through a field or something
+[1:12:56] and he's pulled you over and said, "Oh,
+[1:12:57] I've just seen a you know I won't do a
+[1:13:01] French accent because it'd be awful."
+[1:13:03] Um, but you know, he says kind of, "Oh,
+[1:13:05] I just, you know, I've just seen a a
+[1:13:09] you know, Panza 5 or a Panther or
+[1:13:12] whatever." Just, you know, sorry, Panza
+[1:13:14] 4 or a panther or whatever, you know, up
+[1:13:16] there behind those buildings. It's, you
+[1:13:18] know, it's heading in this direction or
+[1:13:19] whatever. So basically what this does is
+[1:13:22] to cut a long story short is um it says
+[1:13:26] you may reveal what any one potential
+[1:13:29] enemy with 2d6 on the German chart and
+[1:13:33] place it facing a random unblocked hex.
+[1:13:35] In other words, it's like giving you a
+[1:13:37] free spotting action. Not even not even
+[1:13:39] the action, it gives you a free
+[1:13:40] successful spot. So I could now
+[1:13:42] regardless of line of sight. Remember
+[1:13:43] it's not me who's seen it. It's a farmer
+[1:13:46] who was, you know, plowing his field or
+[1:13:48] whatever here has come, you has kind of
+[1:13:50] come to flagged me down in this lane and
+[1:13:52] said down there in a field through the
+[1:13:54] trees, he hasn't seen me, but I've seen
+[1:13:56] him.
+[1:13:57] Uh, so I could reveal this and I do it
+[1:14:00] with 2d6 as if I had spotted it, which
+[1:14:03] remember is advantageous,
+[1:14:05] and then it would be placed with a
+[1:14:06] random facing facing one of these three
+[1:14:09] accessible hex's. But it is the reason
+[1:14:12] it's a choice is because you don't
+[1:14:14] always want more than one tank on the
+[1:14:17] map at a time because things can get
+[1:14:19] very difficult very quickly when that
+[1:14:21] happens. So we you know it's possible
+[1:14:24] that by revealing this we get something
+[1:14:27] nasty and suddenly we're being
+[1:14:29] inundated. However, in this case,
+[1:14:31] because this is a Panza 4, which is
+[1:14:34] fairly manageable, and also because it's
+[1:14:36] damaged and it's heading away from me,
+[1:14:39] and it's going to take a while to get
+[1:14:40] back to me if it doesn't repair,
+[1:14:43] I'm going for it. So, I'm going to roll
+[1:14:45] 2d6 to see what this is.
+[1:14:48] And of course, I rolled a four, which is
+[1:14:51] another pretty awful roll, but it is a
+[1:14:53] Panza 4, so it's at least it's not um a
+[1:14:56] panther.
+[1:14:58] So the Panza 4 appears on this hex and
+[1:15:01] it has a facing of I really want a one
+[1:15:05] four or five
+[1:15:08] and we're going to get one 1 four or
+[1:15:10] five. Yes, five. There we are. So it's
+[1:15:12] going to face down that way because they
+[1:15:15] were the only directions that had
+[1:15:17] accessible hexes. Going to face there.
+[1:15:21] Um and of course it won't activate until
+[1:15:23] the next German activation phase. And
+[1:15:26] we're in at the moment, of course, we're
+[1:15:27] in the end of turn events phase, aren't
+[1:15:29] we? So that's that. So we've done that.
+[1:15:31] So thanks Mr. Farmer. Great help.
+[1:15:35] And again, you can invent your own
+[1:15:37] narrative for that. Could be a, you
+[1:15:38] know, French resistance if you prefer
+[1:15:41] pulling over in a car and saying he's
+[1:15:42] down there. We planted a few mines, but
+[1:15:45] I'll leave it to you guys. So here we
+[1:15:47] go.
+[1:15:48] We go back to phase one.
+[1:15:52] How long have we got on the clock? An
+[1:15:53] hour and 15. Not sure what to do here.
+[1:15:55] Do I split this video up or do I keep
+[1:15:57] going? I think what I'll do is probably
+[1:15:59] finish that one there and I'll carry on
+[1:16:01] with it on a later video.
+[1:16:04] Okay. And certainly that gives you the
+[1:16:05] gist. I think you you know the idea is
+[1:16:07] you read the rules before you play it.
+[1:16:09] So hopefully that helps with a lot of
+[1:16:11] the things that are happening in this
+[1:16:12] game. But there are there's still lots
+[1:16:14] more to see. Cheers guys. as I'll do
+[1:16:17] another one.

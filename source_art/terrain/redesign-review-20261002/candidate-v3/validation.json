@@ -1,0 +1,135 @@
+{
+  "status": "passed",
+  "issues": [],
+  "sourceInfo": {
+    "grass": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "soil": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "mud": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "sand": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "water": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "deep_water": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "paving": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "snow": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "winter_water": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "timber": {
+      "width": 1254,
+      "height": 1254,
+      "hasAlpha": false
+    },
+    "tree_deciduous": {
+      "width": 1374,
+      "height": 1145,
+      "hasAlpha": true
+    },
+    "tree_palm": {
+      "width": 1278,
+      "height": 1230,
+      "hasAlpha": true
+    },
+    "rocks": {
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": true
+    },
+    "building_solid": {
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": true
+    },
+    "building_intact": {
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": true
+    },
+    "building_damaged": {
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": true
+    },
+    "building_rubble": {
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": true
+    }
+  },
+  "sameMaterialSeam": {
+    "pixelsChecked": 84220,
+    "maximumColorResidual": 0,
+    "interiorAlphaErrors": 0
+  },
+  "roadMouths": [
+    {
+      "direction": 0,
+      "alpha": 1
+    },
+    {
+      "direction": 1,
+      "alpha": 1
+    },
+    {
+      "direction": 2,
+      "alpha": 1
+    },
+    {
+      "direction": 3,
+      "alpha": 1
+    },
+    {
+      "direction": 4,
+      "alpha": 1
+    },
+    {
+      "direction": 5,
+      "alpha": 1
+    }
+  ],
+  "oppositeMouthAlphaResidual": 1.509903313490213e-14,
+  "roadConnectionMasksCovered": 63,
+  "tileDimensions": [
+    222,
+    256
+  ],
+  "reviewOnly": true,
+  "limitations": [
+    "Independent review renderer, not an in-game screenshot.",
+    "No game resources or runtime code have been changed.",
+    "Mixed-edge and multi-material corners require visual review; numerical checks do not establish all combinations.",
+    "Generic masks are topology references; final terrain transitions must use world coordinates and material-normalized weights, not stack multiple per-edge images."
+  ]
+}

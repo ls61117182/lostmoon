@@ -12,7 +12,6 @@ require.extensions['.ts'] = (module, filename) => {
 const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
 const { computeRadioSharedVisibleHexes, computeUnitVisibleHexes } = require('../assets/scripts/core/FogOfWar.ts');
 const { canAttack, canMGAttack, hitBreakdown, mgHitBreakdown } = require('../assets/scripts/core/Combat.ts');
-const { beginAmbushTurn, endAmbushTurn, ambushHitThresholdModifier } = require('../assets/scripts/core/Ambush.ts');
 
 const map = new HexMap(8, 8);
 for (let q = 0; q <= 5; q++) map.set({ pos: { q, r: 0 }, terrain: 'field' });
@@ -128,11 +127,5 @@ assert.strictEqual(hitBreakdown({
   expandedTurretDirections: true,
   sameHexInfantryTankAttack: true,
 }).smoke, 2, 'same-hex infantry attacks from smoke get the hardcore +2 hit threshold');
-
-const ambusher = tank('ambusher', 'american', 0);
-ambusher.crewSkills = { loader: ['calm'] };
-endAmbushTurn(ambusher, true);
-beginAmbushTurn(ambusher, 'hardcore');
-assert.strictEqual(ambushHitThresholdModifier(ambusher, 'hardcore'), 0, 'ending a turn in smoke prevents next-turn ambush even with Calm');
 
 console.log('Smoke rules tests passed');

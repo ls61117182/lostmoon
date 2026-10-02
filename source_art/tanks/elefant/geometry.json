@@ -1,0 +1,8 @@
+{
+  "width": 200,
+  "height": 83,
+  "crop": { "left": 22, "top": 14, "width": 1888, "height": 784 },
+  "muzzle": [1, 40],
+  "hatch": [142, 29],
+  "trackBodyLengthScale": 0.83
+}

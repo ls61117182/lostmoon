@@ -1,0 +1,407 @@
+{
+  "armor": [
+    98,
+    106,
+    114
+  ],
+  "highlight": [
+    131,
+    139,
+    147
+  ],
+  "geometryAndAlpha": "verified unchanged",
+  "models": [
+    {
+      "kind": "panzer3",
+      "files": [
+        "panzer3_top.png",
+        "panzer3_top_hull.png",
+        "panzer3_top_turret.png",
+        "panzer3_top_destroyed.png"
+      ],
+      "sourceMid": 135.243,
+      "sourceHighlight": 147.243,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          135.243,
+          106
+        ],
+        [
+          147.243,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "panzer3_m_no_schurzen",
+      "files": [
+        "panzer3_m_no_schurzen_top.png",
+        "panzer3_m_no_schurzen_top_hull.png",
+        "panzer3_m_no_schurzen_top_turret.png",
+        "panzer3_m_no_schurzen_top_destroyed.png"
+      ],
+      "sourceMid": 112.7284,
+      "sourceHighlight": 124.7284,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          112.7284,
+          106
+        ],
+        [
+          124.7284,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "panzer3_m",
+      "files": [
+        "panzer3_m_top.png",
+        "panzer3_m_top_hull.png",
+        "panzer3_m_top_turret.png",
+        "panzer3_m_top_destroyed.png"
+      ],
+      "sourceMid": 112.5158,
+      "sourceHighlight": 124.5158,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          112.5158,
+          106
+        ],
+        [
+          124.5158,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "panzer3_n",
+      "files": [
+        "panzer3_n_top.png",
+        "panzer3_n_top_hull.png",
+        "panzer3_n_top_turret.png",
+        "panzer3_n_top_destroyed.png"
+      ],
+      "sourceMid": 110.6562,
+      "sourceHighlight": 122.6562,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          110.6562,
+          106
+        ],
+        [
+          122.6562,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "panzer3_n_schurzen",
+      "files": [
+        "panzer3_n_schurzen_top.png",
+        "panzer3_n_schurzen_top_hull.png",
+        "panzer3_n_schurzen_top_turret.png",
+        "panzer3_n_schurzen_top_destroyed.png"
+      ],
+      "sourceMid": 112.7284,
+      "sourceHighlight": 124.7284,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          112.7284,
+          106
+        ],
+        [
+          124.7284,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "panzer4",
+      "files": [
+        "panzer4_top.png",
+        "panzer4_top_hull.png",
+        "panzer4_top_turret.png",
+        "panzer4_top_destroyed.png"
+      ],
+      "sourceMid": 112.945,
+      "sourceHighlight": 136.2258,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          112.945,
+          106
+        ],
+        [
+          136.2258,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "stug3",
+      "files": [
+        "stug3_top.png",
+        "stug3_top_destroyed.png"
+      ],
+      "sourceMid": 91.02239999999999,
+      "sourceHighlight": 104.882,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          91.02239999999999,
+          106
+        ],
+        [
+          104.882,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "panther",
+      "files": [
+        "panther_top.png",
+        "panther_top_hull.png",
+        "panther_top_turret.png",
+        "panther_top_destroyed.png"
+      ],
+      "sourceMid": 111.596,
+      "sourceHighlight": 124.81259999999997,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          111.596,
+          106
+        ],
+        [
+          124.81259999999997,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "tiger",
+      "files": [
+        "tiger_top.png",
+        "tiger_top_hull.png",
+        "tiger_top_turret.png",
+        "tiger_top_destroyed.png"
+      ],
+      "sourceMid": 120.0986,
+      "sourceHighlight": 155.81779999999998,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          120.0986,
+          106
+        ],
+        [
+          155.81779999999998,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "tigerking",
+      "files": [
+        "tigerking_top.png",
+        "tigerking_top_hull.png",
+        "tigerking_top_turret.png",
+        "tigerking_top_destroyed.png"
+      ],
+      "sourceMid": 141.1026,
+      "sourceHighlight": 153.1026,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          141.1026,
+          106
+        ],
+        [
+          153.1026,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "maus",
+      "files": [
+        "maus_top.png",
+        "maus_top_hull.png",
+        "maus_top_turret.png",
+        "maus_top_destroyed.png"
+      ],
+      "sourceMid": 135.6682,
+      "sourceHighlight": 147.6682,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          135.6682,
+          106
+        ],
+        [
+          147.6682,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    },
+    {
+      "kind": "sturmtiger",
+      "files": [
+        "sturmtiger_top.png",
+        "sturmtiger_top_destroyed.png"
+      ],
+      "sourceMid": 116.8006,
+      "sourceHighlight": 128.8006,
+      "anchors": [
+        [
+          0,
+          0
+        ],
+        [
+          35,
+          29
+        ],
+        [
+          116.8006,
+          106
+        ],
+        [
+          128.8006,
+          139
+        ],
+        [
+          255,
+          176
+        ]
+      ]
+    }
+  ]
+}

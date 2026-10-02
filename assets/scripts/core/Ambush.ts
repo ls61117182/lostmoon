@@ -1,6 +1,6 @@
 import type { GameMode } from './GameMode';
-import type { CrewSkillId, ShermanCrew, Unit } from './types';
-import { isFootUnit } from './types';
+import type { Axial, CrewSkillId, ShermanCrew, Unit } from './types';
+import { crewRoleAlive, isHostile, isTankUnit, resolvedLoadedShell } from './types';
 
 /** 只有存活乘员携带的技能才对车组生效。 */
 export function hasLivingCrewSkill(
@@ -15,57 +15,70 @@ export function hasLivingCrewSkill(
   return false;
 }
 
-/** 在单位自己的行动开始时锁定本回合资格。 */
-export function beginAmbushTurn(unit: Unit, mode: GameMode): void {
-  unit.ambushActedThisTurn = false;
-  unit.ambushReadyThisTurn = mode === 'hardcore'
-    && !isFootUnit(unit)
-    && !unit.ambushObscuredSinceTurnEnd
-    && (!unit.ambushAttackedSinceTurnEnd || hasLivingCrewSkill(unit, 'calm'));
+/** An explicit loaded-gun stance is available only to an operational tank. */
+export function canEnterAmbush(unit: Unit, mode: GameMode, automaticLoaded = false): boolean {
+  // AI tanks use automatic main-gun ammunition; the player uses the loaded shell.
+  const shell = resolvedLoadedShell(unit);
+  return mode === 'hardcore' && !unit.destroyed && isTankUnit(unit)
+    && !unit.turretDamaged && crewRoleAlive(unit, 'gunner')
+    && (shell === 'ap' || shell === 'he' || (automaticLoaded && shell === null));
 }
 
-/** 自身行动结束后开启下一次伏击的“未受攻击”观察窗口。 */
-export function endAmbushTurn(unit: Unit, obscuredBySmoke = false): void {
-  unit.ambushAttackedSinceTurnEnd = false;
-  unit.ambushObscuredSinceTurnEnd = obscuredBySmoke;
+export function enterAmbush(
+  unit: Unit, mode: GameMode, automaticLoaded = false, peers: readonly Unit[] = [],
+): boolean {
+  if (!canEnterAmbush(unit, mode, automaticLoaded)) return false;
+  unit.ambushEnteredOrder = 1 + peers.reduce(
+    (highest, peer) => Math.max(highest, peer.ambushEnteredOrder ?? 0), 0,
+  );
+  unit.ambushReadyThisTurn = true;
+  return true;
+}
+
+/** The stance expires when the unit's next action begins. */
+export function beginAmbushTurn(unit: Unit, _mode: GameMode): void {
   unit.ambushReadyThisTurn = false;
-  unit.ambushActedThisTurn = false;
 }
 
-/** 成为炮击或机枪攻击的目标即算受到攻击，不要求命中。 */
-export function markAmbushTargeted(unit: Unit): void {
-  unit.ambushAttackedSinceTurnEnd = true;
-}
+/** Ending the action leaves an established ambush ready through the opponent's turn. */
+export function endAmbushTurn(_unit: Unit, _obscuredBySmoke = false): void {}
 
-/** 攻击、机枪扫射、移动或转向均取消本回合后续伏击。 */
+/** Being targeted alone does not cancel the stance. */
+export function markAmbushTargeted(_unit: Unit): void {}
+
+/** Hull movement, firing, and turret damage cancel the stance. */
 export function markAmbushAction(unit: Unit): void {
-  unit.ambushActedThisTurn = true;
+  unit.ambushReadyThisTurn = false;
+}
+
+export function isInAmbushSight(
+  position: Axial, visible: ReadonlySet<string>, keyOf: (hex: Axial) => string,
+): boolean {
+  return visible.has(keyOf(position));
+}
+
+export function orderedAmbushers(units: readonly Unit[], mover: Unit): Unit[] {
+  if (mover.destroyed) return [];
+  return units.filter(unit => unit !== mover && unit.ambushReadyThisTurn && isHostile(unit, mover))
+    .sort((a, b) => (a.ambushEnteredOrder ?? 0) - (b.ambushEnteredOrder ?? 0));
 }
 
 export type AmbushAttackKind = 'main_gun' | 'machine_gun';
 
-/** 伏击只修正主炮命中；机枪虽会取消伏击，但永远不会获得该命中加成。 */
+/** Reaction fire uses the ordinary hit roll. */
 export function ambushHitThresholdModifier(
-  unit: Unit,
-  mode: GameMode,
-  attackKind: AmbushAttackKind = 'main_gun',
+  _unit: Unit,
+  _mode: GameMode,
+  _attackKind: AmbushAttackKind = 'main_gun',
 ): number {
-  if (attackKind !== 'main_gun') return 0;
-  if (mode !== 'hardcore' || isFootUnit(unit)) return 0;
-  if (!unit.ambushReadyThisTurn || unit.ambushActedThisTurn) return 0;
-  return hasLivingCrewSkill(unit, 'ambush_master') ? -2 : -1;
+  return 0;
 }
 
-/** 将基础伏击与“伏击大师”拆成两条 UI 明细。 */
+/** There are no ambush hit modifiers to show in the preview. */
 export function ambushHitThresholdModifierDetails(
-  unit: Unit,
-  mode: GameMode,
-  attackKind: AmbushAttackKind = 'main_gun',
+  _unit: Unit,
+  _mode: GameMode,
+  _attackKind: AmbushAttackKind = 'main_gun',
 ): Array<{ labelKey: string; value: number }> {
-  if (ambushHitThresholdModifier(unit, mode, attackKind) === 0) return [];
-  const details = [{ labelKey: 'dice.rule.ambush', value: -1 }];
-  if (hasLivingCrewSkill(unit, 'ambush_master')) {
-    details.push({ labelKey: 'crew.skill.ambushMaster.name', value: -1 });
-  }
-  return details;
+  return [];
 }

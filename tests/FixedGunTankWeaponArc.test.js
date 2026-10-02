@@ -89,6 +89,33 @@ assert.strictEqual(loadedSuMission.sherman.kind, 'su152');
 assert.strictEqual(loadedSuMission.sherman.stats.visionType, 'fixed');
 assert.strictEqual(loadedSuMission.sherman.turretFacing, undefined);
 
+const jagdtiger = { ...attacker, kind: 'jagdtiger', stats: getUnitStats('jagdtiger'), turretFacing: 1 };
+const elefant = { ...attacker, kind: 'elefant', stats: getUnitStats('elefant'), turretFacing: 1 };
+assert.strictEqual(elefant.stats.visionType, 'fixed');
+assert.strictEqual(elefant.stats.turretTraverseSpeed, 0);
+assert.strictEqual(canAttack({ attacker: elefant, target: frontTank, map }).ok, true);
+assert.strictEqual(canAttack({ attacker: elefant, target: sideTank, map }).reason, 'attack.reason.fixedGunFacing');
+assert(TANK_VISUAL_KINDS.includes('elefant'));
+assert(!SPLIT_TANK_KINDS.includes('elefant'));
+const elefantMission = structuredClone(suMissionData);
+elefantMission.sherman.kind = 'elefant';
+const loadedElefant = loadMission(elefantMission);
+assert.strictEqual(loadedElefant.sherman.kind, 'elefant');
+assert.strictEqual(loadedElefant.sherman.turretFacing, undefined);
+assert.strictEqual(jagdtiger.stats.faction, 'german');
+assert.strictEqual(jagdtiger.stats.visionType, 'fixed');
+assert.strictEqual(jagdtiger.stats.turretTraverseSpeed, 0);
+assert.strictEqual(canAttack({ attacker: jagdtiger, target: frontTank, map }).ok, true);
+assert.strictEqual(canAttack({ attacker: jagdtiger, target: sideTank, map }).reason, 'attack.reason.fixedGunFacing');
+assert(TANK_VISUAL_KINDS.includes('jagdtiger'));
+assert(!SPLIT_TANK_KINDS.includes('jagdtiger'));
+assert.strictEqual(tankVisualAssetConfigOf('jagdtiger').destroyedSpritePath, 'textures/units/jagdtiger_top_destroyed/spriteFrame');
+const jagdMission = structuredClone(suMissionData);
+jagdMission.sherman.kind = 'jagdtiger';
+const loadedJagd = loadMission(jagdMission);
+assert.strictEqual(loadedJagd.sherman.kind, 'jagdtiger');
+assert.strictEqual(loadedJagd.sherman.turretFacing, undefined);
+
 const frontInfantry = unitAt('front-infantry', 'infantry', 1, 0);
 const sideInfantry = unitAt('side-infantry', 'infantry', 0, 1);
 assert.strictEqual(canMGAttack({ attacker, target: frontInfantry, map }).ok, true,

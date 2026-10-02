@@ -65,12 +65,12 @@ assertContains('assets/scripts/view/BattleScene.ts', 'carryPlayerTankToNextSegme
 assertContains('assets/scripts/view/BattleScene.ts', 'currentTurnEndMissionId');
 assertContains('assets/scripts/view/BattleScene.ts', 'CAMPAIGN_CHAPTER_ID');
 assertContains('assets/scripts/view/BattleScene.ts', 'private campaignViewTiles()');
-assertContains('assets/scripts/view/BattleScene.ts', 'this.mapPanEnabled = this.campaignRuntime ? false');
+assertContains('assets/scripts/view/BattleScene.ts', 'this.hexSize = this.standardHexSize * this.mapFitScale()');
 assertContains('assets/scripts/view/BattleScene.ts', 'private campaignViewSegmentIndexOverride');
 assertContains('assets/scripts/view/BattleScene.ts', 'this.campaignViewSegmentIndexOverride = previousIndex');
 assertContains('assets/scripts/view/BattleScene.ts', 'this.startCampaignPanToSegment(nextIndex)');
-assertContains('assets/scripts/view/BattleScene.ts', 'const clampedX = this.campaignRuntime');
-assertContains('assets/scripts/view/BattleScene.ts', 'if (this.campaignRuntime) return { x: rawX, y: rawY }');
+assertContains('assets/scripts/view/BattleScene.ts', 'this.mapNode?.setPosition(x, y, 0)');
+assertContains('assets/scripts/view/BattleScene.ts', 'return { x: rawX, y: rawY }');
 assertContains('assets/scripts/view/BattleScene.ts', 'segmentIndex !== this.activeCampaignSegmentIndex');
 assertContains('assets/scripts/view/BattleScene.ts', 'this.campaignTransitionActive = false;');
 assertNotContainsInPacificBlock();

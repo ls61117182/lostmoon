@@ -62,6 +62,7 @@ function method(name, next) {
 const harnessCode = compile(`class Harness {
   ${method('startTurnEndEventPresentation', 'buildTurnEndEventPanel')}
   ${method('applyTurnEndEventEffects', 'enqueueTankReinforceMoveAnim')}
+  ${method('enqueueTankReinforceMoveAnim', 'enqueueGermanTruckMoveAnims')}
   ${method('setupTurnEndExtraRoll', 'advanceTurnEndEventUI')}
   ${method('advanceTurnEndEventUI', 'onTurnEndConfirmClick')}
 }`);
@@ -99,6 +100,27 @@ test('real event animation preserves earlier dice and reveals confirmation only 
   assert.equal(ui.confirmButton.active, true);
   assert.deepEqual(ui.extraRows.map(r => r.dice.map(d => Number(d.string))), [[2, 3], [5, 4], [2]]);
   assert.deepEqual(ui.dieLabels.map(d => Number(d.string)), [4, 6]);
+});
+
+test('Stuka rolls and reveals every applicable row together', () => {
+  const h = harness([{ dice: [2, 3] }, { dice: [5, 4] }, { dice: [2] }, { dice: [6] }]);
+  const ui = h.turnEndEventUI;
+  ui.effectType = 'stuka';
+  h.advanceTurnEndEventUI(0.1);
+  assert.equal(ui.stage, 'roll_primary');
+  assert.equal(ui.confirmButton.active, false);
+  assert.ok(ui.extraRows.every(row => row.root.active));
+  assert.ok(ui.extraRows.every(row => row.dice.every(die => Number(die.string) >= 1)));
+  assert.ok(ui.extraRows.every(row => row.verdict.string === ''));
+
+  h.advanceTurnEndEventUI(0.5);
+  assert.equal(ui.stage, 'hold');
+  assert.equal(ui.confirmButton.active, true);
+  assert.equal(ui.eventVerdictLabel.string, '斯图卡空袭');
+  assert.deepEqual(ui.dieLabels.map(d => Number(d.string)), [4, 6]);
+  assert.deepEqual(ui.extraRows.map(row => row.dice.map(die => Number(die.string))), [[2, 3], [5, 4], [2], [6]]);
+  assert.deepEqual(ui.extraRows.map(row => row.verdict.string), ['结果0', '结果1', '结果2', '结果3']);
+  assert.equal(ui.bodyLabel.string, '最终结果');
 });
 
 test('mine explosions start before dice and confirmation, excluding skipped and replayed events', () => {
@@ -159,6 +181,20 @@ test('reinforcement movement begins immediately and finishes without confirmatio
   h.applyTurnEndEventEffects(h.turnEndEventUI, () => {});
   assert.equal(applications, 1);
   assert.equal(moves, 1);
+});
+
+test('reinforcement animation never places the logical tank outside the battlefield', () => {
+  const h = harness([]);
+  h.moveDuration = 0.3;
+  h.redraw = () => {};
+  const unit = { pos: { q: 1, r: 2 }, stats: { visionType: 'turreted' } };
+  const move = { from: { q: 2, r: 2 }, to: { q: 1, r: 2 }, facing: 3, finalFacing: 4 };
+  h.enqueueTankReinforceMoveAnim(unit, move);
+  assert.deepEqual(unit.pos, move.to);
+  assert.equal(h.anim.fromQ, move.from.q);
+  assert.equal(h.anim.toQ, move.to.q);
+  assert.equal(unit.turretFacing, move.facing);
+  assert.equal(h.animQueue[0].turnTo, move.finalFacing);
 });
 
 test('adjacent infantry retains its individual resolution flow', () => {

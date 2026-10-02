@@ -67,6 +67,12 @@ try {
   prepared.apply();
   assert.strictEqual(mission.enemies.length, 1, 'tank reinforcement should be added');
   const reinforcement = mission.enemies[0];
+  assert.deepStrictEqual(reinforcement.pos, spawnTile.pos,
+    'applying reinforcement effects must commit the battlefield destination without an animation');
+  assert.strictEqual(reinforcement.facing, spawnTile.enemyStartFacing);
+  assert.notDeepStrictEqual(prepared.tankReinforceMove.from, spawnTile.pos,
+    'the off-map start belongs only to the presentation path');
+  assert.deepStrictEqual(prepared.tankReinforceMove.to, reinforcement.pos);
   assert.deepStrictEqual(reinforcement.crew, {
     commander: true,
     loader: true,
@@ -133,6 +139,7 @@ try {
   // that neutral faction while silently supplying a full crew.
   const legacyMission = {
     data: { id: 'mission_01', theater: 'europe' },
+    map: { all: () => [] },
     sherman: {
       id: 'sherman_player',
       kind: 'sherman',
@@ -153,7 +160,7 @@ try {
     smokeHexes: new Set(),
     smokeHexOwners: new Map(),
   };
-  const saveResult = applySave(legacyMission, 'mission_01', {
+  const legacySave = {
     version: 7,
     missionId: 'mission_01',
     turn: 2,
@@ -179,12 +186,25 @@ try {
       facing: 0,
       // Intentionally no crew: this is the exact old corrupt snapshot shape.
     }],
-  });
+  };
+  const saveResult = applySave(legacyMission, 'mission_01', legacySave);
   assert.strictEqual(saveResult.ok, true);
   assert.strictEqual(legacyMission.enemies.length, 1);
   assert.strictEqual(legacyMission.enemies[0].faction, 'german');
   assert.strictEqual(hasLivingTankCrew(legacyMission.enemies[0]), true);
   assert.strictEqual(isAbandonedTank(legacyMission.enemies[0]), false);
+
+  const duplicateMission = { ...legacyMission, enemies: [] };
+  const duplicateSave = { ...legacySave, enemies: [
+    { ...legacySave.enemies[0], id: 'turnend_1' },
+    { ...legacySave.enemies[0], id: 'turnend_1', q: 1 },
+    { ...legacySave.enemies[0], id: 'turnend_1_restored_1', q: 2 },
+  ] };
+  assert.strictEqual(applySave(duplicateMission, 'mission_01', duplicateSave).ok, true);
+  assert.strictEqual(new Set(duplicateMission.enemies.map(u => u.id)).size, 3);
+  assert.strictEqual(duplicateMission.enemies[0].id, 'turnend_1');
+  assert.strictEqual(duplicateMission.enemies[1].id, 'turnend_1_restored_2');
+  assert.deepStrictEqual(duplicateMission.enemies.map(u => u.pos.q), [0, 1, 2]);
 
   console.log('turn-end reinforcement crew tests passed');
 } finally {

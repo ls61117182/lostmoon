@@ -15,7 +15,7 @@ move1,6,advance,,smoke,,,,前进>烟雾
 misc1,1,repair,commander,shoot,gunner,,,修复并灭火（需要车长存活）>射击（需要炮手存活）
 misc1,2,turn,,turn,coDriver,,,射击>转向（需要副驾驶存活）
 misc1,3,advance,coDriver,turn,coDriver,,,前进（需要副驾驶存活）>转向（需要副驾驶存活）
-misc1,4,shoot,gunner,,,,,射击（需要炮手存活）
+misc1,4,shoot,gunner,ambush,gunner,,,射击（需要炮手存活）>伏击（需要炮手存活）
 misc1,5,smoke,,,,,,烟雾
 misc1,6,conceal,,,,,,隐蔽
 at_gun1,1,turn,,,,,,TURN towards Sherman random

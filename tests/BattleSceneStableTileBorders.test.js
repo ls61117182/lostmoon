@@ -15,18 +15,13 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /this\.pendingTerrainSpriteLoads = Object\.keys\(terrainPaths\)\.length\s*\+ Object\.keys\(winterTerrainPaths\)\.length;/,
+  /this\.pendingTerrainSpriteLoads = Object\.keys\(terrainPaths\)\.length\s*\+ Object\.keys\(winterTerrainPaths\)\.length[\s\S]*?;/,
   'summer and winter terrain requests should settle as one batch',
 );
 assert.match(
   battleScene,
-  /if \(spriteBackedTileKeys\.has\(`\$\{t\.pos\.q\},\$\{t\.pos\.r\}`\)\) continue;\s*if \(t\.terrain === 'deep_water'\)/,
-  'sprite-backed terrain should keep its own baked border without a Graphics overlay',
-);
-assert.match(
-  battleScene,
-  /if \(n && \(\s*tile\.pos\.q > n\.pos\.q \|\| \(tile\.pos\.q === n\.pos\.q && tile\.pos\.r > n\.pos\.r\)/,
-  'shared tile edges should have one stable coordinate owner',
+  /Shared edges are invisible;[\s\S]*?if \(n\) continue;/,
+  'shared tile edges must be skipped entirely',
 );
 assert.match(
   battleScene,
