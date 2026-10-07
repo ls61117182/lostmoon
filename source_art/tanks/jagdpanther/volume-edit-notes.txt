@@ -1,0 +1,1 @@
+Built-in image_gen color-only edit: upper-left lighting, armor plane values, curved mantlet/barrel highlights, hatch/tool contact shadows, recessed grilles. Original alpha and dark outlines preserved deterministically; existing configuration and metadata unchanged. Photo reference: https://www.moddb.com/groups/tanks/images/hetzer-bovington-hdhq
