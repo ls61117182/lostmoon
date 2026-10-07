@@ -1,0 +1,47 @@
+{
+  "tool": "built-in image_gen",
+  "images": [
+    {
+      "key": "rowhouses_l",
+      "kind": "destructible",
+      "state": "intact",
+      "prompt": "Repaint six irregular residential houses, varied L-shaped roofs, staggered lanes and private gardens. Correct camera to true vertical 90 degree orthographic roof plan; remove facades and chimney side faces. Preserve full silhouette and transparent background.",
+      "generatedPath": "C:/Users/Administrator/.codex/generated_images/01a10b7e-2610-7c31-b276-48f6cfc992db/exec-0633083c-ee18-4e2e-9da4-d4b00f8af21f.png"
+    },
+    {
+      "key": "rowhouses_l",
+      "kind": "destructible",
+      "state": "damaged",
+      "prompt": "Edit this residential neighborhood into its battle-damaged state. Preserve EXACT camera90 vertical, six-house positions, canvas, lanes, gardens and registration. Break irregular holes in roughly 35 percent of roof area, expose timber roof skeletons viewed only above, localized fallen tiles and soot, collapse two chimneys, retain other roof portions. Asymmetric localized destruction, no repeated holes or uniform tile scattering. Entire outlines visible transparent background.",
+      "generatedPath": "C:/Users/Administrator/.codex/generated_images/01a10b7e-2610-7c31-b276-48f6cfc992db/exec-ab301fbe-e911-435a-ae65-5a66669a47f7.png"
+    },
+    {
+      "key": "rowhouses_l",
+      "kind": "destructible",
+      "state": "rubble",
+      "prompt": "Edit this same residential neighborhood into fully collapsed realistic RUINS. Preserve EXACT overhead90 vertical camera, canvas, six footprint positions and winding lane. Roofs ALL collapse into localized coarse uneven heaps of tile chunks, timber beams, pale plaster slabs, dark cellar voids; some broken wall TOP segments, 40 percent bare dusty floor spaces. ALL six chimneys toppled or shattered, no standing chimneys in original roof locations. Organic irregular debris, avoid dense uniform brick carpet, avoid matching neat rectangles or repeated patterns. Gardens scorched sparse but recognizable lane. Entire uncut silhouette on true transparent background.",
+      "generatedPath": "C:/Users/Administrator/.codex/generated_images/01a10b7e-2610-7c31-b276-48f6cfc992db/exec-98d04f34-dd92-4488-aa8e-5eb0f0fb230b.png"
+    },
+    {
+      "key": "church",
+      "kind": "indestructible",
+      "state": "intact",
+      "prompt": "Historic Latin-cross church slate roof with rounded apse, copper bell-tower top, garden. Match muted painterly European WWII terrain textures. Correct exact overhead90 camera, remove every facade and vertical wall. Remove backdrop outside complete church-and-garden silhouette and deliver transparent alpha.",
+      "generatedPath": "C:/Users/Administrator/.codex/generated_images/01a10b7e-2610-7c31-b276-48f6cfc992db/exec-d6cdba8a-a5cd-44b6-be6d-60b32b669dd1.png"
+    },
+    {
+      "key": "town_hall",
+      "kind": "indestructible",
+      "state": "intact",
+      "prompt": "Historic European town hall with irregular civic roof complex, red tile wings, open courtyard and distinctive square copper-green pyramidal tower roof. Strict vertical90 orthographic top-down; remove all walls, window facades and foreshortening. Complete transparent silhouette.",
+      "generatedPath": "C:/Users/Administrator/.codex/generated_images/01a10b7e-2610-7c31-b276-48f6cfc992db/exec-89df9898-1f53-4298-913f-598bfeaf4cf3.png"
+    },
+    {
+      "key": "civic_dome",
+      "kind": "indestructible",
+      "state": "intact",
+      "prompt": "Historic civic museum with large circular weathered green copper dome and radial ribs, octagonal slate base and roof wings. Strict vertical90 orthographic overhead, remove visible vertical walls and portico columns. Natural detailed muted WWII game texture and complete transparent silhouette.",
+      "generatedPath": "C:/Users/Administrator/.codex/generated_images/01a10b7e-2610-7c31-b276-48f6cfc992db/exec-7fb77843-ef32-4f92-8af9-ee3a0f109da4.png"
+    }
+  ]
+}
