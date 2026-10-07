@@ -1,0 +1,71 @@
+import { EffectAsset, JsonAsset, Material, Node, resources, Sprite, SpriteFrame, Texture2D, UITransform, Vec4 } from 'cc';
+import type { Tile } from '../core/types';
+import { matchTerrainTransitions, type TransitionEntry } from './TerrainTransitionMatcher';
+const ROOT='textures/terrain/transitions/';
+/** Feathered prefab interiors over continuous ground; the underlying compositor
+ * owns shared edges, including the boundary between prefab and fallback tiles. */
+export class TerrainTransitionRenderer {
+ private entries:TransitionEntry[]=[];
+ private cache=new Map<string,{frame:SpriteFrame;mask:Texture2D|null}>();
+ private pending=new Set<string>();
+ private frames=new Map<string,Promise<SpriteFrame|null>>();
+ private masks=new Map<string,Promise<Texture2D|null>>();
+ private ownedAssets:Array<SpriteFrame|Texture2D>=[];
+ private nodes:Array<{node:Node;material:Material|null;tile:Tile}>=[];
+ private matches:Array<{tile:Tile;entry:TransitionEntry}>=[];
+ private signature='';
+ private destroyed=false;
+ private visible=false;
+ private effect:EffectAsset|null=null;
+ private clock=new Vec4(0,0,0,0);
+ private layout={size:48,x:0,y:0};
+ constructor(private parent:Node){
+  resources.load(ROOT+'manifest',JsonAsset,(error,asset)=>{if(this.destroyed)return;if(error){console.warn('Terrain transition manifest unavailable',error);return;}this.entries=asset.json.entries;this.signature='';});
+  resources.load('effects/water-surface',EffectAsset,(error,effect)=>{if(this.destroyed||error)return;this.effect=effect;this.rebuild();});
+ }
+ draw(tiles:readonly Tile[],style:string,signature:string,size:number,x:number,y:number):void {
+  this.visible=true;this.layout={size,x,y};
+  if(this.signature!==signature){this.signature=signature;this.matches=matchTerrainTransitions(tiles,this.entries,style);this.rebuild();
+   for(const {entry} of this.matches)this.request(entry);
+  }
+  this.position();
+ }
+ private assetKey(entry:TransitionEntry):string {return JSON.stringify([entry.color,entry.waterMask]);}
+ private loadShared<T extends SpriteFrame|Texture2D>(path:string,type:{new(...args:any[]):T},cache:Map<string,Promise<T|null>>):Promise<T|null> {
+  const existing=cache.get(path);if(existing)return existing;
+  const job=new Promise<T|null>(resolve=>resources.load(ROOT+path,type,(error,asset:T)=>{
+   if(this.destroyed){resolve(null);return;}
+   if(error){console.warn('Terrain transition resource unavailable',path,error);resolve(null);return;}
+   asset.addRef();if(asset instanceof SpriteFrame)asset.packable=false;
+   this.ownedAssets.push(asset);resolve(asset);
+  }));cache.set(path,job);return job;
+ }
+ private request(entry:TransitionEntry):void {
+  const key=this.assetKey(entry);if(this.cache.has(key)||this.pending.has(key))return;
+  this.pending.add(key);
+  const frame=this.loadShared(entry.color.replace(/\.png$/,'')+'/spriteFrame',SpriteFrame,this.frames);
+  const mask=entry.waterMask?this.loadShared(entry.waterMask.replace(/\.png$/,'')+'/texture',Texture2D,this.masks):Promise.resolve(null);
+  Promise.all([frame,mask]).then(([frame,mask])=>{
+   if(this.destroyed||!frame||(entry.waterMask&&!mask))return;
+   this.cache.set(key,{frame,mask});this.rebuild();
+  });
+ }
+ private rebuild():void {
+  this.clearNodes();if(this.destroyed)return;
+  for(const {tile,entry} of this.matches){const asset=this.cache.get(this.assetKey(entry));if(!asset)continue;
+   // Wait for the animation effect rather than covering animated ground with static water.
+   if(asset.mask&&!this.effect)continue;
+   const node=new Node('TerrainTransitionPrefab');node.layer=this.parent.layer;node.addComponent(UITransform);
+   const sprite=node.addComponent(Sprite);sprite.sizeMode=Sprite.SizeMode.CUSTOM;sprite.spriteFrame=asset.frame;
+   let material:Material|null=null;
+   if(asset.mask&&this.effect){material=new Material();material.initialize({effectAsset:this.effect,defines:{USE_TEXTURE:true}});material.setProperty('waterMask',asset.mask);material.setProperty('waterClock',this.clock);material.setProperty('chunkBounds',new Vec4(Math.sqrt(3)*48*(tile.pos.q+tile.pos.r/2)-42.5,72*tile.pos.r-48.5,85,97));sprite.customMaterial=material;}
+   this.parent.addChild(node);this.nodes.push({node,material,tile});
+  }
+  this.position();
+ }
+ private position():void {const {size,x,y}=this.layout;for(const c of this.nodes){c.node.active=this.visible;c.node.getComponent(UITransform)!.setContentSize(85*size/48,97*size/48);c.node.setPosition(Math.sqrt(3)*size*(c.tile.pos.q+c.tile.pos.r/2)+x,-1.5*size*c.tile.pos.r+y,0);}}
+ update(dt:number):void {if(!Number.isFinite(dt)||dt<=0)return;this.clock.x+=Math.min(dt,.1);for(const c of this.nodes)if(c.material){c.material.setProperty('waterClock',this.clock);const rendered=c.node.getComponent(Sprite)!.getRenderMaterial(0);if(rendered&&rendered!==c.material)rendered.setProperty('waterClock',this.clock);}}
+ hide():void {this.visible=false;for(const c of this.nodes)c.node.active=false;}
+ private clearNodes():void {for(const c of this.nodes){c.node.destroy();c.material?.destroy();}this.nodes=[];}
+ destroy():void {this.destroyed=true;this.clearNodes();for(const asset of this.ownedAssets)asset.decRef();this.ownedAssets=[];this.cache.clear();this.frames.clear();this.masks.clear();this.pending.clear();}
+}

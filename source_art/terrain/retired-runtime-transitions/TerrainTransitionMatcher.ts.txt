@@ -1,0 +1,24 @@
+import type { Tile } from '../core/types';
+export interface TransitionEntry {style:string;center:string;other:string;neighborMask:number;outerRing:number[][];color:string;waterMask:string|null;}
+const axes=[[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
+export function matchTerrainTransitions(tiles:readonly Tile[],entries:readonly TransitionEntry[],style:string):Array<{tile:Tile;entry:TransitionEntry}> {
+ const lut=new Map(tiles.map(t=>[`${t.pos.q},${t.pos.r}`,t]));
+ const candidates=new Map<string,TransitionEntry[]>();
+ for(const e of entries)if(e.style===style){const a=candidates.get(e.center)??[];a.push(e);candidates.set(e.center,a);}
+ const safe=(t:Tile|undefined)=>!!t&&!t.hasBuilding&&!t.urbanKind&&!t.bridgeEnds&&!t.roads?.some(Boolean)&&t.terrain!=='airstrip'&&!t.terrain.startsWith('urban_');
+ const result:Array<{tile:Tile;entry:TransitionEntry}>=[];
+ for(const tile of tiles){
+  if(!safe(tile))continue;
+  const at=(q:number,r:number)=>lut.get(`${tile.pos.q+q},${tile.pos.r+r}`);
+  const neighbors=axes.map(([q,r])=>at(q,r));
+  if(neighbors.some(t=>!safe(t)))continue;
+  for(const entry of candidates.get(tile.terrain)??[]){
+   let mask=0,valid=true;
+   neighbors.forEach((t,i)=>{if(t!.terrain===entry.other)mask|=1<<i;else if(t!.terrain!==entry.center)valid=false;});
+   if(!valid||mask!==entry.neighborMask)continue;
+   if(!entry.outerRing.every(([q,r,other])=>{const t=at(q,r);return safe(t)&&t!.terrain===(other?entry.other:entry.center);}))continue;
+   result.push({tile,entry});break;
+  }
+ }
+ return result;
+}
