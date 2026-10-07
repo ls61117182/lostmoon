@@ -168,6 +168,7 @@ ammo.tooltip.hvap.title,HVAP · 钨芯穿甲弹,HVAP · Tungsten-Core AP
 ammo.tooltip.hvap.description,穿甲值 {penetration}，有效射程 {range} 格；距离超过有效射程后，每远 1 格穿甲值降低 1。,"Penetration {penetration}; effective range {range} hexes. Beyond effective range, penetration falls by 1 per extra hex."
 action.repair,修复,Repair
 action.fire,炮击,Fire
+action.ambush,伏击,Ambush
 action.fireHardcore,炮击/旋转,Fire/Rotate
 action.rotateTurret,旋转,Rotate
 action.repairTurret,修复炮塔,Repair Turret
@@ -407,6 +408,7 @@ dice.aiCol.japanese_infantry,日本步兵,Japanese Infantry
 dice.aiCol.american_infantry,美军步兵,American Infantry
 dice.aiCol.heavy_artillery,重炮,Heavy Artillery
 dice.aiEnemy.shoot,主炮射击,Main gun
+dice.aiEnemy.ambush,伏击,Ambush
 dice.aiEnemy.turn,转向,Turn
 dice.aiEnemy.advance,前进,Advance
 dice.aiEnemy.reverse,后退,Reverse
@@ -924,4 +926,4 @@ unit.name.panzer3_n_schurzen,3号N,Panzer III Ausf. N (Additional Armor)
 unit.name.sturmtiger,突击虎,Sturmtiger
 unit.name.jagdtiger,猎虎,Jagdtiger
 unit.name.elefant,象式坦克歼击车,Elefant
-unit.name.jagdpanther,追猎者坦克歼击车,Hetzer
+unit.name.jagdpanther,追猎者,Hetzer

@@ -233,7 +233,7 @@ const DB: Record<UnitKind, UnitStats> = {
     crewMembers: [1, 2, 3, 4, 5, 6],
     crewRoleAssignments: {"loader":[3,6]},
   },
-  jagdpanther: { // 追猎者坦克歼击车 - 追猎者固定主炮；五人乘员；装甲机动沿用豹式、穿甲沿用象式的暂定游戏值，待平衡
+  jagdpanther: { // 追猎者 - 追猎者固定主炮；五人乘员；装甲机动沿用豹式、穿甲沿用象式的暂定游戏值，待平衡
     faction: "german",
     firepower: 4, size: 3, armorFront: 14, armorFrontSide: 11, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, penetration: 8, highExplosivePower: 3, effectiveRange: 4, turretTraverseSpeed: 0, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,

@@ -1,6 +1,8 @@
 import { createTankCrew, crewRoleAlive, effectiveTankCrew } from "../core/types";
 import { BUILD_FEATURES } from '../core/BuildProfile';
 import { TerrainGroundRenderer } from './TerrainGroundRenderer';
+import { FogOverlayRenderer } from './FogOverlayRenderer';
+import type { FogMaskCell } from './FogMaskRaster';
 import { ObjectShadowRenderer } from './ObjectShadowRenderer';
 import type { TerrainMaterialBundle } from './TerrainGroundRaster';
 import { europeanCountryRoadDistance } from './TerrainGroundRaster';
@@ -1089,6 +1091,7 @@ type ProjectileTraceMode = 'miss' | 'ricochet' | 'penetration' | 'overpenetratio
 type ProjectileTracePhase = 'flight' | 'ricochet' | 'impact' | 'overpenetration-hidden' | 'overpenetration';
 
 interface ProjectileTrace {
+  shellType: ShellType;
   node: Node;
   g: Graphics;
   mode: ProjectileTraceMode;
@@ -1701,6 +1704,7 @@ export class BattleScene extends Component {
   private turretAimOverlayGraphics: Graphics | null = null;
   private fogNode: Node | null = null;
   private fogGraphics: Graphics | null = null;
+  private fogOverlayRenderer: FogOverlayRenderer | null = null;
   private unitVisibilityMaskNode: Node | null = null;
   private unitVisibilityMaskGraphics: Graphics | null = null;
   private trackVisibilityMaskGraphics: Graphics | null = null;
@@ -2420,7 +2424,7 @@ export class BattleScene extends Component {
       const rw = sf.rect.width;
       const rh = sf.rect.height;
       onLoaded(sf, rw > 0 ? rw : sf.width, rh > 0 ? rh : sf.height);
-      this.redraw();
+      this.requestResourceRedraw();
     });
   }
 
@@ -2535,22 +2539,14 @@ export class BattleScene extends Component {
       this.layoutBattleHud();
       this.layoutTurnTransition();
       this.drawWeatherEffects();
+      this.syncTerrainLoadingOverlay();
     });
     const terrainNode = new Node('TerrainSprites');
     terrainNode.layer = this.node.layer;
     terrainNode.addComponent(UITransform).setContentSize(1280, 720);
     this.node.addChild(terrainNode);
     this.terrainLayerNode = terrainNode;
-    for (let i = 0; i < BattleScene.TERRAIN_SPRITE_POOL; i++) {
-      const n = new Node(`TerrainTile_${i}`);
-      n.layer = this.node.layer;
-      n.addComponent(UITransform).setContentSize(1, 1);
-      const sp = n.addComponent(Sprite);
-      sp.sizeMode = Sprite.SizeMode.CUSTOM;
-      n.active = false;
-      this.terrainSpritePool.push({ node: n, sprite: sp });
-      terrainNode.addChild(n);
-    }
+    this.sceneryPoolParents.set(this.terrainSpritePool, terrainNode);
     // 自动创建子 Graphics 节点，免去编辑器手动配置
     const gNode = new Node('MapGraphics');
     // UI Graphics 必须在 UI_2D 层才会被 Canvas 的 UI 相机渲染。
@@ -2569,16 +2565,7 @@ export class BattleScene extends Component {
     bridgeLayerNode.layer = this.node.layer;
     bridgeLayerNode.addComponent(UITransform).setContentSize(1280, 720);
     gNode.addChild(bridgeLayerNode);
-    for (let i = 0; i < BattleScene.BRIDGE_SPRITE_POOL; i++) {
-      const n = new Node(`Bridge_${i}`);
-      n.layer = this.node.layer;
-      n.addComponent(UITransform).setContentSize(1, 1);
-      const sp = n.addComponent(Sprite);
-      sp.sizeMode = Sprite.SizeMode.CUSTOM;
-      n.active = false;
-      this.bridgeSpritePool.push({ node: n, sprite: sp });
-      bridgeLayerNode.addChild(n);
-    }
+    this.sceneryPoolParents.set(this.bridgeSpritePool, bridgeLayerNode);
 
     // Permanent tank tracks sit above terrain but below buildings, foliage,
     // units, campaign darkness and fog. They are redrawn only when movement
@@ -2638,16 +2625,7 @@ export class BattleScene extends Component {
     urbanBuildingLayerNode.addComponent(UITransform).setContentSize(1280, 720);
     gNode.addChild(urbanBuildingLayerNode);
     this.buildingGraphics = urbanBuildingLayerNode.addComponent(Graphics);
-    for (let i = 0; i < BattleScene.TERRAIN_SPRITE_POOL * 3; i++) {
-      const n = new Node(`UrbanBuilding_${i}`);
-      n.layer = this.node.layer;
-      n.addComponent(UITransform).setContentSize(1, 1);
-      const sp = n.addComponent(Sprite);
-      sp.sizeMode = Sprite.SizeMode.CUSTOM;
-      n.active = false;
-      this.urbanBuildingSpritePool.push({ node: n, sprite: sp });
-      urbanBuildingLayerNode.addChild(n);
-    }
+    this.sceneryPoolParents.set(this.urbanBuildingSpritePool, urbanBuildingLayerNode);
 
     const occlusionNode = new Node('MapOcclusion');
     occlusionNode.layer = this.node.layer;
@@ -2661,17 +2639,14 @@ export class BattleScene extends Component {
     this.fogGraphics = fogNode.addComponent(Graphics);
     this.fogNode = fogNode;
     gNode.addChild(fogNode);
+    this.fogOverlayRenderer?.destroy();
+    this.fogOverlayRenderer = new FogOverlayRenderer(fogNode, () => this.requestResourceRedraw());
 
-    for (let i = 0; i < BattleScene.FOLIAGE_SPRITE_POOL; i++) {
-      const h = new Node(`Foliage_${i}`);
-      h.layer = this.node.layer;
-      h.addComponent(UITransform).setContentSize(1, 1);
-      const sp = h.addComponent(Sprite);
-      sp.sizeMode = Sprite.SizeMode.CUSTOM;
-      h.active = false;
-      this.foliageSpritePool.push({ node: h, sprite: sp });
-      gNode.addChild(h);
-    }
+    // Preserve the original foliage depth when sprites are created later.
+    const foliageLayerNode = new Node('FoliageSprites');
+    foliageLayerNode.layer = this.node.layer;
+    gNode.addChild(foliageLayerNode);
+    this.sceneryPoolParents.set(this.foliageSpritePool, foliageLayerNode);
 
     // Keep inactive-campaign/display-only darkness in its own compositing layer.
     // It must sit above buildings and foliage so those overlays cannot appear lit
@@ -2689,7 +2664,7 @@ export class BattleScene extends Component {
       const material = new Material();
       material.initialize({ effectAsset: effect, defines: { USE_TEXTURE: true } });
       this.unitOcclusion?.setMaterial(material);
-      this.redraw();
+      this.requestResourceRedraw();
     });
 
     const deepShadowNode = new Node('MapDeepShadow');
@@ -2897,7 +2872,7 @@ export class BattleScene extends Component {
             dw: rw > 0 ? rw : sf.width,
             dh: rh > 0 ? rh : sf.height,
           };
-          this.redraw();
+          this.requestResourceRedraw();
         });
       });
     }
@@ -2915,14 +2890,14 @@ export class BattleScene extends Component {
         dw: rw > 0 ? rw : sf.width,
         dh: rh > 0 ? rh : sf.height,
       };
-      this.redraw();
+      this.requestResourceRedraw();
     });
 
     ['tree_01', 'tree_02', 'tree_03', 'tree_04'].forEach((name, idx) => {
       resources.load(`textures/terrain/redesign_v3/europe_${name}/spriteFrame`, SpriteFrame, (err, sf) => {
         if (!this.isValid || err || !sf) return;
         this.europeanSummerTreeSpriteFrames[idx] = sf;
-        this.redraw();
+        this.requestResourceRedraw();
       });
       resources.load(`textures/terrain/${name}/spriteFrame`, SpriteFrame, (err, sf) => {
         if (err || !sf) {
@@ -2930,7 +2905,7 @@ export class BattleScene extends Component {
           return;
         }
         this.treeSpriteFrames[idx] = sf;
-        this.redraw();
+        this.requestResourceRedraw();
       });
       resources.load(`textures/terrain/${name}_snow/spriteFrame`, SpriteFrame, (err, sf) => {
         if (err || !sf) {
@@ -2938,7 +2913,7 @@ export class BattleScene extends Component {
           return;
         }
         this.winterTreeSpriteFrames[idx] = sf;
-        this.redraw();
+        this.requestResourceRedraw();
       });
     });
 
@@ -2970,6 +2945,7 @@ export class BattleScene extends Component {
     };
     const urbanBuildingPaths = [
       'apartment', 'factory', 'office_l', 'warehouse', 'market', 'theater', 'post_office', 'waterworks',
+      'church', 'town_hall', 'civic_dome',
     ].map(name => `textures/terrain/urban/urban_dense_indestructible_${name}_v1/spriteFrame`);
     const urbanDestructiblePaths = ['rowhouses_l', 'courtyard', 'workshop'].flatMap(name =>
       ['intact', 'damaged', 'rubble'].map(state =>
@@ -3005,7 +2981,7 @@ export class BattleScene extends Component {
       this.pendingTerrainSpriteLoads = Math.max(0, this.pendingTerrainSpriteLoads - 1);
       if (this.pendingTerrainSpriteLoads !== 0) return;
       this.terrainSpriteBatchReady = true;
-      this.redraw();
+      this.requestResourceRedraw();
     };
     resources.load('textures/terrain/redesign_v3/materials', JsonAsset, (err, asset) => {
       if (!this.isValid) return;
@@ -3088,6 +3064,8 @@ export class BattleScene extends Component {
   }
 
   onDestroy() {
+    this.fogOverlayRenderer?.destroy();
+    this.fogOverlayRenderer = null;
     this.unitOcclusion?.destroy();
     this.unitOcclusion = null;
     this.continuousTerrain?.destroy();
@@ -5116,6 +5094,9 @@ export class BattleScene extends Component {
   }
 
   private loadAndDraw(data: MissionData) {
+    if (this.terrainLoadingRoot) this.terrainLoadingRoot.active = false;
+    this.terrainLoadingDisplayedProgress = 0;
+    this.terrainLoadingFinishHold = 0;
     // PVP owns its protagonist/lineup through PvpSessionConfig. The main-menu
     // tank preference is deliberately a single-player-only override.
     if (!GameSession.isPvp) {
@@ -5243,11 +5224,180 @@ export class BattleScene extends Component {
 
   // ---------- 绘制 ----------
 
+  private sceneryPoolParents = new Map<Array<{node: Node; sprite: Sprite}>, Node>();
+  private resourceRedrawPending = false;
+  private terrainLoadingLabel: Label | null = null;
+  private terrainLoadingRoot: Node | null = null;
+  private terrainLoadingBar: Graphics | null = null;
+  private terrainLoadingDecoration: Graphics | null = null;
+  private terrainLoadingTank: Node | null = null;
+  private terrainLoadingTitle: Label | null = null;
+  private terrainLoadingSize = '';
+  private terrainLoadingBarState = '';
+  private terrainLoadingAssetTotal = 0;
+  private terrainLoadingDisplayedProgress = 0;
+  private terrainLoadingFinishHold = 0;
+  private syncTerrainLoadingOverlay(dt = 0) {
+    const loading = !!this.mission && (!this.terrainSpriteBatchReady || !!this.continuousTerrain?.loading);
+    if (!loading && (!this.terrainLoadingRoot?.active || !this.mission)) {
+      if (this.terrainLoadingRoot) this.terrainLoadingRoot.active = false;
+      return;
+    }
+    if (loading && !this.terrainLoadingRoot?.active) {
+      this.terrainLoadingDisplayedProgress = 0;
+      this.terrainLoadingFinishHold = 0;
+      this.terrainLoadingAssetTotal = Math.max(1, this.pendingTerrainSpriteLoads);
+    }
+    if (!this.terrainLoadingLabel) {
+      const { node: root } = createAdaptiveFullscreenMask(
+        this.node, 'TerrainLoading', new Color(19, 25, 22, 255), UI_ROOT_SCALE,
+      );
+      root.addComponent(BlockInputEvents);
+      this.terrainLoadingAssetTotal = Math.max(1, this.pendingTerrainSpriteLoads);
+      const decoration = new Node('LoadingDecoration');
+      decoration.layer = this.node.layer;
+      decoration.addComponent(UITransform);
+      root.addChild(decoration);
+      this.terrainLoadingDecoration = decoration.addComponent(Graphics);
+      const title = new Node('DeploymentTitle');
+      title.layer = this.node.layer;
+      title.addComponent(UITransform).setContentSize(700, 100);
+      root.addChild(title);
+      this.terrainLoadingTitle = title.addComponent(Label);
+      this.terrainLoadingTitle.string = 'S H E R M A N';
+      this.terrainLoadingTitle.fontSize = 56;
+      this.terrainLoadingTitle.lineHeight = 72;
+      this.terrainLoadingTitle.color = new Color(135, 147, 109, 255);
+      const text = new Node('LoadingText');
+      text.layer = this.node.layer;
+      text.addComponent(UITransform).setContentSize(480, 60);
+      root.addChild(text);
+      this.terrainLoadingLabel = text.addComponent(Label);
+      this.terrainLoadingLabel.fontSize = 22;
+      this.terrainLoadingLabel.lineHeight = 32;
+      this.terrainLoadingLabel.color = new Color(226, 225, 204, 255);
+      const bar = new Node('LoadingProgress');
+      bar.layer = this.node.layer;
+      bar.addComponent(UITransform);
+      root.addChild(bar);
+      this.terrainLoadingBar = bar.addComponent(Graphics);
+      const tank = new Node('LoadingSherman');
+      tank.layer = this.node.layer;
+      tank.addComponent(UITransform).setContentSize(76, 48);
+      root.addChild(tank);
+      this.terrainLoadingTank = tank;
+      this.drawLoadingSherman(tank.addComponent(Graphics));
+      this.terrainLoadingRoot = root;
+    }
+    this.terrainLoadingRoot!.active = true;
+    this.terrainLoadingRoot!.setSiblingIndex(this.node.children.length - 1);
+    const { width, height } = visibleSizeInRootSpace(UI_ROOT_SCALE);
+    const sizeKey = `${width},${height}`;
+    if (this.terrainLoadingSize !== sizeKey) {
+      this.terrainLoadingSize = sizeKey;
+      // Decorative frame remains inside the visible area; the opaque mask covers
+      // all surplus space exposed by ultrawide or portrait resolutions.
+      // Keep decoration separate: AdaptiveFullscreenMask owns the root Graphics
+      // and can redraw it after this resize callback.
+      const g = this.terrainLoadingDecoration!;
+      g.clear();
+      g.fillColor = new Color(25, 33, 27, 255);
+      g.rect(-width / 2, -height / 2, width, height * .32); g.fill();
+      g.strokeColor = new Color(65, 77, 54, 255); g.lineWidth = 1;
+      g.rect(-width / 2 + 28, -height / 2 + 28, width - 56, height - 56); g.stroke();
+      g.moveTo(-180, height * .08 - 48); g.lineTo(180, height * .08 - 48); g.stroke();
+    }
+    const assetProgress = 1 - this.pendingTerrainSpriteLoads / this.terrainLoadingAssetTotal;
+    const targetProgress = loading ? Math.max(0, Math.min(1, !this.terrainSpriteBatchReady
+      ? assetProgress * .15 : .15 + .85 * (this.continuousTerrain?.progress ?? 1))) : 1;
+    // Use frame time, not chunk completion callbacks. Keep the visual monotonic,
+    // and cap long frames so returning to the window cannot teleport the tank.
+    const frameTime = Number.isFinite(dt) ? Math.max(0, Math.min(dt, .05)) : 0;
+    const gap = Math.max(0, targetProgress - this.terrainLoadingDisplayedProgress);
+    this.terrainLoadingDisplayedProgress += Math.min(gap,
+      Math.max(gap * (1 - Math.exp(-8 * frameTime)), .25 * frameTime));
+    const progress = this.terrainLoadingDisplayedProgress;
+    if (!loading && progress >= 1) {
+      this.terrainLoadingFinishHold += frameTime;
+      if (this.terrainLoadingFinishHold >= .12) {
+        this.terrainLoadingRoot!.active = false;
+        return;
+      }
+    }
+    const barWidth = Math.min(width - 160, 1120);
+    const barY = -height / 2 + Math.max(80, height * .12);
+    const left = -barWidth / 2;
+    this.terrainLoadingTitle!.node.setPosition(0, height * .08, 0);
+    this.terrainLoadingLabel.node.setPosition(0, barY + 94, 0);
+    this.terrainLoadingLabel.string = getLang() === 'zh' ? '正在进入战场...' : 'Entering the battlefield...';
+    const state = `${sizeKey}|${progress}`;
+    if (this.terrainLoadingBarState !== state) {
+      this.terrainLoadingBarState = state;
+      const g = this.terrainLoadingBar!;
+      g.clear();
+      g.fillColor = new Color(10, 15, 12, 255);
+      g.rect(left, barY, barWidth, 12); g.fill();
+      g.strokeColor = new Color(97, 109, 74, 255); g.lineWidth = 1;
+      g.rect(left, barY, barWidth, 12); g.stroke();
+      if (progress > 0) {
+        g.fillColor = new Color(187, 177, 108, 255);
+        g.rect(left + 2, barY + 2, (barWidth - 4) * progress, 8); g.fill();
+      }
+      this.terrainLoadingTank!.setPosition(left + barWidth * progress, barY + 40, 0);
+    }
+  }
+  /** Small side-profile Sherman silhouette, drawn once with no asset loading. */
+  private drawLoadingSherman(g: Graphics) {
+    g.fillColor = new Color(8, 12, 9, 255);
+    g.roundRect(-32, -15, 64, 19, 8); g.fill();
+    g.strokeColor = new Color(157, 163, 115, 255); g.lineWidth = 2;
+    g.roundRect(-32, -15, 64, 19, 8); g.stroke();
+    for (let i = 0; i < 5; i++) {
+      g.fillColor = new Color(92, 104, 70, 255);
+      g.circle(-23 + i * 11.5, -6, 5); g.fill();
+    }
+    g.fillColor = new Color(151, 160, 107, 255);
+    g.moveTo(-32, 3); g.lineTo(-24, 16); g.lineTo(19, 16);
+    g.lineTo(31, 4); g.close(); g.fill();
+    g.fillColor = new Color(181, 184, 131, 255);
+    g.roundRect(-13, 14, 28, 15, 5); g.fill();
+    g.rect(10, 21, 27, 4); g.fill();
+    g.rect(-3, 29, 12, 3); g.fill();
+    g.fillColor = new Color(232, 231, 197, 255);
+    for (let i = 0; i < 10; i++) {
+      const angle = Math.PI / 2 + i * Math.PI / 5;
+      const radius = i % 2 === 0 ? 5 : 2;
+      const x = -7 + Math.cos(angle) * radius, y = 9 + Math.sin(angle) * radius;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.close(); g.fill();
+  }
+  private requestResourceRedraw() { if (this.isValid) this.resourceRedrawPending = true; }
+  private ensureScenerySlot(pool: Array<{node: Node; sprite: Sprite}>, index: number, limit: number): boolean {
+    if (index >= limit) return false;
+    const parent = this.sceneryPoolParents.get(pool);
+    if (!parent) return false;
+    while (pool.length <= index) {
+      const node = new Node('Scenery_' + pool.length);
+      node.layer = this.node.layer;
+      node.active = false;
+      node.addComponent(UITransform).setContentSize(1, 1);
+      const sprite = node.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      parent.addChild(node);
+      pool.push({node, sprite});
+    }
+    return true;
+  }
   private redraw() {
     if (!this.g || !this.mapOcclusionGraphics || !this.mapDeepShadowGraphics || !this.unitGraphics || !this.mission) return;
     // Do not show vector fallback tiles and then replace terrain kinds one by
     // one as asynchronous SpriteFrame requests finish.
-    if (!this.terrainSpriteBatchReady) return;
+    if (!this.terrainSpriteBatchReady) { this.syncTerrainLoadingOverlay(); return; }
+    const usingContinuousTerrain = this.drawContinuousTerrain(this.mission.map.all());
+    this.syncTerrainLoadingOverlay();
+    if (this.continuousTerrain?.loading) return;
+    this.resourceRedrawPending = false;
     this.refreshPlayerVisibility();
     this.redrawUnitVisibilityMask();
     const surfaceGraphics = this.g;
@@ -5295,7 +5445,6 @@ export class BattleScene extends Component {
     const { map, sherman, enemies } = this.mission;
     const tiles = map.all();
 
-    const usingContinuousTerrain = this.drawContinuousTerrain(tiles);
     if (!usingContinuousTerrain) {
     // 1. 地形格：分两遍绘制，避免「每格 fill+stroke 紧挨」时邻格 fill 盖住共享边上的描边
     //    （同色草地会整片「熔合」、看起来像格线突然没了；掷骰后 redraw 变多更明显）。
@@ -6086,7 +6235,22 @@ export class BattleScene extends Component {
     const fogEnabled = fogOfWarEnabled(GameSession.gameMode);
     fogNode.active = fogEnabled;
     if (fogEnabled) {
+      const transition = this.fogVisionTransition;
+      const cells: FogMaskCell[] = [];
       for (const tile of this.mission.map.all()) {
+        if (this.isDeepShadowTile(tile)) continue;
+        const key = HexMap.keyOf(tile.pos);
+        const p = axialToPixel(tile.pos, 1);
+        const changing = transition?.activeLayer.has(key) && !this.transientFogRevealKeys.has(key);
+        const alpha = this.fogOverlayAlpha(tile.pos) / FOG_OVERLAY_COLOR.a;
+        cells.push({ x: p.x, y: -p.y,
+          from: changing ? (transition.expanding ? 1 : 0) : alpha,
+          to: changing ? (transition.expanding ? 0 : 1) : alpha });
+      }
+      const progress = transition ? transition.elapsed / transition.layerInterval : 1;
+      const continuous = this.fogOverlayRenderer?.draw(cells, this.hexSize, this.offsetX, this.offsetY, progress, FOG_OVERLAY_COLOR);
+      // Retain the old path while the effect loads, or if it is unavailable.
+      if (!continuous) for (const tile of this.mission.map.all()) {
         if (this.isDeepShadowTile(tile)) continue;
         const fogAlpha = this.fogOverlayAlpha(tile.pos);
         if (fogAlpha <= 0) continue;
@@ -7402,6 +7566,12 @@ export class BattleScene extends Component {
     const liveIds = new Set<string>();
     for (const unit of this.allUnits()) {
       liveIds.add(unit.id);
+      // Rebuild from current unit state when vision returns, rather than
+      // retaining an invisible effect across fog transitions and snapshots.
+      if (!this.isUnitVisible(unit)) {
+        this.unitEffectVisuals.delete(unit.id);
+        continue;
+      }
       const fireTarget = this.fireEffectLevel(unit) > 0 ? 1 : 0;
       const smokeTarget = 0;
       let v = this.unitEffectVisuals.get(unit.id);
@@ -7409,7 +7579,7 @@ export class BattleScene extends Component {
         v = {
           unit,
           seed: this.hashStringToSeed(unit.id),
-          fireAlpha: 0,
+          fireAlpha: fireTarget,
           smokeAlpha: 0,
           smokeAge: 0,
         };
@@ -7682,6 +7852,9 @@ export class BattleScene extends Component {
         this.silhouetteClaimed.add(sprite);
         const parent = isTankUnit(unit) ? this.tankContentNode : this.infantryContentNode;
         if (parent && sprite.node.parent !== parent) parent.addChild(sprite.node);
+        // Pool slots can move between infantry and tank layers. Restore draw
+        // order on every reuse so the turret stays above its hull.
+        if (parent) sprite.node.setSiblingIndex(parent.children.length - 1);
         if (!isTankUnit(unit) && !unit.destroyed && this.isUnitVisible(unit)) this.silhouetteSources.set(sprite, color);
       }
     }
@@ -8563,6 +8736,7 @@ export class BattleScene extends Component {
       target,
       { hit, penetrated: hit, roll: report?.roll ?? 0 },
       {
+        shellType: 'he',
         skipPenetrationImpact: hit,
         onPenetrationImpact: hit
           ? handleImpact
@@ -8710,7 +8884,7 @@ export class BattleScene extends Component {
     attacker: Unit | null,
     target: Unit | null,
     report?: ProjectileReport,
-    options: Pick<ProjectileTrace, 'skipPenetrationImpact' | 'onPenetrationImpact'> = {},
+    options: Partial<Pick<ProjectileTrace, 'shellType' | 'skipPenetrationImpact' | 'onPenetrationImpact'>> = {},
   ) {
     if (!this.mapNode || !attacker || !target || attacker.destroyed || !report) return;
     if (!this.isUnitVisible(attacker)) return;
@@ -8745,6 +8919,10 @@ export class BattleScene extends Component {
       : impact;
     const bounce = this.projectileBounceVector(attacker, target, flight.ux, flight.uy, report);
     const dist = Math.hypot(end.x - muzzle.x, end.y - muzzle.y);
+    // Capture the chambered round before impact callbacks unload the gun.
+    const shellType = options.shellType ?? resolvedLoadedShell(attacker) ?? 'ap';
+    // Presentation speed is slowed so each shot can be followed in the tactical view.
+    const speed = shellType === 'hvap' ? 12 : shellType === 'he' ? 17 * 0.9 : shellType === 'smoke' ? 6 : 17;
 
     const n = new Node('ProjectileTrace');
     n.layer = this.node.layer;
@@ -8757,6 +8935,7 @@ export class BattleScene extends Component {
     this.placeProjectileTraceNode(n);
 
     const trace: ProjectileTrace = {
+      shellType,
       node: n,
       g,
       mode,
@@ -8774,7 +8953,11 @@ export class BattleScene extends Component {
       bounceUx: bounce.ux,
       bounceUy: bounce.uy,
       t: 0,
-      dur: Math.max(0.14, Math.min(0.34, dist / Math.max(1, this.hexSize * 17))),
+      dur: shellType === 'ap'
+        ? Math.max(0.14, Math.min(0.34, dist / Math.max(1, this.hexSize * speed)))
+        : shellType === 'he'
+          ? Math.max(0.14 / 0.9, Math.min(0.34 / 0.9, dist / Math.max(1, this.hexSize * speed)))
+        : Math.max(shellType === 'hvap' ? 0.24 : 0.30, Math.min(0.85, dist / Math.max(1, this.hexSize * speed))),
       seed: this.projectileSeed(attacker, target, report),
       ...options,
     };
@@ -9313,9 +9496,10 @@ export class BattleScene extends Component {
     const y = tr.startY + (tr.endY - tr.startY) * p;
     const ux = tr.phase === 'ricochet' ? tr.bounceUx : tr.ux;
     const uy = tr.phase === 'ricochet' ? tr.bounceUy : tr.uy;
-    const baseTail = this.hexSize * (tr.phase === 'ricochet' ? 0.52 : 0.72);
-    // The outgoing overpenetration tail may grow back only to the exit hole;
-    // it must never extend across the target sprite and look like an overhead shot.
+    const tracer = tr.shellType === 'ap' || tr.shellType === 'hvap' || tr.shellType === 'he' || tr.phase === 'ricochet';
+    const he = tr.shellType === 'he';
+    const baseTail = this.hexSize * (tr.phase === 'ricochet' ? 0.52 : tracer ? 0.72 : 0.09);
+    // Preserve the old AP streak, but never draw an exit streak across the target.
     const tail = tr.phase === 'overpenetration'
       ? Math.min(baseTail, Math.hypot(x - tr.startX, y - tr.startY))
       : baseTail;
@@ -9326,22 +9510,44 @@ export class BattleScene extends Component {
         : 245;
     const rx = uy;
     const ry = -ux;
+    const radius = tracer ? Math.max(1.6, this.hexSize * 0.026) : Math.max(1, this.hexSize * 0.018);
 
-    g.lineWidth = Math.max(2, this.hexSize * 0.045);
-    g.strokeColor = new Color(255, 202, 58, Math.max(0, alpha));
-    g.moveTo(x - ux * tail, y - uy * tail);
-    g.lineTo(x, y);
-    g.stroke();
-
-    g.lineWidth = Math.max(1, this.hexSize * 0.02);
-    g.strokeColor = new Color(255, 248, 170, Math.max(0, Math.round(alpha * 0.95)));
-    g.moveTo(x - ux * tail * 0.52, y - uy * tail * 0.52);
-    g.lineTo(x + ux * this.hexSize * 0.08, y + uy * this.hexSize * 0.08);
-    g.stroke();
-
-    g.fillColor = new Color(255, 250, 190, Math.max(0, alpha));
-    g.circle(x, y, Math.max(2, this.hexSize * 0.045));
-    g.fill();
+    if (tracer) {
+      // AP and HE share geometry; HE uses an orange-red palette.
+      g.lineWidth = Math.max(2, this.hexSize * 0.045);
+      g.strokeColor = he ? new Color(255, 92, 32, Math.max(0, alpha)) : new Color(255, 202, 58, Math.max(0, alpha));
+      g.moveTo(x - ux * tail, y - uy * tail);
+      g.lineTo(x, y);
+      g.stroke();
+      g.lineWidth = Math.max(1, this.hexSize * 0.02);
+      g.strokeColor = he ? new Color(255, 151, 82, Math.max(0, Math.round(alpha * 0.95))) : new Color(255, 248, 170, Math.max(0, Math.round(alpha * 0.95)));
+      g.moveTo(x - ux * tail * 0.52, y - uy * tail * 0.52);
+      g.lineTo(x + ux * this.hexSize * 0.08, y + uy * this.hexSize * 0.08);
+      g.stroke();
+      g.fillColor = he ? new Color(255, 174, 103, Math.max(0, alpha)) : new Color(255, 250, 190, Math.max(0, alpha));
+      g.circle(x, y, Math.max(2, this.hexSize * 0.045));
+      g.fill();
+    } else {
+      // Smoke stays unlit; smoke emission starts at deployment.
+      g.lineWidth = radius;
+      g.strokeColor = new Color(135, 137, 132, Math.round(alpha * 0.18));
+      g.moveTo(x - ux * tail, y - uy * tail);
+      g.lineTo(x, y);
+      g.stroke();
+      const halfLength = radius * 1.6;
+      g.fillColor = new Color(79, 82, 77, alpha);
+      g.moveTo(x + ux * halfLength, y + uy * halfLength);
+      g.lineTo(x + rx * radius, y + ry * radius);
+      g.lineTo(x - ux * halfLength, y - uy * halfLength);
+      g.lineTo(x - rx * radius, y - ry * radius);
+      g.close();
+      g.fill();
+      g.lineWidth = Math.max(0.6, radius * 0.45);
+      g.strokeColor = new Color(171, 173, 164, Math.round(alpha * 0.65));
+      g.moveTo(x - ux * radius, y - uy * radius);
+      g.lineTo(x + ux * radius, y + uy * radius);
+      g.stroke();
+    }
 
     if (tr.phase === 'ricochet') {
       this.drawProjectileSpark(g, tr.impactX, tr.impactY, tr, p);
@@ -10321,6 +10527,17 @@ export class BattleScene extends Component {
 
   update(dt: number) {
     if (this.leavingBattle) return;
+    try {
+      if (this.continuousTerrain?.advanceGeneration()) this.resourceRedrawPending = true;
+    } catch (error) {
+      console.warn('[BattleScene] Terrain generation failed; using sprite fallback:', error);
+      this.continuousTerrain?.destroy();
+      this.continuousTerrain = null;
+      this.resourceRedrawPending = true;
+    }
+    if (this.resourceRedrawPending) this.redraw();
+    this.syncTerrainLoadingOverlay(dt);
+    this.continuousTerrain?.update(dt);
     if (this.campaignUpgradeChoiceRoot || this.campaignUpgradeDetailRoot) return;
     this.advanceFogVisionTransition(dt);
     this.advanceEngineVibration(dt);
@@ -10591,6 +10808,7 @@ export class BattleScene extends Component {
   }
 
   private onMouseMoveMap(event: EventMouse): void {
+    if (!this.terrainSpriteBatchReady || this.continuousTerrain?.loading || this.terrainLoadingRoot?.active) return;
     const tile = this.pickTileAtScreenUi(event);
     const target = this.isEffectiveBattleTile(tile) ? tile : null;
     if (this.hoveredTile === target) return;
@@ -10641,7 +10859,7 @@ export class BattleScene extends Component {
   /** 绘制带自有格线的地形贴图；失败时调用方会走 Graphics 兜底。 */
   private drawTerrainTileSprite(cx: number, cy: number, size: number, terrain: TerrainType): boolean {
     const sf = this.terrainSpriteFrameFor(terrain);
-    if (!sf || this.terrainSpritePoolNext >= this.terrainSpritePool.length) return false;
+    if (!sf || !this.ensureScenerySlot(this.terrainSpritePool, this.terrainSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL)) return false;
     const slot = this.terrainSpritePool[this.terrainSpritePoolNext++];
     slot.sprite.spriteFrame = sf;
     const ut = slot.node.getComponent(UITransform);
@@ -10666,15 +10884,23 @@ export class BattleScene extends Component {
     }
   }
 
+  private pacificTreeLayout(tile: Tile): number[][] {
+    const seed = ((tile.pos.q * 73856093) ^ (tile.pos.r * 19349663) ^ 0x5a17c9) >>> 0;
+    const rng = new RNG(seed || 1);
+    // Stable per-tile offsets break the repeating rows without filling the gaps.
+    return [[-0.43, 0.32, 0.60], [0.43, 0.28, 0.56], [0, -0.44, 0.62]]
+      .map(([x, y, scale]) => [x + (rng.next() - 0.5) * 0.20, y + (rng.next() - 0.5) * 0.20, scale]);
+  }
+
   private drawRedesignNaturalObjects(cx: number, cy: number, size: number, tile: Tile) {
     if (tile.terrain !== 'trees') return;
     const frame = this.redesignObjectFrames.tree_palm;
     if (!frame) return;
     // Sparse palms leave open ground visible, unlike the dense forest canopy.
-    const layouts = [[-0.43, 0.32, 0.60], [0.43, 0.28, 0.56], [0, -0.44, 0.62]];
+    const layouts = this.pacificTreeLayout(tile);
     let variant = 0;
     for (const [dx, dy, scale] of layouts) {
-      if (this.foliageSpritePoolNext >= this.foliageSpritePool.length) break;
+      if (!this.ensureScenerySlot(this.foliageSpritePool, this.foliageSpritePoolNext, BattleScene.FOLIAGE_SPRITE_POOL)) break;
       const slot = this.foliageSpritePool[this.foliageSpritePoolNext++];
       const index = (Math.abs(tile.pos.q * 31 + tile.pos.r * 17) + variant++) % 4;
       const chosen = this.redesignObjectFrames[index === 0 ? 'tree_palm' : `tree_palm_${index + 1}`] ?? frame;
@@ -11070,7 +11296,7 @@ export class BattleScene extends Component {
         n.addComponent(UITransform); const sp = n.addComponent(Sprite);
         sp.sizeMode = Sprite.SizeMode.CUSTOM; sp.spriteFrame = frame; parent.addChild(n);
       } else {
-        if (this.urbanBuildingSpritePoolNext >= this.urbanBuildingSpritePool.length) break;
+        if (!this.ensureScenerySlot(this.urbanBuildingSpritePool, this.urbanBuildingSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL * 3)) break;
         const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
         n = slot.node; slot.sprite.spriteFrame = frame;
       }
@@ -11087,7 +11313,7 @@ export class BattleScene extends Component {
           n.addComponent(UITransform); const sp = n.addComponent(Sprite);
           sp.spriteFrame = frame; sp.sizeMode = Sprite.SizeMode.CUSTOM; parent.addChild(n);
         } else {
-          if (this.urbanBuildingSpritePoolNext >= this.urbanBuildingSpritePool.length) break;
+          if (!this.ensureScenerySlot(this.urbanBuildingSpritePool, this.urbanBuildingSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL * 3)) break;
           const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
           n = slot.node; slot.sprite.spriteFrame = frame;
         }
@@ -12027,7 +12253,7 @@ export class BattleScene extends Component {
   }
 
   private drawTreeSprite(cx: number, cy: number, hexSize: number, seed: number, scale: number): boolean {
-    if (this.foliageSpritePoolNext >= this.foliageSpritePool.length) return false;
+    if (!this.ensureScenerySlot(this.foliageSpritePool, this.foliageSpritePoolNext, BattleScene.FOLIAGE_SPRITE_POOL)) return false;
     const frames = this.activeTreeSpriteFrames().filter((sf): sf is SpriteFrame => !!sf);
     if (frames.length === 0) return false;
     const rng = new RNG(seed || 1);
@@ -15333,8 +15559,10 @@ export class BattleScene extends Component {
       const local = mapTransform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0));
       const pos = this.pixelToNearestAxial(local.x, local.y);
       if (this.outsideMapTurretAimDirection(pos) !== null) return true;
+      const tile = this.mission?.map.get(pos);
+      return !!tile && !this.isDeepShadowTile(tile);
     }
-    return this.pickTileAtScreenUi(event) !== null;
+    return false;
   }
 
   private requestCombatLogReplay(replay: CombatLogReplay) {
@@ -20665,7 +20893,7 @@ export class BattleScene extends Component {
     }
     this.addTileInspectForestSprites(preview, 0, hexCY, hexR, tile);
     if (tile.terrain === 'trees') {
-      const layout = [[-0.43, 0.32, 0.60], [0.43, 0.28, 0.56], [0, -0.44, 0.62]];
+      const layout = this.pacificTreeLayout(tile);
       for (let i = 0; i < layout.length; i++) {
         const variant = (Math.abs(tile.pos.q * 31 + tile.pos.r * 17) + i) % 4;
         const frame = this.redesignObjectFrames[variant === 0 ? 'tree_palm' : `tree_palm_${variant + 1}`];
@@ -22106,7 +22334,7 @@ export class BattleScene extends Component {
   private drawTerrainSpriteFrame(
     cx: number, cy: number, size: number, frame: SpriteFrame, rotationDegrees = 0,
   ): boolean {
-    if (this.terrainSpritePoolNext >= this.terrainSpritePool.length) return false;
+    if (!this.ensureScenerySlot(this.terrainSpritePool, this.terrainSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL)) return false;
     const slot = this.terrainSpritePool[this.terrainSpritePoolNext++];
     slot.sprite.spriteFrame = frame;
     const ut = slot.node.getComponent(UITransform);
@@ -22121,7 +22349,7 @@ export class BattleScene extends Component {
   private drawBridgeSpriteFrame(
     cx: number, cy: number, size: number, frame: SpriteFrame, rotationDegrees = 0,
   ): boolean {
-    if (this.bridgeSpritePoolNext >= this.bridgeSpritePool.length) return false;
+    if (!this.ensureScenerySlot(this.bridgeSpritePool, this.bridgeSpritePoolNext, BattleScene.BRIDGE_SPRITE_POOL)) return false;
     const slot = this.bridgeSpritePool[this.bridgeSpritePoolNext++];
     slot.sprite.spriteFrame = frame;
     const ut = slot.node.getComponent(UITransform);
@@ -22136,7 +22364,7 @@ export class BattleScene extends Component {
   private drawUrbanBuildingSpriteFrame(
     cx: number, cy: number, size: number, frame: SpriteFrame, scale = 1,
   ): boolean {
-    if (this.urbanBuildingSpritePoolNext >= this.urbanBuildingSpritePool.length) return false;
+    if (!this.ensureScenerySlot(this.urbanBuildingSpritePool, this.urbanBuildingSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL * 3)) return false;
     const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
     slot.sprite.spriteFrame = frame;
     const ut = slot.node.getComponent(UITransform);
@@ -23365,7 +23593,7 @@ export class BattleScene extends Component {
       };
       const traceCount = this.projectileTraces.length;
       this.spawnProjectileTrace(sherman, target, { hit: true, penetrated: true, roll: 0 },
-        { skipPenetrationImpact: true, onPenetrationImpact: finish });
+        { shellType: 'he', skipPenetrationImpact: true, onPenetrationImpact: finish });
       if (this.projectileTraces.length === traceCount) finish();
     });
   }
@@ -23814,7 +24042,7 @@ export class BattleScene extends Component {
       };
       const traceCount = this.projectileTraces.length;
       this.spawnProjectileTrace(sherman, target, { hit: true, penetrated: true, roll: 0 },
-        { skipPenetrationImpact: true, onPenetrationImpact: onImpact });
+        { shellType: 'smoke', skipPenetrationImpact: true, onPenetrationImpact: onImpact });
       if (this.projectileTraces.length === traceCount) onImpact();
     });
   }
@@ -26485,7 +26713,8 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return this.turnTransition !== null || this.campaignTransitionActive || this.campaignPanAnim !== null
+    return !this.terrainSpriteBatchReady || !!this.continuousTerrain?.loading || !!this.terrainLoadingRoot?.active
+      || this.turnTransition !== null || this.campaignTransitionActive || this.campaignPanAnim !== null
       || this.campaignUpgradeChoiceRoot !== null || this.campaignUpgradeDetailRoot !== null
       || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null

@@ -2,12 +2,14 @@ import type { Tile } from './types';
 
 export type UrbanIndestructibleVariant =
   | 'apartment' | 'factory' | 'office_l' | 'warehouse'
-  | 'market' | 'theater' | 'post_office' | 'waterworks';
+  | 'market' | 'theater' | 'post_office' | 'waterworks'
+  | 'church' | 'town_hall' | 'civic_dome';
 export type UrbanDestructibleVariant = 'rowhouses_l' | 'courtyard' | 'workshop' | 'block';
 
 export const URBAN_INDESTRUCTIBLE_VARIANTS: readonly UrbanIndestructibleVariant[] = [
   'apartment', 'factory', 'office_l', 'warehouse',
   'market', 'theater', 'post_office', 'waterworks',
+  'church', 'town_hall', 'civic_dome',
 ];
 export const URBAN_DESTRUCTIBLE_VARIANTS: readonly UrbanDestructibleVariant[] = [
   'rowhouses_l', 'courtyard', 'workshop', 'block',
@@ -291,16 +293,10 @@ export function urbanBuildingSpritePath(tile: Tile): string | null {
 }
 
 /**
- * Compact destructible-building drawings need a little more of the hex than the
- * tall row-house group. Keep one scale per variant so damage-state changes do
- * not make a building visibly jump in size.
+ * Source sprites preserve their complete silhouettes inside the asset canvas.
+ * Enlarge the whole canvas at runtime so roofs fill the tile and can extend
+ * beyond its hex boundary without clipping. All damage states use one scale.
  */
 export function urbanBuildingSpriteScale(tile: Tile): number {
-  if (tile.urbanKind !== 'destructible') return 1;
-  switch (tile.urbanVariant) {
-    case 'courtyard': return 1.12;
-    case 'workshop': return 1.14;
-    case 'block': return 1.08;
-    default: return 1;
-  }
+  return 1.35;
 }

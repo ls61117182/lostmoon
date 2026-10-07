@@ -1,0 +1,9 @@
+const fs=require('fs'),sharp=require('sharp');const dir='source_art/tanks/jagdpanther';
+(async()=>{
+const src=dir+'/top_destroyed-aligned.png',dst='assets/resources/textures/units/jagdpanther_top_destroyed.png';
+const backup=dir+'/before-expanded-damage';fs.mkdirSync(backup,{recursive:true});for(const p of [src,dst]){const b=backup+'/'+require('path').basename(p);if(!fs.existsSync(b))fs.copyFileSync(p,b);}
+const gen='C:/Users/Administrator/.codex/generated_images/01a0fb4c-6391-7de0-a69e-636c83b3f538/exec-4c6b665e-f497-4829-8a60-2131361451b3.png';fs.copyFileSync(gen,dir+'/destroyed-expanded-generated.png');
+const old=await sharp(src).ensureAlpha().raw().toBuffer({resolveWithObject:true});const fresh=await sharp(gen).resize(old.info.width,old.info.height,{fit:'fill'}).ensureAlpha().raw().toBuffer();for(let i=3;i<fresh.length;i+=4)fresh[i]=old.data[i];await sharp(fresh,{raw:old.info}).png().toFile(src);
+const original=await sharp(dst).ensureAlpha().raw().toBuffer({resolveWithObject:true});const crop=JSON.parse(fs.readFileSync(dir+'/geometry.json')).crop;const small=await sharp(src).extract(crop).resize(original.info.width,original.info.height).ensureAlpha().raw().toBuffer();for(let i=3;i<small.length;i+=4)small[i]=original.data[i];await sharp(small,{raw:original.info}).png().toFile(dst);
+const inputs=await Promise.all(['top','top_destroyed'].map(s=>sharp('assets/resources/textures/units/jagdpanther_'+s+'.png').toBuffer()));await sharp({create:{width:430,height:102,channels:4,background:'#4b5156'}}).composite(inputs.map((input,i)=>({input,left:5+i*220,top:10}))).png().toFile(dir+'/game-size-preview.png');await sharp(dir+'/game-size-preview.png').resize(1290,306,{kernel:'nearest'}).toFile(dir+'/game-size-preview-3x.png');console.log('Expanded damage installed; original source and game alpha preserved.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

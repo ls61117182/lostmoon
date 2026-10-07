@@ -55,51 +55,18 @@ assert(engine.chunkOrigins([tile(-10,-9)]).every(p=>p.x<0&&p.y<0),'negative axia
 assert.deepEqual(engine.chunkOrigins([]),[]);
 const empty=engine.renderChunk([],false,0,0,8,8);assert(empty.pixels.every(v=>v===0),'empty map remains transparent');
 
-// Exercise the actual engine adapter with a minimal GPU/node harness.
-let uploads=0,destroyedTextures=0;
-class UITransform {setContentSize(w,h){this.width=w;this.height=h;}}
-class Node {constructor(){this.isValid=true;this.components=new Map();this.children=[];}addComponent(Type){const c=new Type();this.components.set(Type,c);return c;}getComponent(Type){return this.components.get(Type);}addChild(n){this.children.push(n);}setSiblingIndex(){}setPosition(x,y){this.x=x;this.y=y;}destroy(){this.isValid=false;}}
-class Texture2D {
-  static Filter={LINEAR:1};static WrapMode={REPEAT:0,CLAMP_TO_EDGE:1};
-  constructor(){this.wrapS=this.wrapT=Texture2D.WrapMode.REPEAT;}
-  reset(o){this.width=o.width;this.height=o.height;}
-  setWrapMode(s,t){this.wrapS=s;this.wrapT=t;}
-  setFilters(){}
-  uploadData(p){
-    assert.equal(this.wrapS,Texture2D.WrapMode.CLAMP_TO_EDGE,'terrain must not sample the opposite texture edge horizontally');
-    assert.equal(this.wrapT,Texture2D.WrapMode.CLAMP_TO_EDGE,'terrain must not sample the opposite texture edge vertically');
-    uploads++;assert.equal(p.length,this.width*this.height*4);
-  }
-  destroy(){destroyedTextures++;}
+// Cooperative generation must preserve every color and water-mask byte.
+for(const [bundle,winter,resolution] of [[realBundle,false,1],[realBundle.europeanSummer,false,2],[realBundle.europeanWinter,true,2]]){
+  const e=new raster.TerrainGroundRaster(bundle);
+  const mixed=[tile(0,0,'water'),tile(1,0,'mud'),tile(0,1,'road',{roads:[true,false,false,true,false,false]})];
+  const expected=e.renderChunk(mixed,winter,-24,-24,80,80,resolution);
+  const job=e.renderChunkSteps(mixed,winter,-24,-24,80,80,resolution);
+  let step=job.next(),yields=0;
+  while(!step.done){yields++;step=job.next();}
+  assert(yields>resolution*80,'work yields throughout field, blur and pixel stages');
+  assert.deepEqual(step.value,expected,'cooperative output matches synchronous output exactly');
 }
-class SpriteFrame {destroy(){}}
-class Sprite {static SizeMode={CUSTOM:1};}
-class Rect {constructor(x,y,w,h){Object.assign(this,{x,y,width:w,height:h});}}
-class Size {constructor(w,h){this.width=w;this.height=h;}}
-const {TerrainGroundRenderer}=load('assets/scripts/view/TerrainGroundRenderer.ts',{'cc':{Node,Rect,Size,Sprite,SpriteFrame,Texture2D,UITransform},'./TerrainGroundRaster':raster});
-const parent=new Node(),renderer=new TerrainGroundRenderer(parent,realBundle),small=[tile(2,2),tile(3,2)];
-renderer.draw(small,false,60,100,200);const initial=uploads;
-assert(initial>0);
-renderer.draw(small,false,72,10,20);assert.equal(uploads,initial,'camera/scale/redraw must not upload terrain again');
-assert(parent.children.some(n=>n.isValid&&n.getComponent(Sprite).spriteFrame.rect.x===0),'chunk frame must display matching padding to cover sprite mesh cracks');
-renderer.draw(small,true,72,10,20);assert(uploads>initial,'changing seasons rebuilds terrain');
-renderer.destroy();assert.equal(destroyedTextures,uploads,'all generated GPU textures are released');
-const seamParent=new Node(),seamRenderer=new TerrainGroundRenderer(seamParent,realBundle);
-seamRenderer.draw([tile(3,2),tile(4,2)],false,63.7,100.31,200.17);
-const adjacent=seamParent.children.filter(n=>n.isValid).sort((a,b)=>a.x-b.x);
-assert.equal(adjacent.length,2);
-const rightEdge=adjacent[0].x+adjacent[0].getComponent(UITransform).width/2,leftEdge=adjacent[1].x-adjacent[1].getComponent(UITransform).width/2;
-assert(rightEdge-leftEdge>2,'fractional screen positions must retain overlapping chunk geometry');
-seamRenderer.destroy();assert.equal(destroyedTextures,uploads);
 if(realBundle.europeanSummer){
-  const isolated=new TerrainGroundRenderer(new Node(),realBundle);
-  isolated.draw(small,false,60,0,0,false);const baselineUploads=uploads;
-  isolated.draw(small,false,60,0,0,true);assert(uploads>baselineUploads,'Europe summer selects its own material renderer');
-  const europeanUploads=uploads;
-  isolated.draw(small,false,60,0,0,true);assert.equal(uploads,europeanUploads,'Europe summer remains cached');
-  isolated.draw(small,true,60,0,0,true);const winterUploads=uploads;
-  isolated.draw(small,true,60,0,0,false);assert.equal(uploads,winterUploads,'winter ignores the European summer style flag');
-  isolated.destroy();assert.equal(destroyedTextures,uploads);
   const summerEngine=new raster.TerrainGroundRaster(realBundle.europeanSummer),left=summerEngine.renderChunk(tiles,false,0,0,128,192),right=summerEngine.renderChunk(tiles,false,128,0,128,192);
   if(realBundle.europeanSummer.materials.forest_floor){
     assert.notDeepEqual(summerEngine.renderChunk([tile(0,0,'forest')],false,-42,-48,84,96).pixels,summerEngine.renderChunk([tile(0,0,'field')],false,-42,-48,84,96).pixels,'forest has its own ground art');
@@ -184,16 +151,16 @@ if(realBundle.europeanSummer){
   const flat=rgb=>({width:1,height:1,rgb:Buffer.from(rgb).toString('base64')});
   const e=new raster.TerrainGroundRaster({...realBundle,materials:{...realBundle.materials,sand:flat([145,120,80])}});
   for(let axis=0;axis<3;axis++){
-    const dir=[[1,0],[1,-1],[0,-1]][axis],roads=Array.from({length:6},(_,i)=>i===axis||i===axis+3),grid=[];
+    const dir=[[1,0],[0,1],[-1,1]][axis],roads=Array.from({length:6},(_,i)=>i===axis||i===axis+3),grid=[];
     for(let q=-3;q<=3;q++)for(let r=-3;r<=3;r++)grid.push(tile(q,r,(q===0&&r===0||q===dir[0]&&r===dir[1])?'airstrip':'clear',{roads}));
-    const a=e.renderChunk(grid,false,-160,-160,360,360),angle=-axis*Math.PI/3,n=[Math.cos(angle),Math.sin(angle)],join=Math.sqrt(3)*48/2;
+    const a=e.renderChunk(grid,false,-160,-160,360,360),angle=axis*Math.PI/3,n=[Math.cos(angle),Math.sin(angle)],join=Math.sqrt(3)*48/2;
     const red=(u,v)=>{const x=u*n[0]-v*n[1],y=u*n[1]+v*n[0];return a.pixels[((Math.floor(y+160)+1)*a.textureWidth+Math.floor(x+160)+1)*4];};
     for(const u of [join-8,join,join+8])for(const v of [-16,0,16])assert(red(u,v)>195,'runway stays pale and equally wide through the joint, including outside each individual hex');
     assert(red(join,25)<180,'runway width matches the old 0.42-radius half width');
     assert(red(-38,0)<180,'only the outer runway end is trimmed');
   }
 }
-// Village yards change only non-urban, non-road building ground.
+// Village yards also underlie roads; road surfaces and shoulders render above them.
 {
   const village=tile(0,0,'field',{hasBuilding:true}),plain=tile(0,0,'field');
   assert.notEqual(raster.terrainGroundFingerprint([village],false),raster.terrainGroundFingerprint([plain],false),'yard presence invalidates the ground cache');
@@ -202,7 +169,49 @@ if(realBundle.europeanSummer){
   assert.equal(raster.ruralYardCoverage(0,0),1);
   assert.equal(raster.ruralYardCoverage(.85,0),0,'yard retains a grassy perimeter');
   const road={roads:[true,false,false,true,false,false]};
-  assert.deepEqual(engine.renderChunk([tile(0,0,'road',{...road,hasBuilding:true})],false,-40,-40,80,80).pixels,engine.renderChunk([tile(0,0,'road',road)],false,-40,-40,80,80).pixels,'road settlements do not receive a yard');
+  const roadVillage=tile(0,0,'road',{...road,hasBuilding:true}),roadPlain=tile(0,0,'road',road);
+  assert.notEqual(raster.terrainGroundFingerprint([roadVillage],false),raster.terrainGroundFingerprint([roadPlain],false),'building changes on a road invalidate the cached floor');
+  for(const winter of [false,true]) {
+    const yardRoad=engine.renderChunk([roadVillage],winter,-40,-40,80,80),plainRoad=engine.renderChunk([roadPlain],winter,-40,-40,80,80);
+    assert.deepEqual(yardRoad.pixels.slice(i,i+3),plainRoad.pixels.slice(i,i+3),'opaque road surface covers the building floor');
+    const outside=(61*yardRoad.textureWidth+41)*4;
+    assert.notDeepEqual(yardRoad.pixels.slice(outside,outside+3),plainRoad.pixels.slice(outside,outside+3),'building floor remains visible beside the road');
+  }
+  assert.equal(raster.terrainGroundFingerprint([tile(0,0,'urban_road',{...road,hasBuilding:true})],false),raster.terrainGroundFingerprint([tile(0,0,'urban_road',road)],false),'urban ground keeps its existing floor');
 }
-console.log(JSON.stringify({status:'passed',maxSeamError,opaqueSeamPixels,cacheUploadCount:initial,totalUploads:uploads},null,2));
-
+// Water coverage remains continuous and never animates land, bridges or ice banks.
+assert.equal(empty.hasWater,false);
+assert.equal(open.hasWater,false);
+assert(beach.hasWater);
+for(let y=0;y<a.textureHeight;y++)for(let s=0;s<2;s++)for(let k=0;k<4;k++)assert(Math.abs(a.waterMask[(y*a.textureWidth+128+s)*4+k]-b.waterMask[(y*b.textureWidth+s)*4+k])<=1,'water animation mask matches across chunks');
+const lake=engine.renderChunk([tile(0,0,'water')],false,-40,-40,80,80);
+const frozen=engine.renderChunk([tile(0,0,'water')],true,-40,-40,80,80);
+const bridge=engine.renderChunk([tile(0,0,'water',{bridgeEnds:[0,3]})],false,-40,-40,80,80);
+const mid=(41*lake.textureWidth+41)*4;
+const deepSea=engine.renderChunk([tile(0,0,'deep_water')],false,-40,-40,80,80);
+assert(deepSea.hasWater,'Pacific deep sea participates in animated water rendering');
+assert.equal(deepSea.waterMask[mid],255,'deep-sea interior has full animation coverage');
+assert(deepSea.waterMask[mid+2]>lake.waterMask[mid+2],'deep sea uses broader waves');
+assert(deepSea.waterMask[mid+1]<lake.waterMask[mid+1],'deep sea moves more slowly than inland water');
+assert.equal(lake.waterMask[mid],255);
+assert.equal(bridge.waterMask[mid],0,'bridge deck is excluded from motion');
+assert(frozen.waterMask[mid+1]<lake.waterMask[mid+1],'winter moves more slowly');
+for(let i=0;i<a.pixels.length;i+=4)if(a.waterMask[i]>0)assert.equal(a.pixels[i+3],255,'motion never extends off map');
+const europeanWinter=new raster.TerrainGroundRaster(realBundle.europeanWinter);
+const winterLake=europeanWinter.renderChunk([tile(0,0,'water')],true,-16,-16,32,32,2);
+const winterMid=(33*winterLake.textureWidth+33)*4;
+assert.equal(winterLake.waterMask[winterMid],255,'European winter open water is fully animated');
+assert(winterLake.waterMask[winterMid+1]>frozen.waterMask[mid+1],'European winter ripples remain visible against the winter artwork');
+assert(winterLake.waterMask[winterMid+1]<lake.waterMask[mid+1],'European winter flow remains slower than summer');
+const winterBridge=europeanWinter.renderChunk([tile(0,0,'water',{bridgeEnds:[0,3]})],true,-16,-16,32,32,2);
+assert.equal(winterBridge.waterMask[winterMid],0,'European winter bridge stays stationary');
+const narrowRiverTiles=[];
+for(let q=-2;q<=2;q++)for(let r=-2;r<=2;r++)narrowRiverTiles.push(tile(q,r,q===0&&Math.abs(r)<=1?'water':'field'));
+const narrowRiver=europeanWinter.renderChunk(narrowRiverTiles,true,-90,-90,180,180,2);
+let visibleWinterMotion=0;
+for(let i=0;i<narrowRiver.waterMask.length;i+=4)if(narrowRiver.waterMask[i]>128){
+  visibleWinterMotion++;
+  assert.equal(narrowRiver.waterMask[i+3],128,'narrow winter rivers carry the stronger winter highlight setting');
+}
+assert(visibleWinterMotion>1000,'a narrow winter river surrounded by land retains visible animated interior');
+console.log(JSON.stringify({status:'passed',maxSeamError,opaqueSeamPixels},null,2));

@@ -24,7 +24,7 @@ import { BUILD_FEATURES } from '../core/BuildProfile';
 import {
   _decorator, Canvas, Color, Component, EditBox, EventMouse, EventTouch, Graphics,
   HorizontalTextAlignment, JsonAsset, Label, Layers, Mask, Node, ScrollView, Sprite, SpriteFrame, UITransform,
-  Vec3, VerticalTextAlignment, director, resources,
+  Vec3, VerticalTextAlignment, director, resources, Tween, tween,
 } from 'cc';
 import { getLang, setLang, t, LangCode } from '../core/Lang';
 import { GameSession } from '../core/GameSession';
@@ -5035,7 +5035,7 @@ export class MainMenuScene extends Component {
   // UI 构造工具
   // ================================================================
 
-  /** 矩形按钮（圆角 8）。返回 { node, graphics, redraw } 便于外部改色 / 状态。 */
+  /** 矩形按钮，带悬停与按下反馈。返回引用便于外部改色 / 状态。 */
   private makeRectButton(
     parent: Node,
     x: number, y: number, w: number, h: number,
@@ -5048,23 +5048,56 @@ export class MainMenuScene extends Component {
     n.setPosition(x, y, 0);
     const g = n.addComponent(Graphics);
 
-    const redraw = (c: Color, opts?: { border?: boolean }) => {
+    let faceColor = color;
+    let bordered = false;
+    let hovered = false;
+    let pressed = false;
+    const feedback = { hover: 0, press: 0 };
+    let feedbackTween: Tween<typeof feedback> | null = null;
+    const baseScale = n.scale.clone();
+    const paint = () => {
+      if (!n.isValid) return;
+      const brightened = lerp(faceColor, new Color(242, 210, 125, 255), feedback.hover * 0.22);
+      const shade = 1 - feedback.press * 0.12;
+      const c = new Color(brightened.r * shade, brightened.g * shade, brightened.b * shade, 255);
       g.clear();
+      const opaqueFill = new Color(c.r, c.g, c.b, 255);
+      drawFieldPanel(
+        g, w, h, opaqueFill,
+        lerp(bordered ? BTN_LEVEL_BORDER : MENU_DIVIDER, TEXT_TITLE, feedback.hover * 0.65),
+        TEXT_TITLE,
+        false,
+        feedback.hover,
+        feedback.press,
+      );
+      const scale = 1 + feedback.hover * 0.025 - feedback.press * (0.02 + feedback.hover * 0.025);
+      n.setScale(baseScale.x * scale, baseScale.y * scale, baseScale.z);
+    };
+    const redraw = (c: Color, opts?: { border?: boolean }) => {
+      faceColor = c;
+      bordered = !!opts?.border;
       // Buttons sit above the operations-map grid.  Keeping their fill translucent
       // lets the grid/route strokes bleed through; after resolution scaling those
       // strokes can land on different pixels and look like random black seams.
       // Panels may remain translucent, but interactive button faces must be opaque.
-      const opaqueFill = new Color(c.r, c.g, c.b, 255);
-      drawFieldPanel(
-        g, w, h, opaqueFill,
-        opts?.border ? BTN_LEVEL_BORDER : MENU_DIVIDER,
-        TEXT_TITLE,
-        false,
-      );
+      paint();
     };
     redraw(color);
 
-    bindButtonPressScale(n);
+    const animateFeedback = () => {
+      feedbackTween?.stop();
+      feedbackTween = tween(feedback)
+        .to(pressed ? 0.06 : hovered ? 0.12 : 0.15,
+          { hover: hovered ? 1 : 0, press: pressed ? 1 : 0 },
+          { easing: 'sineOut', onUpdate: paint })
+        .start();
+    };
+    n.on(Node.EventType.MOUSE_ENTER, () => { hovered = true; animateFeedback(); });
+    n.on(Node.EventType.MOUSE_LEAVE, () => { hovered = false; pressed = false; animateFeedback(); });
+    n.on(Node.EventType.TOUCH_START, () => { pressed = true; animateFeedback(); });
+    n.on(Node.EventType.TOUCH_END, () => { pressed = false; animateFeedback(); });
+    n.on(Node.EventType.TOUCH_CANCEL, () => { pressed = false; hovered = false; animateFeedback(); });
+    n.on(Node.EventType.NODE_DESTROYED, () => { feedbackTween?.stop(); });
     n.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
       playUiClick();
       onClick();
@@ -5159,10 +5192,12 @@ function drawFieldPanel(
   border: Color,
   accent: Color,
   drawInnerStroke: boolean = true,
+  hover: number = 0,
+  press: number = 0,
 ) {
   const x = -w / 2;
   const y = -h / 2;
-  g.fillColor = new Color(0, 0, 0, 70);
+  g.fillColor = new Color(0, 0, 0, 70 - press * 40);
   g.rect(x + 4, y - 5, w, h);
   g.fill();
   g.fillColor = fill;
@@ -5181,9 +5216,9 @@ function drawFieldPanel(
     g.rect(x + 6, y + 6, w - 12, h - 12);
     g.stroke();
   }
-  g.strokeColor = accent;
-  g.lineWidth = 2;
-  const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18));
+  g.strokeColor = lerp(accent, new Color(255, 245, 207, 255), hover);
+  g.lineWidth = 2 + hover * 0.5;
+  const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18)) + hover * 3;
   g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8 + l, y + h - 8);
   g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8, y + h - 8 - l);
   g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8 - l, y + h - 8);

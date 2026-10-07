@@ -179,6 +179,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'ammo.tooltip.hvap.description': { zh: "穿甲值 {penetration}，有效射程 {range} 格；距离超过有效射程后，每远 1 格穿甲值降低 1。", en: "Penetration {penetration}; effective range {range} hexes. Beyond effective range, penetration falls by 1 per extra hex." },
   'action.repair': { zh: "修复", en: "Repair" },
   'action.fire': { zh: "炮击", en: "Fire" },
+  'action.ambush': { zh: "伏击", en: "Ambush" },
   'action.fireHardcore': { zh: "炮击/旋转", en: "Fire/Rotate" },
   'action.rotateTurret': { zh: "旋转", en: "Rotate" },
   'action.repairTurret': { zh: "修复炮塔", en: "Repair Turret" },
@@ -418,6 +419,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'dice.aiCol.american_infantry': { zh: "美军步兵", en: "American Infantry" },
   'dice.aiCol.heavy_artillery': { zh: "重炮", en: "Heavy Artillery" },
   'dice.aiEnemy.shoot': { zh: "主炮射击", en: "Main gun" },
+  'dice.aiEnemy.ambush': { zh: "伏击", en: "Ambush" },
   'dice.aiEnemy.turn': { zh: "转向", en: "Turn" },
   'dice.aiEnemy.advance': { zh: "前进", en: "Advance" },
   'dice.aiEnemy.reverse': { zh: "后退", en: "Reverse" },
@@ -935,5 +937,5 @@ export const LANG_DB: Record<string, LangEntry> = {
   'unit.name.sturmtiger': { zh: "突击虎", en: "Sturmtiger" },
   'unit.name.jagdtiger': { zh: "猎虎", en: "Jagdtiger" },
   'unit.name.elefant': { zh: "象式坦克歼击车", en: "Elefant" },
-  'unit.name.jagdpanther': { zh: "追猎者坦克歼击车", en: "Hetzer" },
+  'unit.name.jagdpanther': { zh: "追猎者", en: "Hetzer" },
 };

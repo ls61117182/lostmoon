@@ -190,7 +190,7 @@ test('a battlefield hex takes priority over combat-log scrolling during the play
   assert.match(source, /private shouldCombatLogTouchTargetMap\(event: EventTouch\)/);
   assert.match(source, /if \(this\.phase !== 'player' \|\| this\.outcome !== 'ongoing'\) return false/);
   assert.doesNotMatch(source, /shouldCombatLogTouchTargetMap\(event: EventTouch\)[\s\S]{0,240}selectedGunDieIdx/);
-  assert.match(source, /return this\.pickTileAtScreenUi\(event\) !== null/);
+  assert.match(source, /outsideMapTurretAimDirection\(pos\) !== null\) return true;[\s\S]*?const tile = this\.mission\?\.map\.get\(pos\);[\s\S]*?return !!tile && !this\.isDeepShadowTile\(tile\)/);
   assert.match(source, /TOUCH_START[\s\S]*?shouldCombatLogTouchTargetMap\(event\)[\s\S]*?sv\.stopAutoScroll\(\)[\s\S]*?sv\.vertical = false/);
   assert.match(source, /TOUCH_END[\s\S]*?sv\.vertical = true[\s\S]*?this\.onTouchMap\(event\)/);
   assert.match(source, /if \(this\.combatLogTouchTargetsMap \|\| this\.shouldCombatLogTouchTargetMap\(event\)\) return/);

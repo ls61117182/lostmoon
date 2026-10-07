@@ -109,11 +109,12 @@ test('all declared urban building sprites exist in the runtime resource folder',
   }
 });
 
-test('compact destructible building variants fill more of their hex without enlarging tall rowhouses', () => {
+test('city art enlarges complete silhouettes consistently across destruction states', () => {
   const tile = { terrain: 'urban_destructible', urbanKind: 'destructible', urbanStructure: 2 };
-  assert.equal(urbanBuildingSpriteScale({ ...tile, urbanVariant: 'rowhouses_l' }), 1);
-  assert.equal(urbanBuildingSpriteScale({ ...tile, urbanVariant: 'courtyard' }), 1.12);
-  assert.equal(urbanBuildingSpriteScale({ ...tile, urbanVariant: 'workshop' }), 1.14);
-  assert.equal(urbanBuildingSpriteScale({ ...tile, urbanVariant: 'block' }), 1.08);
-  assert.equal(urbanBuildingSpriteScale({ ...tile, urbanKind: 'indestructible', urbanVariant: 'factory' }), 1);
+  for (const urbanVariant of ['rowhouses_l', 'courtyard', 'workshop', 'block']) {
+    for (const urbanStructure of [2, 1, 0]) {
+      assert.equal(urbanBuildingSpriteScale({ ...tile, urbanVariant, urbanStructure }), 1.35);
+    }
+  }
+  assert.equal(urbanBuildingSpriteScale({ ...tile, urbanKind: 'indestructible', urbanVariant: 'factory' }), 1.35);
 });

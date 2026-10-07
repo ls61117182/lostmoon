@@ -5,7 +5,7 @@ import { europeanRoadCenterlineDistance, europeanRoadVariantIndex } from '../cor
  * pointy-top axial. Chunk boundaries never restart material or transition UVs. */
 export interface TerrainMaterialData { width: number; height: number; rgb: string; }
 export interface TerrainMaterialBundle { version: number; materials: Record<string, TerrainMaterialData>; europeanSummer?: TerrainMaterialBundle; europeanWinter?: TerrainMaterialBundle; winterArtwork?: boolean; fieldBasedLand?: boolean; curvedRoads?: boolean; }
-export interface GroundChunk { x: number; y: number; width: number; height: number; textureWidth: number; textureHeight: number; pixels: Uint8Array; }
+export interface GroundChunk { x: number; y: number; width: number; height: number; textureWidth: number; textureHeight: number; pixels: Uint8Array; waterMask: Uint8Array; hasWater: boolean; }
 interface GroundTile { q: number; r: number; x: number; y: number; material: string; roads: number; roadFlags: boolean[]; roadVariant: number; bridge: number; runway: boolean; mudPatches: boolean; ruralYard: boolean; }
 interface Material { width: number; height: number; pixels: Uint8Array; }
 export const GROUND_RADIUS = 48;
@@ -34,7 +34,7 @@ export function terrainMaterial(tile:Tile,winter:boolean):string {
   const m=BASE[tile.terrain]??'grass';return winter?(WATER.has(m)?'winter_water':WINTER[m]??m):m;
 }
 export function terrainGroundFingerprint(tiles:readonly Tile[],winter:boolean):string {
-  return `${winter?1:0}|`+tiles.map(t=>`${t.pos.q},${t.pos.r}:${terrainMaterial(t,winter)}:${['forest','trees'].includes(t.terrain)?t.terrain:''}:${t.terrain==='airstrip'?1:0}:${t.hasBuilding&&!t.urbanKind&&!t.terrain.startsWith('urban_')&&!t.roads?.some(Boolean)?1:0}:${t.roads?.map(b=>b?1:0).join('')??''}:${t.bridgeEnds?.join(',')??''}`).join('|');
+  return `${winter?1:0}|`+tiles.map(t=>`${t.pos.q},${t.pos.r}:${terrainMaterial(t,winter)}:${['forest','trees'].includes(t.terrain)?t.terrain:''}:${t.terrain==='airstrip'?1:0}:${t.hasBuilding&&!t.urbanKind&&!t.terrain.startsWith('urban_')?1:0}:${t.roads?.map(b=>b?1:0).join('')??''}:${t.bridgeEnds?.join(',')??''}`).join('|');
 }
 /** Soft irregular bare-earth courtyard, normalized to the hex radius. */
 export function ruralYardCoverage(x:number,y:number):number {
@@ -52,12 +52,12 @@ function axialAt(x:number,y:number):[number,number] {
 function distance(x:number,y:number,t:GroundTile):number {
   let d=-Infinity;for(const n of NORMALS)d=Math.max(d,(x-t.x)*n[0]+(y-t.y)*n[1]);return d-SQ*GROUND_RADIUS/2;
 }
-function blur(input:Float32Array,width:number,height:number,radius:number):Float32Array {
+function* blurSteps(input:Float32Array,width:number,height:number,radius:number):Generator<void,Float32Array,void> {
   let src=input;
   for(let pass=0;pass<3;pass++) {
     const tmp=new Float32Array(src.length),out=new Float32Array(src.length),span=radius*2+1;
-    for(let y=0;y<height;y++){const row=y*width;let sum=0;for(let k=-radius;k<=radius;k++)sum+=src[row+clamp(k,0,width-1)];for(let x=0;x<width;x++){tmp[row+x]=sum/span;sum+=src[row+clamp(x+radius+1,0,width-1)]-src[row+clamp(x-radius,0,width-1)];}}
-    for(let x=0;x<width;x++){let sum=0;for(let k=-radius;k<=radius;k++)sum+=tmp[clamp(k,0,height-1)*width+x];for(let y=0;y<height;y++){out[y*width+x]=sum/span;sum+=tmp[clamp(y+radius+1,0,height-1)*width+x]-tmp[clamp(y-radius,0,height-1)*width+x];}}
+    for(let y=0;y<height;y++){if(y%8===0)yield;const row=y*width;let sum=0;for(let k=-radius;k<=radius;k++)sum+=src[row+clamp(k,0,width-1)];for(let x=0;x<width;x++){tmp[row+x]=sum/span;sum+=src[row+clamp(x+radius+1,0,width-1)]-src[row+clamp(x-radius,0,width-1)];}}
+    for(let x=0;x<width;x++){if(x%8===0)yield;let sum=0;for(let k=-radius;k<=radius;k++)sum+=tmp[clamp(k,0,height-1)*width+x];for(let y=0;y<height;y++){out[y*width+x]=sum/span;sum+=tmp[clamp(y+radius+1,0,height-1)*width+x]-tmp[clamp(y-radius,0,height-1)*width+x];}}
     src=out;
   }
   return src;
@@ -136,6 +136,8 @@ export class TerrainGroundRaster {
     const i=(reflected(y*factorY,m.height)*m.width+reflected(x*factorX,m.width))*3;
     return [m.pixels[i],m.pixels[i+1],m.pixels[i+2]];
   }
+  /** Decoded source art for GPU atlas upload; the runtime never calls the CPU rasterizer. */
+  getGpuMaterials(): Readonly<Record<string, Readonly<Material>>> { return this.materials; }
   chunkOrigins(tiles:readonly Tile[]):Array<{x:number;y:number}> {
     const chunks=new Map<string,{x:number;y:number}>();
     for(const t of tiles){const x=SQ*GROUND_RADIUS*(t.pos.q+t.pos.r/2),y=1.5*GROUND_RADIUS*t.pos.r;
@@ -143,15 +145,21 @@ export class TerrainGroundRaster {
     return [...chunks.values()];
   }
   renderChunk(tiles:readonly Tile[],winter:boolean,x:number,y:number,width=GROUND_CHUNK_SIZE,height=GROUND_CHUNK_SIZE,resolution=1,roadVariantOverride?:number):GroundChunk {
+    const job=this.renderChunkSteps(tiles,winter,x,y,width,height,resolution,roadVariantOverride);
+    let step=job.next();while(!step.done)step=job.next();return step.value;
+  }
+  /** Identical raster output, with cooperative pauses in every expensive phase. */
+  *renderChunkSteps(tiles:readonly Tile[],winter:boolean,x:number,y:number,width=GROUND_CHUNK_SIZE,height=GROUND_CHUNK_SIZE,resolution=1,roadVariantOverride?:number):Generator<void,GroundChunk,void> {
     const tw=width*resolution+2,th=height*resolution+2,fw=width+2+HALO*2,fh=height+2+HALO*2,ox=x-1-HALO,oy=y-1-HALO;
     const lut=new Map<string,GroundTile>();
     for(const t of tiles){const tx=SQ*GROUND_RADIUS*(t.pos.q+t.pos.r/2),ty=1.5*GROUND_RADIUS*t.pos.r;if(tx<ox-GROUND_RADIUS*2||tx>ox+fw+GROUND_RADIUS*2||ty<oy-GROUND_RADIUS*2||ty>oy+fh+GROUND_RADIUS*2)continue;
       const mudPatches=this.fieldBasedLand&&!winter&&t.terrain==='mud';
       const material=winter&&t.terrain==='forest'&&this.materials.winter_forest?'winter_forest':!winter&&t.terrain==='forest'&&this.materials.forest_floor?'forest_floor':mudPatches?'grass':terrainMaterial(t,winter);
-      lut.set(key(t.pos.q,t.pos.r),{q:t.pos.q,r:t.pos.r,x:tx,y:ty,material,roads:t.roads?.reduce((m,b,i)=>m|(b?1<<i:0),0)??0,roadFlags:t.roads??Array(6).fill(false),roadVariant:roadVariantOverride??europeanRoadVariantIndex(t.pos.q,t.pos.r),bridge:t.terrain==='water'&&t.bridgeEnds?t.bridgeEnds[0]%3:-1,runway:t.terrain==='airstrip',ruralYard:!!t.hasBuilding&&!t.urbanKind&&!t.terrain.startsWith('urban_')&&!t.roads?.some(Boolean),mudPatches});}
+      lut.set(key(t.pos.q,t.pos.r),{q:t.pos.q,r:t.pos.r,x:tx,y:ty,material,roads:t.roads?.reduce((m,b,i)=>m|(b?1<<i:0),0)??0,roadFlags:t.roads??Array(6).fill(false),roadVariant:roadVariantOverride??europeanRoadVariantIndex(t.pos.q,t.pos.r),bridge:t.terrain==='water'&&t.bridgeEnds?t.bridgeEnds[0]%3:-1,runway:t.terrain==='airstrip',ruralYard:!!t.hasBuilding&&!t.urbanKind&&!t.terrain.startsWith('urban_'),mudPatches});}
     const runwayAxis=(t:GroundTile)=>{let axis=0;for(let i=0;i<6;i++)if(t.roads&(1<<i)){axis=i;if(t.roads&(1<<((i+3)%6)))break;}return axis%3;};
     const runways=[...lut.values()].filter(t=>t.runway).map(t=>{
-      const axis=runwayAxis(t),n=NORMALS[(6-axis)%6],end=SQ*GROUND_RADIUS/2;
+      // Raster coordinates are Y-down: axial SE/SW point along positive Y.
+      const axis=runwayAxis(t),n=NORMALS[axis],end=SQ*GROUND_RADIUS/2;
       const connected=(sign:number)=>{
         const [q,r]=axialAt(t.x+n[0]*SQ*GROUND_RADIUS*sign,t.y+n[1]*SQ*GROUND_RADIUS*sign);
         const other=lut.get(key(q,r));return !!other?.runway&&runwayAxis(other)===axis;
@@ -159,15 +167,21 @@ export class TerrainGroundRaster {
       return {tile:t,n,min:connected(-1)?-end:-end*.60,max:connected(1)?end:end*.60};
     });
     const fields=new Map<string,Float32Array>();for(const t of lut.values())if(!fields.has(t.material))fields.set(t.material,new Float32Array(fw*fh));
-    for(let py=0;py<fh;py++)for(let px=0;px<fw;px++){
+    for(let py=0;py<fh;py++){
+      if(py%4===0)yield;
+      for(let px=0;px<fw;px++){
       const gx=ox+px+.5,gy=oy+py+.5,[q,r]=axialAt(gx,gy);let tile=lut.get(key(q,r));
       if(!tile){let best=Infinity;for(const [dq,dr]of AXES){const n=lut.get(key(q+dq,r+dr));if(n){const d=distance(gx,gy,n);if(d<best){best=d;tile=n;}}}}
       if(tile)fields.get(tile.material)![py*fw+px]=1;
     }
-    for(const [m,a]of fields)fields.set(m,blur(a,fw,fh,Math.round(GROUND_RADIUS*(winter?.18:.14))));
-    const ids=[...fields.keys()],arrays=[...fields.values()],weights=new Float64Array(ids.length),pixels=new Uint8Array(tw*th*4);
+    }
+    for(const [m,a]of fields)fields.set(m,yield* blurSteps(a,fw,fh,Math.round(GROUND_RADIUS*(winter?.18:.14))));
+    const ids=[...fields.keys()],arrays=[...fields.values()],weights=new Float64Array(ids.length),pixels=new Uint8Array(tw*th*4),waterMask=new Uint8Array(tw*th*4);
+    let hasWater=false;
     const sampleScale=60/GROUND_RADIUS;
-    for(let py=0;py<th;py++)for(let px=0;px<tw;px++) {
+    for(let py=0;py<th;py++){
+      yield;
+      for(let px=0;px<tw;px++) {
       const gx=x+(px-1+.5)/resolution,gy=y+(py-1+.5)/resolution,[q,r]=axialAt(gx,gy),tile=lut.get(key(q,r));if(!tile)continue;
       const wx=gx*sampleScale,wy=gy*sampleScale;
       const warp=GROUND_RADIUS*(winter?.11:.19);
@@ -194,6 +208,9 @@ export class TerrainGroundRaster {
           }
         }
       }
+      // Fade before the bank/ice fringe; the mask uses the same continuous field
+      // as the ground, including the padding shared by adjacent chunks.
+      let motion=smooth(.96,1,waterAlpha);
       const shoreline=water>.0001&&water<.9999;let color=[0,0,0];
       // Blend snow coverage before thresholding it. Thresholding each material
       // separately clipped the same snow patch differently on neighbouring tiles.
@@ -204,6 +221,10 @@ export class TerrainGroundRaster {
       for(let i=0;i<ids.length;i++){
         const mat=ids[i];let weight=weights[i]/sum;if(shoreline)weight=WATER.has(mat)?weight/water*waterAlpha:weight/(1-water)*(1-waterAlpha);if(weight<.00001)continue;
         let c=this.sample(mat,wx,wy);
+        if(WATER.has(mat)){
+          const a=this.sample(mat,wx-8,wy+5),b=this.sample(mat,wx+8,wy-5);
+          c=c.map((v,k)=>v*.70+(a[k]+b[k])*.15);
+        }
         if(winter&&!WATER.has(mat)){const snow=this.sample('snow',wx,wy);c=c.map((v,k)=>v+(snow[k]-v)*frost);}
         for(let k=0;k<3;k++)color[k]+=c[k]*weight;
       }
@@ -214,6 +235,7 @@ export class TerrainGroundRaster {
         for(let k=0;k<3;k++)color[k]=(color[k]+(sand[k]-color[k])*bank)*(1-dark)*(1-ice)+[168,190,194][k]*ice;
       }
       if(tile.ruralYard&&this.materials.rural_yard){
+        motion=0;
         const alpha=ruralYardCoverage((gx-tile.x)/GROUND_RADIUS,(gy-tile.y)/GROUND_RADIUS),earth=this.sample(winter&&this.materials.winter_yard?'winter_yard':'rural_yard',wx,wy);
         for(let k=0;k<3;k++)color[k]+=(earth[k]-color[k])*alpha;
       }
@@ -235,10 +257,13 @@ export class TerrainGroundRaster {
         runwayAlpha=Math.max(runwayAlpha,cross*along);
       }
       if(runwayAlpha>0){
+        motion*=1-runwayAlpha;
         const surface=this.sample('sand',wx,wy);
         for(let k=0;k<3;k++){const c=surface[k]*.25+[225,219,195][k]*.75;color[k]+=(c-color[k])*runwayAlpha;}
       } else if(tile.bridge>=0){
         const a=tile.bridge*Math.PI/3,dx=gx-tile.x,dy=gy-tile.y,u=dx*Math.cos(a)+dy*Math.sin(a),v=-dx*Math.sin(a)+dy*Math.cos(a),half=GROUND_RADIUS*.205;
+        // Extra margin prevents distorted samples pulling bridge rails into water.
+        if(Math.abs(u)<=SQ*GROUND_RADIUS/2+GROUND_RADIUS*.08+4)motion*=smooth(half+GROUND_RADIUS*.028+2,half+GROUND_RADIUS*.028+5,Math.abs(v));
         if(Math.abs(u)<=SQ*GROUND_RADIUS/2+GROUND_RADIUS*.08&&Math.abs(v)<=half+GROUND_RADIUS*.028){const rail=Math.abs(v)>half-GROUND_RADIUS*.027;let c=rail?[78,70,52]:this.sample('timber',u*sampleScale*2,v*sampleScale*2);if(!rail&&Math.abs(u%(GROUND_RADIUS*.13))<GROUND_RADIUS*.009)c=c.map(z=>z*.68);if(winter&&!rail){const snow=this.sample('snow',wx,wy);c=c.map((z,k)=>z+(snow[k]-z)*.22);}color=c;}
       } else if(!tile.runway) {
         const curved=this.curvedRoads&&(!winter||this.winterArtwork);
@@ -254,10 +279,23 @@ export class TerrainGroundRaster {
           const shoulder=snow?smooth(half*.85,half*1.12,d)*(1-smooth(half*1.25,GROUND_RADIUS*.36,d))*.8:0;
           const roadSnow=snow?.28+.50*smooth(half*.55,half,d):0;
           const tracks=curved?(1-smooth(GROUND_RADIUS*.008,GROUND_RADIUS*.030,Math.abs(d-GROUND_RADIUS*.075)))*.045:0;
+          motion*=1-alpha;
           for(let k=0;k<3;k++){let c=rural[k]+(urban[k]*.76-rural[k])*city;if(snow)c+=(snow[k]-c)*roadSnow;c*=1-edge-tracks;color[k]+=(c-color[k])*alpha;if(snow)color[k]+=(snow[k]-color[k])*shoulder;}}
       }
       const i=(py*tw+px)*4;for(let k=0;k<3;k++)pixels[i+k]=Math.round(clamp(color[k],0,255));pixels[i+3]=255;
+      let deep=0,shallow=0;
+      for(let j=0;j<ids.length;j++){if(ids[j]==='deep_water')deep+=weights[j]/sum;if(ids[j]==='shallow_water')shallow+=weights[j]/sum;}
+      // European winter art has strong baked highlights: use visible, slower
+      // moving ripples rather than the almost imperceptible generic ice setting.
+      const winterSpeed=this.winterArtwork?.50:.28;
+      waterMask[i]=Math.round(motion*255);waterMask[i+1]=Math.round((winter?winterSpeed:.72+shallow*.18-deep*.12)*255);
+      waterMask[i+2]=Math.round((winter&&this.winterArtwork?.65:.5+deep*.35)*255);
+      // Alpha is an effect parameter, not coverage (coverage lives in red).
+      // Winter's dense baked pale patches need stronger moving highlights.
+      waterMask[i+3]=winter?128:255;
+      if(waterMask[i]>0)hasWater=true;
     }
-    return {x,y,width,height,textureWidth:tw,textureHeight:th,pixels};
+    }
+    return {x,y,width,height,textureWidth:tw,textureHeight:th,pixels,waterMask,hasWater};
   }
 }

@@ -1,0 +1,82 @@
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: fog-vs:vert
+      frag: fog-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.001 }
+        maskBounds: { value: [0, 0, 1, 1] }
+        fogParams: { value: [1, 0.055, 0.25, 0.75] }
+}%
+CCProgram fog-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+  out vec4 color;
+  out vec2 uv0;
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1.0);
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+    #if USE_PIXEL_ALIGNMENT
+      pos = cc_matView * pos;
+      pos.xyz = floor(pos.xyz);
+      pos = cc_matProj * pos;
+    #else
+      pos = cc_matViewProj * pos;
+    #endif
+    uv0 = a_texCoord;
+    color = a_color;
+    return pos;
+  }
+}%
+CCProgram fog-fs %{
+  precision highp float;
+  #include <builtin/internal/alpha-test>
+  in vec4 color;
+  in vec2 uv0;
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  uniform FogParams { vec4 maskBounds; vec4 fogParams; };
+
+  float fogHash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+  float fogNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(fogHash(i), fogHash(i + vec2(1.0, 0.0)), f.x),
+      mix(fogHash(i + vec2(0.0, 1.0)), fogHash(i + vec2(1.0)), f.x), f.y);
+  }
+  vec4 frag () {
+    vec4 mask = texture(cc_spriteTexture, uv0);
+    // Coordinate system matches the CPU field (top-to-bottom texture rows).
+    // No clock or screen coordinates: moving the camera cannot move the noise.
+    vec2 p = vec2(maskBounds.x + uv0.x * maskBounds.z, maskBounds.y - uv0.y * maskBounds.w);
+    float noise = (fogNoise(p * 0.85) - 0.5) * 2.0 * fogParams.y;
+    float a = smoothstep(fogParams.z, fogParams.w, mask.r + noise);
+    float b = smoothstep(fogParams.z, fogParams.w, mask.g + noise);
+    // Shape each endpoint before interpolation, retaining continuous ring fades.
+    float opacity = mix(a, b, fogParams.x) * mask.b;
+    vec4 o = vec4(color.rgb, color.a * opacity);
+    ALPHA_TEST(o);
+    return o;
+  }
+}%

@@ -30,7 +30,7 @@ async function main() {
     fs.writeFileSync(dest + '.meta', JSON.stringify(meta, null, 2) + '\n');
   }
   add('data/tank_visuals.csv', 'jagdtiger', 'jagdpanther', {
-    kind: 'jagdpanther', displayName: 'Hetzer', topSpritePath: 'textures/units/jagdpanther_top/spriteFrame', destroyedSpritePath: 'textures/units/jagdpanther_top_destroyed/spriteFrame',
+    kind: 'jagdpanther', displayName: '追猎者', topSpritePath: 'textures/units/jagdpanther_top/spriteFrame', destroyedSpritePath: 'textures/units/jagdpanther_top_destroyed/spriteFrame',
     fitScale: 1.02, offsetForward: 0.12, topTrimW: width, topTrimH: height,
     muzzleSpriteX: geometry.muzzle[0], muzzleSpriteY: geometry.muzzle[1], commanderHatchSpriteX: geometry.hatch[0], commanderHatchSpriteY: geometry.hatch[1], commanderHatchScale: 16,
     destroyedOffsetForward: 0, destroyedOffsetRight: 0, destroyedFitScale: 1,
@@ -38,7 +38,7 @@ async function main() {
     notes: 'Direct simplified recolor of user overhead plan; reference proportions; fully covered side tracks; offset gun axis; common normal and wreck canvas'
   });
   add('data/units.csv', 'panther', 'jagdpanther', {
-    unitKind: 'jagdpanther', displayName: '追猎者坦克歼击车', size: 3, mobility: 3,
+    unitKind: 'jagdpanther', displayName: '追猎者', size: 3, mobility: 3,
     armorFront: 14, armorFrontSide: 11, armorRearSide: 9, armorRear: 8,
     visionType: 'fixed', turretTraverseSpeed: 0, penetration: 8, highExplosivePower: 3, firepower: 4,
     crewMembers: '1|2|3|4|5', crewRoleAssignments: '',
@@ -58,7 +58,7 @@ async function main() {
   text = fs.readFileSync(menu, 'utf8');
   if (!text.includes("jagdpanther: '追猎者'")) text = text.replace("jagdtiger: '猎虎',", "jagdtiger: '猎虎',\n      jagdpanther: '追猎者',");
   fs.writeFileSync(menu, text);
-  if (!fs.readFileSync('data/lang.csv', 'utf8').includes('unit.name.jagdpanther,')) fs.appendFileSync('data/lang.csv', '\nunit.name.jagdpanther,追猎者坦克歼击车,Hetzer\n');
+  if (!fs.readFileSync('data/lang.csv', 'utf8').includes('unit.name.jagdpanther,')) fs.appendFileSync('data/lang.csv', '\nunit.name.jagdpanther,追猎者,Hetzer\n');
   const imgs = await Promise.all(['top', 'top_destroyed'].map(s => sharp(`assets/resources/textures/units/jagdpanther_${s}.png`).toBuffer()));
   await sharp({create: {width: width*2+30, height: height+20, channels:4, background:'#4b5156'}}).composite(imgs.map((input,i) => ({input,left:5+i*(width+20),top:10}))).png().toFile(`${source}/game-size-preview.png`);
   await sharp(`${source}/game-size-preview.png`).resize((width*2+30)*3,(height+20)*3,{kernel:'nearest'}).toFile(`${source}/game-size-preview-3x.png`);
