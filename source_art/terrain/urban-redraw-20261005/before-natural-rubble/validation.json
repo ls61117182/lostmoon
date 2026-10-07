@@ -1,0 +1,475 @@
+{
+  "images": [
+    {
+      "file": "urban_dense_indestructible_apartment_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.543,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1347,
+        "left": 48,
+        "top": 52,
+        "width": 1082,
+        "height": 1295,
+        "scale": 0.14180919019163404,
+        "offsetX": 34.673419147949744,
+        "offsetY": 43.141252833299,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_factory_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.42,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 54,
+        "width": 1153,
+        "height": 1270,
+        "scale": 0.13918917552357743,
+        "offsetX": 8.411053146520786,
+        "offsetY": 46.532324774742875,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_office_l_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.53,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1167,
+        "sourceHeight": 1347,
+        "left": 31,
+        "top": 30,
+        "width": 1122,
+        "height": 1279,
+        "scale": 0.14334140435835355,
+        "offsetX": 18.149485472154982,
+        "offsetY": 26.274737691686855,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_warehouse_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.465,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1347,
+        "left": 41,
+        "top": 13,
+        "width": 1118,
+        "height": 1334,
+        "scale": 0.13620373164975336,
+        "offsetX": 27.307063267840626,
+        "offsetY": 38.81232404296692,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_market_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.506,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1167,
+        "sourceHeight": 1347,
+        "left": 16,
+        "top": 22,
+        "width": 1138,
+        "height": 1295,
+        "scale": 0.14499333709054713,
+        "offsetX": 22.261812179693155,
+        "offsetY": 26.75546332239529,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_theater_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.467,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1169,
+        "sourceHeight": 1346,
+        "left": 13,
+        "top": 31,
+        "width": 1156,
+        "height": 1293,
+        "scale": 0.13592597347448673,
+        "offsetX": 16.68011746871945,
+        "offsetY": 45.782542143569586,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_post_office_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.487,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 15,
+        "width": 1168,
+        "height": 1309,
+        "scale": 0.14197448090193612,
+        "offsetX": 20.484613371223418,
+        "offsetY": 28.738733534817992,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_indestructible_waterworks_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.607,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1169,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 0,
+        "width": 1153,
+        "height": 1332,
+        "scale": 0.15690923910875004,
+        "offsetX": 9.417203771681358,
+        "offsetY": 19.227264177292398,
+        "margin": 4,
+        "states": 1
+      }
+    },
+    {
+      "file": "urban_dense_destructible_rowhouses_l_intact_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.405,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 9,
+        "width": 1166,
+        "height": 1337,
+        "scale": 0.12725121112384896,
+        "offsetX": 36.812543914796066,
+        "offsetY": 39.19069191228133,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_rowhouses_l_damaged_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.411,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 9,
+        "width": 1166,
+        "height": 1337,
+        "scale": 0.12725121112384896,
+        "offsetX": 36.812543914796066,
+        "offsetY": 39.19069191228133,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_rowhouses_l_rubble_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.419,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 9,
+        "width": 1166,
+        "height": 1337,
+        "scale": 0.12725121112384896,
+        "offsetX": 36.812543914796066,
+        "offsetY": 39.19069191228133,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_courtyard_intact_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.459,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1312,
+        "sourceHeight": 1199,
+        "left": 0,
+        "top": 0,
+        "width": 1287,
+        "height": 1199,
+        "scale": 0.1430129983479318,
+        "offsetX": 20.73198310526479,
+        "offsetY": 42.31266689525472,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_courtyard_damaged_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.466,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1312,
+        "sourceHeight": 1199,
+        "left": 0,
+        "top": 0,
+        "width": 1287,
+        "height": 1199,
+        "scale": 0.1430129983479318,
+        "offsetX": 20.73198310526479,
+        "offsetY": 42.31266689525472,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_courtyard_rubble_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.459,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1312,
+        "sourceHeight": 1199,
+        "left": 0,
+        "top": 0,
+        "width": 1287,
+        "height": 1199,
+        "scale": 0.1430129983479318,
+        "offsetX": 20.73198310526479,
+        "offsetY": 42.31266689525472,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_workshop_intact_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.382,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 4,
+        "width": 1168,
+        "height": 1342,
+        "scale": 0.1268214925758197,
+        "offsetX": 43.354604811550686,
+        "offsetY": 42.90277848162497,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_workshop_damaged_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.382,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 4,
+        "width": 1168,
+        "height": 1342,
+        "scale": 0.1268214925758197,
+        "offsetX": 43.354604811550686,
+        "offsetY": 42.90277848162497,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_workshop_rubble_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.384,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 4,
+        "width": 1168,
+        "height": 1342,
+        "scale": 0.1268214925758197,
+        "offsetX": 43.354604811550686,
+        "offsetY": 42.90277848162497,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_intact_topdown_v2.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.38,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 0,
+        "width": 1168,
+        "height": 1346,
+        "scale": 0.13603747850323195,
+        "offsetX": 22.067624014113733,
+        "offsetY": 37.304058194469164,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_damaged_topdown_v2.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.383,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 0,
+        "width": 1168,
+        "height": 1346,
+        "scale": 0.13603747850323195,
+        "offsetX": 22.067624014113733,
+        "offsetY": 37.304058194469164,
+        "margin": 4,
+        "states": 3
+      }
+    },
+    {
+      "file": "urban_dense_destructible_block_rubble_v1.png",
+      "dimensions": [
+        222,
+        256
+      ],
+      "coverage": 0.405,
+      "outsideHexPixels": 0,
+      "visiblePixelsDiscarded": 0,
+      "registration": {
+        "sourceWidth": 1168,
+        "sourceHeight": 1346,
+        "left": 0,
+        "top": 0,
+        "width": 1168,
+        "height": 1346,
+        "scale": 0.13603747850323195,
+        "offsetX": 22.067624014113733,
+        "offsetY": 37.304058194469164,
+        "margin": 4,
+        "states": 3
+      }
+    }
+  ],
+  "aliases": {
+    "urban_dense_indestructible.png": "urban_dense_indestructible_apartment_v1.png",
+    "urban_dense_indestructible_topdown_v2.png": "urban_dense_indestructible_apartment_v1.png",
+    "urban_dense_destructible_intact.png": "urban_dense_destructible_intact_topdown_v2.png",
+    "urban_dense_destructible_damaged.png": "urban_dense_destructible_damaged_topdown_v2.png",
+    "urban_dense_rubble.png": "urban_dense_destructible_block_rubble_v1.png",
+    "urban_dense_rubble_topdown_v2.png": "urban_dense_destructible_block_rubble_v1.png"
+  },
+  "verifiedRoadMouths": 78,
+  "uuidPolicy": "Existing .meta unchanged; byte comparison passed",
+  "tool": "built-in image_gen"
+}
