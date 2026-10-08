@@ -938,4 +938,5 @@ export const LANG_DB: Record<string, LangEntry> = {
   'unit.name.jagdtiger': { zh: "猎虎", en: "Jagdtiger" },
   'unit.name.elefant': { zh: "象式坦克歼击车", en: "Elefant" },
   'unit.name.jagdpanther': { zh: "追猎者", en: "Hetzer" },
+  'unit.name.panzer4_f': { zh: "4号F", en: "Panzer IV Ausf. F1" },
 };

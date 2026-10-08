@@ -1,6 +1,6 @@
 # GPU 连续地面与分块缓存
 
-运行时已取消预制衔接层。旧图片、导入元数据和实现保存在 `source_art/terrain/retired-runtime-transitions/`，不会进入 Cocos 的 `assets/resources` 包。旧安装工具也改为输出到这个归档目录，避免重新引入资源。基础地形素材继续复用 `redesign_v3/materials.json`。
+运行时已取消预制衔接层。2026-10-08 已删除旧源图与归档运行时图片（含预览图共 3225 张 PNG），释放约 132.27 MiB，并清理旧衔接匹配器、渲染器、烘焙/安装/预览工具及其专用测试。旧资源清单、导入元数据和历史说明也已删除；清理记录见 `source_art/terrain/transition-images-removed.json`。基础地形素材继续复用 `redesign_v3/materials.json`，当前 GPU 合成与 CPU 参考算法的测试继续保留。
 
 ## 渲染流程
 

@@ -1,0 +1,55 @@
+{
+  "$schema": "./tank-art-manifest.schema.json",
+  "schemaVersion": 1,
+  "kind": "panzer4_f",
+  "notes": "User turret raster retained except approved forward socket redraw. Gun root and curved mantlet refined against newest detail reference; approximate short-gun placement retained. Grey hull palette; uniform final scale 0.146.",
+  "inputs": {
+    "hull": {
+      "path": "assets/resources/textures/units/panzer4_top_hull.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/panzer4_f/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "assets/resources/textures/units/panzer4_top_destroyed.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 1,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      79,
+      38
+    ],
+    "turretPivot": [
+      67.598,
+      33.58
+    ],
+    "muzzle": [
+      5.548,
+      34.309999999999995
+    ],
+    "commanderHatch": [
+      76.35799999999999,
+      33.58
+    ]
+  }
+}

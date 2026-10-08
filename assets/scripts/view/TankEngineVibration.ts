@@ -28,6 +28,7 @@ export function unitKindHasEngineVibration(kind: UnitKind): boolean {
     || kind === 'maus'
     || kind === 'panther'
     || kind === 'panzer4'
+    || kind === 'panzer4_f'
     || kind === 'stug3'
     || kind === 'sturmtiger'
     || kind === 'jagdtiger'

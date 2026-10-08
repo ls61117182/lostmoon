@@ -3081,6 +3081,7 @@ export class MainMenuScene extends Component {
       tigerking: '虎王',
       panther: '豹式',
       panzer4: '4号G',
+      panzer4_f: '4号F',
       stug3: '3号突击炮G',
       sturmtiger: '突击虎',
       jagdtiger: '猎虎',
@@ -5285,6 +5286,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'maus': return '鼠式';
     case 'panther': return '豹式';
     case 'panzer4': return '4号G';
+    case 'panzer4_f': return '4号F';
     case 'panzer3': return '3号';
     case 'panzer3_m': return '3号M';
     case 'panzer3_m_no_schurzen': return '3号M';

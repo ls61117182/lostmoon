@@ -273,7 +273,10 @@ export function applyUrbanStructureDamage(tile: Tile, highExplosivePower: number
   const damage = urbanStructureDamage(highExplosivePower);
   const before = Math.max(0, Math.min(2, tile.urbanStructure ?? 2));
   tile.urbanStructure = Math.max(0, before - damage);
-  if (tile.urbanStructure === 0) tile.terrain = 'urban_rubble';
+  if (tile.urbanStructure === 0) {
+    tile.terrain = 'urban_rubble';
+    delete tile.hasBuilding;
+  }
   return before - tile.urbanStructure;
 }
 

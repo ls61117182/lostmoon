@@ -36,7 +36,7 @@ import {
 } from './HexGrid';
 import { diagonalMainGunDirectionForHex, diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
 import { markAmbushTargeted } from './Ambush';
-import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isPlayerControlled, isSameSide, isTankUnit, neutralizeUncrewedTank, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
+import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isPlayerControlled, isSameSide, isTankUnit, neutralizeUncrewedTank, tileHasBuilding, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 import { unitLevelHitThresholdModifier } from './UnitLevel';
 
@@ -474,7 +474,7 @@ export interface HitBreakdown {
    * 详见 `HexMap.countHedgesAlong` 的实现注释与 GDD §3.4 Step 1。
    */
   hedges: number;
-  building: number;     // 0 或 1
+  building: number;     // 0、1；城市建筑内的步兵受机枪攻击时为 3
   smoke: number;        // 经典：目标在烟中 +1；硬核：攻击者或目标在烟中 +2
   concealed: number;    // 0 或 2 —— 目标隐蔽（§3.5）
   threshold: number;    // base modifiers + theater/arc modifiers + actionModifier
@@ -491,9 +491,11 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const distance = hexDistance(attacker.pos, target.pos);
   const hedges = map.countHedgesAlong(attacker.pos, target.pos);
   const targetTile = map.get(target.pos);
-  const building = targetTile?.hasBuilding
-    || targetTile?.terrain === 'urban_indestructible'
-    || targetTile?.terrain === 'urban_destructible' ? 1 : 0;
+  const urbanBuilding = targetTile?.terrain === 'urban_indestructible'
+    || targetTile?.terrain === 'urban_destructible';
+  const infantryMGTarget = ctx.attackKind === 'mg'
+    && (isFootUnit(target) || (ctx.atGunCrewTargets === true && isControlledATGun(target)));
+  const building = tileHasBuilding(targetTile) ? (urbanBuilding && infantryMGTarget ? 3 : 1) : 0;
   const size = isBunkerShootingPortAttack(ctx)
     ? (target.stats.shootingPortHitThreshold ?? 10)
     : target.stats.size;
@@ -762,8 +764,7 @@ export function infantryHighExplosiveCoverSource(
   ctx: AttackContext,
 ): InfantryHighExplosiveCoverSource | undefined {
   const tile = ctx.map.get(ctx.target.pos);
-  if (tile?.hasBuilding || tile?.terrain === 'urban_destructible'
-    || tile?.terrain === 'urban_indestructible') return 'building';
+  if (tileHasBuilding(tile)) return 'building';
   if (tile?.terrain === 'forest') return 'forest';
   if (tile?.terrain === 'trees') return 'trees';
   return ctx.units?.some(unit => unit !== ctx.target

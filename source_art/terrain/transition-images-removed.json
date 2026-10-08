@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "removedOn": "2026-10-08",
+  "pngCount": 3225,
+  "bytes": 138692209,
+  "directories": [
+    "source_art/terrain/prefab-transitions-v1",
+    "source_art/terrain/retired-runtime-transitions"
+  ],
+  "removedTools": [
+    "tools/bakeCommonTerrainTransitions.cjs",
+    "tools/installCommonTerrainTransitions.cjs",
+    "tools/previewCommonTerrainTransitions.cjs"
+  ],
+  "removedTests": [
+    "tests/CommonTerrainTransitions.test.js",
+    "tests/TerrainTransitionRuntime.test.js",
+    "tests/TerrainTransitionRenderer.test.js"
+  ],
+  "reason": "GPU terrain replaces prefab transitions; archived matcher, renderer, manifests, metadata, legacy tools and dedicated tests are removed."
+}

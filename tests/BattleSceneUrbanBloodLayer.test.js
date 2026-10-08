@@ -12,7 +12,7 @@ assert.match(source,
   /urbanBuildingSpritePoolNext = 0;[\s\S]*?urbanBuildingSpritePool[\s\S]*?node\.active = false/,
   'the city-building sprite pool must reset on every map redraw');
 assert.match(source,
-  /urbanBuildingSpritePath\(t\)[\s\S]*?drawUrbanBuildingSpriteFrame\(c\.x, c\.y, this\.hexSize, frame, urbanBuildingSpriteScale\(t\)\)/,
+  /urbanBuildingSpritePath\(t\)[\s\S]*?drawUrbanBuildingSpriteFrame\(c\.x, c\.y, this\.hexSize, frame, urbanBuildingSpriteScale\(t\), urbanBuildingState\(t\) === 'rubble'\)/,
   'city buildings must use the dedicated layer instead of the ground terrain sprite pool');
 
 console.log('BattleScene urban building/blood layer tests passed');

@@ -337,6 +337,7 @@ import {
   roadSpriteTransform,
   urbanBuildingSpritePath,
   urbanBuildingSpriteScale,
+  urbanBuildingState,
   urbanRoadSpriteTransform,
 } from '../core/UrbanTerrain';
 import {
@@ -1829,6 +1830,8 @@ export class BattleScene extends Component {
   private bridgeSpritePoolNext = 0;
   private urbanBuildingSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private urbanBuildingSpritePoolNext = 0;
+  private urbanRubbleSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private urbanRubbleSpritePoolNext = 0;
   private ruralLayoutCache = new Map<string, RuralBuilding[]>();
   private ruralPropCache = new Map<string, RuralProp[]>();
   /** Pause map painting until the terrain texture batch has fully settled. */
@@ -2619,6 +2622,13 @@ export class BattleScene extends Component {
     // City building sprites need their own compositing layer. The generic terrain
     // sprite pool belongs to TerrainSprites below MapGraphics, which would put
     // persistent infantry blood decals above the buildings.
+    // Rubble stays above ground decals and below both infantry and tanks.
+    const urbanRubbleLayerNode = new Node('UrbanRubbleSprites');
+    urbanRubbleLayerNode.layer = this.node.layer;
+    urbanRubbleLayerNode.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(urbanRubbleLayerNode);
+    this.sceneryPoolParents.set(this.urbanRubbleSpritePool, urbanRubbleLayerNode);
+
     const urbanBuildingLayerNode = new Node('UrbanBuildingSprites');
     this.sceneryShadows = new ObjectShadowRenderer(gNode, 'SceneryGroundShadows');
     urbanBuildingLayerNode.layer = this.node.layer;
@@ -5419,6 +5429,8 @@ export class BattleScene extends Component {
     for (const { node } of this.bridgeSpritePool) node.active = false;
     this.urbanBuildingSpritePoolNext = 0;
     for (const { node } of this.urbanBuildingSpritePool) node.active = false;
+    this.urbanRubbleSpritePoolNext = 0;
+    for (const { node } of this.urbanRubbleSpritePool) node.active = false;
     this.foliageSpritePoolNext = 0;
     for (const { node } of this.foliageSpritePool) node.active = false;
     this.enemyTopPoolNext = 0;
@@ -5595,7 +5607,7 @@ export class BattleScene extends Component {
         const frame = path ? this.urbanOverlaySpriteFrames[path] : null;
         if (frame) {
           const c = this.project(t.pos.q, t.pos.r);
-          this.drawUrbanBuildingSpriteFrame(c.x, c.y, this.hexSize, frame, urbanBuildingSpriteScale(t));
+          this.drawUrbanBuildingSpriteFrame(c.x, c.y, this.hexSize, frame, urbanBuildingSpriteScale(t), urbanBuildingState(t) === 'rubble');
         }
         continue;
       }
@@ -5689,6 +5701,7 @@ export class BattleScene extends Component {
       }
     }
     this.g = g;
+    // Only standing buildings occlude units; rubble is below their bodies.
     this.unitOcclusion?.sync(this.silhouetteSources, [
       ...this.urbanBuildingSpritePool.map(slot => slot.sprite),
       ...this.foliageSpritePool.map(slot => slot.sprite),
@@ -5732,6 +5745,9 @@ export class BattleScene extends Component {
         const groundProp = sprite.spriteFrame === this.redesignObjectFrames.rural_hay
           || sprite.spriteFrame === this.redesignObjectFrames.rural_well;
         scenery.draw(sprite, groundProp ? 'groundProp' : 'building', this.hexSize);
+      }
+      for (let i = 0; i < this.urbanRubbleSpritePoolNext; i++) {
+        scenery.draw(this.urbanRubbleSpritePool[i].sprite, 'building', this.hexSize);
       }
       for (let i = 0; i < this.foliageSpritePoolNext; i++) {
         scenery.draw(this.foliageSpritePool[i].sprite, 'tree', this.hexSize);
@@ -13198,6 +13214,7 @@ export class BattleScene extends Component {
           offsetRight: PANZER4_SPLIT_VISUAL_CONFIG.hullOffsetRight,
         };
       case 'panzer3_m':
+      case 'panzer4_f':
       case 'panzer3_m_no_schurzen':
       case 'panzer3_n':
       case 'panzer3_n_schurzen': {
@@ -22362,10 +22379,14 @@ export class BattleScene extends Component {
   }
 
   private drawUrbanBuildingSpriteFrame(
-    cx: number, cy: number, size: number, frame: SpriteFrame, scale = 1,
+    cx: number, cy: number, size: number, frame: SpriteFrame, scale = 1, rubble = false,
   ): boolean {
-    if (!this.ensureScenerySlot(this.urbanBuildingSpritePool, this.urbanBuildingSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL * 3)) return false;
-    const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
+    const pool = rubble ? this.urbanRubbleSpritePool : this.urbanBuildingSpritePool;
+    const index = rubble ? this.urbanRubbleSpritePoolNext : this.urbanBuildingSpritePoolNext;
+    if (!this.ensureScenerySlot(pool, index, BattleScene.TERRAIN_SPRITE_POOL * 3)) return false;
+    const slot = pool[index];
+    if (rubble) this.urbanRubbleSpritePoolNext++;
+    else this.urbanBuildingSpritePoolNext++;
     slot.sprite.spriteFrame = frame;
     const ut = slot.node.getComponent(UITransform);
     if (ut) ut.setContentSize(size * Math.sqrt(3) * scale, size * 2.0 * scale);

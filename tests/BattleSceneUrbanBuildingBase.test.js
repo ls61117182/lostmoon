@@ -9,7 +9,7 @@ for (const terrain of ['urban_indestructible', 'urban_destructible', 'urban_rubb
     `${terrain} must use the same tile base as urban roads`);
 }
 assert.match(source,
-  /drawUrbanBuildingSpriteFrame\(c\.x, c\.y, this\.hexSize, frame, urbanBuildingSpriteScale\(t\)\)/,
+  /drawUrbanBuildingSpriteFrame\(c\.x, c\.y, this\.hexSize, frame, urbanBuildingSpriteScale\(t\), urbanBuildingState\(t\) === 'rubble'\)/,
   'battle-map building sprites must use their per-variant scale');
 assert.match(source,
   /const scale = urbanBuildingSpriteScale\(tile\);\s*ut\.setContentSize\(hexR \* Math\.sqrt\(3\) \* scale, hexR \* 2 \* scale\)/,

@@ -118,3 +118,51 @@ test('city art enlarges complete silhouettes consistently across destruction sta
   }
   assert.equal(urbanBuildingSpriteScale({ ...tile, urbanKind: 'indestructible', urbanVariant: 'factory' }), 1.35);
 });
+
+
+test('city MG cover is +3 and rubble removes cover for infantry and tanks', () => {
+  const { hitBreakdown, mgHitBreakdown } = require('../assets/scripts/core/Combat.ts');
+  const map = new HexMap(3, 1);
+  const tile = { pos: { q: 1, r: 0 }, terrain: 'urban_destructible', urbanKind: 'destructible', urbanStructure: 2, hasBuilding: true };
+  map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
+  map.set(tile);
+  const attacker = { kind: 'sherman', faction: 'usa', pos: { q: 0, r: 0 }, facing: 0, stats: { size: 4 } };
+  const infantry = { kind: 'infantry', faction: 'german', pos: tile.pos, facing: null, stats: { size: 2 } };
+  const ctx = { attacker, target: infantry, map };
+  for (const structure of [2, 1]) {
+    tile.urbanStructure = structure;
+    assert.equal(mgHitBreakdown(ctx).building, 3);
+    assert.equal(hitBreakdown(ctx).building, 1, 'main-gun cover stays +1');
+  }
+  const coveredThreshold = mgHitBreakdown(ctx).threshold;
+  applyUrbanStructureDamage(tile, 2);
+  assert.equal(tile.hasBuilding, undefined);
+  assert.equal(mgHitBreakdown(ctx).building, 0);
+  assert.equal(mgHitBreakdown(ctx).threshold, coveredThreshold - 3);
+  tile.hasBuilding = true; // Legacy or inconsistent tile flags must not revive cover.
+  assert.equal(mgHitBreakdown(ctx).building, 0);
+  assert.equal(hitBreakdown(ctx).building, 0);
+  assert.equal(hitBreakdown({ ...ctx, target: { ...infantry, kind: 'panzer_iv' } }).building, 0);
+  tile.terrain = 'urban_indestructible'; tile.urbanKind = 'indestructible';
+  assert.equal(mgHitBreakdown(ctx).building, 3);
+  tile.terrain = 'field'; delete tile.urbanKind;
+  assert.equal(mgHitBreakdown(ctx).building, 1, 'rural building cover stays +1');
+  delete tile.hasBuilding;
+  assert.equal(mgHitBreakdown(ctx).building, 0);
+});
+
+test('destroying a city building opens sight through its rubble, including legacy flags', () => {
+  const { computeUnitVisibleHexes } = require('../assets/scripts/core/FogOfWar.ts');
+  const map = new HexMap(3, 1);
+  const start = { q: 0, r: 0 }, end = { q: 2, r: 0 };
+  const tile = { pos: { q: 1, r: 0 }, terrain: 'urban_destructible', urbanKind: 'destructible', urbanStructure: 2, hasBuilding: true };
+  map.set({ pos: start, terrain: 'field' }); map.set(tile); map.set({ pos: end, terrain: 'field' });
+  const observer = { kind: 'infantry', faction: 'usa', pos: start, facing: null, stats: { visionType: 'infantry' } };
+  assert.equal(map.hasLineOfSight(start, end), false);
+  assert.equal(computeUnitVisibleHexes(map, observer).has(HexMap.keyOf(end)), false);
+  applyUrbanStructureDamage(tile, 4);
+  tile.hasBuilding = true;
+  assert.equal(map.lineOfSightBlockedByTile(tile), false);
+  assert.equal(map.hasLineOfSight(start, end), true);
+  assert.equal(computeUnitVisibleHexes(map, observer).has(HexMap.keyOf(end)), true);
+});

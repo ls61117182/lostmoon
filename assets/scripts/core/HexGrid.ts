@@ -12,7 +12,7 @@
  *           SW(2)  SE(1)
  */
 
-import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBridge } from './types';
+import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBuilding, tileHasBridge } from './types';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -426,9 +426,8 @@ export class HexMap {
    * 建筑在起止格不调用本方法故不挡视线（含：建筑格内的单位可作为视线起点向外射击）。
    */
   lineOfSightBlockedByTile(t: Tile): boolean {
-    if (t.terrain === 'forest' || t.terrain === 'rocky'
-      || t.terrain === 'urban_indestructible' || t.terrain === 'urban_destructible') return true;
-    if (t.hasBuilding) return true;
+    if (t.terrain === 'forest' || t.terrain === 'rocky') return true;
+    if (tileHasBuilding(t)) return true;
     return false;
   }
 

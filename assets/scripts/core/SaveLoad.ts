@@ -521,6 +521,7 @@ export function applySave(
     if (structure === undefined) continue;
     tile.urbanStructure = Math.max(0, Math.min(2, structure));
     tile.terrain = tile.urbanStructure === 0 ? 'urban_rubble' : 'urban_destructible';
+    if (tile.urbanStructure === 0) delete tile.hasBuilding;
   }
   mission.smokeHexOwners.clear();
   for (const key of save.smokeHexes ?? []) {

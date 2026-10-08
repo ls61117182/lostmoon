@@ -109,6 +109,14 @@ export function tileForbidsConcealment(tile: Tile | undefined | null): boolean {
     || tileHasBridge(tile);
 }
 
+/** Standing buildings provide cover and block sight; city rubble never does. */
+export function tileHasBuilding(tile: Tile | undefined | null): boolean {
+  if (!tile || tile.terrain === 'urban_rubble'
+    || (tile.urbanKind === 'destructible' && (tile.urbanStructure ?? 2) <= 0)) return false;
+  return !!tile.hasBuilding || tile.terrain === 'urban_indestructible'
+    || tile.terrain === 'urban_destructible';
+}
+
 /**
  * 计算掷骰 / 移动力使用的「等效地形」：
  * - 水域 + 桥梁 → 视为公路（GDD §3.2「骰子规则与公路相同」）；
@@ -167,6 +175,7 @@ export type UnitKind =
   | 'maus'
   | 'panther'
   | 'panzer4'
+  | 'panzer4_f'
   | 'stug3'
   | 'sturmtiger'
   | 'jagdtiger'
@@ -291,6 +300,7 @@ export function isTankKind(kind: UnitKind): boolean {
     || kind === 'maus'
     || kind === 'panther'
     || kind === 'panzer4'
+    || kind === 'panzer4_f'
     || kind === 'stug3'
     || kind === 'sturmtiger'
     || kind === 'jagdtiger'
