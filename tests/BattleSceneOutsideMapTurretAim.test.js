@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
 
+global.GameSession = { gameMode: 'hardcore' };
+
 const source = fs.readFileSync(require('node:path').join(__dirname, '../assets/scripts/view/BattleScene.ts'), 'utf8');
 const start = source.indexOf('  private outsideMapTurretAimDirection(');
 const end = source.indexOf('\n  private ', start + 10);

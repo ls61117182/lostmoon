@@ -7,7 +7,7 @@ const source = fs.readFileSync(path.join(__dirname, '../assets/scripts/view/Batt
 const ast = ts.createSourceFile('BattleScene.ts', source, ts.ScriptTarget.Latest, true);
 const sceneClass = ast.statements.find(n => ts.isClassDeclaration(n) && n.name?.text === 'BattleScene');
 const method = name => sceneClass.members.find(n => ts.isMethodDeclaration(n) && n.name.getText(ast) === name);
-const names = ['splitTankTurretPivot', 'turretVisualScreenAngle', 'splitTankMuzzlePosition',
+const names = ['turretTraverseSpeedFor', 'splitTankTurretPivot', 'turretVisualScreenAngle', 'splitTankMuzzlePosition',
   'topDownForwardVec', 'targetScreenAngle', 'beginTurretAimAnim', 'startShermanTurretAimDirection',
   'startEnemyTurretAim', 'currentShermanTurretLerp', 'currentEnemyTurretLerp', 'currentTurretFacingFor'];
 const tick = method('update').body.statements.find(n => ts.isIfStatement(n)
@@ -22,6 +22,9 @@ const geometry = { topTrim: { x: 0, y: 0, w: 100, h: 50 }, turretTrim: { w: 50, 
   pivot: { bodyX: 40, bodyY: 20, spriteX: 40, spriteY: 15 }, muzzle: { spriteX: 0, spriteY: 15 } };
 let motorStarts = 0;
 const deps = {
+  clearLockedFire: u => { u.lockedFireTargetId = undefined; },
+  finishLockedFireAttack: () => {},
+  GameSession: { gameMode: 'hardcore' },
   isSplitTankKind: kind => kind === 'tank', isTankUnit: u => u.kind === 'tank',
   isAntiTankGunUnit: () => false, isHeavyArtilleryUnit: () => false,
   splitTankVisualConfigOf: () => cfg, splitTankGeometryConfigOf: () => geometry,

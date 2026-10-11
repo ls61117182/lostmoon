@@ -409,6 +409,8 @@ export interface Unit {
   diagonalGunnerSidePreference?: FireDirection;
   /** Visual-only aim point for flank attacks; rules continue to use turretFacing. */
   turretVisualTarget?: Axial;
+  /** Hardcore: target acquired by a main-gun hit, valid for the next attack this turn. */
+  lockedFireTargetId?: string;
   stats: UnitStats;
   /** 非玩家单位等级；旧存档或缺省值按 recruit 处理。 */
   unitLevel?: UnitLevel;
@@ -433,7 +435,9 @@ export interface Unit {
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
   fireLevel?: number;       // 着火程度；重炮碉堡再次起火时直接摧毁
   turretDamaged?: boolean;  // 炮塔受损
-  paralyzed?: boolean;      // 痛痪
+  paralyzed?: boolean;
+  /** Persistent loose-track placement: fraction measured from the hull front. */
+  trackDamage?: { side: 'left' | 'right'; position: number };      // 痛痪
   hidden?: boolean;         // 隐蔽
   smoked?: boolean;         // 有烟雾掩护
   /** Hardcore: the infantry must forfeit its next complete action, then this flag clears. */
@@ -635,6 +639,8 @@ export interface UnitPlacement {
   startRids?: number[];
   /** 任务 6 等：单位以**初始瘫痪**入场（放置「瘫痪」标记）；与回合结束 `mechanical_failure` 同义，由 `MissionLoader` 写入 `unit.paralyzed = true`。 */
   paralyzed?: boolean;
+  /** Persistent loose-track placement: fraction measured from the hull front. */
+  trackDamage?: { side: 'left' | 'right'; position: number };
   /** 谢尔曼专用：乘员存活；键缺省视为 `true`（存活），显式 `false` 表示该槽位开局阵亡 */
   crew?: Partial<ShermanCrew>;
   /** 谢尔曼专用：着火程度；缺省 0 */

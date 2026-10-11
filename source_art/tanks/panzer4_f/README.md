@@ -18,6 +18,7 @@ node tools/registerPanzer4F.cjs
 node tools/preparePanzer4FUserBase.cjs
 node tools/applyPanzer4FFrontDetail.cjs
 node tools/trimPanzer4FFront.cjs
+node tools/strengthenPanzer4FLines.cjs
 node tools/preparePanzer4FSource.cjs
 node tools/prepareTankArt.cjs --kind panzer4_f
 node tools/finalizePanzer4F.cjs
@@ -34,6 +35,8 @@ finalize步骤恢复G型车身/击毁图的原始边缘像素，并按CSV支点�
 最新版本依照reference-gun-detail.png重新绘制弧形炮盾、炮根渐收连接和套筒。用户明确授权炮塔最前部重新绘制，可不严格遵守矩形框；只有源图x<285、y135..330的炮与前缘区域被替换，其余用户底图保留。最新提示词gun-front-detail-prompt.txt，炮口源坐标(38,235)。此前gun-position-prompt.txt和user-base-prompt.txt为历史提示词。
 
 随后依据reference-front-trim.png红线裁切炮根与前肩多余轮廓。红线顶点转换到当前源图坐标，以透明蒙版精确裁掉外侧；内部颜色和细节像素不改动。trimPanzer4FFront.cjs保存该轮廓，不改变炮口与支点坐标。
+
+线条加深版本保存在turret-line-matched.png。使用ImageGen线条稿作为风格参考，对已确认源图现有深色线条增强对比，并在原轮廓内加深4源像素边线。透明度和尺寸逐像素保留，浅灰装甲填色保持不变；没有扩大轮廓或调整坐标。
 
 历史轮廓修正依据用户红线图reference-contour-markup.png，提示词见contour-correction-prompt.txt。该版已被当前用户底图版替换。
 

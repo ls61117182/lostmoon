@@ -62,8 +62,8 @@ assert.doesNotMatch(
 );
 assert.match(
   methodBody('mgActionUnavailable'),
-  /if \(this\.mission\.sherman\.turretDamaged\) return null;/,
-  'a damaged turret must still allow an independent hull machine gun without a rotation preview',
+  /return null;/,
+  'MG range selection remains available with turret damage or no infantry',
 );
 assert.match(
   methodBody('precisionGunActionUnavailable'),
@@ -117,7 +117,7 @@ assert.match(
 );
 assert.match(
   methodBody('redrawTurretAimOverlay'),
-  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?const fixedWeaponArc = this\.playerHasFixedWeaponArc\(\);[\s\S]*?&& \(turretCanRotate \|\| fixedWeaponArc \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate\) \{[\s\S]*?drawTurretTraverseAngleRing/,
+  /const turretCanRotate = this\.playerTurretCanRotate\(\);[\s\S]*?const fixedWeaponArc = this\.playerHasFixedWeaponArc\(\);[\s\S]*?&& \(classicGunSelection \|\| turretCanRotate \|\| fixedWeaponArc \|\| machineGunSelection \|\| precisionGunSelection \|\| smokeGunSelection\)[\s\S]*?if \(turretCanRotate && GameSession\.gameMode === 'hardcore'\) \{[\s\S]*?drawTurretTraverseAngleRing/,
   'machine-gun masks survive turret damage while the angle ring requires rotation',
 );
 assert.match(

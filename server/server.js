@@ -397,6 +397,10 @@ function sanitizePvpBattleUnit(raw, fallback) {
     fireLevel: Math.max(0, n(src.fireLevel, 0)),
     turretDamaged: !!src.turretDamaged,
     paralyzed: !!src.paralyzed,
+    trackDamage: src.paralyzed && ['left', 'right'].includes(src.trackDamage?.side)
+      && Number.isFinite(src.trackDamage?.position)
+      && src.trackDamage.position >= 1 / 3 && src.trackDamage.position <= 2 / 3
+      ? { side: src.trackDamage.side, position: src.trackDamage.position } : undefined,
     hidden: !!src.hidden,
     smoked: !!src.smoked,
     radioDamaged: !!src.radioDamaged,

@@ -10,6 +10,7 @@ for (const playerWatcher of [true, false]) for (const shell of ['ap', 'he']) {
   const watcher = { id: 'watcher', kind: 'tank', pos: { q: 0, r: 0 }, facing: 0, ambushReadyThisTurn: true, stats: {} };
   const mover = { id: 'mover', kind: 'tank', pos: { q: 1, r: 1 } };
   const context = {
+    finishLockedFireAttack: () => {},
     GameSession: { gameMode: 'hardcore' }, isFootUnit: () => false,
     orderedAmbushers: () => [watcher], isHostile: () => true, canEnterAmbush: () => true,
     isInAmbushSight: () => true, HexMap: { keyOf: () => '' }, resolvedLoadedShell: () => shell,

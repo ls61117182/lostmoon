@@ -273,7 +273,7 @@ assert.match(battleSceneSource,
   /highExplosiveReport\?: HighExplosiveReport[\s\S]*?buildDiceShowPanel\([\s\S]*?opts\.highExplosiveReport,[\s\S]*?opts\.highExplosiveCollateral/,
   'the shared AP result modal must accept HE-specific presentation data');
 assert.match(battleSceneSource,
-  /rollHighExplosiveCollateralResults\([\s\S]*?if \(!this\.mission\) return \[\][\s\S]*?!isAttachedATGunCrew\(unit\)[\s\S]*?unit\.pos\.q === target\.pos\.q[\s\S]*?rollHighExplosiveAttack\([\s\S]*?target: infantry/,
+  /rollHighExplosiveCollateralResults\([\s\S]*?if \(!this\.mission\) return \[\][\s\S]*?!isAttachedATGunCrew\(unit\)[\s\S]*?unit\.pos\.q === target\.pos\.q[\s\S]*?rollHEAttack\([\s\S]*?target: infantry/,
   'every ordinary infantry unit sharing an HE target hex must receive a pre-rolled blast result');
 assert.match(battleSceneSource,
   /rollHighExplosiveCollateralResults\([\s\S]*?isAntiTankGunUnit\(target\)[\s\S]*?unit\.attachedToATGunId === target\.id/,

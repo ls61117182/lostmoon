@@ -27,6 +27,7 @@ export interface PvpBattleUnitSnapshot {
   fireLevel?: number;
   turretDamaged?: boolean;
   paralyzed?: boolean;
+  trackDamage?: { side: 'left' | 'right'; position: number };
   hidden?: boolean;
   smoked?: boolean;
   radioDamaged?: boolean;
@@ -41,6 +42,7 @@ export interface PvpBattleUnitSnapshot {
   ambushAttackedSinceTurnEnd?: boolean;
   ambushReadyThisTurn?: boolean;
   ambushEnteredOrder?: number;
+  lockedFireTargetId?: string;
   ambushActedThisTurn?: boolean;
 }
 

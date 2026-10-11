@@ -96,14 +96,18 @@ panzer4 @ col=6 row=5 | 距离 5 | 视线 通畅 | 穿过树篱 0
 | `enemies[]` | 德军单位列表 |
 | `objective` | 胜负条件 |
 
-## 还没做的（下一步要补）
+## 当前实现（2026-10-10 核对）
 
-- [ ] `Combat.ts`：三步走战斗（命中 / 伤害 / 伤害类型）
-- [ ] `ActionTable.ts`：玩家行动阶段的"骰子 → 行动"映射
-- [ ] `AITable.ts`：德军坦克 AI 行动表
-- [ ] `EventTable.ts`：回合结束事件（2d6）
-- [ ] `TurnManager.ts`：7 阶段状态机
-- [ ] 视图层 `view/`：把核心数据渲染到 Cocos 场景
+上方文件表和示例为早期核心 API 简介，不是完整功能目录。原“还没做”清单已经过时：
+
+- 战斗：`Combat.ts` 已有命中、穿甲、方向伤害、AP / HE / HVAP、机枪与目标分类。
+- 玩家行动：`PlayerActionDB.ts` + `ActionDice.ts` 已有数据驱动的动作和骰池。
+- AI：`EnemyAIDB.ts` + `EnemyAI.ts` 已有行动表、硬核骰、等级 / 火力与目标选择。
+- 回合事件：`TurnEndEventDB.ts` + `TurnEndEventRuntime.ts` + `TurnEndEventApply.ts` 已实现。
+- 回合 / 表现：`view/BattleScene.ts` 已承接阶段流程、地图和单位绘制、输入、动画及存读档，当前没有独立 `TurnManager.ts`。
+- 扩展系统：迷雾 / 无线电、等级 / 实际车组、战役 / 强化 / 检查点、随机生成、自定义任务、天气 / 城市、PVP 服务均有对应模块。
+
+完整清单、文档差异与未完成项见 [功能与策划文档核对](../../../docs/FeatureDocumentationAudit.md)。
 
 ## 单元测试（可选）
 

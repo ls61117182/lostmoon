@@ -36,7 +36,7 @@ export const REPAIRABLE_COMPONENTS: readonly RepairableComponent[] = [
     statusDamagedKey: 'tileInspect.status.paralyzed',
     playerAvailable: () => true,
     isDamaged: (unit) => !!unit.paralyzed,
-    repair: (unit) => { unit.paralyzed = false; },
+    repair: (unit) => { unit.paralyzed = false; unit.trackDamage = undefined; },
   },
   {
     id: 'radio',

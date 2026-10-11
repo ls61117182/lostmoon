@@ -21,7 +21,7 @@ const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const GENERATED_DB = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 const UNITS_DIR = path.join(ROOT, 'assets', 'resources', 'textures', 'units');
 const DEFAULT_MAX_HULL_CONTENT_EDGE = 150;
-const MAX_HULL_CONTENT_EDGE_BY_KIND = Object.freeze({ maus: 250 });
+const MAX_HULL_CONTENT_EDGE_BY_KIND = Object.freeze({ maus: 250, tigerking: 200 });
 
 function maxHullContentEdge(kind) {
   return MAX_HULL_CONTENT_EDGE_BY_KIND[kind] ?? DEFAULT_MAX_HULL_CONTENT_EDGE;

@@ -285,7 +285,7 @@ dice.rule.hitNeedTitle,命中所需点数,Hit Target Number
 dice.rule.penNeedTitle,击穿所需点数,Penetration Target Number
 dice.rule.total,总计,Total
 dice.rule.distance,距离,Distance
-dice.rule.targetSize,命中难度,Hit Difficulty
+dice.rule.targetSize,体积命中难度,Hit Difficulty
 dice.rule.hedges,树篱,Hedgerow
 dice.rule.building,建筑,Building
 dice.rule.smoke,烟雾,Smoke
@@ -928,3 +928,4 @@ unit.name.jagdtiger,猎虎,Jagdtiger
 unit.name.elefant,象式坦克歼击车,Elefant
 unit.name.jagdpanther,追猎者,Hetzer
 unit.name.panzer4_f,4号F,Panzer IV Ausf. F1
+dice.rule.lockedFire,锁定射击,Locked fire

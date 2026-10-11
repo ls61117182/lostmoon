@@ -812,6 +812,9 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: Un
       : stats.interiorVisionRange;
     if (p.turretDamaged) u.turretDamaged = true;
   }
-  if (p.paralyzed) u.paralyzed = true;
+  if (p.paralyzed) {
+    u.paralyzed = true;
+    u.trackDamage = p.trackDamage ? { ...p.trackDamage } : undefined;
+  }
   return u;
 }

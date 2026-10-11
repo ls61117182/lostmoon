@@ -296,7 +296,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'dice.rule.penNeedTitle': { zh: "击穿所需点数", en: "Penetration Target Number" },
   'dice.rule.total': { zh: "总计", en: "Total" },
   'dice.rule.distance': { zh: "距离", en: "Distance" },
-  'dice.rule.targetSize': { zh: "命中难度", en: "Hit Difficulty" },
+  'dice.rule.targetSize': { zh: "体积命中难度", en: "Hit Difficulty" },
   'dice.rule.hedges': { zh: "树篱", en: "Hedgerow" },
   'dice.rule.building': { zh: "建筑", en: "Building" },
   'dice.rule.smoke': { zh: "烟雾", en: "Smoke" },
@@ -939,4 +939,5 @@ export const LANG_DB: Record<string, LangEntry> = {
   'unit.name.elefant': { zh: "象式坦克歼击车", en: "Elefant" },
   'unit.name.jagdpanther': { zh: "追猎者", en: "Hetzer" },
   'unit.name.panzer4_f': { zh: "4号F", en: "Panzer IV Ausf. F1" },
+  'dice.rule.lockedFire': { zh: "锁定射击", en: "Locked fire" },
 };

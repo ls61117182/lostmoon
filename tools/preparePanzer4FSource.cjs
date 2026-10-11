@@ -8,7 +8,7 @@ async function main() {
   // Uniform scale: turret roof width matches G hull and the F1 overhead plan.
   // Coordinates were measured on the saved generated image, before cropping.
   const scale = 0.146;
-  const {data, info} = await sharp(path.join(source, 'turret-user-composited.png')).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const {data, info} = await sharp(path.join(source, 'turret-line-matched.png')).ensureAlpha().raw().toBuffer({resolveWithObject:true});
   await sharp(data,{raw:info}).resize(Math.round(info.width*scale), Math.round(info.height*scale)).png().toFile(path.join(source,'turret-selected.png'));
   const point = (x,y) => [x*scale,y*scale];
   const manifest = {

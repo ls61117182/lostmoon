@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "kind": "tigerking",
+  "notes": "User top-view blueprint; clean gray redraw; uniform turret registration to blueprint proportions; shared final scale and hull-aligned wreck.",
+  "inputs": {
+    "hull": {
+      "path": "source_art/tanks/tigerking/reference-redraw-200/hull-selected.png",
+      "background": "alpha"
+    },
+    "turret": {
+      "path": "source_art/tanks/tigerking/reference-redraw-200/turret-selected.png",
+      "background": "alpha"
+    },
+    "destroyed": {
+      "path": "source_art/tanks/tigerking/reference-redraw-200/destroyed-selected.png",
+      "background": "alpha"
+    }
+  },
+  "processing": {
+    "alphaThreshold": 32,
+    "commonScale": 0.14820359281437126,
+    "outlinePixels": 0,
+    "hullPadding": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "turretPadding": [
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "sourceGeometry": {
+    "hullPivot": [
+      1100,
+      444
+    ],
+    "turretPivot": [
+      1303,
+      510
+    ],
+    "muzzle": [
+      39,
+      509
+    ],
+    "commanderHatch": [
+      1303,
+      598
+    ]
+  }
+}

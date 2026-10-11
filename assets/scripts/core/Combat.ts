@@ -16,6 +16,7 @@ import { crewRoleAlive } from "./types";
  */
 
 import { RNG } from './Dice';
+import { immobilizeTank } from './TankTrackDamage';
 import { turretTurnDistance } from './TurretTraverse';
 import { ATTACK_DIRECTION_RULES } from './AttackDirectionDB';
 import type { ArmorFace, AttackDirectionRule, DamageCheckType } from './AttackDirectionDB';
@@ -39,6 +40,7 @@ import { markAmbushTargeted } from './Ambush';
 import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isPlayerControlled, isSameSide, isTankUnit, neutralizeUncrewedTank, tileHasBuilding, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
 import { unitLevelHitThresholdModifier } from './UnitLevel';
+import { lockedFireModifier } from './LockedFire';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
 
@@ -84,6 +86,8 @@ export interface CrewDeathResult {
 }
 
 export interface AttackReport {
+  /** Clockwise bearing relative to the hull, captured at shot time. */
+  incomingAngle?: number;
   dice: [number, number];
   hitDiceCount?: number;
   hitBonus?: number;
@@ -144,6 +148,8 @@ export interface AttackReport {
 }
 
 export interface AttackContext {
+  /** Hardcore: a previous main-gun hit grants -2 against the locked tank. */
+  lockedFire?: boolean;
   attacker: Unit;
   target: Unit;
   map: HexMap;
@@ -509,7 +515,8 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const rearArc = includeRearArc && pacific && isTankUnit(attacker)
     && attacker.facing !== null && isTargetInRearArc(attacker, target) ? 1 : 0;
   const frontArcModifier = opts.frontArcModifier ?? 0;
-  const actionModifier = ctx.hitThresholdModifier ?? 0;
+  const actionModifier = (ctx.hitThresholdModifier ?? 0)
+    + lockedFireModifier(attacker, target, ctx.lockedFire && ctx.shellType !== 'smoke');
   const weather = ctx.attackKind !== 'mg' && isTankUnit(attacker)
     ? weatherHitThresholdModifier(ctx.weather)
     : 0;
@@ -724,6 +731,7 @@ export function nonPlayerTankWeaponForTarget(target: Unit, distance: number): No
 
 /** A standalone HE report: normal hit first, then target-specific blast resolution. */
 export interface HighExplosiveReport {
+  incomingAngle?: number;
   dice: [number, number];
   roll: number;
   threshold: number;
@@ -823,9 +831,10 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   // Heavy-artillery ordinary fire is automatic. A failed shooting-port attempt
   // also lands on the bunker and therefore continues into the normal HE check.
   const hit = automaticHit || shootingPortAttack || roll >= threshold;
-  const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
+  const hitModifiers = mainGunHitThresholdModifierDetails(ctx);
   const power = attacker.stats.highExplosivePower ?? 0;
   const base: HighExplosiveReport = {
+    incomingAngle: incomingAngleFrom(target, attacker.pos),
     dice: [d1, d2], roll, threshold, hit, automaticHit, shootingPortHit, hitBreakdown: lockedHitBreakdown,
     hitModifiers, highExplosivePower: power, outcome: 'none',
   };
@@ -958,7 +967,7 @@ export function applyHighExplosiveAttack(target: Unit, report: HighExplosiveRepo
       if (target.campaignParalyzedProtectionAvailable === true) {
         target.campaignParalyzedProtectionAvailable = false;
       } else {
-        target.paralyzed = true;
+        immobilizeTank(target, report.incomingAngle);
       }
       break;
     case 'suppressed': target.suppressed = true; break;
@@ -1096,10 +1105,11 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   // penetration. Ordinary hardcore fire against the bunker is automatic.
   const hit = automaticHit || shootingPortAttack || roll >= threshold;
   const hitRollMeta = {
+    incomingAngle: incomingAngleFrom(target, attacker.pos),
     automaticHit: automaticHit || undefined,
     shootingPortHit,
   };
-  const hitModifiers = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item }));
+  const hitModifiers = mainGunHitThresholdModifierDetails(ctx);
   const commanderDeathTriggered = hit && hitDoublesKillOpenHatchCommander(ctx, d1, d2);
   const commanderShieldBlocked = commanderDeathTriggered && target.campaignCommanderShieldAvailable === true;
   const commanderKilledByHitDoubles = commanderDeathTriggered && !commanderShieldBlocked;
@@ -1472,7 +1482,7 @@ function firstAliveCrewSlot(target: Unit, priority: readonly CrewSlot[] | undefi
   return null;
 }
 
-function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonistTarget: boolean): void {
+function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonistTarget: boolean, incomingAngle?: number): void {
   switch (step.effect) {
     case 'destroyed':
       target.destroyed = true;
@@ -1490,7 +1500,7 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
       if (target.campaignParalyzedProtectionAvailable === true) {
         target.campaignParalyzedProtectionAvailable = false;
       } else {
-        target.paralyzed = true;
+        immobilizeTank(target, incomingAngle);
       }
       break;
     case 'radio':
@@ -1550,7 +1560,7 @@ export function applyAttack(target: Unit, report: AttackReport): void {
         }
         continue;
       }
-      applyDamageEffectStep(target, step, protagonistTarget);
+      applyDamageEffectStep(target, step, protagonistTarget, report.incomingAngle);
     }
     neutralizeUncrewedTank(target);
     return;
@@ -1582,7 +1592,7 @@ export function applyAttack(target: Unit, report: AttackReport): void {
       if (target.campaignParalyzedProtectionAvailable === true) {
         target.campaignParalyzedProtectionAvailable = false;
       } else {
-        target.paralyzed = true;
+        immobilizeTank(target, report.incomingAngle);
       }
       break;
     case 'crewCheck':
@@ -1671,7 +1681,7 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
     && attacker.facing !== fireDir) {
     return { ok: false, reason: 'attack.reason.mgDirection' };
   }
-  if (isTankUnit(attacker) && attacker.turretDamaged
+  if (ctx.hardcoreTankMachineGuns && isTankUnit(attacker) && attacker.turretDamaged
     && !selectTankMachineGun(attacker, fireDir, false)) {
     return { ok: false, reason: 'attack.reason.mgDirection' };
   }
@@ -1782,8 +1792,15 @@ export function rollSelectedTankMachineGunAttacks(
   }));
 }
 
-export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
+function mainGunHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
   const details = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item })) ?? [];
+  const lock = lockedFireModifier(ctx.attacker, ctx.target, ctx.lockedFire && ctx.shellType !== 'smoke');
+  if (lock) details.push({ labelKey: 'dice.rule.lockedFire', value: lock });
+  return details;
+}
+
+export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
+  const details = mainGunHitThresholdModifierDetails(ctx);
   const coordination = mgTankCoordinationModifier(ctx);
   const atGunShield = atGunShieldModifier(ctx);
   if (coordination) details.push({ labelKey: 'dice.rule.infantryTankCoordination', value: coordination });

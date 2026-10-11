@@ -51,6 +51,7 @@ interface UnitSnapshot {
   fireLevel?: number;
   turretDamaged?: boolean;
   paralyzed?: boolean;
+  trackDamage?: { side: 'left' | 'right'; position: number };
   loaded?: boolean;
   loadedShell?: ShellType | null;
   hvapAmmoRemaining?: number;
@@ -69,6 +70,7 @@ interface UnitSnapshot {
   ambushObscuredSinceTurnEnd?: boolean;
   ambushReadyThisTurn?: boolean;
   ambushEnteredOrder?: number;
+  lockedFireTargetId?: string;
   ambushActedThisTurn?: boolean;
   atGunCrewAlive?: boolean;
   atGunCrewKind?: ATGunCrewKind;
@@ -152,6 +154,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     fireLevel: u.fireLevel,
     turretDamaged: u.turretDamaged,
     paralyzed: u.paralyzed,
+    trackDamage: u.trackDamage ? { ...u.trackDamage } : undefined,
     loaded: u.loaded,
     loadedShell: u.loadedShell,
     hvapAmmoRemaining: u.hvapAmmoRemaining,
@@ -172,6 +175,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     ambushObscuredSinceTurnEnd: u.ambushObscuredSinceTurnEnd,
     ambushReadyThisTurn: u.ambushReadyThisTurn,
     ambushEnteredOrder: u.ambushEnteredOrder,
+    lockedFireTargetId: u.lockedFireTargetId,
     ambushActedThisTurn: u.ambushActedThisTurn,
     atGunCrewAlive: u.atGunCrewAlive,
     atGunCrewKind: u.atGunCrewKind,
@@ -227,6 +231,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.fireLevel = s.fireLevel ?? 0;
   live.turretDamaged = s.turretDamaged ?? false;
   live.paralyzed = s.paralyzed ?? false;
+  live.trackDamage = s.paralyzed && s.trackDamage ? { ...s.trackDamage } : undefined;
   live.loaded = s.loaded ?? false;
   live.loadedShell = s.loadedShell ?? (s.loaded ? 'ap' : null);
   live.hvapAmmoRemaining = s.hvapAmmoRemaining;
@@ -251,6 +256,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.ambushObscuredSinceTurnEnd = s.ambushObscuredSinceTurnEnd ?? false;
   live.ambushReadyThisTurn = s.ambushReadyThisTurn ?? false;
   live.ambushEnteredOrder = s.ambushEnteredOrder;
+  live.lockedFireTargetId = s.lockedFireTargetId;
   live.ambushActedThisTurn = s.ambushActedThisTurn ?? false;
   if (s.atGunCrewAlive !== undefined) live.atGunCrewAlive = s.atGunCrewAlive;
   if (s.atGunCrewKind !== undefined) live.atGunCrewKind = s.atGunCrewKind;
@@ -445,6 +451,7 @@ export function applySave(
   playerTank.pos = { q: savedPlayer.q, r: savedPlayer.r };
   mission.enemies.push(...extraEnemies);
   playerTank.facing = savedPlayer.facing;
+  playerTank.lockedFireTargetId = savedPlayer.lockedFireTargetId;
   playerTank.turretFacing = savedTurretFacing(savedPlayer.turretFacing, savedPlayer.facing);
   playerTank.previousTurretFacing = savedTurretFacing(savedPlayer.previousTurretFacing, savedPlayer.facing);
   playerTank.diagonalGunnerSidePreference = savedTurretFacing(savedPlayer.diagonalGunnerSidePreference, null);
@@ -487,6 +494,7 @@ export function applySave(
     sh.fireLevel = ss.fireLevel ?? 0;
     sh.turretDamaged = ss.turretDamaged ?? false;
     sh.paralyzed = ss.paralyzed ?? false;
+    sh.trackDamage = ss.paralyzed && ss.trackDamage ? { ...ss.trackDamage } : undefined;
     sh.loaded = ss.loaded ?? false;
     sh.loadedShell = ss.loadedShell ?? (ss.loaded ? 'ap' : null);
     sh.hvapAmmoRemaining = ss.hvapAmmoRemaining;

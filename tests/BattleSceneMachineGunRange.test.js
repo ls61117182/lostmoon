@@ -27,6 +27,7 @@ for (let q = -3; q <= 3; q++) for (let r = -3; r <= 3; r++) map.set({ pos: { q, 
 const tank = { kind: 'sherman', pos: { q: 0, r: 0 }, facing: 0, turretFacing: 3, stats: { visionType: 'turreted' } };
 scene.mission = { sherman: tank, map };
 scene.isDeepShadowTile = () => false;
+scene.outsideMapTurretAimDirection = () => null;
 scene.currentTurretFacingFor = unit => unit.turretFacing;
 scene.canTurretReachDirection = () => true;
 scene.playerTurretCanRotate = () => !tank.turretDamaged;

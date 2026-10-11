@@ -600,6 +600,7 @@ export function prepareTurnEndEvent(
           }
           if (sh.paralyzed) {
             sh.paralyzed = false;
+            sh.trackDamage = undefined;
             return;
           }
           if (sh.turretDamaged) {
