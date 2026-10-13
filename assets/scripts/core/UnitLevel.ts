@@ -90,7 +90,7 @@ export function nonPlayerTankDiceBonus(unit: Unit): RankedDiceBonus {
 export function nonPlayerTankFirepowerBonus(unit: Unit): number {
   if (!isTankUnit(unit) || unit.crewLevels) return 0;
   const level = unitLevelOf(unit);
-  return level === 'elite' ? 4 : level === 'veteran' ? 2 : 0;
+  return level === 'elite' ? 2 : level === 'veteran' ? 1 : 0;
 }
 
 /** Legacy balance helper retained for compatibility; hardcore AT guns no longer roll action dice. */

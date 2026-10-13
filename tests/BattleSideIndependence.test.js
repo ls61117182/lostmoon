@@ -85,7 +85,7 @@ const currentSave = captureSave({
   hatchChangedThisTurn: false,
   phaseDice: [],
 });
-assert.strictEqual(currentSave.version, 11);
+assert.strictEqual(currentSave.version, 12);
 assert.strictEqual(currentSave.playerTank.kind, 'tiger');
 assert.strictEqual(currentSave.playerTank.sideId, 'player');
 assert.strictEqual(currentSave.enemies[0].sideId, 'enemy');

@@ -7,7 +7,7 @@ const editor = fs.readFileSync('assets/scripts/view/MainMenuScene.ts', 'utf8');
 
 assert.match(
   catalog,
-  /id: 'europe',[\s\S]*?terrainCodes: \['f', 'r', 'm', 'F', 'w'\]/,
+  /id: 'europe',[\s\S]*?terrainCodes: \['f', 'r', 'm', 'F', 'w', 'eb'\]/,
   'European terrain category must contain the existing European battlefield tiles',
 );
 assert.match(
@@ -44,7 +44,7 @@ assert.strictEqual(
 );
 
 const expectedCodes = {
-  europe: new Set(['f', 'r', 'm', 'F', 'w']),
+  europe: new Set(['f', 'r', 'm', 'F', 'w', 'eb']),
   pacific: new Set(['c', 'a', 'T', 'B', 'H', 'dw']),
   urban: new Set(['u', 'ur', 'ui', 'ud']),
 };

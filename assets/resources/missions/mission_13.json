@@ -1,0 +1,460 @@
+{
+  "id": "mission_13",
+  "name": "诺曼底登陆：打开海滩出口",
+  "description": "你的坦克已登陆。摧毁控制海滩的德军重炮碉堡和 Pak 38，然后沿内陆公路出口的红色箭头向东驶离。\n海堤有两处缺口：上方（6,2）路线较短，附近有拒马；下方（6,5）绕行较远，弹坑较多。完好铁丝网可直接碾坏，不额外消耗骰子；拒马格会使坦克立即瘫痪。弹坑按泥地行动，允许坦克隐蔽。\n两支美军步兵随你推进。第3回合末车长获得一次额外行动，可协助装填、抢修或灭火；第6回合末德军从内陆投入一辆IV号坦克。其他守军不必全部消灭，清除碉堡和Pak 38后即可撤离。",
+  "_comment": "原创诺曼底登陆场景，非指定真实海滩的历史复原。10×8 odd-r；海面仅作显示格。出生(2,3)朝东。海堤横贯沙滩/内陆边界，只有目标格(6,2)、(6,5)的跨界边开放。wire同时包含完好和损坏状态。所有拒马均可绕过。rid六处保留为海滩友军支援配置位，eid六处仅用于第6回合末敌军IV号增援。胜利需清除指定两种守军并从(9,3)向东撤离。",
+  "theater": "europe",
+  "season": "summer",
+  "weather": "clear",
+  "cols": 10,
+  "rows": 8,
+  "enemyStartByDice": false,
+  "tiles": [
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "sh": 1,
+        "wire": "100000"
+      },
+      {
+        "t": "eb",
+        "sh": 1
+      },
+      {
+        "t": "eb",
+        "sw": "100000"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f",
+        "eid": 1,
+        "ef": 3
+      },
+      {
+        "t": "f"
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb",
+        "rid": 1,
+        "rf": 0
+      },
+      {
+        "t": "eb",
+        "sh": 1
+      },
+      {
+        "t": "eb",
+        "wire": "120001"
+      },
+      {
+        "t": "eb",
+        "cr": 1
+      },
+      {
+        "t": "eb",
+        "sw": "100001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "rd": "001000",
+        "eid": 2,
+        "ef": 3
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "rid": 4,
+        "rf": 0
+      },
+      {
+        "t": "eb",
+        "wire": "200000"
+      },
+      {
+        "t": "eb",
+        "sh": 1
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "r",
+        "rd": "100100"
+      },
+      {
+        "t": "r",
+        "rd": "010100"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "r",
+        "rd": "011001"
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb",
+        "rid": 2,
+        "rf": 0
+      },
+      {
+        "t": "eb",
+        "cr": 1
+      },
+      {
+        "t": "eb",
+        "wire": "110002"
+      },
+      {
+        "t": "eb",
+        "cr": 1
+      },
+      {
+        "t": "eb",
+        "cr": 1,
+        "sw": "110000"
+      },
+      {
+        "t": "f",
+        "bd": 1
+      },
+      {
+        "t": "r",
+        "rd": "101010"
+      },
+      {
+        "t": "r",
+        "rd": "100101"
+      },
+      {
+        "t": "r",
+        "rd": "100110"
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "cr": 1
+      },
+      {
+        "t": "eb",
+        "sh": 1,
+        "wire": "100000"
+      },
+      {
+        "t": "eb",
+        "cr": 1
+      },
+      {
+        "t": "eb",
+        "sw": "100000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "rd": "011001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "bd": 1
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "rid": 5,
+        "rf": 0
+      },
+      {
+        "t": "eb",
+        "wire": "210001"
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "cr": 1,
+        "sw": "010001"
+      },
+      {
+        "t": "r",
+        "rd": "100101"
+      },
+      {
+        "t": "r",
+        "rd": "000110"
+      },
+      {
+        "t": "f",
+        "eid": 3,
+        "ef": 3
+      },
+      {
+        "t": "f",
+        "eid": 4,
+        "ef": 3
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb",
+        "rid": 3,
+        "rf": 0
+      },
+      {
+        "t": "eb",
+        "sh": 1
+      },
+      {
+        "t": "eb",
+        "wire": "100000",
+        "rid": 6,
+        "rf": 0
+      },
+      {
+        "t": "eb",
+        "sh": 1
+      },
+      {
+        "t": "eb",
+        "sw": "100000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f"
+      }
+    ],
+    [
+      {
+        "t": "w",
+        "disp": 1
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "wire": "100001"
+      },
+      {
+        "t": "eb"
+      },
+      {
+        "t": "eb",
+        "sh": 1,
+        "sw": "100001"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "r",
+        "rd": "100000",
+        "eid": 5,
+        "ef": 3
+      },
+      {
+        "t": "r",
+        "rd": "000100",
+        "eid": 6,
+        "ef": 3
+      }
+    ]
+  ],
+  "playerTank": {
+    "kind": "sherman",
+    "faction": "usa",
+    "at": {
+      "col": 2,
+      "row": 3
+    },
+    "facing": 0,
+    "hatchOpen": false
+  },
+  "allies": [
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 2
+      },
+      "facing": 0,
+      "unitLevel": "recruit"
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 5
+      },
+      "facing": 0,
+      "unitLevel": "recruit"
+    }
+  ],
+  "enemies": [
+    {
+      "kind": "german_heavy_artillery",
+      "faction": "german",
+      "at": {
+        "col": 7,
+        "row": 1
+      },
+      "facing": 3,
+      "unitLevel": "recruit"
+    },
+    {
+      "kind": "pak38",
+      "faction": "german",
+      "at": {
+        "col": 7,
+        "row": 4
+      },
+      "facing": 3,
+      "atGunCrewLevel": "recruit"
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 4,
+        "row": 1
+      },
+      "facing": 3,
+      "unitLevel": "recruit"
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 5
+      },
+      "facing": 3,
+      "unitLevel": "recruit"
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 9,
+        "row": 4
+      },
+      "facing": 3,
+      "unitLevel": "recruit"
+    }
+  ],
+  "objective": {
+    "type": "destroy_kind_evac",
+    "kinds": [
+      "german_heavy_artillery",
+      "pak38"
+    ],
+    "evacAt": {
+      "col": 9,
+      "row": 3
+    },
+    "evacExitDir": 0
+  },
+  "roundEvents": [
+    {
+      "turns": [
+        3
+      ],
+      "effectType": "commander_extra"
+    },
+    {
+      "turns": [
+        6
+      ],
+      "effectType": "panzer4_spawn",
+      "reinforcementSide": "enemy"
+    }
+  ],
+  "actionTableId": "standard",
+  "aiTableId": "standard",
+  "eventTableId": "mission_13"
+}

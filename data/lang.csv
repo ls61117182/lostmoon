@@ -1,5 +1,16 @@
 ﻿key,zh,en
 键,中文,英文
+roundEvent.title,回合事件,Round events
+hud.roundEvents,第 {n} 回合 · 回合事件,Round {n} · Round events
+hud.randomEvents,第 {n} 回合 · 回合随机事件,Round {n} · Random round events
+battle.turnEndList.effect.airborne_support,空降兵支援,Airborne support
+turnEnd.airborne.placed,空降 {count} 名美军步兵。,Deploy {count} American paratroopers.
+turnEnd.airborne.cancelled,空降兵支援取消：天气或空降位置不满足条件。,Airborne support cancelled: weather or landing positions are unsuitable.
+roundEvent.airborne.started,空降兵支援：投放 {count} 名伞兵。,Airborne support: deploying {count} paratroopers.
+roundEvent.reference,{turns}：{effect}（{side}）,{turns}: {effect} ({side})
+roundEvent.every,每回合,Every round
+roundEvent.friendly,友方,Friendly
+roundEvent.enemy,敌方,Enemy
 dmg.effect.destroyed,摧毁,Destroyed
 dmg.effect.damaged,受损,Damaged
 dmg.effect.fire,起火 +1,On Fire +1
@@ -385,6 +396,17 @@ unit.name.heavy_artillery,重炮,Heavy Artillery
 terrain.clear,开阔地,Clear
 terrain.trees,树木,Trees
 terrain.beach,海滩,Beach
+terrain.europe_beach,沙滩（欧洲）,Beach (Europe)
+tileInspect.europeBeach,沙滩：行动效果与开阔地相同。坦克不能隐蔽。,Beach: uses Clear terrain rules. Tanks cannot conceal.
+tileInspect.wireIntact,完好铁丝网：阻挡步兵和反坦克炮跨越。坦克正常移动即可碾坏；不额外消耗骰子。,Intact wire blocks infantry and AT guns. Tanks crush it during normal movement with no extra dice.
+tileInspect.wireDamaged,损坏铁丝网：没有任何规则效果。,Damaged wire has no rules effect.
+tileInspect.steelHedgehogs,钢制拒马：不挡视野。步兵可进入；坦克进入后立即瘫痪。,Steel hedgehogs do not block sight. Infantry may enter; tanks are immediately immobilized on entry.
+tileInspect.crater,弹坑：行动效果与泥地相同。步兵命中所需点数+1；坦克允许隐蔽。,Crater: uses Mud terrain rules. Infantry hit threshold +1; tanks may conceal.
+tileInspect.seawall,海堤：沿用防波堤规则。日军不受影响；盟军坦克仅能使用杂项阶段的前进动作跨越。,Seawall uses breakwater crossing rules. Japanese units ignore it; Allied tanks cross only with a Misc-phase advance.
+dice.rule.crater,弹坑掩护,Crater cover
+floater.hedgehogParalyzed,进入拒马格：瘫痪,Steel hedgehogs: immobilized
+battleLog.wireCrushed,{unitKind} 碾坏了铁丝网。,{unitKind} crushed the barbed wire.
+battleLog.hedgehogParalyzed,{unitKind} 进入拒马格并瘫痪。,{unitKind} entered steel hedgehogs and was immobilized.
 terrain.rocky,岩石高地,Rocky high ground
 terrain.deep_water,深海,Deep sea
 terrain.airstrip,机场,Airstrip
@@ -483,6 +505,7 @@ level.09.title,跨过水域,Crossing the Water
 level.10.title,只是路过：城镇,Just Passing Through: Town
 level.11.title,钢铁角斗士,Steel Gladiator
 level.12.title,猎杀虎式Ⅱ,Hunt the Tiger II
+level.13.title,诺曼底登陆,Normandy Landing
 level.test.title,测试关卡,Test Mission
 level.test.random.europe.title,随机关卡（欧洲战场）,Random Mission (Europe)
 level.test.random.pacific.title,随机关卡（太平洋战场）,Random Mission (Pacific)
@@ -651,8 +674,8 @@ battleLog.combat.overpenetration,[战斗] 穿甲结果超过所需点数 6 点�
 battleLog.unknown,未知,unknown
 battle.settings.title,战斗设置,Battle Settings
 battle.settings.exit,退出关卡,Exit Level
-battle.turnEndList.title,回合结束事件（本关）,Turn-end events (this mission)
-battle.turnEndList.empty,本关未配置回合结束事件表。,This mission has no turn-end event table.
+battle.turnEndList.title,回合事件配置（本关）,Round event configuration (this mission)
+battle.turnEndList.empty,本关未配置回合随机事件表。,This mission has no random round event table.
 battle.turnEndList.line,{range} → {effect},{range} → {effect}
 battle.turnEndList.effect.none,本回合没有事件发生,No event occurs this turn
 battle.turnEndList.effect.sniper,狙击手,Sniper
@@ -717,7 +740,7 @@ battle.load.none,无存档,No save data
 battle.load.badJson,存档格式损坏,Save data corrupted
 battle.load.busy,忙碌中无法读档,Cannot load while busy
 battle.load.fail,读档失败：{reason},Load failed: {reason}
-turnEnd.title,回合结束事件,Turn-end event
+turnEnd.title,回合随机事件,Random round event
 turnEnd.confirm,确认,OK
 turnEnd.sumLine,主骰 {dice}，合计 {sum},Rolled {dice} (sum {sum})
 turnEnd.none.body,事件骰 {d1}+{d2}={sum}。本回合没有事件发生。,Event dice {d1}+{d2}={sum}. No event occurs this turn.
@@ -912,7 +935,7 @@ tileInspect.firepower,基础火力 {base} · 当前火力 {value},Base firepower
 crew.tooltip.6,协助搬运与装填重型炮弹；可接替装填岗位。,Handles heavy ammunition and can cover the loading duty.
 crew.assignedDuties,兼任职责：{duties},Assigned duties: {duties}
 battleLog.firepowerCheck,{name} 火力检定：骰面{pip} / 火力{value} → {result},{name} firepower check: die {pip} / firepower {value} → {result}
-tileInspect.playerFirepower,基础火力 {base} · 攻击骰修正 {value},Base firepower {base} · Attack dice modifier {value}
+tileInspect.playerFirepower,基础火力 {base} · 当前火力 {value}（攻击骰 {value}颗）,Base firepower {base} · Current firepower {value} ({value} attack dice)
 preview.bunkerSlit,精准·射击孔,Precision: firing slit
 preview.bunkerBody,碉堡本体,Bunker body
 preview.heFire,起火≥{n},Fire ≥{n}
@@ -929,3 +952,14 @@ unit.name.elefant,象式坦克歼击车,Elefant
 unit.name.jagdpanther,追猎者,Hetzer
 unit.name.panzer4_f,4号F,Panzer IV Ausf. F1
 dice.rule.lockedFire,锁定射击,Locked fire
+unit.name.german_heavy_artillery,德军重炮,German Heavy Artillery
+action.repairRadio,修复无线电,Repair Radio
+floater.radioFixed,无线电已修复,Radio Repaired
+battleLog.misc.repairRadio,[杂项] 修复无线电,[Misc] Radio repaired
+attack.reason.outOfRange,超出射程,Out of range
+turnEnd.commanderExtra.loadProgress,车长督促装填：主炮装填进度推进一次。,Commander urges loading: main gun loading advances one step.
+faction.usa,美国,United States
+faction.britain,英国,Britain
+faction.soviet,苏联,Soviet Union
+faction.german,德国,Germany
+faction.japan,日本,Japan

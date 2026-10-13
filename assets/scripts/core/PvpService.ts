@@ -23,6 +23,7 @@ export interface PvpBattleUnitSnapshot {
   damaged?: boolean;
   loaded?: boolean;
   loadedShell?: ShellType | null;
+  reloadProgress?: number;
   hatchOpen?: boolean;
   fireLevel?: number;
   turretDamaged?: boolean;
@@ -56,6 +57,7 @@ export interface PvpBattleSnapshot {
   units: PvpBattleUnitSnapshot[];
   smokeHexes?: string[];
   smokeHexOwners?: Record<string, PvpParity>;
+  barbedWireStates?: Record<string, number[]>;
   turnDeadlineAt?: number;
   turnDurationMs?: number;
   turnRemainingMs?: number;

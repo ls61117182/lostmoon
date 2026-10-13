@@ -6,7 +6,7 @@ const test = require('node:test');
 const source = fs.readFileSync(
   path.join(__dirname, '..', 'assets', 'scripts', 'view', 'BattleScene.ts'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 test('unit rank marker follows the full localized unit-name width', () => {
   const method = source.match(

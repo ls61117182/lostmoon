@@ -4,8 +4,9 @@ import { GROUND_CHUNK_SIZE, GROUND_RADIUS, TerrainGroundRaster, terrainGroundFin
 
 // Stable shader IDs. Every cell has its own duplicated border, so atlas filtering
 // cannot pull an unrelated material into a shoreline or winter patch.
-export const GPU_MATERIALS = ['grass','soil','mud','sand','water','deep_water','paving','snow','winter_water','timber','rural_yard','shallow_water','winter_ground','winter_mud','winter_soil','winter_paving','road_surface','forest_floor','winter_forest','winter_yard'] as const;
-export const ATLAS_CELL = 386, ATLAS_COLUMNS = 4, ATLAS_ROWS = 5;
+export const GPU_MATERIALS = ['grass','soil','mud','sand','water','deep_water','paving','snow','winter_water','timber','rural_yard','shallow_water','winter_ground','winter_mud','winter_soil','winter_paving','road_surface','forest_floor','winter_forest','winter_yard','europe_sand'] as const;
+// Keep both texture dimensions below 2048 for WebGL/mobile devices.
+export const ATLAS_CELL = 386, ATLAS_COLUMNS = 5, ATLAS_ROWS = 5;
 const axes = [[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
 const sq = Math.sqrt(3);
 export interface GpuChunkPlan {

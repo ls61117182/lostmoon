@@ -157,8 +157,8 @@ assert.match(
 );
 assert.match(
   methodBody('onTouchMap'),
-  /const legalMGTarget = mgSel \? enemiesOnTile\.find\(e => canMGAttack[\s\S]*?const machineGunRotationOnly = mgSel && enemiesOnTile\.length > 0 && !legalMGTarget;[\s\S]*?unloadedGunRotation \|\| machineGunRotationOnly[\s\S]*?tryAimShermanTurretAtFogTile/,
-  'clicking an enemy outside MG attack legality must consume the MG action as turret rotation',
+  /const legalMGTarget = mgSel \? enemiesOnTile\.find\(e => canMGAttack[\s\S]*?const machineGunRotationOnly = mgSel && !legalMGTarget;[\s\S]*?unloadedGunRotation \|\| machineGunRotationOnly[\s\S]*?tryAimShermanTurretAtFogTile/,
+  'clicking a marked tile without a legal MG target must rotate regardless of friendly occupancy',
 );
 assert.match(
   methodBody('onTouchMap'),

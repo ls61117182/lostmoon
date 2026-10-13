@@ -4,6 +4,12 @@
 
 “已实现”表示发现运行时逻辑及入口 / 调用链，不等于所有场景都通过验收。“已有文档”包括专项设计稿，不能将“总策划没有写”误判为完全没有文档。下表的覆盖状态描述本次补充前的情况，末列说明此次处理。
 
+## 2026-10-12 装填规则补充
+
+本次仅同步装填相关策划，保留下面2026-10-10的历史核对与测试记录。现行规则为：全单位基础火力减4且允许负数；玩家当前火力等于攻击骰数（基础火力+地形+岗位+战役强化，至少1）；AI与玩家复用同一当前火力计算（基础火力+地形+岗位+自身战役强化，至少1），保留老兵+1、王牌+2加成，每点火力提供3个有效攻击骰面；基础火力表达车组协同；装填难度独立控制进度上限；装满才允许主炮发射并扣除有限弹药；玩家换弹先归零；AI独立装填、不选弹种且无装填音效；AI攻击骰1—6统一装填＞射击且不附带骰面级乘员存活要求，杂项骰保留原乘员条件，岗位伤亡仍影响当前火力；新入场为难度−1并按基础穿甲 / HE威力预选弹种；战役玩家跨关保留原进度与弹种。普通M26装填难度为1。
+
+正文见 [主策划 §3.4 / §3.7](GameDesignDocument.md)、[逐车数值与依据](FirepowerReloadBalance.md)。实现依据为 `initialMainGunLoadingState`、`loadCampaignShell`、AI `reload` 动作、`loadMission` 的 `preservePlayerReload` 选项及v12存档。对应验证入口为 `InitialReloadState.test.js`、`ReloadDifficulty.test.js`、`AIReloadAction.test.js`；本次文档整理只做一致性核对，没有新增实机或联机验收结论。
+
 ## 可玩内容与系统清单
 
 | 功能 | 当前实现与边界 | 原文档覆盖 | 本次整理 / 实现依据 |
@@ -36,7 +42,7 @@
 | 账号与本地进度 | 在线注册 / 登录服务、离线进入，账号对应存档、关卡进度、语言 / 音量偏好 | 总策划遗漏，菜单 / 服务端代码已有 | 此表补清单；[AuthService.ts](../assets/scripts/core/AuthService.ts)、[SaveSlot.ts](../assets/scripts/core/SaveSlot.ts)、[server.js](../server/server.js)；未确认云存档 |
 | 关卡编辑器 | 地图 / 单位 / 等级 / 目标 / 天气 / 季节 / 简单事件编辑，官方与自定义导入、随机生成、10 槽本地保存 / 删除、复制 JSON | 仍以草案和分期计划为主 | 补已实现清单及限制；[编辑器方案](LevelEditorPlan.md) |
 | 联机原型 | 三阵营、匹配 / 房间 / 开局骰 / 快照 / 60 秒回合超时；支援 AI 简化，编制与企划不同 | PVP 文档是目标规格，缺落地状态 | 补实现矩阵，明确地图、重连、投降、状态同步不足；[PVP 策划](PvpDesignDocument.md) |
-| 存档与继续 | v11 状态快照、旧版本迁移、账号 / 构建档位隔离；关卡与战役双存档、阶段检查点与安全自动保存 | 总策划仍写 ActionLog 重演，菜单专项已有 | 重写 §6.2.5；[SaveLoad.ts](../assets/scripts/core/SaveLoad.ts)、[CampaignRunStore.ts](../assets/scripts/core/CampaignRunStore.ts) |
+| 存档与继续 | v12 状态快照、旧版本迁移、账号 / 构建档位隔离；关卡与战役双存档、阶段检查点与安全自动保存 | 总策划仍写 ActionLog 重演，菜单专项已有 | 重写 §6.2.5；[SaveLoad.ts](../assets/scripts/core/SaveLoad.ts)、[CampaignRunStore.ts](../assets/scripts/core/CampaignRunStore.ts) |
 | 战报历史 | 结果历史滚动、只读骰子 / 规则详情回看、暂停后续 AI、恢复边界；可选择玩家结果弹窗 | 总策划只写“过程”和回放设想 | 补 §6.2.5；[BattleSceneCombatLogHistory.test.js](../tests/BattleSceneCombatLogHistory.test.js)，有 1 条失败 |
 | 单位与战场表现 | 车体 / 炮塔分层、开舱车长、主炮后坐、机枪序列、AP / HE / 过穿、步兵反坦克、履带、尾气与振动、血迹 / 残骸、雨雪、阴影、连续地形 / GPU 迷雾 | 部分总策划已有，部分分散专项或仅代码 | 集中索引：[TankTopSpriteArtSpec.md](TankTopSpriteArtSpec.md)、[gpu-terrain.md](gpu-terrain.md)、[步兵反坦克表现](infantry-anti-tank-vfx-design.md)、[过穿表现](overpenetration-vfx-design.md)；视觉未实机验收 |
 | 分辨率与体验版 | 主体等比例完整显示、容器 resize 适配；demo 隐藏开发入口、单人固定硬核 / 谢尔曼、存档隔离；当前构建档为 development | 专项已有，总策划缺边界 | [菜单适配](MenuNavigation.md#分辨率适配)、[体验版构建](demo-build.md)、[BuildProfile.ts](../assets/scripts/core/BuildProfile.ts) |

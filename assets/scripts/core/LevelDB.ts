@@ -24,7 +24,7 @@ export type ChapterId = string;
 export interface LevelMeta {
   /** Chapter this level belongs to. */
   chapterId: ChapterId;
-  /** 关卡编号 1..12；也是解锁顺序 */
+  /** 章节内关卡编号；也是解锁顺序 */
   id: number;
   /** 任务 JSON 在 resources/ 下的相对路径（无扩展名） */
   missionPath: string;
@@ -62,7 +62,7 @@ export const CUSTOM_CHAPTER_ID = 'custom';
 export const LEVEL_EDITOR_ENTRY_ID = 0;
 
 /**
- * 12 关卡配置。当前已实装到 mission_12（`assets/resources/missions/mission_12.json`）。
+ * 欧洲 13 关、太平洋 12 关，以及战役与自定义入口。
  */
 const ALL_CHAPTERS: ChapterMeta[] = [
   {
@@ -83,6 +83,7 @@ const ALL_CHAPTERS: ChapterMeta[] = [
       { chapterId: DEFAULT_CHAPTER_ID, id: 10, missionPath: 'missions/mission_10', titleKey: 'level.10.title', missionId: 'mission_10' },
       { chapterId: DEFAULT_CHAPTER_ID, id: 11, missionPath: 'missions/mission_11', titleKey: 'level.11.title', missionId: 'mission_11' },
       { chapterId: DEFAULT_CHAPTER_ID, id: 12, missionPath: 'missions/mission_12', titleKey: 'level.12.title', missionId: 'mission_12' },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 13, missionPath: 'missions/mission_13', titleKey: 'level.13.title', missionId: 'mission_13', alwaysUnlocked: true },
     ],
   },
   {
@@ -238,15 +239,15 @@ export function getCustomChapterLevels(): LevelMeta[] {
 export const MENU_STATE_KEY = profileStorageKey('lone_sherman_menu_v1');
 
 /**
- * 至少解锁到此关：测试期间设为 `LEVELS.length`（当前 = 12），主菜单全部关卡开放，
- * 方便绕过通关链直接进入任意已实装关卡（mission_01..12）。
+ * 至少解锁到此关：测试期间设为正式任务最大编号，主菜单全部关卡开放，
+ * 方便绕过通关链直接进入任意已实装关卡（欧洲 mission_01..13）。
  * 正式发布前若要恢复「按通关顺序解锁」可把
  * 它改回 1（仅首关默认开放），既有玩家存档里 unlockedLevel 较大的值会照常保留。
  */
 const MIN_UNLOCKED_LEVEL = Math.max(...LEVELS.map(l => l.id));
 
 export interface MenuState {
-  /** 已解锁到第几关（1..12）。新档至少为 MIN_UNLOCKED_LEVEL。通关 n 后解锁 n+1 */
+  /** 已解锁到第几关。新档至少为 MIN_UNLOCKED_LEVEL。通关 n 后解锁 n+1 */
   unlockedLevel: number;
   /** 通关过的关卡编号列表（用于 ★） */
   completedLevels: number[];

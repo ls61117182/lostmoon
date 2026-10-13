@@ -1,3 +1,5 @@
+import { loadCampaignShell } from './CampaignUpgrade';
+import { AirbornePlan, planAirborneSupport, landAirborneUnit } from './AirborneSupport';
 /**
  * 回合结束事件：根据已掷好的主骰与配置行，生成说明文案 key + 延迟执行的应用函数。
  * UI 层先播动画，玩家确认后再调用 apply()。
@@ -27,7 +29,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
-import { Axial, Direction, effectiveDiceTerrain, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isFootKind, isFootUnit, isTankKind, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
+import { initialMainGunLoadingState, Axial, Direction, effectiveDiceTerrain, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isFootKind, isFootUnit, isTankKind, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
   mission: LoadedMission;
@@ -39,6 +41,8 @@ export interface TurnEndApplyContext {
   gunMantletArmor?: boolean;
   unitDamageTargetClass?: boolean;
   weather?: WeatherType;
+  hardcoreReload?: boolean;
+  airborneAllowedKeys?: ReadonlySet<string>;
 }
 
 /** 额外判定骰（点数已预掷；展示节奏由事件面板决定） */
@@ -69,6 +73,7 @@ export interface AdjacentInfantryVolleyPreview {
 }
 
 export interface TurnEndPrepared {
+  airbornePlan?: AirbornePlan;
   bodyKey: string;
   bodyParams: Record<string, string | number>;
   apply: () => void;
@@ -230,9 +235,10 @@ function requireReinforcementSide(row: TurnEndEventRow): ReinforcementSide {
   throw new Error(`[TurnEnd] ${row.effectType} requires reinforcementSide=friendly|enemy`);
 }
 
-function addReinforcement(mission: LoadedMission, unit: Unit, side: ReinforcementSide): void {
+function addReinforcement(mission: LoadedMission, unit: Unit, side: ReinforcementSide, hardcoreReload = false): void {
   unit.sideId = side === 'friendly' ? 'player' : 'enemy';
   unit.controller = 'ai';
+  if (hardcoreReload) Object.assign(unit, initialMainGunLoadingState(unit.stats));
   (side === 'friendly' ? mission.allies : mission.enemies).push(unit);
 }
 
@@ -289,6 +295,7 @@ function prepareTankSpawnEvent(
   baseParams: Record<string, string | number>,
   spawnPoint: 'eid' | 'rid',
   side: ReinforcementSide,
+  hardcoreReload = false,
 ): TurnEndPrepared {
   const spawnDie = rng.d6();
   const tile = spawnPoint === 'rid'
@@ -338,7 +345,7 @@ function prepareTankSpawnEvent(
       // missing crew object makes isAbandonedTank() treat a fresh reinforcement
       // as an empty vehicle and the next attack (including a miss) neutralizes it.
       restoreFullTankCrew(reinforcement);
-      addReinforcement(mission, reinforcement, side);
+      addReinforcement(mission, reinforcement, side, hardcoreReload);
     },
   };
 }
@@ -548,6 +555,15 @@ export function prepareTurnEndEvent(
   const baseParams: Record<string, string | number> = { d1, d2, sum };
 
   switch (row.effectType as TurnEndEffectType) {
+    case 'airborne_support': {
+      const plan = planAirborneSupport(mission, requireReinforcementSide(row), rng, ctx.nextEnemyId, ctx.airborneAllowedKeys);
+      return {
+        bodyKey: plan ? 'turnEnd.airborne.placed' : 'turnEnd.airborne.cancelled',
+        bodyParams: { ...baseParams, count: plan?.units.length ?? 0 },
+        airbornePlan: plan ?? undefined,
+        apply: () => { if (plan) plan.units.forEach(unit => landAirborneUnit(mission, plan, unit)); },
+      };
+    }
     case 'none': {
       // 显式「本回合无事件」行（mission_07 7-8）：保持事件面板的范围完整列表，
       // 不触发任何骰 / 行动；turnEndRowForSum 落到这里时也走完正常 UI 流程，避免 console.warn。
@@ -588,7 +604,7 @@ export function prepareTurnEndEvent(
       else if ((sh.fireLevel ?? 0) > 0) bodyKey = 'turnEnd.commanderExtra.fire';
       else if (sh.paralyzed) bodyKey = 'turnEnd.commanderExtra.paralyze';
       else if (sh.turretDamaged) bodyKey = 'turnEnd.commanderExtra.turret';
-      else bodyKey = 'turnEnd.commanderExtra.load';
+      else bodyKey = ctx.hardcoreReload ? 'turnEnd.commanderExtra.loadProgress' : 'turnEnd.commanderExtra.load';
       return {
         bodyKey,
         bodyParams: baseParams,
@@ -607,8 +623,8 @@ export function prepareTurnEndEvent(
             sh.turretDamaged = false;
             return;
           }
-          sh.loaded = true;
-          sh.loadedShell = 'ap';
+          if (ctx.hardcoreReload) loadCampaignShell(sh, sh.loadedShell ?? 'ap');
+          else { sh.loaded = true; sh.loadedShell = 'ap'; }
         },
       };
     }
@@ -643,7 +659,7 @@ export function prepareTurnEndEvent(
             pos: { ...pos },
             facing,
             stats,
-          }, side);
+          }, side, ctx.hardcoreReload);
         },
       };
     }
@@ -721,22 +737,22 @@ export function prepareTurnEndEvent(
       };
     }
     case 'panzer3_spawn': {
-      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer3', 'eid'), requireReinforcementSide(row));
+      return prepareTankSpawnEvent('panzer3', 'panzer3', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer3', 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'type97_spawn': {
-      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type97', 'rid'), requireReinforcementSide(row));
+      return prepareTankSpawnEvent('type97', 'type97', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type97', 'rid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'type95_spawn': {
-      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type95', 'rid'), requireReinforcementSide(row));
+      return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type95', 'rid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'panzer4_spawn': {
-      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer4', 'eid'), requireReinforcementSide(row));
+      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer4', 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'tiger_spawn': {
-      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'tiger', 'eid'), requireReinforcementSide(row));
+      return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'tiger', 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'sherman_spawn': {
-      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'sherman', 'eid'), requireReinforcementSide(row));
+      return prepareTankSpawnEvent('sherman', 'sherman', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'sherman', 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'german_truck_move': {
       const path = ctx.mission.data.truckPath;
@@ -905,7 +921,7 @@ export function prepareTurnEndEvent(
     }
     case 'clear_mine': {
       const t = mission.map.get(sh.pos);
-      const onClear = t?.terrain === 'clear';
+      const onClear = effectiveDiceTerrain(t) === 'clear';
       if (sh.destroyed || sh.paralyzed || !onClear) {
         return {
           bodyKey: 'turnEnd.clearMine.skip',

@@ -57,6 +57,6 @@ generateRandomMissionPackage('europe', seed, {
 ## 兼容性
 
 - 自定义关卡包 schema 已升级到 v2；v1 包会在读取时自动补齐 `playerTank`。
-- 战斗存档已升级到 v11，保存 `sideId` 和 `controller`；v2–v10 存档仍可读取。
+- 战斗存档当前为v12，保存 `sideId`、`controller`、装填进度 / 弹种 / 完成状态；v2–v11仍可读取。v12采用有限弹药装填完成时才扣除的规则，兼容迁移旧版提前扣弹的未完成装填状态。
 - 保存时仍写出 `sherman` 兼容字段，供旧版本读取。
 - 战役跨段继承玩家当前车型，不再固定重建为 Sherman。

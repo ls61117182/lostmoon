@@ -2,7 +2,7 @@
  * 行动阶段骰子逻辑 —— 纯 TypeScript，不依赖 Cocos。
  *
  * GDD §3.6.1：掷骰数由当前子阶段、谢尔曼当前格地形与乘员状态共同决定。
- * 硬核攻击阶段使用“地形火力值修正 + 固定 2 骰 + 乘员加成”，杂项阶段使用
+ * 硬核攻击阶段使用“基础火力 + 地形修正 + 岗位加骰 + 强化修正”，杂项阶段使用
  * “地形杂项修正 + 固定 1 骰 + 开舱车长加成”，其余阶段沿用配置规则，
  * 最后经配置的下限与可选上限钳制。
  * 玩家进入某一子阶段时重摇该数量的骰，再按骰面拖入对应行动槽。
@@ -120,12 +120,10 @@ export interface ActionDicePoolOpts {
   /** 硬核模式使用独立骰池，并在移动阶段加入当前坦克机动属性。 */
   hardcore?: boolean;
   mobility?: number;
-  /** 基础火力6为基准；玩家通过骰数体现火力差异。 */
+  /** 基础火力可为负整数；合计岗位、地形与强化后再应用骰数下限。 */
   firepower?: number;
 }
 
-/** 硬核玩家攻击阶段不随地形变化的基础骰数。地形表中的 attack_* 仅表示火力值修正。 */
-export const HARDCORE_PLAYER_ATTACK_BASE_DICE = 2;
 /** 硬核玩家杂项阶段不随地形变化的基础骰数。地形表中的 misc_* 仅表示杂项修正。 */
 export const HARDCORE_PLAYER_MISC_BASE_DICE = 1;
 
@@ -139,7 +137,7 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
   let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
 
   if (opts.hardcore && opts.subPhase === 'movement') n += opts.mobility ?? 0;
-  if (opts.hardcore && opts.subPhase === 'attack') n += HARDCORE_PLAYER_ATTACK_BASE_DICE + (opts.firepower ?? 6) - 6;
+  if (opts.hardcore && opts.subPhase === 'attack') n += opts.firepower ?? 2;
   if (opts.hardcore && opts.subPhase === 'misc') n += HARDCORE_PLAYER_MISC_BASE_DICE;
 
   /** 舱盖加骰仅在车长存活时成立（车长阵亡后 `hatchOpen` 可能未及时清位） */

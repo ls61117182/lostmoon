@@ -1,6 +1,9 @@
 ﻿mission_id,sum_min,sum_max,dice_count,effect_type,notes,reinforcement_side
 任务ID,骰子和最小值,骰子和最大值,骰子数量,效果类型,备注,增援方位
 mission_01,2,3,2,sniper,说明书：狙击手,
+mission_13,2,4,2,adjacent_infantry_fire,诺曼底：仅邻近敌步兵发动齐射；不新增守军,
+mission_13,5,9,2,none,诺曼底：战场短暂平静,
+mission_13,10,12,2,commander_extra,诺曼底：车长督促装填或抢修,
 mission_01,4,4,2,commander_extra,车长额外行动,
 mission_01,5,6,2,infantry_spawn,德军步兵→红格 rid,enemy
 mission_01,7,8,2,adjacent_infantry_fire,相邻步兵齐射,

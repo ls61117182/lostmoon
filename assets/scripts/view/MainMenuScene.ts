@@ -1,4 +1,5 @@
 import { createMenuBackground } from './MenuBackground';
+import { drawBeachEdge, drawBeachOverlays } from './BeachTerrainVisual';
 import { supportMarkerVisuals } from './SupportMarkerVisual';
 import { BUILD_FEATURES } from '../core/BuildProfile';
 /**
@@ -73,7 +74,8 @@ import {
   terrainCategoryForCode,
 } from '../core/TerrainCatalog';
 import { isAntiTankGunKind, isFootKind, isTankKind } from '../core/types';
-import type { MissionData, MissionObjective, SeasonType, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
+import type { MissionData, MissionObjective, RoundEventConfig, SeasonType, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
+import { validateRoundEvents } from '../core/RoundEvents';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
 import {
@@ -242,7 +244,7 @@ export class MainMenuScene extends Component {
   private playerTankSelectLabel: Label | null = null;
   private selectedPlayerTankKind: UnitKind = 'sherman';
 
-  // 关卡按钮池（1..12，对应 LEVELS）
+  // 关卡按钮池（对应所选章节的任务目录）
   private levelBtns: ButtonRefs[] = [];
   private chapterBtns: ButtonRefs[] = [];
   private selectedChapterId: string = DEFAULT_CHAPTER_ID;
@@ -1119,7 +1121,7 @@ export class MainMenuScene extends Component {
   }
 
   // ================================================================
-  // 12 关卡栅格（6 × 2）
+  // 关卡栅格（6 列；超过两行时压缩纵向尺寸）
   // ================================================================
   private buildLevelGrid() {
     if (this.levelGridRoot && this.levelGridRoot.isValid) this.levelGridRoot.destroy();
@@ -1154,15 +1156,18 @@ export class MainMenuScene extends Component {
       return;
     }
 
+    const gridRows = Math.ceil(levels.length / 6);
+    const buttonH = gridRows > 2 ? 88 : LEVEL_BTN_H;
+    const gapY = gridRows > 2 ? 18 : LEVEL_GRID_GAP_Y;
     for (let i = 0; i < levels.length; i++) {
       const meta = levels[i];
       const col = i % 6;
       const row = Math.floor(i / 6);
       const x = LEVEL_GRID_START_X + col * (LEVEL_BTN_W + LEVEL_GRID_GAP_X);
-      const y = LEVEL_GRID_START_Y - row * (LEVEL_BTN_H + LEVEL_GRID_GAP_Y);
+      const y = LEVEL_GRID_START_Y - row * (buttonH + gapY);
 
       const btn = this.makeRectButton(
-        root, x, y, LEVEL_BTN_W, LEVEL_BTN_H,
+        root, x, y, LEVEL_BTN_W, buttonH,
         BTN_LEVEL_LOCKED, () => this.onClickLevel(meta),
       );
       btn.node.name = `LevelBtn_${meta.entryKind ?? 'mission'}_${meta.id}`;
@@ -1170,7 +1175,7 @@ export class MainMenuScene extends Component {
       // 左上角大编号
       const idStr = meta.badgeOverride ?? (meta.id > 0 ? String(meta.id).padStart(2, '0') : 'T');
       const idLabel = this.makeLabel(btn.node, idStr,
-        -LEVEL_BTN_W / 2 + 32, LEVEL_BTN_H / 2 - 26, 60, 36, 30, TEXT_PRIMARY);
+        -LEVEL_BTN_W / 2 + 32, buttonH / 2 - 26, 60, 36, 30, TEXT_PRIMARY);
       idLabel.horizontalAlign = HorizontalTextAlignment.LEFT;
       idLabel.enableOutline = true;
       idLabel.outlineColor = TEXT_OUTLINE;
@@ -1179,7 +1184,7 @@ export class MainMenuScene extends Component {
 
       // 右上角 ★（仅通关显示）
       const starLabel = this.makeLabel(btn.node, '★',
-        LEVEL_BTN_W / 2 - 20, LEVEL_BTN_H / 2 - 22, 24, 24, 22, TEXT_STAR);
+        LEVEL_BTN_W / 2 - 20, buttonH / 2 - 22, 24, 24, 22, TEXT_STAR);
       starLabel.enableOutline = true;
       starLabel.outlineColor = TEXT_OUTLINE;
       starLabel.outlineWidth = 2;
@@ -1201,7 +1206,7 @@ export class MainMenuScene extends Component {
       const titleUt = titleN.addComponent(UITransform);
       titleUt.setAnchorPoint(0.5, 0);
       titleUt.setContentSize(titleW, 24);
-      titleN.setPosition(0, -LEVEL_BTN_H / 2 + titleBottomInset, 0);
+      titleN.setPosition(0, -buttonH / 2 + titleBottomInset, 0);
       const titleLabel = titleN.addComponent(Label);
       titleLabel.string = meta.titleOverride ?? t(meta.titleKey);
       titleLabel.fontSize = 16;
@@ -2926,6 +2931,7 @@ export class MainMenuScene extends Component {
       { code: 'a', key: 'terrain.airstrip', color: new Color(151, 141, 114, 235), spriteKey: 'clear' },
       { code: 'T', key: 'terrain.trees', color: new Color(48, 112, 67, 235), spriteKey: 'trees' },
       { code: 'B', key: 'terrain.beach', color: new Color(165, 143, 94, 235), spriteKey: 'beach' },
+      { code: 'eb', key: 'terrain.europe_beach', color: new Color(194, 181, 151, 255), spriteKey: null },
       { code: 'H', key: 'terrain.rocky', color: new Color(120, 118, 112, 235), spriteKey: 'rocky' },
       { code: 'dw', key: 'terrain.deep_water', color: new Color(56, 98, 118, 235), spriteKey: null },
       { code: 'u', key: 'terrain.urban_ground', color: new Color(142, 140, 132, 235), spriteKey: 'urban_ground' },
@@ -3003,6 +3009,9 @@ export class MainMenuScene extends Component {
     let draftAllies: UnitPlacement[] = cloneJson(existingPackage?.mission.allies ?? []);
     let draftEnemies: UnitPlacement[] = cloneJson(existingPackage?.mission.enemies ?? [defaultEnemy()]);
     let draftTurnEndEvents: TurnEndEventRow[] = cloneJson(existingPackage?.turnEndEvents ?? []);
+    let draftRoundEvents: RoundEventConfig[] = cloneJson(existingPackage?.mission.roundEvents ?? []);
+    let eventEditorMode: 'random' | 'round' = 'random';
+    let eventPage = 0;
     let draftEnemyStartByDice = !!existingPackage?.mission.enemyStartByDice;
     let draftShermanStartByDice = !!existingPackage?.mission.shermanStartByDice;
     let draftEnemyDiceEidMax = existingPackage?.mission.enemyDiceEidMax;
@@ -3140,6 +3149,7 @@ export class MainMenuScene extends Component {
       'type95_spawn',
       'type97_spawn',
       'heavy_mortar',
+      'airborne_support',
     ];
     const eventRanges = [
       [2, 3], [4, 4], [5, 6], [7, 8], [9, 9], [10, 10], [11, 12],
@@ -3178,6 +3188,8 @@ export class MainMenuScene extends Component {
       draftAllies = [];
       draftEnemies = [defaultEnemy()];
       draftTurnEndEvents = [];
+      draftRoundEvents = [];
+      eventPage = 0;
       draftEnemyStartByDice = false;
       draftShermanStartByDice = false;
       draftEnemyDiceEidMax = undefined;
@@ -3207,7 +3219,7 @@ export class MainMenuScene extends Component {
       return ['road', 'field', 'mud', 'forest', 'water'].includes(key) ? `${key}_snow` : key;
     };
     const terrainToolLabel = (tool: TerrainTool) => {
-      if (tool.code && draftSeason === 'winter' && draftTerrainCategory === 'europe') {
+      if (tool.code && ['f', 'r', 'm', 'F', 'w'].includes(tool.code) && draftSeason === 'winter' && draftTerrainCategory === 'europe') {
         return t(`${tool.key}_snow`);
       }
       return t(tool.key);
@@ -3231,6 +3243,8 @@ export class MainMenuScene extends Component {
       if (['u', 'ur', 'ui', 'ud'].includes(tile.t)) delete tile.bd;
       if (tile.t === 'dw') delete tile.h;
       if (tile.t !== 'c' && tile.t !== 'T') delete tile.bw;
+      if (tile.t !== 'eb') { delete tile.sh; delete tile.cr; }
+      if (['w', 'dw', 'B'].includes(tile.t)) { delete tile.wire; delete tile.sw; }
       if (tile.t !== 'w') delete tile.br;
       if (tile.t !== 'r' && tile.t !== 'ur' && tile.t !== 'a') {
         delete tile.rd;
@@ -3249,6 +3263,41 @@ export class MainMenuScene extends Component {
         delete tile.eid;
         delete tile.ef;
       }
+    };
+    const openBeachProps = (tile: TileDef) => {
+      const popup = new Node('BeachObstacleProps');
+      popup.layer = this.node.layer;
+      popup.addComponent(UITransform).setContentSize(330, 370);
+      const background = popup.addComponent(Graphics);
+      background.fillColor = new Color(30, 37, 32, 255);
+      background.rect(-165, -185, 330, 370); background.fill();
+      propRoot.addChild(popup);
+      const refresh = () => {
+        popup.removeAllChildren();
+        this.makeLabel(popup, getLang() === 'zh' ? '海滩与边界障碍' : 'Beach and edge obstacles', 0, 158, 310, 30, 17, TEXT_TITLE);
+        const button = (label: string, x: number, y: number, w: number, active: boolean, click: () => void) => {
+          const btn = this.makeRectButton(popup, x, y, w, 25, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => { click(); redrawAllCells(); refresh(); });
+          this.makeLabel(btn.node, label, 0, 0, w - 6, 24, 12, TEXT_PRIMARY);
+        };
+        if (tile.t === 'eb') {
+          button(getLang() === 'zh' ? '钢制拒马' : 'Steel hedgehogs', -76, 120, 136, tile.sh === 1, () => { if (tile.sh) delete tile.sh; else tile.sh = 1; });
+          button(getLang() === 'zh' ? '弹坑' : 'Crater', 76, 120, 136, tile.cr === 1, () => { if (tile.cr) delete tile.cr; else tile.cr = 1; });
+        }
+        const states = getLang() === 'zh' ? ['无', '完好', '损坏'] : ['None', 'Intact', 'Damaged'];
+        ['E', 'SE', 'SW', 'W', 'NW', 'NE'].forEach((dir, i) => {
+          const y = 80 - i * 30, wire = /^[012]{6}$/.test(tile.wire ?? '') ? tile.wire! : '000000', state = Number(wire[i]);
+          this.makeLabel(popup, dir, -130, y, 30, 24, 13, TEXT_TITLE);
+          button(`${getLang() === 'zh' ? '铁丝网' : 'Wire'}: ${states[state]}`, -34, y, 140, state !== 0, () => {
+            const chars = wire.split(''); chars[i] = String((state + 1) % 3);
+            const next = chars.join(''); if (next === '000000') delete tile.wire; else tile.wire = next;
+          });
+          if (draftTerrainCategory === 'europe') button(getLang() === 'zh' ? '海堤' : 'Seawall', 105, y, 78, normalizeFlags(tile.sw)[i] === '1', () => { tile.sw = setFlag(tile.sw, i, normalizeFlags(tile.sw)[i] !== '1'); });
+        });
+        this.makeLabel(popup, getLang() === 'zh' ? '点击铁丝网：无 → 完好 → 损坏' : 'Wire cycles: none → intact → damaged', 0, -116, 300, 24, 12, TEXT_SUBTITLE);
+        const close = this.makeRectButton(popup, 0, -154, 130, 28, BTN_LEVEL_UNLOCKED, () => { popup.destroy(); refreshSelection(); });
+        this.makeLabel(close.node, getLang() === 'zh' ? '完成' : 'Done', 0, 0, 120, 26, 14, TEXT_PRIMARY);
+      };
+      refresh();
     };
     const redrawAllCells = () => {
       for (let row = 0; row < rows; row++) {
@@ -3416,11 +3465,42 @@ export class MainMenuScene extends Component {
               draftObjective.evacAt = selectedOffset();
             }, 12);
           }
-          this.makeLabel(propRoot, '回合结束事件', 0, -84, 170, 22, 14, TEXT_TITLE);
+          addPlainBtn('回合随机事件', -62, -84, 116, 24, eventEditorMode === 'random', () => { eventEditorMode = 'random'; eventPage = 0; }, 12);
+          addPlainBtn('回合事件', 62, -84, 110, 24, eventEditorMode === 'round', () => { eventEditorMode = 'round'; eventPage = 0; }, 12);
           addPlainBtn('新增事件', 0, -110, 100, 24, false, () => {
-            draftTurnEndEvents.push({ missionId: '', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'none' });
+            if (eventEditorMode === 'round') {
+              draftRoundEvents.push({ effectType: 'airborne_support', reinforcementSide: 'friendly', turns: 'every', condition: 'clear' });
+              eventPage = Math.floor((draftRoundEvents.length - 1) / 2);
+            } else {
+              draftTurnEndEvents.push({ missionId: '', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'none' });
+              eventPage = Math.floor((draftTurnEndEvents.length - 1) / 3);
+            }
           }, 12);
-          const rowsToShow = draftTurnEndEvents.slice(0, 4);
+          if (eventEditorMode === 'round') {
+            const pageCount = Math.max(1, Math.ceil(draftRoundEvents.length / 2));
+            eventPage = Math.min(eventPage, pageCount - 1);
+            draftRoundEvents.slice(eventPage * 2, eventPage * 2 + 2).forEach((event, i) => {
+              const y = -140 - i * 52;
+              addPlainBtn(event.effectType === 'airborne_support' ? '空降兵支援' : event.effectType, -48, y, 140, 24, true, () => {
+                event.effectType = cycleIn(eventEffects, event.effectType, 'none');
+                if (event.effectType.endsWith('_spawn') || event.effectType === 'airborne_support') event.reinforcementSide ??= 'friendly';
+              }, 11);
+              addPlainBtn(event.reinforcementSide === 'enemy' ? '敌方' : '友方', 50, y, 46, 24, false, () => { event.reinforcementSide = event.reinforcementSide === 'enemy' ? 'friendly' : 'enemy'; }, 11);
+              addPlainBtn('删', 98, y, 34, 24, false, () => { draftRoundEvents.splice(eventPage * 2 + i, 1); }, 11);
+              this.makeLabel(propRoot, '触发回合', -80, y - 24, 72, 22, 11, TEXT_SUBTITLE);
+              const input = this.makeInputField(propRoot, 34, y - 24, 166, 23, '每回合 或 1,3,5', false, event.turns == null || event.turns === 'every' ? '每回合' : event.turns.join(','));
+              input.node.on(EditBox.EventType.TEXT_CHANGED, () => {
+                const value = input.string.trim();
+                event.turns = value === '每回合' || value === 'every' ? 'every' : value.split(/[,，、\s]+/).map(Number);
+              });
+            });
+            addPlainBtn(`上一页 ${eventPage + 1}/${pageCount}`, -60, -246, 112, 24, false, () => { eventPage = (eventPage + pageCount - 1) % pageCount; }, 11);
+            addPlainBtn('下一页', 64, -246, 104, 24, false, () => { eventPage = (eventPage + 1) % pageCount; }, 11);
+            return;
+          }
+          const randomPageCount = Math.max(1, Math.ceil(draftTurnEndEvents.length / 3));
+          eventPage = Math.min(eventPage, randomPageCount - 1);
+          const rowsToShow = draftTurnEndEvents.slice(eventPage * 3, eventPage * 3 + 3);
           for (let i = 0; i < rowsToShow.length; i++) {
             const ev = rowsToShow[i]!;
             const y = -138 - i * 28;
@@ -3430,15 +3510,18 @@ export class MainMenuScene extends Component {
               ev.sumMin = next[0]!;
               ev.sumMax = next[1]!;
             }, 11);
-            addPlainBtn(ev.effectType, 0, y, 104, 24, true, () => {
+            addPlainBtn(ev.effectType === 'airborne_support' ? '空降支援' : ev.effectType, -10, y, 88, 24, true, () => {
               ev.effectType = cycleIn(eventEffects, ev.effectType, 'none');
+              if (ev.effectType.endsWith('_spawn') || ev.effectType === 'airborne_support') ev.reinforcementSide ??= 'enemy';
             }, 10);
-            addPlainBtn('删', 84, y, 44, 24, false, () => {
-              draftTurnEndEvents.splice(i, 1);
+            addPlainBtn(ev.reinforcementSide === 'friendly' ? '友' : '敌', 56, y, 32, 24, false, () => { ev.reinforcementSide = ev.reinforcementSide === 'friendly' ? 'enemy' : 'friendly'; }, 11);
+            addPlainBtn('删', 98, y, 34, 24, false, () => {
+              draftTurnEndEvents.splice(eventPage * 3 + i, 1);
             }, 12);
           }
           if (draftTurnEndEvents.length > rowsToShow.length) {
-            this.makeLabel(propRoot, `还有 ${draftTurnEndEvents.length - rowsToShow.length} 条，保存/导出会保留`, 0, -238, 230, 20, 11, TEXT_SUBTITLE);
+            addPlainBtn(`上一页 ${eventPage + 1}/${randomPageCount}`, -60, -238, 112, 24, false, () => { eventPage = (eventPage + randomPageCount - 1) % randomPageCount; }, 11);
+            addPlainBtn('下一页', 64, -238, 104, 24, false, () => { eventPage = (eventPage + 1) % randomPageCount; }, 11);
           }
           return;
         }
@@ -3736,7 +3819,7 @@ export class MainMenuScene extends Component {
           });
         }
         addBtn('清空附加', allowsBuilding ? 72 : 0, 82, 112, 28, false, () => {
-          delete tile.bd; delete tile.h; delete tile.bw; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
+          delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
         });
         const sectionY = 8;
         if (allowsHedge) {
@@ -3781,7 +3864,11 @@ export class MainMenuScene extends Component {
           });
         }
         const raw = JSON.stringify(tile);
-        const rawLabel = this.makeLabel(propRoot, raw, 0, -210, 250, 22, 10, TEXT_SUBTITLE);
+        if (!['w', 'dw', 'B'].includes(tile.t)) {
+          const obstacleBtn = this.makeRectButton(propRoot, 0, -210, 224, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
+          this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩附加物' : 'Wire / seawall / beach overlays', 0, 0, 216, 24, 12, TEXT_PRIMARY);
+        }
+        const rawLabel = this.makeLabel(propRoot, raw, 0, -242, 310, 20, 10, TEXT_SUBTITLE);
         rawLabel.overflow = Label.Overflow.SHRINK;
         return;
       }
@@ -3837,7 +3924,7 @@ export class MainMenuScene extends Component {
         });
       }
       addBtn('清空附加', allowsBuilding ? 72 : 0, 146, 112, 28, false, () => {
-        delete tile.bd; delete tile.h; delete tile.bw; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
+        delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
       });
       const sectionY = 66;
       if (allowsHedge) {
@@ -3882,7 +3969,11 @@ export class MainMenuScene extends Component {
         });
       }
       const raw = JSON.stringify(tile);
-      const rawLabel = this.makeLabel(propRoot, raw, 0, -178, 250, 22, 10, TEXT_SUBTITLE);
+      if (!['w', 'dw', 'B'].includes(tile.t)) {
+        const obstacleBtn = this.makeRectButton(propRoot, 0, -210, 224, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
+        this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩附加物' : 'Wire / seawall / beach overlays', 0, 0, 216, 24, 12, TEXT_PRIMARY);
+      }
+      const rawLabel = this.makeLabel(propRoot, raw, 0, -242, 310, 20, 10, TEXT_SUBTITLE);
       rawLabel.overflow = Label.Overflow.SHRINK;
     };
     let unitListTouchY: number | null = null;
@@ -4120,6 +4211,14 @@ export class MainMenuScene extends Component {
             outlineGraphics.stroke();
           }
         }
+        drawBeachOverlays(outlineGraphics, 0, 0, radius, tile.cr === 1, tile.sh === 1);
+        for (let i = 0; i < 6; i++) {
+          const a = [0, -60, -120, 180, 120, 60][i];
+          const p1 = pointForAngle(a - 30), p2 = pointForAngle(a + 30);
+          if (normalizeFlags(tile.sw)[i] === '1') drawBeachEdge(outlineGraphics, p1.x, p1.y, p2.x, p2.y, radius, 'seawall');
+          const state = Number(tile.wire?.[i] ?? 0);
+          if (state === 1 || state === 2) drawBeachEdge(outlineGraphics, p1.x, p1.y, p2.x, p2.y, radius, 'wire', state);
+        }
         const hedge = normalizeFlags(tile.h);
         outlineGraphics.strokeColor = winter ? new Color(124, 94, 66, 255) : new Color(73, 123, 53, 255);
         outlineGraphics.lineWidth = 5;
@@ -4147,6 +4246,7 @@ export class MainMenuScene extends Component {
           outlineGraphics.stroke();
         }
         if (tile.bd === 1) {
+          // Beach obstacles are independent overlays, never building/vision blockers.
           outlineGraphics.fillColor = winter ? new Color(225, 235, 238, 250) : new Color(92, 68, 44, 245);
           outlineGraphics.rect(-8, -7, 16, 14);
           outlineGraphics.fill();
@@ -4515,6 +4615,8 @@ export class MainMenuScene extends Component {
       draftAllies = cloneJson(mission.allies ?? []);
       draftEnemies = cloneJson(mission.enemies ?? [defaultEnemy()]);
       draftTurnEndEvents = cloneJson([...turnEndEvents]);
+      draftRoundEvents = cloneJson(mission.roundEvents ?? []);
+      eventPage = 0;
       draftEnemyStartByDice = !!mission.enemyStartByDice;
       draftShermanStartByDice = !!mission.shermanStartByDice;
       draftEnemyDiceEidMax = mission.enemyDiceEidMax;
@@ -4897,6 +4999,7 @@ export class MainMenuScene extends Component {
         actionTableId: draftBaseMission.actionTableId ?? 'standard',
         aiTableId: draftBaseMission.aiTableId ?? 'standard',
         eventTableId: draftBaseMission.eventTableId ?? missionId,
+        roundEvents: cloneJson(draftRoundEvents),
       };
       if (draftRowParityOffset === 1) mission.rowParityOffset = 1;
       else delete mission.rowParityOffset;
@@ -4950,6 +5053,8 @@ export class MainMenuScene extends Component {
       const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
       const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
       const mission = buildDraftMission(id, oldPkg, name);
+      const errors = validateRoundEvents(mission.roundEvents);
+      if (errors.length) { statusLabel.string = '回合事件配置无效：触发回合必须是不重复的正整数，或填写“每回合”。'; return; }
       const json = JSON.stringify({ mission, turnEndEvents: buildTurnEndEvents(mission.id) }, null, 2);
       console.log('[LevelEditor] exported custom mission package JSON:\n' + json);
       const copied = copyTextToClipboard(json);
@@ -4966,6 +5071,8 @@ export class MainMenuScene extends Component {
         const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
         const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
         const mission = buildDraftMission(id, oldPkg, name);
+        const errors = validateRoundEvents(mission.roundEvents);
+        if (errors.length) { statusLabel.string = '回合事件配置无效：触发回合必须是不重复的正整数，或填写“每回合”。'; return; }
         editingPackageId = CustomMissionStore.save(id, {
           schemaVersion: 2,
           editorVersion: 'menu-editor-mvp',

@@ -18,6 +18,7 @@ const DEFAULT_HARDCORE_TANK_ACTION_TABLE = { attack: 'attack1', move: 'move1', m
 const HARDCORE_TANK_TERRAINS = ['road', 'field', 'mud', 'clear', 'trees', 'beach', 'airstrip'];
 const CREW_SLOTS = ['commander', 'loader', 'gunner', 'driver', 'coDriver'];
 const AI_ACTIONS = [
+  'reload',
   'shoot',
   'ambush',
   'turn',

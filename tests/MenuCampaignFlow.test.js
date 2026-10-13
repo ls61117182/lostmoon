@@ -112,8 +112,8 @@ test('invalid campaign saves are rejected without damaging the mission slot', ()
   }
 });
 
-test('mission catalog exposes both twelve-level theaters and three ungenerated random choices', () => {
-  assert.equal(getChapterLevels('europe').length, 12);
+test('mission catalog exposes thirteen European and twelve Pacific levels plus three random choices', () => {
+  assert.equal(getChapterLevels('europe').length, 13);
   assert.equal(getChapterLevels('pacific').length, 12);
   const before = new Map(storage);
   assert.equal(getRandomMissionLevels().length, 3);

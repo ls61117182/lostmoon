@@ -21,6 +21,7 @@
 const fs = require('fs');
 const path = require('path');
 const { readCsvRowsSmart } = require('./csvSmart');
+const { validateLangReferences } = require('./validateLangKeys');
 
 const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'lang.csv');
@@ -138,6 +139,7 @@ function build() {
     requiredHeaders: ['key', 'zh', 'en'],
   });
   const entries = rowsToEntries(rows);
+  validateLangReferences(entries, ROOT);
 
   // 生成 TS
   const lines = [];

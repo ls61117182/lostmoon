@@ -104,7 +104,7 @@ assert.deepStrictEqual(
     move_trees: -1,
     move_beach: -3,
     move_rocky: -2,
-    move_airstrip: 0,
+    move_airstrip: 1,
   },
   'hardcore movement terrain modifiers should all increase by one',
 );
@@ -132,7 +132,7 @@ assert.deepStrictEqual(
     misc_trees: 1,
     misc_beach: 0,
     misc_rocky: -1,
-    misc_airstrip: 0,
+    misc_airstrip: -1,
   },
   'hardcore misc terrain values should be modifiers after subtracting one die',
 );
@@ -149,12 +149,12 @@ assert.deepStrictEqual(
     row.fallback2_crew,
   ]])),
   {
-    'attack1:1': ['shoot', '', '', '', '', ''],
-    'attack1:2': ['shoot', 'loader', '', '', '', ''],
-    'attack1:3': ['shoot', 'loader', '', '', '', ''],
-    'attack1:4': ['shoot', 'gunner', '', '', '', ''],
-    'attack1:5': ['shoot', 'gunner', '', '', '', ''],
-    'attack1:6': ['shoot', 'commander', '', '', '', ''],
+    'attack1:1': ['reload', '', 'shoot', '', '', ''],
+    'attack1:2': ['reload', 'loader', 'shoot', 'loader', '', ''],
+    'attack1:3': ['reload', 'loader', 'shoot', 'loader', '', ''],
+    'attack1:4': ['reload', 'gunner', 'shoot', 'gunner', '', ''],
+    'attack1:5': ['reload', 'gunner', 'shoot', 'gunner', '', ''],
+    'attack1:6': ['reload', 'commander', 'shoot', 'commander', '', ''],
     'move1:1': ['turn', '', '', '', '', ''],
     'move1:2': ['advance', '', 'reverse', '', '', ''],
     'move1:3': ['advance', '', 'turn', '', '', ''],
@@ -164,7 +164,7 @@ assert.deepStrictEqual(
     'misc1:1': ['repair', 'commander', 'shoot', 'gunner', '', ''],
     'misc1:2': ['turn', '', 'turn', 'coDriver', '', ''],
     'misc1:3': ['advance', 'coDriver', 'turn', 'coDriver', '', ''],
-    'misc1:4': ['shoot', 'gunner', '', '', '', ''],
+    'misc1:4': ['reload', 'gunner', 'shoot', 'gunner', 'ambush', 'gunner'],
     'misc1:5': ['smoke', '', '', '', '', ''],
     'misc1:6': ['conceal', '', '', '', '', ''],
     'at_gun1:1': ['turn', '', '', '', '', ''],
@@ -217,8 +217,8 @@ assert.match(generated, /export type EnemyTankDieType = 'attack' \| 'move' \| 'm
 assert.match(generated, /export type HardcoreTankActionTableId = 'american_infantry1' \| 'at_gun1' \| 'attack1' \| 'heavy_artillery1' \| 'japanese_infantry1' \| 'misc1' \| 'move1';/);
 assert.match(generated, /export const DEFAULT_HARDCORE_TANK_ACTION_TABLE: Record<EnemyTankDieType, HardcoreTankActionTableId> = \{/);
 assert.match(generated, /road: \{ attack: 1, move: 0, misc: -1 \}/);
-assert.match(generated, /2: \{ primary: 'shoot', primaryCrew: 'loader' \}/);
-assert.match(generated, /6: \{ primary: 'shoot', primaryCrew: 'commander' \}/);
+assert.match(generated, /2: \{ primary: 'reload', primaryCrew: 'loader', fallback: 'shoot', fallbackCrew: 'loader' \}/);
+assert.match(generated, /6: \{ primary: 'reload', primaryCrew: 'commander', fallback: 'shoot', fallbackCrew: 'commander' \}/);
 assert.match(generated, /misc1: \{\n\s+1: \{ primary: 'repair', primaryCrew: 'commander', fallback: 'shoot', fallbackCrew: 'gunner' \}/);
 assert.match(generated, /at_gun1: \{\n\s+1: \{ primary: 'turn' \}/);
 assert.match(generated, /japanese_infantry1: \{\n\s+1: \{ primary: 'shoot_adjacent' \}/);
@@ -238,11 +238,11 @@ assert.match(enemyAI, /if \(isAntiTankGunUnit\(unit\)\) return \{ attack: 0, mov
 assert.match(enemyAI, /case 'japanese_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'american_infantry': return \{ attack: 0, move: 3, misc: 0 \};/);
 assert.match(enemyAI, /case 'german_heavy_artillery': return \{ attack: 1, move: 0, misc: 0 \};/);
-assert.match(enemyAI, /export function hardcoreAttackDieIsInvalid\(pip: number, firepowerModifier: number\): boolean/);
+assert.match(enemyAI, /export function hardcoreAttackDieIsInvalid\(pip: number, firepowerModifier: number, firepower = 2, attackValidFaces\?: number\): boolean/);
 assert.match(enemyAI, /export function actionForHardcoreTankDie\([\s\S]*?firepowerModifier = 0,[\s\S]*?\): AIActionEntry/);
 assert.match(battleScene, /unit\.stats\.actionTable/);
-assert.match(battleScene, /actionForHardcoreTankDie\(enemy, type, pip, this\.enemyFirepowerModifier\)/);
-assert.match(battleScene, /hardcoreAttackDieIsInvalid\(this\.enemyDice\[dieIdx\], this\.enemyFirepowerModifier\)/);
+assert.match(battleScene, /actionForHardcoreTankDie\(enemy, type, pip, this\.enemyFirepowerModifier, this\.enemyDiceFirepower\[dieIdx\]\)/);
+assert.match(battleScene, /hardcoreAttackDieIsInvalid\(this\.enemyDice\[dieIdx\], 0, [^\n]+this\.enemyDiceFirepower\[dieIdx\]\)/);
 assert.match(battleScene, /if \(mv !== 0\) blocks\.push\(t\('tileInspect\.modifier\.mobility'/);
 assert.match(battleScene, /if \(at !== 0\) blocks\.push\(t\('tileInspect\.modifier\.firepower'/);
 assert.match(battleScene, /if \(ms !== 0\) blocks\.push\(t\('tileInspect\.modifier\.misc'/);

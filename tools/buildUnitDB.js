@@ -18,7 +18,7 @@ const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'UnitDB.ts');
 const DAMAGE_CSV_PATH = path.join(ROOT, 'data', 'damage_table.csv');
 const HARDCORE_TANK_ACTION_CSV_PATH = path.join(ROOT, 'data', 'enemy_hardcore_tank_action_table.csv');
 
-const NUM_FIELDS = ['firepower', 'size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'highExplosivePower', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
+const NUM_FIELDS = ['firepower', 'reloadDifficulty', 'size', 'armorFront', 'armorFrontSide', 'armorRearSide', 'armorRear', 'gunMantletArmor', 'penetration', 'highExplosivePower', 'effectiveRange', 'turretTraverseSpeed', 'usCasualtyDice', 'visionRange'];
 const BOOL_FIELDS = ['hasRadio'];
 const STRING_FIELDS = ['moveSound', 'attackSound', 'commanderSpritePath', 'visionType', 'damageTargetClass'];
 const BONUS_FIELDS = ['infantryTankCoordination'];
@@ -131,14 +131,14 @@ function toRecords(rows) {
   });
 }
 
-function intOrThrow(rec, field) {
+function intOrThrow(rec, field, allowNegative = false) {
   const raw = rec[field];
   if (raw === '' || raw === undefined) {
     throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: field ${field} is empty`);
   }
   const n = Number(raw);
-  if (!Number.isInteger(n) || n < 0) {
-    throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: field ${field}="${raw}" is not a non-negative integer`);
+  if (!Number.isInteger(n) || (!allowNegative && n < 0)) {
+    throw new Error(`row ${rec.__row} ${rec.unitKind || '?'}: field ${field}="${raw}" is not ${allowNegative ? 'an integer' : 'a non-negative integer'}`);
   }
   return n;
 }
@@ -268,8 +268,8 @@ function build() {
   }
 
   for (const rec of records) {
-    for (const f of NUM_FIELDS) intOrThrow(rec, f);
-    if (!Number.isInteger(Number(rec.firepower)) || Number(rec.firepower) < 0) throw new Error("firepower must be a non-negative integer");
+    for (const f of NUM_FIELDS) intOrThrow(rec, f, f === 'firepower');
+    if (intOrThrow(rec, 'reloadDifficulty') < 1) throw new Error('reloadDifficulty must be positive');
     if (TANK_KINDS.has(rec.unitKind)) intOrThrow(rec, 'mobility');
     for (const f of BONUS_FIELDS) intOrThrow(rec, f);
     const turretTraverseSpeed = intOrThrow(rec, 'turretTraverseSpeed');
@@ -302,6 +302,7 @@ function build() {
       `armorRearSide: ${r.armorRearSide}, ` +
       `armorRear: ${r.armorRear}, ` +
       `gunMantletArmor: ${r.gunMantletArmor}, ` +
+      `reloadDifficulty: ${r.reloadDifficulty}, ` +
       `penetration: ${r.penetration}, ` +
       `highExplosivePower: ${r.highExplosivePower}, ` +
       `effectiveRange: ${r.effectiveRange}, ` +

@@ -22,6 +22,7 @@
 **Files:**
 - Create: `assets/scripts/core/RepairableComponents.ts`
 - Modify: `assets/scripts/core/LangDB.ts`
+- Modify: `data/lang.csv` (localization source of truth)
 - Test: `tests/RepairableComponents.test.js`
 
 **Interfaces:**
@@ -40,7 +41,7 @@ export function repairableComponentsFor(mode: GameMode, unit: Unit): RepairableC
 export function firstDamagedRepairableComponent(mode: GameMode, unit: Unit): RepairableComponent | null;
 ```
 
-Add action, floater, log, intact, and damaged radio translations in `LangDB.ts`.
+Add action, floater, log, intact, and damaged radio translations in `data/lang.csv`, then run `node tools/buildLangDB.js` to regenerate `LangDB.ts`. Do not add translations directly to the generated file; the all-table updater replaces it from the CSV.
 - [ ] **Step 4:** Run `node tests/RepairableComponents.test.js`; expect success.
 - [ ] **Step 5:** Commit only these files with `feat: add repairable component configuration`.
 

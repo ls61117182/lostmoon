@@ -2,7 +2,7 @@ import { profileStorageKey } from './BuildProfile';
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
 import type { ATGunCrewKind, BattleSideId, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitController, UnitKind, UnitLevel } from './types';
-import { createTankCrew, isAntiTankGunKind, isTankKind, neutralizeUncrewedTank } from './types';
+import { createTankCrew, isAntiTankGunKind, isTankKind, neutralizeUncrewedTank, reloadDifficulty } from './types';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
@@ -24,7 +24,8 @@ export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
  *   10: 关卡初始反坦克炮组改为真实绑定步兵单位
  *   11: 国家 faction 与战斗方 sideId、控制者 controller 分离
  */
-const SAVE_VERSION = 11 as const;
+// v12: finite ammunition is deducted only after loading completes.
+const SAVE_VERSION = 12 as const;
 
 /** 与 BattleScene PlayerStep 一致；独立在此避免 BattleScene ↔ SaveLoad 环依赖 */
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
@@ -54,6 +55,7 @@ interface UnitSnapshot {
   trackDamage?: { side: 'left' | 'right'; position: number };
   loaded?: boolean;
   loadedShell?: ShellType | null;
+  reloadProgress?: number;
   hvapAmmoRemaining?: number;
   smokeAmmoRemaining?: number;
   hatchOpen?: boolean;
@@ -81,7 +83,7 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
-  version: typeof SAVE_VERSION | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2;
+  version: typeof SAVE_VERSION | 11 | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2;
   /** v5: selected rule profile; older saves resume as classic. */
   gameMode?: GameMode;
   missionId: string;
@@ -101,6 +103,7 @@ export interface SaveData {
   smokeHexOwners?: Record<string, 'friendly' | 'enemy'>;
   /** 可破坏城市建筑结构值，键为 HexMap.keyOf(pos)。 */
   urbanStructures?: Record<string, number>;
+  barbedWireStates?: Record<string, number[]>;
   /** v3：杂项阶段是否已结束 */
   miscDone?: boolean;
   /** v3：玩家回合子状态 */
@@ -157,6 +160,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     trackDamage: u.trackDamage ? { ...u.trackDamage } : undefined,
     loaded: u.loaded,
     loadedShell: u.loadedShell,
+    reloadProgress: u.reloadProgress,
     hvapAmmoRemaining: u.hvapAmmoRemaining,
     smokeAmmoRemaining: u.smokeAmmoRemaining,
     hatchOpen: u.hatchOpen,
@@ -234,6 +238,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.trackDamage = s.paralyzed && s.trackDamage ? { ...s.trackDamage } : undefined;
   live.loaded = s.loaded ?? false;
   live.loadedShell = s.loadedShell ?? (s.loaded ? 'ap' : null);
+  live.reloadProgress = s.reloadProgress;
   live.hvapAmmoRemaining = s.hvapAmmoRemaining;
   live.smokeAmmoRemaining = s.smokeAmmoRemaining;
   if (s.visionRange !== undefined) live.visionRange = s.visionRange;
@@ -320,6 +325,9 @@ export function captureSave(p: SnapshotParams): SaveData {
     urbanStructures: Object.fromEntries(p.mission.map.all()
       .filter(tile => tile.urbanKind === 'destructible')
       .map(tile => [HexMap.keyOf(tile.pos), tile.urbanStructure ?? 2])),
+    barbedWireStates: Object.fromEntries(p.mission.map.all()
+      .filter(tile => !!tile.barbedWire)
+      .map(tile => [HexMap.keyOf(tile.pos), [...tile.barbedWire!]])),
     shermanEvacuated: p.mission.playerTankEvacuated ?? p.mission.shermanEvacuated ?? false,
     truckEscapeDefeat: p.mission.truckEscapeDefeat ?? false,
     usCasualties: p.mission.usCasualties ?? 0,
@@ -396,7 +404,7 @@ export function applySave(
   missionId: string,
   save: SaveData,
 ): ApplyResult {
-  if (save.version !== SAVE_VERSION && save.version !== 10 && save.version !== 9 && save.version !== 8 && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
+  if (save.version !== SAVE_VERSION && save.version !== 11 && save.version !== 10 && save.version !== 9 && save.version !== 8 && save.version !== 7 && save.version !== 6 && save.version !== 5 && save.version !== 4 && save.version !== 3 && save.version !== 2) {
     return { ok: false, reason: `版本不兼容 (${save.version} vs ${SAVE_VERSION})` };
   }
   if (save.missionId !== missionId) {
@@ -432,24 +440,31 @@ export function applySave(
   for (let i = liveEnemies.length; i < save.enemies.length; i++) {
     extraEnemies.push(makeSavedUnit(save.enemies[i], `save_enemy_${i}`, mission.data.theater));
   }
+  const extraAllies: Unit[] = [];
   if (save.version >= 4) {
     const allies = save.allies ?? [];
-    if (allies.length !== liveAllies.length) {
+    if (allies.length < liveAllies.length) {
       return {
         ok: false,
         reason: `友军数不匹配 (${allies.length} vs ${liveAllies.length})`,
       };
     }
-    for (let i = 0; i < allies.length; i++) {
+    for (let i = 0; i < liveAllies.length; i++) {
       if (allies[i].kind !== liveAllies[i].kind) {
         return { ok: false, reason: `友军 #${i} 种类不匹配` };
       }
+    }
+    for (let i = liveAllies.length; i < allies.length; i++) {
+      const unit = makeSavedUnit(allies[i], `save_ally_${i}`, mission.data.theater);
+      unit.sideId = allies[i].sideId ?? 'player';
+      extraAllies.push(unit);
     }
   }
 
   // 校验通过，写入状态
   playerTank.pos = { q: savedPlayer.q, r: savedPlayer.r };
   mission.enemies.push(...extraEnemies);
+  mission.allies.push(...extraAllies);
   playerTank.facing = savedPlayer.facing;
   playerTank.lockedFireTargetId = savedPlayer.lockedFireTargetId;
   playerTank.turretFacing = savedTurretFacing(savedPlayer.turretFacing, savedPlayer.facing);
@@ -476,7 +491,7 @@ export function applySave(
   if (save.version >= 4 && save.allies) {
     for (let i = 0; i < save.allies.length; i++) {
       const s = save.allies[i];
-      const live = liveAllies[i];
+      const live = i < liveAllies.length ? liveAllies[i] : extraAllies[i - liveAllies.length];
       applyUnitSnapshot(live, s, playerTank.faction);
     }
   }
@@ -497,6 +512,7 @@ export function applySave(
     sh.trackDamage = ss.paralyzed && ss.trackDamage ? { ...ss.trackDamage } : undefined;
     sh.loaded = ss.loaded ?? false;
     sh.loadedShell = ss.loadedShell ?? (ss.loaded ? 'ap' : null);
+    sh.reloadProgress = ss.reloadProgress;
     sh.hvapAmmoRemaining = ss.hvapAmmoRemaining;
     sh.smokeAmmoRemaining = ss.smokeAmmoRemaining;
     if (ss.hatchOpen !== undefined) sh.hatchOpen = ss.hatchOpen;
@@ -523,6 +539,12 @@ export function applySave(
   }
 
   mission.smokeHexes.clear();
+  for (const tile of mission.map.all()) {
+    const states = save.barbedWireStates?.[HexMap.keyOf(tile.pos)];
+    if (tile.barbedWire && states?.length === 6 && states.every(n => n === 0 || n === 1 || n === 2)) {
+      tile.barbedWire = [...states] as NonNullable<typeof tile.barbedWire>;
+    }
+  }
   for (const tile of mission.map.all()) {
     if (tile.urbanKind !== 'destructible') continue;
     const structure = save.urbanStructures?.[HexMap.keyOf(tile.pos)];
@@ -559,6 +581,20 @@ export function applySave(
   // Older sessions restarted the reinforcement sequence after loading. Give
   // duplicate reinforcement tanks independent IDs before visual maps use them.
   const units = [playerTank, ...mission.allies, ...mission.enemies];
+  if (save.version < 12 && save.gameMode === 'hardcore') {
+    for (const unit of new Set(units)) {
+      const progress = unit.reloadProgress ?? 0;
+      if (unit.loaded || progress <= 0) continue;
+      if (progress >= reloadDifficulty(unit)) {
+        // A reduced difficulty (M26: 2 -> 1) now completes its already-paid round.
+        unit.loaded = true;
+      } else if (unit.loadedShell === 'hvap' && unit.hvapAmmoRemaining !== undefined) {
+        unit.hvapAmmoRemaining = Math.min(2, unit.hvapAmmoRemaining + 1);
+      } else if (unit.loadedShell === 'smoke' && unit.smokeAmmoRemaining !== undefined) {
+        unit.smokeAmmoRemaining = Math.min(7, unit.smokeAmmoRemaining + 1);
+      }
+    }
+  }
   const reservedIds = new Set(units.map(unit => unit.id));
   const seenIds = new Set<string>();
   for (const unit of units) {

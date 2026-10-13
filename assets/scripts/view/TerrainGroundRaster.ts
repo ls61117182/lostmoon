@@ -31,6 +31,7 @@ function decodeBase64(text:string):Uint8Array {
   return out;
 }
 export function terrainMaterial(tile:Tile,winter:boolean):string {
+  if(tile.terrain==='europe_beach')return winter?'winter_soil':'europe_sand';
   const m=BASE[tile.terrain]??'grass';return winter?(WATER.has(m)?'winter_water':WINTER[m]??m):m;
 }
 export function terrainGroundFingerprint(tiles:readonly Tile[],winter:boolean):string {
@@ -110,6 +111,14 @@ export class TerrainGroundRaster {
     if(bundle.version!==3)throw new Error('Unsupported terrain material version');
     for(const [id,m]of Object.entries(bundle.materials)){const pixels=decodeBase64(m.rgb);if(pixels.length!==m.width*m.height*3)throw new Error(`Invalid terrain material ${id}`);this.materials[id]={width:m.width,height:m.height,pixels};}
     for(const id of ['grass','soil','mud','sand','water','deep_water','paving','snow','winter_water','timber'])if(!this.materials[id])throw new Error(`Missing terrain material ${id}`);
+    if(!this.materials.europe_sand){
+      const sand=this.materials.sand,pixels=sand.pixels.slice(),tint=[194,181,151];
+      for(let i=0;i<pixels.length;i+=3){
+        const value=(pixels[i]+pixels[i+1]+pixels[i+2])/3;
+        for(let k=0;k<3;k++)pixels[i+k]=Math.max(0,Math.min(255,tint[k]+(value-170)*.22));
+      }
+      this.materials.europe_sand={width:sand.width,height:sand.height,pixels};
+    }
     if(!this.materials.shallow_water){
       const water=this.materials.water,pixels=water.pixels.slice(),tint=[145,201,202];
       for(let i=0;i<pixels.length;i++)pixels[i]=Math.round(pixels[i]+(tint[i%3]-pixels[i])*.4);

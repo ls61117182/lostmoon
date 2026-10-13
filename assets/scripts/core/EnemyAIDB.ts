@@ -7,6 +7,7 @@
  */
 
 export type EnemyAction =
+  | 'reload'
   | 'shoot'
   | 'ambush'
   | 'turn'
@@ -175,12 +176,12 @@ export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {
     6: { primary: 'shoot' },
   },
   attack1: {
-    1: { primary: 'shoot' },
-    2: { primary: 'shoot', primaryCrew: 'loader' },
-    3: { primary: 'shoot', primaryCrew: 'loader' },
-    4: { primary: 'shoot', primaryCrew: 'gunner' },
-    5: { primary: 'shoot', primaryCrew: 'gunner' },
-    6: { primary: 'shoot', primaryCrew: 'commander' },
+    1: { primary: 'reload', fallback: 'shoot' },
+    2: { primary: 'reload', fallback: 'shoot' },
+    3: { primary: 'reload', fallback: 'shoot' },
+    4: { primary: 'reload', fallback: 'shoot' },
+    5: { primary: 'reload', fallback: 'shoot' },
+    6: { primary: 'reload', fallback: 'shoot' },
   },
   heavy_artillery1: {
     1: { primary: 'none' },
@@ -202,7 +203,7 @@ export const HARDCORE_TANK_AI_TABLE: HardcoreTankActionTable = {
     1: { primary: 'repair', primaryCrew: 'commander', fallback: 'shoot', fallbackCrew: 'gunner' },
     2: { primary: 'turn', fallback: 'turn', fallbackCrew: 'coDriver' },
     3: { primary: 'advance', primaryCrew: 'coDriver', fallback: 'turn', fallbackCrew: 'coDriver' },
-    4: { primary: 'shoot', primaryCrew: 'gunner', fallback: 'ambush', fallbackCrew: 'gunner' },
+    4: { primary: 'reload', primaryCrew: 'gunner', fallback: 'shoot', fallbackCrew: 'gunner', fallback2: 'ambush', fallback2Crew: 'gunner' },
     5: { primary: 'smoke' },
     6: { primary: 'conceal' },
   },

@@ -44,9 +44,11 @@ const EFFECT_TYPES = [
   'type95_spawn',
   'type97_spawn',
   'heavy_mortar',
+  'airborne_support',
 ];
 
 const REINFORCEMENT_EFFECT_TYPES = new Set([
+  'airborne_support',
   'infantry_spawn',
   'panzer3_spawn',
   'panzer4_spawn',

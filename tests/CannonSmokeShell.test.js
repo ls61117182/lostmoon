@@ -3,12 +3,12 @@ const fs = require('node:fs');
 const ts = require('typescript');
 require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText, filename);
 const { loadCampaignShell } = require('../assets/scripts/core/CampaignUpgrade.ts');
-const { resolvedLoadedShell } = require('../assets/scripts/core/types.ts');
+const { resolvedLoadedShell, isMainGunLoaded } = require('../assets/scripts/core/types.ts');
 const tank = { loaded: false, loadedShell: null };
 for (let i = 0; i < 7; i++) {
   assert.equal(loadCampaignShell(tank, 'smoke'), true);
   assert.equal(tank.smokeAmmoRemaining, 6 - i);
-  tank.loaded = false; tank.loadedShell = null;
+  tank.loaded = false; tank.loadedShell = null; tank.reloadProgress = 0;
 }
 assert.equal(loadCampaignShell(tank, 'smoke'), false);
 const swap = { loaded: false, hvapAmmoRemaining: 2 };
@@ -24,7 +24,7 @@ assert.equal(swap.smokeAmmoRemaining, 7);
 const scene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
 const method = scene.match(/  private tryFireSmokeAt\(tile: Tile\): void \{[\s\S]*?\n  \}/)[0];
 const code = ts.transpileModule('class Harness { '+method+' }', { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
-const Harness = new Function('resolvedLoadedShell', 'markAmbushAction', 't', 'Color', code+'; return Harness;')(resolvedLoadedShell, ()=>{}, x=>x, class {});
+const Harness = new Function('finishLockedFireAttack', 'isMainGunLoaded', 'resolvedLoadedShell', 'markAmbushAction', 't', 'Color', code+'; return Harness;')(()=>{}, isMainGunLoaded, resolvedLoadedShell, ()=>{}, x=>x, class {});
 for (const partner of [-1, 1]) {
   const h = new Harness();
   const unit = { loaded: true, loadedShell: 'smoke', stats: {}, hp: 10 };
@@ -63,11 +63,11 @@ const tiles = [{pos:{q:1,r:0}},{pos:{q:2,r:0}}];
 const icons = {clear:()=>{}};
 let iconCount=0, blueCount=0, topIndex=-1;
 Object.assign(h, {
-  turretAimOverlayGraphics:{clear:()=>{}},turretAimOverlayNode:{},smokeTargetIconGraphics:icons,
+  outsideMapTurretInputNodes:[],turretAimOverlayGraphics:{clear:()=>{}},turretAimOverlayNode:{},smokeTargetIconGraphics:icons,
   smokeTargetIconNode:{setSiblingIndex:i=>topIndex=i},mapNode:{children:[{}, {}, {}, {}]},
   mission:{sherman:{pos:{q:0,r:0},loadedShell:'smoke',stats:{turretTraverseSpeed:2}},map:{all:()=>tiles,get:()=>null}},
   selectedGunDieIdx:0,selectedGunHitThresholdModifier:0,
-  playerTurretCanRotate:()=>true,hasTurretReconGunSelection:()=>true,
+  playerHasFixedWeaponArc:()=>false,outsideMapTurretAimPositions:()=>[],playerTurretCanRotate:()=>true,hasTurretReconGunSelection:()=>true,
   playerWeaponTargetHexKeys:()=>new Set(['1,0','2,0']),isDeepShadowTile:()=>false,
   isHexVisible:()=>false,fogTurretAimDirection:p=>p.q===1?0:null,
   project:(x,y)=>({x,y}),drawSmokeShellTargetIcon:g=>{assert.equal(g,icons);iconCount++;},

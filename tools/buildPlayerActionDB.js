@@ -50,6 +50,7 @@ const REQUIRED_ACTION_ROWS = ['1', '2', '3', '4', '5', '6', 'doubles'];
 const TERRAIN_KINDS = ['road', 'field', 'mud', 'forest', 'water', 'deep_water', 'clear', 'trees', 'beach', 'rocky', 'airstrip'];
 /** 与 effectiveDiceTerrain 的城市地形折算保持一致。 */
 const URBAN_TERRAIN_ALIASES = {
+  europe_beach: 'clear',
   urban_ground: 'field',
   urban_road: 'road',
   urban_indestructible: 'forest',

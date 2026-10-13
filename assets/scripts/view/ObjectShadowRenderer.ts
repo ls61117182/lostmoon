@@ -18,6 +18,7 @@ export class ObjectShadowRenderer {
   private contacts: Graphics;
   private pool: Array<{ root: Node; sprite: Sprite }> = [];
   private next = 0;
+  private cameraRotation = 0;
 
   constructor(parent: Node, name: string, siblingIndex?: number) {
     this.layer = new Node(name);
@@ -28,7 +29,8 @@ export class ObjectShadowRenderer {
     if (siblingIndex !== undefined) this.layer.setSiblingIndex(siblingIndex);
   }
 
-  begin(): void {
+  begin(cameraRotation = 0): void {
+    this.cameraRotation = cameraRotation;
     this.next = 0;
     this.contacts.clear();
   }
@@ -63,7 +65,9 @@ export class ObjectShadowRenderer {
       ? Math.min(hexSize * profile.reach, footprint * (kind === 'groundProp' ? 0.08 : 0.16))
       : hexSize * profile.reach;
     slot.root.active = true;
-    slot.root.setPosition(node.position.x + reach, node.position.y - reach, 0);
+    const rotated = this.cameraRotation === 90;
+    slot.root.setPosition(node.position.x + (rotated ? -reach : reach), node.position.y - reach, 0);
+    slot.root.angle = rotated ? -90 : 0;
     // Flatten in world space so rotation never changes the sunlight direction.
     slot.root.setScale(1, profile.flatten, 1);
     slot.sprite.spriteFrame = source.spriteFrame;
@@ -72,13 +76,14 @@ export class ObjectShadowRenderer {
     const shadowTransform = slot.sprite.node.getComponent(UITransform)!;
     shadowTransform.setContentSize(transform.contentSize);
     shadowTransform.setAnchorPoint(transform.anchorPoint);
-    slot.sprite.node.angle = node.angle;
+    slot.sprite.node.angle = node.angle + this.cameraRotation;
     slot.sprite.node.setScale(node.scale);
 
     // Compact ground contact makes the object feel seated, even with a long cast.
     const radius = Math.min(width, height) * profile.contact * 0.5;
     this.contacts.fillColor = new Color(0, 0, 0, Math.round(48 * opacity));
-    this.contacts.ellipse(node.position.x, node.position.y, radius, radius * 0.72);
+    this.contacts.ellipse(node.position.x, node.position.y,
+      rotated ? radius * 0.72 : radius, rotated ? radius : radius * 0.72);
     this.contacts.fill();
   }
 

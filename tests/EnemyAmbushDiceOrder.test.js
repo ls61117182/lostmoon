@@ -12,7 +12,7 @@ assert.ok(start >= 0 && miscCheck >= 0 && pipCheck > miscCheck,
   'misc dice must sort after the shared attack/move pip ordering');
 
 const csv = fs.readFileSync(path.resolve(__dirname, '../data/enemy_hardcore_tank_action_table.csv'), 'utf8');
-assert.match(csv, /^misc1,4,shoot,gunner,ambush,gunner,/m,
-  'misc 4 attacks first and ambushes when no target exists');
+assert.match(csv, /^misc1,4,reload,gunner,shoot,gunner,ambush,gunner,/m,
+  'misc 4 loads first, then shoots, then ambushes');
 
 console.log('Enemy ambush dice order tests passed');

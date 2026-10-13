@@ -5,7 +5,7 @@ const path = require('path');
 const source = fs.readFileSync(
   path.resolve(__dirname, '../assets/scripts/view/BattleScene.ts'),
   'utf8',
-);
+).replace(/\r\n/g, '\n');
 
 assert.match(source, /repairableComponentsFor\(GameSession\.gameMode\)/);
 assert.match(source, /private tryRepair\(dieIdx: number, target: RepairableComponentId\)/);

@@ -9,6 +9,16 @@
  */
 
 // ---------- 坐标 ----------
+import type { TurnEndEffectType, ReinforcementSide } from './TurnEndEventDB';
+
+export interface RoundEventConfig {
+  effectType: TurnEndEffectType;
+  reinforcementSide?: ReinforcementSide;
+  /** Omitted or 'every' runs every round; otherwise one-based round numbers. */
+  turns?: 'every' | number[];
+  condition?: 'clear';
+}
+
 export interface Axial {
   q: number;
   r: number;
@@ -39,6 +49,7 @@ export type TerrainType =
   | 'clear'
   | 'trees'
   | 'beach'
+  | 'europe_beach'
   | 'rocky'
   | 'airstrip'
   | 'urban_ground'
@@ -66,6 +77,12 @@ export interface Tile {
   hedges?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** Pacific breakwater edge flags; same axial 0..5 index as hedges. */
   breakwaters?: [boolean, boolean, boolean, boolean, boolean, boolean];
+  /** European concrete seawall; crossing rules match Pacific breakwaters. */
+  seawalls?: [boolean, boolean, boolean, boolean, boolean, boolean];
+  /** Axial edge states: 0 absent, 1 intact, 2 crushed (no rules effect). */
+  barbedWire?: [number, number, number, number, number, number];
+  steelHedgehogs?: boolean;
+  crater?: boolean;
   /**
    * 公路视觉：第 i 位为 true 表示本格与「第 i 向邻格」之间那条格边中点 → 本格心绘有一段道路。
    * 仅对 `terrain==='road'` 或叠桥水域有效；纯视觉字段，不影响移动 / 视线 / 骰子规则。
@@ -102,6 +119,7 @@ export function tileForbidsSmokeOrConcealment(tile: Tile | undefined | null): bo
 
 /** Roads, airstrips, bridges, and Pacific beach hexes forbid concealment. */
 export function tileForbidsConcealment(tile: Tile | undefined | null): boolean {
+  if (tile?.terrain === 'europe_beach') return !tile.crater;
   return tileForbidsSmokeOrConcealment(tile)
     || tile?.terrain === 'road'
     || tile?.terrain === 'urban_road'
@@ -127,6 +145,7 @@ export function tileHasBuilding(tile: Tile | undefined | null): boolean {
  */
 export function effectiveDiceTerrain(tile: Tile | undefined | null): TerrainType {
   if (!tile) return 'field';
+  if (tile.terrain === 'europe_beach') return tile.crater ? 'mud' : 'clear';
   if (tileHasBridge(tile)) return 'road';
   if (tile.terrain === 'urban_road') return 'road';
   if (tile.terrain === 'urban_ground') return 'field';
@@ -361,7 +380,8 @@ export interface UnitStats {
   interiorVisionRange?: number;
   hasRadio: boolean;         // 是否装备无线电；运行时 radioDamaged=true 表示损坏
   crewMembers: CrewSlot[];   // 实际乘员：1车长 2炮手 3装填手 4驾驶员 5机电员 6第二装填手
-  firepower?: number;       // 基础火力值（非负整数）；旧配置缺省6
+  firepower?: number;       // 基础火力值（整数，可为负）；缺省2，合计修正后再取下限
+  reloadDifficulty?: number; // 硬核装填难度及装填进度上限，默认1
   crewRoleAssignments?: Partial<Record<keyof ShermanCrew, CrewSlot[]>>;
 }
 
@@ -444,6 +464,7 @@ export interface Unit {
   suppressed?: boolean;
   loaded?: boolean;         // 主炮已装填
   loadedShell?: ShellType | null; // 硬核模式已装填弹种；null 表示未装填
+  reloadProgress?: number; // 硬核装填进度；换弹种清零，发射后清零
   /** Campaign HVAP rounds remaining in the ready supply. */
   hvapAmmoRemaining?: number;
   smokeAmmoRemaining?: number;
@@ -609,9 +630,34 @@ export function resolvedLoadedShell(unit: Pick<Unit, 'loaded' | 'loadedShell'>):
   return unit.loadedShell !== undefined ? unit.loadedShell : unit.loaded === true ? 'ap' : null;
 }
 
-/** In hardcore the shell field is authoritative; classic mode keeps the legacy boolean rule. */
-export function isMainGunLoaded(unit: Pick<Unit, 'loaded' | 'loadedShell'>, hardcore: boolean): boolean {
-  return hardcore ? resolvedLoadedShell(unit) !== null : unit.loaded === true;
+/** The configured number of loading actions required in Hardcore mode. */
+export function reloadDifficulty(unit: { stats?: Pick<UnitStats, 'reloadDifficulty'> }): number {
+  return Math.max(1, Math.floor(unit.stats?.reloadDifficulty ?? 1));
+}
+
+/** Fresh battlefield entrants need one more loading action, with AP winning ties. */
+export function initialMainGunLoadingState(stats: Pick<UnitStats, 'reloadDifficulty' | 'penetration' | 'highExplosivePower'>): Pick<Unit, 'loaded' | 'loadedShell' | 'reloadProgress'> {
+  return {
+    loaded: false,
+    loadedShell: stats.highExplosivePower > stats.penetration ? 'he' : 'ap',
+    reloadProgress: reloadDifficulty({ stats }) - 1,
+  };
+}
+
+export function mainGunReloadProgress(unit: Pick<Unit, 'loaded' | 'loadedShell' | 'reloadProgress'> & { stats?: Pick<UnitStats, 'reloadDifficulty'> }): number {
+  const legacy = resolvedLoadedShell(unit) !== null;
+  return Math.min(reloadDifficulty(unit), Math.max(0, Math.floor(unit.reloadProgress ?? (legacy ? reloadDifficulty(unit) : 0))));
+}
+
+/** AI loading has no shell selection; ammunition is chosen only when firing. */
+export function reloadAIMainGun(unit: Unit): boolean {
+  unit.reloadProgress = Math.min(reloadDifficulty(unit), mainGunReloadProgress(unit) + 1);
+  unit.loaded = unit.reloadProgress === reloadDifficulty(unit);
+  return unit.loaded;
+}
+
+export function isMainGunLoaded(unit: Pick<Unit, 'loaded' | 'loadedShell' | 'reloadProgress'> & { stats?: Pick<UnitStats, 'reloadDifficulty'> }, hardcore: boolean): boolean {
+  return hardcore ? mainGunReloadProgress(unit) === reloadDifficulty(unit) : unit.loaded === true;
 }
 
 export interface UnitPlacement {
@@ -659,6 +705,7 @@ export interface UnitPlacement {
   loaded?: boolean;
   /** 硬核模式初始弹种；旧关卡仅 loaded=true 时迁移为 AP。 */
   loadedShell?: ShellType | null;
+  reloadProgress?: number;
   /** 战役强化提供的 HVAP 剩余弹数。 */
   hvapAmmoRemaining?: number;
   smokeAmmoRemaining?: number;
@@ -673,6 +720,10 @@ export interface MissionData {
   season?: SeasonType;
   /** Fixed weather for the mission. Omitted missions use clear weather. */
   weather?: WeatherType;
+  /** Battlefield view rotation in degrees counterclockwise; omitted means 0. Does not change map coordinates or facing. */
+  cameraRotation?: 0 | 90;
+  /** Guaranteed end-of-round events; omitted means skip this phase. */
+  roundEvents?: RoundEventConfig[];
   /** 地图列数 / 行数（offset） */
   cols: number;
   rows: number;
@@ -737,7 +788,7 @@ export interface TileDef {
    * 旧版 `b` 表示「整格为建筑」已废弃，见 MissionLoader 会转为 f+建筑。
    */
   t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b' | 'c' | 'T' | 'B' | 'H' | 'dw' | 'a'
-    | 'u' | 'ur' | 'ui' | 'ud';
+    | 'u' | 'ur' | 'ui' | 'ud' | 'eb';
   /**
    * 建筑叠加在基底上：`1` 表示有建筑（坦克可进入；命中+1；视线仅路径「中间格」阻挡）。
    * 田/泥+建筑在任务表述上为「农场」，公路+建筑为「村庄」。
@@ -750,6 +801,13 @@ export interface TileDef {
   h?: string;
   /** Pacific breakwater edge flags: 6 chars, same axial index as h. */
   bw?: string;
+  /** Concrete seawall edges, six 0/1 characters in axial direction order. */
+  sw?: string;
+  /** Barbed wire edges, six 0/1/2 characters: absent/intact/damaged. */
+  wire?: string;
+  /** Sand overlays; permitted only on European beach (eb). */
+  sh?: 1;
+  cr?: 1;
   /**
    * 公路绘制方向：6 位 `0/1`，与 `h` 共享轴向索引（0=E, 顺时针 1=SE … 5=NE）。
    * `1` 表示本格内沿"第 i 向邻边中点 → 格心"绘制一段道路条带。仅 `t==='r'` 或水域+桥梁允许配置（其它基底 MissionLoader 抛错）。

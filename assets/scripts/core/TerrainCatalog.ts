@@ -20,7 +20,7 @@ export const TERRAIN_CATEGORIES: readonly TerrainCategoryDefinition[] = [
     id: 'europe',
     available: true,
     label: { zh: '欧洲战场', en: 'European' },
-    terrainCodes: ['f', 'r', 'm', 'F', 'w'],
+    terrainCodes: ['f', 'r', 'm', 'F', 'w', 'eb'],
   },
   {
     id: 'pacific',

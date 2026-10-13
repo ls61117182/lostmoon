@@ -1040,9 +1040,9 @@ const rngFrom = (...values): RNG => {
       commanderBonusWithoutOpenHatch: hardcoreBonus, hardcore: true }), 3);
     assert.strictEqual(hardcoreAttackDieIsInvalid(6, 0), false);
     assert.strictEqual(hardcoreAttackDieIsInvalid(6, -1), true);
-    assert.strictEqual(hardcoreAttackDieIsInvalid(5, -1), false);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(3, -1), false);
     assert.strictEqual(hardcoreAttackDieIsInvalid(5, -2), true);
-    assert.strictEqual(hardcoreAttackDieIsInvalid(4, -2), false);
+    assert.strictEqual(hardcoreAttackDieIsInvalid(1, -2), true);
   };
 
   const addRect = (map: HexMap, cols: number, rows: number) => {

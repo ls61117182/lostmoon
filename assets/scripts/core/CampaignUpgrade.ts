@@ -6,27 +6,31 @@ import {
   CampaignUpgradeId,
 } from './CampaignUpgradeDB';
 import type { RNG } from './Dice';
-import { resolvedLoadedShell } from './types';
+import { resolvedLoadedShell, mainGunReloadProgress, reloadDifficulty, isMainGunLoaded } from './types';
 import type { ShellType, TerrainType, Unit } from './types';
 
 export const HVAP_AMMO_CAPACITY = 2;
 
-/** Load a hardcore shell while keeping the finite HVAP reserve in sync with the chamber. */
+/** Advance loading; finite ammunition leaves reserve only when loading completes. */
 export function loadCampaignShell(sherman: Unit, nextShell: ShellType): boolean {
   const currentShell = resolvedLoadedShell(sherman);
-  if (currentShell === nextShell) return true;
-  const smokeReserve = sherman.smokeAmmoRemaining ?? (currentShell === 'smoke' ? 6 : 7);
+  const currentComplete = isMainGunLoaded(sherman, true);
+  if (currentShell === nextShell && currentComplete) return true;
+  const smokeReserve = sherman.smokeAmmoRemaining ?? (currentShell === 'smoke' && currentComplete ? 6 : 7);
   if (nextShell === 'smoke' && smokeReserve <= 0) return false;
-  if (nextShell === 'hvap') {
-    const remaining = sherman.hvapAmmoRemaining ?? 0;
-    if (remaining <= 0) return false;
-    sherman.hvapAmmoRemaining = remaining - 1;
-  } else if (currentShell === 'hvap') {
+  if (nextShell === 'hvap' && (sherman.hvapAmmoRemaining ?? 0) <= 0) return false;
+  const progress = Math.min(reloadDifficulty(sherman),
+    (currentShell === nextShell ? mainGunReloadProgress(sherman) : 0) + 1);
+  const complete = progress === reloadDifficulty(sherman);
+  // Only a completed, unfired round can be returned when changing ammunition.
+  if (currentComplete && currentShell === 'hvap') {
     sherman.hvapAmmoRemaining = Math.min(HVAP_AMMO_CAPACITY, (sherman.hvapAmmoRemaining ?? 0) + 1);
   }
-  if (nextShell === 'smoke') sherman.smokeAmmoRemaining = smokeReserve - 1;
-  else if (currentShell === 'smoke') sherman.smokeAmmoRemaining = Math.min(7, smokeReserve + 1);
-  sherman.loaded = true;
+  if (currentComplete && currentShell === 'smoke') sherman.smokeAmmoRemaining = Math.min(7, smokeReserve + 1);
+  if (complete && nextShell === 'hvap') sherman.hvapAmmoRemaining = (sherman.hvapAmmoRemaining ?? 0) - 1;
+  if (complete && nextShell === 'smoke') sherman.smokeAmmoRemaining = smokeReserve - 1;
+  sherman.reloadProgress = progress;
+  sherman.loaded = complete;
   sherman.loadedShell = nextShell;
   return true;
 }
@@ -99,7 +103,7 @@ export function applyCampaignUpgradesToSherman(sherman: Unit, ids: readonly Camp
     if (def.ignoreFirstAttackParalyzedPerSegment) sherman.campaignParalyzedProtectionAvailable = true;
     if (def.commanderShieldPerSegment) sherman.campaignCommanderShieldAvailable = true;
     if (id === 'hvap' && sherman.hvapAmmoRemaining === undefined) {
-      const chamberedHvap = resolvedLoadedShell(sherman) === 'hvap' ? 1 : 0;
+      const chamberedHvap = resolvedLoadedShell(sherman) === 'hvap' && isMainGunLoaded(sherman, true) ? 1 : 0;
       sherman.hvapAmmoRemaining = HVAP_AMMO_CAPACITY - chamberedHvap;
     }
     applied.add(id);

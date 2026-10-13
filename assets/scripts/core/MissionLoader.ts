@@ -7,6 +7,7 @@
  */
 
 import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
+import { validateRoundEvents } from './RoundEvents';
 import {
   createTankCrew,
   Axial,
@@ -18,6 +19,8 @@ import {
   isAntiTankGunKind,
   isFootKind,
   isTankKind,
+  isMainGunLoaded,
+  initialMainGunLoadingState,
   neutralizeUncrewedTank,
   MissionData,
   Offset,
@@ -46,6 +49,7 @@ const TERRAIN_MAP = {
   c: 'clear',
   T: 'trees',
   B: 'beach',
+  eb: 'europe_beach',
   H: 'rocky',
   dw: 'deep_water',
   a: 'airstrip',
@@ -229,7 +233,15 @@ function pickRestrictedNumberedSlot(
   return rng.pick(available).cell;
 }
 
-export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
+export interface MissionLoadOptions {
+  hardcore?: boolean;
+  /** Campaign continuation preserves the player's chamber; other entrants are fresh. */
+  preservePlayerReload?: boolean;
+}
+
+export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOptions = {}): LoadedMission {
+  const roundEventErrors = validateRoundEvents(data.roundEvents);
+  if (roundEventErrors.length) throw new Error(`任务 ${data.id}：${roundEventErrors.join('; ')}`);
   const playerPlacement = data.playerTank ?? data.sherman;
   if (!playerPlacement) {
     throw new Error(`任务 ${data.id}：playerTank（或旧字段 sherman）必填`);
@@ -251,6 +263,11 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
       const def: TileDef | null | undefined = data.tiles[row]?.[col];
       if (!def) continue;
       const { terrain, hasBuilding } = parseTileDefBase(def);
+      if (def.wire !== undefined && !/^[012]{6}$/.test(def.wire)) throw new Error('wire must contain six 0/1/2 edge states');
+      if (def.sw !== undefined && !/^[01]{6}$/.test(def.sw)) throw new Error('sw must contain six 0/1 edge flags');
+      if ((def.sh !== undefined || def.cr !== undefined) && (def.t !== 'eb' || (def.sh !== undefined && def.sh !== 1) || (def.cr !== undefined && def.cr !== 1))) {
+        throw new Error('Steel hedgehogs and craters require European beach (eb), with sh/cr = 1');
+      }
       const eid = def.eid;
       // ef 与 h[i] 使用同一套方向索引 0..5，见 `HexGrid.hedgeFlagsFromMapJson` 与 `HEX_DIRECTIONS`
       const efRaw = def.ef;
@@ -270,6 +287,10 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
         ...(hasBuilding ? { hasBuilding: true } : {}),
         hedges: hedgeFlagsFromMapJson(def.h),
         breakwaters: breakwaterFlagsFromMapJson(def.bw),
+        seawalls: breakwaterFlagsFromMapJson(def.sw),
+        ...(def.wire ? { barbedWire: def.wire.split('').map(Number) as Tile['barbedWire'] } : {}),
+        ...(def.sh === 1 ? { steelHedgehogs: true } : {}),
+        ...(def.cr === 1 ? { crater: true } : {}),
         ...(roads ? { roads } : {}),
         reinforceId: def.rid,
         ...(reinforceFacing !== undefined ? { reinforceFacing } : {}),
@@ -395,6 +416,14 @@ export function loadMission(data: MissionData, rng?: RNG): LoadedMission {
   for (const enemy of enemies) validateUnitNotOnDisplayOnly(data.id, map, enemy);
   attachScenarioATGunCrews(allies, data.theater);
   attachScenarioATGunCrews(enemies, data.theater);
+  if (options.hardcore) {
+    for (const unit of [sherman, ...allies, ...enemies]) {
+      if (unit === sherman && options.preservePlayerReload) continue;
+      Object.assign(unit, initialMainGunLoadingState(unit.stats));
+    }
+    // Fresh AP/HE preparation cannot consume a smoke round from an authored chamber.
+    if (!options.preservePlayerReload && playerPlacement.smokeAmmoRemaining === undefined) sherman.smokeAmmoRemaining = 7;
+  }
   if (diceList && di !== diceList.length) {
     throw new Error(
       `任务 ${data.id}：内部错误：无坐标掷骰数 ${diceList.length} 与无 at 的敌方数不一致`,
@@ -793,11 +822,16 @@ function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: Un
     u.hatchOpen = p.hatchOpen ?? role.controller === 'local_player';
     neutralizeUncrewedTank(u);
   }
+  u.reloadProgress = p.reloadProgress;
+  if (role.controller !== 'local_player') {
+    u.loaded = p.loaded;
+    u.loadedShell = p.loadedShell;
+  }
   if (role.controller === 'local_player') {
     u.fireLevel = p.fireLevel !== undefined ? p.fireLevel : 0;
     u.loaded = p.loaded === true;
     u.loadedShell = p.loadedShell ?? (p.loaded === true ? 'ap' : null);
-    u.smokeAmmoRemaining = Math.max(0, Math.floor(p.smokeAmmoRemaining ?? (u.loadedShell === 'smoke' ? 6 : 7)));
+    u.smokeAmmoRemaining = Math.max(0, Math.floor(p.smokeAmmoRemaining ?? (u.loadedShell === 'smoke' && isMainGunLoaded(u, true) ? 6 : 7)));
     if (p.hvapAmmoRemaining !== undefined) {
       u.hvapAmmoRemaining = Math.max(0, Math.floor(p.hvapAmmoRemaining));
     }

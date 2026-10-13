@@ -17,24 +17,25 @@ function pool(kind, terrain='road') { const u=unit(kind); return actionDicePool(
 test('player firepower changes dice count, preserving terrain and a one-die minimum', () => {
   assert.equal(pool('sherman'), 5);
   assert.equal(pool('sherman', 'mud'), 4);
-  assert.equal(pool('m26_pershing'), 4);
-  assert.equal(pool('m26_pershing', 'mud'), 3);
-  assert.equal(pool('su152'), 2);
-  assert.equal(pool('su152', 'beach'), 1);
+  assert.equal(pool('m26_pershing'), 5);
+  assert.equal(pool('m26_pershing', 'mud'), 4);
+  assert.equal(pool('su152'), 5);
+  assert.equal(pool('su152', 'beach'), 3);
   assert.equal(pool('t34'), 3, 'combined commander/gunner is an available duty; no extra efficiency penalty');
+  assert.equal(actionDicePool({ subPhase:'attack', terrain:'road', hatchOpen:false, hardcore:true, crew:{ commander:false, gunner:false, loader:false, driver:false, coDriver:false }, firepower:0 }), 1);
 });
 test('AI invalidates high faces without changing movement/misc actions', () => {
-  for(let pip=1;pip<=6;pip++) assert.equal(hardcoreAttackDieIsInvalid(pip,-1,5), pip>4);
+  for(let pip=1;pip<=6;pip++) assert.equal(hardcoreAttackDieIsInvalid(pip,-1,2), pip>3);
   const tiger=unit('tiger');
-  assert.equal(actionForHardcoreTankDie(tiger,'attack',6).primary,'none');
-  assert.equal(actionForHardcoreTankDie(tiger,'attack',5).primary,'shoot');
-  assert.equal(actionForHardcoreTankDie(tiger,'attack',5,-1).primary,'none');
-  assert.notEqual(actionForHardcoreTankDie(tiger,'move',6,-2).primary,'none');
+  assert.equal(actionForHardcoreTankDie(tiger,'attack',6).primary,'reload');
+  assert.equal(actionForHardcoreTankDie(tiger,'attack',5).primary,'reload');
+  assert.equal(actionForHardcoreTankDie(tiger,'attack',5,-4).primary,'none');
+  assert.notEqual(actionForHardcoreTankDie(tiger,'move',6,-4).primary,'none');
   assert.equal(hardcoreAttackDieIsInvalid(1,-2,1),true);
   assert.equal(hardcoreAttackDieIsInvalid(6,2,6),false);
 });
 test('real physical rosters and shared duties survive casualties', () => {
-  for(const [kind,count] of Object.entries({sherman:5,t34:4,t34_85:5,type95:3,type97:4,stug3:4,su152:5,maus:6})) {
+  for(const [kind,count] of Object.entries({sherman:5,t34:4,t34_85:5,type95:3,type97:4,stug3:4,su152:5,maus:6,is2:4,sturmtiger:5})) {
     const u=unit(kind); assert.equal(u.stats.crewMembers.length,count); assert.equal(Object.values(u.crew).filter(Boolean).length,count);
   }
   const ha=unit('type95');
@@ -44,6 +45,25 @@ test('real physical rosters and shared duties survive casualties', () => {
   const su=unit('su152'); assert.equal(su.crew.coDriver,false);
   killCrewSlot(su.crew,3); assert.equal(types.crewRoleAlive(su,'loader'),true);
   killCrewSlot(su.crew,6); assert.equal(types.crewRoleAlive(su,'loader'),false);
+  const is=unit('is2'); assert.equal(is.crew.coDriver,false); assert.equal(is.crew.gunner,true);
+  const sturm=unit('sturmtiger'); assert.equal(sturm.crew.gunner,false); assert.equal(types.crewRoleAlive(sturm,'gunner'),true);
+  killCrewSlot(sturm.crew,1); assert.equal(types.crewRoleAlive(sturm,'gunner'),false);
+  killCrewSlot(sturm.crew,3); assert.equal(types.crewRoleAlive(sturm,'loader'),true);
+});
+test('large slow weapons retain coordinated attack dice but need multiple actual loading actions', () => {
+  const { loadCampaignShell } = require('../assets/scripts/core/CampaignUpgrade.ts');
+  for (const kind of ['is2', 'su152', 'jagdtiger', 'maus', 'sturmtiger']) {
+    const u=unit(kind); u.loaded=false; u.loadedShell=null; u.reloadProgress=0;
+    assert.ok(u.stats.firepower >= 1, `${kind}: do not use low firepower as a reload penalty`);
+    assert.ok(pool(kind) >= 4, `${kind}: crew can still generate coordinated actions`);
+    assert.ok(u.stats.reloadDifficulty >= 3);
+    for (let action=1; action<=u.stats.reloadDifficulty; action++) {
+      assert.equal(loadCampaignShell(u,'ap'),true);
+      assert.equal(types.isMainGunLoaded(u,true),action===u.stats.reloadDifficulty);
+    }
+  }
+  assert.equal(unit('sherman').stats.reloadDifficulty,1);
+  assert.equal(unit('t34').stats.reloadDifficulty,1, 'commander workload is not charged again as loading difficulty');
 });
 test('sixth person can be hit and keep a tank crewed; absent slots are not casualties', () => {
   const maus=unit('maus'); assert.equal(resolveCrewCheck(maus,{d6:()=>6}).slot,6);
@@ -67,8 +87,8 @@ test('mission loading and save roundtrip retain physical crews and second loader
  assert.equal(types.crewRoleAlive(restored.enemies.find(u=>u.kind==='type95'),'gunner'),false);
 });
 test('ordinary European M26 and Sherman baseline are preserved in generated profiles', () => {
- const m=getUnitStats('m26_pershing');assert.deepEqual([m.penetration,m.highExplosivePower,m.effectiveRange,m.firepower],[5,3,4,5]);
- for(const theater of ['europe','pacific']) { const s=getUnitStats('sherman',theater);assert.deepEqual([s.armorFront,s.armorFrontSide,s.armorRearSide,s.armorRear,s.penetration,s.firepower],[11,10,9,8,2,6]); }
+ const m=getUnitStats('m26_pershing');assert.equal(m.reloadDifficulty,1);assert.deepEqual([m.penetration,m.highExplosivePower,m.effectiveRange,m.firepower],[5,3,4,2]);
+ for(const theater of ['europe','pacific']) { const s=getUnitStats('sherman',theater);assert.deepEqual([s.armorFront,s.armorFrontSide,s.armorRearSide,s.armorRear,s.penetration,s.firepower],[11,10,9,8,2,2]); }
 });
 test('player scene feeds firepower to the pool and does not discard high dice', () => {
  const scene=fs.readFileSync('assets/scripts/view/BattleScene.ts','utf8');
@@ -83,7 +103,8 @@ test('support artillery firepower gate uses the same AI threshold', () => {
  const Host=vm.runInNewContext(js+';Host',{hardcoreAttackDieIsInvalid,effectiveDiceTerrain:tile=>tile.terrain,PLAYER_HARDCORE_DICE_POOL:{baseByPhaseTerrain:{attack:{field:0,mud:-1}}},t:()=>'',unitDisplayName:k=>k});
  const host=new Host();let terrain='field',pip=4;
  host.mission={map:{get:()=>({terrain})}};host.rng={d6:()=>pip};host.battleLog=()=>{};
- const gun=unit('heavy_artillery');assert.equal(host.supportGunFirepowerAllows(gun),false);
+ const gun=unit('heavy_artillery');assert.equal(host.supportGunFirepowerAllows(gun),true);
+ gun.stats={...gun.stats,firepower:1};assert.equal(host.supportGunFirepowerAllows(gun),false);
  pip=3;assert.equal(host.supportGunFirepowerAllows(gun),true);
  terrain='mud';assert.equal(host.supportGunFirepowerAllows(gun),false);
 });

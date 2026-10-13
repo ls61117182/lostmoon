@@ -28,6 +28,7 @@ export function terrainMoveCost(t: TerrainType): number {
     case 'water':    return Infinity;
     case 'deep_water': return Infinity;
     case 'clear':    return 1;
+    case 'europe_beach': return 1;
     case 'trees':    return 1;
     case 'beach':    return 1;
     case 'rocky':    return Infinity;

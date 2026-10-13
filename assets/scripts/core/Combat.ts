@@ -490,6 +490,7 @@ export interface HitBreakdown {
   actionModifier?: number;
   weather?: number;
   unitLevel?: number;
+  crater?: number;
 }
 
 export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
@@ -502,6 +503,7 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const infantryMGTarget = ctx.attackKind === 'mg'
     && (isFootUnit(target) || (ctx.atGunCrewTargets === true && isControlledATGun(target)));
   const building = tileHasBuilding(targetTile) ? (urbanBuilding && infantryMGTarget ? 3 : 1) : 0;
+  const crater = targetTile?.terrain === 'europe_beach' && targetTile.crater && isFootUnit(target) ? 1 : 0;
   const size = isBunkerShootingPortAttack(ctx)
     ? (target.stats.shootingPortHitThreshold ?? 10)
     : target.stats.size;
@@ -523,7 +525,8 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
   return {
     size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
-    threshold: size + distance + hedges + building + smoke + concealed + trees + rearArc
+    crater,
+    threshold: size + distance + hedges + building + crater + smoke + concealed + trees + rearArc
       + frontArcModifier + actionModifier + weather + unitLevel,
   };
 }
@@ -753,9 +756,9 @@ export interface HighExplosiveReport {
   /** Crew at a gun uses 8; ordinary infantry retains its existing base 6. */
   suppressBase?: number;
   fireThreshold?: number;
-  /** 坦克 HE 的低档结果阈值；达到更高的 fireThreshold 时由起火取代瘫痪。 */
+  /** 坦克 HE 的低档结果阈值；更高档依次为起火和摧毁。 */
   paralyzeThreshold?: number;
-  /** 重炮碉堡已经起火时，本次再次达到起火阈值而升级为摧毁。 */
+  /** 已起火的重炮碉堡或非主角坦克再次达到起火阈值而升级为摧毁。 */
   destroyedByRepeatFire?: boolean;
   infantryInCover?: boolean;
   infantryCoverValue?: number;
@@ -926,9 +929,11 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
     const effectRoll = effectDice[0] + effectDice[1];
     const paralyzeThreshold = armor - power;
     const fireThreshold = armor + 4 - power;
-    const rolledOutcome: HighExplosiveOutcome = effectRoll >= fireThreshold
-      ? 'fire'
-      : effectRoll >= paralyzeThreshold ? 'paralyzed' : 'none';
+    const destroyThreshold = armor + 8 - power;
+    const rolledOutcome: HighExplosiveOutcome = effectRoll >= destroyThreshold
+      ? 'destroyed'
+      : effectRoll >= fireThreshold ? 'fire'
+        : effectRoll >= paralyzeThreshold ? 'paralyzed' : 'none';
     const destroyedByRepeatFire = hit
       && rolledOutcome === 'fire'
       && !isProtagonistTarget(ctx)
@@ -942,9 +947,10 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
       armor,
       effectDice,
       effectRoll,
-      effectThreshold: outcome === 'fire' || outcome === 'destroyed'
-        ? fireThreshold
-        : paralyzeThreshold,
+      effectThreshold: outcome === 'destroyed' && !destroyedByRepeatFire
+        ? destroyThreshold
+        : outcome === 'fire' || destroyedByRepeatFire ? fireThreshold : paralyzeThreshold,
+      destroyThreshold,
       fireThreshold,
       paralyzeThreshold,
       destroyedByRepeatFire,

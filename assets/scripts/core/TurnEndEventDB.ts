@@ -4,7 +4,7 @@
  * 生成：node tools/buildTurnEndEventDB.js
  */
 
-export type TurnEndEffectType = 'none' | 'sniper' | 'commander_extra' | 'infantry_spawn' | 'adjacent_infantry_fire' | 'mechanical_failure' | 'stuka' | 'panzer3_spawn' | 'road_mine' | 'panzer4_spawn' | 'tiger_spawn' | 'sherman_spawn' | 'german_truck_move' | 'clear_mine' | 'type95_spawn' | 'type97_spawn' | 'heavy_mortar';
+export type TurnEndEffectType = 'none' | 'sniper' | 'commander_extra' | 'infantry_spawn' | 'adjacent_infantry_fire' | 'mechanical_failure' | 'stuka' | 'panzer3_spawn' | 'road_mine' | 'panzer4_spawn' | 'tiger_spawn' | 'sherman_spawn' | 'german_truck_move' | 'clear_mine' | 'type95_spawn' | 'type97_spawn' | 'heavy_mortar' | 'airborne_support';
 export type ReinforcementSide = 'friendly' | 'enemy';
 
 export interface TurnEndEventRow {
@@ -18,6 +18,9 @@ export interface TurnEndEventRow {
 
 export const TURN_END_EVENTS: TurnEndEventRow[] = [
   { missionId: 'mission_01', sumMin: 2, sumMax: 3, diceCount: 2, effectType: 'sniper' },
+  { missionId: 'mission_13', sumMin: 2, sumMax: 4, diceCount: 2, effectType: 'adjacent_infantry_fire' },
+  { missionId: 'mission_13', sumMin: 5, sumMax: 9, diceCount: 2, effectType: 'none' },
+  { missionId: 'mission_13', sumMin: 10, sumMax: 12, diceCount: 2, effectType: 'commander_extra' },
   { missionId: 'mission_01', sumMin: 4, sumMax: 4, diceCount: 2, effectType: 'commander_extra' },
   { missionId: 'mission_01', sumMin: 5, sumMax: 6, diceCount: 2, effectType: 'infantry_spawn', reinforcementSide: 'enemy' },
   { missionId: 'mission_01', sumMin: 7, sumMax: 8, diceCount: 2, effectType: 'adjacent_infantry_fire' },

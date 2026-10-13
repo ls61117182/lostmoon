@@ -28,6 +28,7 @@ export function tankTrackStyleForTerrain(
     case 'trees':
       return 'normal';
     case 'clear':
+    case 'europe_beach':
       return 'shallow';
     case 'road':
     case 'urban_road':

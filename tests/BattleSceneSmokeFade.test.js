@@ -66,7 +66,7 @@ function particles(age, endAge) {
     ellipse(x, y, rx, ry) { ellipses.push({ x, y, rx, ry, alpha: this.fillColor.a / 255 }); },
     fill() {},
   };
-  render.call({ hexSize: 100 }, g, 0, 0, {
+  render.call({ hexSize: 100, screenAlignedMapGraphics: method('screenAlignedMapGraphics') }, g, 0, 0, {
     seed: 127, smokeAlpha: 1, smokeAge: age, smokeEmissionEndAge: endAge,
   });
   return ellipses;

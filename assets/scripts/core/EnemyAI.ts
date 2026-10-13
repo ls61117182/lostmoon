@@ -1,4 +1,4 @@
-import { crewRoleAlive } from "./types";
+import { crewRoleAlive, effectiveTankCrew, isTankUnit, isMainGunLoaded } from "./types";
 /**
  * 德军坦克 AI —— 纯 TypeScript，不依赖 Cocos。
  *
@@ -20,7 +20,9 @@ import { crewRoleAlive } from "./types";
  */
 
 import { RNG } from './Dice';
-import { PLAYER_HARDCORE_DICE_POOL } from './PlayerActionDB';
+import { actionDicePool } from './ActionDice';
+import { campaignUpgradeDiceBonus } from './CampaignUpgrade';
+import { CAMPAIGN_UPGRADE_BY_ID, CampaignUpgradeId } from './CampaignUpgradeDB';
 import {
   AI_DICE_COUNT,
   AIActionEntry,
@@ -99,16 +101,25 @@ export function rollAIDice(rng: RNG, count: number): number[] {
 export interface EnemyAIDie {
   type: EnemyTankDieType;
   pip: number;
+  /** 掷骰时固定的有效骰面数量（0..6），不是原始火力点数。 */
   attackFirepower?: number;
 }
 
-function effectiveAIFirepower(unit: Unit, terrain: TerrainType): number {
-  return Math.max(0, Math.trunc((unit.stats.firepower ?? 6)
-    + nonPlayerTankFirepowerBonus(unit)
-    + PLAYER_HARDCORE_DICE_POOL.baseByPhaseTerrain.attack[terrain]));
+/** 与玩家复用同一火力计算；AI等级加成在取下限前合计。 */
+export function effectiveAIFirepower(unit: Unit, terrain: TerrainType, additionalModifier = 0): number {
+  const upgrades = (unit.campaignUpgradeIds ?? []).filter((id): id is CampaignUpgradeId =>
+    Object.prototype.hasOwnProperty.call(CAMPAIGN_UPGRADE_BY_ID, id));
+  return actionDicePool({
+    subPhase: 'attack', terrain, hardcore: true, firepower: unit.stats.firepower,
+    crew: effectiveTankCrew(unit), hatchOpen: !!unit.hatchOpen,
+    commanderBonusWithoutOpenHatch: true,
+    externalBonus: nonPlayerTankFirepowerBonus(unit)
+      + campaignUpgradeDiceBonus(upgrades, terrain, 'attack') + additionalModifier,
+  });
 }
 
 export function hardcoreTankDiceTerrain(terrain: TerrainType): HardcoreTankDiceTerrain {
+  if (terrain === 'europe_beach') return 'clear';
   switch (terrain) {
     case 'road':
     case 'mud':
@@ -139,7 +150,7 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
   const base = HARDCORE_TANK_AI_DICE_COUNT[key];
   const rank = nonPlayerTankDiceBonus(unit);
   return {
-    attack: Math.max(1, base.attack + rank.attack) + Math.max(0, Math.ceil(effectiveAIFirepower(unit, terrain) / 6) - 1),
+    attack: Math.max(1, base.attack + rank.attack) + Math.max(0, Math.ceil(effectiveAIFirepower(unit, terrain) * 3 / 6) - 1),
     move: Math.max(1, (unit.stats.mobility ?? 0) + base.move + (crewAlive(unit, 'driver') ? 1 : 0) + rank.move),
     misc: Math.max(1, base.misc + (crewAlive(unit, 'commander') ? 1 : 0) + rank.misc),
   };
@@ -148,11 +159,11 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
 export function rollHardcoreTankAIDice(rng: RNG, unit: Unit, terrain: TerrainType): EnemyAIDie[] {
   const count = hardcoreTankAIDiceCount(unit, terrain);
   const out: EnemyAIDie[] = [];
-  const firepower = effectiveAIFirepower(unit, terrain);
-  const extra = Math.max(0, Math.ceil(firepower / 6) - 1);
+  const validFaces = effectiveAIFirepower(unit, terrain) * 3;
+  const extra = Math.max(0, Math.ceil(validFaces / 6) - 1);
   const baseCount = Math.max(1, count.attack - extra);
   for (let i = 0; i < count.attack; i++) {
-    const attackFirepower = Math.min(6, Math.max(0, firepower - Math.max(0, i - baseCount + 1) * 6));
+    const attackFirepower = Math.min(6, Math.max(0, validFaces - Math.max(0, i - baseCount + 1) * 6));
     out.push({ type: 'attack', pip: rng.d6(), attackFirepower });
   }
   for (let i = 0; i < count.move; i++) out.push({ type: 'move', pip: rng.d6() });
@@ -167,12 +178,13 @@ export function actionFor(table: AIActionTable, col: AIColumn, pip: number): AIA
 }
 
 /**
- * 单颗攻击骰的有效点数为1..6；超额火力由掷骰函数分配给额外骰。
+ * 每点火力提供3个有效骰面；超额骰面由掷骰函数分配给额外骰。
+ * attackValidFaces 为掷骰时固定的单颗骰阈值，传入后不再读取当前火力。
  * 玩家使用ActionDice中的骰数修正，不调用此函数。
  */
-export function hardcoreAttackDieIsInvalid(pip: number, firepowerModifier: number, firepower = 6): boolean {
-  const penalty = 6 - Math.min(6, Math.max(0, Math.trunc(firepower + firepowerModifier)));
-  return penalty > 0 && pip > Math.max(0, 6 - penalty);
+export function hardcoreAttackDieIsInvalid(pip: number, firepowerModifier: number, firepower = 2, attackValidFaces?: number): boolean {
+  const validFaces = Math.min(6, Math.max(0, attackValidFaces ?? Math.trunc(firepower + firepowerModifier) * 3));
+  return pip > validFaces;
 }
 
 export function actionForHardcoreTankDie(
@@ -182,7 +194,8 @@ export function actionForHardcoreTankDie(
   firepowerModifier = 0,
   attackFirepower?: number,
 ): AIActionEntry {
-  if (type === 'attack' && hardcoreAttackDieIsInvalid(pip, attackFirepower === undefined ? firepowerModifier : 0, attackFirepower ?? unit.stats.firepower ?? 6)) {
+  if (type === 'attack' && hardcoreAttackDieIsInvalid(pip, 0,
+    attackFirepower === undefined ? effectiveAIFirepower(unit, 'road', firepowerModifier) : 1, attackFirepower)) {
     return { primary: 'none' };
   }
   const tableId = (unit.stats.actionTable?.[type] ?? DEFAULT_HARDCORE_TANK_ACTION_TABLE[type]) as keyof typeof HARDCORE_TANK_AI_TABLE;
@@ -350,7 +363,7 @@ export function decideEnemyTurn(
   const canEnterFront = (d: Direction) => {
     const p = neighbor(enemy.pos, d);
     // 桥梁边向（GDD §3.2）：通过 canTankCrossEdge 同时校验「水域+桥梁可入」与「方向落在桥端」。
-    if (!map.canTankCrossEdge(enemy.pos, p, {
+    if (!map.canUnitCrossEdge(enemy.pos, p, enemy, {
       ignoreBreakwater: enemy.faction === 'japanese',
       faction: enemy.faction,
     })) return false;
@@ -437,6 +450,7 @@ export function canExecuteAction(
   const currentTile = map.get(enemy.pos);
   switch (action) {
     case 'none':   return false;
+    case 'reload': return isTankUnit(enemy) && !isMainGunLoaded(enemy, true);
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
     case 'ambush': return canEnterAmbush(enemy, 'hardcore', true) && !enemy.ambushReadyThisTurn;
     case 'turn':   return !enemy.paralyzed;
@@ -459,7 +473,7 @@ export function canExecuteAction(
       if (enemy.paralyzed) return false;
       if (enemy.facing === null) return false;
       const to = neighbor(enemy.pos, enemy.facing);
-      if (!map.canTankCrossEdge(enemy.pos, to, {
+      if (!map.canUnitCrossEdge(enemy.pos, to, enemy, {
         ignoreBreakwater: enemy.faction === 'japanese',
         faction: enemy.faction,
       })) return false;
@@ -468,7 +482,8 @@ export function canExecuteAction(
       return !!tile?.hasBuilding;
     }
     case 'hull_down':
-      return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile);
+      return !enemy.hidden && !tileForbidsSmokeOrConcealment(currentTile)
+        && (currentTile?.terrain !== 'europe_beach' || !tileForbidsConcealment(currentTile));
     case 'advance':
     case 'reverse': {
       if (enemy.paralyzed) return false;
@@ -478,7 +493,7 @@ export function canExecuteAction(
         : rotateDirection(enemy.facing, 3);
       const to = neighbor(enemy.pos, dir);
       // 桥梁边向（GDD §3.2）：水域+桥梁可入需 dir 落在 br 端；非桥梁场景 canTankCrossEdge 行为退化为 canTankEnter。
-      if (!map.canTankCrossEdge(enemy.pos, to, {
+      if (!map.canUnitCrossEdge(enemy.pos, to, enemy, {
         ignoreBreakwater: enemy.faction === 'japanese',
         faction: enemy.faction,
       })) return false;
@@ -519,7 +534,7 @@ export function decideEnemyMove(
   let bestCost = Infinity;
 
   for (const n of neighbors(enemy.pos)) {
-    if (!map.canTankCrossEdge(enemy.pos, n, {
+    if (!map.canUnitCrossEdge(enemy.pos, n, enemy, {
       ignoreBreakwater: enemy.faction === 'japanese',
       faction: enemy.faction,
     })) continue;

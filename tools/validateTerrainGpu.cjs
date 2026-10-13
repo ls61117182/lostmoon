@@ -8,9 +8,10 @@ async function main() {
   const urban=load('assets/scripts/core/UrbanTerrain.ts'),raster=load('assets/scripts/view/TerrainGroundRaster.ts',{'../core/UrbanTerrain':urban});
   const {TerrainGroundGpuData}=load('assets/scripts/view/TerrainGroundGpuData.ts',{'../core/UrbanTerrain':urban,'./TerrainGroundRaster':raster});
   const bundle=JSON.parse(fs.readFileSync(path.join(root,'assets/resources/textures/terrain/redesign_v3/materials.json'))),cases=[];
-  for(const [name,b,w]of [['summer',bundle.europeanSummer,false],['winter',bundle.europeanWinter,true],['pacific',bundle,false]]) {
+  for(const [name,b,w]of [['summer',bundle.europeanSummer,false],['winter',bundle.europeanWinter,true],['pacific',bundle,false],['normandy',bundle.europeanSummer,false]]) {
     const data=new TerrainGroundGpuData(b),tiles=[];
     for(let r=-3;r<=5;r++)for(let q=-4;q<=8;q++)tiles.push({pos:{q,r},terrain:q===0?'water':q===1?'beach':q===2?'mud':q===3?'forest':q===4?'urban_ground':'field',...(r===2&&q!==0?{roads:[true,false,false,true,false,false]}:{}),...(r===2&&q===0?{bridgeEnds:[0,3]}:{})});
+    if(name==='normandy')for(const tile of tiles)if(tile.terrain==='beach'||tile.terrain==='mud')tile.terrain='europe_beach';
     const atlas=data.atlas(),encoded=data.tileData(tiles,w);
     cases.push({name,w,b:{curvedRoads:!!b.curvedRoads,winterArtwork:!!b.winterArtwork,roadSurface:!!b.materials.road_surface,winterYard:!!b.materials.winter_yard},encoded:{...encoded,ground:Array.from(encoded.ground),roads:Array.from(encoded.roads)}});
     await sharp(atlas.pixels,{raw:{width:atlas.width,height:atlas.height,channels:4}}).png().toFile(path.join(out,'atlas-'+name+'.png'));

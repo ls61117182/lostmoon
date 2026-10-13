@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const battleScene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
+const battleScene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8').replace(/\r\n/g, '\n');
 
 const assert = (condition, message) => {
   if (!condition) throw new Error(message);

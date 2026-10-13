@@ -13,8 +13,10 @@ export const AudioKeys = {
   bgmBattle: 'audio/bgm_battle',
   uiClick: 'audio/ui_click',
   diceRoll: 'audio/dice_roll',
-  /** 坦克前进 / 后退 / 转向共用；动画期间循环播放，动作结束时由 `stopTankManeuver` 停止 */
+  /** 轻、中型车辆前进 / 后退 / 转向；实际车型由 UnitStats.moveSound 选择，动画结束时停止 */
   tankManeuver: 'audio/tank_move',
+  /** 较重车辆独立机动音路径；暂用原坦克移动音效，方便后续替换，动画期间循环播放 */
+  tankManeuverHeavy: 'audio/tank_move_heavy',
   /** 炮塔独立转向；循环播放并由炮塔动画结束回调精确停止 */
   turretTraverse: 'audio/tank_turret_rotate',
   cannonFire: 'audio/cannon_fire',
@@ -32,6 +34,7 @@ export const AudioKeys = {
   tankExplosion: 'audio/tank_explosion',
   smokeDeploy: 'audio/smoke_deploy',
   stukaFlyover: 'audio/stuka',
+  c47Flyover: 'audio/c47_flyover',
   stukaCannonFire: 'audio/stuka_cannon_fire',
   /** 主炮装填完成（玩家消耗装填骰 / 对子装填手） */
   cannonReload: 'audio/cannon_reload',
@@ -373,6 +376,11 @@ export function playSmokeDeploy(): void {
 /** One-shot siren/engine cue for the Stuka flyover presentation. */
 export function playStukaFlyover(): void {
   playSfxKey(AudioKeys.stukaFlyover, 1.4, 1.4);
+}
+
+/** C-47 flyover: source recording trimmed from 28 to 38 seconds. */
+export function playC47Flyover(): void {
+  playSfxKey(AudioKeys.c47Flyover);
 }
 
 /** 斯图卡扫射前播放攻击音效；使用独立音源，由飞行动画负责停止。 */

@@ -18,7 +18,7 @@ assert.equal(villageData.ground[villageIndex+3],4,'road buildings retain the vil
 assert.equal(villageData.ground[villageIndex+1],9,'village floor keeps road connections');
 assert.deepEqual(gp.plans(cells,false).map(p=>({x:p.x,y:p.y})),new raster.TerrainGroundRaster(bundle.europeanSummer).chunkOrigins(cells));
 const atlas=gp.atlas();assert.equal(atlas.pixels.length,atlas.width*atlas.height*4);
-for(let id=0;id<data.GPU_MATERIALS.length;id++){const x=id%4*386,y=Math.floor(id/4)*386;assert.deepEqual(atlas.pixels.slice((y*atlas.width+x)*4,(y*atlas.width+x)*4+4),atlas.pixels.slice(((y+1)*atlas.width+x+1)*4,((y+1)*atlas.width+x+1)*4+4),'atlas cells have duplicated borders');}
+for(let id=0;id<data.GPU_MATERIALS.length;id++){const x=id%data.ATLAS_COLUMNS*386,y=Math.floor(id/data.ATLAS_COLUMNS)*386;assert.deepEqual(atlas.pixels.slice((y*atlas.width+x)*4,(y*atlas.width+x)*4+4),atlas.pixels.slice(((y+1)*atlas.width+x+1)*4,((y+1)*atlas.width+x+1)*4+4),'atlas cells have duplicated borders');}
 class Vec4{constructor(x=0,y=0,z=0,w=0){Object.assign(this,{x,y,z,w});}}
 class Node{constructor(name){this.name=name;this.active=true;this.isValid=true;this.components=new Map();this.children=[];this.layer=1;}get scene(){return scene;}addChild(n){this.children.push(n);n.parent=this;}addComponent(Type){const c=new Type();this.components.set(Type,c);c.node=this;return c;}getComponent(Type){return this.components.get(Type);}setPosition(x,y,z){this.position={x,y,z};}setScale(x,y,z){this.scale={x,y,z};}setSiblingIndex(){}destroy(){this.isValid=false;for(const c of this.children)c.destroy();}}
 const scene=new Node('scene');

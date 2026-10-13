@@ -77,3 +77,18 @@ renderer.begin(); renderer.draw(source, 'infantry', 50); renderer.end();
 assert(cast.active && cast.position.y < 200, 'Infantry receives a short ground cast');
 assert.equal(cast.children[0].getComponent(Sprite).color.a, 45, 'Infantry shadows respect source opacity');
 console.log('Object shadow rendering tests passed');
+
+sourceNode.getComponent(UITransform).setContentSize({ width: 40, height: 60 });
+for (const kind of ['tree', 'building', 'vehicle']) {
+  renderer.begin(90); renderer.draw(source, kind, 50); renderer.end();
+  const dx = cast.position.x - sourceNode.position.x;
+  const dy = cast.position.y - sourceNode.position.y;
+  assert.equal(-dy, 4, `${kind} shadow still points screen-right after a 90 degree camera rotation`);
+  assert.equal(dx, -4, `${kind} shadow still points screen-down after a 90 degree camera rotation`);
+  assert.equal(cast.angle, -90, 'flattening stays in the screen frame');
+  assert.equal(cast.children[0].angle + cast.angle, sourceNode.angle, 'source silhouette keeps its map facing');
+  const contact = renderer.contacts.ellipses[0];
+  assert.ok(contact[2] < contact[3], 'contact flattening compensates for camera rotation');
+}
+renderer.begin(); renderer.draw(source, 'tree', 50); renderer.end();
+assert.equal(cast.angle, 0, 'pooled shadow resets when returning to an unrotated mission');

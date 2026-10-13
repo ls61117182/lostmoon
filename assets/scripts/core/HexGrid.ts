@@ -12,7 +12,7 @@
  *           SW(2)  SE(1)
  */
 
-import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBuilding, tileHasBridge } from './types';
+import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBuilding, tileHasBridge, Unit, isFootUnit, isAntiTankGunUnit, isTankUnit } from './types';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -384,10 +384,41 @@ export class HexMap {
   hasBreakwaterBetween(from: Axial, to: Axial): boolean {
     if (hexDistance(from, to) !== 1) return false;
     const dirAB = directionTo(from, to);
-    if (dirAB !== null && this.get(from)?.breakwaters?.[dirAB]) return true;
+    if (dirAB !== null && (this.get(from)?.breakwaters?.[dirAB] || this.get(from)?.seawalls?.[dirAB])) return true;
     const dirBA = directionTo(to, from);
-    if (dirBA !== null && this.get(to)?.breakwaters?.[dirBA]) return true;
+    if (dirBA !== null && (this.get(to)?.breakwaters?.[dirBA] || this.get(to)?.seawalls?.[dirBA])) return true;
     return false;
+  }
+
+  /** Shared edges may be encoded on either side; intact always wins. */
+  barbedWireBetween(from: Axial, to: Axial): number {
+    if (hexDistance(from, to) !== 1) return 0;
+    const a = directionTo(from, to)!, b = directionTo(to, from)!;
+    const x = this.get(from)?.barbedWire?.[a] ?? 0, y = this.get(to)?.barbedWire?.[b] ?? 0;
+    return x === 1 || y === 1 ? 1 : x === 2 || y === 2 ? 2 : 0;
+  }
+
+  canUnitCrossEdge(from: Axial, to: Axial, unit: Unit, opts: { ignoreBreakwater?: boolean; faction?: Faction } = {}): boolean {
+    if (hexDistance(from, to) !== 1 || !this.canUnitEnter(to, unit.faction)) return false;
+    if ((isFootUnit(unit) || isAntiTankGunUnit(unit)) && this.barbedWireBetween(from, to) === 1) return false;
+    if (isFootUnit(unit) || isAntiTankGunUnit(unit)) return true;
+    return this.canTankCrossEdge(from, to, { ...opts, faction: unit.faction });
+  }
+
+  /** Commit only after an actual move; previews/path searches never crush wire. */
+  applyMovementTerrainEffects(unit: Unit, from: Axial, to: Axial): boolean {
+    if (!isTankUnit(unit) || hexDistance(from, to) !== 1) return false;
+    let crushed = false;
+    for (const [pos, other] of [[from, to], [to, from]]) {
+      const tile = this.get(pos), dir = directionTo(pos, other)!;
+      if (tile?.barbedWire?.[dir] === 1) {
+        tile.barbedWire[dir] = 2;
+        crushed = true;
+      }
+    }
+    const destination = this.get(to);
+    if (destination?.terrain === 'europe_beach' && destination.steelHedgehogs) unit.paralyzed = true;
+    return crushed;
   }
 
   /**

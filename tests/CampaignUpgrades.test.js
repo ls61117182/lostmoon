@@ -60,7 +60,7 @@ assert(scene.includes("campaignUpgradeActive('hvap')")
   && scene.includes('hvapAmmoRemaining'), 'HVAP should add a reload choice with a remaining-ammo badge');
 assert(scene.includes('loadCampaignShell(sherman, requestedShell)')
   && runtime.includes("currentShell === 'hvap'")
-  && runtime.includes("resolvedLoadedShell(sherman) === 'hvap' ? 1 : 0"),
+  && runtime.includes("resolvedLoadedShell(sherman) === 'hvap' && isMainGunLoaded(sherman, true) ? 1 : 0"),
   'unfired chambered HVAP should return to reserve and reduce the next-segment reserve by one');
 assert(combat.includes('HVAP_PENETRATION_BONUS = 2')
   && combat.includes('HVAP_EFFECTIVE_RANGE_BONUS = 2'), 'HVAP should add two penetration and two effective range');

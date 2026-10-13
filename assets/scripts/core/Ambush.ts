@@ -1,6 +1,6 @@
 import type { GameMode } from './GameMode';
 import type { Axial, CrewSkillId, ShermanCrew, Unit } from './types';
-import { crewRoleAlive, isHostile, isTankUnit, resolvedLoadedShell } from './types';
+import { crewRoleAlive, isHostile, isTankUnit, isMainGunLoaded, resolvedLoadedShell } from './types';
 
 /** 只有存活乘员携带的技能才对车组生效。 */
 export function hasLivingCrewSkill(
@@ -21,6 +21,7 @@ export function canEnterAmbush(unit: Unit, mode: GameMode, automaticLoaded = fal
   const shell = resolvedLoadedShell(unit);
   return mode === 'hardcore' && !unit.destroyed && isTankUnit(unit)
     && !unit.turretDamaged && crewRoleAlive(unit, 'gunner')
+    && isMainGunLoaded(unit, true)
     && (shell === 'ap' || shell === 'he' || (automaticLoaded && shell === null));
 }
 

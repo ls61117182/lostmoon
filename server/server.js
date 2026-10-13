@@ -426,6 +426,11 @@ function updatePvpBattleFromEvent(match, event) {
   match.battleState.units = match.battleState.units.map(unit => (
     byId.has(unit.id) ? sanitizePvpBattleUnit(byId.get(unit.id), unit) : unit
   ));
+  if (event.barbedWireStates && typeof event.barbedWireStates === 'object') {
+    match.battleState.barbedWireStates = Object.fromEntries(Object.entries(event.barbedWireStates)
+      .filter(([key, states]) => /^-?\d+,-?\d+$/.test(key) && Array.isArray(states) && states.length === 6 && states.every(n => n === 0 || n === 1 || n === 2))
+      .map(([key, states]) => [key, [...states]]));
+  }
   if (Array.isArray(event.smokeHexes)) {
     const smokeHexes = sanitizePvpSmokeHexes(event.smokeHexes);
     match.battleState.smokeHexes = smokeHexes;
