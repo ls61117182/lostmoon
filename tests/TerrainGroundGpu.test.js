@@ -78,4 +78,17 @@ late.destroy();lateWaterCallback(null,{});assert(textures.every(t=>t.destroyed),
 // Failed shader uses BattleScene's existing fallback instead of infinite loading.
 const broken=new TerrainGroundRenderer(new Node(),bundle);broken.draw([tile(0,0)],false,60,0,0);callbacks.get('effects/terrain-bake')(new Error('compile'),null);assert.throws(()=>broken.advanceGeneration(),/GPU terrain effect/);broken.destroy();
 assert(!fs.existsSync('assets/resources/textures/terrain/transitions'),'retired images are outside the resource bundle');
-console.log('GPU terrain: compact map data, atlas padding, offscreen lifecycle, redraw cache, local invalidation, cancellation, water clocks and shader failure passed.');
+if(bundle.europeanSummer.bridgeArtwork){
+ const bridgeParent=new Node('painted-bridge'),bridgeRenderer=new TerrainGroundRenderer(bridgeParent,bundle);
+ effects();ready(bridgeRenderer,[tile(0,0,'water',{bridgeEnds:[1,4]}),tile(30,0)],false,60,0,0,true);
+ const chunks=bridgeParent.children.filter(n=>n.isValid),near=chunks.filter(n=>n.position.x<1000),farChunks=chunks.filter(n=>n.position.x>1000);
+ assert(near.length&&farChunks.length);
+ assert(near.every(n=>n.getComponent(Sprite).spriteFrame.rect.width===770),'bridge neighbourhood bakes at 2x');
+ assert(farChunks.every(n=>n.getComponent(Sprite).spriteFrame.rect.width===386),'distant ordinary terrain stays at 1x');
+ assert(near.every(n=>n.getComponent(UITransform).width===481.25),'denser output preserves bridge world size');
+ const paintedMaterial=materials.find(m=>m.bridgeArtwork?.width===768&&m.bakeOptions?.w===1);
+ assert(paintedMaterial,'GPU baker binds the independent 768px bridge texture and enables its sampling');
+ const paintedTexture=paintedMaterial.bridgeArtwork;bridgeRenderer.destroy();assert(paintedTexture.destroyed,'painted bridge texture is released');
+ assert(textures.every(t=>t.destroyed),'density changes and artwork textures do not leak');
+}
+console.log('GPU terrain: compact map data, atlas padding, offscreen lifecycle, redraw cache, local invalidation, cancellation, water clocks, painted bridge density and shader failure passed.');

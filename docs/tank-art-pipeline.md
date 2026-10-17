@@ -61,3 +61,7 @@ pnpm run tank:validate
 ```
 
 该命令依次完成数据库重建、PNG/Meta/坐标审计、战场注册回归、朝向测试和 TypeScript 检查。全部通过后再进入 Cocos 实机目视验收。
+
+## 7. 德军后期涂装
+
+保留原德军灰资源，后期三色迷彩使用独立 `textures/units/late_war/` 目录。关卡顶层配置 `germanTankCamouflage: "late_war"` 后统一切换该关所有德军坦克及其击毁状态；省略或填 `"grey"` 时使用原灰色。编辑器的“关卡”页提供“德军配色”切换。制作、重建和验证说明见 [GermanTankCamouflage.md](GermanTankCamouflage.md)。

@@ -17,17 +17,17 @@ panzer4,4号G,german,4,3,11,9,8,7,0,2,1,4,2,,3,3,0,4,4,1,1,audio/tank_move,audio
 stug3,3号突击炮G,german,6,3,11,9,8,7,0,1,1,4,2,,3,0,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,fixed,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4,,谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；四人但车长炮手装填手职责分开；75毫米整装弹装填1
 panzer3,3号,german,5,3,10,9,8,8,0,2,1,1,1,,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,,按短50毫米炮型配置；五人三人炮塔；短50毫米整装弹装填1
 truck,卡车,german,4,,2,2,2,2,0,-4,1,0,0,,0,0,0,4,4,1,1,audio/tank_move,,,fixed,destroyed,0,,4,,占位 - 后续按特殊规则结算
-infantry,步兵,german,2,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,,占位 - 仅事件中作为攻击方
-german_infantry,德军步兵,german,2,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,,德军步兵；保留 infantry 作为旧关卡兼容配置
-soviet_infantry,苏军步兵,soviet,2,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,0,,,,infantry,destroyed,0,,,,苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
-officer,军官,german,2,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
+infantry,步兵,german,3,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,,占位 - 仅事件中作为攻击方
+german_infantry,德军步兵,german,3,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,,德军步兵；保留 infantry 作为旧关卡兼容配置
+soviet_infantry,苏军步兵,soviet,3,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,0,,,,infantry,destroyed,0,,,,苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
+officer,军官,german,3,,0,0,0,0,0,-4,1,1,0,,1,0,0,3,4,1,1,,,,infantry,destroyed,0,,,,任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
 type95,九五式,japanese,6,3,5,5,4,4,0,-1,1,0,0,,1,2,1,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|4|5,gunner=1;loader=1,谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；37毫米高爆弹降为HE0；0代表最弱高爆档而非无高爆弹；三人车组、车长兼炮手和装填手；37毫米小型整装弹不重复加装填惩罚
 type97,九七式,japanese,5,3,7,6,5,5,0,0,1,0,1,,1,2,1,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,destroyed,1,attack=attack1|move=move1|misc=misc1,1|3|4|5,gunner=1,原型九七式；57毫米主炮；车长兼炮手；原型57毫米九七式四人车组、车长兼炮手；小型整装弹装填1
 type4,四式,japanese,3,3,11,9,8,7,0,2,1,4,2,,3,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/japanese_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,,四式试制型；未实战验证；五人三人炮塔；75毫米整装弹；试制车按结构估档，不宣称实战射速
-at_gun,反坦克炮,japanese,8,,4,4,2,2,0,2,1,1,0,,2,2,1,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,,谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；命中难度表示AP有效命中所需点数；HE本体与炮组独立判定；按一式47毫米反坦克炮；HE弹装药87克；HE0仍可杀伤与压制；一式47毫米牵引炮；炮班协同基准2、轻型整装弹装填1
+at_gun,九二式步兵炮,japanese,8,,4,4,2,2,0,2,1,1,0,,2,2,1,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,,九二式步兵炮美术与名称；保留原有游戏平衡数值；基础火力表示人机协同；HE本体与炮组独立判定；炮班协同基准2、装填1
 pak38,pak38,german,8,,4,4,2,2,0,2,1,2,1,,2,2,1,4,4,1,1,,audio/cannon_fire,,fixed,destroyed,0,attack=at_gun1|move=at_gun1|misc=at_gun1,,,谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；命中难度表示AP有效命中所需点数；HE本体与炮组独立判定；50毫米牵引炮；炮班协同基准2、轻型整装弹装填1
-japanese_infantry,日本步兵,japanese,2,,0,0,0,0,0,-4,1,1,0,,1,0,1,3,4,1,0,,,,infantry,destroyed,0,attack=japanese_infantry1|move=japanese_infantry1|misc=japanese_infantry1,,,Pacific: Japanese Infantry; no radio
-american_infantry,美军步兵,usa,2,,0,0,0,0,0,-4,1,1,0,,1,0,1,3,4,1,1,,,,infantry,destroyed,0,attack=american_infantry1|move=american_infantry1|misc=american_infantry1,,,US AI support infantry; equipped with radio
+japanese_infantry,日本步兵,japanese,3,,0,0,0,0,0,-4,1,1,0,,1,0,1,3,4,1,0,,,,infantry,destroyed,0,attack=japanese_infantry1|move=japanese_infantry1|misc=japanese_infantry1,,,Pacific: Japanese Infantry; no radio
+american_infantry,美军步兵,usa,3,,0,0,0,0,0,-4,1,1,0,,1,0,1,3,4,1,1,,,,infantry,destroyed,0,attack=american_infantry1|move=american_infantry1|misc=american_infantry1,,,US AI support infantry; equipped with radio
 heavy_artillery,重炮,japanese,3,,14,13,12,11,0,2,1,4,4,10,4,2,2,4,4,1,1,,audio/cannon_fire,,fixed,heavy_artillery,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,,Pacific: Heavy Artillery；射击孔仅正面±30度；HE4为未指定口径的中重型火炮抽象；未指定历史口径的碉堡抽象；协同使用中性基准2，装填暂为1，不编造特定炮型射速
 german_heavy_artillery,重炮,german,3,,14,13,12,11,0,2,1,4,4,10,4,2,2,4,4,1,1,,audio/cannon_fire,,fixed,heavy_artillery,0,attack=heavy_artillery1|move=heavy_artillery1|misc=heavy_artillery1,,,German heavy-artillery bunker; stats and AI mirror Japanese Heavy Artillery；射击孔仅正面±30度；HE4为未指定口径的中重型火炮抽象；未指定历史口径的碉堡抽象；与日军碉堡统一协同2、装填暂为1
 panzer3_m,3号M,german,5,3,11,9,8,8,0,2,1,2,1,,2,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,,谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；五人三人炮塔；长50毫米整装弹装填1

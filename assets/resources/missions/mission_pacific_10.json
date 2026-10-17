@@ -1,7 +1,7 @@
 {
   "id": "mission_pacific_10",
   "name": "Peleliu - The Landing",
-  "description": "Pacific Scenario D10. Move off the map along the red arrow. Place 3 AT Guns and 1 Type 97 tank on 4 different red numbered hexes, facing the numbered edge. Place an Infantry unit on 2 different blue numbered hexes. The Sherman starts on the black outlined hex.",
+  "description": "Pacific Scenario D10. Move off the map along the red arrow. Place 3 Type 92 Infantry Guns and 1 Type 97 tank on 4 different red numbered hexes, facing the numbered edge. Place an Infantry unit on 2 different blue numbered hexes. The Sherman starts on the black outlined hex.",
   "theater": "pacific",
   "usCasualtyLimit": 10,
   "cols": 8,

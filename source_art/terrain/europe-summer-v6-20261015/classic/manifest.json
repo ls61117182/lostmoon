@@ -1,0 +1,406 @@
+{
+  "version": "classic",
+  "summerSha256": "707e61b60ce8a3cce6d91830472f561f4320f5ca73a0a4b5c1feb02421358c38",
+  "files": [
+    {
+      "path": "terrain_field.png",
+      "sha256": "3afd18d86422045cadbb570543b42e0323b84ebce42254c79b94c3306d93ca90"
+    },
+    {
+      "path": "terrain_field.png.meta",
+      "sha256": "df8d04b2265af6419138cc75f9afb3c3f3c62009508e4570c70263778ac8dfb7"
+    },
+    {
+      "path": "terrain_forest.png",
+      "sha256": "8d0170944c7ddbf15d63769802954f185bb72a09e2f1d1344c9158a580a6c8bc"
+    },
+    {
+      "path": "terrain_forest.png.meta",
+      "sha256": "df1fae5bfd3d9f5d5c8ad6218aa49a76be0f96673f3420c9f98370566c5dd598"
+    },
+    {
+      "path": "terrain_mud.png",
+      "sha256": "ce252e75e741e88f4b05197f3d86700e3b8faa472d56982358921e79017a4f63"
+    },
+    {
+      "path": "terrain_mud.png.meta",
+      "sha256": "a64fdd259e99a841d081580010daf0d9c26f32fdda104fa80dc6794074fec0bc"
+    },
+    {
+      "path": "terrain_road.png",
+      "sha256": "3afd18d86422045cadbb570543b42e0323b84ebce42254c79b94c3306d93ca90"
+    },
+    {
+      "path": "terrain_road.png.meta",
+      "sha256": "2db8a15837f26430be30486f0c3e2b0e4f1574ed72b582e61aa53bdc30003dcb"
+    },
+    {
+      "path": "terrain_water.png",
+      "sha256": "1a495e0fced8340a45201e4da41ee7a88cb80481acd2fe42f536c4ca68ac0f13"
+    },
+    {
+      "path": "terrain_water.png.meta",
+      "sha256": "ec675f14f4ded87ea9ffa73c41cb05f41c857c5cb5baf9650de9c06be3d2c0da"
+    },
+    {
+      "path": "terrain_deep_water.png",
+      "sha256": "db7bd7a7a49442b51fda36e49f735f1c6b908c6f1c0f73a1eefe4931c614c1b5"
+    },
+    {
+      "path": "terrain_deep_water.png.meta",
+      "sha256": "8d2f7fe779b6f850c7e1a7364b70650bfa3fdce5782133695c4f4d18dca26eed"
+    },
+    {
+      "path": "redesign_v3/europe_tree_01.png",
+      "sha256": "9a07606920b2b94b831b8e7a9d7583826e11c6190c7ef55dfe3289472a2b54e3"
+    },
+    {
+      "path": "redesign_v3/europe_tree_01.png.meta",
+      "sha256": "8ec8f8a3f9168ba16a7b89bb757e29454fbecd1428f5685e67a46e2e7da330e7"
+    },
+    {
+      "path": "redesign_v3/europe_tree_02.png",
+      "sha256": "b8e7a94fabe11385b19186dd4811156b77c24cd762dcb78a620d57e0d2c87be1"
+    },
+    {
+      "path": "redesign_v3/europe_tree_02.png.meta",
+      "sha256": "5c3ae0d501ef58257ce98a002508f044ad8b888370e7a99f9d286a5e4d8f8ea7"
+    },
+    {
+      "path": "redesign_v3/europe_tree_03.png",
+      "sha256": "a955b704da4f91f6a39aacdb02cf7cc8757b9b446665986a5e70966a3269a0e3"
+    },
+    {
+      "path": "redesign_v3/europe_tree_03.png.meta",
+      "sha256": "e313749310985e0023577fb5db834b9864125d7e350e32fa7da501de67c2326e"
+    },
+    {
+      "path": "redesign_v3/europe_tree_04.png",
+      "sha256": "15a4dfb98b1fe6284b40f1a88e4282996c4f10b9483fd72bde0a7f89a8a80f56"
+    },
+    {
+      "path": "redesign_v3/europe_tree_04.png.meta",
+      "sha256": "197f2f6e3fcbdcdbe7b8db00c88e0c2de3dcb86545c9451e3eca2a800898a0db"
+    },
+    {
+      "path": "european_roads/european_bridge_surface_summer_v1.png",
+      "sha256": "c99ea72f6777441108ec349e5ea1d4ab7c651a43d223ce02ae3e8dd64f813661"
+    },
+    {
+      "path": "european_roads/european_bridge_surface_summer_v1.png.meta",
+      "sha256": "bd64e9681535dffb46ed0c6f6256ad668d9f123d021d2baa538b4eff711b1967"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v1.png",
+      "sha256": "930656edc43ce9efdc36d5d6d8065cd2c022c11a71d8af75f38eaad6c5edfb5c"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v1.png.meta",
+      "sha256": "4f5c17aa910cb65fc3faccf92aaf75985f1824dd630397d1f2fb44d29bfe923a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v2.png",
+      "sha256": "0b4a6bb3c46733e8fa201622e0cb3f211492448f31c1059ae36e96064168ad13"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v2.png.meta",
+      "sha256": "58c6888ae1d5bf51ce2ef2a9d22b4e10530114f33ea15402bc30a38c6fb43582"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v3.png",
+      "sha256": "aede00c27857cbc58f2bb30a12050d3b0d06d8a1c2cd78ddec88ceb5b018defb"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v3.png.meta",
+      "sha256": "736c96b4bf88c40d57ac4877d71017f7c1a786f50fa373c1e93ff61004b45f19"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v1.png",
+      "sha256": "7866dc33b9202cf5503f197d8ee3b8fc241660a10be8cf6153cab03da3afb46d"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v1.png.meta",
+      "sha256": "8afc0b76e23f27217ae0d63817186abb7c63d6ae8339c0a8fd10b487b880742b"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v2.png",
+      "sha256": "2808ee7097565c04f1219bb02a01cc86cb5d6b36b301bc644bea98cc67ccbf13"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v2.png.meta",
+      "sha256": "daa7285a3aafad29e48d0a05d718e4eab12debb5f63b9d85f2630c2f53f790f2"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v3.png",
+      "sha256": "5e180d09b9f3b23413c925cefcd72fbc7e86e3e76cc018ee653518cba8ba88f4"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v3.png.meta",
+      "sha256": "6870c46d9a3af07ce164d23a11e4191652a540062aafd334fb8f38502f0b5c23"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v1.png",
+      "sha256": "22cf4c3a8e00c83201b65d7655b0bf06fc277ba60b26f4022b20867679d309c6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v1.png.meta",
+      "sha256": "577405604ba52bdd091cb5fafdc5946cbf10173568c1b266c485a3607b1ff812"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v2.png",
+      "sha256": "a9cd3e874886c2164e790987b6df196935f8c52d43beaa4be7ee306ce1398e56"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v2.png.meta",
+      "sha256": "70895e2b97a2e2e0d0f88cc584615c767c377c265a7cb71b71f1d95bdafbcc85"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v3.png",
+      "sha256": "7aa242ef0e98e8bb85b146bca64dd5b91b4ff949e24cfb386026381ce7bd5ae1"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v3.png.meta",
+      "sha256": "9f5f3418a97fcab1bd2c2c70e59e7be0f84e85bc7a5b5dc168d5360cb9b9bc5e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v1.png",
+      "sha256": "2a19ae6beea4b9a5ddf534663a4a1d8d46ca98982bad4b8f2e4c177c8f4b6f65"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v1.png.meta",
+      "sha256": "9c8371bc4eaad359ec51f2298cecb3ba5c7bc9127c3e6899f80d85d37fb2807a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v2.png",
+      "sha256": "8a9464fb10042d0e368bd821db8d8fd5fff6ec57a93b570991a41a0c973b2fae"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v2.png.meta",
+      "sha256": "7f9756230d175ca1d1c8a8220637bbc312914f78580b88e87b74de843cda3e15"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v3.png",
+      "sha256": "b8db2d770036d80be247d39a3569a148527d71c147ecac0b86bd68e10ea2a61f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v3.png.meta",
+      "sha256": "7a47edabdc0685e8f47d5d7fd9b4043a10cecae149473d1f07d8e8edc70a8976"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v1.png",
+      "sha256": "e63abe93872367e187a1a6d024235825c9bc77873c28ae08e7ac7eea02972389"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v1.png.meta",
+      "sha256": "40988db2b13b819c3d2c7a932865e6663aca4fb2176a5a6b5844d7aa4d7e6680"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v2.png",
+      "sha256": "da5897b82fb757f20d0550fb6f91367b0b59c6abdb80609fb3178f1f16a5bd18"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v2.png.meta",
+      "sha256": "8f2e00ed55af61d5407dd3aaff45ace64cae0108634b48ce070976a1f7da0f02"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v3.png",
+      "sha256": "988288ffaa49b0d384cff37d8a5d40e5a8790e3b25af12cb7908ecb119da31e3"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v3.png.meta",
+      "sha256": "0408d09f3ae4df6e805917b5fe867a5da03b3bacf10b8ff24f49f3ce760684fa"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v1.png",
+      "sha256": "ea5f6c407547b3676b5a385e222376334498d9ec7dd7a189699f7d83b8aa838f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v1.png.meta",
+      "sha256": "75f5bc66bdb2ed43980cb241b4976b8446a09d4e5ee2b013a6f69de16ca92446"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v2.png",
+      "sha256": "7599f8a663f86ee51c2274d35a4b97b74d84786c715fe57b014c4eb5140e8a42"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v2.png.meta",
+      "sha256": "348889c620881c31af8336bc5ebefb3496a37f341935b744f881a7eda150bd4c"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v3.png",
+      "sha256": "34f5c60bf684c1248bfd9f5353a3e9efcb06d40b62432e5ba9a878ef58546534"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v3.png.meta",
+      "sha256": "bb9063a92f94e5c829d8f8cf1b8d89aa5ddea7ed13a6e9fffbba7c7c263d7763"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v1.png",
+      "sha256": "8586472299af29634a43d2114db0f542968b47029e7a7246cdf330f5a49eb301"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v1.png.meta",
+      "sha256": "556548e0bec242e91ffeb88e22dd259b9936173624a4f4e2b3f7d37678a579d8"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v2.png",
+      "sha256": "cf1e4dda145dc7881ec558463f5389f1619349874f9cd89d6f2ff906fb7bd52b"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v2.png.meta",
+      "sha256": "e1838536059e8992a04063483b7f07f8ccf6921d39aabcbb26c679897633121a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v3.png",
+      "sha256": "0fdfb5922137df9e2e8ddd5d9c8c04dbf8106776c88db27a5c0ccd68cd9f7367"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v3.png.meta",
+      "sha256": "ea6d11aac5f35770be6baddba0a19dba1121ab7e9d0ad6eabe27c390de50cd50"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v1.png",
+      "sha256": "7c40ebf862a75d81a1aa51fe7bbbae60fae196affc58903dd02c55f173afafef"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v1.png.meta",
+      "sha256": "a168a67b52b3d962620cd8a49d53a5caab756f16d60d65f43799c84d7b363d6e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v2.png",
+      "sha256": "2eb0da69d6a3dc6f57a39fb322cf86bc1471732e3935325701223bfbeb885223"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v2.png.meta",
+      "sha256": "0bbb73c166effe4954624f70e7bcef67be354653be667e053c52951ad59a23a2"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v3.png",
+      "sha256": "66c7842e938e8b8e85293dcab2a58830d3c392e4b1369e62902aa5dd8897f324"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v3.png.meta",
+      "sha256": "44b0571bcab90cadb46eeb6cc42cc6f88457ee5ab4577628509d7252e41650f7"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v1.png",
+      "sha256": "673f4c1166fc35e657f6ac96f724dcb4feb5f5ee01cb0bafd7b7f1e9374d7497"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v1.png.meta",
+      "sha256": "d683bfe4dfd4c27d69e4162b07fce1928e370a8de16ecd42e4f62b2b44d78c3f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v2.png",
+      "sha256": "a69bf71e62b43d4df2a93c26c9ab6c5416ac6fc9f1c0c74bbb771d1bf204c823"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v2.png.meta",
+      "sha256": "abd7681b4a5dce4fa56d5f2dd08701db26a9578d0d5cfba78aae64ede3a0b495"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v3.png",
+      "sha256": "b696e827c9bf4812260c2c33e8ff6de0e7bb09fb5faffee876269b99ebe30afb"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v3.png.meta",
+      "sha256": "cb6aaf39a210d9c8ceada98e60150555b8eb44c5bb394e14f1e5ffa1beafa34c"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v1.png",
+      "sha256": "2bbaab2485a7edd9e7008a86eb6474c8c731f51ee9ab768c326cfecdbb2608dc"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v1.png.meta",
+      "sha256": "9114f8247ffb6aff8f2635507bc225e939aa09b09f9f6161c828915526aecb57"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v2.png",
+      "sha256": "312c2d56d89cb8ac03e1d875f147a476c874758835438a435e858f22f06a3fa1"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v2.png.meta",
+      "sha256": "f7a38ac184b4b0621feb9d94360f3f204e3c1dcef74068048f47607f0e92c4ee"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v3.png",
+      "sha256": "770c2da7441517abddfcfc65433ea0b7d58a7f74d7fa42183678fce20387ba73"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v3.png.meta",
+      "sha256": "01ce8b60d4f07b90f4d7fd46dfc4c17838b5b62fee6df3b2cfc426ed9f8e31f8"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v1.png",
+      "sha256": "cb20fa6f70c22c4930b7dad9be5d18413af86f6924f1c6c4599704e6e70d6b83"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v1.png.meta",
+      "sha256": "b26ffb3b4bb018776c998622200358c7465ef2b7df3129902a5338e2eadfef7a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v2.png",
+      "sha256": "a3fb1186961f8bd0d8854c29497b585103e54bef377ae9577e02b49bee6ae5f6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v2.png.meta",
+      "sha256": "f1cf455f0fdc04ab636982fa4cb1a7ec42045a18dc28d5892263bb56d64932ae"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v3.png",
+      "sha256": "3ba1d6bf6b1cdd24811a955141bf35adb85885176ab85d214916d059343abd98"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v3.png.meta",
+      "sha256": "821e8d3a781254cf542f206d152867cd969e4ad2d21dbce43396e2c706bdcafe"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v1.png",
+      "sha256": "9c4af09c92147cda8359611e7789b085055cd7d23209c803c4a9cd77db35286e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v1.png.meta",
+      "sha256": "253f46351c2936d78a82693e6521e31ddd81ad6c06d0633b7102f7e63039d12e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v2.png",
+      "sha256": "0c11149230f5fcc2917a8acbafdd050f6e0c8e00bfd52a83ebde2d5d85fa1daf"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v2.png.meta",
+      "sha256": "68fe6a0b2d59e4e743d317099689cef0eb77a31402c048977d600975b6a49d46"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v3.png",
+      "sha256": "fd0cebe411693be781116fc1c439febdc0476defbd18a57229ffb66841621b6a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v3.png.meta",
+      "sha256": "47c2eb0bb2e3ca343205b768d11dc7b12c3859827bc6eb36c52a1b61ac0ecc93"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v1.png",
+      "sha256": "d9851bb710cacf02b6a7bce8d07e9880dce88a199ea10b81fd873851e83ed9c6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v1.png.meta",
+      "sha256": "14bfc78dd9fad7ac4b6a85889a5daebbfd392f1465a7a0a208656686ba1417dd"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v2.png",
+      "sha256": "7c6caae3fcc8b7283e572fc014e81a6be6ba50a1e02c365bfb7dd21853a4c443"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v2.png.meta",
+      "sha256": "9b8c3b83bd0abff020b90009d40b19619dc83dfee4ee9be1a2a10839427f80f6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v3.png",
+      "sha256": "b1f1cb466fbd0d31ce70f3b30a72625d07f03166a166cc1d952153050c7af50f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v3.png.meta",
+      "sha256": "6c14a794d031fcfe460e6c160e35709a4ef6efae4d34f542dfba08c45f4d8ea3"
+    }
+  ]
+}

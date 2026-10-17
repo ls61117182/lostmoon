@@ -1,5 +1,5 @@
 import { Camera, Canvas, Color, director, Director, EffectAsset, Material, Node, RenderTexture, Sprite, SpriteFrame, Texture2D, UITransform, Vec4 } from 'cc';
-import { GROUND_CHUNK_SIZE } from './TerrainGroundRaster';
+import { GROUND_CHUNK_SIZE, decodeBase64 } from './TerrainGroundRaster';
 import { TerrainGroundGpuData, type GpuChunkPlan } from './TerrainGroundGpuData';
 
 export interface GpuBakedChunk { texture:RenderTexture; mask:RenderTexture|null; padding:number; }
@@ -7,12 +7,15 @@ export interface GpuBakedChunk { texture:RenderTexture; mask:RenderTexture|null;
  * rasterization, or per-frame rebaking. AFTER_DRAW acknowledges submitted work. */
 export class TerrainGroundGpuBaker {
   private atlas:Texture2D;
+  private bridgeArtwork:Texture2D|null=null;
   private root:Node;
   private frame:SpriteFrame;
   private cancelled=false;
   private cleanupJob:(()=>void)|null=null;
   constructor(private parent:Node,private data:TerrainGroundGpuData,private effect:EffectAsset) {
     const source=data.atlas();this.atlas=this.upload(source.width,source.height,source.pixels,false);
+    const bridge=data.bundle.bridgeArtwork;
+    if(bridge)this.bridgeArtwork=this.upload(bridge.width,bridge.height,decodeBase64(bridge.rgba),false);
     this.root=new Node('TerrainGpuBake');
     // Keep it independent of map transforms and UI layers. Main cameras cannot
     // see the distant quad even if their visibility mask includes custom bits.
@@ -51,11 +54,12 @@ export class TerrainGroundGpuBaker {
         target.setFilters(Texture2D.Filter.LINEAR,Texture2D.Filter.LINEAR);textures.push(target);
         const material=new Material();material.initialize({effectAsset:this.effect});materials.push(material);
         material.setProperty('terrainAtlas',this.atlas);material.setProperty('tileGround',ground);material.setProperty('tileRoads',roads);
+        material.setProperty('bridgeArtwork',this.bridgeArtwork??this.atlas);
         material.setProperty('chunkBounds',new Vec4(plan.x-padding,plan.y-padding,span,span));
         material.setProperty('tileBounds',new Vec4(encoded.q,encoded.r,encoded.width,encoded.height));
         const bundle=this.data.bundle;
         material.setProperty('terrainStyle',new Vec4(winter?1:0,bundle.fieldBasedLand?1:0,bundle.curvedRoads?1:0,bundle.winterArtwork?1:0));
-        material.setProperty('bakeOptions',new Vec4(pass,bundle.materials.road_surface?1:0,bundle.materials.winter_yard?1:0,0));
+        material.setProperty('bakeOptions',new Vec4(pass,bundle.materials.road_surface?1:0,bundle.materials.winter_yard?1:0,this.bridgeArtwork?1:0));
         // Separate locations, so each camera sees only its own output quad.
         const canvasNode=new Node('TerrainBakeCanvas');canvasNode.layer=layer;job.addChild(canvasNode);canvasNode.setPosition(pass*span*3,0,0);
         canvasNode.addComponent(UITransform).setContentSize(span,span);
@@ -73,5 +77,5 @@ export class TerrainGroundGpuBaker {
     }catch(error){this.cleanupJob?.();throw error;}
   }
   cancel():void {this.cleanupJob?.();}
-  destroy():void {this.cancelled=true;this.cancel();this.root.destroy();this.frame.destroy();this.atlas.destroy();}
+  destroy():void {this.cancelled=true;this.cancel();this.root.destroy();this.frame.destroy();this.atlas.destroy();this.bridgeArtwork?.destroy();}
 }

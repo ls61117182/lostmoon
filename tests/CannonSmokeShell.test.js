@@ -69,6 +69,7 @@ Object.assign(h, {
   selectedGunDieIdx:0,selectedGunHitThresholdModifier:0,
   playerHasFixedWeaponArc:()=>false,outsideMapTurretAimPositions:()=>[],playerTurretCanRotate:()=>true,hasTurretReconGunSelection:()=>true,
   playerWeaponTargetHexKeys:()=>new Set(['1,0','2,0']),isDeepShadowTile:()=>false,
+  canMainGunReachTile:()=>true,
   isHexVisible:()=>false,fogTurretAimDirection:p=>p.q===1?0:null,
   project:(x,y)=>({x,y}),drawSmokeShellTargetIcon:g=>{assert.equal(g,icons);iconCount++;},
   drawTurretAimHex:()=>blueCount++,currentTurretFacingFor:()=>0,directionScreenAngle:()=>0,

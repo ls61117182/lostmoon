@@ -711,6 +711,9 @@ export interface UnitPlacement {
   smokeAmmoRemaining?: number;
 }
 
+/** Mission-wide paint for German tanks; omitted settings retain the original grey assets. */
+export type GermanTankCamouflage = 'grey' | 'late_war';
+
 export interface MissionData {
   id: string;
   name: string;
@@ -718,6 +721,8 @@ export interface MissionData {
   theater?: Theater;
   /** Visual season. Omitted missions use summer; winter currently skins European terrain only. */
   season?: SeasonType;
+  /** Applies to every German tank, including allies, the player, reinforcements and wrecks. */
+  germanTankCamouflage?: GermanTankCamouflage;
   /** Fixed weather for the mission. Omitted missions use clear weather. */
   weather?: WeatherType;
   /** Battlefield view rotation in degrees counterclockwise; omitted means 0. Does not change map coordinates or facing. */
@@ -788,7 +793,7 @@ export interface TileDef {
    * 旧版 `b` 表示「整格为建筑」已废弃，见 MissionLoader 会转为 f+建筑。
    */
   t: 'r' | 'f' | 'm' | 'F' | 'w' | 'b' | 'c' | 'T' | 'B' | 'H' | 'dw' | 'a'
-    | 'u' | 'ur' | 'ui' | 'ud' | 'eb';
+    | 'u' | 'ur' | 'ui' | 'ud' | 'eb' | 'esw';
   /**
    * 建筑叠加在基底上：`1` 表示有建筑（坦克可进入；命中+1；视线仅路径「中间格」阻挡）。
    * 田/泥+建筑在任务表述上为「农场」，公路+建筑为「村庄」。

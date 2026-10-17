@@ -144,7 +144,7 @@ test('player single and paired loading actions defer charging, and unavailable a
   const scene = fs.readFileSync('assets/scripts/view/BattleScene.ts','utf8');
   const src = ts.createSourceFile('BattleScene.ts',scene,ts.ScriptTarget.Latest,true);
   const cls = src.statements.find(s => ts.isClassDeclaration(s) && s.name?.text==='BattleScene');
-  const names=['tryReload','tryDoublesLoaderReload','reloadActionUnavailable'];
+  const names=['tryReload','tryDoublesLoaderReload','reloadActionUnavailable','dieStep'];
   const methods=cls.members.filter(m => names.includes(m.name?.getText(src))).map(m=>m.getText(src)).join('\n');
   const { resolvedLoadedShell } = require('../assets/scripts/core/types.ts');
   const code=ts.transpileModule('class Harness {'+methods+'}',{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;

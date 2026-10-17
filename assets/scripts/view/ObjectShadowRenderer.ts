@@ -1,11 +1,13 @@
 import { Color, Graphics, Node, Sprite, UITransform } from 'cc';
 
-export type ObjectShadowKind = 'tree' | 'building' | 'vehicle' | 'groundProp' | 'infantry';
+export type ObjectShadowKind = 'tree' | 'building' | 'rocky' | 'vehicle' | 'groundProp' | 'infantry';
 
 // Screen-space sunlight comes from the upper left (Cocos UI Y points up).
-const PROFILES = {
+export const OBJECT_SHADOW_PROFILES = {
   tree: { reach: 0.08, flatten: 0.94, alpha: 72, contact: 0.35 },
   building: { reach: 0.08, flatten: 0.98, alpha: 78, contact: 0.80 },
+  // Height is expressed by a longer cast without tilting the overhead rock art.
+  rocky: { reach: 0.20, flatten: 1, alpha: 88, contact: 0.90 },
   vehicle: { reach: 0.08, flatten: 1, alpha: 70, contact: 0.66 },
   groundProp: { reach: 0.018, flatten: 1, alpha: 78, contact: 0.85 },
   infantry: { reach: 0.028, flatten: 1, alpha: 90, contact: 0.75 },
@@ -39,7 +41,7 @@ export class ObjectShadowRenderer {
     const node = source.node;
     const transform = node.getComponent(UITransform);
     if (!node.active || !source.spriteFrame || !transform) return;
-    const profile = PROFILES[kind];
+    const profile = OBJECT_SHADOW_PROFILES[kind];
     let slot = this.pool[this.next++];
     if (!slot) {
       const root = new Node('ProjectedSilhouette');

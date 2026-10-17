@@ -1,0 +1,20 @@
+{
+  "installed": true,
+  "normalMatchesApproved": true,
+  "destroyedMatchesApprovedV3": true,
+  "cocosUuidsPreserved": true,
+  "combatProfileUnchanged": true,
+  "muzzle": {
+    "x": 1,
+    "y": 55
+  },
+  "validation": {
+    "tankValidate": true,
+    "assetKinds": 34,
+    "tests": 17,
+    "missionLoaderATGunFaction": true,
+    "campaignRuntime": true,
+    "typecheck": true,
+    "inGameVisualInspection": false
+  }
+}

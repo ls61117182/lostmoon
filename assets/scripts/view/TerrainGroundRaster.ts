@@ -4,7 +4,8 @@ import { europeanRoadCenterlineDistance, europeanRoadVariantIndex } from '../cor
 /** Pure, platform-independent terrain compositor. Coordinates are Y-down,
  * pointy-top axial. Chunk boundaries never restart material or transition UVs. */
 export interface TerrainMaterialData { width: number; height: number; rgb: string; }
-export interface TerrainMaterialBundle { version: number; materials: Record<string, TerrainMaterialData>; europeanSummer?: TerrainMaterialBundle; europeanWinter?: TerrainMaterialBundle; winterArtwork?: boolean; fieldBasedLand?: boolean; curvedRoads?: boolean; }
+export interface TerrainBridgeArtwork { width:number; height:number; rgba:string; }
+export interface TerrainMaterialBundle { version: number; materials: Record<string, TerrainMaterialData>; europeanSummer?: TerrainMaterialBundle; europeanWinter?: TerrainMaterialBundle; bridgeArtwork?:TerrainBridgeArtwork; winterArtwork?: boolean; fieldBasedLand?: boolean; curvedRoads?: boolean; }
 export interface GroundChunk { x: number; y: number; width: number; height: number; textureWidth: number; textureHeight: number; pixels: Uint8Array; waterMask: Uint8Array; hasWater: boolean; }
 interface GroundTile { q: number; r: number; x: number; y: number; material: string; roads: number; roadFlags: boolean[]; roadVariant: number; bridge: number; runway: boolean; mudPatches: boolean; ruralYard: boolean; }
 interface Material { width: number; height: number; pixels: Uint8Array; }
@@ -22,7 +23,7 @@ function smooth(a:number,b:number,v:number):number { const t=clamp((v-a)/(b-a));
 function noise(x:number,y:number):number { return Math.sin(x*.055+y*.016)*.47+Math.sin(x*.022-y*.068)*.32+Math.sin(x*.113+y*.091)*.21; }
 function key(q:number,r:number):string { return `${q},${r}`; }
 function reflected(n:number,len:number):number { const p=((Math.floor(n)%(len*2))+len*2)%(len*2);return p<len?p:len*2-p-1; }
-function decodeBase64(text:string):Uint8Array {
+export function decodeBase64(text:string):Uint8Array {
   const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   const table=new Int16Array(128).fill(-1);for(let i=0;i<alphabet.length;i++)table[alphabet.charCodeAt(i)]=i;
   const padding=text.endsWith('==')?2:text.endsWith('=')?1:0,out=new Uint8Array(text.length/4*3-padding);
@@ -104,10 +105,16 @@ export class TerrainGroundRaster {
   private fieldBasedLand=false;
   private curvedRoads=false;
   private winterArtwork=false;
+  private bridgeArtwork:{width:number;height:number;pixels:Uint8Array}|null=null;
   constructor(bundle:TerrainMaterialBundle) {
     this.fieldBasedLand=!!bundle.fieldBasedLand;
     this.curvedRoads=!!bundle.curvedRoads;
     this.winterArtwork=!!bundle.winterArtwork;
+    if(bundle.bridgeArtwork){
+      const b=bundle.bridgeArtwork,pixels=decodeBase64(b.rgba);
+      if(!Number.isInteger(b.width)||!Number.isInteger(b.height)||b.width<1||b.height<1||b.width>2048||b.height>2048||pixels.length!==b.width*b.height*4)throw new Error('Invalid bridge artwork');
+      this.bridgeArtwork={width:b.width,height:b.height,pixels};
+    }
     if(bundle.version!==3)throw new Error('Unsupported terrain material version');
     for(const [id,m]of Object.entries(bundle.materials)){const pixels=decodeBase64(m.rgb);if(pixels.length!==m.width*m.height*3)throw new Error(`Invalid terrain material ${id}`);this.materials[id]={width:m.width,height:m.height,pixels};}
     for(const id of ['grass','soil','mud','sand','water','deep_water','paving','snow','winter_water','timber'])if(!this.materials[id])throw new Error(`Missing terrain material ${id}`);
@@ -144,6 +151,12 @@ export class TerrainGroundRaster {
     const m=this.materials[id],factorX=m.width/384,factorY=m.height/384;
     const i=(reflected(y*factorY,m.height)*m.width+reflected(x*factorX,m.width))*3;
     return [m.pixels[i],m.pixels[i+1],m.pixels[i+2]];
+  }
+  /** Bilinear deck sampling for offline previews and exported bridge sprites. */
+  private sampleBridge(u:number,v:number):number[] {
+    const b=this.bridgeArtwork!,x=clamp(u)*(b.width-1),y=clamp(v)*(b.height-1),x0=Math.floor(x),y0=Math.floor(y),fx=x-x0,fy=y-y0;
+    const at=(dx:number,dy:number,k:number)=>b.pixels[(Math.min(y0+dy,b.height-1)*b.width+Math.min(x0+dx,b.width-1))*4+k];
+    return [0,1,2,3].map(k=>(at(0,0,k)*(1-fx)+at(1,0,k)*fx)*(1-fy)+(at(0,1,k)*(1-fx)+at(1,1,k)*fx)*fy);
   }
   /** Decoded source art for GPU atlas upload; the runtime never calls the CPU rasterizer. */
   getGpuMaterials(): Readonly<Record<string, Readonly<Material>>> { return this.materials; }
@@ -273,7 +286,10 @@ export class TerrainGroundRaster {
         const a=tile.bridge*Math.PI/3,dx=gx-tile.x,dy=gy-tile.y,u=dx*Math.cos(a)+dy*Math.sin(a),v=-dx*Math.sin(a)+dy*Math.cos(a),half=GROUND_RADIUS*.205;
         // Extra margin prevents distorted samples pulling bridge rails into water.
         if(Math.abs(u)<=SQ*GROUND_RADIUS/2+GROUND_RADIUS*.08+4)motion*=smooth(half+GROUND_RADIUS*.028+2,half+GROUND_RADIUS*.028+5,Math.abs(v));
-        if(Math.abs(u)<=SQ*GROUND_RADIUS/2+GROUND_RADIUS*.08&&Math.abs(v)<=half+GROUND_RADIUS*.028){const rail=Math.abs(v)>half-GROUND_RADIUS*.027;let c=rail?[78,70,52]:this.sample('timber',u*sampleScale*2,v*sampleScale*2);if(!rail&&Math.abs(u%(GROUND_RADIUS*.13))<GROUND_RADIUS*.009)c=c.map(z=>z*.68);if(winter&&!rail){const snow=this.sample('snow',wx,wy);c=c.map((z,k)=>z+(snow[k]-z)*.22);}color=c;}
+        if(Math.abs(u)<=SQ*GROUND_RADIUS/2+GROUND_RADIUS*.08&&Math.abs(v)<=half+GROUND_RADIUS*.028){
+          if(!winter&&this.bridgeArtwork){const c=this.sampleBridge(u/(2*(SQ*GROUND_RADIUS/2+GROUND_RADIUS*.08))+.5,v/(2*(half+GROUND_RADIUS*.028))+.5);color=color.map((z,k)=>z+(c[k]-z)*c[3]/255);}
+          else {const rail=Math.abs(v)>half-GROUND_RADIUS*.027;let c=rail?[78,70,52]:this.sample('timber',u*sampleScale*2,v*sampleScale*2);if(!rail&&Math.abs(u%(GROUND_RADIUS*.13))<GROUND_RADIUS*.009)c=c.map(z=>z*.68);if(winter&&!rail){const snow=this.sample('snow',wx,wy);c=c.map((z,k)=>z+(snow[k]-z)*.22);}color=c;}
+        }
       } else if(!tile.runway) {
         const curved=this.curvedRoads&&(!winter||this.winterArtwork);
         let d=tile.roads?roadDistance(gx,gy,tile,curved):Infinity;

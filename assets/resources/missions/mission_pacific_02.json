@@ -1,7 +1,7 @@
 {
   "id": "mission_pacific_02",
   "name": "Tarawa, Red Beach 1 - Pushing Inland",
-  "description": "Pacific Scenario A2. Destroy the Heavy Artillery and the Type 95s, then move off the map along the red arrow. Place the Heavy Artillery and AT Gun randomly on eid 5 and eid 6, and place the two Type 95s randomly on the remaining eid start hexes. The Sherman starts on the black outlined landing hex.",
+  "description": "Pacific Scenario A2. Destroy the Heavy Artillery and the Type 95s, then move off the map along the red arrow. Place the Heavy Artillery and Type 92 Infantry Gun randomly on eid 5 and eid 6, and place the two Type 95s randomly on the remaining eid start hexes. The Sherman starts on the black outlined landing hex.",
   "theater": "pacific",
   "usCasualtyLimit": 10,
   "cols": 8,

@@ -26,7 +26,7 @@ assert(beginTurn, 'beginCurrentEnemyTurn should be found');
 assert(beginTurn[0].indexOf('this.isHardcoreInfantryActor(enemy)')
   < beginTurn[0].indexOf('rollHardcoreTankAIDice'));
 assert(beginTurn[0].includes('this.enemyDice = []'));
-assert.match(battleScene, /isAIActorUnit\(unit, GameSession\.gameMode === 'hardcore'\)/);
+assert.match(battleScene, /isAIActorUnit\(unit, \(GameSession\.gameMode === 'hardcore' \|\| GameSession\.gameMode === 'test'\)\)/);
 assert.match(battleScene, /isFootUnit\(unit\)\s*&& unit\.kind !== 'officer'/,
   'all infantry nationalities, but not officers, should use the hardcore rule');
 

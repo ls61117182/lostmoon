@@ -1,6 +1,11 @@
 import { Color, Graphics, Mask, Material, Node, Sprite, UITransform, Vec4, dynamicAtlasManager } from 'cc';
 
 export type OcclusionShape = { circle: [number, number, number] } | { polygon: Array<[number, number]> };
+export type UnitSpriteOccluder = {
+  blocker: Sprite;
+  sources: Map<Sprite, Color>;
+  vectors?: Array<{ circle: [number, number, number]; color: Color }>;
+};
 
 /** Sprite alpha stencils clip the second unit pass to actual foliage/roof pixels.
  * The parent visibility stencil also clips silhouettes at fog boundaries. */
@@ -16,17 +21,21 @@ export class UnitOcclusionRenderer {
     this.material = material;
   }
 
-  sync(sources: Map<Sprite, Color>, blockers: Sprite[], shapes: OcclusionShape[] = [], vectors: Array<{ circle: [number, number, number]; color: Color }> = []) {
+  sync(sources: Map<Sprite, Color>, blockers: Sprite[], shapes: OcclusionShape[] = [], vectors: Array<{ circle: [number, number, number]; color: Color }> = [], unitBlockers: UnitSpriteOccluder[] = []) {
     this.liveCopies.length = 0;
     for (const slot of this.slots) slot.node.active = false;
     if (!this.material) return;
     let next = 0;
-    for (const blocker of [...blockers, ...(shapes.length ? [null] : [])]) {
+    const passes: Array<{ blocker: Sprite | null; sources: Map<Sprite, Color>; vectors: typeof vectors }> = [
+      ...[...blockers, ...(shapes.length ? [null] : [])].map(blocker => ({ blocker, sources, vectors })),
+      ...unitBlockers.map(entry => ({ ...entry, vectors: entry.vectors ?? [] })),
+    ];
+    for (const { blocker, sources: passSources, vectors: passVectors } of passes) {
       if (blocker && (!blocker.node.activeInHierarchy || !blocker.spriteFrame)) continue;
       const bounds = blocker?.getComponent(UITransform)!.getBoundingBoxToWorld();
-      const overlapping = [...sources].filter(([sprite]) => sprite.node.activeInHierarchy
+      const overlapping = [...passSources].filter(([sprite]) => sprite.node.activeInHierarchy
         && !!sprite.spriteFrame && (!bounds || bounds.intersects(sprite.getComponent(UITransform)!.getBoundingBoxToWorld())));
-      if (!overlapping.length && !vectors.length) continue;
+      if (!overlapping.length && !passVectors.length) continue;
       let slot = this.slots[next++];
       if (!slot) {
         const node = new Node('OccluderAlphaStencil');
@@ -70,7 +79,7 @@ export class UnitOcclusionRenderer {
           graphics.fill();
         }
       }
-      if (vectors.length && !slot.vectors) {
+      if (passVectors.length && !slot.vectors) {
         const node = new Node('VectorUnitSilhouettes');
         node.layer = this.root.layer;
         node.addComponent(UITransform);
@@ -82,7 +91,7 @@ export class UnitOcclusionRenderer {
         slot.vectors.node.setWorldPosition(this.root.worldPosition);
         slot.vectors.node.setWorldRotation(this.root.worldRotation);
         slot.vectors.node.setWorldScale(this.root.worldScale);
-        for (const vector of vectors) {
+        for (const vector of passVectors) {
           slot.vectors.strokeColor = vector.color;
           slot.vectors.lineWidth = 2;
           slot.vectors.circle(...vector.circle);

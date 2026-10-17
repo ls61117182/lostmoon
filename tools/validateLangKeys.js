@@ -44,6 +44,21 @@ function validateLangReferences(entries, root = path.resolve(__dirname, '..')) {
   const kindIndex = rows[0].indexOf('unitKind');
   if (kindIndex < 0) throw new Error('units.csv missing unitKind header');
   for (const row of rows.slice(1)) check(`unit.name.${row[kindIndex]}`, 'data/units.csv');
+  // Enemy die subtitles use t(`dice.aiEnemy.${action}`), including fallback actions.
+  for (const name of ['enemy_ai_table.csv', 'enemy_hardcore_tank_action_table.csv']) {
+    const actionRows = withoutLocalizedDescriptionRow(
+      chooseParsedRows(decodeTable(path.join(root, 'data', name)).text,
+        ['primary', 'fallback', 'fallback2']).rows,
+    );
+    for (const field of ['primary', 'fallback', 'fallback2']) {
+      const index = actionRows[0].indexOf(field);
+      if (index < 0) throw new Error(`${name} missing ${field} header`);
+      for (const row of actionRows.slice(1)) {
+        const action = (row[index] ?? '').trim();
+        if (action) check(`dice.aiEnemy.${action}`, `data/${name}`);
+      }
+    }
+  }
   if (missing.size) {
     throw new Error('data/lang.csv 缺少代码引用的翻译，请补齐主表后重新生成：\n'
       + [...missing].sort(([a], [b]) => a.localeCompare(b))

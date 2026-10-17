@@ -1,7 +1,7 @@
 ﻿{
     "id":  "campaign_tarawa_red_beach_2_03",
     "name":  "Tarawa, Red Beach 2 - Clear the East of the Airfield",
-    "description":  "Pacific Scenario C9. Clear the map of all Japanese units, including Heavy Artillery and reinforcements, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex. Place 1 AT Gun and 2 Type 95 tanks on different red numbered hexes, and 2 Japanese Infantry units on different blue numbered hexes.",
+    "description":  "Pacific Scenario C9. Clear the map of all Japanese units, including Heavy Artillery and reinforcements, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex. Place 1 Type 92 Infantry Gun and 2 Type 95 tanks on different red numbered hexes, and 2 Japanese Infantry units on different blue numbered hexes.",
     "theater":  "pacific",
     "usCasualtyLimit":  10,
     "cols":  8,

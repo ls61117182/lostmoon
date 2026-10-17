@@ -353,7 +353,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   infantry: { // 步兵 - 占位 - 仅事件中作为攻击方
     faction: "german",
-    firepower: -4, size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: -4, size: 3, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -365,7 +365,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   german_infantry: { // 德军步兵 - 德军步兵；保留 infantry 作为旧关卡兼容配置
     faction: "german",
-    firepower: -4, size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: -4, size: 3, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -377,7 +377,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   soviet_infantry: { // 苏军步兵 - 苏军步兵；未装备无线电，仅可与同格友方坦克共享视野
     faction: "soviet",
-    firepower: -4, size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: -4, size: 3, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: false,
     moveSound: "",
     attackSound: "",
@@ -389,7 +389,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   officer: { // 军官 - 任务 8：高级军官（与步兵同属徒步类，但 kind 独立避免与 spawn 步兵混淆）
     faction: "german",
-    firepower: -4, size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: -4, size: 3, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 0, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",
@@ -440,7 +440,7 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  at_gun: { // 反坦克炮 - 谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；命中难度表示AP有效命中所需点数；HE本体与炮组独立判定；按一式47毫米反坦克炮；HE弹装药87克；HE0仍可杀伤与压制；一式47毫米牵引炮；炮班协同基准2、轻型整装弹装填1
+  at_gun: { // 九二式步兵炮 - 九二式步兵炮美术与名称；保留原有游戏平衡数值；基础火力表示人机协同；HE本体与炮组独立判定；炮班协同基准2、装填1
     faction: "japanese",
     firepower: 2, size: 8, armorFront: 4, armorFrontSide: 4, armorRearSide: 2, armorRear: 2, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 2, turretTraverseSpeed: 2, mobility: 0, usCasualtyDice: 1, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
@@ -481,7 +481,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   japanese_infantry: { // 日本步兵 - Pacific: Japanese Infantry; no radio
     faction: "japanese",
-    firepower: -4, size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: -4, size: 3, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: false,
     moveSound: "",
     attackSound: "",
@@ -494,7 +494,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   american_infantry: { // 美军步兵 - US AI support infantry; equipped with radio
     faction: "usa",
-    firepower: -4, size: 2, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: -4, size: 3, armorFront: 0, armorFrontSide: 0, armorRearSide: 0, armorRear: 0, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 0, effectiveRange: 1, turretTraverseSpeed: 0, mobility: 0, usCasualtyDice: 1, visionRange: 3, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "",
     attackSound: "",

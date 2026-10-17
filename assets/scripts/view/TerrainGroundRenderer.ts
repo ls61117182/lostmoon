@@ -72,11 +72,13 @@ export class TerrainGroundRenderer {
     if(this.busy||!this.queue.length||!this.bakeEffect)return false;
     if(!this.baker)this.baker=new TerrainGroundGpuBaker(this.parent,this.data!,this.bakeEffect);
     const plan=this.queue[0],epoch=this.epoch;this.busy=true;
-    try {this.baker.bake(plan,this.winter,this.resolution,result=>{
+    // Only chunks near a painted summer bridge need denser colour/mask output.
+    const resolution=!this.winter&&this.data!.bundle.bridgeArtwork&&plan.tiles.some(t=>t.terrain==='water'&&!!t.bridgeEnds)?Math.max(2,this.resolution):this.resolution;
+    try {this.baker.bake(plan,this.winter,resolution,result=>{
       if(this.destroyed||epoch!==this.epoch){result.texture.destroy();result.mask?.destroy();return;}
       this.busy=false;
       const previous=this.chunks.get(plan.key);if(previous)this.releaseChunk(previous);
-      const frame=new SpriteFrame();frame.texture=result.texture;const size=GROUND_CHUNK_SIZE*this.resolution+2;
+      const frame=new SpriteFrame();frame.texture=result.texture;const size=GROUND_CHUNK_SIZE*resolution+2;
       frame.rect=new Rect(0,0,size,size);frame.originalSize=new Size(size,size);frame.packable=false;
       const node=new Node('ContinuousTerrainChunk');node.layer=this.parent.layer;node.addComponent(UITransform);
       const sprite=node.addComponent(Sprite);sprite.sizeMode=Sprite.SizeMode.CUSTOM;sprite.spriteFrame=frame;

@@ -1,0 +1,45 @@
+{
+  "sourceBounds": [
+    {
+      "left": 110,
+      "top": 145,
+      "right": 1311,
+      "bottom": 1050,
+      "width": 1347,
+      "height": 1167,
+      "transparent": 1327394
+    },
+    {
+      "left": 210,
+      "top": 142,
+      "right": 1314,
+      "bottom": 1056,
+      "width": 1347,
+      "height": 1167,
+      "transparent": 1310929
+    }
+  ],
+  "sharedCrop": {
+    "left": 107,
+    "top": 140,
+    "width": 1211,
+    "height": 916
+  },
+  "exports": [
+    {
+      "file": "type92_top.png",
+      "width": 150,
+      "height": 113,
+      "alpha": true
+    },
+    {
+      "file": "type92_top_destroyed-v2.png",
+      "width": 150,
+      "height": 113,
+      "alpha": true
+    }
+  ],
+  "previewLongestSide": 65,
+  "runtimeFilesUnchanged": true,
+  "inGameVisualInspection": false
+}

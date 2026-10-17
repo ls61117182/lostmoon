@@ -92,3 +92,12 @@ for (const kind of ['tree', 'building', 'vehicle']) {
 }
 renderer.begin(); renderer.draw(source, 'tree', 50); renderer.end();
 assert.equal(cast.angle, 0, 'pooled shadow resets when returning to an unrotated mission');
+for (const rotation of [0, 90]) {
+  renderer.begin(rotation); renderer.draw(source, 'rocky', 50); renderer.end();
+  const dx = cast.position.x - sourceNode.position.x;
+  const dy = cast.position.y - sourceNode.position.y;
+  assert.equal(dx, rotation === 90 ? -10 : 10, 'Raised rock cast reflects its greater height');
+  assert.equal(dy, -10, 'Rock cast stays screen-down/right after camera rotation');
+  assert.equal(cast.scale.y, 1, 'Rock projection preserves the overhead footprint');
+  assert.equal(cast.children[0].getComponent(Sprite).color.a, 44, 'Rock cast respects source opacity');
+}

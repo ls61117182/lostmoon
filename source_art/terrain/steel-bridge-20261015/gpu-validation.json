@@ -1,0 +1,38 @@
+{
+  "passed": true,
+  "webgl1Compiled": true,
+  "reports": [
+    {
+      "style": "summer",
+      "maxSeam": 0,
+      "opaque": 776,
+      "water": 255,
+      "bridge": 0,
+      "paintedBridge": true
+    },
+    {
+      "style": "winter",
+      "maxSeam": 0,
+      "opaque": 776,
+      "water": 255,
+      "bridge": 0,
+      "paintedBridge": false
+    },
+    {
+      "style": "pacific",
+      "maxSeam": 0,
+      "opaque": 776,
+      "water": 255,
+      "bridge": 0,
+      "paintedBridge": false
+    },
+    {
+      "style": "normandy",
+      "maxSeam": 0,
+      "opaque": 776,
+      "water": 255,
+      "bridge": 0,
+      "paintedBridge": true
+    }
+  ]
+}

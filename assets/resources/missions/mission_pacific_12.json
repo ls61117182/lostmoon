@@ -1,7 +1,7 @@
 ﻿{
     "id":  "mission_pacific_12",
     "name":  "Peleliu - Clear the Airfield",
-    "description":  "Pacific Scenario D12. Clear the map of all Japanese units, including Heavy Artillery, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex, facing the small black triangle. Place 2 AT Guns and 2 Type 97 tanks on different red numbered hexes, facing the numbered edge. Place 1 Japanese Infantry unit on a blue numbered hex. The Sherman starts on the black outlined hex.",
+    "description":  "Pacific Scenario D12. Clear the map of all Japanese units, including Heavy Artillery, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex, facing the small black triangle. Place 2 Type 92 Infantry Guns and 2 Type 97 tanks on different red numbered hexes, facing the numbered edge. Place 1 Japanese Infantry unit on a blue numbered hex. The Sherman starts on the black outlined hex.",
     "theater":  "pacific",
     "usCasualtyLimit":  10,
     "cols":  8,

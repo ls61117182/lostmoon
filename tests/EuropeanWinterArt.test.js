@@ -3,7 +3,23 @@ function load(file,deps={}){const m={exports:{}};new Function('module','exports'
 const raster=load('assets/scripts/view/TerrainGroundRaster.ts',{'../core/UrbanTerrain':load('assets/scripts/core/UrbanTerrain.ts')}),bundle=JSON.parse(fs.readFileSync('assets/resources/textures/terrain/redesign_v3/materials.json','utf8')),winter=bundle.europeanWinter;
 assert(winter.winterArtwork&&winter.curvedRoads,'winter uses independent artwork and European country road bends');
 const backup=JSON.parse(fs.readFileSync('source_art/terrain/redesign-review-20261003/europe-winter/backup/redesign_v3/materials.json','utf8'));
-assert.deepEqual(bundle.materials,backup.materials,'Pacific and base materials preserved');assert.deepEqual(bundle.europeanSummer,backup.europeanSummer,'European summer preserved');
+const summerUpgradeSnapshot='source_art/terrain/europe-summer-v6-20261015/classic/materials.snapshot.json';
+const winterBaseline=fs.existsSync(summerUpgradeSnapshot)?JSON.parse(fs.readFileSync(summerUpgradeSnapshot,'utf8')):backup;
+assert.deepEqual(bundle.materials,winterBaseline.materials,'Pacific and base materials preserved');
+// Summer may now be switched independently; its original V5 artwork remains
+// preserved byte-for-byte in the version pack rather than being the active art.
+const versionsPath='source_art/terrain/europe-summer-v6-20261015',activeSummer=JSON.stringify(bundle.europeanSummer);
+if(fs.existsSync(versionsPath+'/detailed/manifest.json')){
+ const originalSummer=JSON.parse(fs.readFileSync(versionsPath+'/classic/summer.json','utf8'));
+ const snapshot=JSON.parse(fs.readFileSync(versionsPath+'/classic/materials.snapshot.json','utf8'));
+ assert.deepEqual(originalSummer,snapshot.europeanSummer,'original European summer art preserved at the V6 upgrade boundary');
+ assert.deepEqual(winter,snapshot.europeanWinter,'summer version switching preserves winter art exactly');
+ const detailedSummer=JSON.parse(fs.readFileSync(versionsPath+'/detailed/summer.json','utf8'));
+ const versions=[originalSummer,detailedSummer];
+ const bridgeVersion=versionsPath+'/detailed-bridge/summer.json';if(fs.existsSync(bridgeVersion))versions.push(JSON.parse(fs.readFileSync(bridgeVersion,'utf8')));
+ const steelVersion=versionsPath+'/detailed-steel-bridge/summer.json';if(fs.existsSync(steelVersion))versions.push(JSON.parse(fs.readFileSync(steelVersion,'utf8')));
+ assert(versions.some(v=>JSON.stringify(v)===activeSummer),'active summer must match a preserved version');
+}else assert.deepEqual(bundle.europeanSummer,backup.europeanSummer,'European summer preserved');
 const engine=new raster.TerrainGroundRaster(winter),tile=(q,r,terrain,more={})=>({pos:{q,r},terrain,...more}),tiles=[];
 for(let r=0;r<5;r++)for(let c=0;c<8;c++)tiles.push(tile(c-Math.floor(r/2),r,['forest','mud','field','water'][c%4],r===2?{roads:[true,false,false,true,false,false]}:{}));
 let maximum=0;for(const horizontal of [true,false]){const a=engine.renderChunk(tiles,true,0,0,128,192,2),b=engine.renderChunk(tiles,true,horizontal?128:0,horizontal?0:192,128,192,2);

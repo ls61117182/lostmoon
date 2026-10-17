@@ -209,14 +209,17 @@ export class MenuOperations {
     } else if (BUILD_FEATURES.gameModeSelection) {
       let classic: ReturnType<MenuOperations['button']>;
       let hardcore: ReturnType<MenuOperations['button']>;
+      let test: ReturnType<MenuOperations['button']>;
       const change = (mode: GameMode) => {
         this.actions.setMode(mode);
-        classic.draw(mode === 'classic'); hardcore.draw(mode === 'hardcore');
+        classic.draw(mode === 'classic'); hardcore.draw(mode === 'hardcore'); test.draw(mode === 'test');
       };
-      classic = this.button(parent, 'ClassicMode', t('menu.mode.classic'), -273, -198, 150, 44,
+      classic = this.button(parent, 'ClassicMode', t('menu.mode.classic'), -299, -198, 98, 44,
         () => change('classic'), this.actions.mode() === 'classic', 17);
-      hardcore = this.button(parent, 'HardcoreMode', t('menu.mode.hardcore'), -111, -198, 150, 44,
+      hardcore = this.button(parent, 'HardcoreMode', t('menu.mode.hardcore'), -189, -198, 110, 44,
         () => change('hardcore'), this.actions.mode() === 'hardcore', 17);
+      test = this.button(parent, 'TestMode', t('menu.mode.test'), -79, -198, 98, 44,
+        () => change('test'), this.actions.mode() === 'test', 17);
     } else this.label(parent, t('menu.mode.hardcore'), -200, -198, 280, 40, 18, C.gold);
     const unlocked = level.alwaysUnlocked || level.entryKind === 'custom' || level.entryKind === 'random'
       || MenuProgress.isUnlocked(level.id, level.chapterId);

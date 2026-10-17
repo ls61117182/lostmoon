@@ -65,7 +65,7 @@ test('scene clips silhouettes with the same fog mask and excludes destroyed unit
   assert.match(s, /redrawVisibleHexMask\(this.silhouetteVisibilityGraphics, true\)/);
   assert.match(s, /!unit.destroyed && this.isUnitVisible\(unit\)/);
   assert.match(s, /insertChild\(unitMaskNode, urbanBuildingLayerNode.getSiblingIndex\(\)\)/);
-  assert.match(s, /this\.unitOcclusion\?\.sync\(this\.silhouetteSources,\s*\[\s*\.\.\.this\.urbanBuildingSpritePool\.map\(slot => slot\.sprite\),\s*\.\.\.this\.foliageSpritePool\.map\(slot => slot\.sprite\),\s*\], this\.occlusionShapes, this\.vectorSilhouettes\);/,
+  assert.match(s, /this\.unitOcclusion\?\.sync\(this\.silhouetteSources,\s*\[\s*\.\.\.this\.urbanBuildingSpritePool\.map\(slot => slot\.sprite\),\s*\.\.\.this\.foliageSpritePool\.map\(slot => slot\.sprite\),\s*\], this\.occlusionShapes, this\.vectorSilhouettes, this\.bunkerInfantryOccluders\(\)\);/,
     'map redraw must submit collected units, roofs, foliage and vector fallbacks to the silhouette renderer');
   const shader = fs.readFileSync('assets/resources/effects/unit-silhouette.effect', 'utf8');
   assert.match(shader, /center \* \(1\.0 - interior\) \* color\.a/);
@@ -81,4 +81,26 @@ test('vector fallback silhouettes and tree/roof geometry remain clipped by stenc
   const vector = root.children[0].children[0].getComponent(Graphics);
   assert.deepEqual(vector.circles[0], [2, 3, 4]); assert.equal(vector.strokeColor, green);
   assert.equal(root.children[1].getComponent(Mask).type, Mask.Type.GRAPHICS_STENCIL);
+});
+
+test('bunker passes clip only their selected infantry and keep existing building passes independent', () => {
+  const root = new Node('root'), r = new Renderer(root); r.setMaterial({ destroy() {} });
+  const infantry = sprite(0), tank = sprite(0), roof = sprite(0), bunker = sprite(0);
+  const color = { r: 65, g: 225, b: 95 };
+  r.sync(new Map([[infantry, color], [tank, color]]), [roof], [], [],
+    [{ blocker: bunker, sources: new Map([[infantry, color]]) }]);
+  assert.equal(root.children.length, 2);
+  assert.equal(root.children[0].children.length, 2, 'normal roofs retain their original source set');
+  const stencil = root.children[1];
+  assert.equal(stencil.getComponent(Mask).subComp.spriteFrame, bunker.spriteFrame);
+  assert.equal(stencil.getComponent(Mask).alphaThreshold, 0.1);
+  assert.equal(stencil.children.length, 1);
+  assert.equal(stencil.children[0].getComponent(Sprite).spriteFrame, infantry.spriteFrame);
+  r.sync(new Map(), [], [], [], [{ blocker: bunker, sources: new Map(), vectors: [{ circle: [2, 3, 4], color }] }]);
+  assert.equal(root.children[0].getComponent(Mask).subComp.spriteFrame, bunker.spriteFrame);
+  assert.deepEqual(root.children[0].children.find(node => node.getComponent(Graphics))
+    .getComponent(Graphics).circles[0], [2, 3, 4]);
+  bunker.node.active = false;
+  r.sync(new Map(), [], [], [], [{ blocker: bunker, sources: new Map([[infantry, color]]) }]);
+  assert(root.children.every(node => !node.active), 'pooled bunker passes reset when no longer visible');
 });

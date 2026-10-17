@@ -17,7 +17,7 @@ export function infantrySpriteAngle(direction: Direction): number {
   return Math.round(angle * 1_000_000) / 1_000_000;
 }
 
-/** Returns the wide formation when a squad shares its hex with any live unit. */
+/** Returns the wide formation when a squad shares its hex with a live unit or tank wreck. */
 export function infantrySquadOffsets(hexSize: number, coLocateOtherUnit: boolean): Array<{ ox: number; oy: number }> {
   const teamRadius = hexSize * 0.5;
   const ringR = coLocateOtherUnit ? hexSize * 0.58 : teamRadius * 0.546;

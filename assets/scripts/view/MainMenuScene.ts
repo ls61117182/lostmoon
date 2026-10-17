@@ -1,5 +1,7 @@
 import { createMenuBackground } from './MenuBackground';
-import { drawBeachEdge, drawBeachOverlays } from './BeachTerrainVisual';
+import { drawBeachEdge, drawBeachOverlays, drawSeawallJoints } from './BeachTerrainVisual';
+import type { SeawallSegment } from '../core/SeawallJunctions';
+import { applyNormandyEditorBrush, normandyEditorEdgeState, setNormandyEditorEdge, type NormandyEditorBrush } from '../core/NormandyEditor';
 import { supportMarkerVisuals } from './SupportMarkerVisual';
 import { BUILD_FEATURES } from '../core/BuildProfile';
 /**
@@ -106,6 +108,7 @@ import {
   tankVisualAssetConfigOf,
   tankVisualConfigOf,
 } from '../core/TankVisualDB';
+import { GERMAN_LATE_WAR_VISUAL_KINDS, lateWarTankVisualAssetConfigOf } from '../core/TankCamouflage';
 
 const { ccclass, property } = _decorator;
 
@@ -239,6 +242,7 @@ export class MainMenuScene extends Component {
   private battleLoading = false;
   private classicModeBtn: ButtonRefs | null = null;
   private hardcoreModeBtn: ButtonRefs | null = null;
+  private testModeBtn: ButtonRefs | null = null;
   private pvpEntryBtn: ButtonRefs | null = null;
   private playerTankSelectBtn: ButtonRefs | null = null;
   private playerTankSelectLabel: Label | null = null;
@@ -482,18 +486,25 @@ export class MainMenuScene extends Component {
     const x = 390;
     this.makeLabel(this.node, t('menu.mode.title'), x, 158, 280, 22, 16, TEXT_SUBTITLE);
     this.classicModeBtn = this.makeRectButton(
-      this.node, x - 70, 126, 130, 38, MODE_BTN_IDLE,
+      this.node, x - 96, 126, 90, 38, MODE_BTN_IDLE,
       () => this.selectGameMode('classic'),
     );
     this.classicModeBtn.label = this.makeLabel(
-      this.classicModeBtn.node, t('menu.mode.classic'), 0, 0, 120, 26, 18, TEXT_PRIMARY,
+      this.classicModeBtn.node, t('menu.mode.classic'), 0, 0, 84, 26, 18, TEXT_PRIMARY,
     );
     this.hardcoreModeBtn = this.makeRectButton(
-      this.node, x + 70, 126, 130, 38, MODE_BTN_IDLE,
+      this.node, x, 126, 90, 38, MODE_BTN_IDLE,
       () => this.selectGameMode('hardcore'),
     );
     this.hardcoreModeBtn.label = this.makeLabel(
-      this.hardcoreModeBtn.node, t('menu.mode.hardcore'), 0, 0, 120, 26, 18, TEXT_PRIMARY,
+      this.hardcoreModeBtn.node, t('menu.mode.hardcore'), 0, 0, 84, 26, 18, TEXT_PRIMARY,
+    );
+    this.testModeBtn = this.makeRectButton(
+      this.node, x + 96, 126, 90, 38, MODE_BTN_IDLE,
+      () => this.selectGameMode('test'),
+    );
+    this.testModeBtn.label = this.makeLabel(
+      this.testModeBtn.node, t('menu.mode.test'), 0, 0, 84, 26, 18, TEXT_PRIMARY,
     );
     this.refreshGameModeSwitch();
   }
@@ -508,11 +519,13 @@ export class MainMenuScene extends Component {
   }
 
   private refreshGameModeSwitch() {
-    const classic = this.gameMode === 'classic';
-    this.classicModeBtn?.redraw(classic ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: classic });
-    this.hardcoreModeBtn?.redraw(classic ? MODE_BTN_IDLE : MODE_BTN_ACTIVE, { border: !classic });
-    if (this.classicModeBtn?.label) this.classicModeBtn.label.color = classic ? TEXT_TITLE : TEXT_PRIMARY;
-    if (this.hardcoreModeBtn?.label) this.hardcoreModeBtn.label.color = classic ? TEXT_PRIMARY : TEXT_TITLE;
+    for (const [mode, button] of [
+      ['classic', this.classicModeBtn], ['hardcore', this.hardcoreModeBtn], ['test', this.testModeBtn],
+    ] as const) {
+      const active = this.gameMode === mode;
+      button?.redraw(active ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: active });
+      if (button?.label) button.label.color = active ? TEXT_TITLE : TEXT_PRIMARY;
+    }
   }
 
   private buildPvpEntryButton() {
@@ -1431,6 +1444,7 @@ export class MainMenuScene extends Component {
     if (this.modalRoot) this.modalRoot.name = 'TankVisualDebugger';
 
     const splitKindSet = new Set<string>(SPLIT_TANK_KINDS as readonly string[]);
+    const lateWarKindSet = new Set<string>(GERMAN_LATE_WAR_VISUAL_KINDS);
     const frames: Record<string, {
       top: SpriteFrame | null;
       topW: number;
@@ -1440,6 +1454,7 @@ export class MainMenuScene extends Component {
       destroyed: SpriteFrame | null;
       destroyedW: number;
       destroyedH: number;
+      loadError?: boolean;
     }> = {};
     const drafts: Record<string, TankVisualDebugDraft> = {};
     const hexR = 185;
@@ -1451,6 +1466,8 @@ export class MainMenuScene extends Component {
     let showMuzzleFlash = false;
     let commanderHatchState: 'closed' | 'open' | 'open-dead' = 'closed';
     let showDestroyed = false;
+    let showLateWarCamouflage = false;
+    const frameKey = (kind: TankVisualKind, lateWar: boolean) => lateWar ? `${kind}:late_war` : kind;
     let engineVibrationEnabled = TANK_ENGINE_VIBRATION_DEFAULT_ENABLED;
     let engineVibrationElapsed = 0;
     let engineVibrationLayer: Node | null = null;
@@ -1495,9 +1512,10 @@ export class MainMenuScene extends Component {
       };
     };
 
-    for (const kind of TANK_VISUAL_KINDS) {
-      drafts[kind] = makeDraft(kind);
-      frames[kind] = {
+    const loadTankFrames = (kind: TankVisualKind, lateWar = false) => {
+      const key = frameKey(kind, lateWar);
+      if (frames[key] && !frames[key]!.loadError) return;
+      const loaded: (typeof frames)[string] = {
         top: null,
         topW: 0,
         topH: 0,
@@ -1506,40 +1524,48 @@ export class MainMenuScene extends Component {
         destroyed: null,
         destroyedW: 0,
         destroyedH: 0,
+        loadError: false,
       };
-      const assets = tankVisualAssetConfigOf(kind);
+      frames[key] = loaded;
+      const assets = lateWar ? lateWarTankVisualAssetConfigOf(kind) : tankVisualAssetConfigOf(kind);
       if (assets.topSpritePath) {
         resources.load(assets.topSpritePath, SpriteFrame, (err, sf) => {
           if (!err && sf) {
-            frames[kind]!.top = sf;
-            frames[kind]!.topW = sf.rect.width > 0 ? sf.rect.width : sf.width;
-            frames[kind]!.topH = sf.rect.height > 0 ? sf.rect.height : sf.height;
-          }
+            loaded.top = sf;
+            loaded.topW = sf.rect.width > 0 ? sf.rect.width : sf.width;
+            loaded.topH = sf.rect.height > 0 ? sf.rect.height : sf.height;
+          } else loaded.loadError = true;
           if (kind === selectedKind) refreshPreview();
         });
       }
       if (assets.hullSpritePath) {
         resources.load(assets.hullSpritePath, SpriteFrame, (err, sf) => {
-          if (!err && sf) frames[kind]!.hull = sf;
+          if (!err && sf) loaded.hull = sf;
+          else loaded.loadError = true;
           if (kind === selectedKind) refreshPreview();
         });
       }
       if (assets.turretSpritePath) {
         resources.load(assets.turretSpritePath, SpriteFrame, (err, sf) => {
-          if (!err && sf) frames[kind]!.turret = sf;
+          if (!err && sf) loaded.turret = sf;
+          else loaded.loadError = true;
           if (kind === selectedKind) refreshPreview();
         });
       }
       if (assets.destroyedSpritePath) {
         resources.load(assets.destroyedSpritePath, SpriteFrame, (err, sf) => {
           if (!err && sf) {
-            frames[kind]!.destroyed = sf;
-            frames[kind]!.destroyedW = sf.rect.width > 0 ? sf.rect.width : sf.width;
-            frames[kind]!.destroyedH = sf.rect.height > 0 ? sf.rect.height : sf.height;
-          }
+            loaded.destroyed = sf;
+            loaded.destroyedW = sf.rect.width > 0 ? sf.rect.width : sf.width;
+            loaded.destroyedH = sf.rect.height > 0 ? sf.rect.height : sf.height;
+          } else loaded.loadError = true;
           if (kind === selectedKind) refreshPreview();
         });
       }
+    };
+    for (const kind of TANK_VISUAL_KINDS) {
+      drafts[kind] = makeDraft(kind);
+      loadTankFrames(kind);
     }
     const commanderSpritePaths = new Set(
       TANK_VISUAL_KINDS
@@ -1622,6 +1648,16 @@ export class MainMenuScene extends Component {
     vibrationBtn.label = this.makeLabel(vibrationBtn.node, '震动关闭', 0, 0, 126, 22, 14, TEXT_PRIMARY);
     vibrationBtn.label.overflow = Label.Overflow.SHRINK;
 
+    const camouflageBtn = this.makeRectButton(stage, -205, 210, 230, 30, MODE_BTN_IDLE, () => {
+      if (!lateWarKindSet.has(selectedKind)) return;
+      showLateWarCamouflage = !showLateWarCamouflage;
+      loadTankFrames(selectedKind, showLateWarCamouflage);
+      refreshCamouflageButton();
+      refreshPreview();
+    });
+    camouflageBtn.label = this.makeLabel(camouflageBtn.node, '', 0, 0, 212, 22, 15, TEXT_PRIMARY);
+    camouflageBtn.label.overflow = Label.Overflow.SHRINK;
+
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
     listPanel.addComponent(UITransform).setContentSize(255, debugColumnH);
@@ -1674,7 +1710,9 @@ export class MainMenuScene extends Component {
         selectedKind = kind;
         bodyAngleDeg = 0;
         turretAngleDeg = 0;
+        loadTankFrames(kind, showLateWarCamouflage && lateWarKindSet.has(kind));
         refreshKindButtons();
+        refreshCamouflageButton();
         refreshFlashButton();
         refreshHatchButton();
         rebuildInputs();
@@ -1807,6 +1845,17 @@ export class MainMenuScene extends Component {
       if (destroyedBtn.label) {
         destroyedBtn.label.string = showDestroyed ? '击毁状态' : '正常状态';
         destroyedBtn.label.color = showDestroyed ? TEXT_TITLE : TEXT_PRIMARY;
+      }
+    }
+
+    function refreshCamouflageButton() {
+      const supported = lateWarKindSet.has(selectedKind);
+      const active = supported && showLateWarCamouflage;
+      camouflageBtn.redraw(active ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: active });
+      if (camouflageBtn.label) {
+        camouflageBtn.label.string = !supported ? '后期配色（仅德军）'
+          : active ? '配色：后期三色迷彩' : '配色：德军灰';
+        camouflageBtn.label.color = !supported ? TEXT_DISABLED : active ? TEXT_TITLE : TEXT_PRIMARY;
       }
     }
 
@@ -2081,17 +2130,23 @@ export class MainMenuScene extends Component {
       previewRoot.addChild(exhaustPreviewNode);
       drawTankExhaustPreview();
       const draft = drafts[selectedKind]!;
-      const loaded = frames[selectedKind]!;
+      const lateWar = showLateWarCamouflage && lateWarKindSet.has(selectedKind);
+      const loaded = frames[frameKey(selectedKind, lateWar)]!;
       const body = angleVec(bodyAngleDeg);
       const turret = angleVec(turretAngleDeg);
       const offsetUnit = hexR * Math.sqrt(3);
       selectedLabel.string = `${tankVisualAssetName(selectedKind)} / ${selectedKind}`;
+      if (lateWarKindSet.has(selectedKind)) selectedLabel.string += lateWar ? ' / 后期三色迷彩' : ' / 德军灰';
       bodyAngleLabel.string = `车身 ${Math.round(normalizeAngleDeg(bodyAngleDeg))}°`;
       turretAngleLabel.string = isTankKind(selectedKind) && !splitKindSet.has(selectedKind)
         ? '固定炮塔（随车身）'
         : `炮塔 ${Math.round(normalizeAngleDeg(turretAngleDeg))}°`;
       lastPivot = { x: 0, y: 0 };
 
+      if (showDestroyed && !loaded.destroyed) {
+        statusLabel.string = loaded.loadError ? '击毁贴图加载失败；请刷新 Cocos 资源后重试配色切换。' : '击毁贴图加载中...';
+        return;
+      }
       if (showDestroyed && loaded.destroyed) {
         const sf = loaded.destroyed;
         const displayW = loaded.destroyedW > 0 ? loaded.destroyedW : sf.width;
@@ -2301,13 +2356,14 @@ export class MainMenuScene extends Component {
         return;
       }
 
-      statusLabel.string = '资源加载中...';
+      statusLabel.string = loaded.loadError ? '贴图加载失败；请刷新 Cocos 资源后重试配色切换。' : '资源加载中...';
     }
 
     refreshKindButtons();
     refreshFlashButton();
     refreshHatchButton();
     refreshDestroyedButton();
+    refreshCamouflageButton();
     refreshVibrationButton();
     rebuildInputs();
     refreshPreview();
@@ -2719,6 +2775,7 @@ export class MainMenuScene extends Component {
     this.continueSubLabel = null;
     this.classicModeBtn = null;
     this.hardcoreModeBtn = null;
+    this.testModeBtn = null;
     this.playerTankSelectBtn = null;
     this.playerTankSelectLabel = null;
     this.authNameLabel = null;
@@ -2915,7 +2972,7 @@ export class MainMenuScene extends Component {
     const { panel, contentY } = this.openModal(t('level.custom.editor.title'), panelW, panelH, false);
 
     type EditorTile = TileDef | null;
-    type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null };
+    type TerrainTool = { code: TileDef['t'] | null; key: string; color: Color; spriteKey: string | null; normandy?: NormandyEditorBrush };
     type EditorCell = { redraw: (tile: EditorTile) => void; drawBoundary: () => void };
     type EditorWeatherOption = { id: WeatherType; label: string; desc: string };
     type EditorSeasonOption = { id: SeasonType; label: string; desc: string };
@@ -2932,6 +2989,13 @@ export class MainMenuScene extends Component {
       { code: 'T', key: 'terrain.trees', color: new Color(48, 112, 67, 235), spriteKey: 'trees' },
       { code: 'B', key: 'terrain.beach', color: new Color(165, 143, 94, 235), spriteKey: 'beach' },
       { code: 'eb', key: 'terrain.europe_beach', color: new Color(194, 181, 151, 255), spriteKey: null },
+      { code: 'esw', key: 'terrain.europe_shallow', color: new Color(121, 173, 183, 235), spriteKey: 'beach' },
+      { code: 'eb', key: 'levelEditor.normandy.steel', color: new Color(194, 181, 151, 255), spriteKey: null, normandy: 'steel' },
+      { code: 'eb', key: 'levelEditor.normandy.crater', color: new Color(194, 181, 151, 255), spriteKey: null, normandy: 'crater' },
+      { code: 'eb', key: 'levelEditor.normandy.wireIntact', color: new Color(194, 181, 151, 255), spriteKey: null, normandy: 'wire_intact' },
+      { code: 'eb', key: 'levelEditor.normandy.wireDamaged', color: new Color(194, 181, 151, 255), spriteKey: null, normandy: 'wire_damaged' },
+      { code: 'eb', key: 'levelEditor.normandy.seawall', color: new Color(194, 181, 151, 255), spriteKey: null, normandy: 'seawall' },
+      { code: 'eb', key: 'levelEditor.normandy.erase', color: new Color(194, 181, 151, 255), spriteKey: null, normandy: 'erase' },
       { code: 'H', key: 'terrain.rocky', color: new Color(120, 118, 112, 235), spriteKey: 'rocky' },
       { code: 'dw', key: 'terrain.deep_water', color: new Color(56, 98, 118, 235), spriteKey: null },
       { code: 'u', key: 'terrain.urban_ground', color: new Color(142, 140, 132, 235), spriteKey: 'urban_ground' },
@@ -2940,6 +3004,7 @@ export class MainMenuScene extends Component {
       { code: 'ud', key: 'terrain.urban_destructible', color: new Color(151, 91, 63, 235), spriteKey: 'urban_destructible' },
     ];
     const terrainSpritePaths: Record<string, string> = {
+
       road: 'textures/terrain/terrain_road/spriteFrame',
       field: 'textures/terrain/terrain_field/spriteFrame',
       mud: 'textures/terrain/terrain_mud/spriteFrame',
@@ -2948,7 +3013,7 @@ export class MainMenuScene extends Component {
       clear: 'textures/terrain/pacific_sand/spriteFrame',
       trees: 'textures/terrain/pacific_trees/spriteFrame',
       beach: 'textures/terrain/pacific_water/spriteFrame',
-      rocky: 'textures/terrain/pacific_rocks/spriteFrame',
+      rocky: 'textures/terrain/rocky_highland_01/spriteFrame',
       road_snow: 'textures/terrain/terrain_road_snow/spriteFrame',
       field_snow: 'textures/terrain/terrain_field_snow/spriteFrame',
       mud_snow: 'textures/terrain/terrain_mud_snow/spriteFrame',
@@ -3018,6 +3083,7 @@ export class MainMenuScene extends Component {
     let draftTruckPath = cloneJson(existingPackage?.mission.truckPath ?? []);
     let draftWeather: WeatherType = normalizeWeather(existingPackage?.mission.weather);
     let draftSeason: SeasonType = existingPackage?.mission.season === 'winter' ? 'winter' : 'summer';
+    let draftGermanTankCamouflage = existingPackage?.mission.germanTankCamouflage === 'late_war' ? 'late_war' : 'grey';
     let draftTerrainCategory: ActiveTerrainCategory = activeTerrainCategoryForMission(
       existingPackage?.mission.theater, existingPackage?.mission.tiles,
     );
@@ -3029,6 +3095,7 @@ export class MainMenuScene extends Component {
     let titleInput: EditBox | null = null;
     let descInput: EditBox | null = null;
     let selectedTool: TerrainTool | null = null;
+    let normandyEdgeDirection = 0;
     let selectedRow = 0;
     let selectedCol = 0;
     for (let row = 0; row < rows; row++) {
@@ -3109,7 +3176,7 @@ export class MainMenuScene extends Component {
       type97: '九七式',
       type4: '四式',
       maus: '鼠式',
-      at_gun: 'AT Gun',
+      at_gun: t('unit.name.at_gun'),
       pak38: 'pak38',
       flak88: '88mm高射炮',
       japanese_infantry: 'JP Inf',
@@ -3196,6 +3263,7 @@ export class MainMenuScene extends Component {
       draftTruckPath = [];
       draftWeather = 'clear';
       draftSeason = 'summer';
+      draftGermanTankCamouflage = 'grey';
       draftTerrainCategory = 'europe';
       draftRowParityOffset = 0;
       titleInput = null;
@@ -3239,12 +3307,12 @@ export class MainMenuScene extends Component {
     const normalizeSelectedTile = () => {
       const tile = draftTiles[selectedRow]?.[selectedCol];
       if (!tile) return;
-      if (tile.bd !== 1 || ['w', 'dw', 'B'].includes(tile.t)) delete tile.bd;
+      if (tile.bd !== 1 || ['w', 'dw', 'B', 'esw'].includes(tile.t)) delete tile.bd;
       if (['u', 'ur', 'ui', 'ud'].includes(tile.t)) delete tile.bd;
       if (tile.t === 'dw') delete tile.h;
       if (tile.t !== 'c' && tile.t !== 'T') delete tile.bw;
       if (tile.t !== 'eb') { delete tile.sh; delete tile.cr; }
-      if (['w', 'dw', 'B'].includes(tile.t)) { delete tile.wire; delete tile.sw; }
+      if (['w', 'dw', 'B', 'esw'].includes(tile.t)) { delete tile.wire; delete tile.sw; }
       if (tile.t !== 'w') delete tile.br;
       if (tile.t !== 'r' && tile.t !== 'ur' && tile.t !== 'a') {
         delete tile.rd;
@@ -3285,13 +3353,15 @@ export class MainMenuScene extends Component {
         }
         const states = getLang() === 'zh' ? ['无', '完好', '损坏'] : ['None', 'Intact', 'Damaged'];
         ['E', 'SE', 'SW', 'W', 'NW', 'NE'].forEach((dir, i) => {
-          const y = 80 - i * 30, wire = /^[012]{6}$/.test(tile.wire ?? '') ? tile.wire! : '000000', state = Number(wire[i]);
+          const y = 80 - i * 30, state = normandyEditorEdgeState(draftTiles, selectedRow, selectedCol, i, 'wire', draftRowParityOffset);
           this.makeLabel(popup, dir, -130, y, 30, 24, 13, TEXT_TITLE);
           button(`${getLang() === 'zh' ? '铁丝网' : 'Wire'}: ${states[state]}`, -34, y, 140, state !== 0, () => {
-            const chars = wire.split(''); chars[i] = String((state + 1) % 3);
-            const next = chars.join(''); if (next === '000000') delete tile.wire; else tile.wire = next;
+            setNormandyEditorEdge(draftTiles, selectedRow, selectedCol, i, 'wire', (state + 1) % 3, draftRowParityOffset);
           });
-          if (draftTerrainCategory === 'europe') button(getLang() === 'zh' ? '海堤' : 'Seawall', 105, y, 78, normalizeFlags(tile.sw)[i] === '1', () => { tile.sw = setFlag(tile.sw, i, normalizeFlags(tile.sw)[i] !== '1'); });
+          if (draftTerrainCategory === 'europe') {
+            const wall = normandyEditorEdgeState(draftTiles, selectedRow, selectedCol, i, 'sw', draftRowParityOffset);
+            button(getLang() === 'zh' ? '海堤' : 'Seawall', 105, y, 78, wall === 1, () => { setNormandyEditorEdge(draftTiles, selectedRow, selectedCol, i, 'sw', wall === 1 ? 0 : 1, draftRowParityOffset); });
+          }
         });
         this.makeLabel(popup, getLang() === 'zh' ? '点击铁丝网：无 → 完好 → 损坏' : 'Wire cycles: none → intact → damaged', 0, -116, 300, 24, 12, TEXT_SUBTITLE);
         const close = this.makeRectButton(popup, 0, -154, 130, 28, BTN_LEVEL_UNLOCKED, () => { popup.destroy(); refreshSelection(); });
@@ -3413,7 +3483,19 @@ export class MainMenuScene extends Component {
             label.overflow = Label.Overflow.SHRINK;
             toolButtons.push({ button: btn, tool });
           }
-          this.makeLabel(propRoot, '地图可拖动；滚轮或双指缩放。', 0, -84, 300, 24, 13, TEXT_SUBTITLE);
+          const paletteBottomY = 78 - (Math.ceil(visibleTerrainTools.length / 3) - 1) * 42;
+          const edgeBrush = selectedTool?.normandy === 'wire_intact' || selectedTool?.normandy === 'wire_damaged' || selectedTool?.normandy === 'seawall';
+          const guideKey = edgeBrush ? 'levelEditor.normandy.edgeHint'
+            : selectedTool?.normandy === 'steel' || selectedTool?.normandy === 'crater' ? 'levelEditor.normandy.sandHint'
+            : selectedTool?.normandy === 'erase' ? 'levelEditor.normandy.eraseHint' : 'levelEditor.normandy.mapHint';
+          const guide = this.makeLabel(propRoot, t(guideKey), 0, paletteBottomY - 36, 310, 28, 12, TEXT_SUBTITLE);
+          guide.overflow = Label.Overflow.SHRINK;
+          if (edgeBrush) {
+            const directions = getLang() === 'zh' ? ['东', '东南', '西南', '西', '西北', '东北'] : ['E', 'SE', 'SW', 'W', 'NW', 'NE'];
+            directions.forEach((label, dir) => {
+              addPlainBtn(label, -130 + dir * 52, paletteBottomY - 76, 46, 28, normandyEdgeDirection === dir, () => { normandyEdgeDirection = dir; }, 13);
+            });
+          }
           return;
         }
 
@@ -3448,6 +3530,14 @@ export class MainMenuScene extends Component {
           addPlainBtn(`季节：${seasonLabel(draftSeason)}`, 62, 42, 112, 26, draftSeason === 'winter', () => {
             openSeasonPicker();
           }, 12);
+          addPlainBtn(
+            getLang() === 'en'
+              ? `German paint: ${draftGermanTankCamouflage === 'late_war' ? 'Late war' : 'Grey'}`
+              : `德军配色：${draftGermanTankCamouflage === 'late_war' ? '后期三色迷彩' : '德军灰'}`,
+            0, 10, 236, 26, draftGermanTankCamouflage === 'late_war',
+            () => { draftGermanTankCamouflage = draftGermanTankCamouflage === 'late_war' ? 'grey' : 'late_war'; },
+            12,
+          );
           if (draftObjective.type === 'destroy_kind' || draftObjective.type === 'destroy_kind_evac') {
             addPlainBtn(`目标 ${unitKindLabels[draftObjective.kind ?? 'infantry']}`, -62, -22, 104, 26, true, () => {
               draftObjective.kind = cycleIn(objectiveTargetKinds, draftObjective.kind, 'infantry');
@@ -3793,7 +3883,7 @@ export class MainMenuScene extends Component {
             addBtn(dirs[i]!, positions[i]!.x, positions[i]!.y, 36, 22, activeFn(i), () => onClick(i));
           }
         };
-        const allowsBuilding = !['w', 'dw', 'B'].includes(tile.t);
+        const allowsBuilding = !['w', 'dw', 'B', 'esw'].includes(tile.t);
         const allowsHedge = tile.t !== 'dw';
         const allowsRoadDirs = tile.t === 'r' || tile.t === 'ur';
         const allowsAirstripDirs = tile.t === 'a';
@@ -3864,7 +3954,7 @@ export class MainMenuScene extends Component {
           });
         }
         const raw = JSON.stringify(tile);
-        if (!['w', 'dw', 'B'].includes(tile.t)) {
+        if (!['w', 'dw', 'B', 'esw'].includes(tile.t)) {
           const obstacleBtn = this.makeRectButton(propRoot, 0, -210, 224, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
           this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩附加物' : 'Wire / seawall / beach overlays', 0, 0, 216, 24, 12, TEXT_PRIMARY);
         }
@@ -3909,7 +3999,7 @@ export class MainMenuScene extends Component {
           addBtn(dirs[i]!, positions[i]!.x, positions[i]!.y, 36, 22, activeFn(i), () => onClick(i));
         }
       };
-      const allowsBuilding = !['w', 'dw', 'B'].includes(tile.t);
+      const allowsBuilding = !['w', 'dw', 'B', 'esw'].includes(tile.t);
       const allowsHedge = tile.t !== 'dw';
       const allowsRoadDirs = tile.t === 'r' || tile.t === 'ur';
       const allowsAirstripDirs = tile.t === 'a';
@@ -3969,7 +4059,7 @@ export class MainMenuScene extends Component {
         });
       }
       const raw = JSON.stringify(tile);
-      if (!['w', 'dw', 'B'].includes(tile.t)) {
+      if (!['w', 'dw', 'B', 'esw'].includes(tile.t)) {
         const obstacleBtn = this.makeRectButton(propRoot, 0, -210, 224, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
         this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩附加物' : 'Wire / seawall / beach overlays', 0, 0, 216, 24, 12, TEXT_PRIMARY);
       }
@@ -4177,6 +4267,7 @@ export class MainMenuScene extends Component {
         return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
       };
       const drawTileOverlays = (tile: EditorTile) => {
+
         if (!tile) return;
         const winter = draftSeason === 'winter' && draftTerrainCategory === 'europe';
         if (isDisplayOnlyEditorTile(tile)) {
@@ -4219,6 +4310,21 @@ export class MainMenuScene extends Component {
           const state = Number(tile.wire?.[i] ?? 0);
           if (state === 1 || state === 2) drawBeachEdge(outlineGraphics, p1.x, p1.y, p2.x, p2.y, radius, 'wire', state);
         }
+        const segments: SeawallSegment[] = [];
+        const nearby = [{row,col}, ...Array.from({length:6}, (_,dir) => editorNeighborOffset(row,col,dir))];
+        for (const at of nearby) {
+          const wallTile = draftTiles[at.row]?.[at.col];
+          if (!wallTile) continue;
+          const x = (at.col-col)*radius*Math.sqrt(3) + (((at.row+draftRowParityOffset)%2)-((row+draftRowParityOffset)%2))*radius*Math.sqrt(3)/2;
+          const y = (row-at.row)*radius*1.5;
+          for (let edge=0; edge<6; edge++) {
+            if (normalizeFlags(wallTile.sw)[edge] !== '1') continue;
+            const a = [0,-60,-120,180,120,60][edge];
+            const p1=pointForAngle(a-30), p2=pointForAngle(a+30);
+            segments.push([x+p1.x,y+p1.y,x+p2.x,y+p2.y]);
+          }
+        }
+        drawSeawallJoints(outlineGraphics, segments, radius, {x:0,y:0});
         const hedge = normalizeFlags(tile.h);
         outlineGraphics.strokeColor = winter ? new Color(124, 94, 66, 255) : new Color(73, 123, 53, 255);
         outlineGraphics.lineWidth = 5;
@@ -4389,9 +4495,13 @@ export class MainMenuScene extends Component {
         selectedRow = row;
         selectedCol = col;
         if (selectedTool) {
-          draftTiles[row]![col] = selectedTool.code === null
-            ? null
-            : { ...(draftTiles[row]![col] ?? {}), t: selectedTool.code };
+          if (selectedTool.normandy) {
+            if (!applyNormandyEditorBrush(draftTiles, row, col, selectedTool.normandy, normandyEdgeDirection, draftRowParityOffset)) statusLabel.string = t('levelEditor.normandy.landOnly');
+          } else {
+            draftTiles[row]![col] = selectedTool.code === null
+              ? null
+              : { ...(draftTiles[row]![col] ?? {}), t: selectedTool.code };
+          }
         }
         refreshSelection();
         ev.propagationStopped = true;
@@ -4622,6 +4732,7 @@ export class MainMenuScene extends Component {
       draftEnemyDiceEidMax = mission.enemyDiceEidMax;
       draftTruckPath = cloneJson(mission.truckPath ?? []);
       draftWeather = normalizeWeather(mission.weather);
+      draftGermanTankCamouflage = mission.germanTankCamouflage === 'late_war' ? 'late_war' : 'grey';
       draftSeason = mission.season === 'winter' && activeTerrainCategoryForTheater(mission.theater) === 'europe'
         ? 'winter'
         : 'summer';
@@ -5018,6 +5129,8 @@ export class MainMenuScene extends Component {
       else delete mission.weather;
       if (draftSeason === 'winter' && draftTerrainCategory === 'europe') mission.season = 'winter';
       else delete mission.season;
+      if (draftGermanTankCamouflage === 'late_war') mission.germanTankCamouflage = 'late_war';
+      else delete mission.germanTankCamouflage;
       return mission;
     };
 
@@ -5400,7 +5513,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'panzer3_n': return '3号N';
     case 'panzer3_n_schurzen': return '3号N';
     case 'type97': return '九七式';
-      case 'at_gun': return 'AT Gun';
+      case 'at_gun': return t('unit.name.at_gun');
       case 'pak38': return 'pak38';
       case 'flak88': return '88mm高射炮';
     case 'heavy_artillery': return 'Artillery';

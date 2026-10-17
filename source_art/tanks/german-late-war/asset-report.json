@@ -1,0 +1,735 @@
+{
+  "version": 1,
+  "scheme": "late_war",
+  "palette": [
+    [
+      182,
+      161,
+      109
+    ],
+    [
+      98,
+      109,
+      67
+    ],
+    [
+      128,
+      86,
+      70
+    ]
+  ],
+  "paintMasterSha256": "eeadaf1f5d1b3067f073c41b53f0a52e5ab9ea7ec7b8734c261e9d89783aba49",
+  "models": [
+    {
+      "kind": "tiger",
+      "sourceMid": 107.8768,
+      "flattenedHullOffset": {
+        "x": 48,
+        "y": 0,
+        "score": 2381.3999999999996
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "tiger_top.png",
+          "width": 247,
+          "height": 85,
+          "greySha256": "eed0cf4e3f564d0c6dee29aea989fd125e05facdedc491e1879399e193e890bb",
+          "greyMetaSha256": "600cb611bec616012e42deceb622797617624a7346ed1ee0f5250c507f459701",
+          "alphaSha256": "ec7433047fc7d48b2bc65f86554ccf53f65c6554bad04bb1d310c54b27b35847",
+          "lateWarSha256": "1e41b9cfa8cd94c4b59c35cb8875fe530f1996afda3265e5c6ade3a253d17457"
+        },
+        {
+          "role": "hull",
+          "name": "tiger_top_hull.png",
+          "width": 151,
+          "height": 85,
+          "greySha256": "f27704442e995501264728387292412a3696a84ae0d47722e485dff3d966541b",
+          "greyMetaSha256": "19cf7bba859ddf2de9bdc7b4ae82720f8f7e216fc5da5733969cec2159be9725",
+          "alphaSha256": "33faad68c0c2188e051f64d8f38a8480c81247043b69c7115509b0a8b0778aed",
+          "lateWarSha256": "87f5e686f81f2a5cb103508f1b13c91ca8aa464abec7717e009e23901d411727"
+        },
+        {
+          "role": "turret",
+          "name": "tiger_top_turret.png",
+          "width": 159,
+          "height": 58,
+          "greySha256": "83001539781b749e4828da256bb4eb9631bfce2d7afa66fe3a2c85df7ccecaa6",
+          "greyMetaSha256": "4a21075008d58d1da12a92325a94d1e709c0c1fc5fe55e9edb95afb0af7f7f6f",
+          "alphaSha256": "e1427bcecdce01e5c7082e7dd74784468c66d575d8bb9d0681e0aa9900cd9c30",
+          "lateWarSha256": "041987340e105a7294c0461d1704a84dff20033664bb64bb7e2cc2696e01ca82"
+        },
+        {
+          "role": "destroyed",
+          "name": "tiger_top_destroyed.png",
+          "width": 151,
+          "height": 85,
+          "greySha256": "d018f47a69944a2e533a4b174ffcd0c58a2207a4aaeac316ab9a8ab7e0a843de",
+          "greyMetaSha256": "272fa731bd6c720775aef63e3a66514c2ece4197eac62de486fb2fbca80ab147",
+          "alphaSha256": "33faad68c0c2188e051f64d8f38a8480c81247043b69c7115509b0a8b0778aed",
+          "lateWarSha256": "84a7d4af04f16ff41107912e19bdcff6e06d63976d1826a746e47aa23d0aeaaf"
+        }
+      ]
+    },
+    {
+      "kind": "tigerking",
+      "sourceMid": 144.8676,
+      "flattenedHullOffset": {
+        "x": 87,
+        "y": 0,
+        "score": 2885.862500000002
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "tigerking_top.png",
+          "width": 374,
+          "height": 104,
+          "greySha256": "fc051637f57f78aa420c94bfaa7f9713ceb8a5a9ad3b2326c3afc0e54ca764bd",
+          "greyMetaSha256": "579e979d41432985d846787240fa096c15a519545cfdffc0892c526e916e1fad",
+          "alphaSha256": "e7ff24518b952dc236887aefe35b872a2ffaa7f14588e23c3a2c2c17a7ed8fef",
+          "lateWarSha256": "c344bea158733237cee8f7bcc1ddb41f9f58a13c0f14c7d722e0a8ee76609300"
+        },
+        {
+          "role": "hull",
+          "name": "tigerking_top_hull.png",
+          "width": 200,
+          "height": 104,
+          "greySha256": "d189b583190ce7dd66250898282282520de72e9a182dd63e69a13b039182dc07",
+          "greyMetaSha256": "a5f49b3abf75b9c1ed36e0315882805a1db6272c6f083fd7e618b7262d6e1746",
+          "alphaSha256": "f66d00f759a27d34b42bb86021b80dd460675958b944415bf471937212a30d4d",
+          "lateWarSha256": "439430e7e9908df84282e602a525faf601df1e8ec83039b4f14aea3d1ae60b80"
+        },
+        {
+          "role": "turret",
+          "name": "tigerking_top_turret.png",
+          "width": 246,
+          "height": 73,
+          "greySha256": "36010323153cccd1a9f4fee3e44d47b8cd23f211a75be1c375997f89edad5cf9",
+          "greyMetaSha256": "d440ecfd3217085d2cce5d0a594b4dab648b1be28adef47c69d3c153b3a8943b",
+          "alphaSha256": "946c64119ba66a26066735852bf2b08a6035a4133d8c6a4ad8a0203f4c8331e3",
+          "lateWarSha256": "8c3ce9cba6e7a027404f625483acf90d69b23d570ae9397cc6edca3f9202bfd8"
+        },
+        {
+          "role": "destroyed",
+          "name": "tigerking_top_destroyed.png",
+          "width": 200,
+          "height": 104,
+          "greySha256": "b197804a14e422a9285392482e9f40162476834fd48fe0a80993196288341d39",
+          "greyMetaSha256": "a45e03f8407bcc830d00a77df1fe705c001ccc5ed73ccee46cd999adc066d1bd",
+          "alphaSha256": "3ab7a0095c5f81812a1e45aa3949e50fe738e3daa34fadb536807602e9df6bdb",
+          "lateWarSha256": "d9b6469f3ae1c65c19a5068c07c4a070148a941bb31d6fb247fbce4af4b7352b"
+        }
+      ]
+    },
+    {
+      "kind": "maus",
+      "sourceMid": 107.8768,
+      "flattenedHullOffset": {
+        "x": 42,
+        "y": 0,
+        "score": 361.35
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "maus_top.png",
+          "width": 142,
+          "height": 38,
+          "greySha256": "29705d6fc7faf09a8e8ff68182fe5651056fb4b1fe08c786844431db2486fb21",
+          "greyMetaSha256": "279f8b16b4df2031c09231091e88544de4eba6b64201e204ea1accfba4c9b6e7",
+          "alphaSha256": "b8bc6e87f03368135bc9fc7c89d6a456a0b23a9414bd7b505addcf92f448dc44",
+          "lateWarSha256": "1e1d841332155d8d86eaf04462d7f61891f106bc86f30186d2235de24ce785f5"
+        },
+        {
+          "role": "hull",
+          "name": "maus_top_hull.png",
+          "width": 100,
+          "height": 38,
+          "greySha256": "7145288b2f128bca578d56688e0592278bac330156f3f43cb194c268511aa280",
+          "greyMetaSha256": "f04cbdb171e00996df5583ae1b2d31c7e85e4567ea797f8c228369da99b82c27",
+          "alphaSha256": "bfc40becb3b8f9dca8275bfaadabd0683a41d61bddf4d79d4216f4a1015110cf",
+          "lateWarSha256": "ae5d1e22fbb2f4ba2c1f83ca3ef0416850d36d6c2c605348240ef14f62c9237d"
+        },
+        {
+          "role": "turret",
+          "name": "maus_top_turret.png",
+          "width": 96,
+          "height": 34,
+          "greySha256": "13374a778f8333b1fbf6e24cb372313e7448ea90b6c222386b212115256d22d1",
+          "greyMetaSha256": "009116e54464e6fbd73d1e4f46c78a0d20a2991eb72ed8cada12e8c5dd920ad4",
+          "alphaSha256": "52abe0f4c5bc59e14a4bc370d23aa271ffd224149737f440f370c59a512014d4",
+          "lateWarSha256": "af6a83828a56a3f03725582fd455bbda55a78ffda3740a71841559914b6f75e7"
+        },
+        {
+          "role": "destroyed",
+          "name": "maus_top_destroyed.png",
+          "width": 100,
+          "height": 38,
+          "greySha256": "0d3d2fdfea2ab4708c2bec536562a9e27b1a4bf30422fb927a5288494f9c8f1d",
+          "greyMetaSha256": "746410fb16ab61fcadee7eb81bb9db5b39877bd9efb844d824c6ea4abd6c49da",
+          "alphaSha256": "cfeac21715a2997c42647112b38b7f0c55fc58ec3ccee03ae3dd96063005d88c",
+          "lateWarSha256": "eda960ec66a1d06e797633e5a87857f0a3ca7217fa6033544b7b66e6ebc630f5"
+        }
+      ]
+    },
+    {
+      "kind": "panther",
+      "sourceMid": 106.8768,
+      "flattenedHullOffset": {
+        "x": 45,
+        "y": 0,
+        "score": 7091.937500000006
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panther_top.png",
+          "width": 301,
+          "height": 137,
+          "greySha256": "3023751adfbd8b613670d0a7458820d2020ee090feb7188b500e5ae145dc2cfb",
+          "greyMetaSha256": "4844ae7d6b28bab9472c8c157a7098a2a4f31ea044c8a9aaf1c2232c108c2899",
+          "alphaSha256": "f54458541d17960b058d2f81bf966f29e4d7798fa4f50d76a1448e1341a2d0fe",
+          "lateWarSha256": "90213563490350c902a73dab727c1463f871be56c04185123b557023a0a5ba9f"
+        },
+        {
+          "role": "hull",
+          "name": "panther_top_hull.png",
+          "width": 256,
+          "height": 137,
+          "greySha256": "19149535530c57572d8f9690db080b49dab9d1b08e6ba764adc13d4c2042bf09",
+          "greyMetaSha256": "5af5a9589ae485002a68c1b5be4544526a186395272324ca837b40c9fa2af31c",
+          "alphaSha256": "5acda284f1cba8202b1f21ebeae8434d1accf8eae5fe6f57bed61bfee3db5628",
+          "lateWarSha256": "d5c9a924b05f931d15451fc8ea8440c15bf7e60b64db96441b2fc9d4cbceaff3"
+        },
+        {
+          "role": "turret",
+          "name": "panther_top_turret.png",
+          "width": 249,
+          "height": 106,
+          "greySha256": "124fef590bc94530ebed69d0725862ec127c13ae9c1f7039bb059522ffdfb638",
+          "greyMetaSha256": "237e998e88877ce52f055bcfc92a3237c70361537dc7dd6339bf8bdff5e9820f",
+          "alphaSha256": "c72c82073ea8636b2e1c5001b1d677c26e5ef97ce66a2156eba0e1ab90a2fe2f",
+          "lateWarSha256": "9b591fd52fd72a626c6821ec5c94d9ac6c08da31ce05f53f723e0a32bd824cc6"
+        },
+        {
+          "role": "destroyed",
+          "name": "panther_top_destroyed.png",
+          "width": 256,
+          "height": 136,
+          "greySha256": "d44d1a38b371a7a25547ac5ab8303848d9b717080ca390bf31ebe3464c2cceec",
+          "greyMetaSha256": "2c18223d59e0751448ff30f662558f1e507aa93ceeee565e937ed10dc35d2467",
+          "alphaSha256": "fd242ff5d053c368a6abf7cd48e6ff24b8893e74f93ab4ef96f198a180b4a133",
+          "lateWarSha256": "7753ec7e23f0f95ad9898039413687797fe14b0028b535ee3033b0f4429a7e1a"
+        }
+      ]
+    },
+    {
+      "kind": "panzer4",
+      "sourceMid": 108.8768,
+      "flattenedHullOffset": {
+        "x": 22,
+        "y": 0,
+        "score": 2027.9999999999993
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer4_top.png",
+          "width": 193,
+          "height": 78,
+          "greySha256": "e8281efaa001a2d7431b437605f6461d9751b61ff606831e573b96058d8377cb",
+          "greyMetaSha256": "1f2f3284f2484e12c83bc37184a3f8df028ea14c5eb7637ff694f4ff84367e50",
+          "alphaSha256": "98d1349d7eb2f1b2403c06b52d6939e9e4027bf7200cf0811db8f734eadeb98c",
+          "lateWarSha256": "df7a14b04f25245040e91d0451089f0ac863732d26c59decf53e192730a30ce9"
+        },
+        {
+          "role": "hull",
+          "name": "panzer4_top_hull.png",
+          "width": 149,
+          "height": 78,
+          "greySha256": "f4080f23a831df9f65f39415dc3f5bc280286e11dcfa51fa39c2f3777886495b",
+          "greyMetaSha256": "e2ee43230d941852e6540d563b19e7297c67d1e9548748af39d4d9f17120ec96",
+          "alphaSha256": "87e5e0338ef2a78d59efcaf0ad0c02ae3221dabd11d494f3b50192470015d5db",
+          "lateWarSha256": "0fc6a5b9800c56f059545cebda573df0fb2784df5c5099cfca88cedaaf07c59b"
+        },
+        {
+          "role": "turret",
+          "name": "panzer4_top_turret.png",
+          "width": 141,
+          "height": 55,
+          "greySha256": "762d7bb2d6785f3d01b6e678dfb29e4d8a596d16450650028e0bdc23d3ab439c",
+          "greyMetaSha256": "64db29a1322f3ecac3e2dcf73065e552570ea125bb30fa91b0101b5aba04de67",
+          "alphaSha256": "67f52e8d5d20198774b57921f95919c75e3823bf00d604d8f863e6e39bd3b6e7",
+          "lateWarSha256": "c1edf391ba8056e8106054e7fefcb9ef793ab44964ec3d4a8a24d505c9f76fc9"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer4_top_destroyed.png",
+          "width": 149,
+          "height": 78,
+          "greySha256": "a205638383ea30b840cf433152c414ba9ea74840d8c352e2aed04224dbfd131b",
+          "greyMetaSha256": "acbf2fc2b040c6a537d882c76aebb4fcd0a71f169dd3eb622106223ad0307b3a",
+          "alphaSha256": "87e5e0338ef2a78d59efcaf0ad0c02ae3221dabd11d494f3b50192470015d5db",
+          "lateWarSha256": "8e1e0c846d3f1f9c6e2d2aee9e854cf8a98d49ca9ab86671ef88d43109801a6d"
+        }
+      ]
+    },
+    {
+      "kind": "stug3",
+      "sourceMid": 106.8768,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "stug3_top.png",
+          "width": 183,
+          "height": 87,
+          "greySha256": "1eaf12e7f3a5428f1144a70416e3b1dc978807d36d3085b3685e9fd516fcddbc",
+          "greyMetaSha256": "0732301ff0854762567dc56dd985b3e61a58a5be7b4c5cd44ebc9a438aef0ca2",
+          "alphaSha256": "c439b22e908ab81e6c6e3368a519323ed27e14c204ef6cb81d5b6a10a0500c5f",
+          "lateWarSha256": "6f9942b556d641e1fd2079d4bece71b3fd8b1ead6123d6e14d0d8ac747c79231"
+        },
+        {
+          "role": "destroyed",
+          "name": "stug3_top_destroyed.png",
+          "width": 183,
+          "height": 87,
+          "greySha256": "f8b773693335063a08309ecd7e1dde01b4ecb58778fa906ddf1a3eeac1447742",
+          "greyMetaSha256": "3093aa897d7de8158367271a415c4a78643d0bd50fc2322fab9dad26b44f73a4",
+          "alphaSha256": "26345499b02d9e532f3bcd8e144e35bf33487005f4c640530106727d18f96999",
+          "lateWarSha256": "461b2f428084c33ba44de1f57204443813272d1ba01382efc9d35e6fed29e6f0"
+        }
+      ]
+    },
+    {
+      "kind": "panzer3",
+      "sourceMid": 104.8768,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0,
+        "score": 675.8375000000001
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer3_top.png",
+          "width": 100,
+          "height": 53,
+          "greySha256": "667c2d850e2e5207dadf38b8e010fc72f87b1efb910452ee8f9cdc3b24ff00df",
+          "greyMetaSha256": "b4592396af0c945425f399a13baa07aa0f725fe95dc31cca825fed13257c0360",
+          "alphaSha256": "ef4b7c100d09750e745b028e4f876585a90f877aace9e4c55105fc64f8b14b22",
+          "lateWarSha256": "97eab3a0392fd38bed1c9e3dac793e8b92d49b5a78cc1c2f24f0e404bd85cbf6"
+        },
+        {
+          "role": "hull",
+          "name": "panzer3_top_hull.png",
+          "width": 100,
+          "height": 53,
+          "greySha256": "a04957d0ceb11dfe46971c1da1d3badd36aea0f643565a1f32925c1853760a87",
+          "greyMetaSha256": "a0ea219890e226cc0ad9323ad2a1e4147efaae34cc3d367ce04322547f6ec8e8",
+          "alphaSha256": "ee38998f1b105beeb8d56a20a8f463e1cdad87fe5ebbc79fc0e4c84cd8256424",
+          "lateWarSha256": "3ed569f13820d207a2d0da2b1bab4035187d92f69d6d879602088768fd539b04"
+        },
+        {
+          "role": "turret",
+          "name": "panzer3_top_turret.png",
+          "width": 79,
+          "height": 40,
+          "greySha256": "dfbd752a509482e3a2e548fd63d7279b7ef0eebac1542bb85dc22aaa2f601e76",
+          "greyMetaSha256": "5f24ac7750d45e1165ce3197b2fcf02fe4d7d0d84930b155c4f317116d9d9313",
+          "alphaSha256": "4aad0c380dfdeb442757dc7f628a062315edb812563a8ec0f645b2bef21ebfba",
+          "lateWarSha256": "69f952be2b73a3012475e582ecc748ffff38fdbbd841e8644e2fdc056fe9f91b"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer3_top_destroyed.png",
+          "width": 100,
+          "height": 53,
+          "greySha256": "a2c520e0351033ea83b1b7508a50867bf2602eb90d0787826593677da8095cc9",
+          "greyMetaSha256": "7579ca2a2ccc1de63c65adeb747a5197ccf1533449fc7b36929505c40811911b",
+          "alphaSha256": "ee38998f1b105beeb8d56a20a8f463e1cdad87fe5ebbc79fc0e4c84cd8256424",
+          "lateWarSha256": "d34f85161fd9c82a18e6cc232470e771c18863f6a3e6c84556df4c6c5e76b02c"
+        }
+      ]
+    },
+    {
+      "kind": "panzer3_m",
+      "sourceMid": 105.87679999999999,
+      "flattenedHullOffset": {
+        "x": 24,
+        "y": 0,
+        "score": 1890.1499999999999
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer3_m_top.png",
+          "width": 196,
+          "height": 90,
+          "greySha256": "663bfe86edd1dd8f65ca57aa2aedc6f1ed62f4ea9a06a2eabfd57bc8524c5bc0",
+          "greyMetaSha256": "b560f853e4cbb5e18caf7a8ecfa20c068ec8b34fa5591e32107b411a97bce545",
+          "alphaSha256": "0130d30c3f03a79dcec7300c5a377fef48c8c3d65c559a639978306ba468dce1",
+          "lateWarSha256": "4b2a6f440829a3af5046d6029c5f4ba89c3c7669180803682e3c1def5a6a04fc"
+        },
+        {
+          "role": "hull",
+          "name": "panzer3_m_top_hull.png",
+          "width": 148,
+          "height": 90,
+          "greySha256": "82a57e4c4eecc449736c9a585d59b9ffaf2120a10a72de12a84b0e8219745847",
+          "greyMetaSha256": "775653924885b57e863470cbd8a51a7858daa2e40f534a07d770a2936724dad2",
+          "alphaSha256": "b3750b7dcb72a9642ff567762c44ff2e3eb4cef99dee5af456ba567e9bcb2b3a",
+          "lateWarSha256": "5c93754ba10b5afe8135b8447f1d75c29391772fbc9dd41799fe9b8800d59b8f"
+        },
+        {
+          "role": "turret",
+          "name": "panzer3_m_top_turret.png",
+          "width": 134,
+          "height": 65,
+          "greySha256": "e3962b14a20ec407893b09cc40d1405663399dc5a37ed662d45168a6a9b1cadb",
+          "greyMetaSha256": "beac87d0e40ecf6b275b1cb2602dd6c094ea643a4635b6a7010acc73a0a247bc",
+          "alphaSha256": "da104abfc1864c83c9de9deeaf7bc47acecc3b8c34eefadc6620ecddc6617752",
+          "lateWarSha256": "fd605b8a852fddd38f858e0dbb1c526b9ca72edeedba6b4197b6a64174716a9c"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer3_m_top_destroyed.png",
+          "width": 148,
+          "height": 90,
+          "greySha256": "4b613e353eb02106c090d3115687564ae50f9c5158264b27b9968b3fefc801a8",
+          "greyMetaSha256": "45136419c9e1fa1263ff268026f3975142d865a96474c34c253663af311f7d95",
+          "alphaSha256": "465922a1c68a3874b8e718d0ea94b7aeeb4f34ced95685e7c5fd610712159e0e",
+          "lateWarSha256": "47741d879223cbe2edead08b809edf835aca74c5d2fc5b0c81575558c8b13222"
+        }
+      ]
+    },
+    {
+      "kind": "panzer3_m_no_schurzen",
+      "sourceMid": 106.8768,
+      "flattenedHullOffset": {
+        "x": 33,
+        "y": 0,
+        "score": 2200.2625000000007
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer3_m_no_schurzen_top.png",
+          "width": 214,
+          "height": 83,
+          "greySha256": "5d93937ebeb69a85c5fb6454466585f2cc3698fd46feb48e2a0cb03d06d2f50d",
+          "greyMetaSha256": "28164c24c003c53fa01281b9ccf9f17d40c671ee7685ff1b1676538044a0ebb8",
+          "alphaSha256": "750edd82436022325c4f02a24e02b05418234aca11a77bdd61a8d750907a7db8",
+          "lateWarSha256": "34fa17ea26895611ff0c6bcd242ca3f24e0cca11a7910349e7438ec508b573d6"
+        },
+        {
+          "role": "hull",
+          "name": "panzer3_m_no_schurzen_top_hull.png",
+          "width": 148,
+          "height": 83,
+          "greySha256": "9869243a4c759281900064710b529a7f68fd20ef1b7e107833ce0e110401c9c3",
+          "greyMetaSha256": "742fd197082c1a0fb1bdf4c27cde48b166f2af3a070036d680779e7df8b86166",
+          "alphaSha256": "b2014ad907151e2840c382094e6729b7fc16b9ab64dd664a2b587fb8ec402d4e",
+          "lateWarSha256": "094e3eb265efb59624ebdfc358a918d74ccf79c2878c20be02f0d8684f342b8d"
+        },
+        {
+          "role": "turret",
+          "name": "panzer3_m_no_schurzen_top_turret.png",
+          "width": 131,
+          "height": 58,
+          "greySha256": "536f0fa7624d58749628423d72414944ca2190f25b46ac31b65b8955aece269b",
+          "greyMetaSha256": "39fd5e5e3ae763f0d3fcfec6c39d7591d0fb5b54fcf8b8609dad207bc376b6cd",
+          "alphaSha256": "c044a64bb2e839a0a30e11c7b5e22938ba0df9043f20305be573d4d3dc40b93b",
+          "lateWarSha256": "40bf23d639d791ef6723bd776cb588ee29d414f2752a28a26087b462b546330c"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer3_m_no_schurzen_top_destroyed.png",
+          "width": 148,
+          "height": 83,
+          "greySha256": "5f2b01de7195a33e66cee94a61a1bf816114006e6eb2fa9cd53db934b35c8502",
+          "greyMetaSha256": "5d71aecc3f1bef6fd0d1af5d6c183e3662e1b15b858e2b07f2a0fc308a60f643",
+          "alphaSha256": "a277310c63912d68db5d41ba5c04f2cd22ddd4c33fb2d9fc51b058a72d1006b7",
+          "lateWarSha256": "d72fdbbb2a2763b9090f7916523140fb3635059b5169d03766764fe3c3807c0a"
+        }
+      ]
+    },
+    {
+      "kind": "panzer3_n",
+      "sourceMid": 108.8768,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0,
+        "score": 2012.474999999999
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer3_n_top.png",
+          "width": 148,
+          "height": 83,
+          "greySha256": "9be07fc02f3c665e957e1b337d7fcd79cbdbdbb2b8d33dcbc87644e8f5bf45be",
+          "greyMetaSha256": "9bd4402879ad055480e0ff69aee4487cc8dece5691ddd3ba6745c5d0ff874b09",
+          "alphaSha256": "b2014ad907151e2840c382094e6729b7fc16b9ab64dd664a2b587fb8ec402d4e",
+          "lateWarSha256": "f2e1e2d81be4a154a3d74c73f441e3b7770bc16c280febbe0fd3026d1cf5637e"
+        },
+        {
+          "role": "hull",
+          "name": "panzer3_n_top_hull.png",
+          "width": 148,
+          "height": 83,
+          "greySha256": "84b75e9c5f14f9bebbacc2184f9655e99475651db0342eea514da44bc18c30e3",
+          "greyMetaSha256": "3d2c8bb0735746bb86e07ae84f353b96592bb4d48e07aa08b6e485ee768b09af",
+          "alphaSha256": "b2014ad907151e2840c382094e6729b7fc16b9ab64dd664a2b587fb8ec402d4e",
+          "lateWarSha256": "96bd016e0a9344878ea1d828d516bbe870d2229d94930e8ea297221dc5970462"
+        },
+        {
+          "role": "turret",
+          "name": "panzer3_n_top_turret.png",
+          "width": 95,
+          "height": 62,
+          "greySha256": "f8d345fe54f7b3c27e4a3a8cada25b9a8dcc5e8be0cf1aa05b224a505bd6c76b",
+          "greyMetaSha256": "1ce070e71da64632b878d39d6e0392ce667d905182311180134d3aff16e2d860",
+          "alphaSha256": "5d974ce1216d0f4698733e98dad270382bf42dee431efc10c9afd02d35c3d7dd",
+          "lateWarSha256": "5094d59bda489257954c1317be393b3060ba7e5f272b7a49bc309c30b84ab1b8"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer3_n_top_destroyed.png",
+          "width": 148,
+          "height": 83,
+          "greySha256": "5e750561bb50d5f30d16d0780b5f6de0b53c27414d2afd821207a531b78d2700",
+          "greyMetaSha256": "11466adb3e8ad6b88d8a1fc40d921aa3db07fb6c7b4db27499ea9eb9042c4a07",
+          "alphaSha256": "a277310c63912d68db5d41ba5c04f2cd22ddd4c33fb2d9fc51b058a72d1006b7",
+          "lateWarSha256": "e542350acf728990153270c0e4ecc2fcd8fe67e7599571c3af274e362fff31fb"
+        }
+      ]
+    },
+    {
+      "kind": "panzer3_n_schurzen",
+      "sourceMid": 106.8768,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0,
+        "score": 1975.9499999999994
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer3_n_schurzen_top.png",
+          "width": 148,
+          "height": 90,
+          "greySha256": "f605d0d3f833e869e91bcd6ba9d68650ab7e1d473d6655c14aea16a20cc8d6ed",
+          "greyMetaSha256": "c57a11a77fd98bf734c068bab07380ab3ded611b88618b98d60415bbde16748d",
+          "alphaSha256": "b3750b7dcb72a9642ff567762c44ff2e3eb4cef99dee5af456ba567e9bcb2b3a",
+          "lateWarSha256": "704012a9a4ed8523990f86cd8a5fbc0dae1bf62d3a1228096a4ca5e54cf8304a"
+        },
+        {
+          "role": "hull",
+          "name": "panzer3_n_schurzen_top_hull.png",
+          "width": 148,
+          "height": 90,
+          "greySha256": "dfd20977df0a0bfba7c21d5154d99f5e8733996ab4374751a3ed7719f1971930",
+          "greyMetaSha256": "df99b4781813eeeaa099b90a943fab022c28e7b63f31fa24c6ab1589b29562b1",
+          "alphaSha256": "b3750b7dcb72a9642ff567762c44ff2e3eb4cef99dee5af456ba567e9bcb2b3a",
+          "lateWarSha256": "585de50ccc5400285bd9204d38b8aa57aea15ce516bf247b2211beab0136cc85"
+        },
+        {
+          "role": "turret",
+          "name": "panzer3_n_schurzen_top_turret.png",
+          "width": 97,
+          "height": 67,
+          "greySha256": "d68cf9e05aade23cd3b83a067872b6204b4c9a1fd3eb8d0771e3965668434026",
+          "greyMetaSha256": "14f1a3b033d9601752ecacf7590d5745dbaccaa8e76f11283293b96a3a1262ae",
+          "alphaSha256": "5edea69911ae4589940674887b5e84154d5fdcefe8afaa637656f8d424fe68c9",
+          "lateWarSha256": "0287e8c08e56ab954e9259bc2028159b5372d91784a2905b22fe091d5729fc6b"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer3_n_schurzen_top_destroyed.png",
+          "width": 148,
+          "height": 90,
+          "greySha256": "149401ed84271dfd89bc2dcb93f4d739669f4ae66fc7f731c0ac2911b4b23510",
+          "greyMetaSha256": "bcfd724f0895434c5b4ed5ba1517580497248dd384c4aa41a1cf834033a112f3",
+          "alphaSha256": "465922a1c68a3874b8e718d0ea94b7aeeb4f34ced95685e7c5fd610712159e0e",
+          "lateWarSha256": "53d8b2f118dda034946b5b08b6857aeebf9bad17a4e26a326924c1de4c08b130"
+        }
+      ]
+    },
+    {
+      "kind": "sturmtiger",
+      "sourceMid": 108.8768,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "sturmtiger_top.png",
+          "width": 150,
+          "height": 90,
+          "greySha256": "d3d1ac812bf955c2b25fbddf5566490a1558a8afc0ed0d2deb0802df4040feb6",
+          "greyMetaSha256": "edf65fcd89bb7367557de71b70036392b783cc50303df22c192de8c64558b024",
+          "alphaSha256": "d4294b989c42b38e4b5d446ef7549d869729471de7003d21fb0a64536a7d803d",
+          "lateWarSha256": "ab28cd623747e30e3a2795faa20e8b86c20bbf2295f114f8050ee09ae2f46e31"
+        },
+        {
+          "role": "destroyed",
+          "name": "sturmtiger_top_destroyed.png",
+          "width": 150,
+          "height": 90,
+          "greySha256": "caa32672deb8f6172f695d203a93537be1cbf2c6278d5dd7c9e3b15553248b62",
+          "greyMetaSha256": "4350152a03aea77caa2ef9c699e48806e491aa10e9095b67de39d5336c94905c",
+          "alphaSha256": "5238018c2f78302c7f56d11391ef0d7580859d2c42a9c1cfc65af521d31d5635",
+          "lateWarSha256": "8ff5bd44b405344a9ebadaf1fbc8df8d717d58c550cb777824da4860c007bccb"
+        }
+      ]
+    },
+    {
+      "kind": "jagdtiger",
+      "sourceMid": 92.5106,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "jagdtiger_top.png",
+          "width": 220,
+          "height": 80,
+          "greySha256": "fc3d8dac217b3616c76874a1e7947439066c1385d35aea0586db576888c7909c",
+          "greyMetaSha256": "325a3c722c4bd8f86df377fbfbac06a01c29ef32fb18dc6b3bc16ab1ee044ff9",
+          "alphaSha256": "c38aace70f786c03ed13437b5913d97d27bb9bb779b1b0f7ee733b31124be479",
+          "lateWarSha256": "44aaa762ec462ec375b33088ad0d56fa479c6886075a29ebe6db0d62b36ff1f9"
+        },
+        {
+          "role": "destroyed",
+          "name": "jagdtiger_top_destroyed.png",
+          "width": 220,
+          "height": 80,
+          "greySha256": "b9565e47cf820c3f1b2da279d0fc400a6290f97d73e9443011de085d8a878d29",
+          "greyMetaSha256": "c5dc0b8b7e4f444a6fd878079682b2816c42f4fe7b8c94d644cfc3f10827d76f",
+          "alphaSha256": "51f087ed1e5b88cf0711cdc0a306fd8000584a53b444e779ab97d927ada24924",
+          "lateWarSha256": "1c148da58eb28df46c550f8244266c9457429f8d9a9f528d302c0bc1fb05b79d"
+        }
+      ]
+    },
+    {
+      "kind": "elefant",
+      "sourceMid": 102.8046,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "elefant_top.png",
+          "width": 200,
+          "height": 83,
+          "greySha256": "f559547394673696249b81c1c53a17a1ac06c7ce8b8902cf6eae5b0db1136218",
+          "greyMetaSha256": "67cd9a214aa0573105f1d6a306c1d6e135453a8de7c2401ada5a0ff931842009",
+          "alphaSha256": "cf89823770da75d32e5abb3df82114fef799bd4594699529dbe6ac3ef4ad4aa6",
+          "lateWarSha256": "f3f084239908ec86a34eeccbf387a91acd81b46f7a3d0d0c5ccd58a6874ba796"
+        },
+        {
+          "role": "destroyed",
+          "name": "elefant_top_destroyed.png",
+          "width": 200,
+          "height": 83,
+          "greySha256": "f8cc0c20c64d2344a753421f39755969fa10181ec618efabdcc4a14ba7f63278",
+          "greyMetaSha256": "1eee80fb5404a34626d3c92c5242ee6bb8ac322b87f753a51249107035004376",
+          "alphaSha256": "79a8f062f151ed651d1f9ad1f69e419a066900fe131369062f464e5405683bcd",
+          "lateWarSha256": "4546a12be30dce47e9280dc99467e3c6618c88fdef51cafd2d5119194c2d5e11"
+        }
+      ]
+    },
+    {
+      "kind": "jagdpanther",
+      "sourceMid": 110.22979999999998,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "jagdpanther_top.png",
+          "width": 200,
+          "height": 82,
+          "greySha256": "56342ff9ea11f3f81d8fef17cf8bf53bfaadc8d12740b35f3956b4cd1392c4af",
+          "greyMetaSha256": "bc96e80218f9866926c2a01a08e0526667b33526be7cf05df95d567af923c8f3",
+          "alphaSha256": "8f40e3f8dc0127298a4d9bd6856dfe1128905ab621e749710eb51fc314bf99ac",
+          "lateWarSha256": "7c95af7c98e606079ff2b94d932d2bf7d83c37bd94b285c9e05961b92b331979"
+        },
+        {
+          "role": "destroyed",
+          "name": "jagdpanther_top_destroyed.png",
+          "width": 200,
+          "height": 82,
+          "greySha256": "c2cfa938611934d9c58fe4adc526397ec73927296f618bed0826e4043e8d8a01",
+          "greyMetaSha256": "5e16811124852a315f18bee12505fbeff60a01eab96f593f18fb4ae4fde96a58",
+          "alphaSha256": "9a1f629396edbc644b7c7ba925aeb4839cfc446af1c32b555fbfcc2d716d4908",
+          "lateWarSha256": "ee4620861c775fdbaaf0e85714577b69b8e2c160652c94dfebedac09f04c20ef"
+        }
+      ]
+    },
+    {
+      "kind": "panzer4_f",
+      "sourceMid": 108.8768,
+      "flattenedHullOffset": {
+        "x": 0,
+        "y": 0,
+        "score": 1794.5875000000012
+      },
+      "files": [
+        {
+          "role": "top",
+          "name": "panzer4_f_top.png",
+          "width": 149,
+          "height": 78,
+          "greySha256": "3620e2ca6952640fe10ea016262c4c5c5fa706c99f88a60c7ac30c9abdb7b6f9",
+          "greyMetaSha256": "88fb0c2a6b4aa0969a17d16bba165b16eee8896d07b195f1773b5321c23bf20b",
+          "alphaSha256": "87e5e0338ef2a78d59efcaf0ad0c02ae3221dabd11d494f3b50192470015d5db",
+          "lateWarSha256": "1f04991bae183e970da55b0ef757210ba7ea652283fbd2cd97e7cd6e0405b181"
+        },
+        {
+          "role": "hull",
+          "name": "panzer4_f_top_hull.png",
+          "width": 149,
+          "height": 78,
+          "greySha256": "f4080f23a831df9f65f39415dc3f5bc280286e11dcfa51fa39c2f3777886495b",
+          "greyMetaSha256": "be2c23285527e84e2cc1935c5b1ec9a8182b7ff456e4f9ec746f2a9bf3ae03d1",
+          "alphaSha256": "87e5e0338ef2a78d59efcaf0ad0c02ae3221dabd11d494f3b50192470015d5db",
+          "lateWarSha256": "5ee5799373c2954b9d8e14d16492a5113f21d4f004a11b3bb99e3e9ae0fc68bc"
+        },
+        {
+          "role": "turret",
+          "name": "panzer4_f_top_turret.png",
+          "width": 103,
+          "height": 59,
+          "greySha256": "3f8eb3a2251f29633dd555851f8afeae0408ddc7e59f49097589c99fef16f747",
+          "greyMetaSha256": "ba94e5e5115f88a8687f749f27df716814d60d14b39d21b9567d2ae017f5e9eb",
+          "alphaSha256": "066696f6e4927d1959602631d8326eb5a8ed9800d9ad5b7df75605aa7014a163",
+          "lateWarSha256": "67dec037bee9c9ffdf908b540e3d68e05b23fc667511b60a16dbf5311201ae45"
+        },
+        {
+          "role": "destroyed",
+          "name": "panzer4_f_top_destroyed.png",
+          "width": 149,
+          "height": 78,
+          "greySha256": "a205638383ea30b840cf433152c414ba9ea74840d8c352e2aed04224dbfd131b",
+          "greyMetaSha256": "f90f57d26990cbccc928d4f325b0d98f54164f908631b0a72f27ec3ebf37eb73",
+          "alphaSha256": "87e5e0338ef2a78d59efcaf0ad0c02ae3221dabd11d494f3b50192470015d5db",
+          "lateWarSha256": "d4ac53f697f11555067a6f6d533a2ae319e01021135ed9cbd6d1bcce3ace6cb8"
+        }
+      ]
+    }
+  ]
+}

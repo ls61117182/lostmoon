@@ -1,0 +1,1491 @@
+{
+  "materialsSnapshotSha256": "17bb58366776bda332c3dc31c5df9318a33dbb03e752c05abca18a4d612ee5f4",
+  "baseSha256": "5697cfc3f9039e8357831c8c0a65f27a4d47598c0a7122437b9f07ea9a8850eb",
+  "winterSha256": "08b7d2998007c7d35f741690e9b535e5d24d6b81886d05b17f1738e292936d8a",
+  "files": [
+    {
+      "path": "european_roads/european_bridge_surface_summer_v1.png",
+      "sha256": "c99ea72f6777441108ec349e5ea1d4ab7c651a43d223ce02ae3e8dd64f813661"
+    },
+    {
+      "path": "european_roads/european_bridge_surface_summer_v1.png.meta",
+      "sha256": "bd64e9681535dffb46ed0c6f6256ad668d9f123d021d2baa538b4eff711b1967"
+    },
+    {
+      "path": "european_roads/european_bridge_surface_winter_v1.png",
+      "sha256": "a8b69914bcb747f617ad9212e3be5f57fe9eb99cb00dadb315cc786a91da63e1"
+    },
+    {
+      "path": "european_roads/european_bridge_surface_winter_v1.png.meta",
+      "sha256": "d8c037034cc7efd911ba502afc3d4ef1161158b44a02fd4ad451d59ebcfee016"
+    },
+    {
+      "path": "european_roads/european_road_manifest.json",
+      "sha256": "1633fff4ef26e82983a2dc0fffd81658c0b18c68b39adc4648fb376f9fc6b30f"
+    },
+    {
+      "path": "european_roads/european_road_manifest.json.meta",
+      "sha256": "6da6605473b4954e1b819b1e431f94130f250649408cce0219b88438816fea9b"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v1.png",
+      "sha256": "930656edc43ce9efdc36d5d6d8065cd2c022c11a71d8af75f38eaad6c5edfb5c"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v1.png.meta",
+      "sha256": "4f5c17aa910cb65fc3faccf92aaf75985f1824dd630397d1f2fb44d29bfe923a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v2.png",
+      "sha256": "0b4a6bb3c46733e8fa201622e0cb3f211492448f31c1059ae36e96064168ad13"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v2.png.meta",
+      "sha256": "58c6888ae1d5bf51ce2ef2a9d22b4e10530114f33ea15402bc30a38c6fb43582"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v3.png",
+      "sha256": "aede00c27857cbc58f2bb30a12050d3b0d06d8a1c2cd78ddec88ceb5b018defb"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100000_v3.png.meta",
+      "sha256": "736c96b4bf88c40d57ac4877d71017f7c1a786f50fa373c1e93ff61004b45f19"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v1.png",
+      "sha256": "7866dc33b9202cf5503f197d8ee3b8fc241660a10be8cf6153cab03da3afb46d"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v1.png.meta",
+      "sha256": "8afc0b76e23f27217ae0d63817186abb7c63d6ae8339c0a8fd10b487b880742b"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v2.png",
+      "sha256": "2808ee7097565c04f1219bb02a01cc86cb5d6b36b301bc644bea98cc67ccbf13"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v2.png.meta",
+      "sha256": "daa7285a3aafad29e48d0a05d718e4eab12debb5f63b9d85f2630c2f53f790f2"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v3.png",
+      "sha256": "5e180d09b9f3b23413c925cefcd72fbc7e86e3e76cc018ee653518cba8ba88f4"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_100100_v3.png.meta",
+      "sha256": "6870c46d9a3af07ce164d23a11e4191652a540062aafd334fb8f38502f0b5c23"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v1.png",
+      "sha256": "22cf4c3a8e00c83201b65d7655b0bf06fc277ba60b26f4022b20867679d309c6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v1.png.meta",
+      "sha256": "577405604ba52bdd091cb5fafdc5946cbf10173568c1b266c485a3607b1ff812"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v2.png",
+      "sha256": "a9cd3e874886c2164e790987b6df196935f8c52d43beaa4be7ee306ce1398e56"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v2.png.meta",
+      "sha256": "70895e2b97a2e2e0d0f88cc584615c767c377c265a7cb71b71f1d95bdafbcc85"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v3.png",
+      "sha256": "7aa242ef0e98e8bb85b146bca64dd5b91b4ff949e24cfb386026381ce7bd5ae1"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101000_v3.png.meta",
+      "sha256": "9f5f3418a97fcab1bd2c2c70e59e7be0f84e85bc7a5b5dc168d5360cb9b9bc5e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v1.png",
+      "sha256": "2a19ae6beea4b9a5ddf534663a4a1d8d46ca98982bad4b8f2e4c177c8f4b6f65"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v1.png.meta",
+      "sha256": "9c8371bc4eaad359ec51f2298cecb3ba5c7bc9127c3e6899f80d85d37fb2807a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v2.png",
+      "sha256": "8a9464fb10042d0e368bd821db8d8fd5fff6ec57a93b570991a41a0c973b2fae"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v2.png.meta",
+      "sha256": "7f9756230d175ca1d1c8a8220637bbc312914f78580b88e87b74de843cda3e15"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v3.png",
+      "sha256": "b8db2d770036d80be247d39a3569a148527d71c147ecac0b86bd68e10ea2a61f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101010_v3.png.meta",
+      "sha256": "7a47edabdc0685e8f47d5d7fd9b4043a10cecae149473d1f07d8e8edc70a8976"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v1.png",
+      "sha256": "e63abe93872367e187a1a6d024235825c9bc77873c28ae08e7ac7eea02972389"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v1.png.meta",
+      "sha256": "40988db2b13b819c3d2c7a932865e6663aca4fb2176a5a6b5844d7aa4d7e6680"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v2.png",
+      "sha256": "da5897b82fb757f20d0550fb6f91367b0b59c6abdb80609fb3178f1f16a5bd18"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v2.png.meta",
+      "sha256": "8f2e00ed55af61d5407dd3aaff45ace64cae0108634b48ce070976a1f7da0f02"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v3.png",
+      "sha256": "988288ffaa49b0d384cff37d8a5d40e5a8790e3b25af12cb7908ecb119da31e3"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_101100_v3.png.meta",
+      "sha256": "0408d09f3ae4df6e805917b5fe867a5da03b3bacf10b8ff24f49f3ce760684fa"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v1.png",
+      "sha256": "ea5f6c407547b3676b5a385e222376334498d9ec7dd7a189699f7d83b8aa838f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v1.png.meta",
+      "sha256": "75f5bc66bdb2ed43980cb241b4976b8446a09d4e5ee2b013a6f69de16ca92446"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v2.png",
+      "sha256": "7599f8a663f86ee51c2274d35a4b97b74d84786c715fe57b014c4eb5140e8a42"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v2.png.meta",
+      "sha256": "348889c620881c31af8336bc5ebefb3496a37f341935b744f881a7eda150bd4c"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v3.png",
+      "sha256": "34f5c60bf684c1248bfd9f5353a3e9efcb06d40b62432e5ba9a878ef58546534"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110000_v3.png.meta",
+      "sha256": "bb9063a92f94e5c829d8f8cf1b8d89aa5ddea7ed13a6e9fffbba7c7c263d7763"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v1.png",
+      "sha256": "8586472299af29634a43d2114db0f542968b47029e7a7246cdf330f5a49eb301"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v1.png.meta",
+      "sha256": "556548e0bec242e91ffeb88e22dd259b9936173624a4f4e2b3f7d37678a579d8"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v2.png",
+      "sha256": "cf1e4dda145dc7881ec558463f5389f1619349874f9cd89d6f2ff906fb7bd52b"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v2.png.meta",
+      "sha256": "e1838536059e8992a04063483b7f07f8ccf6921d39aabcbb26c679897633121a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v3.png",
+      "sha256": "0fdfb5922137df9e2e8ddd5d9c8c04dbf8106776c88db27a5c0ccd68cd9f7367"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110100_v3.png.meta",
+      "sha256": "ea6d11aac5f35770be6baddba0a19dba1121ab7e9d0ad6eabe27c390de50cd50"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v1.png",
+      "sha256": "7c40ebf862a75d81a1aa51fe7bbbae60fae196affc58903dd02c55f173afafef"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v1.png.meta",
+      "sha256": "a168a67b52b3d962620cd8a49d53a5caab756f16d60d65f43799c84d7b363d6e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v2.png",
+      "sha256": "2eb0da69d6a3dc6f57a39fb322cf86bc1471732e3935325701223bfbeb885223"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v2.png.meta",
+      "sha256": "0bbb73c166effe4954624f70e7bcef67be354653be667e053c52951ad59a23a2"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v3.png",
+      "sha256": "66c7842e938e8b8e85293dcab2a58830d3c392e4b1369e62902aa5dd8897f324"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_110110_v3.png.meta",
+      "sha256": "44b0571bcab90cadb46eeb6cc42cc6f88457ee5ab4577628509d7252e41650f7"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v1.png",
+      "sha256": "673f4c1166fc35e657f6ac96f724dcb4feb5f5ee01cb0bafd7b7f1e9374d7497"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v1.png.meta",
+      "sha256": "d683bfe4dfd4c27d69e4162b07fce1928e370a8de16ecd42e4f62b2b44d78c3f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v2.png",
+      "sha256": "a69bf71e62b43d4df2a93c26c9ab6c5416ac6fc9f1c0c74bbb771d1bf204c823"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v2.png.meta",
+      "sha256": "abd7681b4a5dce4fa56d5f2dd08701db26a9578d0d5cfba78aae64ede3a0b495"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v3.png",
+      "sha256": "b696e827c9bf4812260c2c33e8ff6de0e7bb09fb5faffee876269b99ebe30afb"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111000_v3.png.meta",
+      "sha256": "cb6aaf39a210d9c8ceada98e60150555b8eb44c5bb394e14f1e5ffa1beafa34c"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v1.png",
+      "sha256": "2bbaab2485a7edd9e7008a86eb6474c8c731f51ee9ab768c326cfecdbb2608dc"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v1.png.meta",
+      "sha256": "9114f8247ffb6aff8f2635507bc225e939aa09b09f9f6161c828915526aecb57"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v2.png",
+      "sha256": "312c2d56d89cb8ac03e1d875f147a476c874758835438a435e858f22f06a3fa1"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v2.png.meta",
+      "sha256": "f7a38ac184b4b0621feb9d94360f3f204e3c1dcef74068048f47607f0e92c4ee"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v3.png",
+      "sha256": "770c2da7441517abddfcfc65433ea0b7d58a7f74d7fa42183678fce20387ba73"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111010_v3.png.meta",
+      "sha256": "01ce8b60d4f07b90f4d7fd46dfc4c17838b5b62fee6df3b2cfc426ed9f8e31f8"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v1.png",
+      "sha256": "cb20fa6f70c22c4930b7dad9be5d18413af86f6924f1c6c4599704e6e70d6b83"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v1.png.meta",
+      "sha256": "b26ffb3b4bb018776c998622200358c7465ef2b7df3129902a5338e2eadfef7a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v2.png",
+      "sha256": "a3fb1186961f8bd0d8854c29497b585103e54bef377ae9577e02b49bee6ae5f6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v2.png.meta",
+      "sha256": "f1cf455f0fdc04ab636982fa4cb1a7ec42045a18dc28d5892263bb56d64932ae"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v3.png",
+      "sha256": "3ba1d6bf6b1cdd24811a955141bf35adb85885176ab85d214916d059343abd98"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111100_v3.png.meta",
+      "sha256": "821e8d3a781254cf542f206d152867cd969e4ad2d21dbce43396e2c706bdcafe"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v1.png",
+      "sha256": "9c4af09c92147cda8359611e7789b085055cd7d23209c803c4a9cd77db35286e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v1.png.meta",
+      "sha256": "253f46351c2936d78a82693e6521e31ddd81ad6c06d0633b7102f7e63039d12e"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v2.png",
+      "sha256": "0c11149230f5fcc2917a8acbafdd050f6e0c8e00bfd52a83ebde2d5d85fa1daf"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v2.png.meta",
+      "sha256": "68fe6a0b2d59e4e743d317099689cef0eb77a31402c048977d600975b6a49d46"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v3.png",
+      "sha256": "fd0cebe411693be781116fc1c439febdc0476defbd18a57229ffb66841621b6a"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111110_v3.png.meta",
+      "sha256": "47c2eb0bb2e3ca343205b768d11dc7b12c3859827bc6eb36c52a1b61ac0ecc93"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v1.png",
+      "sha256": "d9851bb710cacf02b6a7bce8d07e9880dce88a199ea10b81fd873851e83ed9c6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v1.png.meta",
+      "sha256": "14bfc78dd9fad7ac4b6a85889a5daebbfd392f1465a7a0a208656686ba1417dd"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v2.png",
+      "sha256": "7c6caae3fcc8b7283e572fc014e81a6be6ba50a1e02c365bfb7dd21853a4c443"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v2.png.meta",
+      "sha256": "9b8c3b83bd0abff020b90009d40b19619dc83dfee4ee9be1a2a10839427f80f6"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v3.png",
+      "sha256": "b1f1cb466fbd0d31ce70f3b30a72625d07f03166a166cc1d952153050c7af50f"
+    },
+    {
+      "path": "european_roads/european_road_surface_summer_111111_v3.png.meta",
+      "sha256": "6c14a794d031fcfe460e6c160e35709a4ef6efae4d34f542dfba08c45f4d8ea3"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100000_v1.png",
+      "sha256": "f380f8d03f91aec84b97dbbf05abe8f925cc23edaf83f7a59810305589d33057"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100000_v1.png.meta",
+      "sha256": "cab5acf96ea8bceb2d6956329fc7113ff3ae0815420addf0160f79b21472ff07"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100000_v2.png",
+      "sha256": "e64fd04a06523b934603cc538d9c707f12a1facc46233c47397cdcabcf76a72f"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100000_v2.png.meta",
+      "sha256": "850d8e85baaae478860e733cf37a3a3e3331523e5f49e5b3e0c35fee1cad00a2"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100000_v3.png",
+      "sha256": "7bf3744b0b0d73ca48ff8837cceaf55c688c25f57e8132e7fff0c67964754c33"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100000_v3.png.meta",
+      "sha256": "8885726e2b5d5f02e9600df10eb7898fd22cd43778788d50292d39b39b67e297"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100100_v1.png",
+      "sha256": "6ff1d492878113af967958d53566cdd28e23e5c506dba0f47f90469f428e32ed"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100100_v1.png.meta",
+      "sha256": "e6641bb475f5171e9d927d0efb6ec1a2d96d1f1f604d8fe9d9a9bb15903583fe"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100100_v2.png",
+      "sha256": "6d144af055ef5f334db7cb2e0cf074a103b6143d4fc62d01207b7a18f19d7a92"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100100_v2.png.meta",
+      "sha256": "940856da1937283b52b277ebf4d79ea7213557faf887be253f41753c13d4f91b"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100100_v3.png",
+      "sha256": "158f85a27a13de562d11f4050d872d7b4e5db910e5ec96b2e9c80f7ed85b69aa"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_100100_v3.png.meta",
+      "sha256": "f822f48db45cbab77921bc82bfcace3e733a4a1c378f23db727e1dc37fdf462d"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101000_v1.png",
+      "sha256": "1bd572fbd02c763436d8d6c07766cc81c74bb01af90c7de0b00a3db7b0a45811"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101000_v1.png.meta",
+      "sha256": "05b28070f69bb31a1d609ea61809f03c757bb59854debb8d28242d7647b1592a"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101000_v2.png",
+      "sha256": "5c225a472373951e0838edf975c810bdcbc909e997fd82c89a08e2eaef9b0bd5"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101000_v2.png.meta",
+      "sha256": "fd40b220c6dafcbb7af4ab0ea46f257fe0b1c1aa96f64f4d80666d13c601b115"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101000_v3.png",
+      "sha256": "938fb9bcfe2b0244741306e8cfb2a7344116bf5278f558d88cc0014f1baaddfd"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101000_v3.png.meta",
+      "sha256": "eddad63163eb3d6bcabe1058f64877dfd6584489aa35b770895ad36f55b0008c"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101010_v1.png",
+      "sha256": "88317b19c8798e660b586204697a45384b8b33a3fda9cf51d9bd3434eaab61fb"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101010_v1.png.meta",
+      "sha256": "94a44f16c05ea7451372d2f596be7f65868c0cdb817427253382bd2ce3cf361f"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101010_v2.png",
+      "sha256": "80fc09b1b8d0e12e2534d0ef0e0c72fb93d14e241937494dd5ddcffad035c365"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101010_v2.png.meta",
+      "sha256": "839bf08cff7d28ea0ff494c73164bf0c1032d5b31fa2895ba3c0268e4a405a9b"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101010_v3.png",
+      "sha256": "67a461204bdbcaac44362662f4d283defc0d9e28eaeb3d90e80a0d951763370f"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101010_v3.png.meta",
+      "sha256": "ef75c4237e5589be4531e61c712f2eca8b8757d4f8426b031c4dd14ae749c806"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101100_v1.png",
+      "sha256": "4ca6fbb5a397b696db48e321dd9edfbe804974860ad7b3c52ad26990fa870508"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101100_v1.png.meta",
+      "sha256": "d92a7865863377f11b385c80359c1738e0d2262ba1c34f568f4024d0eb549838"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101100_v2.png",
+      "sha256": "85c68fb8c2d77955d06b3af6f01bafd4a4cf9cafff55894a9fd0ed6e26e9ef0b"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101100_v2.png.meta",
+      "sha256": "b5c352e4d327250f71ecb0026fd80fe17591307e3c7f745781143005ba1600aa"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101100_v3.png",
+      "sha256": "e2de5158d233d39f3f2c989d40e65c80782d9effec5082398ee9c903824245f8"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_101100_v3.png.meta",
+      "sha256": "74bc0c04a583fb7e9641d87427f690370db6807fda5b94b61c7c645c29c62fd2"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110000_v1.png",
+      "sha256": "bd6b6831c7908f5c05542ed7294a91638dd335dd83304186cd8a33bb7049916b"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110000_v1.png.meta",
+      "sha256": "adeb8f72db87d14b62b69d1dbab09425e38d1885974e106f4b1ba0cc3caed480"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110000_v2.png",
+      "sha256": "2c889b50749993adafa2dd42de0bc3d8612428bd35f64911b09d66631084d49f"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110000_v2.png.meta",
+      "sha256": "a6dcb32ff1b9bd6648582d9324860df4f4172623ada3bde82dd80fa6d6ac8941"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110000_v3.png",
+      "sha256": "a94dbb02d8b52f9d85e52b341c47b24badb9e07889aee6c3aee6c11987a760a8"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110000_v3.png.meta",
+      "sha256": "f4525887ac552ee692356e4fa0865fdf90eb47c03273c3e1a0a754e897c64ed0"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110100_v1.png",
+      "sha256": "17bf85aa79efbac48e9eea7a3f8933fd3b43468ea18b6b075cc96923a6e1fd40"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110100_v1.png.meta",
+      "sha256": "b53b4247a219e23d24075542e3e14c353ac89d5c9b344456b115d97b98ca4204"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110100_v2.png",
+      "sha256": "21497e052e00b4c1d7bb3b0be295c8029febacc87ead57cd5cb32c6e935aa22a"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110100_v2.png.meta",
+      "sha256": "279616d61ad65526c18a3421a9ddcc3661a3c3030bb6615b7e0d78b1f88eda88"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110100_v3.png",
+      "sha256": "b9d22b561de010b743fd0fe76c75721de3d13daea5b983337869f48c88028aa2"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110100_v3.png.meta",
+      "sha256": "f82d6b35a0314e4d9351287e8075f4294217552eba0c037ed2d660c7ade4ab60"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110110_v1.png",
+      "sha256": "cbd15544226d87161462efbd1b4b67126fa121779b706b066ea3635e226faf8d"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110110_v1.png.meta",
+      "sha256": "2a1fabf8e79227bae3475ad23e5c000aa11bf70b01509af17b1b4a25bcf8a3ab"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110110_v2.png",
+      "sha256": "3f97174d0b4ff23c5b4f3e536dceaf3e34fd7befcf0fde242eece5fbef0c513e"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110110_v2.png.meta",
+      "sha256": "8c753d0986685f8c50ea70976c107fd2d4c43a385d4ff6ca727bbb7220c8ba1e"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110110_v3.png",
+      "sha256": "436a5ee65fe6988f5a8da0f441d396fcae17fccb8356114afc567d069429b59e"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_110110_v3.png.meta",
+      "sha256": "e94ae4156dda2a4a271f1696039837bed0964dc56ddeb0fbaed659dd1486f4ec"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111000_v1.png",
+      "sha256": "b5e1276329e602fcfb8f7fe7d6f4a16cb72e6babb2b1fc42886bd0b487bec307"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111000_v1.png.meta",
+      "sha256": "0d877cf899b9dc766a5cbf09b3f9484c19623098407899f6ad513970bbeac845"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111000_v2.png",
+      "sha256": "d5155265bc40b3f40130d7f9cedd002b7f4a9ec82f3259dccdf840ff73c21854"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111000_v2.png.meta",
+      "sha256": "b149f3ca4971ff3c4517518af4497d8863f74d71ebd53846b857c8c389f8dc65"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111000_v3.png",
+      "sha256": "0ab7436ade06e98f64d3018759a4e643f7711cbf4cbc220afee5b7c5f8e33391"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111000_v3.png.meta",
+      "sha256": "320a8892177ff2fd2e7c6b933ce06346f3e2d3030acbe439c08d149788aba8ee"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111010_v1.png",
+      "sha256": "f016533ac874a3df1c7371fcf3cab45df29520ede199db0c47c92c835e913af6"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111010_v1.png.meta",
+      "sha256": "86f27760f7ca9364c04166ec8972fd535a02814ca5d53ba937d6eaf4a6f1e54a"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111010_v2.png",
+      "sha256": "2b246ead5d81f64a88f83b6800cc9b8cf078fee45e4b7e2b39033230a2b5b21a"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111010_v2.png.meta",
+      "sha256": "e195fc67dcd76628ad30e1fa5b9d87244fa65cf1387027d87e4649d3db93af88"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111010_v3.png",
+      "sha256": "ca6e9cb5b0fa5eda0dd7795739948baaa6e187d59a87f1326282cfc2ab9313ee"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111010_v3.png.meta",
+      "sha256": "b190642e8b23f6adc3d8654a9f18032d5de7baf721f08bbf9d77f833633bd712"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111100_v1.png",
+      "sha256": "a9b3194045808e6357243fa4fa0d15ee0806b97afbb711f1749df26e3916fb98"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111100_v1.png.meta",
+      "sha256": "296e79e66a77478d5a3a75eb1fc2363b349c5cb7e083996a673dc9e01c49364a"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111100_v2.png",
+      "sha256": "dbd8c8e72a655ae42aa63a2a76f3d5437d9470d1bbe1e38b5f0d6e1524517180"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111100_v2.png.meta",
+      "sha256": "1d47c0f4bc09d726874e13e0b53b13fd4f78e508e28a0b35b0ed420257e65ed2"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111100_v3.png",
+      "sha256": "caa88f15c3dfede3ca107eee85ee4a5269af10fc4f2d1c400301896ac70466ce"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111100_v3.png.meta",
+      "sha256": "64989899c0ec968bce19ee78fb684a48e2bf7a4c69e728deb843db6ce1b8faa1"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111110_v1.png",
+      "sha256": "fcbc957f0025dda2b69ce5a92fa2091cc622dc2f1988e7ad26edbc5592cedf99"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111110_v1.png.meta",
+      "sha256": "ccc4fb5cb879bfcd7a978e4f99241faad47f0f12e66f40910520e9fc033252c6"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111110_v2.png",
+      "sha256": "eb2d11d8b45ae809ebf5cd9ec1a42554db9d14b25fd26cf59c4cc75362834c62"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111110_v2.png.meta",
+      "sha256": "b66f619e29d0e4db55e5bbc1cbd0e42b9f800712704238a504b6ad15316461dd"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111110_v3.png",
+      "sha256": "c3256fbd401fe016d1d656892afdb6b053891aff9d8b5605afd992a6fc38089d"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111110_v3.png.meta",
+      "sha256": "dab2661684069443fb2d668d3c45eae260e91af457d7ae6b31363d9b507c9f67"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111111_v1.png",
+      "sha256": "8772958bd5351805575ff087d897fc55b237eccf2910ec9eb590f50e8cd6745f"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111111_v1.png.meta",
+      "sha256": "a2fe52d6a0b8131c7839786647c83fc273291696cf99223143e8c081ac503dd5"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111111_v2.png",
+      "sha256": "af3dfc6cea101c13625600f1eb3ebed3bcf3640070b12d33b8b4168171d70d9f"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111111_v2.png.meta",
+      "sha256": "b27a72b9791669b769d314cfb946f9f4ddc1d7552fcbb0ada95a23a4d57cf194"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111111_v3.png",
+      "sha256": "e658952b6140756cdc4950a7013352f295666c00bd601be90d915ea46d842bc6"
+    },
+    {
+      "path": "european_roads/european_road_surface_winter_111111_v3.png.meta",
+      "sha256": "9cc392fbe108a9ebc50fe82f38172ae0e5137fc8264b37cb01d41f036f001c85"
+    },
+    {
+      "path": "european_roads.meta",
+      "sha256": "4c3109af1ae83c7668d7c2fc56ffbda73c7068cfdade6e14d05013c9640b6c40"
+    },
+    {
+      "path": "pacific_rocks.png",
+      "sha256": "2128d00882b12f2c1f50a478758c3cbaf0a0c6fe7464ebf3fdf45ee1e0a48bf4"
+    },
+    {
+      "path": "pacific_rocks.png.meta",
+      "sha256": "7c1c218ea890e3cc14534ad88d23f2d3b16d75055fdc0151ba48074e6adf44e8"
+    },
+    {
+      "path": "pacific_sand.png",
+      "sha256": "6ac8919c898f63c307d2b40992f7c9102a983780fe16ca1ef68d44b6de526c55"
+    },
+    {
+      "path": "pacific_sand.png.meta",
+      "sha256": "8c15208d72ea6df6e405345153bbf996e5914cb2cf46d4a91e2c7b74a34d8c73"
+    },
+    {
+      "path": "pacific_track.png",
+      "sha256": "6ac8919c898f63c307d2b40992f7c9102a983780fe16ca1ef68d44b6de526c55"
+    },
+    {
+      "path": "pacific_track.png.meta",
+      "sha256": "95774c03bf977d07118491172e4a17a2eaea39a38fa23fb258f64a5c678baabc"
+    },
+    {
+      "path": "pacific_trees.png",
+      "sha256": "6ac8919c898f63c307d2b40992f7c9102a983780fe16ca1ef68d44b6de526c55"
+    },
+    {
+      "path": "pacific_trees.png.meta",
+      "sha256": "c079d0feab75e4cf2eb183a6e7f0193a7082ebc7a065dfa5a4dd2fc28ef23b34"
+    },
+    {
+      "path": "pacific_tree_01.png",
+      "sha256": "4fa6dcbb8c452e080dad8d5e526a8250aec390527d1cd7b17d28c83c276e0cc7"
+    },
+    {
+      "path": "pacific_tree_01.png.meta",
+      "sha256": "703cc8dccb270d622ea222209dbf763ff9daca7f69d1a41b8ec66c887c96e891"
+    },
+    {
+      "path": "pacific_tree_02.png",
+      "sha256": "2882cffb0af880fd24a46a8ed20233e4ee6c02d7c166d0a1718afd3afe376bd6"
+    },
+    {
+      "path": "pacific_tree_02.png.meta",
+      "sha256": "6283cc07502284bd38ff3fc92f2574515f2ea0a5f3c4ef7bccf27d4a813e096a"
+    },
+    {
+      "path": "pacific_tree_03.png",
+      "sha256": "1bc5caddb57d81dd8dee27461a38afa865b70fb4c8ed796fb6ee9f8e3ae347bd"
+    },
+    {
+      "path": "pacific_tree_03.png.meta",
+      "sha256": "60f7f8499f5002247dba4d448d64b3763b83c35cfd4f57b4dbf6a901e0e57010"
+    },
+    {
+      "path": "pacific_tree_04.png",
+      "sha256": "2d9a9dc40e879c67f32eef3f53514febb65f089da723d32a58839246c70237b2"
+    },
+    {
+      "path": "pacific_tree_04.png.meta",
+      "sha256": "c12897908d1a97a3f5053fb5e76ad6241d5aedb0337418a769f86fb37a6c502e"
+    },
+    {
+      "path": "pacific_water.png",
+      "sha256": "186d9670118c9b7e012ef73934a890da6751643a8ec801e84f6db1037e5700a5"
+    },
+    {
+      "path": "pacific_water.png.meta",
+      "sha256": "00ae0a762bcebef28c0441703c0c0398d58f2fbbf35fbe0e9249324d5824014c"
+    },
+    {
+      "path": "redesign_v3/building_intact.png",
+      "sha256": "a782bf5968c3f9a6d5eead59fe3bec2f780468e1e093f53ca7ce90d6c52c6553"
+    },
+    {
+      "path": "redesign_v3/building_intact.png.meta",
+      "sha256": "cbdc6fa141ee9585aae8650c1003cddf1a85d1dac075e4dd0cb7517c6710a2f4"
+    },
+    {
+      "path": "redesign_v3/europe_building_intact.png",
+      "sha256": "16a98b2c9c31f08ed044018ef24626ed6265017c55cec20611c6132486913122"
+    },
+    {
+      "path": "redesign_v3/europe_building_intact.png.meta",
+      "sha256": "22b202785022204239f22c4a55322562280d1bcf4050444796f7fc3aa263a54e"
+    },
+    {
+      "path": "redesign_v3/europe_tree_01.png",
+      "sha256": "9a07606920b2b94b831b8e7a9d7583826e11c6190c7ef55dfe3289472a2b54e3"
+    },
+    {
+      "path": "redesign_v3/europe_tree_01.png.meta",
+      "sha256": "8ec8f8a3f9168ba16a7b89bb757e29454fbecd1428f5685e67a46e2e7da330e7"
+    },
+    {
+      "path": "redesign_v3/europe_tree_02.png",
+      "sha256": "b8e7a94fabe11385b19186dd4811156b77c24cd762dcb78a620d57e0d2c87be1"
+    },
+    {
+      "path": "redesign_v3/europe_tree_02.png.meta",
+      "sha256": "5c3ae0d501ef58257ce98a002508f044ad8b888370e7a99f9d286a5e4d8f8ea7"
+    },
+    {
+      "path": "redesign_v3/europe_tree_03.png",
+      "sha256": "a955b704da4f91f6a39aacdb02cf7cc8757b9b446665986a5e70966a3269a0e3"
+    },
+    {
+      "path": "redesign_v3/europe_tree_03.png.meta",
+      "sha256": "e313749310985e0023577fb5db834b9864125d7e350e32fa7da501de67c2326e"
+    },
+    {
+      "path": "redesign_v3/europe_tree_04.png",
+      "sha256": "15a4dfb98b1fe6284b40f1a88e4282996c4f10b9483fd72bde0a7f89a8a80f56"
+    },
+    {
+      "path": "redesign_v3/europe_tree_04.png.meta",
+      "sha256": "197f2f6e3fcbdcdbe7b8db00c88e0c2de3dcb86545c9451e3eca2a800898a0db"
+    },
+    {
+      "path": "redesign_v3/materials.json.meta",
+      "sha256": "a46f5ee4ed527082337616c9007fcb0e94ffb7bb66ef4ee4cad5367cd155154e"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_01.png",
+      "sha256": "cbdf1f7b9e011680dec473ec5d46fe6cf79208930e519ca706a09209226f7ee5"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_01.png.meta",
+      "sha256": "c9fb841ce7dc1e45490d983bdf191611e9e61be1b3f36b5357f3bd90b090242a"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_02.png",
+      "sha256": "f4c987d4df5b99500c92ca151642f39838f03efa133b75c8d76ce8c66b3dee26"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_02.png.meta",
+      "sha256": "86b28c4f8a0c60bb9d893eaa04f88db9887a25fcaabaec4d6c03c19a86a1b66d"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_03.png",
+      "sha256": "bf996db1f1c22b6ead540188dde3cd07ac81459b3071e283e927824ce9b57fc5"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_03.png.meta",
+      "sha256": "8114002959184854cac780cd9ab141651e7612f11808f5ba20f301dcf5e53212"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_04.png",
+      "sha256": "99150ec7043de7c4ef3fbc7e7c7f30d35a60f407fae71b30295fd4e2ba3ddf0a"
+    },
+    {
+      "path": "redesign_v3/pacific_roof_04.png.meta",
+      "sha256": "b9979385d42b6ee5f65841a1c17bcb95985511dfb22276c9df7258e7e6bd4ddb"
+    },
+    {
+      "path": "redesign_v3/rocks.png",
+      "sha256": "5cd97d6a382696eb6607ddf253f7d0fd70485aefc16fbc603cc7a07e776d8476"
+    },
+    {
+      "path": "redesign_v3/rocks.png.meta",
+      "sha256": "0b2cf8466676f362a63d3d6a8a9ec946742bd04f84b2d83caef41e25a07767e0"
+    },
+    {
+      "path": "redesign_v3/rural_hay.png",
+      "sha256": "38824cfc7dca6bb5fcc688fd8b435fba19988b86d25e1d9681f09fa14d0322f3"
+    },
+    {
+      "path": "redesign_v3/rural_hay.png.meta",
+      "sha256": "d075fa2dd362da1023d26ee7a42eb98b7bc3fe5e657b394470840cde1c6b6ad1"
+    },
+    {
+      "path": "redesign_v3/rural_roof_01.png",
+      "sha256": "929c2bf358194f22a772e4ffb43d549d43d38704f27e35a6ba322af516301a60"
+    },
+    {
+      "path": "redesign_v3/rural_roof_01.png.meta",
+      "sha256": "2e35470a8a78b504908ef048586f734c79ade9caf3059ed78e49dbf192413ed1"
+    },
+    {
+      "path": "redesign_v3/rural_roof_01_snow.png",
+      "sha256": "bc30c23161b0351b3082607df0c58fce52981d86e0e250a267ea135b86a00f23"
+    },
+    {
+      "path": "redesign_v3/rural_roof_01_snow.png.meta",
+      "sha256": "7213324c893f9d98479250e1c3ea537feb45ccbc7c078fd29b0ec7abaa1233a1"
+    },
+    {
+      "path": "redesign_v3/rural_roof_02.png",
+      "sha256": "fc831a14a8f9f2b6283ce9cbf799bfafec57ffc848ad3831475a3b2084a44135"
+    },
+    {
+      "path": "redesign_v3/rural_roof_02.png.meta",
+      "sha256": "69846dc057f24650e54a6c534215fbd7e8adf9844b64037a463cca6b3d1ff5ce"
+    },
+    {
+      "path": "redesign_v3/rural_roof_02_snow.png",
+      "sha256": "0776d4adb43d7e168329c3345de6d6e5e817a067c028ee82651f00dd4060b75b"
+    },
+    {
+      "path": "redesign_v3/rural_roof_02_snow.png.meta",
+      "sha256": "6ad7792a822bd1ebd05a0ff7a9361330012dde1057ab8c0bdbf2cf0b73e61632"
+    },
+    {
+      "path": "redesign_v3/rural_roof_03.png",
+      "sha256": "2e9ace760530452aeb998980231b6e29c9015b7c8fa17f0a8bd4a15eb4eb2b1f"
+    },
+    {
+      "path": "redesign_v3/rural_roof_03.png.meta",
+      "sha256": "f213377530106b94f38851284d9bd7e6223afa59b03f55ed2a381483803e8e92"
+    },
+    {
+      "path": "redesign_v3/rural_roof_03_snow.png",
+      "sha256": "6b075a009b1dba3870ccd92e6cbde58741b820880422ab0a7b912b814202f3d7"
+    },
+    {
+      "path": "redesign_v3/rural_roof_03_snow.png.meta",
+      "sha256": "9a1a4e3664bbdf0e04b48bfd9aee40083ea240f63d46603af1a3caf4b03932a3"
+    },
+    {
+      "path": "redesign_v3/rural_roof_04.png",
+      "sha256": "bacd75be8efaa9b24fd8121b57c58647871d8436de87454b610df4306967aa9d"
+    },
+    {
+      "path": "redesign_v3/rural_roof_04.png.meta",
+      "sha256": "7e0255e50794f35baa84b87f7a0caffc370067ef2ffd284e97b98666c551b4e6"
+    },
+    {
+      "path": "redesign_v3/rural_roof_04_snow.png",
+      "sha256": "575de8e3a665df3f9bb6d43616930a1891a9513b883f280ba4bbdbc205cc7e58"
+    },
+    {
+      "path": "redesign_v3/rural_roof_04_snow.png.meta",
+      "sha256": "10a8877677ccc01d0b1640a1c8aea5387d0a042f035fe6f6c6397cee2da2687d"
+    },
+    {
+      "path": "redesign_v3/rural_well.png",
+      "sha256": "4f7ef15c25469d376ac56fbea643d4b9edfaf589454b530a62f13ac7129d706e"
+    },
+    {
+      "path": "redesign_v3/rural_well.png.meta",
+      "sha256": "977e32b7045eebca24d5d83896188610c0f5d580eb1a5fe8813554efe4d4980d"
+    },
+    {
+      "path": "redesign_v3/rural_yard_patch.png",
+      "sha256": "f0790c186b318a1f85f1dda825f0e5e5ed230a7bf52139a9409c557607e4cee0"
+    },
+    {
+      "path": "redesign_v3/rural_yard_patch.png.meta",
+      "sha256": "f20bfec68172cb58a046b172cee64631636fd0ac974b2ce92d21030c48ce9f20"
+    },
+    {
+      "path": "redesign_v3/rural_yard_patch_snow.png",
+      "sha256": "99f5f6cbd39b12564fd3a9133ba903b58f7274c24dceb277178886fe94722200"
+    },
+    {
+      "path": "redesign_v3/rural_yard_patch_snow.png.meta",
+      "sha256": "ca7e35333163fc181b5a144bbebe460139aac3c34ed5b2d23c9ccfaa8a0db4da"
+    },
+    {
+      "path": "redesign_v3/tree_palm.png",
+      "sha256": "4fa6dcbb8c452e080dad8d5e526a8250aec390527d1cd7b17d28c83c276e0cc7"
+    },
+    {
+      "path": "redesign_v3/tree_palm.png.meta",
+      "sha256": "e95db806e690114b0bb586689348fd665185ada19ddcfc5a6d5f44f5f90f3404"
+    },
+    {
+      "path": "redesign_v3/tree_palm_2.png",
+      "sha256": "2882cffb0af880fd24a46a8ed20233e4ee6c02d7c166d0a1718afd3afe376bd6"
+    },
+    {
+      "path": "redesign_v3/tree_palm_2.png.meta",
+      "sha256": "ed716cf9b73682b32fc30b37cfbcc936a9df607e71e71e694ba3b721cf5d0e38"
+    },
+    {
+      "path": "redesign_v3/tree_palm_3.png",
+      "sha256": "1bc5caddb57d81dd8dee27461a38afa865b70fb4c8ed796fb6ee9f8e3ae347bd"
+    },
+    {
+      "path": "redesign_v3/tree_palm_3.png.meta",
+      "sha256": "2589bb36997b9999c105e81062d63ef32e9f734a3a77651bb203c1b629a0a64b"
+    },
+    {
+      "path": "redesign_v3/tree_palm_4.png",
+      "sha256": "2d9a9dc40e879c67f32eef3f53514febb65f089da723d32a58839246c70237b2"
+    },
+    {
+      "path": "redesign_v3/tree_palm_4.png.meta",
+      "sha256": "c01c98ff99ac93bfaa5af4d77ceb061c5a20e06e51d3ee05ff72d1699d7d41d2"
+    },
+    {
+      "path": "redesign_v3.meta",
+      "sha256": "8d900c84c13433c05881490ead5b590feb947c3bc92de9c5ec2e62e389c30147"
+    },
+    {
+      "path": "seawall_joint_square_v1.png",
+      "sha256": "569bc8427cd3fb40068dc6a6d15fa0cd580550fef2a87e690dd99717ff4b6a10"
+    },
+    {
+      "path": "seawall_joint_square_v1.png.meta",
+      "sha256": "98efd16f0a1ed511a5f6f99e256dafb1e19cfaab8b31c0bc073f47c2fd15165d"
+    },
+    {
+      "path": "terrain_deep_water.png",
+      "sha256": "db7bd7a7a49442b51fda36e49f735f1c6b908c6f1c0f73a1eefe4931c614c1b5"
+    },
+    {
+      "path": "terrain_deep_water.png.meta",
+      "sha256": "8d2f7fe779b6f850c7e1a7364b70650bfa3fdce5782133695c4f4d18dca26eed"
+    },
+    {
+      "path": "terrain_field.png",
+      "sha256": "3afd18d86422045cadbb570543b42e0323b84ebce42254c79b94c3306d93ca90"
+    },
+    {
+      "path": "terrain_field.png.meta",
+      "sha256": "df8d04b2265af6419138cc75f9afb3c3f3c62009508e4570c70263778ac8dfb7"
+    },
+    {
+      "path": "terrain_field_snow.png",
+      "sha256": "3be52261c70133c176c4d131f41e48d32f4ad727ec2c4873cae713341a28371a"
+    },
+    {
+      "path": "terrain_field_snow.png.meta",
+      "sha256": "2c564260ee52b20ff800147af5d2e00bc0e09d553b1ad23fdd1fba74d4dbe077"
+    },
+    {
+      "path": "terrain_forest.png",
+      "sha256": "8d0170944c7ddbf15d63769802954f185bb72a09e2f1d1344c9158a580a6c8bc"
+    },
+    {
+      "path": "terrain_forest.png.meta",
+      "sha256": "df1fae5bfd3d9f5d5c8ad6218aa49a76be0f96673f3420c9f98370566c5dd598"
+    },
+    {
+      "path": "terrain_forest_snow.png",
+      "sha256": "e986203ac8c1faf87a0fa14dfc470e86bb44d5e9591dab03e3efdb8493d95328"
+    },
+    {
+      "path": "terrain_forest_snow.png.meta",
+      "sha256": "282a24696a10f2e56a9afcef4b04e793680b9903f64b556e55eb2f6d9e223479"
+    },
+    {
+      "path": "terrain_mud.png",
+      "sha256": "ce252e75e741e88f4b05197f3d86700e3b8faa472d56982358921e79017a4f63"
+    },
+    {
+      "path": "terrain_mud.png.meta",
+      "sha256": "a64fdd259e99a841d081580010daf0d9c26f32fdda104fa80dc6794074fec0bc"
+    },
+    {
+      "path": "terrain_mud_snow.png",
+      "sha256": "eead8e7fc660da9f822ca22fd5d5fef6e71f8556df89faffb6292685ab273e56"
+    },
+    {
+      "path": "terrain_mud_snow.png.meta",
+      "sha256": "0e448c4942aa47d354b85efb2e17c17cdf59b308cc42bfb2c76778d1bd60e0a1"
+    },
+    {
+      "path": "terrain_road.png",
+      "sha256": "3afd18d86422045cadbb570543b42e0323b84ebce42254c79b94c3306d93ca90"
+    },
+    {
+      "path": "terrain_road.png.meta",
+      "sha256": "2db8a15837f26430be30486f0c3e2b0e4f1574ed72b582e61aa53bdc30003dcb"
+    },
+    {
+      "path": "terrain_road_snow.png",
+      "sha256": "3be52261c70133c176c4d131f41e48d32f4ad727ec2c4873cae713341a28371a"
+    },
+    {
+      "path": "terrain_road_snow.png.meta",
+      "sha256": "732600d087e38f65fcdeef546c53f376ef7c5fb8a4429a87733d87ee9cebdcf0"
+    },
+    {
+      "path": "terrain_water.png",
+      "sha256": "1a495e0fced8340a45201e4da41ee7a88cb80481acd2fe42f536c4ca68ac0f13"
+    },
+    {
+      "path": "terrain_water.png.meta",
+      "sha256": "ec675f14f4ded87ea9ffa73c41cb05f41c857c5cb5baf9650de9c06be3d2c0da"
+    },
+    {
+      "path": "terrain_water_snow.png",
+      "sha256": "c83e1f39ccbc8ee5d778003afa9e77dd1b35a38fa956dfb812ebdf4cfbf45450"
+    },
+    {
+      "path": "terrain_water_snow.png.meta",
+      "sha256": "875ac06520c3408387c4bfe86fd86e0df71a7cd14d8a8cee19b467676332aae7"
+    },
+    {
+      "path": "tree_01.png",
+      "sha256": "5090695296aff5072a8bf1770347ccb843b492a9786d53dde3a9f9d569f4529b"
+    },
+    {
+      "path": "tree_01.png.meta",
+      "sha256": "99c8ee61c08483691975c6baac35faebc9d961b9ee1fe509b7fce42ce7f9ec19"
+    },
+    {
+      "path": "tree_01_snow.png",
+      "sha256": "81d2fad272cf530bc3d081aaa0a9bfaf7ccfe31f5294270267ca678aff7d1141"
+    },
+    {
+      "path": "tree_01_snow.png.meta",
+      "sha256": "b708f853be3ea49cb39fc773007cbfc862d3c88da8a34b90caaa03cfbcc1f1e1"
+    },
+    {
+      "path": "tree_02.png",
+      "sha256": "57a5724685a996b38850ef09dde1dc756794159403aabe93e34b2f684520691c"
+    },
+    {
+      "path": "tree_02.png.meta",
+      "sha256": "9decd62a2cdd4c121bf3458d491f1e004bb95106ce4e5afaf4206bef95848ce4"
+    },
+    {
+      "path": "tree_02_snow.png",
+      "sha256": "d2a964a75017088d79a421891705d7b1dc58f2a94096fc22c24dbb4cbd1668f7"
+    },
+    {
+      "path": "tree_02_snow.png.meta",
+      "sha256": "aef6f23061ef1196379eaddd0b370f2af28babeccbfbaddf5a0a599eaa597df6"
+    },
+    {
+      "path": "tree_03.png",
+      "sha256": "48b1545ca8394ab3e963051d940bb44cfe98db063a33adb6bd92b25cc8869d44"
+    },
+    {
+      "path": "tree_03.png.meta",
+      "sha256": "74358815809b72bd2df4d8da9d9a338c785a16ab0e58bee228fec0c7e60a94ba"
+    },
+    {
+      "path": "tree_03_snow.png",
+      "sha256": "f01c8fff77c73ff89542368038aeadc2857e7e28f923f90f2ea53ce2db89ea21"
+    },
+    {
+      "path": "tree_03_snow.png.meta",
+      "sha256": "a7ef91c36f4ee9456b4ee217f151f73e641d4bb705567a27222fb3890417c30f"
+    },
+    {
+      "path": "tree_04.png",
+      "sha256": "466a87821e88274b29991ce08a607e6e999804c17dbd8fcd21bfc27868dc0546"
+    },
+    {
+      "path": "tree_04.png.meta",
+      "sha256": "a42db5bc2af9b4059a9ed46a2f15b580139bae3d731634c6da909e7fcf9523c9"
+    },
+    {
+      "path": "tree_04_snow.png",
+      "sha256": "c503e6be127f44584db739df4a661afb9c845abc52b2dd1f3bb667d3afaed1a3"
+    },
+    {
+      "path": "tree_04_snow.png.meta",
+      "sha256": "6db1660f2aa7d3d3f4a06d3ba436790bbbe55ac4c974edb1ee7d4bbaaec10a4f"
+    },
+    {
+      "path": "urban/roads/urban_road_manifest.json",
+      "sha256": "f4a56ed2f497f5a79ea68f1c61b6b6911087f23c8b810ea835ecd11adc6bf65c"
+    },
+    {
+      "path": "urban/roads/urban_road_manifest.json.meta",
+      "sha256": "03e96c0b9e12af6284a5788e2879906a24102b4472244cdc019862d9b82d7bdd"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_100000_v1.png",
+      "sha256": "60a841f113ca0f2546654bdf049b9500279f419b4afef74f458a303bc59749f6"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_100000_v1.png.meta",
+      "sha256": "6e7a9e83b53624d45b2bb64de3547915d7d401b1a67ef45ee8b27c0bad9518e1"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_100100_v1.png",
+      "sha256": "fc8bd31e0781ee4560afcc04afa2e9d92ce0a3300f9248b503fe453d475b6a1f"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_100100_v1.png.meta",
+      "sha256": "f17466be57443dea8f23fa9cb093d3c7772e0c498c6a0f146ab283779b62337b"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_101000_v1.png",
+      "sha256": "8e3f7c3a67bc6eebd3852fcca4ee0a3af73a1808d2b6212d14d7fb3183aa35cf"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_101000_v1.png.meta",
+      "sha256": "467d94be70338e6630dbfe64b74716910c9c2fb5f356a800b11deee018acec7d"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_101010_v1.png",
+      "sha256": "10a187d810a9f3892ac747a77430d253f7f3bfcdb86517d8891dce10ed8d2b0f"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_101010_v1.png.meta",
+      "sha256": "d60d01c8976ad31c303844315a37dfb0bcbb0ebfc3decc5cf5b61214958f9741"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_101100_v1.png",
+      "sha256": "014b2493d3b4b5cbe446b1ef2088880984685765145898e03537bf0369ad4de9"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_101100_v1.png.meta",
+      "sha256": "619e4e96cf799ff572b36a10fb76ee39aca416ecaf151310157b0d00fadc9a4e"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_110000_v1.png",
+      "sha256": "1f979cdddfb839ea7d542867b7a6ce6e36e76b2d41f7f525d0e1cef6d5df8f6f"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_110000_v1.png.meta",
+      "sha256": "894effc2b29346c7678af61e0768bd2d4c3478ce1f5c7fda1a1bffe8faeb1685"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_110100_v1.png",
+      "sha256": "ffb1f28d56f1dec5fc3960b3c2767aefd87ce222eccc31dab5977806cc5ba7a0"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_110100_v1.png.meta",
+      "sha256": "84ebad41754b2849342b0e837ff1ec50b34bfaf78a6cdf311844864b15a118f2"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_110110_v1.png",
+      "sha256": "aa037464313c861e0212abf163227d44cdc1cf65642e68af97bf3942b92ab764"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_110110_v1.png.meta",
+      "sha256": "c3a0fdcfdf1aa7b1b1ad279c72d7ac00889022b8ff2c995f29aad74ac8b7a6ab"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111000_v1.png",
+      "sha256": "395ce3ce51ae52e01bd2677deccfee8fdbd94871f0596d5d0b7dc1462dec28f5"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111000_v1.png.meta",
+      "sha256": "a665a4712f55709a69f6fcd814ecbba3aa3ebd555bdaa5610423f719304da411"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111010_v1.png",
+      "sha256": "39ee3676577c59c7804eb873217e2642e2ff96a8f5e7b1db68e5624d82ef24d6"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111010_v1.png.meta",
+      "sha256": "b79f561d62d41d943fe60be5addb4db4d260724a8a16a1a561a55c25a59922de"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111100_v1.png",
+      "sha256": "9ebd554912c99179360b8f8a44a4277d7ec5419e8843920e374d6e22280d4e30"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111100_v1.png.meta",
+      "sha256": "4e5e94f783a56d94865dc457696676cd9a3ccad5420a352e3747205a29bd8c52"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111110_v1.png",
+      "sha256": "5e377ea1bdad943c4635137e9eff15cff71d85dd08dcd12262db0f897ed7fe78"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111110_v1.png.meta",
+      "sha256": "7270b843cf6cc7f41295bad70a46a49e432a17f949a86cafc732fc7f01579226"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111111_v1.png",
+      "sha256": "ffc447969897f4b6c5d238f369027b153063c9b3e6609d322b0e0708f6414c84"
+    },
+    {
+      "path": "urban/roads/urban_road_surface_111111_v1.png.meta",
+      "sha256": "28d40d1a45d2594842f380bde64b49a086001a1f3136094652108787a9170002"
+    },
+    {
+      "path": "urban/roads/urban_road_tile_base_v1.png",
+      "sha256": "856ea17f48d7c7a68be5c5a7f5e77135e67b758a34e91f48d9bd8198465d38f6"
+    },
+    {
+      "path": "urban/roads/urban_road_tile_base_v1.png.meta",
+      "sha256": "c271539baf1fd35ab72d825135697d608c4ffec1e1fe6724b9b0ae66e8d591a2"
+    },
+    {
+      "path": "urban/roads.meta",
+      "sha256": "1af02ece89db4d05a8b4cfdf802185f913cc42fc57778d1552863bbc27b3d68b"
+    },
+    {
+      "path": "urban/urban_dense_destructible_block_rubble_v1.png",
+      "sha256": "b0f6fc2144637fea225c16970f9e893b176d28e6832e553c708ce19e7ffbd443"
+    },
+    {
+      "path": "urban/urban_dense_destructible_block_rubble_v1.png.meta",
+      "sha256": "372d798f1c939b02a66c3339ed0751ba303b2e47e605fa833adb5b04c899d0dd"
+    },
+    {
+      "path": "urban/urban_dense_destructible_courtyard_damaged_v1.png",
+      "sha256": "8d4ff2a46729800a5810ab25cbb006539736317ba6e35ea6f8f59696f521cede"
+    },
+    {
+      "path": "urban/urban_dense_destructible_courtyard_damaged_v1.png.meta",
+      "sha256": "08bd37df6437b6417b3831210d431a4652e80f7b2d31fd3fdd1a35ce0472f174"
+    },
+    {
+      "path": "urban/urban_dense_destructible_courtyard_intact_v1.png",
+      "sha256": "c8d041962c29a85b572f74a0ac95fbd5726419192db3e8d9d67c4073a1ca6f98"
+    },
+    {
+      "path": "urban/urban_dense_destructible_courtyard_intact_v1.png.meta",
+      "sha256": "16000c4902d18062453f7daea89e8d93629bcd1d2dfee87e4c4fcbe9a53819ec"
+    },
+    {
+      "path": "urban/urban_dense_destructible_courtyard_rubble_v1.png",
+      "sha256": "e7ebf3598fbe32cb1a79f8ce70fdeb6117d7e345bbce88657591b2bdfee7a829"
+    },
+    {
+      "path": "urban/urban_dense_destructible_courtyard_rubble_v1.png.meta",
+      "sha256": "25cc677974208349a6c52d544721e32f8ad8ee0afcb91bc212a38c15d2c6dfbd"
+    },
+    {
+      "path": "urban/urban_dense_destructible_damaged.png",
+      "sha256": "da2cad2c303c7b14f1cb2a51fac6cdf2d8c0944ab36f2731e077c2355ac459a4"
+    },
+    {
+      "path": "urban/urban_dense_destructible_damaged.png.meta",
+      "sha256": "d7456c804f2a05d4911c74481ce70762f77cb36d054c3c39b519e556a6e26c00"
+    },
+    {
+      "path": "urban/urban_dense_destructible_damaged_topdown_v2.png",
+      "sha256": "da2cad2c303c7b14f1cb2a51fac6cdf2d8c0944ab36f2731e077c2355ac459a4"
+    },
+    {
+      "path": "urban/urban_dense_destructible_damaged_topdown_v2.png.meta",
+      "sha256": "ba2f504eccf1156fb60e4108048c9556320fb1dbb71994c8bc35d28fa2293dd7"
+    },
+    {
+      "path": "urban/urban_dense_destructible_intact.png",
+      "sha256": "dfed2ff9b824fd0e77dbea24144c480b1e23abeac70c8e8741d924dcc7b45737"
+    },
+    {
+      "path": "urban/urban_dense_destructible_intact.png.meta",
+      "sha256": "2f0d3e53a50d7f326c22649e581b4e44e456d47d93cc57e572045a3366d898c1"
+    },
+    {
+      "path": "urban/urban_dense_destructible_intact_topdown_v2.png",
+      "sha256": "dfed2ff9b824fd0e77dbea24144c480b1e23abeac70c8e8741d924dcc7b45737"
+    },
+    {
+      "path": "urban/urban_dense_destructible_intact_topdown_v2.png.meta",
+      "sha256": "1ec65514aeea688923db9829c54f45477fdac074f03388352a9c10084ae9c13e"
+    },
+    {
+      "path": "urban/urban_dense_destructible_rowhouses_l_damaged_v1.png",
+      "sha256": "762726eb69f1f46a0ebc92f4827028bc75b0b9911c5be67053223a4177f4229b"
+    },
+    {
+      "path": "urban/urban_dense_destructible_rowhouses_l_damaged_v1.png.meta",
+      "sha256": "a3efd8034a9920d64238e009ce57e285fa2487c90b5c36b3775bb8141e42d5c1"
+    },
+    {
+      "path": "urban/urban_dense_destructible_rowhouses_l_intact_v1.png",
+      "sha256": "8e9bd9336122cea7750315b3df3a1b450c1f2af9f1046ada417580fee750657e"
+    },
+    {
+      "path": "urban/urban_dense_destructible_rowhouses_l_intact_v1.png.meta",
+      "sha256": "f58f2d0d8beb3b71f19e52ee3b2efdf8842e8887921882229cd4e1216514a929"
+    },
+    {
+      "path": "urban/urban_dense_destructible_rowhouses_l_rubble_v1.png",
+      "sha256": "c253643cdc4d2d6aacfbc9637de328e9cb05b70028d34c047d7d694dabb5c0c2"
+    },
+    {
+      "path": "urban/urban_dense_destructible_rowhouses_l_rubble_v1.png.meta",
+      "sha256": "f337df2ee4a2d3e9d864dda5035b3b3332ac033c882c5f77297bb43cf9dedd28"
+    },
+    {
+      "path": "urban/urban_dense_destructible_workshop_damaged_v1.png",
+      "sha256": "03cdb9a78cd312fabba014a7e5e967880ac6496a1b850f2e3fea63b9fd75380b"
+    },
+    {
+      "path": "urban/urban_dense_destructible_workshop_damaged_v1.png.meta",
+      "sha256": "6279fb55925ddccac2f140a33cd2196327781aaddf597771690bf71d54d24aba"
+    },
+    {
+      "path": "urban/urban_dense_destructible_workshop_intact_v1.png",
+      "sha256": "4e9b980eb341183e5a38a3ddfb0c3c511307c0189941cc6f52fdbd1a9e16ec74"
+    },
+    {
+      "path": "urban/urban_dense_destructible_workshop_intact_v1.png.meta",
+      "sha256": "ccadeb95a9aba61cc875d0217144bd4c18b01de184d650757cb9c1b3199d499c"
+    },
+    {
+      "path": "urban/urban_dense_destructible_workshop_rubble_v1.png",
+      "sha256": "cf135be17c65f523b2dc4396e5f493dfd29a2a2e68e9627975ef2715ff9e0ec5"
+    },
+    {
+      "path": "urban/urban_dense_destructible_workshop_rubble_v1.png.meta",
+      "sha256": "807d47ffbf5e9d60ea57478870af1f4d79b26372d288aa4a203f6d9bf340eec4"
+    },
+    {
+      "path": "urban/urban_dense_indestructible.png",
+      "sha256": "710a8f944104e7c615dee3b88d861b2e9a6fbf89184c70d42395ac2ca3a758c8"
+    },
+    {
+      "path": "urban/urban_dense_indestructible.png.meta",
+      "sha256": "349619a7740b9746db45d911511ad47f9de3c2f61083054302c5fa8645ea55ab"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_apartment_v1.png",
+      "sha256": "710a8f944104e7c615dee3b88d861b2e9a6fbf89184c70d42395ac2ca3a758c8"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_apartment_v1.png.meta",
+      "sha256": "1d304f2e6ff1eb6577a125ec4e1e4fbacbb590c89897986d17fdd8a437b59a3f"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_church_v1.png",
+      "sha256": "ae978c9d4add63a329e5aad2bfc9f3a43d40e79e7891cb67ace7f999014a618a"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_church_v1.png.meta",
+      "sha256": "e4e8f9b168cba02073f40f506ec9a3fe8f0a1e071763dfbdc8390964dfd87b48"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_civic_dome_v1.png",
+      "sha256": "cce6785d5e3ae70354a10e6261c719aaae00be331fc9418eb7d80af82ad9e486"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_civic_dome_v1.png.meta",
+      "sha256": "cd3c653030654f53db5a9206003f7702213a5a4c736858d3690677b3e3e0426e"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_factory_v1.png",
+      "sha256": "45e0233516e068f6924307e8851fea535380091b0b25ef8a382afcf9b26ec57c"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_factory_v1.png.meta",
+      "sha256": "8871173073169b6985ccecd1f5e8c1b4bf71f33683eeb24ea5aa94b52939dfcd"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_market_v1.png",
+      "sha256": "4ad41b10239c2905edb5bda807690994656162545cd92e8abfafa3c303bc980f"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_market_v1.png.meta",
+      "sha256": "5ef94f866699a1f1c8df77b21b4d39f8b1919dbde097d1d12d1a93ec78abf570"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_office_l_v1.png",
+      "sha256": "e924c5aa24b3fd236b706289b5d1c43fa04e121f53781fe48fc4f8e3350c0996"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_office_l_v1.png.meta",
+      "sha256": "c215e8b5069f7cc2ab09d67bafa697fa006cc5876e092dbdd2f2eb07d0a223cf"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_post_office_v1.png",
+      "sha256": "058c5815cf9416649eb154f2f37e7602c54e4ab92a88d9d3c6c2729c2ad6821c"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_post_office_v1.png.meta",
+      "sha256": "f1e2111c405d4d677b363029c94ab5be735e353cd62a909149339085fcfae356"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_theater_v1.png",
+      "sha256": "1d5f8a2b8d5c65c2cb2695305363581fc5e6efdbd71a61771f3f166c466965a5"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_theater_v1.png.meta",
+      "sha256": "4054c42b1ab3e4ab7b80e4eeceb6a2c9f391e0560ab1dcc02556afe8bf079f0a"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_topdown_v2.png",
+      "sha256": "710a8f944104e7c615dee3b88d861b2e9a6fbf89184c70d42395ac2ca3a758c8"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_topdown_v2.png.meta",
+      "sha256": "cf33d241466da1397cfb83bf5360e90817b1646d31c279b16a557b074170919e"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_town_hall_v1.png",
+      "sha256": "ec564cec46d595c68f976063486180c015301f16dcd6c818fb26363e1fa2cefb"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_town_hall_v1.png.meta",
+      "sha256": "0bda9247b24200b6f15c0f26f285566b1edbce46045f89c3eca79aba2203779a"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_warehouse_v1.png",
+      "sha256": "ca7c5b1183493514e840bb4efdf221f7f68a60a704cefb8ee8e6e7c422cae7a0"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_warehouse_v1.png.meta",
+      "sha256": "2d2a49cb02142fdf8c9a11bf11f45cc768e6c021e9f8c80df27db7d9100fddf5"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_waterworks_v1.png",
+      "sha256": "858bd25cd13b979b5c8567b1911a95d646d3281a195f3732ce7a5fec2ca012fb"
+    },
+    {
+      "path": "urban/urban_dense_indestructible_waterworks_v1.png.meta",
+      "sha256": "f8644264981b42023997128717f96ddc92f0248d926c360e40825ceda59289ce"
+    },
+    {
+      "path": "urban/urban_dense_rubble.png",
+      "sha256": "b0f6fc2144637fea225c16970f9e893b176d28e6832e553c708ce19e7ffbd443"
+    },
+    {
+      "path": "urban/urban_dense_rubble.png.meta",
+      "sha256": "2538b8b97ae27fcd87b115843980a41b24c1d5986d3bf6c26b160ed171310616"
+    },
+    {
+      "path": "urban/urban_dense_rubble_topdown_v2.png",
+      "sha256": "b0f6fc2144637fea225c16970f9e893b176d28e6832e553c708ce19e7ffbd443"
+    },
+    {
+      "path": "urban/urban_dense_rubble_topdown_v2.png.meta",
+      "sha256": "2f14355f88cce9357ecae37e47953a83e9ef51239d8ba115cba9d6cf35f8d720"
+    },
+    {
+      "path": "urban/urban_floor_base_v1.png",
+      "sha256": "856ea17f48d7c7a68be5c5a7f5e77135e67b758a34e91f48d9bd8198465d38f6"
+    },
+    {
+      "path": "urban/urban_floor_base_v1.png.meta",
+      "sha256": "3f107273b41fffebb389509a6a3e5e24d5434572735b0e3941387677642d30f3"
+    },
+    {
+      "path": "urban/urban_road_base_v1.png",
+      "sha256": "856ea17f48d7c7a68be5c5a7f5e77135e67b758a34e91f48d9bd8198465d38f6"
+    },
+    {
+      "path": "urban/urban_road_base_v1.png.meta",
+      "sha256": "7a859ba216e58efd59623de8bcfb9e670eef3f99879cd406fb48053fa08c8507"
+    },
+    {
+      "path": "urban.meta",
+      "sha256": "00e7f5750e3e1abe1bdb16f36479f6e43aae43111e3bf09e30800f3830bc8eab"
+    }
+  ]
+}

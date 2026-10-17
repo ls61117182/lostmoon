@@ -1,7 +1,7 @@
 ﻿{
     "id":  "campaign_tarawa_red_beach_1_01",
     "name":  "Tarawa, Red Beach 1 - Landing at the Bird\u0027s Beak",
-    "description":  "Pacific Scenario A1. Destroy the Heavy Artillery, then move off the map along the red arrow. Place 1 Heavy Artillery and 2 AT Guns randomly on the six numbered red hexes, facing the numbered edge. The Sherman starts on the black outlined landing hex.",
+    "description":  "Pacific Scenario A1. Destroy the Heavy Artillery, then move off the map along the red arrow. Place 1 Heavy Artillery and 2 Type 92 Infantry Guns randomly on the six numbered red hexes, facing the numbered edge. The Sherman starts on the black outlined landing hex.",
     "theater":  "pacific",
     "usCasualtyLimit":  10,
     "cols": 9,

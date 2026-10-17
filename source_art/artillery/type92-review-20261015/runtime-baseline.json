@@ -1,0 +1,8 @@
+{
+  "assets/resources/textures/units/at_gun_top.png": "209405f281c80a01673e478c5eb03e6ace899f87cb47d858693af232f7e0fecd",
+  "assets/resources/textures/units/at_gun_top_destroyed.png": "f8884f4a6d8fff7c137d80681670932962ba134727aaaaf1eef7f32cd745aa0e",
+  "assets/resources/textures/units/at_gun_top.png.meta": "977052011135a65cbf5fc9695b5d5f60d586c83c475dac5ecfe219cbb4513ef7",
+  "assets/resources/textures/units/at_gun_top_destroyed.png.meta": "5018e8a280711a83dce7b29454fdf669a521ffe684d19b02bd64f953f231fa48",
+  "data/tank_visuals.csv": "12cadaad5b5bcecb3ba51c2ec0e1d7d5bf3cfeac102d966c6d90db68306a1b4a",
+  "assets/scripts/core/TankVisualDB.ts": "cc6227d4390fcc3c229449e1dd033f561e7ae0cb810c1b2aa14b27f3713bd3ab"
+}

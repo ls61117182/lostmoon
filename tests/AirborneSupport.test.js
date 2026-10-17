@@ -6,6 +6,7 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 const { RNG } = require('../assets/scripts/core/Dice.ts');
 const { HexMap, hexDistance, neighbor } = require('../assets/scripts/core/HexGrid.ts');
 const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
+const { rollMGAttack } = require('../assets/scripts/core/Combat.ts');
 const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
 const { planAirborneSupport, landAirborneUnit, airborneReactionContext } = require('../assets/scripts/core/AirborneSupport.ts');
 const { roundEventsForTurn, isAirborneWeather, validateRoundEvents } = require('../assets/scripts/core/RoundEvents.ts');
@@ -94,6 +95,30 @@ test('MG reactions respect suppression, once-per-unit and current tank orientati
   reacted.add(infantry.id); assert.equal(airborneReactionContext(m,infantry,target,reacted),null);
   assert.equal(airborneReactionContext(m,unit('ally','american_infantry',2,3,'player'),target,new Set()),null);
 });
+test('infantry landing reactions never gain tank MG modifiers from their facing', () => {
+  const m = mission();
+  const target = unit('paratrooper', 'american_infantry', 3, 3, 'player');
+  const infantry = unit('infantry', 'german_infantry', 2, 3);
+  for (const facing of [0, 3]) {
+    infantry.facing = facing;
+    const ctx = airborneReactionContext(m, infantry, target, new Set());
+    assert(ctx);
+    const miss = rollMGAttack(ctx, { d6: () => 3 });
+    assert.equal(miss.hitBreakdown.frontArc, 0);
+    assert.deepEqual(miss.hitModifiers, []);
+    assert.equal(miss.threshold, 4, 'size 3 + distance 1, independent of infantry facing');
+    assert.equal(miss.hit, false);
+    assert.equal(rollMGAttack(ctx, { d6: () => 4 }).hit, true);
+  }
+  const tank = unit('tank', 'stug3', 2, 3);
+  const tankCtx = airborneReactionContext(m, tank, target, new Set());
+  assert(tankCtx);
+  const report = rollMGAttack(tankCtx, { d6: () => 3 });
+  assert.equal(report.threshold, 3);
+  assert.equal(report.hitBreakdown.frontArc, 0);
+  assert.deepEqual(report.hitModifiers, [{ labelKey: 'dice.rule.tankHitModifier', value: -1 }]);
+});
+
 test('every-round and scheduled entries all remain eligible; invalid authoring rejected', () => {
   const events=[{effectType:'none'}, {effectType:'airborne_support',reinforcementSide:'friendly',turns:[1,3,5]}, {effectType:'none',turns:'every'}];
   assert.equal(roundEventsForTurn(events,1).length,3); assert.equal(roundEventsForTurn(events,2).length,2); assert.deepEqual(validateRoundEvents(events),[]);

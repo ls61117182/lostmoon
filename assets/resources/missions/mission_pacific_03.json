@@ -1,7 +1,7 @@
 ﻿{
     "id":  "mission_pacific_03",
     "name":  "Tarawa, Red Beach 1 - Clear the West of the Airfield",
-    "description":  "Pacific Scenario A3. Clear the map of all Japanese units, including the Heavy Artillery and reinforcements, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex. Place 1 AT Gun and 2 Type 95s randomly on different red numbered start hexes, and place 2 Japanese Infantry units randomly on different blue numbered start hexes. The Sherman starts on the black outlined hex.",
+    "description":  "Pacific Scenario A3. Clear the map of all Japanese units, including the Heavy Artillery and reinforcements, at any point to win. The Heavy Artillery starts on the fixed hexagonal building hex. Place 1 Type 92 Infantry Gun and 2 Type 95s randomly on different red numbered start hexes, and place 2 Japanese Infantry units randomly on different blue numbered start hexes. The Sherman starts on the black outlined hex.",
     "theater":  "pacific",
     "usCasualtyLimit":  10,
     "cols":  8,

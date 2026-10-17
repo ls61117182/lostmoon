@@ -1,10 +1,12 @@
 import { createTankCrew, crewRoleAlive, effectiveTankCrew } from "../core/types";
 import { BUILD_FEATURES } from '../core/BuildProfile';
 import { TerrainGroundRenderer } from './TerrainGroundRenderer';
-import { drawBeachEdge, drawBeachOverlays } from './BeachTerrainVisual';
+import { drawBeachEdge, drawBeachOverlays, drawSeawallJoints } from './BeachTerrainVisual';
+import type { SeawallSegment } from '../core/SeawallJunctions';
 import { FogOverlayRenderer } from './FogOverlayRenderer';
 import type { FogMaskCell } from './FogMaskRaster';
 import { ObjectShadowRenderer } from './ObjectShadowRenderer';
+import { assignRockyHighlandVariants, rockyCellKey, ROCKY_HIGHLAND_SPRITE_PATHS } from './RockyHighlandVariants';
 import type { TerrainMaterialBundle } from './TerrainGroundRaster';
 import { europeanCountryRoadDistance } from './TerrainGroundRaster';
 import { ruralBuildingLayout, ruralVillageProps, RuralBuilding, RuralProp } from '../core/RuralBuildings';
@@ -41,7 +43,7 @@ import { ruralBuildingLayout, ruralVillageProps, RuralBuilding, RuralProp } from
  *                 movesPerTurn（仅敌方 AI 用） / rngSeed
  */
 
-import { OcclusionShape, UnitOcclusionRenderer } from './UnitOcclusionRenderer';
+import { OcclusionShape, UnitOcclusionRenderer, UnitSpriteOccluder } from './UnitOcclusionRenderer';
 
 import {
   _decorator,
@@ -299,6 +301,7 @@ import {
   tankVisualConfigOf,
   emptyCommanderHatchScaleOf,
 } from '../core/TankVisualDB';
+import { GERMAN_LATE_WAR_VISUAL_KINDS, lateWarTankVisualAssetConfigOf, usesGermanLateWarCamouflage } from '../core/TankCamouflage';
 import {
   INFANTRY_VISUAL_KINDS,
   InfantryVisualKind,
@@ -367,14 +370,14 @@ import { supportMarkerVisuals } from './SupportMarkerVisual';
 /** 小预览用：在 Graphics 上画实心六角 + 描边 */
 /** Consume old aim memory when staging a primary shot; acquire its fresh lock after turret aiming. */
 function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
-  const enabled = GameSession.gameMode === 'hardcore';
+  const enabled = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
   const report = rollMainGunAttack({ ...ctx, lockedFire: enabled }, rng);
   if (enabled) clearLockedFire(ctx.attacker);
   return report;
 }
 
 function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplosiveReport {
-  const enabled = GameSession.gameMode === 'hardcore';
+  const enabled = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
   const report = rollHEAttack({ ...ctx, lockedFire: enabled }, rng);
   if (enabled) clearLockedFire(ctx.attacker);
   return report;
@@ -889,8 +892,9 @@ type Phase = 'player' | 'fireCheck' | 'ally' | 'enemy';
  */
 type PlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
 
-/** 骰子托盘里的单颗骰子 —— 同阶段内所有骰共享一份 action 分类结果（movement 或 attack） */
+/** 骰子托盘里的单颗骰子；测试模式额外记录所属动作列。 */
 interface DieSlot {
+  type?: 'attack' | 'movement'; // Test mode keeps each die's action column.
   pip: number;    // 1..6 的点数
   used: boolean;  // 执行后置 true；渲染时灰掉并跳过点击
 }
@@ -1751,6 +1755,11 @@ export class BattleScene extends Component {
   private tankDamageTrackLayer: Node | null = null;
   private tankDamageTrackNodes = new Map<Node, Node>();
   private infantryContentNode: Node | null = null;
+  private bunkerContentNode: Node | null = null;
+  private bunkerGraphics: Graphics | null = null;
+  private bunkerOcclusionSprites = new Map<Sprite, Unit>();
+  private infantryOcclusionSprites = new Map<Sprite, Unit>();
+  private infantryVectorSilhouettes: Array<{ unit: Unit; vector: { circle: [number, number, number]; color: Color } }> = [];
   private tankVisibilityGraphics: Graphics | null = null;
   private tankGraphics: Graphics | null = null;
   private buildingGraphics: Graphics | null = null;
@@ -1861,10 +1870,13 @@ export class BattleScene extends Component {
   private winterTerrainSpriteFrames: Partial<Record<TerrainType, SpriteFrame | null>> = {};
   private continuousTerrain: TerrainGroundRenderer | null = null;
   private sceneryShadows: ObjectShadowRenderer | null = null;
+  private rockyShadows: ObjectShadowRenderer | null = null;
   private vehicleShadows: ObjectShadowRenderer | null = null;
   private redesignObjectFrames: Record<string, SpriteFrame | null> = {};
   private terrainSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private terrainSpritePoolNext = 0;
+  private rockySpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private rockySpritePoolNext = 0;
   private bridgeSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private bridgeSpritePoolNext = 0;
   private urbanBuildingSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
@@ -1876,6 +1888,9 @@ export class BattleScene extends Component {
   /** Pause map painting until the terrain texture batch has fully settled. */
   private pendingTerrainSpriteLoads = 0;
   private terrainSpriteBatchReady = false;
+  private rockyVariantFrames: Array<SpriteFrame | null> = ROCKY_HIGHLAND_SPRITE_PATHS.map(() => null);
+  private rockyVariantLayoutSignature = '';
+  private rockyVariantsByCell = new Map<string, number>();
   private treeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private europeanSummerTreeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
   private winterTreeSpriteFrames: Array<SpriteFrame | null> = [null, null, null, null];
@@ -1893,12 +1908,16 @@ export class BattleScene extends Component {
   /** Keyed by the commander SpriteFrame path from units.csv, not by faction or tank kind. */
   private commanderHatchSpriteFrames: Record<string, SpriteFrame> = {};
   private splitTankSprites: Partial<Record<SplitTankKind, SplitTankSpriteAssets>> = {};
+  private lateWarSplitTankSprites: Partial<Record<SplitTankKind, SplitTankSpriteAssets>> = {};
+  private lateWarTankSpritesRequested = false;
   /** 加载时锁定的裁切显示宽高；避免每帧 `sprite.spriteFrame = sf` 后引擎改写 sf.width/height 导致宽高比崩（日志里 movement 阶段 th 被拉成与 tw 相等）。 */
   private shermanSpriteDisplayW = 0;
   private shermanSpriteDisplayH = 0;
   /** 德军俯视图（四号/三号/虎/卡）：多单位共用节点池；每帧 redraw 开头清零再按绘制顺序占用 */
   private enemyTopMeta: Partial<Record<EnemyTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private destroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
+  private lateWarTopMeta: Partial<Record<EnemyTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
+  private lateWarDestroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private enemyTopPoolNext = 0;
   private static readonly ENEMY_TOP_SPRITE_POOL = 16;
@@ -2487,22 +2506,51 @@ export class BattleScene extends Component {
     });
   }
 
-  private ensureSplitTankSprites(kind: SplitTankKind): SplitTankSpriteAssets {
-    const existing = this.splitTankSprites[kind];
+  private ensureSplitTankSprites(kind: SplitTankKind, lateWar = false): SplitTankSpriteAssets {
+    const registry = lateWar ? this.lateWarSplitTankSprites : this.splitTankSprites;
+    const existing = registry[kind];
     if (existing) return existing;
     const created = { hull: null, turret: null, hullDisplayW: 0, hullDisplayH: 0 };
-    this.splitTankSprites[kind] = created;
+    registry[kind] = created;
     return created;
   }
 
-  private loadTankVisualSprites() {
+  private splitTankSpritesFor(u: Unit, kind: SplitTankKind): SplitTankSpriteAssets | undefined {
+    const late = this.lateWarSplitTankSprites[kind];
+    // Select both layers together, even when asynchronous loads complete in a different order.
+    if (usesGermanLateWarCamouflage(this.mission?.data, u) && late?.hull && late.turret) return late;
+    return this.splitTankSprites[kind];
+  }
+
+  private tankTopMetaFor(u: Unit) {
+    const kind = u.kind as EnemyTopKind;
+    return (usesGermanLateWarCamouflage(this.mission?.data, u) ? this.lateWarTopMeta[kind] : undefined)
+      ?? this.enemyTopMeta[kind];
+  }
+
+  private destroyedTankTopMetaFor(u: Unit) {
+    const kind = u.kind as DestroyedTopKind;
+    return (usesGermanLateWarCamouflage(this.mission?.data, u) ? this.lateWarDestroyedTopMeta[kind] : undefined)
+      ?? this.destroyedTopMeta[kind];
+  }
+
+  private loadMissionTankCamouflage() {
+    if (this.mission?.data.germanTankCamouflage !== 'late_war' || this.lateWarTankSpritesRequested) return;
+    this.lateWarTankSpritesRequested = true;
+    this.loadTankVisualSprites(true);
+  }
+
+  private loadTankVisualSprites(lateWar = false) {
     TANK_VISUAL_KINDS.forEach((kind: TankVisualKind) => {
-      const assets = tankVisualAssetConfigOf(kind);
+      if (lateWar && !GERMAN_LATE_WAR_VISUAL_KINDS.includes(kind)) return;
+      const assets = lateWar ? lateWarTankVisualAssetConfigOf(kind) : tankVisualAssetConfigOf(kind);
+      const topRegistry = lateWar ? this.lateWarTopMeta : this.enemyTopMeta;
+      const destroyedRegistry = lateWar ? this.lateWarDestroyedTopMeta : this.destroyedTopMeta;
       this.loadSpriteFrame(
         assets.topSpritePath,
         `[BattleScene] 俯视图加载失败 (${kind})，该类型将回退矢量车体:`,
         (sf, dw, dh) => {
-          this.enemyTopMeta[kind] = { sf, dw, dh };
+          topRegistry[kind] = { sf, dw, dh };
           if (kind === 'sherman') {
             this.shermanSpriteDisplayW = dw;
             this.shermanSpriteDisplayH = dh;
@@ -2516,12 +2564,12 @@ export class BattleScene extends Component {
         assets.destroyedSpritePath,
         `[BattleScene] destroyed tank sprite load failed (${kind}); fallback to vector wreck:`,
         (sf, dw, dh) => {
-          this.destroyedTopMeta[kind] = { sf, dw, dh };
+          destroyedRegistry[kind] = { sf, dw, dh };
         },
       );
 
       if (!isSplitTankKind(kind)) return;
-      const split = this.ensureSplitTankSprites(kind);
+      const split = this.ensureSplitTankSprites(kind, lateWar);
       this.loadSpriteFrame(
         assets.hullSpritePath,
         `[BattleScene] ${kind} hull split sprite load failed; fallback to top sprite:`,
@@ -2540,6 +2588,7 @@ export class BattleScene extends Component {
       );
     });
 
+    if (lateWar) return;
     this.loadSpriteFrame(
       'textures/units/sherman_commander_hatch_open_v2/spriteFrame',
       '[BattleScene] Sherman commander hatch sprite load failed; hatch will have no commander visual:',
@@ -2646,6 +2695,14 @@ export class BattleScene extends Component {
     gNode.addChild(bridgeLayerNode);
     this.sceneryPoolParents.set(this.bridgeSpritePool, bridgeLayerNode);
 
+    // Rock faces and their casts are terrain: tracks, blood and infantry sit above them.
+    this.rockyShadows = new ObjectShadowRenderer(gNode, 'RockyGroundShadows');
+    const rockyLayerNode = new Node('RockyHighlandSprites');
+    rockyLayerNode.layer = this.node.layer;
+    rockyLayerNode.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(rockyLayerNode);
+    this.sceneryPoolParents.set(this.rockySpritePool, rockyLayerNode);
+
     // Permanent tank tracks sit above terrain but below buildings, foliage,
     // units, campaign darkness and fog. They are redrawn only when movement
     // adds a new segment, never from update().
@@ -2705,8 +2762,9 @@ export class BattleScene extends Component {
     gNode.addChild(urbanRubbleLayerNode);
     this.sceneryPoolParents.set(this.urbanRubbleSpritePool, urbanRubbleLayerNode);
 
-    const urbanBuildingLayerNode = new Node('UrbanBuildingSprites');
     this.sceneryShadows = new ObjectShadowRenderer(gNode, 'SceneryGroundShadows');
+
+    const urbanBuildingLayerNode = new Node('UrbanBuildingSprites');
     urbanBuildingLayerNode.layer = this.node.layer;
     urbanBuildingLayerNode.addComponent(UITransform).setContentSize(1280, 720);
     gNode.addChild(urbanBuildingLayerNode);
@@ -2793,6 +2851,14 @@ export class BattleScene extends Component {
     const tankMask = tankMaskNode.addComponent(Mask);
     tankMask.type = Mask.Type.GRAPHICS_STENCIL;
     this.tankVisibilityGraphics = tankMask.subComp as Graphics;
+    // Bunkers are scenery like city roofs: keep their bodies outside the visible-unit
+    // stencil so unseen intact structures and wrecks remain beneath the fog overlay.
+    const bunkerContent = new Node('BunkerContent');
+    bunkerContent.layer = this.node.layer;
+    bunkerContent.addComponent(UITransform).setContentSize(1280, 720);
+    this.bunkerGraphics = bunkerContent.addComponent(Graphics);
+    gNode.insertChild(bunkerContent, tankMaskNode.getSiblingIndex());
+    this.bunkerContentNode = bunkerContent;
     const tankContent = new Node('TankContent');
     tankContent.layer = this.node.layer;
     tankContent.addComponent(UITransform).setContentSize(1280, 720);
@@ -3090,13 +3156,21 @@ export class BattleScene extends Component {
       ...urbanBuildingPaths, ...urbanDestructiblePaths, ...urbanRoadPaths, ...europeanRoadPaths,
     ];
     this.pendingTerrainSpriteLoads = Object.keys(terrainPaths).length
-      + Object.keys(winterTerrainPaths).length + urbanOverlayPaths.length + 24;
+      + Object.keys(winterTerrainPaths).length + urbanOverlayPaths.length + 24 + ROCKY_HIGHLAND_SPRITE_PATHS.length;
     const finishTerrainSpriteLoad = () => {
       this.pendingTerrainSpriteLoads = Math.max(0, this.pendingTerrainSpriteLoads - 1);
       if (this.pendingTerrainSpriteLoads !== 0) return;
       this.terrainSpriteBatchReady = true;
       this.requestResourceRedraw();
     };
+    ROCKY_HIGHLAND_SPRITE_PATHS.forEach((path, index) => {
+      resources.load(path, SpriteFrame, (err, frame) => {
+        if (!this.isValid) return;
+        if (err || !frame) console.warn(`[BattleScene] rocky variant load failed (${path}); using base rock:`, err);
+        else this.rockyVariantFrames[index] = frame;
+        finishTerrainSpriteLoad();
+      });
+    });
     resources.load('textures/terrain/redesign_v3/materials', JsonAsset, (err, asset) => {
       if (!this.isValid) return;
       if (err || !asset || !this.terrainLayerNode) {
@@ -3402,7 +3476,7 @@ export class BattleScene extends Component {
       damaged: false,
       loaded: role === 'protagonist' ? false : undefined,
       loadedShell: role === 'protagonist' ? null : undefined,
-      ...(GameSession.gameMode === 'hardcore' ? initialMainGunLoadingState(getUnitStats(kind, ownerFactionId === 'japan' ? 'pacific' : 'europe')) : {}),
+      ...((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? initialMainGunLoadingState(getUnitStats(kind, ownerFactionId === 'japan' ? 'pacific' : 'europe')) : {}),
       hatchOpen: role === 'protagonist' ? false : undefined,
       fireLevel: 0,
       turretDamaged: false,
@@ -4388,7 +4462,7 @@ export class BattleScene extends Component {
       miscDone: this.miscDone,
       playerStep: this.playerStep as SavePlayerStep,
       hatchChangedThisTurn: this.hatchChangedThisTurn,
-      phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+      phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used, type: s.type })),
       attackPositionMemory: this.attackPositionMemory,
       missionSource: this.missionSource,
     });
@@ -4407,7 +4481,7 @@ export class BattleScene extends Component {
 
   private campaignUpgradesEnabled(): boolean {
     return !!this.campaignRuntime
-      && GameSession.gameMode === 'hardcore'
+      && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && !GameSession.isPvp;
   }
 
@@ -5266,7 +5340,8 @@ export class BattleScene extends Component {
     this.airborneReactionTurn = -1;
     this.casualtyCheckedTurn = -1;
     this.rng = new RNG(this.rngSeed || undefined);
-    this.mission = loadMission(data, this.rng, { hardcore: GameSession.gameMode === 'hardcore', preservePlayerReload: options.preservePlayerReload });
+    this.mission = loadMission(data, this.rng, { hardcore: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), preservePlayerReload: options.preservePlayerReload });
+    this.loadMissionTankCamouflage();
     this.applyBattlefieldCameraRotation();
     if (this.campaignUpgradesEnabled()) {
       applyCampaignUpgradesToSherman(this.mission.sherman, this.campaignUpgradeIds);
@@ -5581,13 +5656,19 @@ export class BattleScene extends Component {
     this.mapDeepShadowGraphics.clear();
     this.unitGraphics.clear();
     this.tankGraphics?.clear();
+    this.bunkerGraphics?.clear();
     this.buildingGraphics?.clear();
     this.silhouetteSources.clear();
     this.silhouetteClaimed.clear();
+    this.bunkerOcclusionSprites.clear();
+    this.infantryOcclusionSprites.clear();
+    this.infantryVectorSilhouettes.length = 0;
     this.occlusionShapes.length = 0;
     this.vectorSilhouettes.length = 0;
     this.terrainSpritePoolNext = 0;
     for (const { node } of this.terrainSpritePool) node.active = false;
+    this.rockySpritePoolNext = 0;
+    for (const { node } of this.rockySpritePool) node.active = false;
     this.bridgeSpritePoolNext = 0;
     for (const { node } of this.bridgeSpritePool) node.active = false;
     this.urbanBuildingSpritePoolNext = 0;
@@ -5626,6 +5707,7 @@ export class BattleScene extends Component {
 
     const { map, sherman, enemies } = this.mission;
     const tiles = map.all();
+    this.prepareRockyHighlandVariants(tiles);
 
     if (!usingContinuousTerrain) {
     // 1. 地形格：分两遍绘制，避免「每格 fill+stroke 紧挨」时邻格 fill 盖住共享边上的描边
@@ -5633,7 +5715,7 @@ export class BattleScene extends Component {
     const spriteBackedTileKeys = new Set<string>();
     for (const t of tiles) {
       const c = this.project(t.pos.q, t.pos.r);
-      if (this.drawTerrainTileSprite(c.x, c.y, this.hexSize, t.terrain)) {
+      if (this.drawTerrainTileSprite(c.x, c.y, this.hexSize, t.terrain, t)) {
         spriteBackedTileKeys.add(`${t.pos.q},${t.pos.r}`);
         continue;
       }
@@ -5739,7 +5821,7 @@ export class BattleScene extends Component {
       for (const t of tiles) {
         if (!t.terrain.startsWith('urban_') && t.terrain !== 'rocky') continue;
         const c = this.project(t.pos.q, t.pos.r);
-        this.drawTerrainTileSprite(c.x, c.y, this.hexSize, t.terrain);
+        this.drawTerrainTileSprite(c.x, c.y, this.hexSize, t.terrain, t);
       }
       for (const t of tiles) {
         if (t.terrain !== 'urban_road' || !t.roads) continue;
@@ -5772,6 +5854,7 @@ export class BattleScene extends Component {
 
     // 1b. 城市建筑图案：建筑格与城市道路共用砖面底座，透明建筑贴图在专用层按式样缩放。
     for (const t of tiles) {
+      if (this.hasBunkerAt(t.pos)) continue;
       if (t.urbanKind === 'indestructible' || t.urbanKind === 'destructible') {
         const path = urbanBuildingSpritePath(t);
         const frame = path ? this.urbanOverlaySpriteFrames[path] : null;
@@ -5804,11 +5887,13 @@ export class BattleScene extends Component {
     // 2b. Pacific 防波堤：沿格边绘制石块，规则层由 HexMap.canTankCrossEdge 判定。
     const breakwaterKeys = new Set<string>();
     const beachEdgeKeys = new Set<string>();
+    const seawallSegments: SeawallSegment[] = [];
     for (const tile of tiles) {
       const c = this.project(tile.pos.q, tile.pos.r);
       drawBeachOverlays(this.g!, c.x, c.y, this.hexSize, !!tile.crater, !!tile.steelHedgehogs);
-      this.drawBeachTileEdges(c.x, c.y, this.hexSize, tile, beachEdgeKeys);
+      this.drawBeachTileEdges(c.x, c.y, this.hexSize, tile, beachEdgeKeys, false, seawallSegments);
     }
+    drawSeawallJoints(this.g!, seawallSegments, this.hexSize);
     for (const t of tiles) {
       if (!t.breakwaters) continue;
       const c = this.project(t.pos.q, t.pos.r);
@@ -5824,7 +5909,7 @@ export class BattleScene extends Component {
     if (!this.anim && this.phase === 'player'
         && (this.playerStep === 'attack' || this.playerStep === 'misc')
         && this.selectedGunDieIdx >= 0
-        && isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore')
+        && isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))
         && this.outcome === 'ongoing') {
       this.drawAttackableHighlights();
     }
@@ -5855,14 +5940,16 @@ export class BattleScene extends Component {
     this.g = this.unitGraphics;
     for (const u of units) {
       if (u.destroyed) {
-        this.g = isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
+        this.g = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(u)
+          ? this.bunkerGraphics : isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
         this.drawUnitMaybeAnim(u);
         this.captureSilhouetteSources(u);
       }
     }
     for (const u of units) {
       if (!u.destroyed) {
-        this.g = isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
+        this.g = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(u)
+          ? this.bunkerGraphics : isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
         this.drawUnitMaybeAnim(u);
         this.captureSilhouetteSources(u);
       }
@@ -5881,7 +5968,7 @@ export class BattleScene extends Component {
     this.unitOcclusion?.sync(this.silhouetteSources, [
       ...this.urbanBuildingSpritePool.map(slot => slot.sprite),
       ...this.foliageSpritePool.map(slot => slot.sprite),
-    ], this.occlusionShapes, this.vectorSilhouettes);
+    ], this.occlusionShapes, this.vectorSilhouettes, this.bunkerInfantryOccluders());
     this.redrawObjectShadows();
     this.placeUnitEffectLayerAboveUnits();
     this.syncUnitEffects(0);
@@ -5909,9 +5996,26 @@ export class BattleScene extends Component {
   }
 
   private redrawObjectShadows() {
+    // Split units cast from their base only, including bunkers in the scenery layer.
+    const turrets = new Set([
+      ...Object.values(this.splitTankSprites), ...Object.values(this.lateWarSplitTankSprites),
+    ].map(assets => assets?.turret));
+    const rocks = this.rockyShadows;
+    if (rocks) {
+      rocks.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
+      for (let i = 0; i < this.rockySpritePoolNext; i++) {
+        rocks.draw(this.rockySpritePool[i].sprite, 'rocky', this.hexSize);
+      }
+      rocks.end();
+    }
     const scenery = this.sceneryShadows;
     if (scenery) {
       scenery.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
+      // Bunker bodies remain visible beneath fog, so their casts must share the
+      // unmasked building layer rather than disappear with vehicle visibility.
+      for (const sprite of this.bunkerOcclusionSprites.keys()) {
+        if (!turrets.has(sprite.spriteFrame)) scenery.draw(sprite, 'building', this.hexSize);
+      }
       for (let i = 0; i < this.urbanBuildingSpritePoolNext; i++) {
         const sprite = this.urbanBuildingSpritePool[i].sprite;
         const groundProp = sprite.spriteFrame === this.redesignObjectFrames.rural_hay
@@ -5930,11 +6034,12 @@ export class BattleScene extends Component {
     if (vehicles) {
       vehicles.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
       if (this.shermanTopSprite) vehicles.draw(this.shermanTopSprite, 'vehicle', this.hexSize);
-      // A split tank casts one hull shadow; turret/hatch layers must not darken it twice.
-      const turrets = new Set(Object.values(this.splitTankSprites).map(assets => assets?.turret));
+      // Bunkers already cast in the scenery layer; retain masked shadows for mobile units.
       for (let i = 0; i < this.enemyTopPoolNext; i++) {
         const sprite = this.enemyTopSpritePool[i].sprite;
-        if (!turrets.has(sprite.spriteFrame)) vehicles.draw(sprite, 'vehicle', this.hexSize);
+        if (!this.bunkerOcclusionSprites.has(sprite) && !turrets.has(sprite.spriteFrame)) {
+          vehicles.draw(sprite, 'vehicle', this.hexSize);
+        }
       }
       for (let i = 0; i < this.infantryTopPoolNext; i++) {
         vehicles.draw(this.infantryTopSpritePool[i].sprite, 'infantry', this.hexSize);
@@ -6132,7 +6237,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    if (GameSession.gameMode === 'hardcore') {
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
       const now = Date.now();
       for (const [unitId, hexKey] of this.livingFriendlyTankHexKeys) {
         if (livingNow.has(unitId) || this.visibleHexKeys.has(hexKey)) continue;
@@ -6304,7 +6409,7 @@ export class BattleScene extends Component {
     if (!tile || this.isDeepShadowTile(tile) || distance === 0 || distance > MG_MAX_RANGE) return null;
     const direction = fireDirectionTo(sherman.pos, pos);
     if (direction === null) return null;
-    if (GameSession.gameMode === 'hardcore') {
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
       return selectTankMachineGun(
         { ...sherman, turretFacing: this.currentTurretFacingFor(sherman, direction) },
         direction,
@@ -6515,7 +6620,7 @@ export class BattleScene extends Component {
     const precisionGunSelection = this.selectedGunDieIdx >= 0
       && this.selectedGunHitThresholdModifier < 0;
     const smokeGunSelection = this.selectedGunDieIdx >= 0
-      && GameSession.gameMode === 'hardcore'
+      && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && resolvedLoadedShell(this.mission.sherman) === 'smoke';
     const classicGunSelection = GameSession.gameMode === 'classic' && this.selectedGunDieIdx >= 0;
     const turretCanRotate = this.playerTurretCanRotate();
@@ -6534,7 +6639,7 @@ export class BattleScene extends Component {
     if (showTurretAimMarkers) {
       const legalWeaponTargetKeys = this.playerWeaponTargetHexKeys();
       const unloadedGunRotation = this.selectedGunDieIdx >= 0
-        && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
+        && !isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
       const originKey = HexMap.keyOf(this.mission.sherman.pos);
       const reachableKeys = new Set<string>();
       const reachableTiles: Tile[] = [];
@@ -6543,7 +6648,8 @@ export class BattleScene extends Component {
           if (this.isDeepShadowTile(tile)) continue;
           const tileKey = HexMap.keyOf(tile.pos);
           if (tileKey === originKey) continue;
-          if (machineGunSelection && this.machineGunAimDirection(tile.pos) === null) continue;
+          const machineGunDirection = machineGunSelection ? this.machineGunAimDirection(tile.pos) : null;
+          if (machineGunSelection && machineGunDirection === null) continue;
           if (classicGunSelection && !this.canClassicMainGunReachTile(tile)) continue;
           if (!classicGunSelection && !machineGunSelection && !precisionGunSelection && !smokeGunSelection) {
             const direction = this.isHexVisible(tile.pos)
@@ -6565,12 +6671,24 @@ export class BattleScene extends Component {
             this.drawPrecisionTargetReticle(overlay, c.x, c.y);
             continue;
           }
-          reachableKeys.add(tileKey);
-          reachableTiles.push(tile);
-          this.drawTurretAimHex(overlay, c.x, c.y);
+          // Hull-MG coverage keeps its fill, but cannot extend the turret's
+          // boundary into a direction the turret cannot reach this action.
+          const hullMachineGunOnly = machineGunDirection !== null && GameSession.gameMode !== 'classic'
+            && (!this.canTurretReachDirection(this.mission.sherman, machineGunDirection)
+              || (this.mission.sherman.turretDamaged
+                && this.currentTurretFacingFor(this.mission.sherman, machineGunDirection) !== machineGunDirection));
+          if (!hullMachineGunOnly) {
+            reachableKeys.add(tileKey);
+            reachableTiles.push(tile);
+          }
+          // Keep every aimable hex in the firing-arc boundary, including those
+          // behind cover. Only the fill promises a clear main-gun firing path.
+          if (machineGunSelection || classicGunSelection || this.canMainGunReachTile(tile)) {
+            this.drawTurretAimHex(overlay, c.x, c.y);
+          }
         }
       }
-      if (turretCanRotate && GameSession.gameMode === 'hardcore') {
+      if (turretCanRotate && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         for (const pos of this.outsideMapTurretAimPositions()) {
           if (this.outsideMapTurretAimDirection(pos) === null) continue;
           const c = this.project(pos.q, pos.r);
@@ -6670,8 +6788,8 @@ export class BattleScene extends Component {
       for (const target of enemies) {
         if (target.destroyed || !this.isUnitVisible(target)) continue;
         const machineGun = this.tankMachineGunSelection(sherman, target);
-        if (GameSession.gameMode === 'hardcore' && !machineGun) continue;
-        if (GameSession.gameMode !== 'hardcore'
+        if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !machineGun) continue;
+        if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')
           && !this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, target))) continue;
         if (canMGAttack({
           attacker: sherman,
@@ -6681,16 +6799,16 @@ export class BattleScene extends Component {
           units,
           smokeHexes: this.mission.smokeHexes,
           weather: this.currentWeather(),
-          lockedFire: GameSession.gameMode === 'hardcore',
+          lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
           expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
-          atGunCrewTargets: GameSession.gameMode === 'hardcore',
+          atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
           ...this.tankMachineGunContext(sherman, target, machineGun),
         }).ok) keys.add(HexMap.keyOf(target.pos));
       }
       return keys;
     }
-    if (this.selectedGunDieIdx < 0 || !isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')) return keys;
-    const shellType = GameSession.gameMode === 'hardcore'
+    if (this.selectedGunDieIdx < 0 || !isMainGunLoaded(sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))) return keys;
+    const shellType = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       ? resolvedLoadedShell(sherman) : null;
     if (shellType === 'smoke') {
       for (const tile of map.all()) if (this.canFireSmokeAt(tile)) keys.add(HexMap.keyOf(tile.pos));
@@ -6708,11 +6826,11 @@ export class BattleScene extends Component {
   private canPlayerMainGunAttack(target: Unit): boolean {
     if (!this.mission || target.destroyed || !this.isUnitVisible(target)) return false;
     const { map, sherman } = this.mission;
-    if (!isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')) return false;
-    const shellType = GameSession.gameMode === 'hardcore' ? resolvedLoadedShell(sherman) : null;
+    if (!isMainGunLoaded(sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))) return false;
+    const shellType = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? resolvedLoadedShell(sherman) : null;
     if (shellType === 'smoke') return false;
     if (isFootUnit(target)
-      && !isMainGunSuppressionAttack(sherman, target, GameSession.gameMode === 'hardcore', shellType)) return false;
+      && !isMainGunSuppressionAttack(sherman, target, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), shellType)) return false;
     if (!this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, target))) return false;
     return canAttack({
       attacker: sherman,
@@ -6724,11 +6842,11 @@ export class BattleScene extends Component {
       hitThresholdModifier: this.campaignMainGunHitThresholdModifier()
         + ambushHitThresholdModifier(sherman, GameSession.gameMode),
       hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
-      mainGunSuppressesInfantry: GameSession.gameMode === 'hardcore',
+      mainGunSuppressesInfantry: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       shellType: shellType ?? undefined,
-      hardcoreHeavyArtilleryRules: GameSession.gameMode === 'hardcore',
+      hardcoreHeavyArtilleryRules: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       precisionFire: this.selectedGunHitThresholdModifier < 0,
     }).ok;
   }
@@ -6757,8 +6875,8 @@ export class BattleScene extends Component {
     if (this.selectedGunHitThresholdModifier < 0) return false;
     const sherman = this.mission.sherman;
     if (!this.isHexVisible(tile.pos)
-      || !isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')
-      || (GameSession.gameMode === 'hardcore' && resolvedLoadedShell(sherman) !== 'he')) return false;
+      || !isMainGunLoaded(sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))
+      || ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && resolvedLoadedShell(sherman) !== 'he')) return false;
     const target = this.urbanBuildingTarget(tile);
     if (!this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, target))) return false;
     return canAttack({
@@ -6768,7 +6886,7 @@ export class BattleScene extends Component {
       theater: this.mission.data.theater,
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       shellType: 'he',
       precisionFire: this.selectedGunHitThresholdModifier < 0,
@@ -6892,7 +7010,7 @@ export class BattleScene extends Component {
   private drawAttackableHighlights() {
     if (!this.g || !this.mission) return;
     const { map, sherman } = this.mission;
-    const shellType = GameSession.gameMode === 'hardcore'
+    const shellType = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       ? resolvedLoadedShell(sherman) : null;
     if (shellType === 'smoke') return;
     const legalUnitTargetKeys = new Set<string>();
@@ -6900,7 +7018,7 @@ export class BattleScene extends Component {
       if (e.destroyed) continue;
       if (!this.isUnitVisible(e)) continue;
       // 主炮不瞄徒步类（步兵 / 军官）：徒步单位专属机枪（§3.1.2 / §3.6），避免大红圈误导
-      if (isFootUnit(e) && !isMainGunSuppressionAttack(sherman, e, GameSession.gameMode === 'hardcore', shellType)) continue;
+      if (isFootUnit(e) && !isMainGunSuppressionAttack(sherman, e, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), shellType)) continue;
       const ctx = {
         attacker: sherman,
         target: e,
@@ -6912,11 +7030,11 @@ export class BattleScene extends Component {
         hitThresholdModifier: this.campaignMainGunHitThresholdModifier()
           + ambushHitThresholdModifier(sherman, GameSession.gameMode),
         hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
-        mainGunSuppressesInfantry: GameSession.gameMode === 'hardcore',
+        mainGunSuppressesInfantry: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         shellType: shellType ?? undefined,
-        hardcoreHeavyArtilleryRules: GameSession.gameMode === 'hardcore',
+        hardcoreHeavyArtilleryRules: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         precisionFire: this.selectedGunHitThresholdModifier < 0,
       };
       if (!this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, e))) continue;
@@ -6991,9 +7109,9 @@ export class BattleScene extends Component {
       if (e.destroyed || isAttachedATGunCrew(e)) continue;
       if (!this.isUnitVisible(e)) continue;
       const machineGun = this.tankMachineGunSelection(sherman, e);
-      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), lockedFire: GameSession.gameMode === 'hardcore', expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore', ...this.tankMachineGunContext(sherman, e, machineGun) };
-      if (GameSession.gameMode === 'hardcore' && !machineGun) continue;
-      if (GameSession.gameMode !== 'hardcore'
+      const ctx = { attacker: sherman, target: e, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), ...this.tankMachineGunContext(sherman, e, machineGun) };
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !machineGun) continue;
+      if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')
         && !this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, e))) continue;
       if (!canMGAttack(ctx).ok) continue;
 
@@ -7163,7 +7281,7 @@ export class BattleScene extends Component {
     const g = this.ambushSightOverlayGraphics;
     if (!g) return;
     g.clear();
-    if (!this.mission || GameSession.gameMode !== 'hardcore') return;
+    if (!this.mission || (GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')) return;
     const now = Date.now();
     for (const watcher of this.allUnits()) {
       if (!watcher.ambushReadyThisTurn || watcher.destroyed
@@ -7837,7 +7955,7 @@ export class BattleScene extends Component {
   }
 
   private drawLockedFireReticles(g: Graphics) {
-    if (!this.mission || GameSession.gameMode !== 'hardcore') return;
+    if (!this.mission || (GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')) return;
     const scale = 0.6 * (1 + 0.08 * Math.sin(this.unitEffectTime * Math.PI * 2 / 1.8));
     const units = this.allUnits();
     const drawn = new Set<string>();
@@ -7849,7 +7967,7 @@ export class BattleScene extends Component {
       drawn.add(target.id);
       const c = this.interpolatedPos(target);
       const radius = Math.max(12, this.hexSize * 0.32) * scale;
-      g.strokeColor = new Color(255, 230, 70, 255);
+      g.strokeColor = new Color(255, 255, 255, 255);
       // Keep strokes above two pixels even at the smallest breathing scale.
       g.lineWidth = Math.max(2.2, 3.8 * scale);
       g.circle(c.x, c.y, radius);
@@ -7868,7 +7986,7 @@ export class BattleScene extends Component {
 
   /** Tactical readiness stays at the barrel, separate from the damage status row. */
   private drawAmbushMuzzleReticles(g: Graphics) {
-    if (!this.mission || GameSession.gameMode !== 'hardcore') return;
+    if (!this.mission || (GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')) return;
     const pulse = (1 + Math.cos(this.unitEffectTime * Math.PI * 2 / 1.2)) / 2;
     const radius = Math.max(6, this.hexSize * 0.12) * (1.12 - pulse * 0.22);
     const alpha = Math.round(170 + pulse * 85);
@@ -8058,11 +8176,14 @@ export class BattleScene extends Component {
   private recordVectorSilhouette(unit: Unit, x: number, y: number, radius: number) {
     if (this.g !== this.unitGraphics || unit.destroyed || !this.isUnitVisible(unit)
         || !this.shouldDisplayUnitOutline(unit)) return;
-    this.vectorSilhouettes.push({ circle: [x, y, radius], color: this.unitSilhouetteColor(unit) });
+    const vector = { circle: [x, y, radius] as [number, number, number], color: this.unitSilhouetteColor(unit) };
+    this.vectorSilhouettes.push(vector);
+    if (GameSession.gameMode !== 'classic' && isFootUnit(unit)) this.infantryVectorSilhouettes.push({ unit, vector });
   }
 
   private shouldDisplayUnitOutline(unit: Unit): boolean {
     if (isTankUnit(unit)) return false;
+    if (isFootUnit(unit) && this.hasBunkerAt(unit.pos)) return true;
     if (!isFootUnit(unit) && !isAntiTankGunUnit(unit) && !isHeavyArtilleryUnit(unit)) return true;
     const tile = this.mission?.map.get(unit.pos);
     return !!tile && (tile.terrain === 'forest'
@@ -8081,16 +8202,33 @@ export class BattleScene extends Component {
     for (const sprite of sprites) {
       if (sprite?.node.active && !this.silhouetteClaimed.has(sprite)) {
         this.silhouetteClaimed.add(sprite);
-        const parent = isTankUnit(unit)
+        const bunker = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(unit);
+        const parent = bunker ? this.bunkerContentNode : isTankUnit(unit)
           ? (unit.destroyed ? this.tankWreckLayer : this.tankContentNode)
           : this.infantryContentNode;
         if (parent && sprite.node.parent !== parent) parent.addChild(sprite.node);
         // Pool slots can move between infantry and tank layers. Restore draw
         // order on every reuse so the turret stays above its hull.
         if (parent) sprite.node.setSiblingIndex(parent.children.length - 1);
+        if (bunker) this.bunkerOcclusionSprites.set(sprite, unit);
+        if (GameSession.gameMode !== 'classic' && isFootUnit(unit)) this.infantryOcclusionSprites.set(sprite, unit);
         if (this.shouldDisplayUnitOutline(unit) && !unit.destroyed && this.isUnitVisible(unit)) this.silhouetteSources.set(sprite, color);
       }
     }
+  }
+
+  private bunkerInfantryOccluders(): UnitSpriteOccluder[] {
+    return [...this.bunkerOcclusionSprites].map(([blocker, bunker]) => ({
+      blocker,
+      vectors: this.infantryVectorSilhouettes
+        .filter(({ unit }) => unit.pos.q === bunker.pos.q && unit.pos.r === bunker.pos.r)
+        .map(({ vector }) => vector),
+      sources: new Map([...this.infantryOcclusionSprites].flatMap(([sprite, infantry]) => {
+        const color = this.silhouetteSources.get(sprite);
+        return color && infantry.pos.q === bunker.pos.q && infantry.pos.r === bunker.pos.r
+          ? [[sprite, color] as [Sprite, Color]] : [];
+      })),
+    }));
   }
 
   private placeUnitEffectLayerAboveUnits() {
@@ -8286,12 +8424,13 @@ export class BattleScene extends Component {
     return u.destroyed && this.destroyWreckVisualIds.has(u.id);
   }
 
-  /** Returns whether another living unit shares this infantry unit's hex. */
+  /** Other units and tank wrecks spread infantry; non-classic bunkers act as buildings. */
   private infantrySharesHexWithOtherUnit(u: Unit): boolean {
     if (!this.mission) return false;
     const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
     for (const o of all) {
-      if (o === u || o.destroyed) continue;
+      if (o === u || (o.destroyed && !isTankUnit(o))) continue;
+      if (GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(o)) continue;
       if (o.pos.q === u.pos.q && o.pos.r === u.pos.r) return true;
     }
     return false;
@@ -8299,7 +8438,7 @@ export class BattleScene extends Component {
 
   /** Hardcore: an enemy tank sharing this squad's hex becomes its visual focus. */
   private enemyTankSharingInfantryHex(u: Unit): Unit | null {
-    if (GameSession.gameMode !== 'hardcore' || !isFootUnit(u)) return null;
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isFootUnit(u)) return null;
     return this.allUnits().find(o =>
       o !== u
       && !o.destroyed
@@ -8430,7 +8569,7 @@ export class BattleScene extends Component {
     attacker: Unit | null,
   ): void {
     if (this.destroyedTurretVisualIds.has(u.id) || !isSplitTankKind(u.kind)) return;
-    const assets = this.splitTankSprites[u.kind];
+    const assets = this.splitTankSpritesFor(u, u.kind);
     const layer = this.unitEffectNode;
     if (!assets?.turret || !layer) return;
 
@@ -8604,7 +8743,7 @@ export class BattleScene extends Component {
 
   /** Hardcore: infantry entering an abandoned gun hex becomes its operator group. */
   private captureAbandonedATGunsAt(infantry: Unit): void {
-    if (GameSession.gameMode !== 'hardcore' || !isFootUnit(infantry) || infantry.destroyed) return;
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isFootUnit(infantry) || infantry.destroyed) return;
     const gun = this.allUnits().find(unit =>
       isAbandonedATGun(unit)
       && unit.pos.q === infantry.pos.q
@@ -9477,7 +9616,7 @@ export class BattleScene extends Component {
     aim: { ux: number; uy: number },
   ): { x: number; y: number; ux: number; uy: number } | null {
     if (cfg.muzzle.spriteX === 0 && cfg.muzzle.spriteY === 0) return null;
-    const meta = this.enemyTopMeta[u.kind as TankVisualKind];
+    const meta = this.tankTopMetaFor(u);
     if (!meta?.sf) return null;
 
     const w = meta.dw > 0 ? meta.dw : meta.sf.width;
@@ -11080,6 +11219,7 @@ export class BattleScene extends Component {
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
       const crushedWire = this.mission.map.applyMovementTerrainEffects(finishedUnit, { q: anim.fromQ, r: anim.fromR }, finishedUnit.pos);
       if (crushedWire) this.battleLogI18n('battleLog.wireCrushed', { unitKind: finishedUnit.kind });
+      this.consumeMovementDiceOnMudEntry(finishedUnit);
       if (isTankUnit(finishedUnit) && this.mission.map.get(finishedUnit.pos)?.steelHedgehogs) {
         this.spawnFloater(finishedUnit.pos.q, finishedUnit.pos.r, t('floater.hedgehogParalyzed'), new Color(200, 160, 240, 255), { size: 22 });
         this.battleLogI18n('battleLog.hedgehogParalyzed', { unitKind: finishedUnit.kind });
@@ -11206,7 +11346,8 @@ export class BattleScene extends Component {
     finishManeuverSound();
     // 玩家移动 / 转向 / 杂项阶段驾驶类动作结束后
     if (this.phase === 'player'
-        && (this.playerStep === 'movement' || this.playerStep === 'misc')) {
+        && (this.playerStep === 'movement' || this.playerStep === 'misc'
+          || (GameSession.gameMode === 'test' && this.playerStep === 'attack'))) {
       this.updateHUD();
       this.completePhaseDiceAction();
     }
@@ -11262,10 +11403,15 @@ export class BattleScene extends Component {
   }
 
   /** 绘制带自有格线的地形贴图；失败时调用方会走 Graphics 兜底。 */
-  private drawTerrainTileSprite(cx: number, cy: number, size: number, terrain: TerrainType): boolean {
-    const sf = this.terrainSpriteFrameFor(terrain);
-    if (!sf || !this.ensureScenerySlot(this.terrainSpritePool, this.terrainSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL)) return false;
-    const slot = this.terrainSpritePool[this.terrainSpritePoolNext++];
+  private drawTerrainTileSprite(cx: number, cy: number, size: number, terrain: TerrainType, tile?: Tile): boolean {
+    const sf = this.terrainSpriteFrameFor(terrain, tile);
+    const rocky = terrain === 'rocky';
+    const pool = rocky ? this.rockySpritePool : this.terrainSpritePool;
+    const index = rocky ? this.rockySpritePoolNext : this.terrainSpritePoolNext;
+    if (!sf || !this.ensureScenerySlot(pool, index, BattleScene.TERRAIN_SPRITE_POOL)) return false;
+    if (rocky) this.rockySpritePoolNext++;
+    else this.terrainSpritePoolNext++;
+    const slot = pool[index];
     slot.sprite.spriteFrame = sf;
     const ut = slot.node.getComponent(UITransform);
     if (ut) ut.setContentSize(size * Math.sqrt(3), size * 2.0);
@@ -11327,7 +11473,20 @@ export class BattleScene extends Component {
     return (this.mission?.data.theater ?? 'europe') === 'europe' && !this.usesWinterTerrainVisuals();
   }
 
-  private terrainSpriteFrameFor(terrain: TerrainType): SpriteFrame | null {
+  private prepareRockyHighlandVariants(tiles: Tile[]) {
+    const seed = this.mission?.data.id ?? '';
+    const keys = tiles.filter(tile => tile.terrain === 'rocky').map(tile => rockyCellKey(tile.pos)).sort();
+    const signature = JSON.stringify([seed, keys]);
+    if (signature === this.rockyVariantLayoutSignature) return;
+    this.rockyVariantLayoutSignature = signature;
+    this.rockyVariantsByCell = assignRockyHighlandVariants(tiles, seed);
+  }
+
+  private terrainSpriteFrameFor(terrain: TerrainType, tile?: Tile): SpriteFrame | null {
+    if (terrain === 'rocky' && tile) {
+      const variant = this.rockyVariantsByCell.get(rockyCellKey(tile.pos));
+      if (variant !== undefined && this.rockyVariantFrames[variant]) return this.rockyVariantFrames[variant];
+    }
     if (this.usesWinterTerrainVisuals()) {
       return this.winterTerrainSpriteFrames[terrain] ?? this.terrainSpriteFrames[terrain];
     }
@@ -11683,6 +11842,7 @@ export class BattleScene extends Component {
   }
 
   private drawRuralBuildingSprites(cx: number, cy: number, size: number, tile: Tile, parent?: Node) {
+    if (this.hasBunkerAt(tile.pos)) return;
     const village = !tile.roads?.some(Boolean);
     const yardFrame = this.redesignObjectFrames[this.usesWinterTerrainVisuals() ? 'rural_yard_patch_snow' : 'rural_yard_patch'];
     if (parent && village && yardFrame) {
@@ -11730,6 +11890,7 @@ export class BattleScene extends Component {
   }
 
   private drawBuildingOverlay(cx: number, cy: number, size: number, tile: Tile) {
+    if (this.hasBunkerAt(tile.pos)) return;
     if (!tile.urbanKind && !tile.terrain.startsWith('urban_') && this.ruralRoofFrame(0)) {
       if (this.g === this.mapOcclusionGraphics || this.g === this.buildingGraphics) this.drawRuralBuildingSprites(cx, cy, size, tile);
       // The inspector adds the same roof sprites after its Graphics preview.
@@ -12286,7 +12447,7 @@ export class BattleScene extends Component {
     g.stroke();
   }
 
-  private drawBeachTileEdges(cx: number, cy: number, size: number, tile: Tile, used: Set<string>, includeNeighbors = false) {
+  private drawBeachTileEdges(cx: number, cy: number, size: number, tile: Tile, used: Set<string>, includeNeighbors = false, segments?: SeawallSegment[]) {
     for (let ax = 0; ax < 6; ax++) {
       const np = neighbor(tile.pos, ax as Direction), adjacent = this.mission?.map.get(np);
       const wire = includeNeighbors ? this.mission?.map.barbedWireBetween(tile.pos, np) ?? 0 : tile.barbedWire?.[ax] ?? 0;
@@ -12299,6 +12460,7 @@ export class BattleScene extends Component {
         if (!(kind === 'wire' ? wire : wall) || used.has(`${kind}:${edgeKey}`)) continue;
         used.add(`${kind}:${edgeKey}`);
         const state = this.mission?.map.barbedWireBetween(tile.pos, np) || wire;
+        if (kind === 'seawall') segments?.push([x0, y0, x1, y1]);
         drawBeachEdge(this.g!, x0, y0, x1, y1, size, kind, state);
       }
     }
@@ -13136,7 +13298,7 @@ export class BattleScene extends Component {
     }
 
     if (isEnemyTopKind(unit.kind)) {
-      const meta = this.enemyTopMeta[unit.kind];
+      const meta = this.tankTopMetaFor(unit);
       if (meta?.sf) {
         const w = meta.dw > 0 ? meta.dw : meta.sf.width;
         const h = meta.dh > 0 ? meta.dh : meta.sf.height;
@@ -13756,7 +13918,7 @@ export class BattleScene extends Component {
     c: { x: number; y: number },
     facingLerp?: DirectionLerp | null,
   ) {
-    const assets = this.splitTankSprites[kind];
+    const assets = this.splitTankSpritesFor(u, kind);
     if (!assets?.hull) return;
 
     const node = slot.node;
@@ -13796,7 +13958,7 @@ export class BattleScene extends Component {
     bodyFacingLerp?: DirectionLerp | null,
     turretFacingLerp?: DirectionLerp | null,
   ) {
-    const assets = this.splitTankSprites[kind];
+    const assets = this.splitTankSpritesFor(u, kind);
     if (!assets?.turret) return;
 
     const node = slot.node;
@@ -14282,7 +14444,7 @@ export class BattleScene extends Component {
 
   private enemySupportsSplitTurret(u: Unit): boolean {
     if (!isSplitTankKind(u.kind)) return false;
-    const assets = this.splitTankSprites[u.kind];
+    const assets = this.splitTankSpritesFor(u, u.kind);
     return !!assets?.hull && !!assets.turret;
   }
 
@@ -14303,7 +14465,7 @@ export class BattleScene extends Component {
   }
 
   private turretTraverseSpeedFor(unit: Unit): number {
-    return GameSession.gameMode === 'hardcore' ? unit.stats.turretTraverseSpeed : 6;
+    return (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? unit.stats.turretTraverseSpeed : 6;
   }
 
   /** Classic range previews use the same firing rays and terrain checks as a real shot. */
@@ -14318,6 +14480,21 @@ export class BattleScene extends Component {
       theater: this.mission.data.theater,
       weather: this.currentWeather(),
       expandedTurretDirections: false,
+    }).ok;
+  }
+
+  /** Preview the firing path independently of targets, loading and current shared vision. */
+  private canMainGunReachTile(tile: Tile): boolean {
+    if (!this.mission) return false;
+    const { sherman, map, smokeHexes } = this.mission;
+    return canAttack({
+      attacker: sherman,
+      target: { ...sherman, id: 'main-gun-range-preview', pos: tile.pos, destroyed: false, hidden: false },
+      map,
+      smokeHexes,
+      theater: this.mission.data.theater,
+      weather: this.currentWeather(),
+      expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
     }).ok;
   }
 
@@ -14352,7 +14529,7 @@ export class BattleScene extends Component {
   }
 
   private tankMachineGunSelection(unit: Unit, target: Unit): TankMachineGunSelection | null {
-    if (GameSession.gameMode !== 'hardcore' || !isTankUnit(unit)) return null;
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isTankUnit(unit)) return null;
     const direction = unit.turretDamaged
       ? fireDirectionTo(unit.pos, target.pos)
       : this.turretTargetDirection(unit, target);
@@ -14366,7 +14543,7 @@ export class BattleScene extends Component {
   }
 
   private tankMachineGunContext(unit: Unit, target: Unit, selection?: TankMachineGunSelection) {
-    if (GameSession.gameMode !== 'hardcore' || !isTankUnit(unit)) return {};
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isTankUnit(unit)) return {};
     const resolved = selection ?? this.tankMachineGunSelection(unit, target) ?? undefined;
     return {
       lockedFire: true,
@@ -14382,7 +14559,7 @@ export class BattleScene extends Component {
     facingLerp?: DirectionLerp | null,
   ): boolean {
     if (!isDestroyedTopKind(u.kind)) return false;
-    const meta = this.destroyedTopMeta[u.kind];
+    const meta = this.destroyedTankTopMetaFor(u);
     if (!meta) return false;
 
     if (u.kind === 'sherman' && u === this.mission?.sherman) {
@@ -14512,7 +14689,7 @@ export class BattleScene extends Component {
         }
         return;
       }
-      const meta = this.enemyTopMeta[u.kind];
+      const meta = this.tankTopMetaFor(u);
       if (meta?.sf) {
         const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
         this.applyTopDownTankSprite(
@@ -15338,7 +15515,9 @@ export class BattleScene extends Component {
     this.applyCombatLogChrome(false);
     this.combatLogLines = [];
 
-    root.setSiblingIndex(Math.max(0, this.node.children.length - 1));
+    // Keep the log below the HUD so overlapping dice render and receive touches first.
+    const controls = this.hudRoot ?? this.diceTrayRoot;
+    if (controls?.parent === root.parent) root.setSiblingIndex(controls.getSiblingIndex());
   }
 
   /**
@@ -16183,9 +16362,9 @@ export class BattleScene extends Component {
     const W = 240;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
-    const showCampaignUpgrades = GameSession.gameMode === 'hardcore' && GameSession.isCampaign;
+    const showCampaignUpgrades = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && GameSession.isCampaign;
     // 战役强化槽需要保留完整的描边与按压缩放空间；360 高度使槽底距面板底边约 21px。
-    const H = showCampaignUpgrades ? 360 : GameSession.gameMode === 'hardcore' ? 236 : 214;
+    const H = showCampaignUpgrades ? 360 : (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? 236 : 214;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
     const x = CANVAS_W * 0.5 - W * 0.5 - 10;
@@ -16194,7 +16373,7 @@ export class BattleScene extends Component {
     const innerTop = H / 2 - 8;
     const shermanTitleY = innerTop - 14;
     const bodyFirstY = shermanTitleY - 24;
-    const bodyRowY = Array.from({ length: GameSession.gameMode === 'hardcore' ? 5 : 4 }, (_, j) => bodyFirstY - j * BODY_GAP);
+    const bodyRowY = Array.from({ length: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? 5 : 4 }, (_, j) => bodyFirstY - j * BODY_GAP);
     const sepY = bodyRowY[bodyRowY.length - 1] - 20;
     const crewTitleY = sepY - 18;
     // 标题与图标原本边界轻微交叠；额外下移 6px，留出清晰的视觉间距。
@@ -16284,7 +16463,7 @@ export class BattleScene extends Component {
       [t('status.row.turret'),    'turret'],
       [t('status.row.mobility'),  'mobility'],
     ];
-    if (GameSession.gameMode === 'hardcore') bodyRows.push([t('status.row.radio'), 'radio']);
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) bodyRows.push([t('status.row.radio'), 'radio']);
     bodyRows.push([t('status.row.fireLevel'), 'fire']);
     for (let i = 0; i < bodyRows.length; i++) {
       const [label, key] = bodyRows[i];
@@ -16496,7 +16675,7 @@ export class BattleScene extends Component {
       if (s.destroyed) {
         this.statusLoaded.string = '—';
         this.statusLoaded.color = STATUS_VALUE_DOWN;
-      } else if (GameSession.gameMode === 'hardcore') {
+      } else if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         this.statusLoaded.string = this.mainGunLoadingLabel(s);
         this.statusLoaded.color = isMainGunLoaded(s, true) ? STATUS_VALUE_OK : STATUS_VALUE_DOWN;
       } else if (s.loaded) {
@@ -16651,7 +16830,7 @@ export class BattleScene extends Component {
       } else if (this.phase === 'enemy') {
         this.hudLabel.string = t('hud.enemyTurn', { n: this.turn });
       } else if (this.playerStep === 'choose') {
-        const doneTag = [
+        const doneTag = GameSession.gameMode === 'test' ? t('btn.attackMovementPhase') : [
           this.movementDone ? t('hud.moveDone')   : t('hud.moveTodo'),
           this.attackDone   ? t('hud.attackDone') : t('hud.attackTodo'),
         ].join(' ');
@@ -16662,8 +16841,8 @@ export class BattleScene extends Component {
         this.hudLabel.string = t('hud.miscPhase', { n: this.turn, dice: this.remainingDice() });
       } else {
         const sherman = this.mission?.sherman;
-        const loaded = sherman && GameSession.gameMode === 'hardcore' ? this.mainGunLoadingLabel(sherman) : sherman?.loaded
-          ? GameSession.gameMode === 'hardcore'
+        const loaded = sherman && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? this.mainGunLoadingLabel(sherman) : sherman?.loaded
+          ? (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
             ? t((sherman.loadedShell ?? 'ap') === 'he' ? 'status.val.he'
               : sherman.loadedShell === 'smoke' ? 'status.val.smoke' : sherman.loadedShell === 'hvap' ? 'status.val.hvap' : 'status.val.ap')
             : t('hud.loaded')
@@ -16676,7 +16855,7 @@ export class BattleScene extends Component {
             : 'hud.attackSelectHint')}`;
         }
         else if (this.selectedMGDieIdx >= 0) sel = ` | ${t('hud.mgSelectHint')}`;
-        this.hudLabel.string = t('hud.attackPhase', {
+        this.hudLabel.string = t(GameSession.gameMode === 'test' ? 'hud.attackMovementPhase' : 'hud.attackPhase', {
           n: this.turn,
           loaded,
           dice: this.remainingDice(),
@@ -16893,6 +17072,7 @@ export class BattleScene extends Component {
         const key = HexMap.keyOf(next);
         if (previous.has(key)) continue;
         if (!this.canMoveToBattleTile(next)) continue;
+        if (this.hasBunkerAt(next)) continue;
         if (map.get(next)?.steelHedgehogs) continue;
         if (!map.canTankCrossEdge(current, next, { faction: sherman.faction })) continue;
         previous.set(key, current);
@@ -17357,6 +17537,13 @@ export class BattleScene extends Component {
     }
   }
 
+  /** The combined phase uses attack as its lifecycle state and routes actions per die. */
+  private dieStep(index: number): PlayerStep {
+    return this.playerStep === 'attack' && GameSession.gameMode === 'test'
+      ? this.phaseDice[index]?.type ?? 'attack'
+      : this.playerStep;
+  }
+
   /** 根据 playerStep / 胜负 / 敌方阶段等状态切换底部 UI 的可见性与文字。 */
   private refreshPhaseUI() {
     const pvpReady = !GameSession.isPvp || this.pvpBattleStarted;
@@ -17371,6 +17558,14 @@ export class BattleScene extends Component {
       this.chooseBar.active = barOn;
       if (barOn) this.refreshChooseHatchButton();
     }
+    const combined = GameSession.gameMode === 'test';
+    const chooseStep = PHASE_CHOOSE_BTN_W + 20;
+    if (this.chooseMoveBtn) this.chooseMoveBtn.active = !combined;
+    this.chooseHatchBtn?.setPosition(combined ? -chooseStep / 2 : -chooseStep, 0, 0);
+    this.chooseAttackBtn?.setPosition(combined ? chooseStep / 2 : chooseStep, 0, 0);
+    if (this.chooseAttackLabel) this.chooseAttackLabel.string = this.fitTextForLabel(
+      this.chooseAttackLabel, t(combined ? 'btn.attackMovementPhase' : 'btn.attackPhase'), PHASE_CHOOSE_BTN_W,
+    );
     const canMove   = !this.movementDone;
     const canAttack = !this.attackDone;
     if (this.chooseMoveBtn)   this.setPhaseBtnEnabled(this.chooseMoveBtn,   canMove,   PHASE_BTN_MOVE);
@@ -17453,6 +17648,12 @@ export class BattleScene extends Component {
     const n = this.phaseDice.length;
     this.ensureDiceVisualCount(n);
     const total = n > 0 ? SLOT * n + GAP * (n - 1) : 0;
+    // The combined pool can exceed one normal tray; keep it clear of Next Phase.
+    const { width } = visibleSizeInRootSpace(UI_ROOT_SCALE);
+    const scale = GameSession.gameMode === 'test' && total > 0
+      ? Math.min(1, Math.max(1, width - 2 * (ADVANCE_BTN_W + 40)) / total)
+      : 1;
+    this.diceTrayRoot?.setScale(scale, scale, 1);
     const startX = n > 0 ? -total * 0.5 + SLOT * 0.5 : 0;
     let shown = 0;
     for (let i = 0; i < this.diceVisuals.length; i++) {
@@ -17492,7 +17693,8 @@ export class BattleScene extends Component {
 
     const order = this.phaseDice
       .map((slot, index) => ({ slot, index }))
-      .sort((a, b) => (a.slot.pip - b.slot.pip) || (a.index - b.index));
+      .sort((a, b) => Number(a.slot.type === 'movement') - Number(b.slot.type === 'movement')
+        || (a.slot.pip - b.slot.pip) || (a.index - b.index));
 
     let changed = false;
     for (let i = 0; i < n; i++) {
@@ -17536,7 +17738,7 @@ export class BattleScene extends Component {
     const g = vis.bg;
     g.clear();
     this.drawDieBody(g, W, H, {
-      fill: slot.used ? DIE_FACE_USED_FILL : this.playerDieFillColor(),
+      fill: slot.used ? DIE_FACE_USED_FILL : this.playerDieFillColor(slot.type),
       border: highlighted ? DIE_FACE_SELECTED : DIE_FACE_BORDER,
       lineWidth: highlighted ? 4 : 2,
       shadow: !slot.used,
@@ -17553,7 +17755,7 @@ export class BattleScene extends Component {
     vis.faceLabel.string = '';
     vis.faceLabel.color = slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT;
 
-    const hint = this.dieActionHint(slot.pip);
+    const hint = this.dieActionHint(slot.pip, slot.type);
     const hintText = this.playerDiceRollAnim ? '' : slot.used ? t('dice.slot.used') : hint.text;
     vis.hintLabel.string = this.fitTextForLabel(vis.hintLabel, hintText, BattleScene.DICE_TRAY_SLOT + 12);
     vis.hintLabel.color = slot.used ? DIE_HINT_GREY : DIE_HINT_ACTIVE;
@@ -17652,8 +17854,9 @@ export class BattleScene extends Component {
   }
 
   /** 给定点数，返回当前阶段该骰面对应的动作名 + 配色，用于骰子下方小字提示。 */
-  private dieActionHint(pip: number): { text: string; color: Color } {
-    if (this.playerStep === 'movement') {
+  private dieActionHint(pip: number, type?: 'attack' | 'movement'): { text: string; color: Color } {
+    const step = GameSession.gameMode === 'test' && this.playerStep === 'attack' ? type : this.playerStep;
+    if (step === 'movement') {
       const a = classifyMoveDie(pip);
       switch (a) {
         case 'turn':    return { text: t('die.hint.turn'),    color: DIE_HINT_GREEN };
@@ -17663,7 +17866,7 @@ export class BattleScene extends Component {
         default:        return { text: t('die.hint.none'),    color: DIE_HINT_GREY };
       }
     }
-    if (this.playerStep === 'attack') {
+    if (step === 'attack') {
       const a = classifyAttackDie(pip);
       switch (a) {
         case 'reload': return { text: t('die.hint.reload'), color: DIE_HINT_RED };
@@ -17789,22 +17992,26 @@ export class BattleScene extends Component {
       driver: false,
       coDriver: false,
     };
-    const subPhase = which === 'movement' ? 'movement' : which === 'attack' ? 'attack' : 'misc';
+    const subPhase: 'movement' | 'attack' | 'misc' = which;
     const hatchOpenRaw = !!sherman.hatchOpen;
     const modeConfig = getGameModeConfig(GameSession.gameMode);
-    const count = actionDicePool({
+    const poolOptions = {
       subPhase,
       terrain,
       hatchOpen: hatchOpenRaw,
       crew,
       commanderBonusWithoutOpenHatch: modeConfig.commanderBonusWithoutOpenHatch,
-      hardcore: GameSession.gameMode === 'hardcore',
+      hardcore: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       mobility: sherman.stats.mobility,
       firepower: sherman.stats.firepower,
       externalBonus: this.campaignUpgradesEnabled()
         ? campaignUpgradeDiceBonus(this.campaignUpgradeIds, terrain, subPhase)
         : 0,
-    });
+    };
+    const combined = GameSession.gameMode === 'test' && which === 'attack';
+    const attackCount = actionDicePool(poolOptions);
+    const moveCount = combined ? actionDicePool({ ...poolOptions, subPhase: 'movement' }) : 0;
+    const count = attackCount + moveCount;
     const rolledPips = rollActionDice(this.rng, count);
     const retainedAttackPip = subPhase === 'attack'
       && this.campaignUpgradeActive('ammo_handling_optimization')
@@ -17814,12 +18021,15 @@ export class BattleScene extends Component {
     const pips = retainedAttackPip == null ? rolledPips : [...rolledPips, retainedAttackPip];
     if (subPhase === 'attack') this.retainedCampaignAttackDiePip = null;
     this.pendingAutoEndStep = null;
-    this.phaseDice = pips.map((_, i) => ({ pip: ((i * 2) % 6) + 1, used: false }));
+    this.phaseDice = pips.map((_, i) => ({
+      pip: ((i * 2) % 6) + 1, used: false,
+      type: combined ? (i < attackCount ? 'attack' : 'movement') : undefined,
+    }));
     this.clearGunSelection();
     this.playerStep = which;
     this.closeDiePopover();
 
-    const phaseKey = which === 'movement' ? 'battleLog.phase.movement'
+    const phaseKey = combined ? 'battleLog.phase.attackMovement' : which === 'movement' ? 'battleLog.phase.movement'
       : which === 'attack' ? 'battleLog.phase.attack' : 'battleLog.phase.misc';
     const hatchForLog = hatchOpenRaw && !!crew.commander;
     this.playerDiceRollAnim = {
@@ -17858,6 +18068,7 @@ export class BattleScene extends Component {
       const unused = this.phaseDice.filter(slot => !slot.used).map(slot => slot.pip);
       this.retainedCampaignAttackDiePip = unused.length > 0 ? Math.min(...unused) : null;
     }
+    if (was === 'attack' && GameSession.gameMode === 'test') this.movementDone = true;
     if (was === 'movement') this.movementDone = true;
     else if (was === 'attack') this.attackDone = true;
     else if (was === 'misc') this.miscDone = true;
@@ -17942,7 +18153,8 @@ export class BattleScene extends Component {
     if (this.phaseDice.length === 0) return;
     const anyLeft = this.phaseDice.some(d => !d.used);
     if (!anyLeft) {
-      const phaseKey = this.playerStep === 'movement' ? 'battleLog.phase.movement'
+      const phaseKey = GameSession.gameMode === 'test' && this.playerStep === 'attack'
+        ? 'battleLog.phase.attackMovement' : this.playerStep === 'movement' ? 'battleLog.phase.movement'
         : this.playerStep === 'attack' ? 'battleLog.phase.attack' : 'battleLog.phase.misc';
       this.battleLogI18n('battleLog.diceAutoEnd', { phaseKey });
       this.endCurrentSubPhase();
@@ -17971,6 +18183,27 @@ export class BattleScene extends Component {
     }
     if (this.phaseDice.length > 0 && !this.phaseDice.some(die => !die.used)) {
       this.pendingAutoEndStep = this.playerStep;
+    }
+  }
+
+  /** 非经典模式：坦克抵达泥地后耗尽本组移动骰，攻击骰和杂项骰保留。 */
+  private consumeMovementDiceOnMudEntry(unit: Unit) {
+    if (!this.mission || GameSession.gameMode === 'classic' || !isTankUnit(unit)
+      || effectiveDiceTerrain(this.mission.map.get(unit.pos)) !== 'mud') return;
+    if (this.phase === 'player' && unit === this.mission.sherman) {
+      const indices = this.phaseDice.reduce<number[]>((result, die, index) => {
+        if (!die.used && this.dieStep(index) === 'movement') result.push(index);
+        return result;
+      }, []);
+      if (indices.length === 0) return;
+      this.usePhaseDice(indices);
+      this.refreshPhaseUI();
+    } else if ((this.phase === 'ally' || this.phase === 'enemy')
+      && unit === this.enemyOrder[this.enemyIndex]) {
+      for (let index = 0; index < this.enemyDiceTypes.length; index++) {
+        if (this.enemyDiceTypes[index] === 'move') this.enemyDiceUsed[index] = true;
+      }
+      this.refreshEnemyDiceTray();
     }
   }
 
@@ -18053,7 +18286,7 @@ export class BattleScene extends Component {
     const crewReason = crewSlot ? this.crewActionUnavailable(crewSlot) : null;
     if (crewReason) return crewReason;
     const sherman = this.mission.sherman;
-    if (GameSession.gameMode !== 'hardcore') return sherman.loaded ? t('floater.alreadyLoaded') : null;
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')) return sherman.loaded ? t('floater.alreadyLoaded') : null;
     const current = resolvedLoadedShell(sherman);
     if (shellType && current === shellType && isMainGunLoaded(sherman, true)) return t('floater.alreadyLoaded');
     if (shellType === 'smoke' && (sherman.smokeAmmoRemaining ?? 7) <= 0) return t('floater.noSmokeAmmo');
@@ -18073,7 +18306,7 @@ export class BattleScene extends Component {
     if (crewReason) return crewReason;
     // 硬核模式下主炮骰始终可用于旋转炮塔；该用途不需要装填，也不受舱盖状态影响。
     // 实际开炮仍会在 tryAttack 中要求 loaded。
-    const canUseUnloadedForTurretRecon = GameSession.gameMode === 'hardcore'
+    const canUseUnloadedForTurretRecon = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && this.playerTurretCanRotate();
     if (!s.loaded && !canUseUnloadedForTurretRecon) return t('hud.unloaded');
     return null;
@@ -18085,7 +18318,7 @@ export class BattleScene extends Component {
     if (crewReason) return crewReason;
     // Unlike ordinary hardcore main-gun selection, precision fire can never be
     // used as an unloaded rotation-only action.
-    if (!isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore')) return t('hud.unloaded');
+    if (!isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))) return t('hud.unloaded');
     return this.gunActionUnavailable();
   }
 
@@ -18120,9 +18353,9 @@ export class BattleScene extends Component {
     if (this.isBusy()) return;
     if (this.phase !== 'player') return;
     if (this.outcome !== 'ongoing') return;
-    if (this.playerStep !== 'movement'
-      && this.playerStep !== 'attack'
-      && this.playerStep !== 'misc') return;
+    if (this.dieStep(idx) !== 'movement'
+      && this.dieStep(idx) !== 'attack'
+      && this.dieStep(idx) !== 'misc') return;
     const slot = this.phaseDice[idx];
     const selectedWeaponDieIdx = this.selectedGunDieIdx >= 0
       ? this.selectedGunDieIdx
@@ -18145,7 +18378,7 @@ export class BattleScene extends Component {
     // 都只有单一动作、无分支选择 → 点一下直接执行，不再弹菜单。
     // 但若存在同点搭档（= §3.6 对子动作可用），仍要走 popover 让玩家选择对子动作。
     const hasDoubles = this.findDoublesPartner(idx) >= 0;
-    if (this.playerStep === 'movement') {
+    if (this.dieStep(idx) === 'movement') {
       const a = classifyMoveDie(slot.pip);
       if (a === 'drive' && !hasDoubles && !this.campaignMovementDiceCanReverseDirection()
         && !this.driveActionUnavailable(+1)) {
@@ -18159,14 +18392,14 @@ export class BattleScene extends Component {
         this.tryDriveSherman(idx, -1);
         return;
       }
-    } else if (this.playerStep === 'attack') {
+    } else if (this.dieStep(idx) === 'attack') {
       const a = classifyAttackDie(slot.pip);
-      if (GameSession.gameMode !== 'hardcore' && a === 'reload' && !hasDoubles && !this.reloadActionUnavailable()) {
+      if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') && a === 'reload' && !hasDoubles && !this.reloadActionUnavailable()) {
         this.closeDiePopover();
         this.tryReload(idx);
         return;
       }
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(idx) === 'misc') {
       // 杂项阶段 1 点 = 灭火，无分支 → 直接执行。
       // 但若有同点搭档（= 可走"隐蔽"对子动作），则改走 popover 让玩家选择。
       const m = classifyMiscDie(slot.pip);
@@ -18236,7 +18469,7 @@ export class BattleScene extends Component {
       classicKey = 'action.reload',
       doubles = false,
     ) => {
-      if (GameSession.gameMode === 'hardcore') {
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         addItem(t('action.reloadAP'), color, () => onReload('ap'), this.reloadActionUnavailable(crewSlot, 'ap'), true,
           'reload-ap', doubles, undefined, 'ap');
         if (this.campaignUpgradeActive('hvap')) {
@@ -18255,15 +18488,15 @@ export class BattleScene extends Component {
     };
 
     const hasDoublesPartner = this.findDoublesPartner(idx) >= 0;
-    const unloadedTurretRotation = GameSession.gameMode === 'hardcore'
+    const unloadedTurretRotation = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && !!this.mission
-      && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
+      && !isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
     const fireActionKey = unloadedTurretRotation
       ? 'action.rotateTurret'
-      : GameSession.gameMode === 'hardcore' ? 'action.fireHardcore' : 'action.fire';
+      : (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? 'action.fireHardcore' : 'action.fire';
     const mainGunEffectId = unloadedTurretRotation ? 'turret-rotation' : 'main-gun';
 
-    if (this.playerStep === 'movement') {
+    if (this.dieStep(idx) === 'movement') {
       const a = classifyMoveDie(slot.pip);
       const transmissionAllowsBothDirections = (a === 'drive' || a === 'reverse')
         && this.campaignMovementDiceCanReverseDirection();
@@ -18303,7 +18536,7 @@ export class BattleScene extends Component {
             () => this.tryDoublesCoDriverTurn(idx, +1), this.turnActionUnavailable('coDriver'), true);
         }
       }
-    } else if (this.playerStep === 'attack') {
+    } else if (this.dieStep(idx) === 'attack') {
       const a = classifyAttackDie(slot.pip);
       if (a === 'reload') {
         addReloadItems(PHASE_BTN_ATTACK, shell => this.tryReload(idx, shell));
@@ -18337,7 +18570,7 @@ export class BattleScene extends Component {
             () => this.selectPrecisionGunDie(idx), this.precisionGunActionUnavailable());
         }
       }
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(idx) === 'misc') {
       const m = classifyMiscDie(slot.pip);
       const sherman = this.mission ? this.mission.sherman : null;
       switch (m) {
@@ -18639,15 +18872,15 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
-    if (this.playerStep === 'movement') {
+    if (this.dieStep(dieIdx) === 'movement') {
       const action = classifyMoveDie(slot.pip);
       if (action !== 'turn') return;
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(dieIdx) === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'driver_turn_or_drive') return;
     } else {
       return;
     }
-    if (this.playerStep === 'misc' && !this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
+    if (this.dieStep(dieIdx) === 'misc' && !this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
 
     const sherman = this.mission.sherman;
     // §3.5 瘫痪：不可转向 / 前进 / 后退；骰子保留不消耗。
@@ -18702,19 +18935,19 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
-    if (this.playerStep === 'movement') {
+    if (this.dieStep(dieIdx) === 'movement') {
       const act = classifyMoveDie(slot.pip);
       if (act !== 'drive' && act !== 'reverse') return;
       const nativeDirection = act === 'drive' ? +1 : -1;
       if (dirSign !== nativeDirection && !this.campaignMovementDiceCanReverseDirection()) return;
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(dieIdx) === 'misc') {
       // 杂项阶段 driver_turn_or_drive (die=3) 只允许前进 1 格
       if (classifyMiscDie(slot.pip) !== 'driver_turn_or_drive') return;
       if (dirSign !== +1) return;
     } else {
       return;
     }
-    if (this.playerStep === 'misc' && !this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
+    if (this.dieStep(dieIdx) === 'misc' && !this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
 
     const { map, sherman } = this.mission;
     // §3.5 瘫痪：不可前进 / 后退；骰子保留不消耗
@@ -18758,7 +18991,7 @@ export class BattleScene extends Component {
     }
     const tile = map.get(to);
     // 桥梁规则（GDD §3.2）：水域+桥梁可入；入 / 出方向须落在 bridgeEnds 端，否则等同越水阻挡。
-    const canCrossBreakwater = this.playerStep === 'misc' && dirSign === 1;
+    const canCrossBreakwater = this.dieStep(dieIdx) === 'misc' && dirSign === 1;
     if (!tile || !this.canMoveToBattleTile(to) || !map.canTankCrossEdge(sherman.pos, to, {
       ignoreBreakwater: canCrossBreakwater,
       faction: sherman.faction,
@@ -18821,7 +19054,7 @@ export class BattleScene extends Component {
 
   /** Resolve reactions after a vehicle's movement die, in stance activation order. */
   private tryResolveAmbushAfterMove(mover: Unit, resume: () => void): boolean {
-    if (!this.mission || this.resolvingAmbush || GameSession.gameMode !== 'hardcore'
+    if (!this.mission || this.resolvingAmbush || (GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')
       || isFootUnit(mover) || mover.destroyed) return false;
     const { map, smokeHexes } = this.mission;
     const watchers = orderedAmbushers(this.allUnits(), mover);
@@ -18838,7 +19071,7 @@ export class BattleScene extends Component {
       const shell = resolvedLoadedShell(watcher) === 'he' ? 'he' : 'ap';
       if (!canAttack({
         attacker: sightUnit, target: mover, map, smokeHexes,
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         shellType: shell, hardcoreHeavyArtilleryRules: true,
       }).ok) continue;
@@ -18852,7 +19085,7 @@ export class BattleScene extends Component {
         protagonist: this.protagonistForAttackTarget(mover),
         theater: this.mission.data.theater,
         units: this.allUnits(), smokeHexes, weather: this.currentWeather(),
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         hardcoreHeavyArtilleryRules: true,
       };
@@ -18946,17 +19179,17 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
-    if (this.playerStep === 'attack') {
+    if (this.dieStep(dieIdx) === 'attack') {
       const action = classifyAttackDie(slot.pip);
       if (action !== 'reload' && !(action === 'gun' && this.campaignReadyRackCanReloadShootingDice())) return;
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(dieIdx) === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'gunner_gun_or_reload') return;
     } else {
       return;
     }
-    if (this.playerStep === 'misc' && !this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
+    if (this.dieStep(dieIdx) === 'misc' && !this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
     const sherman = this.mission.sherman;
-    const hardcore = GameSession.gameMode === 'hardcore';
+    const hardcore = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
     const requestedShell = hardcore ? (shellType ?? 'ap') : undefined;
     const currentShell = resolvedLoadedShell(sherman);
     if ((!hardcore && sherman.loaded) || (hardcore && currentShell === requestedShell && isMainGunLoaded(sherman, true))) {
@@ -18996,14 +19229,14 @@ export class BattleScene extends Component {
   private selectGunDie(dieIdx: number) {
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
-    if (this.playerStep === 'attack') {
+    if (this.dieStep(dieIdx) === 'attack') {
       if (classifyAttackDie(slot.pip) !== 'gun') return;
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(dieIdx) === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'gunner_gun_or_reload') return;
     } else {
       return;
     }
-    if (this.playerStep === 'misc' && !this.checkCrewAlive('gunner')) { this.closeDiePopover(); return; }
+    if (this.dieStep(dieIdx) === 'misc' && !this.checkCrewAlive('gunner')) { this.closeDiePopover(); return; }
     // 选择动作是幂等的：再次点击同一个“主炮射击 / 旋转”按钮时继续保留范围，
     // 而不是把同一选择当作 toggle 关闭。若此前是机枪、对子或精确射击，
     // 则下面的完整赋值会切换为当前普通主炮动作，并由 redraw 刷新对应遮罩。
@@ -19023,7 +19256,7 @@ export class BattleScene extends Component {
   /** §3.6 B 列对子：炮手主炮射击（+同点骰）。选中后走普通开火流程，tryAttack 会一并消耗 partner。 */
   private selectGunDieDoubles(dieIdx: number) {
     if (!this.mission) return;
-    if (this.playerStep !== 'attack') return; // 对子 B 列仅用于攻击阶段
+    if (this.dieStep(dieIdx) !== 'attack') return; // 对子 B 列仅用于攻击阶段
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     const partnerIdx = this.findDoublesPartner(dieIdx);
@@ -19056,10 +19289,10 @@ export class BattleScene extends Component {
   private selectPrecisionGunDie(dieIdx: number) {
     if (!this.mission || !getGameModeConfig(GameSession.gameMode).precisionFire) return;
     if (resolvedLoadedShell(this.mission.sherman) === 'smoke') return;
-    if (this.playerStep !== 'attack') return;
+    if (this.dieStep(dieIdx) !== 'attack') return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used || classifyAttackDie(slot.pip) !== 'gun') return;
-    if (!isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore')) {
+    if (!isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))) {
       const s = this.mission.sherman;
       this.clearGunSelection();
       this.closeDiePopover();
@@ -19126,9 +19359,9 @@ export class BattleScene extends Component {
   private selectMGDie(dieIdx: number) {
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
-    if (this.playerStep === 'attack') {
+    if (this.dieStep(dieIdx) === 'attack') {
       if (classifyAttackDie(slot.pip) !== 'mg') return;
-    } else if (this.playerStep === 'misc') {
+    } else if (this.dieStep(dieIdx) === 'misc') {
       if (classifyMiscDie(slot.pip) !== 'codriver_mg') return;
     } else {
       return;
@@ -19278,7 +19511,7 @@ export class BattleScene extends Component {
 
     const machineGun = selectedMachineGun ?? this.tankMachineGunSelection(sherman, target) ?? undefined;
 
-    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, lockedFire: GameSession.gameMode === 'hardcore', expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore', ...this.tankMachineGunContext(sherman, target, machineGun) });
+    const check = canMGAttack({ attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), ...this.tankMachineGunContext(sherman, target, machineGun) });
     if (!check.ok) {
       this.battleLogI18n('battleLog.combat.cannotAttack', {
         reasonKey: check.reason ?? 'attack.reason.unknown',
@@ -19288,7 +19521,7 @@ export class BattleScene extends Component {
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
-    if (GameSession.gameMode !== 'hardcore' && !turretAlreadyAimed
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') && !turretAlreadyAimed
       && !this.canTurretReachDirection(sherman, this.turretTargetDirection(sherman, target))) {
       this.showGunAimWarning('attack.reason.turretTraverseSpeed');
       return;
@@ -19296,7 +19529,7 @@ export class BattleScene extends Component {
     if (!turretAlreadyAimed) this.hideTurretTargetOverlayForCommittedAction();
 
     if (!turretAlreadyAimed) {
-      if (GameSession.gameMode === 'hardcore') {
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         if (machineGun?.rotateTurret) {
           this.startShermanMachineGunAim(target, machineGun, () => this.tryMGAttack(target, true, machineGun));
         } else {
@@ -19310,7 +19543,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), atGunCrewTargets: GameSession.gameMode === 'hardcore', ...this.tankMachineGunContext(sherman, target, machineGun) };
+    const ctx = { attacker: sherman, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), ...this.tankMachineGunContext(sherman, target, machineGun) };
     markAmbushAction(sherman);
     markAmbushTargeted(target);
     const maxRoll = maxMGHitRoll(ctx);
@@ -19331,7 +19564,7 @@ export class BattleScene extends Component {
           hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
       : rollMGAttack(ctx, this.rng));
-    finishLockedFireAttack(ctx.attacker, ctx.target, false, GameSession.gameMode === 'hardcore', 'mg');
+    finishLockedFireAttack(ctx.attacker, ctx.target, false, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), 'mg');
     const secondaryReport = dualWeaponReports?.[1]?.report;
     const hit = report.hit || secondaryReport?.hit === true;
     this.battleLogI18n('battleLog.combatMg', {
@@ -19597,7 +19830,7 @@ export class BattleScene extends Component {
     for (let i = 0; i < this.phaseDice.length; i++) {
       if (i === dieIdx) continue;
       const p = this.phaseDice[i];
-      if (p && !p.used && p.pip === slot.pip) return i;
+      if (p && !p.used && p.pip === slot.pip && this.dieStep(i) === this.dieStep(dieIdx)) return i;
     }
     return -1;
   }
@@ -19649,7 +19882,7 @@ export class BattleScene extends Component {
    */
   private tryDoublesDriverAdvance(dieIdx: number) {
     if (!this.mission) return;
-    if (this.playerStep !== 'movement') return;
+    if (this.dieStep(dieIdx) !== 'movement') return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     if (!this.checkCrewAlive('driver')) { this.closeDiePopover(); return; }
@@ -19738,7 +19971,7 @@ export class BattleScene extends Component {
    */
   private tryDoublesCoDriverTurn(dieIdx: number, dirSign: 1 | -1) {
     if (!this.mission) return;
-    if (this.playerStep !== 'movement') return;
+    if (this.dieStep(dieIdx) !== 'movement') return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     if (!this.checkCrewAlive('coDriver')) { this.closeDiePopover(); return; }
@@ -19786,13 +20019,13 @@ export class BattleScene extends Component {
    */
   private tryDoublesLoaderReload(dieIdx: number, shellType?: ShellType) {
     if (!this.mission) return;
-    if (this.playerStep !== 'attack') return;
+    if (this.dieStep(dieIdx) !== 'attack') return;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used) return;
     if (!this.checkCrewAlive('loader')) { this.closeDiePopover(); return; }
 
     const sherman = this.mission.sherman;
-    const hardcore = GameSession.gameMode === 'hardcore';
+    const hardcore = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
     const requestedShell = hardcore ? (shellType ?? 'ap') : undefined;
     const currentShell = resolvedLoadedShell(sherman);
     if ((!hardcore && sherman.loaded) || (hardcore && currentShell === requestedShell && isMainGunLoaded(sherman, true))) {
@@ -19850,6 +20083,13 @@ export class BattleScene extends Component {
   private allUnits(): Unit[] {
     if (!this.mission) return [];
     return [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
+  }
+
+  /** Bunker sites retain their bare floor after destruction, including in saved games. */
+  private hasBunkerAt(pos: Axial): boolean {
+    return GameSession.gameMode !== 'classic' && this.allUnits().some(unit =>
+      isHeavyArtilleryUnit(unit) && unit.pos.q === pos.q && unit.pos.r === pos.r,
+    );
   }
 
   private aiTargetsFor(actor: Unit): Unit[] {
@@ -19936,12 +20176,12 @@ export class BattleScene extends Component {
       if (isAbandonedTank(target)) continue;
       if (isSameSide(target, actor)) continue;
       const d = hexDistance(actor.pos, target.pos);
-      const automaticWeapon = GameSession.gameMode === 'hardcore' && isTankUnit(actor)
+      const automaticWeapon = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isTankUnit(actor)
         ? nonPlayerTankWeaponForTarget(target, d)
         : 'ap';
       const tankSuppression = automaticWeapon === 'he'
         && isMainGunSuppressionAttack(actor, target, true, 'he');
-      if (GameSession.gameMode === 'hardcore' && isTankUnit(actor)) {
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isTankUnit(actor)) {
         if (automaticWeapon === 'mg') continue;
       } else if (!hardcoreInfantry && !tankSuppression && (isFootUnit(target) || target.kind === 'truck')) {
         continue;
@@ -19959,7 +20199,7 @@ export class BattleScene extends Component {
           this.currentWeather(),
           this.mission.smokeHexes,
         )) continue;
-      const sameHexInfantryTankAttack = GameSession.gameMode === 'hardcore'
+      const sameHexInfantryTankAttack = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
         && isFootUnit(actor)
         && isTankUnit(target)
         && d === 0;
@@ -19969,7 +20209,7 @@ export class BattleScene extends Component {
         target,
         map,
         smokeHexes: this.mission.smokeHexes,
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         sameHexInfantryTankAttack,
         mainGunSuppressesInfantry: tankSuppression,
@@ -20011,8 +20251,8 @@ export class BattleScene extends Component {
       if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
       if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather(), this.mission.smokeHexes)) continue;
       const machineGun = this.tankMachineGunSelection(actor, target);
-      if (GameSession.gameMode === 'hardcore' && !machineGun) continue;
-      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), lockedFire: GameSession.gameMode === 'hardcore', expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: GameSession.gameMode === 'hardcore', ...this.tankMachineGunContext(actor, target, machineGun) }).ok) continue;
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !machineGun) continue;
+      if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), ...this.tankMachineGunContext(actor, target, machineGun) }).ok) continue;
       const priority = aiTargetPriorityForActor(actor, target, missionTargets);
       const d = hexDistance(actor.pos, target.pos);
       if (priority < bestPriority || (priority === bestPriority && d < bestDist)) {
@@ -20032,7 +20272,7 @@ export class BattleScene extends Component {
   private canAIExecuteShoot(actor: Unit): boolean {
     if (isTankUnit(actor) && this.selectAIMGTarget(actor, false)) return true;
     const mainGunTarget = this.selectAIShootTarget(actor, false);
-    if (mainGunTarget && (GameSession.gameMode !== 'hardcore' || !isTankUnit(actor) || isMainGunLoaded(actor, true))
+    if (mainGunTarget && ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isTankUnit(actor) || isMainGunLoaded(actor, true))
       && this.canAIMainGunResolveSelectedTarget(actor, mainGunTarget)) return true;
     return getGameModeConfig(GameSession.gameMode).aiMainGunFallbackToMG
       && !!this.selectAIMGTarget(actor, false);
@@ -20056,7 +20296,7 @@ export class BattleScene extends Component {
   private beginAllyPhase() {
     if (!this.mission) return;
     const aiCandidates = this.mission.allies.filter(unit =>
-      isAIActorUnit(unit, GameSession.gameMode === 'hardcore'));
+      isAIActorUnit(unit, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')));
     if (aiCandidates.length === 0) {
       this.beginEnemyPhase();
       return;
@@ -20095,7 +20335,7 @@ export class BattleScene extends Component {
 
   private beginAllyPhaseAfterTransition() {
     if (!this.mission) return;
-    const hardcoreInfantry = GameSession.gameMode === 'hardcore';
+    const hardcoreInfantry = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
     const aiCandidates = this.mission.allies.filter(unit => isAIActorUnit(unit, hardcoreInfantry));
     this.phase = 'ally';
     this.aiSide = 'ally';
@@ -20143,7 +20383,7 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     this.phase = 'enemy';
     this.aiSide = 'german';
-    const hardcoreInfantry = GameSession.gameMode === 'hardcore';
+    const hardcoreInfantry = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
     const aiCandidates = this.mission.enemies.filter(unit => isAIActorUnit(unit, hardcoreInfantry));
     this.enemyOrder = selectAIOrder(
       aiCandidates,
@@ -20257,7 +20497,7 @@ export class BattleScene extends Component {
       return;
     }
     // 硬核模式步兵使用无骰攻击/移动 AI；军官仍不行动。卡车只由回合结束事件移动。
-    const hardcoreInfantry = GameSession.gameMode === 'hardcore';
+    const hardcoreInfantry = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
     const aiCandidates = this.mission.enemies.filter(unit => isAIActorUnit(unit, hardcoreInfantry));
     this.enemyOrder = selectAIOrder(
       aiCandidates,
@@ -20617,7 +20857,7 @@ export class BattleScene extends Component {
       }
       if (u.turretDamaged) parts.push(t('tileInspect.status.turretDamaged'));
       if (u.paralyzed) parts.push(t('tileInspect.status.paralyzed'));
-      if (GameSession.gameMode === 'hardcore') {
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         const radio = repairableComponentById('radio');
         if (radio.isDamaged(u)) parts.push(t(radio.statusDamagedKey));
       }
@@ -20642,12 +20882,18 @@ export class BattleScene extends Component {
   private buildTileInspectTerrainText(tile: Tile): string {
     const blocks: string[] = [];
     if (tile.terrain === 'europe_beach') blocks.push(t(tile.crater ? 'tileInspect.crater' : 'tileInspect.europeBeach'));
+    if (tile.terrain === 'rocky') blocks.push(t('tileInspect.rockyCover'));
     if (tile.steelHedgehogs) blocks.push(t('tileInspect.steelHedgehogs'));
     const wireStates = Array.from({ length: 6 }, (_, dir) => this.mission?.map.barbedWireBetween(tile.pos, neighbor(tile.pos, dir as Direction)) || tile.barbedWire?.[dir] || 0);
     if (wireStates.includes(1)) blocks.push(t('tileInspect.wireIntact'));
     if (wireStates.includes(2)) blocks.push(t('tileInspect.wireDamaged'));
     if (tile.seawalls?.some(Boolean) || neighbors(tile.pos).some((pos, dir) => this.mission?.map.get(pos)?.seawalls?.[(dir + 3) % 6])) blocks.push(t('tileInspect.seawall'));
-    if (tile.hasBuilding) {
+    if (this.hasBunkerAt(tile.pos)) {
+      const intact = this.allUnits().some(unit => isHeavyArtilleryUnit(unit) && !unit.destroyed
+        && unit.pos.q === tile.pos.q && unit.pos.r === tile.pos.r);
+      blocks.push(t(intact ? 'tileInspect.bunkerIntact' : 'tileInspect.bunkerWreck'));
+    }
+    if (tile.hasBuilding && !this.hasBunkerAt(tile.pos)) {
       blocks.push(t('tileInspect.building'));
     }
     if (this.hasSmokeAt(tile.pos)) {
@@ -20686,7 +20932,7 @@ export class BattleScene extends Component {
     // 不能供坦克使用的格子没有可实际使用的地形骰，只显示对应的通行与视野规则。
     if (!infantryOnlyVisionBlocker && !allUnitsImpassableNonVisionBlocker) {
       // 桥梁叠加（GDD §3.2）：水域+桥梁的骰子基数读取按公路；这里 tile 面板与实际掷骰一致。
-      const hardcoreDicePool = GameSession.gameMode === 'hardcore';
+      const hardcoreDicePool = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
       const pool = hardcoreDicePool ? PLAYER_HARDCORE_DICE_POOL : PLAYER_DICE_POOL;
       const b = pool.baseByPhaseTerrain;
       const eff = effectiveDiceTerrain(tile);
@@ -20987,23 +21233,23 @@ export class BattleScene extends Component {
 
       if (isTankUnit(u) || isAntiTankGunUnit(u) || isHeavyArtilleryUnit(u)) {
         const terrain = effectiveDiceTerrain(tile);
-        const modifier = GameSession.gameMode === 'hardcore' ? PLAYER_HARDCORE_DICE_POOL.baseByPhaseTerrain.attack[terrain] : 0;
+        const modifier = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? PLAYER_HARDCORE_DICE_POOL.baseByPhaseTerrain.attack[terrain] : 0;
         const base = u.stats.firepower ?? 2;
-        const playerHardcore = u === this.mission?.sherman && GameSession.gameMode === 'hardcore';
+        const playerHardcore = u === this.mission?.sherman && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test');
         const currentFirepower = playerHardcore ? actionDicePool({
           subPhase: 'attack', terrain, hatchOpen: !!u.hatchOpen,
           crew: effectiveTankCrew(u), hardcore: true, firepower: base,
           commanderBonusWithoutOpenHatch: getGameModeConfig(GameSession.gameMode).commanderBonusWithoutOpenHatch,
           externalBonus: this.campaignUpgradesEnabled()
             ? campaignUpgradeDiceBonus(this.campaignUpgradeIds, terrain, 'attack') : 0,
-        }) : GameSession.gameMode === 'hardcore' && isTankUnit(u)
+        }) : (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isTankUnit(u)
           ? effectiveAIFirepower(u, terrain)
           : Math.max(0, base + modifier + nonPlayerTankFirepowerBonus(u));
         const { h: fireH } = this.makeTileScrollText(content, x0, y, textW,
           t(playerHardcore ? 'tileInspect.playerFirepower' : 'tileInspect.firepower', { base, value: currentFirepower }), 15);
         y -= fireH + gapL;
       }
-      if (isHeavyArtilleryUnit(u) && GameSession.gameMode === 'hardcore') {
+      if (isHeavyArtilleryUnit(u) && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         const { h: slitH } = this.makeTileScrollText(content, x0, y, textW,
           t('tileInspect.bunkerSlit', { n: u.stats.shootingPortHitThreshold ?? 10 }), 15);
         y -= slitH + gapL;
@@ -21075,7 +21321,7 @@ export class BattleScene extends Component {
   private paintTileInspectPreview(g: Graphics, tile: Tile, cx: number, cy: number, hexR: number) {
     const oldG = this.g;
     this.g = g;
-    const hasTerrainSprite = !!this.terrainSpriteFrameFor(tile.terrain);
+    const hasTerrainSprite = !!this.terrainSpriteFrameFor(tile.terrain, tile);
     if (!hasTerrainSprite) {
       this.drawHexFill(cx, cy, hexR, tile.terrain === 'airstrip' ? TERRAIN_COLORS.clear : this.terrainColorFor(tile.terrain));
       if (tile.terrain === 'field') this.drawFieldBrushOverlay(cx, cy, hexR, tile);
@@ -21102,7 +21348,22 @@ export class BattleScene extends Component {
     }
     if (tile.hasBuilding) this.drawBuildingOverlay(cx, cy, hexR, tile);
     drawBeachOverlays(this.g!, cx, cy, hexR, !!tile.crater, !!tile.steelHedgehogs);
-    this.drawBeachTileEdges(cx, cy, hexR, tile, new Set<string>(), true);
+    const segments: SeawallSegment[] = [];
+    this.drawBeachTileEdges(cx, cy, hexR, tile, new Set<string>(), true, segments);
+    // Include adjoining cells' edges in junction detection without painting them.
+    for (let ax = 0; ax < 6; ax++) {
+      const pos = neighbor(tile.pos, ax as Direction), adjacent = this.mission?.map.get(pos);
+      if (!adjacent?.seawalls) continue;
+      const origin = this.project(tile.pos.q, tile.pos.r), c = this.project(pos.q, pos.r);
+      const ratio = hexR / this.hexSize;
+      for (let edge = 0; edge < 6; edge++) {
+        if (!adjacent.seawalls[edge]) continue;
+        const a = (-30 + 60 * HEDGE_DRAW_EDGE_BY_AXIAL[edge]) * Math.PI / 180;
+        const x = cx + (c.x-origin.x)*ratio, y = cy + (c.y-origin.y)*ratio;
+        segments.push([x+hexR*Math.cos(a), y+hexR*Math.sin(a), x+hexR*Math.cos(a+Math.PI/3), y+hexR*Math.sin(a+Math.PI/3)]);
+      }
+    }
+    drawSeawallJoints(this.g!, segments, hexR, {x:cx,y:cy});
     if (tile.breakwaters) {
       const usedKeys = new Set<string>();
       for (let ax = 0; ax < 6; ax++) {
@@ -21248,7 +21509,7 @@ export class BattleScene extends Component {
   }
 
   private addTileInspectTerrainSprite(parent: Node, tile: Tile, cx: number, cy: number, hexR: number) {
-    const sf = this.terrainSpriteFrameFor(tile.terrain);
+    const sf = this.terrainSpriteFrameFor(tile.terrain, tile);
     if (!sf) return;
     const n = new Node('TileInspectTerrainSprite');
     n.layer = this.node.layer;
@@ -21331,6 +21592,7 @@ export class BattleScene extends Component {
   private addTileInspectUrbanBuildingSprite(
     parent: Node, tile: Tile, cx: number, cy: number, hexR: number,
   ) {
+    if (this.hasBunkerAt(tile.pos)) return;
     const path = urbanBuildingSpritePath(tile);
     const sf = path ? this.urbanOverlaySpriteFrames[path] : null;
     if (!sf) return;
@@ -21348,11 +21610,24 @@ export class BattleScene extends Component {
 
   private addTileInspectTilePreview(parent: Node, tile: Tile, centerX: number, topY: number, hexR: number) {
     const h = 114;
-    const preview = new Node('TilePreview');
+    const layout = new Node('TilePreview');
+    layout.layer = this.node.layer;
+    layout.addComponent(UITransform).setContentSize(132, h);
+    layout.setPosition(centerX, topY - h * 0.5, 0);
+    parent.addChild(layout);
+
+    // Rotate only the artwork about its hex center; the caption keeps its layout.
+    const view = new Node('TilePreviewView');
+    view.layer = this.node.layer;
+    view.addComponent(UITransform).setContentSize(132, h);
+    view.setPosition(0, 24, 0);
+    view.angle = this.mission?.data?.cameraRotation === 90 ? 90 : 0;
+    layout.addChild(view);
+    const preview = new Node('TilePreviewContent');
     preview.layer = this.node.layer;
     preview.addComponent(UITransform).setContentSize(132, h);
-    preview.setPosition(centerX, topY - h * 0.5, 0);
-    parent.addChild(preview);
+    preview.setPosition(0, -24, 0);
+    view.addChild(preview);
 
     const hexCY = 24;
     this.addTileInspectTerrainSprite(preview, tile, 0, hexCY, hexR);
@@ -21388,14 +21663,16 @@ export class BattleScene extends Component {
     }
     this.addTileInspectHedgeSprites(preview, 0, hexCY, hexR, tile);
 
-    const baseTerrainName = this.usesWinterTerrainVisuals() && ['road', 'field', 'mud', 'forest', 'water'].includes(tile.terrain)
+    const baseTerrainName = tile.terrain === 'beach' && this.mission?.data.theater === 'europe'
+      ? t('terrain.europe_shallow')
+      : this.usesWinterTerrainVisuals() && ['road', 'field', 'mud', 'forest', 'water'].includes(tile.terrain)
       ? t(`terrain.${tile.terrain}_snow`)
       : t(`terrain.${tile.terrain}`);
     const titleStr = tileHasBridge(tile)
       ? `${baseTerrainName} + ${t('terrain.bridge')}`
       : baseTerrainName;
     const lab = this.makeBattleModalLabel(
-      preview, titleStr,
+      layout, titleStr,
       0, -42, 132, 24, 18, new Color(235, 240, 245, 255),
     );
     lab.horizontalAlign = HorizontalTextAlignment.CENTER;
@@ -21645,7 +21922,7 @@ export class BattleScene extends Component {
       return;
     }
 
-    const destroyedMeta = u.destroyed ? this.destroyedTopMeta[u.kind as DestroyedTopKind] : null;
+    const destroyedMeta = u.destroyed ? this.destroyedTankTopMetaFor(u) : null;
     if (destroyedMeta?.sf) {
       this.addTileInspectDestroyedTankSprite(parent, u, destroyedMeta.sf, destroyedMeta.dw, destroyedMeta.dh, hexR);
       this.g = oldG;
@@ -21653,7 +21930,7 @@ export class BattleScene extends Component {
     }
     if (isEnemyTopKind(u.kind)) {
       if (isSplitTankKind(u.kind)) {
-        const assets = this.splitTankSprites[u.kind];
+        const assets = this.splitTankSpritesFor(u, u.kind);
         if (this.addTileInspectSplitTank(
           parent,
           u,
@@ -21674,7 +21951,7 @@ export class BattleScene extends Component {
         this.g = oldG;
         return;
       }
-      const meta = this.enemyTopMeta[u.kind];
+      const meta = this.tankTopMetaFor(u);
       if (meta?.sf) {
         this.addTileInspectTopDownTankSprite(parent, u, meta.sf, meta.dw, meta.dh, hexR);
         this.g = oldG;
@@ -21697,6 +21974,7 @@ export class BattleScene extends Component {
     unitPreview.layer = this.node.layer;
     unitPreview.addComponent(UITransform).setContentSize(116, h);
     unitPreview.setPosition(centerX, topY - h * 0.5, 0);
+    unitPreview.angle = this.mission?.data?.cameraRotation === 90 ? 90 : 0;
     parent.addChild(unitPreview);
     this.paintTileInspectUnitPreview(unitPreview, u, hexR);
   }
@@ -22262,7 +22540,7 @@ export class BattleScene extends Component {
       'status.row.loaded',
       'status.row.turret',
       'status.row.mobility',
-      ...(GameSession.gameMode === 'hardcore' ? ['status.row.radio'] as const : []),
+      ...((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? ['status.row.radio'] as const : []),
       'status.row.fireLevel',
     ];
     for (let i = 0; i < this.statusBodyLeftLabels.length && i < bodyKeys.length; i++) {
@@ -22270,7 +22548,8 @@ export class BattleScene extends Component {
     }
     if (this.statusCrewTitleLabel) this.statusCrewTitleLabel.string = t('status.row.crewTitle');
     if (this.chooseMoveLabel) this.chooseMoveLabel.string = this.fitTextForLabel(this.chooseMoveLabel, t('btn.movePhase'), PHASE_CHOOSE_BTN_W);
-    if (this.chooseAttackLabel) this.chooseAttackLabel.string = this.fitTextForLabel(this.chooseAttackLabel, t('btn.attackPhase'), PHASE_CHOOSE_BTN_W);
+    if (this.chooseAttackLabel) this.chooseAttackLabel.string = this.fitTextForLabel(this.chooseAttackLabel,
+      t(GameSession.gameMode === 'test' ? 'btn.attackMovementPhase' : 'btn.attackPhase'), PHASE_CHOOSE_BTN_W);
     if (this.combatLogTitleLab) this.combatLogTitleLab.string = t('battleLog.title');
     if (this.popupResultsToggleLabel) this.popupResultsToggleLabel.string = t('battle.hud.popupResults');
     this.refreshCombatLogText();
@@ -22369,7 +22648,7 @@ export class BattleScene extends Component {
       miscDone: this.miscDone,
       playerStep: this.playerStep as SavePlayerStep,
       hatchChangedThisTurn: this.hatchChangedThisTurn,
-      phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+      phaseDice: this.phaseDice.map(s => ({ pip: s.pip, used: s.used, type: s.type })),
       attackPositionMemory: this.attackPositionMemory,
       missionSource: this.missionSource,
     });
@@ -22466,7 +22745,7 @@ export class BattleScene extends Component {
       this.playerStep = (result.playerStep ?? 'choose') as PlayerStep;
       this.playerDiceRollAnim = null;
       this.playerDiceSortAnim = null;
-      this.phaseDice = (result.phaseDice ?? []).map(s => ({ pip: s.pip, used: s.used }));
+      this.phaseDice = (result.phaseDice ?? []).map(s => ({ pip: s.pip, used: s.used, type: s.type }));
     } else {
       this.playerStep = 'choose';
       this.playerDiceRollAnim = null;
@@ -22599,7 +22878,7 @@ export class BattleScene extends Component {
       this.runHardcoreInfantryTurn(enemy);
       return;
     }
-    if ((GameSession.gameMode === 'hardcore' && isControlledATGun(enemy))
+    if (((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isControlledATGun(enemy))
       || (isImmobileGunUnit(enemy) && isControlledATGun(enemy))) {
       if (enemy.suppressed) {
         enemy.suppressed = false;
@@ -22631,7 +22910,7 @@ export class BattleScene extends Component {
       this.runHardcoreATGunTurn(enemy);
       return;
     }
-    if (GameSession.gameMode === 'hardcore' && isHeavyArtilleryUnit(enemy)) {
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isHeavyArtilleryUnit(enemy)) {
       this.enemyDice = [];
       this.enemyDiceTypes = [];
       this.enemyDiceFirepower = [];
@@ -22798,7 +23077,7 @@ export class BattleScene extends Component {
         target,
         map,
         smokeHexes,
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       }).ok) continue;
       candidates.push({
@@ -22822,7 +23101,7 @@ export class BattleScene extends Component {
     this.battleLog(`[Heavy Artillery] ${unitDisplayName(artillery.kind)} 消耗攻击行动转向，不射击`);
     this.startEnemyTurretAim(artillery, target, () => {
       if (this.outcome !== 'ongoing') return;
-      if (GameSession.gameMode === 'hardcore') this.finishHardcoreHeavyArtilleryTurn(artillery);
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) this.finishHardcoreHeavyArtilleryTurn(artillery);
       else this.runNextEnemyStep();
     });
     return true;
@@ -22935,7 +23214,7 @@ export class BattleScene extends Component {
           target,
           map,
           smokeHexes,
-          lockedFire: GameSession.gameMode === 'hardcore',
+          lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections,
         }).ok;
       } else {
@@ -22954,7 +23233,7 @@ export class BattleScene extends Component {
           attacker,
           target,
           map,
-          lockedFire: GameSession.gameMode === 'hardcore',
+          lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections,
         };
         const actual = canAttack({ ...baseCtx, smokeHexes });
@@ -23115,12 +23394,12 @@ export class BattleScene extends Component {
       hitThresholdModifiers: ambushHitThresholdModifierDetails(gun, GameSession.gameMode),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       overpenetration: getGameModeConfig(GameSession.gameMode).overpenetration,
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
       gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
-      shellType: GameSession.gameMode === 'hardcore' ? 'ap' as const : undefined,
+      shellType: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? 'ap' as const : undefined,
     };
     markAmbushAction(gun);
     markAmbushTargeted(target);
@@ -23169,7 +23448,7 @@ export class BattleScene extends Component {
   /** Applies the hardcore-only AI commander hatch rule before this tank acts. */
   private updateNonPlayerTankCommanderHatch(unit: Unit) {
     if (!this.mission) return;
-    if (GameSession.gameMode !== 'hardcore' || unit === this.mission.sherman || !isTankUnit(unit)) return;
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || unit === this.mission.sherman || !isTankUnit(unit)) return;
     // 车长在开舱状态下阵亡后保留 hatchOpen，持续显示无车长的空舱盖图片。
     // 这不是一次关舱动作，因此也不播放关舱音效。
     if (unit.crew?.commander === false) return;
@@ -23305,7 +23584,7 @@ export class BattleScene extends Component {
     // shoot 的真正可行性必须由 canAttack 决定。固定主炮坦克在当前朝向
     // 没有合法目标时，把这次攻击动作转换为一次车体转向。
     const canPerform = (a: EnemyAction): boolean => {
-      if (a === 'reload') return GameSession.gameMode === 'hardcore'
+      if (a === 'reload') return (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
         && !enemy.destroyed && isTankUnit(enemy) && !isMainGunLoaded(enemy, true);
       if (!target) return false;
       if (a === 'shoot_adjacent') {
@@ -23375,7 +23654,7 @@ export class BattleScene extends Component {
         return 'done';
 
       case 'reload':
-        if (GameSession.gameMode === 'hardcore' && !enemy.destroyed && isTankUnit(enemy) && !isMainGunLoaded(enemy, true)) {
+        if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !enemy.destroyed && isTankUnit(enemy) && !isMainGunLoaded(enemy, true)) {
           reloadAIMainGun(enemy);
           this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 装填 ${this.mainGunLoadingLabel(enemy)}`);
           this.redraw();
@@ -23556,7 +23835,7 @@ export class BattleScene extends Component {
         if (tileForbidsSmokeOrConcealment(tile) || (tile?.terrain === 'europe_beach' && tileForbidsConcealment(tile))) return 'done';
         enemy.hidden = true;
         this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} Hull Down`);
-        this.spawnFloater(enemy.pos.q, enemy.pos.r, 'Hull Down',
+        this.spawnFloater(enemy.pos.q, enemy.pos.r, t('dice.aiEnemy.hull_down'),
           new Color(160, 200, 160, 255), { size: 24 });
         this.redraw();
         return 'done';
@@ -23607,7 +23886,7 @@ export class BattleScene extends Component {
   }
 
   private isHardcoreInfantryActor(unit: Unit): boolean {
-    return GameSession.gameMode === 'hardcore'
+    return (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && isFootUnit(unit)
       && unit.kind !== 'officer';
   }
@@ -23667,6 +23946,7 @@ export class BattleScene extends Component {
     if (occupants.some(u => isAntiTankGunUnit(u) && u.faction === 'neutral')) return 0;
     const sameSide = (unit: Unit) => unit.faction !== 'neutral' && isSameSide(unit, enemy);
     if (occupants.some(u => isTankUnit(u) && sameSide(u))) return 1;
+    if (GameSession.gameMode !== 'classic' && occupants.some(u => isHeavyArtilleryUnit(u) && sameSide(u))) return 2;
     if (tile.terrain === 'rocky' || tile.hasBuilding || tile.terrain === 'forest') return 2;
     if (tile.terrain === 'trees' || tile.crater) return 3;
     return 4;
@@ -23749,7 +24029,7 @@ export class BattleScene extends Component {
     const occ = new Set<string>();
     if (!this.mission) return occ;
     for (const u of this.allUnits()) {
-      if (u === self || u.destroyed) continue;
+      if (u === self) continue;
       if (!this.isBlockingMoveOccupant(self, u)) continue;
       occ.add(`${u.pos.q},${u.pos.r}`);
     }
@@ -23759,7 +24039,6 @@ export class BattleScene extends Component {
   private findMoveBlocker(mover: Unit, pos: Axial): Unit | null {
     return this.allUnits().find(u =>
       u !== mover
-      && !u.destroyed
       && u.pos.q === pos.q
       && u.pos.r === pos.r
       && this.isBlockingMoveOccupant(mover, u)
@@ -23767,10 +24046,16 @@ export class BattleScene extends Component {
   }
 
   private isBlockingMoveOccupant(mover: Unit, occupant: Unit): boolean {
+    if (GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(occupant)) {
+      // The concrete wreck still blocks tanks; only an intact bunker restricts infantry by side.
+      if (occupant.destroyed) return isTankUnit(mover);
+      return !isFootUnit(mover) || !this.areUnitsOnSameSide(mover, occupant);
+    }
+    if (occupant.destroyed) return false;
     if (isAttachedATGunCrew(occupant)) return false;
     // Any infantry may enter an abandoned tank's hex to become its new crew.
     if (isFootUnit(mover) && isAbandonedTank(occupant)) return false;
-    if (GameSession.gameMode === 'hardcore') {
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
       // AT guns cannot move into a hex occupied by any non-tank unit.
       if (isAntiTankGunUnit(mover) && !isTankUnit(occupant)) return true;
       // Infantry may enter an abandoned gun's hex to take control.
@@ -23849,7 +24134,7 @@ export class BattleScene extends Component {
 
   /** Hardcore: a tank entering an enemy/neutral AT-gun hex destroys only the gun. */
   private crushEnemyATGunsAt(mover: Unit): void {
-    if (GameSession.gameMode !== 'hardcore' || !isTankUnit(mover)) return;
+    if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isTankUnit(mover)) return;
     for (const unit of this.allUnits()) {
       if (unit === mover
         || unit.destroyed
@@ -23946,8 +24231,9 @@ export class BattleScene extends Component {
     this.closeDiePopover();
 
     if ((this.playerStep === 'attack' || this.playerStep === 'misc')
-      && this.selectedGunDieIdx >= 0 && GameSession.gameMode === 'hardcore'
-      && resolvedLoadedShell(this.mission.sherman) === 'smoke') {
+      && this.selectedGunDieIdx >= 0 && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
+      && resolvedLoadedShell(this.mission.sherman) === 'smoke'
+      && this.canFireSmokeAt(target)) {
       this.tryFireSmokeAt(target);
       return;
     }
@@ -23982,15 +24268,15 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       smokeHexes: this.mission!.smokeHexes,
       weather: this.currentWeather(),
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
-      atGunCrewTargets: GameSession.gameMode === 'hardcore',
+      atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       ...this.tankMachineGunContext(this.mission!.sherman, e),
     }).ok) : undefined;
     const legalMGSelection = legalMGTarget
       ? this.tankMachineGunSelection(this.mission.sherman, legalMGTarget)
       : null;
-    const hullMGCanFireWhileTurretPartiallyTraverses = GameSession.gameMode === 'hardcore'
+    const hullMGCanFireWhileTurretPartiallyTraverses = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && legalMGSelection?.weapon === 'hull';
 
     // Classic weapon masks only preview firing coverage. Empty/illegal cells never buy a turret turn.
@@ -24042,7 +24328,7 @@ export class BattleScene extends Component {
           return;
         }
         const unloadedGunRotation = gunSel
-          && !isMainGunLoaded(this.mission.sherman, GameSession.gameMode === 'hardcore');
+          && !isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
         const machineGunRotationOnly = mgSel && !legalMGTarget;
         const mainGunRotationOnly = gunSel && visibleUnitsOnTile.length > 0
           && !legalMainGunTarget && !legalUrbanBuildingTarget;
@@ -24084,8 +24370,8 @@ export class BattleScene extends Component {
     const dieIdx = this.selectedGunDieIdx;
     const slot = this.phaseDice[dieIdx];
     if (!slot || slot.used
-      || (GameSession.gameMode === 'hardcore' && resolvedLoadedShell(sherman) !== 'he')
-      || !isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')) return;
+      || ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && resolvedLoadedShell(sherman) !== 'he')
+      || !isMainGunLoaded(sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))) return;
     const target = this.urbanBuildingTarget(tile);
     const direction = this.turretTargetDirection(sherman, target);
     if (!this.canTurretReachDirection(sherman, direction)) {
@@ -24098,7 +24384,7 @@ export class BattleScene extends Component {
       map: this.mission.map,
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       shellType: 'he',
     });
@@ -24461,7 +24747,7 @@ export class BattleScene extends Component {
   private applyMainGunAttackResult(target: Unit, report: AttackReport): void {
     // Dice presentation may have already applied the destroyed visual, so do
     // not use isControlledATGun here (it deliberately rejects destroyed guns).
-    const hadATGunCrew = GameSession.gameMode === 'hardcore'
+    const hadATGunCrew = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && isAntiTankGunUnit(target)
       && target.atGunCrewAlive === true;
     applyAttack(target, report);
@@ -24534,7 +24820,7 @@ export class BattleScene extends Component {
   }
 
   private applyMachineGunAttackResult(target: Unit, report: Pick<AttackReport, 'hit'>): void {
-    const hadATGunCrew = GameSession.gameMode === 'hardcore'
+    const hadATGunCrew = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       && isAntiTankGunUnit(target)
       && target.atGunCrewAlive === true;
     if (hadATGunCrew && report.hit) {
@@ -24601,7 +24887,7 @@ export class BattleScene extends Component {
     const slot = this.phaseDice[gunDieIdx];
     if (!slot || slot.used) return;
     // 主炮禁瞄徒步类（步兵 / 军官）：引导玩家改用机枪骰；不消耗骰，避免误操作损失行动资源
-    const loadedShell = GameSession.gameMode === 'hardcore'
+    const loadedShell = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
       ? resolvedLoadedShell(sherman)
       : null;
     if (loadedShell === 'smoke') {
@@ -24610,14 +24896,14 @@ export class BattleScene extends Component {
       return;
     }
     const suppressionAttack = isMainGunSuppressionAttack(
-      sherman, target, GameSession.gameMode === 'hardcore', loadedShell,
+      sherman, target, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), loadedShell,
     );
     if (isFootUnit(target) && !suppressionAttack) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('attack.reason.gunVsInfantry'),
         new Color(255, 200, 120, 255), { size: 22, dur: 1.0, rise: 26 });
       return;
     }
-    if (!isMainGunLoaded(sherman, GameSession.gameMode === 'hardcore')) {
+    if (!isMainGunLoaded(sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'))) {
       this.spawnFloater(sherman.pos.q, sherman.pos.r, t('hud.unloaded'),
         new Color(255, 120, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
@@ -24632,11 +24918,11 @@ export class BattleScene extends Component {
       target,
       map,
       smokeHexes: this.mission.smokeHexes,
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections,
       mainGunSuppressesInfantry: suppressionAttack,
       shellType: loadedShell ?? undefined,
-      hardcoreHeavyArtilleryRules: GameSession.gameMode === 'hardcore',
+      hardcoreHeavyArtilleryRules: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       precisionFire: this.selectedGunHitThresholdModifier < 0,
     });
     if (!check.ok) {
@@ -24671,7 +24957,7 @@ export class BattleScene extends Component {
         weather: this.currentWeather(),
         hitThresholdModifier: this.campaignMainGunHitThresholdModifier() + ambushModifier,
         hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections,
         gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
         mainGunSuppressesInfantry: true,
@@ -24760,7 +25046,7 @@ export class BattleScene extends Component {
       };
       this.startShermanTurretAim(target, () => {
         if (!this.mission || target.destroyed) return;
-        finishLockedFireAttack(sherman, target, report.hit, GameSession.gameMode === 'hardcore');
+        finishLockedFireAttack(sherman, target, report.hit, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
         markAmbushAction(sherman);
         markAmbushTargeted(target);
         this.startDiceShow(panelReport, t('actor.player'), unitDisplayName(target.kind), () => {
@@ -24801,13 +25087,13 @@ export class BattleScene extends Component {
       hitThresholdModifiers: this.playerMainGunHitThresholdModifierDetails(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       overpenetration: getGameModeConfig(GameSession.gameMode).overpenetration,
-      lockedFire: GameSession.gameMode === 'hardcore',
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
       gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
       shellType: loadedShell ?? undefined,
-      hardcoreHeavyArtilleryRules: GameSession.gameMode === 'hardcore',
+      hardcoreHeavyArtilleryRules: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       precisionFire,
     }, this.rng);
     // 瞄准与开火动画期间保留主炮骰的选中态；进入结果展示后再统一消耗。
@@ -24852,7 +25138,7 @@ export class BattleScene extends Component {
       });
     };
     this.startShermanTurretAim(target, () => {
-      finishLockedFireAttack(sherman, target, report.hit, GameSession.gameMode === 'hardcore');
+      finishLockedFireAttack(sherman, target, report.hit, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
       // 旋转期间目标头顶仍展示这次已锁定的伏击命中需求。
       // 到炮塔完成瞄准、即将开火时才消耗伏击资格，使其只影响下次预览。
       markAmbushAction(sherman);
@@ -24941,11 +25227,11 @@ export class BattleScene extends Component {
       }
     }
 
-    const automaticWeapon = GameSession.gameMode === 'hardcore' && isTankUnit(enemy)
+    const automaticWeapon = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isTankUnit(enemy)
       ? nonPlayerTankWeaponForTarget(target, hexDistance(enemy.pos, target.pos))
       : 'ap';
     if (automaticWeapon === 'mg') return this.tryAIMGAttack(enemy, target);
-    if (GameSession.gameMode === 'hardcore' && isTankUnit(enemy) && !isMainGunLoaded(enemy, true)) return false;
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && isTankUnit(enemy) && !isMainGunLoaded(enemy, true)) return false;
 
     if (automaticWeapon === 'he') {
       const heContext = {
@@ -24959,7 +25245,7 @@ export class BattleScene extends Component {
         weather: this.currentWeather(),
         hitThresholdModifier: ambushHitThresholdModifier(enemy, GameSession.gameMode),
         hitThresholdModifiers: ambushHitThresholdModifierDetails(enemy, GameSession.gameMode),
-        lockedFire: GameSession.gameMode === 'hardcore',
+        lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
         expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
         gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
         mainGunSuppressesInfantry: true,
@@ -25022,10 +25308,10 @@ export class BattleScene extends Component {
         this.refreshStatusPanel();
       };
       const fire = () => {
-        if (GameSession.gameMode === 'hardcore' && !isFootUnit(enemy)) {
+        if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !isFootUnit(enemy)) {
           enemy.loaded = false; enemy.loadedShell = null; enemy.reloadProgress = 0;
         }
-        finishLockedFireAttack(enemy, target, report.hit, GameSession.gameMode === 'hardcore');
+        finishLockedFireAttack(enemy, target, report.hit, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
         this.startDiceShow(panelReport, enemyActor, targetLabel, () => {
           applyAndPresentHEAttack();
           if (this.outcome === 'ongoing' && (this.phase === 'ally' || this.phase === 'enemy')) {
@@ -25065,9 +25351,9 @@ export class BattleScene extends Component {
       hitThresholdModifiers: ambushHitThresholdModifierDetails(enemy, GameSession.gameMode),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
       overpenetration: getGameModeConfig(GameSession.gameMode).overpenetration,
-      sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
-      shellType: GameSession.gameMode === 'hardcore' ? 'ap' as const : undefined,
-      lockedFire: GameSession.gameMode === 'hardcore',
+      sameHexInfantryTankAttack: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
+      shellType: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? 'ap' as const : undefined,
+      lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections,
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
       gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
@@ -25076,7 +25362,7 @@ export class BattleScene extends Component {
     const precisionPartnerIdx = !opts.adjacentOnly
       && isSplitTankKind(enemy.kind)
       && getGameModeConfig(GameSession.gameMode).precisionFire
-      && (!isHeavyArtilleryUnit(target) || GameSession.gameMode !== 'hardcore'
+      && (!isHeavyArtilleryUnit(target) || (GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test')
         || isBunkerShootingPortAttack({ ...attackCtx, hardcoreHeavyArtilleryRules: true, precisionFire: true }))
       && probHit2d6(hitThreshold(attackCtx)) < 0.5
       ? this.findUnusedMatchingEnemyDie(this.enemyDiceHighlightIdx)
@@ -25101,7 +25387,7 @@ export class BattleScene extends Component {
         ...attackCtx.hitThresholdModifiers,
         ...(precisionFire ? [{ labelKey: 'dice.rule.precisionFire', value: -2 }] : []),
       ],
-      hardcoreHeavyArtilleryRules: GameSession.gameMode === 'hardcore',
+      hardcoreHeavyArtilleryRules: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       precisionFire,
     }, this.rng);
     const infantryVsInfantry = isFootUnit(enemy) && isFootUnit(target);
@@ -25155,10 +25441,10 @@ export class BattleScene extends Component {
       onHold: applyAndPresentAttack,
     });
     const afterTurretAim = () => {
-      if (GameSession.gameMode === 'hardcore' && !isFootUnit(enemy)) {
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !isFootUnit(enemy)) {
         enemy.loaded = false; enemy.loadedShell = null; enemy.reloadProgress = 0;
       }
-      finishLockedFireAttack(enemy, target, report.hit, GameSession.gameMode === 'hardcore');
+      finishLockedFireAttack(enemy, target, report.hit, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
       if (precisionFire) {
         this.beginPrecisionAimHold(enemy, target, enemy.stats.attackSound, report, showDice);
       } else {
@@ -25942,6 +26228,7 @@ export class BattleScene extends Component {
         add(t('dice.rule.hedges'), base.hedges);
         add(t('dice.rule.building'), base.building);
         add(t('dice.rule.crater'), base.crater);
+        add(t('dice.rule.rockyCover'), base.rocky);
         add(t('dice.rule.smoke'), base.smoke);
         add(t('dice.rule.concealed'), base.concealed);
         add(t('dice.rule.trees'), base.trees);
@@ -26561,7 +26848,7 @@ export class BattleScene extends Component {
     // A hardcore MG hit abandons an AT gun; it must never preview the gun's
     // destroyed sprite. Crew death and blood are applied by the real result.
     if (show.mg
-        && GameSession.gameMode === 'hardcore'
+        && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
         && target !== undefined
         && isAntiTankGunUnit(target)
         && target.atGunCrewAlive === true) return;
@@ -26626,7 +26913,8 @@ export class BattleScene extends Component {
     return DICE_DIE_FILL;
   }
 
-  private playerDieFillColor(): Color {
+  private playerDieFillColor(type?: 'attack' | 'movement'): Color {
+    if (GameSession.gameMode === 'test' && this.playerStep === 'attack' && type === 'movement') return AI_MOVE_DIE_FILL;
     if (this.playerStep === 'attack') return AI_ATTACK_DIE_FILL;
     if (this.playerStep === 'movement') return AI_MOVE_DIE_FILL;
     if (this.playerStep === 'misc') return AI_MISC_DIE_FILL;
@@ -27967,10 +28255,10 @@ export class BattleScene extends Component {
     const target = aimedTarget ?? this.selectAIMGTarget(actor, true);
     if (!target) return false;
     const machineGun = selectedMachineGun ?? this.tankMachineGunSelection(actor, target) ?? undefined;
-    if (GameSession.gameMode === 'hardcore' && !machineGun) return false;
+    if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !machineGun) return false;
 
     if (!aimedTarget && actor.stats.visionType === 'turreted') {
-      if (GameSession.gameMode === 'hardcore') {
+      if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')) {
         if (machineGun?.rotateTurret) {
           this.startEnemyMachineGunAim(actor, target, machineGun, () => {
             this.tryAIMGAttack(actor, target, machineGun);
@@ -28004,7 +28292,7 @@ export class BattleScene extends Component {
       units: this.allUnits(),
       smokeHexes: this.mission.smokeHexes,
       weather: this.currentWeather(),
-      atGunCrewTargets: GameSession.gameMode === 'hardcore',
+      atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       ...this.tankMachineGunContext(actor, target, machineGun),
     };
     const maxRoll = maxMGHitRoll(ctx);
@@ -28025,7 +28313,7 @@ export class BattleScene extends Component {
           hitModifiers: mgHitThresholdModifierDetails(ctx),
         }
       : rollMGAttack(ctx, this.rng));
-    finishLockedFireAttack(ctx.attacker, ctx.target, false, GameSession.gameMode === 'hardcore', 'mg');
+    finishLockedFireAttack(ctx.attacker, ctx.target, false, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), 'mg');
     const secondaryReport = dualWeaponReports?.[1]?.report;
     const hit = report.hit || secondaryReport?.hit === true;
     const actorLabel = actor.sideId === 'enemy'
@@ -28152,8 +28440,8 @@ export class BattleScene extends Component {
       rng: this.rng,
       nextEnemyId: () => this.nextTurnEndUnitId(),
       effectiveRangePenetration: getGameModeConfig(GameSession.gameMode).effectiveRangePenetration,
-      sameHexInfantryTankAttack: GameSession.gameMode === 'hardcore',
-      hardcoreReload: GameSession.gameMode === 'hardcore',
+      sameHexInfantryTankAttack: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
+      hardcoreReload: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'),
       directionalDamageCheck: getGameModeConfig(GameSession.gameMode).directionalDamageCheck,
       gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
@@ -28629,7 +28917,7 @@ export class BattleScene extends Component {
     }
 
     if (tankReinforceMove && this.mission) {
-      if (!this.canMoveToBattleTile(tankReinforceMove.to)) {
+      if (!this.canMoveToBattleTile(tankReinforceMove.to) || this.hasBunkerAt(tankReinforceMove.to)) {
         this.refreshStatusPanel();
         this.redraw();
         onDone();

@@ -1,7 +1,7 @@
 {
   "id": "mission_pacific_07",
   "name": "Tarawa, Red Beach 2 - The Landing",
-  "description": "Pacific Scenario C7. Move off the map along the red arrow. Place 1 Heavy Artillery on the fixed hexagonal building hex. Place AT Guns on the three red numbered hexes 4, 5, and 6. The Sherman starts on the black outlined hex. Sherman can only cross the sea wall using Misc action 5.",
+  "description": "Pacific Scenario C7. Move off the map along the red arrow. Place 1 Heavy Artillery on the fixed hexagonal building hex. Place Type 92 Infantry Guns on the three red numbered hexes 4, 5, and 6. The Sherman starts on the black outlined hex. Sherman can only cross the sea wall using Misc action 5.",
   "theater": "pacific",
   "usCasualtyLimit": 10,
   "cols": 8,

@@ -491,6 +491,21 @@ export interface HitBreakdown {
   weather?: number;
   unitLevel?: number;
   crater?: number;
+  rocky?: number;
+}
+
+/** Intact friendly bunkers shelter infantry under the non-classic combat rules.
+ * MG and turn-end attacks carry narrower capability sets than main-gun attacks. */
+function hasFriendlyBunkerCover(ctx: AttackContext): boolean {
+  if (!ctx.hardcoreHeavyArtilleryRules && !ctx.atGunCrewTargets && !usesHardcoreSmokeRules(ctx)) return false;
+  if (!isFootUnit(ctx.target)) return false;
+  return ctx.units?.some(unit => !unit.destroyed
+    && isHeavyArtilleryUnit(unit)
+    && unit.faction !== 'neutral'
+    && ctx.target.faction !== 'neutral'
+    && isSameSide(unit, ctx.target)
+    && unit.pos.q === ctx.target.pos.q
+    && unit.pos.r === ctx.target.pos.r) === true;
 }
 
 export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
@@ -502,8 +517,12 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     || targetTile?.terrain === 'urban_destructible';
   const infantryMGTarget = ctx.attackKind === 'mg'
     && (isFootUnit(target) || (ctx.atGunCrewTargets === true && isControlledATGun(target)));
-  const building = tileHasBuilding(targetTile) ? (urbanBuilding && infantryMGTarget ? 3 : 1) : 0;
+  const terrainBuilding = tileHasBuilding(targetTile) ? (urbanBuilding && infantryMGTarget ? 3 : 1) : 0;
+  const bunkerBuilding = hasFriendlyBunkerCover(ctx) ? (infantryMGTarget ? 3 : 1) : 0;
+  const building = Math.max(terrainBuilding, bunkerBuilding);
   const crater = targetTile?.terrain === 'europe_beach' && targetTile.crater && isFootUnit(target) ? 1 : 0;
+  const rocky = targetTile?.terrain === 'rocky'
+    && (isFootUnit(target) || (ctx.atGunCrewTargets === true && isControlledATGun(target))) ? 1 : 0;
   const size = isBunkerShootingPortAttack(ctx)
     ? (target.stats.shootingPortHitThreshold ?? 10)
     : target.stats.size;
@@ -525,8 +544,8 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
   return {
     size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
-    crater,
-    threshold: size + distance + hedges + building + crater + smoke + concealed + trees + rearArc
+    crater, rocky,
+    threshold: size + distance + hedges + building + crater + rocky + smoke + concealed + trees + rearArc
       + frontArcModifier + actionModifier + weather + unitLevel,
   };
 }
@@ -775,7 +794,7 @@ export function infantryHighExplosiveCoverSource(
   ctx: AttackContext,
 ): InfantryHighExplosiveCoverSource | undefined {
   const tile = ctx.map.get(ctx.target.pos);
-  if (tileHasBuilding(tile)) return 'building';
+  if (tileHasBuilding(tile) || hasFriendlyBunkerCover(ctx)) return 'building';
   if (tile?.terrain === 'forest') return 'forest';
   if (tile?.terrain === 'trees') return 'trees';
   return ctx.units?.some(unit => unit !== ctx.target
@@ -1666,6 +1685,13 @@ function mgTankCoordinationModifier(ctx: AttackContext): number {
   return bonus;
 }
 
+/** All tank MGs, including casemate-mounted guns, gain -1 against infantry. */
+function mgTankHitModifier(ctx: AttackContext): number {
+  const infantryTarget = isFootUnit(ctx.target)
+    || (ctx.atGunCrewTargets === true && isControlledATGun(ctx.target));
+  return isTankUnit(ctx.attacker) && infantryTarget ? -1 : 0;
+}
+
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
   const { attacker, target, map } = ctx;
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
@@ -1734,6 +1760,7 @@ export interface TankMachineGunAttackReport {
 export function mgHitThreshold(ctx: AttackContext): number {
   const base = mgHitBreakdown(ctx);
   return base.threshold
+    + mgTankHitModifier(ctx)
     + mgTankCoordinationModifier(ctx)
     + atGunShieldModifier(ctx);
 }
@@ -1750,9 +1777,8 @@ function atGunShieldModifier(ctx: AttackContext): number {
 export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
   // In hardcore mode the hull and coaxial guns are separate attacks. A target
   // covered by both weapons no longer receives the old combined-fire -1 bonus.
-  const frontArcModifier = ctx.hardcoreTankMachineGuns && isTankUnit(ctx.attacker)
-    ? 0
-    : (isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0);
+  const frontArcModifier = isTankUnit(ctx.attacker) && !ctx.hardcoreTankMachineGuns
+    && isTargetInFrontArc(ctx.attacker, ctx.target) ? -1 : 0;
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(ctx.target);
   const hitContext = atGunCrewTarget
     ? {
@@ -1807,8 +1833,10 @@ function mainGunHitThresholdModifierDetails(ctx: AttackContext): HitThresholdMod
 
 export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
   const details = mainGunHitThresholdModifierDetails(ctx);
+  const tankHit = mgTankHitModifier(ctx);
   const coordination = mgTankCoordinationModifier(ctx);
   const atGunShield = atGunShieldModifier(ctx);
+  if (tankHit) details.push({ labelKey: 'dice.rule.tankHitModifier', value: tankHit });
   if (coordination) details.push({ labelKey: 'dice.rule.infantryTankCoordination', value: coordination });
   if (atGunShield) details.push({ labelKey: 'dice.rule.atGunCrewTarget', value: atGunShield });
   return details;

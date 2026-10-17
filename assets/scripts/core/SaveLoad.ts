@@ -111,7 +111,7 @@ export interface SaveData {
   /** Whether the phase-choice hatch button has already been used this player turn. */
   hatchChangedThisTurn?: boolean;
   /** v3：当前子阶段骰子槽（与 BattleScene.phaseDice 同构） */
-  phaseDice?: Array<{ pip: number; used: boolean }>;
+  phaseDice?: Array<{ pip: number; used: boolean; type?: 'attack' | 'movement' }>;
   /** 谢尔曼是否已完成 destroy_kind_evac 离场移动 */
   shermanEvacuated?: boolean;
   /** 任务 5：德军卡车是否因回合结束事件已驶出地图而判负 */
@@ -134,7 +134,7 @@ export interface SnapshotParams {
   miscDone: boolean;
   playerStep: SavePlayerStep;
   hatchChangedThisTurn: boolean;
-  phaseDice: Array<{ pip: number; used: boolean }>;
+  phaseDice: Array<{ pip: number; used: boolean; type?: 'attack' | 'movement' }>;
   attackPositionMemory?: AttackPositionMemory;
 }
 
@@ -314,7 +314,7 @@ export function captureSave(p: SnapshotParams): SaveData {
     miscDone: p.miscDone,
     playerStep: p.playerStep,
     hatchChangedThisTurn: p.hatchChangedThisTurn,
-    phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used })),
+    phaseDice: p.phaseDice.map(s => ({ pip: s.pip, used: s.used, type: s.type })),
     attackPositionMemory: cloneAttackPositionMemory(p.attackPositionMemory),
     sherman: playerTankSnapshot,
     playerTank: { ...playerTankSnapshot },
@@ -344,7 +344,7 @@ export interface ApplyResult {
   miscDone?: boolean;
   playerStep?: SavePlayerStep;
   hatchChangedThisTurn?: boolean;
-  phaseDice?: Array<{ pip: number; used: boolean }>;
+  phaseDice?: Array<{ pip: number; used: boolean; type?: 'attack' | 'movement' }>;
   attackPositionMemory?: AttackPositionMemory;
   reason?: string;
 }
@@ -628,7 +628,7 @@ export function applySave(
         miscDone: false,
         playerStep: 'choose' as SavePlayerStep,
         hatchChangedThisTurn: false,
-        phaseDice: [] as Array<{ pip: number; used: boolean }>,
+        phaseDice: [] as Array<{ pip: number; used: boolean; type?: 'attack' | 'movement' }>,
       }),
   };
 }

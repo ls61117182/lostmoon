@@ -1,0 +1,62 @@
+{
+  "generator": "built-in imagegen",
+  "material": "weathered-Pacific-reef-limestone",
+  "projection": "vertical-overhead-orthographic",
+  "shadowProfile": {
+    "reach": 0.2,
+    "flatten": 1,
+    "alpha": 88,
+    "contact": 0.9
+  },
+  "width": 222,
+  "height": 256,
+  "variants": [
+    {
+      "id": 1,
+      "file": "assets/resources/textures/terrain/rocky_highland_01.png",
+      "source": "master-reef-01.png",
+      "sha256": "efbfc390875e27ff083d260377ea7deccee84cc0e6923781ac4642f4b66acff7",
+      "coverage": 40945
+    },
+    {
+      "id": 2,
+      "file": "assets/resources/textures/terrain/rocky_highland_02.png",
+      "source": "master-reef-02.png",
+      "sha256": "f71505913b19bf848c59496268f943b68df4314b7a8aaf00cafb810da763edb7",
+      "coverage": 40943,
+      "silhouetteOverlap": 0.9961
+    },
+    {
+      "id": 3,
+      "file": "assets/resources/textures/terrain/rocky_highland_03.png",
+      "source": "master-reef-03.png",
+      "sha256": "7f2fa85eb95e355949c4659d1846bc640b6e120f9fda491a291fd745f02e694e",
+      "coverage": 40958,
+      "silhouetteOverlap": 0.9977
+    },
+    {
+      "id": 4,
+      "file": "assets/resources/textures/terrain/rocky_highland_04.png",
+      "source": "master-reef-04.png",
+      "sha256": "e2b346540501154c34a4a8ac072e1ce68fcf2d6d475181e59c4d40cca3b0c833",
+      "coverage": 41021,
+      "silhouetteOverlap": 0.9979
+    },
+    {
+      "id": 5,
+      "file": "assets/resources/textures/terrain/rocky_highland_05.png",
+      "source": "master-reef-05.png",
+      "sha256": "20e3d7468a088ed1d1319a4d26d6bc229207b8b099150de247d85a0684774898",
+      "coverage": 41062,
+      "silhouetteOverlap": 0.9977
+    },
+    {
+      "id": 6,
+      "file": "assets/resources/textures/terrain/rocky_highland_06.png",
+      "source": "master-reef-06.png",
+      "sha256": "6a742d01892da0aceadafbef4192e13949ec098a4e218702108e1a93067b12f8",
+      "coverage": 41006,
+      "silhouetteOverlap": 0.9972
+    }
+  ]
+}

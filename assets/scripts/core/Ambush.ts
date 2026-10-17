@@ -19,7 +19,7 @@ export function hasLivingCrewSkill(
 export function canEnterAmbush(unit: Unit, mode: GameMode, automaticLoaded = false): boolean {
   // AI tanks use automatic main-gun ammunition; the player uses the loaded shell.
   const shell = resolvedLoadedShell(unit);
-  return mode === 'hardcore' && !unit.destroyed && isTankUnit(unit)
+  return (mode === 'hardcore' || mode === 'test') && !unit.destroyed && isTankUnit(unit)
     && !unit.turretDamaged && crewRoleAlive(unit, 'gunner')
     && isMainGunLoaded(unit, true)
     && (shell === 'ap' || shell === 'he' || (automaticLoaded && shell === null));

@@ -86,7 +86,8 @@ test('generation rejects translations absent from CSV even when LangDB contains 
   ).rows);
   const entries = rowsToEntries(rows);
   const generatedKeys = definedLangKeys();
-  for (const key of ['action.repairRadio', 'unit.name.german_heavy_artillery', 'turnEnd.commanderExtra.loadProgress']) {
+  for (const key of ['action.repairRadio', 'unit.name.german_heavy_artillery', 'turnEnd.commanderExtra.loadProgress',
+    'dice.aiEnemy.reload', 'dice.aiEnemy.hull_down']) {
     assert.equal(generatedKeys.has(key), true);
     assert.throws(
       () => validateLangReferences(entries.filter(entry => entry.key !== key), ROOT),

@@ -6,7 +6,7 @@ import type { Theater } from './types';
 export type { FireCheckEffect, FireCheckProfile } from './FireCheckDB';
 
 export function fireCheckProfileFor(mode: GameMode, theater: Theater): FireCheckProfile {
-  if (mode === 'hardcore') return 'hardcore';
+  if ((mode === 'hardcore' || mode === 'test')) return 'hardcore';
   return theater === 'pacific' ? 'classic_pacific' : 'classic_europe';
 }
 

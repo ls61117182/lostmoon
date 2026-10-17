@@ -130,7 +130,14 @@ async function main() {
   })).filter((row) => row.kind && /^[a-z][a-z0-9_]*$/.test(row.kind));
   const selected = requestedKind ? rows.filter((row) => row.kind === requestedKind) : rows;
   if (!selected.length) throw new Error(`unknown tank kind: ${requestedKind}`);
-  for (const row of selected) await audit(row);
+  for (const row of selected) {
+    await audit(row);
+    const variant = { ...row, kind: `${row.kind} [late_war]` };
+    for (const field of ['topSpritePath', 'hullSpritePath', 'turretSpritePath', 'destroyedSpritePath']) {
+      variant[field] = row[field].replace('textures/units/', 'textures/units/late_war/');
+    }
+    if (fs.existsSync(sourcePng(variant.topSpritePath))) await audit(variant);
+  }
   console.log(`[tank:audit] PASS ${selected.length} tank(s)`);
 }
 

@@ -50,7 +50,7 @@ for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
 const scene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8').replace(/\r\n/g, '\n');
 const beginTurn = scene.match(/private\s+beginCurrentEnemyTurn\s*\([^)]*\)[\s\S]*?\n  }\n\n/);
 assert(beginTurn, 'enemy turn entry should exist');
-assert.match(beginTurn[0], /GameSession\.gameMode === 'hardcore' && isHeavyArtilleryUnit\(enemy\)[\s\S]*?this\.enemyDice = \[\][\s\S]*?runHardcoreHeavyArtilleryTurn\(enemy\)/,
+assert.match(beginTurn[0], /\(GameSession\.gameMode === 'hardcore' \|\| GameSession\.gameMode === 'test'\) && isHeavyArtilleryUnit\(enemy\)[\s\S]*?this\.enemyDice = \[\][\s\S]*?runHardcoreHeavyArtilleryTurn\(enemy\)/,
   'hardcore heavy artillery must bypass action dice');
 
 const turn = scene.match(/private\s+runHardcoreHeavyArtilleryTurn\s*\([^)]*\)[\s\S]*?\n  }\n\n/);

@@ -38,6 +38,7 @@ import { getUnitStats } from './UnitDB';
 import { RNG } from './Dice';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { createUrbanVariantAllocator } from './UrbanTerrain';
+import { normalizeGermanTankCamouflage } from './TankCamouflage';
 
 /** TileDef 简写（不含已废弃的整格 b）→ TerrainType */
 const TERRAIN_MAP = {
@@ -50,6 +51,7 @@ const TERRAIN_MAP = {
   T: 'trees',
   B: 'beach',
   eb: 'europe_beach',
+  esw: 'beach', // European nearshore alias; same rules and visuals as Pacific B.
   H: 'rocky',
   dw: 'deep_water',
   a: 'airstrip',
@@ -240,6 +242,7 @@ export interface MissionLoadOptions {
 }
 
 export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOptions = {}): LoadedMission {
+  normalizeGermanTankCamouflage(data.germanTankCamouflage);
   const roundEventErrors = validateRoundEvents(data.roundEvents);
   if (roundEventErrors.length) throw new Error(`任务 ${data.id}：${roundEventErrors.join('; ')}`);
   const playerPlacement = data.playerTank ?? data.sherman;

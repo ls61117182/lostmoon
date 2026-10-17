@@ -23,7 +23,8 @@ function load(file, deps) {
   new Function('module', 'exports', 'require', ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText)(m, m.exports, name => deps[name]);
   return m.exports;
 }
-const art = load(path.join(root, 'assets/scripts/view/BeachTerrainVisual.ts'), { cc: { Color, Graphics } });
+const junctions = load(path.join(root, 'assets/scripts/core/SeawallJunctions.ts'), {});
+const art = load(path.join(root, 'assets/scripts/view/BeachTerrainVisual.ts'), { cc: { Color, Graphics }, '../core/SeawallJunctions': junctions });
 const urban = load(path.join(root, 'assets/scripts/core/UrbanTerrain.ts'), {});
 const rasterModule = load(path.join(root, 'assets/scripts/view/TerrainGroundRaster.ts'), { '../core/UrbanTerrain': urban });
 const bundle = JSON.parse(fs.readFileSync(path.join(root, 'assets/resources/textures/terrain/redesign_v3/materials.json'), 'utf8'));
@@ -48,11 +49,15 @@ async function main() {
     const polygon = points.map(a => a.join(',')).join(' ');
     svg += `<g transform="translate(${x} ${y}) scale(1 -1)"><polygon points="${polygon}" fill="url(#sand)" stroke="#928b72" stroke-width="1.5"/>`;
     art.drawBeachOverlays(g, 0, 0, radius, !!p.crater, !!p.steel);
-    if (p.wire || p.wall) for (const edge of [0, 2, 4]) {
+    const wallSegments = [];
+    if (p.wire || p.wall) for (const edge of p.wall ? [5, 0, 1] : [0, 2, 4]) {
       const a = points[edge], b = points[(edge + 1) % 6];
       art.drawBeachEdge(g, ...a, ...b, radius, p.wall ? 'seawall' : 'wire', p.wire ?? 1);
+      if (p.wall) wallSegments.push([...a,...b]);
     }
-    svg += g.items.join('') + `</g><text x="${x}" y="${y+145}" text-anchor="middle" font-size="23">${p.label}</text><text x="${x}" y="${y+175}" text-anchor="middle" font-size="15">${p.rule}</text>`;
+    art.drawSeawallJoints(g,wallSegments,radius);
+    svg += g.items.join('');
+    svg += `</g><text x="${x}" y="${y+145}" text-anchor="middle" font-size="23">${p.label}</text><text x="${x}" y="${y+175}" text-anchor="middle" font-size="15">${p.rule}</text>`;
   });
   svg += '</g></svg>';
   const output = path.join(root, 'source_art/terrain/normandy-concept-20261013');

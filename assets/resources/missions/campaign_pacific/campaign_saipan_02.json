@@ -1,7 +1,7 @@
 ﻿{
     "id":  "campaign_saipan_02",
     "name":  "Saipan - North towards Garapan",
-    "description":  "Pacific Scenario B5. Move off the map along the red arrow. The Heavy Artillery starts on the fixed hexagonal building hex. Place 2 AT Guns and 1 Type 97 randomly on different red numbered start hexes. Place 1 Japanese Infantry randomly on a blue numbered start hex. The Sherman starts on the black outlined hex.",
+    "description":  "Pacific Scenario B5. Move off the map along the red arrow. The Heavy Artillery starts on the fixed hexagonal building hex. Place 2 Type 92 Infantry Guns and 1 Type 97 randomly on different red numbered start hexes. Place 1 Japanese Infantry randomly on a blue numbered start hex. The Sherman starts on the black outlined hex.",
     "theater":  "pacific",
     "usCasualtyLimit":  10,
     "cols":  8,

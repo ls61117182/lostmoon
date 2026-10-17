@@ -9,7 +9,9 @@ const end = source.indexOf('\n  private ', start + 10);
 const compiled = ts.transpile(`class Scene { ${source.slice(start, end)} }`, {
   target: ts.ScriptTarget.ES2020,
 });
-const Scene = new Function('isTankUnit', `${compiled}; return Scene;`)(unit => unit.tank);
+const Scene = new Function('isTankUnit', 'GameSession', `${compiled}; return Scene;`)(
+  unit => unit.tank, { gameMode: 'classic' },
+);
 
 class Node {
   constructor() { this.children = []; this.active = true; this.parent = null; }
@@ -33,7 +35,7 @@ Object.assign(scene, {
   commanderHatchSpritePool: [], infantryTopSpritePool: [], officerTopSpritePool: [],
   tankContentNode: new Node(), infantryContentNode: new Node(),
   silhouetteClaimed: new Set(), silhouetteSources: new Map(),
-  unitSilhouetteColor: () => null, isUnitVisible: () => true,
+  unitSilhouetteColor: () => null, isUnitVisible: () => true, shouldDisplayUnitOutline: () => true,
 });
 // A fire-support unit uses only the hull slot in the other layer, leaving the
 // turret slot behind. On reuse, reparenting the hull appends it above the turret.

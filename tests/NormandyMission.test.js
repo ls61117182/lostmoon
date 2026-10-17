@@ -30,6 +30,10 @@ function safePath(mission, destination, exclude = new Set()) {
 }
 
 test('European mission 13 is listed, importable and has a real Cocos JSON asset', () => {
+  const standard = JSON.parse(fs.readFileSync('assets/resources/missions/mission_12.json', 'utf8'));
+  assert.deepEqual([data.cols, data.rows], [standard.cols, standard.rows]);
+  assert.equal(data.tiles.length, data.rows);
+  assert.ok(data.tiles.every(row => row.length === data.cols));
   const levels = getChapterLevels('europe');
   assert.equal(levels.length, 13);
   const last = levels.at(-1); assert.equal(last.id, 13); assert.equal(last.missionId, data.id); assert.equal(last.titleKey, 'level.13.title');
@@ -41,8 +45,8 @@ test('European mission 13 is listed, importable and has a real Cocos JSON asset'
 test('fixed deployment loads for different seeds with both American support squads and all five defenders', () => {
   for (const seed of [1, 2, 17, 72]) {
     const mission = loadMission(data, new RNG(seed));
-    assert.equal(mission.map.all().length, 80);
-    assert.deepEqual(axialToOffset(mission.sherman.pos), { col: 2, row: 3 });
+    assert.equal(mission.map.all().length, 48);
+    assert.deepEqual(axialToOffset(mission.sherman.pos), { col: 1, row: 3 });
     assert.equal(mission.sherman.facing, 0);
     assert.equal(mission.allies.length, 2);
     assert.ok(mission.allies.every(unit => unit.kind === 'american_infantry' && unit.faction === 'usa' && unit.sideId === 'player'));
@@ -53,11 +57,28 @@ test('fixed deployment loads for different seeds with both American support squa
   }
 });
 
+test('player starts in real shallow water and can drive onto sand with normal movement', () => {
+  const mission = loadMission(data), start = mission.sherman.pos, landing = neighbor(start, mission.sherman.facing);
+  const tile = mission.map.get(start), shore = mission.map.get(landing);
+  assert.equal(data.tiles[3][1].t, 'esw');
+  assert.equal(tile.terrain, 'beach', 'reuses the Pacific front-beach runtime rules');
+  assert.equal(tile.displayOnly, undefined, 'the water start is a playable hex');
+  assert.deepEqual(axialToOffset(landing), { col: 2, row: 3 });
+  assert.equal(shore.terrain, 'europe_beach');
+  assert.equal(mission.map.canTankCrossEdge(start, landing, { faction: mission.sherman.faction }), true);
+  assert.ok(![...mission.allies, ...mission.enemies].some(unit => unit.pos.q === landing.q && unit.pos.r === landing.r));
+  const { actionDicePool } = require('../assets/scripts/core/ActionDice.ts');
+  const { tileForbidsConcealment } = require('../assets/scripts/core/types.ts');
+  assert.equal(tileForbidsConcealment(tile), true);
+  for (const hardcore of [false, true]) assert.ok(actionDicePool({ terrain: tile.terrain, subPhase: 'movement', hardcore, mobility: mission.sherman.stats.mobility, crew: mission.sherman.crew, hatchOpen: false }) >= 1);
+});
+
 test('both seawall breaches lead to the road exit without entering hedgehogs or crossing a wall', () => {
-  const mission = loadMission(data), upper = offsetToAxial({ col: 6, row: 2 }), lower = offsetToAxial({ col: 6, row: 5 });
+  const mission = loadMission(data), upper = offsetToAxial({ col: 5, row: 1 }), lower = offsetToAxial({ col: 5, row: 4 });
   const exit = offsetToAxial(data.objective.evacAt);
   for (const breach of [upper, lower]) {
-    const path = safePath(mission, breach); assert.ok(path, 'breach has a safe tank approach');
+    const other = breach === upper ? lower : upper;
+    const path = safePath(mission, breach, new Set([HexMap.keyOf(other)])); assert.ok(path, 'each breach has a safe independent tank approach');
     for (let i = 1; i < path.length; i++) assert.ok(!mission.map.get(path[i]).steelHedgehogs);
     const fromBreach = { ...mission, sherman: { ...mission.sherman, pos: breach } };
     assert.ok(safePath(fromBreach, exit), 'road is reachable beyond the breach');
