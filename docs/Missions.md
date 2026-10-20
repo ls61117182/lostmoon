@@ -41,7 +41,7 @@
 
 ### 胜负条件（代码实现）
 
-- 使用 `objective.type = "destroy_kind_evac"`、`kind = "panzer4"`，并配置
+- 使用 `objective.type = "destroy_kind_evac"`、`kind = "panzer4_f"`，并配置
   `evacAt`（offset 撤离六角格）与 `evacExitDir`（驶出地图的六向，0=E … 5=NE）。
 - 先击毁全部 IV 号；再于撤离格上，沿 `evacExitDir` 执行 **前进** 或等效的
   **后退**（位移方向与 `evacExitDir` 一致），且 **目标六角不在地图内**（`HexMap.has` 为假）时，记 `shermanEvacuated` 并判胜。
@@ -429,7 +429,7 @@ row6:    ·     r↗S    f      f      f      f      ·
 
 ### 目标
 
-- **歼灭全部德军坦克后撤离**：`objective.type = "destroy_kind_evac"`，`kinds: ["tiger", "panzer4"]` —— `Objective.destroyKindEvacPrereqMet` 要求两种 kind 的敌方分组均 `destroyed` 后，`isShermanEvacDrive` / `isObjectiveMet` 才允许进入撤离结算。
+- **歼灭全部德军坦克后撤离**：`objective.type = "destroy_kind_evac"`，`kinds: ["tiger", "panzer4_f"]` —— `Objective.destroyKindEvacPrereqMet` 要求两种 kind 的敌方分组均 `destroyed` 后，`isShermanEvacDrive` / `isObjectiveMet` 才允许进入撤离结算。
 - **步兵不挡胜利**：地图上 4 名开局步兵与后续事件无关本关「坦克全灭」判定；玩家仍需应付其相邻齐射等事件。
 - **撤离几何**：以当前 JSON 为准——谢尔曼在 **`evacAt`** 所指格，沿 **`evacExitDir`** 方向驶离地图边界时 `shermanEvacuated` 置真并判胜（见 `mission_09.json` 的 `objective`）。
 

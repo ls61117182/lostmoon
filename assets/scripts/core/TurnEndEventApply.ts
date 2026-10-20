@@ -286,7 +286,7 @@ function selectTankReinforceEntry(
 
 /** 某格上是否站着任何坦克（含谢尔曼 / 敌坦 / 另一辆 truck，不计已毁） */
 function prepareTankSpawnEvent(
-  kind: Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type95' | 'type97'>,
+  kind: Extract<UnitKind, 'sherman' | 'panzer4' | 'panzer4_f' | 'panzer3' | 'tiger' | 'type95' | 'type97'>,
   keyStem: 'sherman' | 'panzer4' | 'panzer3' | 'tiger' | 'type95' | 'type97',
   mission: LoadedMission,
   rng: RNG,
@@ -746,7 +746,8 @@ export function prepareTurnEndEvent(
       return prepareTankSpawnEvent('type95', 'type95', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'type95', 'rid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'panzer4_spawn': {
-      return prepareTankSpawnEvent('panzer4', 'panzer4', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'panzer4', 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);
+      const kind = (mission.data.theater ?? 'europe') === 'europe' ? 'panzer4_f' : 'panzer4';
+      return prepareTankSpawnEvent(kind, 'panzer4', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, kind, 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);
     }
     case 'tiger_spawn': {
       return prepareTankSpawnEvent('tiger', 'tiger', mission, rng, nextEnemyId, sh, baseParams, spawnMarkerKindForMission(mission.data.id, 'tiger', 'eid'), requireReinforcementSide(row), ctx.hardcoreReload);

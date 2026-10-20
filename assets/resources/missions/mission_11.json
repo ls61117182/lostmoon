@@ -71,7 +71,7 @@
   "sherman": { "kind": "sherman", "faction": "allied" },
   "enemies": [
     { "kind": "tiger", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" },
+    { "kind": "panzer4_f", "faction": "german" },
     { "kind": "panzer3", "faction": "german" }
   ],
   "objective": { "type": "destroy_all_enemies" },

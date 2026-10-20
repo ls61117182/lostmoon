@@ -25,7 +25,7 @@ import { BUILD_FEATURES } from '../core/BuildProfile';
  */
 
 import {
-  _decorator, Canvas, Color, Component, EditBox, EventMouse, EventTouch, Graphics,
+  _decorator, BlockInputEvents, Canvas, Color, Component, EditBox, EventMouse, EventTouch, Graphics,
   HorizontalTextAlignment, JsonAsset, Label, Layers, Mask, Node, ScrollView, Sprite, SpriteFrame, UITransform,
   Vec3, VerticalTextAlignment, director, resources, Tween, tween,
 } from 'cc';
@@ -80,6 +80,7 @@ import type { MissionData, MissionObjective, RoundEventConfig, SeasonType, TileD
 import { validateRoundEvents } from '../core/RoundEvents';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
+import { bindAdaptivePageLayout } from './AdaptivePageLayout';
 import {
   applyAdaptiveResolution,
   createAdaptiveFullscreenMask,
@@ -1457,6 +1458,9 @@ export class MainMenuScene extends Component {
       loadError?: boolean;
     }> = {};
     const drafts: Record<string, TankVisualDebugDraft> = {};
+    const savedDrafts: Record<string, TankVisualDebugDraft> = {};
+    const debugInputs = new Map<TankVisualDebugKey, EditBox>();
+    let savingConfig = false;
     const hexR = 185;
     let selectedKind: TankVisualKind = TANK_VISUAL_KINDS[0]!;
     let bodyAngleDeg = 0;
@@ -1565,6 +1569,7 @@ export class MainMenuScene extends Component {
     };
     for (const kind of TANK_VISUAL_KINDS) {
       drafts[kind] = makeDraft(kind);
+      savedDrafts[kind] = { ...drafts[kind]! };
       loadTankFrames(kind);
     }
     const commanderSpritePaths = new Set(
@@ -1658,6 +1663,70 @@ export class MainMenuScene extends Component {
     camouflageBtn.label = this.makeLabel(camouflageBtn.node, '', 0, 0, 212, 22, 15, TEXT_PRIMARY);
     camouflageBtn.label.overflow = Label.Overflow.SHRINK;
 
+    const saveHint = this.makeLabel(panel, '保存当前坦克参数到本地配置表', 0, -346, 1180, 24, 14, TEXT_SUBTITLE);
+    saveHint.overflow = Label.Overflow.SHRINK;
+    const saveConfigBtn = this.makeRectButton(stage, 220, 210, 180, 30, MODE_BTN_ACTIVE, () => {
+      void saveCurrentConfig();
+    });
+    saveConfigBtn.node.name = 'SaveTankVisualConfig';
+    saveConfigBtn.label = this.makeLabel(saveConfigBtn.node, '保存配置', 0, 0, 158, 22, 15, TEXT_PRIMARY);
+
+    const saveCurrentConfig = async () => {
+      if (savingConfig) return;
+      const kind = selectedKind;
+      const draft = drafts[kind]!;
+      // Read the active EditBox too, so saving does not depend on its blur event.
+      for (const [key, input] of debugInputs) {
+        const raw = input.string.trim();
+        if (!raw || !Number.isFinite(Number(raw))) {
+          saveHint.string = '保存失败：请先填写有效的数字参数。';
+          return;
+        }
+        // Display rounding must not turn untouched values into edits.
+        if (raw !== formatTankDebugNumber(draft[key])) draft[key] = Number(raw);
+      }
+      const values: Partial<TankVisualDebugDraft> = {};
+      for (const key of Object.keys(draft) as TankVisualDebugKey[]) {
+        if (draft[key] !== savedDrafts[kind]![key]) values[key] = draft[key];
+      }
+      if (!Object.keys(values).length) {
+        saveHint.string = `${tankVisualAssetName(kind)}：没有需要保存的修改。`;
+        return;
+      }
+      savingConfig = true;
+      saveConfigBtn.label!.string = '保存中…';
+      saveHint.string = `正在保存 ${tankVisualAssetName(kind)}…`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        let response: Response;
+        try {
+          response = await fetch('http://127.0.0.1:3219/tank-visuals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Tank-Debug': '1' },
+            body: JSON.stringify({ kind, values }),
+            signal: controller.signal,
+          });
+        } catch {
+          throw new Error('无法连接本地保存服务；请在项目目录运行 npm run tank:debug-server，再重试。');
+        }
+        const result = await response.json();
+        if (!response.ok || result.ok !== true || result.kind !== kind) {
+          throw new Error(result.message || '本地配置写入失败');
+        }
+        Object.assign(savedDrafts[kind]!, values);
+        if (saveHint.node.isValid) {
+          saveHint.string = `已保存 ${tankVisualAssetName(kind)}：配置表与运行配置已同步，刷新预览后战斗生效。`;
+        }
+      } catch (error) {
+        if (saveHint.node.isValid) saveHint.string = `保存失败：${error instanceof Error ? error.message : String(error)}`;
+      } finally {
+        clearTimeout(timeout);
+        savingConfig = false;
+        if (saveConfigBtn.node.isValid) saveConfigBtn.label!.string = '保存配置';
+      }
+    };
+
     const listPanel = new Node('TankVisualKindList');
     listPanel.layer = this.node.layer;
     listPanel.addComponent(UITransform).setContentSize(255, debugColumnH);
@@ -1665,7 +1734,7 @@ export class MainMenuScene extends Component {
     const listG = listPanel.addComponent(Graphics);
     drawFieldPanel(listG, 255, debugColumnH, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
     panel.addChild(listPanel);
-    this.makeLabel(listPanel, '坦克列表', 0, debugColumnH / 2 - 26, 180, 28, 20, TEXT_TITLE);
+    const tankListTitle = this.makeLabel(listPanel, '坦克列表', 0, debugColumnH / 2 - 26, 180, 28, 20, TEXT_TITLE);
 
     const tankListViewportW = 230;
     const tankListViewportH = 528;
@@ -1783,9 +1852,10 @@ export class MainMenuScene extends Component {
     inputScroll.content = inputRoot;
 
     const rebuildInputs = () => {
+      debugInputs.clear();
       inputRoot.removeAllChildren();
       const draft = drafts[selectedKind]!;
-      const contentH = Math.max(540, fieldDefs.length * 38 + 20);
+      const contentH = Math.max(inputViewport.getComponent(UITransform)!.height, fieldDefs.length * 38 + 20);
       inputRootTransform.setContentSize(280, contentH);
       for (let i = 0; i < fieldDefs.length; i++) {
         const def = fieldDefs[i]!;
@@ -1795,10 +1865,11 @@ export class MainMenuScene extends Component {
         lab.overflow = Label.Overflow.SHRINK;
         lab.horizontalAlign = HorizontalTextAlignment.RIGHT;
         const input = this.makeInputField(inputRoot, 58, y, 116, 30, '0', false, formatTankDebugNumber(draft[def.key]));
+        debugInputs.set(def.key, input);
         input.maxLength = 12;
         const applyValue = (resetInvalid: boolean) => {
           const parsed = Number(input.string.trim());
-          if (!Number.isFinite(parsed)) {
+          if (!input.string.trim() || !Number.isFinite(parsed)) {
             if (resetInvalid) input.string = formatTankDebugNumber(draft[def.key]);
             return;
           }
@@ -2368,6 +2439,50 @@ export class MainMenuScene extends Component {
     rebuildInputs();
     refreshPreview();
     this.schedule(applyEngineVibration, 0);
+
+    bindAdaptivePageLayout(panel, UI_ROOT_SCALE, ({ width, height }) => {
+      const dx = (width - CANVAS_W) / 2;
+      const dy = (height - CANVAS_H) / 2;
+      const columnH = debugColumnH + dy * 2;
+      stage.getComponent(UITransform)!.setContentSize(660 + dx * 2, columnH);
+      stageG.clear();
+      drawFieldPanel(stageG, 660 + dx * 2, columnH, new Color(26, 32, 28, 238), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      propsPanel.setPosition(210 + dx, debugColumnY, 0);
+      propsPanel.getComponent(UITransform)!.setContentSize(305, columnH);
+      propsG.clear();
+      drawFieldPanel(propsG, 305, columnH, new Color(28, 34, 29, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      listPanel.setPosition(495 + dx, debugColumnY, 0);
+      listPanel.getComponent(UITransform)!.setContentSize(255, columnH);
+      listG.clear();
+      drawFieldPanel(listG, 255, columnH, new Color(28, 35, 30, 240), MODAL_PANEL_BORDER, MENU_DIVIDER);
+      selectedLabel.node.setPosition(0, 278 + dy, 0);
+      statusLabel.node.setPosition(0, -280 - dy, 0);
+      statusLabel.node.getComponent(UITransform)!.setContentSize(580 + dx * 2, 24);
+      bodyAngleLabel.node.setPosition(-205 - dx, -252 - dy, 0);
+      turretAngleLabel.node.setPosition(205 + dx, -252 - dy, 0);
+      for (const [button, x, y] of [[flashBtn, 240, 248], [hatchBtn, 74, 248],
+        [destroyedBtn, -92, 248], [vibrationBtn, -250, 248],
+        [camouflageBtn, -205, 210], [saveConfigBtn, 220, 210]] as const) {
+        button.node.setPosition(x, y + dy, 0);
+      }
+      tankListTitle.node.setPosition(0, debugColumnH / 2 - 26 + dy, 0);
+      saveHint.node.setPosition(0, -346 - dy, 0);
+
+      // Resize scroll viewports without recreating EditBoxes or losing draft values.
+      const resizeScroll = (viewport: Node, content: Node, scroll: ScrollView, w: number, h: number, minH: number) => {
+        const offset = scroll.getScrollOffset();
+        const transform = content.getComponent(UITransform)!;
+        const contentH = Math.max(h, minH);
+        const shiftY = (contentH - transform.height) / 2;
+        viewport.getComponent(UITransform)!.setContentSize(w, h);
+        transform.setContentSize(w, contentH);
+        for (const child of content.children) child.setPosition(child.position.x, child.position.y + shiftY, 0);
+        scroll.scrollToOffset(offset, 0);
+      };
+      resizeScroll(tankListViewport, tankListContent, tankListScroll, tankListViewportW,
+        tankListViewportH + dy * 2, tankListRows * tankListRowStride + 16);
+      resizeScroll(inputViewport, inputRoot, inputScroll, 280, 540 + dy * 2, fieldDefs.length * 38 + 20);
+    });
   }
 
   private openLoginGate() {
@@ -2887,10 +3002,11 @@ export class MainMenuScene extends Component {
       UI_ROOT_SCALE,
     ).node;
     backdrop.on(Node.EventType.TOUCH_END, (e: EventTouch) => {
-      // 点遮罩空白处关闭模态
-      this.closeModal();
+      // Fullscreen tools are pages: only their explicit navigation may close them.
+      if (!isFullscreen) this.closeModal();
       e.propagationStopped = true;
     }, this);
+    backdrop.addComponent(BlockInputEvents);
     // 面板本体
     const panel = new Node('Panel');
     panel.layer = this.node.layer;
@@ -2917,17 +3033,32 @@ export class MainMenuScene extends Component {
     titleLab.outlineWidth = 2;
 
     // 右上角 ✕
+    let closeBtn: ButtonRefs | null = null;
     if (showCloseButton) {
-      const closeBtn = this.makeRectButton(
+      closeBtn = this.makeRectButton(
         panel, panelW / 2 - 28, panelH / 2 - 28, 36, 36,
         MODAL_CLOSE_BG, () => this.closeModal(),
       );
       this.makeLabel(closeBtn.node, '✕', 0, 0, 36, 36, 22, TEXT_PRIMARY);
     }
-    if (panelW >= CANVAS_W && panelH >= CANVAS_H) {
+    if (isFullscreen) {
       const back = this.makeRectButton(panel, -panelW / 2 + 82, panelH / 2 - 30,
         118, 38, ICON_BTN_BG, () => this.closeModal());
       this.makeLabel(back.node, t('menu.operations.back'), 0, 0, 110, 32, 18, TEXT_PRIMARY);
+      root.addComponent(BlockInputEvents);
+      bindAdaptivePageLayout(root, UI_ROOT_SCALE, ({ width, height }) => {
+        panel.getComponent(UITransform)!.setContentSize(width, height);
+        titleLab.node.setPosition(0, height / 2 - 36, 0);
+        titleLab.node.getComponent(UITransform)!.setContentSize(width - 320, 36);
+        back.node.setPosition(-width / 2 + 82, height / 2 - 30, 0);
+        closeBtn?.node.setPosition(width / 2 - 28, height / 2 - 28, 0);
+        pg.clear();
+        pg.strokeColor = MENU_DIVIDER;
+        pg.lineWidth = 1;
+        pg.moveTo(-width / 2 + 30, height / 2 - 64);
+        pg.lineTo(width / 2 - 30, height / 2 - 64);
+        pg.stroke();
+      });
     }
 
     this.modalRoot = root;
@@ -3029,6 +3160,7 @@ export class MainMenuScene extends Component {
       { id: 'rain', label: '雨天', desc: '主炮命中-1 / 视野-1' },
       { id: 'light_snow', label: '小雪', desc: '轻度飘雪视觉效果' },
       { id: 'heavy_snow', label: '大雪', desc: '三倍雪量 / 飘落速度+50%' },
+      { id: 'fog', label: '雾天', desc: '开舱/炮手视野2格' },
     ];
     const weatherLabel = (weather: WeatherType) =>
       weatherOptions.find(option => option.id === weather)?.label ?? weatherOptions[0]!.label;
@@ -3047,6 +3179,10 @@ export class MainMenuScene extends Component {
     const existingEntries = CustomMissionStore.list();
     const requestedEntry = initialPackageId ? existingEntries.find(entry => entry.id === initialPackageId) : null;
     let editingPackageId: string | null = requestedEntry?.id ?? existingEntries[0]?.id ?? null;
+    let editingExistingMission: { missionPath: string; id: string; revision: string } | null = null;
+    let existingMissionSaving = false;
+    let saveButtonLabel: Label | null = null;
+    let existingDeleteButton: ButtonRefs | null = null;
     const cloneJson = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
     const existingPackage = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
     let draftBaseMission: Partial<MissionData> = cloneJson(existingPackage?.mission ?? {});
@@ -3124,7 +3260,7 @@ export class MainMenuScene extends Component {
     const currentLabelX = (leftControlsRight + rightActionsLeft) / 2;
     const currentLabelW = rightActionsLeft - leftControlsRight - currentLabelPadding * 2;
 
-    this.makeLabel(panel, '地图编辑区', -545, contentY - 8, 150, 34, 17, TEXT_TITLE);
+    const mapHeading = this.makeLabel(panel, '地图编辑区', -545, contentY - 8, 150, 34, 17, TEXT_TITLE);
     const currentLabel = this.makeLabel(panel, '',
       currentLabelX, footerY, currentLabelW, 30, 14, TEXT_SUBTITLE);
     currentLabel.overflow = Label.Overflow.SHRINK;
@@ -3134,9 +3270,32 @@ export class MainMenuScene extends Component {
     statusLabel.enableWrapText = true;
 
     const refreshCurrentLabel = () => {
-      currentLabel.string = t('levelEditor.workspace.current', {
+      currentLabel.string = editingExistingMission ? `编辑现有关卡：${draftName}` : t('levelEditor.workspace.current', {
         name: draftName.trim() || t('levelEditor.workspace.newDraft'),
       });
+      if (saveButtonLabel) saveButtonLabel.string = existingMissionSaving ? '保存中…'
+        : editingExistingMission ? '保存现有关卡' : t('levelEditor.workspace.save');
+      existingDeleteButton?.redraw(editingExistingMission ? BTN_LEVEL_LOCKED : MODAL_CLOSE_BG);
+    };
+    const requestMissionFile = async (action: 'load' | 'save', payload: object) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        let response: Response;
+        try {
+          response = await fetch(`http://127.0.0.1:3219/missions/${action}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Tank-Debug': '1' },
+            body: JSON.stringify(payload), signal: controller.signal,
+          });
+        } catch {
+          throw new Error('无法连接本地文件服务，请在项目目录运行 npm run editor:server 后重试。');
+        }
+        const result = await response.json();
+        if (!response.ok || result.ok !== true) throw new Error(result.message || '关卡文件操作失败');
+        return result;
+      } finally {
+        clearTimeout(timeout);
+      }
     };
     const captureMissionFields = () => {
       if (titleInput) draftName = titleInput.string.trim() || draftName;
@@ -4114,8 +4273,8 @@ export class MainMenuScene extends Component {
       const direction = event.getScrollY() > 0 ? -1 : 1;
       if ((unitKindPickerTarget ? scrollUnitKindPicker(direction) : scrollUnitList(direction))) event.propagationStopped = true;
     }, this);
-    const gridViewportW = 800;
-    const gridViewportH = 480;
+    let gridViewportW = 800;
+    let gridViewportH = 480;
     const gridViewport = new Node('EditorGridViewport');
     gridViewport.layer = this.node.layer;
     gridViewport.addComponent(UITransform).setContentSize(gridViewportW, gridViewportH);
@@ -4570,19 +4729,14 @@ export class MainMenuScene extends Component {
       const gapX = 14;
       const gapY = 14;
 
-      weatherPickerRoot = new Node('LevelEditorWeatherPicker');
-      weatherPickerRoot.layer = this.node.layer;
-      weatherPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
-      weatherPickerRoot.setPosition(0, 0, 0);
-      const backdrop = weatherPickerRoot.addComponent(Graphics);
-      backdrop.fillColor = new Color(0, 0, 0, 132);
-      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-      backdrop.fill();
+      weatherPickerRoot = createAdaptiveFullscreenMask(
+        panel, 'LevelEditorWeatherPicker', new Color(0, 0, 0, 132), UI_ROOT_SCALE,
+      ).node;
+      weatherPickerRoot.addComponent(BlockInputEvents);
       weatherPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
         closeWeatherPicker();
         ev.propagationStopped = true;
       }, this);
-      panel.addChild(weatherPickerRoot);
 
       const picker = new Node('WeatherOptionPanel');
       picker.layer = this.node.layer;
@@ -4646,19 +4800,14 @@ export class MainMenuScene extends Component {
       const buttonW = 140;
       const buttonH = 64;
 
-      seasonPickerRoot = new Node('LevelEditorSeasonPicker');
-      seasonPickerRoot.layer = this.node.layer;
-      seasonPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
-      seasonPickerRoot.setPosition(0, 0, 0);
-      const backdrop = seasonPickerRoot.addComponent(Graphics);
-      backdrop.fillColor = new Color(0, 0, 0, 132);
-      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-      backdrop.fill();
+      seasonPickerRoot = createAdaptiveFullscreenMask(
+        panel, 'LevelEditorSeasonPicker', new Color(0, 0, 0, 132), UI_ROOT_SCALE,
+      ).node;
+      seasonPickerRoot.addComponent(BlockInputEvents);
       seasonPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
         closeSeasonPicker();
         ev.propagationStopped = true;
       }, this);
-      panel.addChild(seasonPickerRoot);
 
       const picker = new Node('SeasonOptionPanel');
       picker.layer = this.node.layer;
@@ -4760,6 +4909,8 @@ export class MainMenuScene extends Component {
       statusLabel.string = statusText(draftName);
     };
     const applyImportedMission = (mission: MissionData, meta: LevelMeta) => {
+      if (editingExistingMission) editingPackageId = null;
+      editingExistingMission = null;
       applyMissionToDraft(
         mission,
         [],
@@ -4774,19 +4925,14 @@ export class MainMenuScene extends Component {
       let selectedTheater: RandomMissionTheater = draftTerrainCategory === 'pacific' ? 'pacific' : 'europe';
       let landingBattle = true;
 
-      randomPickerRoot = new Node('LevelEditorRandomMissionPicker');
-      randomPickerRoot.layer = this.node.layer;
-      randomPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
-      randomPickerRoot.setPosition(0, 0, 0);
-      const backdrop = randomPickerRoot.addComponent(Graphics);
-      backdrop.fillColor = new Color(0, 0, 0, 150);
-      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-      backdrop.fill();
+      randomPickerRoot = createAdaptiveFullscreenMask(
+        panel, 'LevelEditorRandomMissionPicker', new Color(0, 0, 0, 150), UI_ROOT_SCALE,
+      ).node;
+      randomPickerRoot.addComponent(BlockInputEvents);
       randomPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
         closeRandomPicker();
         ev.propagationStopped = true;
       }, this);
-      panel.addChild(randomPickerRoot);
 
       const pickerW = 580;
       const pickerH = 390;
@@ -4852,6 +4998,8 @@ export class MainMenuScene extends Component {
               : {},
           );
           closeRandomPicker();
+          if (editingExistingMission) editingPackageId = null;
+          editingExistingMission = null;
           applyMissionToDraft(
             pkg.mission,
             pkg.turnEndEvents,
@@ -4866,22 +5014,22 @@ export class MainMenuScene extends Component {
       this.makeLabel(generateBtn.node, t('levelEditor.random.confirm'), 0, 0, 190, 34, 19, TEXT_PRIMARY);
       randomPickerRoot.setSiblingIndex(panel.children.length - 1);
     };
-    const openImportMissionPicker = () => {
+    const openImportMissionPicker = (editExisting = false) => {
       closeImportPicker();
+      closeRandomPicker();
+      closeWeatherPicker();
+      closeSeasonPicker();
       const catalog = getImportableMissionLevels();
-      importPickerRoot = new Node('LevelEditorImportPicker');
-      importPickerRoot.layer = this.node.layer;
-      importPickerRoot.addComponent(UITransform).setContentSize(panelW, panelH);
-      importPickerRoot.setPosition(0, 0, 0);
-      const backdrop = importPickerRoot.addComponent(Graphics);
-      backdrop.fillColor = new Color(0, 0, 0, 150);
-      backdrop.rect(-panelW / 2, -panelH / 2, panelW, panelH);
-      backdrop.fill();
+      importPickerRoot = createAdaptiveFullscreenMask(
+        panel, 'LevelEditorImportPicker', new Color(0, 0, 0, 150), UI_ROOT_SCALE,
+      ).node;
+      importPickerRoot.addComponent(BlockInputEvents);
       importPickerRoot.on(Node.EventType.TOUCH_END, (ev: EventTouch) => {
         closeImportPicker();
         ev.propagationStopped = true;
       }, this);
-      panel.addChild(importPickerRoot);
+      const pickerRoot = importPickerRoot;
+      let loadRequest = 0;
 
       const picker = new Node('ImportMissionList');
       picker.layer = this.node.layer;
@@ -4894,8 +5042,10 @@ export class MainMenuScene extends Component {
       }, this);
       importPickerRoot.addChild(picker);
 
-      this.makeLabel(picker, '导入关卡', 0, 214, 260, 34, 26, TEXT_TITLE);
-      const hint = this.makeLabel(picker, '选择一个已有配置关卡导入到当前编辑草稿。导入不会自动保存。', 0, 178, 760, 26, 17, TEXT_SUBTITLE);
+      this.makeLabel(picker, editExisting ? '编辑现有关卡' : '导入关卡', 0, 214, 300, 34, 26, TEXT_TITLE);
+      const hint = this.makeLabel(picker, editExisting
+        ? '选择要编辑的关卡；“保存现有关卡”会写回该关卡的本地文件。'
+        : '选择一个已有配置关卡导入到当前编辑草稿。导入不会自动保存。', 0, 178, 760, 26, 17, TEXT_SUBTITLE);
       hint.overflow = Label.Overflow.SHRINK;
       const closeBtn = this.makeRectButton(picker, 410, 218, 38, 34, MODAL_CLOSE_BG, () => closeImportPicker());
       this.makeLabel(closeBtn.node, 'X', 0, 0, 30, 30, 17, TEXT_PRIMARY);
@@ -4949,7 +5099,25 @@ export class MainMenuScene extends Component {
         const btn = this.makeRectButton(importContent, x, y, buttonW, buttonH, BTN_LEVEL_UNLOCKED, () => {
           const importTitle = meta.titleOverride ?? t(meta.titleKey);
           statusLabel.string = `正在导入：${importTitle}`;
+          if (editExisting) {
+            const request = ++loadRequest;
+            hint.string = `正在读取：${importTitle}`;
+            void requestMissionFile('load', { missionPath: meta.missionPath }).then(result => {
+              if (!panel.isValid || importPickerRoot !== pickerRoot || loadRequest !== request) return;
+              editingPackageId = null;
+              editingExistingMission = { missionPath: meta.missionPath, id: result.mission.id, revision: result.revision };
+              applyMissionToDraft(result.mission, result.turnEndEvents, importTitle,
+                name => `正在编辑：${name}。保存将写回 ${meta.missionPath}.json。`);
+              closeImportPicker();
+            }).catch(error => {
+              if (!panel.isValid || importPickerRoot !== pickerRoot || loadRequest !== request) return;
+              hint.string = `读取失败：${error instanceof Error ? error.message : String(error)}`;
+              statusLabel.string = hint.string;
+            });
+            return;
+          }
           resources.load(meta.missionPath, JsonAsset, (err, asset) => {
+            if (!panel.isValid || importPickerRoot !== pickerRoot) return;
             if (err || !asset?.json) {
               console.warn('[LevelEditor] import mission failed:', meta.missionPath, err);
               statusLabel.string = `导入失败：${importTitle}`;
@@ -4964,6 +5132,7 @@ export class MainMenuScene extends Component {
         const sub = this.makeLabel(btn.node, meta.missionId, 0, -14, buttonW - 12, 18, 10, TEXT_SUBTITLE);
         sub.overflow = Label.Overflow.SHRINK;
       }
+      importScroll.scrollToTop(0);
       importPickerRoot.setSiblingIndex(panel.children.length - 1);
     };
 
@@ -5007,11 +5176,12 @@ export class MainMenuScene extends Component {
     const makeExtendButton = (text: string, x: number, y: number, direction: 'up' | 'down' | 'left' | 'right') => {
       const btn = this.makeRectButton(panel, x, y, 38, 30, BTN_LEVEL_UNLOCKED, () => extendGrid(direction));
       this.makeLabel(btn.node, text, 0, 0, 34, 28, 20, TEXT_PRIMARY);
+      return btn.node;
     };
-    makeExtendButton('+↑', -180, 268, 'up');
-    makeExtendButton('+↓', -180, -248, 'down');
-    makeExtendButton('+←', -605, 10, 'left');
-    makeExtendButton('+→', 245, 10, 'right');
+    const extendUp = makeExtendButton('+↑', -180, 268, 'up');
+    const extendDown = makeExtendButton('+↓', -180, -248, 'down');
+    const extendLeft = makeExtendButton('+←', -605, 10, 'left');
+    const extendRight = makeExtendButton('+→', 245, 10, 'right');
     rebuildGrid(true);
     for (const [key, path] of Object.entries(terrainSpritePaths)) {
       resources.load(path, SpriteFrame, (err, sf) => {
@@ -5040,6 +5210,7 @@ export class MainMenuScene extends Component {
     currentLabel.node.setSiblingIndex(panel.children.length - 1);
 
     const newBtn = this.makeRectButton(panel, -565, footerY, 124, 40, BTN_LEVEL_UNLOCKED, () => {
+      editingExistingMission = null;
       editingPackageId = null;
       rows = 6;
       cols = 8;
@@ -5073,6 +5244,10 @@ export class MainMenuScene extends Component {
     this.makeLabel(nextBtn.node, t('levelEditor.workspace.next'), 0, 0, 78, 40, 15, TEXT_PRIMARY);
     const importBtn = this.makeRectButton(panel, -250, footerY, 120, 40, BTN_LEVEL_UNLOCKED, () => openImportMissionPicker());
     this.makeLabel(importBtn.node, '导入关卡', 0, 0, 112, 40, 15, TEXT_PRIMARY);
+    const editExistingBtn = this.makeRectButton(panel, 470, panelH / 2 - 80, 220, 32, BTN_LEVEL_UNLOCKED,
+      () => openImportMissionPicker(true));
+    editExistingBtn.node.name = 'EditExistingMission';
+    this.makeLabel(editExistingBtn.node, '编辑现有关卡', 0, 0, 206, 28, 17, TEXT_PRIMARY);
     const randomBtn = this.makeRectButton(panel, -100, footerY, 168, 40, BTN_LEVEL_COMPLETED, () => openRandomMissionPicker());
     this.makeLabel(randomBtn.node, t('levelEditor.workspace.random'), 0, 0, 158, 40, 15, TEXT_PRIMARY);
 
@@ -5088,7 +5263,7 @@ export class MainMenuScene extends Component {
     const buildDraftMission = (id: string, oldPkg: ReturnType<typeof CustomMissionStore.load> | null, fallbackName: string): MissionData => {
       captureMissionFields();
       const randomGeneratedId = draftBaseMission.id?.startsWith('random_') ? draftBaseMission.id : undefined;
-      const missionId = oldPkg?.mission.id ?? randomGeneratedId ?? id;
+      const missionId = editingExistingMission?.id ?? oldPkg?.mission.id ?? randomGeneratedId ?? id;
       const sherman = cloneJson(draftSherman);
       if (draftShermanStartByDice) {
         delete sherman.at;
@@ -5175,7 +5350,37 @@ export class MainMenuScene extends Component {
     });
     this.makeLabel(exportBtn.node, '导出JSON', 0, 0, 104, 40, 15, TEXT_PRIMARY);
 
+    const saveExistingMissionFile = async () => {
+      if (!editingExistingMission || existingMissionSaving) return;
+      const target = editingExistingMission;
+      const mission = buildDraftMission(target.id, null, draftName);
+      const errors = validateRoundEvents(mission.roundEvents);
+      if (errors.length) { statusLabel.string = '回合事件配置无效：触发回合必须是不重复的正整数，或填写“每回合”。'; return; }
+      existingMissionSaving = true;
+      refreshCurrentLabel();
+      statusLabel.string = `正在保存：${draftName}`;
+      try {
+        const result = await requestMissionFile('save', {
+          missionPath: target.missionPath, revision: target.revision,
+          mission, turnEndEvents: buildTurnEndEvents(mission.id),
+        });
+        target.revision = result.revision;
+        if (panel.isValid && editingExistingMission === target) {
+          // Retain newer edits made while the request was in flight.
+          draftBaseMission.eventTableId = result.mission.eventTableId;
+          statusLabel.string = `已保存现有关卡：${result.file}。刷新预览后生效。`;
+        }
+      } catch (error) {
+        if (panel.isValid && editingExistingMission === target) {
+          statusLabel.string = `保存失败：${error instanceof Error ? error.message : String(error)}`;
+        }
+      } finally {
+        existingMissionSaving = false;
+        if (panel.isValid) refreshCurrentLabel();
+      }
+    };
     const saveBtn = this.makeRectButton(panel, saveButtonX, footerY, saveButtonW, 44, BTN_CONTINUE, () => {
+      if (editingExistingMission) { void saveExistingMissionFile(); return; }
       try {
         const list = CustomMissionStore.list();
         const isNew = !editingPackageId;
@@ -5203,9 +5408,13 @@ export class MainMenuScene extends Component {
         statusLabel.string = t('levelEditor.workspace.saveFull');
       }
     });
-    this.makeLabel(saveBtn.node, t('levelEditor.workspace.save'), 0, 0, 202, 44, 17, TEXT_PRIMARY);
+    saveButtonLabel = this.makeLabel(saveBtn.node, t('levelEditor.workspace.save'), 0, 0, 202, 44, 17, TEXT_PRIMARY);
 
     const deleteBtn = this.makeRectButton(panel, deleteButtonX, footerY, deleteButtonW, 40, MODAL_CLOSE_BG, () => {
+      if (editingExistingMission) {
+        statusLabel.string = '当前正在编辑现有关卡；此模式不删除关卡文件。';
+        return;
+      }
       if (!editingPackageId) {
         statusLabel.string = t('levelEditor.workspace.deleteUnsaved');
         return;
@@ -5225,7 +5434,51 @@ export class MainMenuScene extends Component {
       statusLabel.string = t('levelEditor.workspace.deleted');
       this.rebuildLevelGridBehindModal();
     });
+    existingDeleteButton = deleteBtn;
     this.makeLabel(deleteBtn.node, t('levelEditor.workspace.delete'), 0, 0, 132, 40, 15, TEXT_PRIMARY);
+    refreshCurrentLabel();
+
+    // Expand the working area while keeping controls and hex/tank art undistorted.
+    bindAdaptivePageLayout(panel, UI_ROOT_SCALE, ({ width, height }) => {
+      const dx = (width - CANVAS_W) / 2;
+      const dy = (height - CANVAS_H) / 2;
+      mapHeading.node.setPosition(-545 - dx, contentY - 8 + dy, 0);
+      propRoot.setPosition(450 + dx, 12 + dy, 0);
+      editExistingBtn.node.setPosition(470 + dx, panelH / 2 - 80 + dy, 0);
+      statusLabel.node.setPosition(450 + dx, footerY + 44 - dy, 0);
+      for (const [button, x] of [[newBtn, -565], [prevBtn, -455], [nextBtn, -365],
+        [importBtn, -250], [randomBtn, -100]] as const) {
+        button.node.setPosition(x - dx, footerY - dy, 0);
+      }
+      for (const [button, x] of [[saveBtn, saveButtonX], [exportBtn, exportButtonX],
+        [deleteBtn, deleteButtonX]] as const) {
+        button.node.setPosition(x + dx, footerY - dy, 0);
+      }
+      currentLabel.node.setPosition(currentLabelX, footerY - dy, 0);
+      currentLabel.node.getComponent(UITransform)!.setContentSize(currentLabelW + dx * 2, 30);
+      footer.setPosition(0, footerY - dy, 0);
+      footer.getComponent(UITransform)!.setContentSize(width - 40, 58);
+      footerGraphics.clear();
+      footerGraphics.fillColor = new Color(24, 30, 24, 245);
+      footerGraphics.roundRect(-width / 2 + 20, -29, width - 40, 58, 6);
+      footerGraphics.fill();
+      footerGraphics.strokeColor = MENU_DIVIDER;
+      footerGraphics.roundRect(-width / 2 + 20, -29, width - 40, 58, 6);
+      footerGraphics.stroke();
+      gridViewportW = 800 + dx * 2;
+      gridViewportH = 480 + dy * 2;
+      gridViewport.getComponent(UITransform)!.setContentSize(gridViewportW, gridViewportH);
+      gridContent.getComponent(UITransform)!.setContentSize(gridViewportW, gridViewportH);
+      gridFrame.getComponent(UITransform)!.setContentSize(gridViewportW + 4, gridViewportH + 4);
+      gridFrameGraphics.clear();
+      gridFrameGraphics.rect(-gridViewportW / 2 - 2, -gridViewportH / 2 - 2, gridViewportW + 4, gridViewportH + 4);
+      gridFrameGraphics.stroke();
+      extendUp.setPosition(-180, 268 + dy, 0);
+      extendDown.setPosition(-180, -248 - dy, 0);
+      extendLeft.setPosition(-605 - dx, 10, 0);
+      extendRight.setPosition(245 + dx, 10, 0);
+      clampGridPosition();
+    });
   }
 
   private cloneEditorTiles(source: MissionData['tiles'] | undefined, rows: number, cols: number): Array<Array<TileDef | null>> {

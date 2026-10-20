@@ -1,0 +1,95 @@
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: weather-fog-vs:vert
+      frag: weather-fog-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.001 }
+        mapBounds: { value: [0, 0, 1, 1] }
+        weatherParams: { value: [0, 0.05, 0.20, 0.10] }
+        fogOrigin: { value: [0, 0, 0, 0] }
+}%
+CCProgram weather-fog-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+  out vec4 color;
+  out vec2 uv0;
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1.0);
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+    pos = cc_matViewProj * pos;
+    uv0 = a_texCoord;
+    color = a_color;
+    return pos;
+  }
+}%
+CCProgram weather-fog-fs %{
+  precision highp float;
+  #include <builtin/internal/alpha-test>
+  in vec4 color;
+  in vec2 uv0;
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  uniform WeatherFogParams { vec4 mapBounds; vec4 weatherParams; vec4 fogOrigin; };
+
+  float mistHash(vec2 p) {
+    // Arithmetic hash avoids platform-dependent large sine arguments.
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+  }
+  float mistNoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mistHash(i), mistHash(i + vec2(1.0, 0.0)), f.x),
+      mix(mistHash(i + vec2(0.0, 1.0)), mistHash(i + vec2(1.0)), f.x), f.y);
+  }
+  float mistField(vec2 p) {
+    return mistNoise(p) * 0.72 + mistNoise(p * 2.03 + vec2(17.2, 9.4)) * 0.28;
+  }
+  vec4 frag () {
+    // Coordinates are in hex radii, independent of viewport, pan and rotation.
+    vec2 p = vec2(mapBounds.x + uv0.x * mapBounds.z, mapBounds.y - uv0.y * mapBounds.w);
+    float t = weatherParams.x;
+    // The two fields travel roughly one adjacent hex in 30 / 55 seconds.
+    vec2 windA = vec2(0.055, 0.012) * t;
+    vec2 windB = vec2(0.030, -0.008) * t;
+    float warp = mistNoise(p * 0.13 + vec2(5.1, 12.7));
+    float a = mistField((p - windA) * vec2(0.18, 0.36) + vec2(warp * 0.65, 0.0));
+    float b = mistField((p - windB) * vec2(0.29, 0.20) + vec2(23.7, 41.3));
+    float ribbons = smoothstep(0.22, 0.78, a * 0.62 + b * 0.38);
+    // The Sprite has an opaque 1x1 texture; exact map clipping is a geometric
+    // stencil, avoiding magnified texel steps along slanted board edges.
+    float coverage = texture(cc_spriteTexture, uv0).b;
+    // Fractional axial distance gives exact hex distances at tile centers and
+    // a continuous gradient between them, without visible opacity rings.
+    vec2 delta = p - fogOrigin.xy;
+    float dr = -delta.y * (2.0 / 3.0);
+    float dq = delta.x / 1.7320508075688772 - dr * 0.5;
+    float hexDistance = max(max(abs(dq), abs(dr)), abs(dq + dr));
+    float baseOpacity = weatherParams.y + weatherParams.w * hexDistance;
+    float opacity = clamp(baseOpacity + weatherParams.z * ribbons, 0.0, 1.0) * coverage;
+    vec4 o = vec4(color.rgb, color.a * opacity);
+    ALPHA_TEST(o);
+    return o;
+  }
+}%

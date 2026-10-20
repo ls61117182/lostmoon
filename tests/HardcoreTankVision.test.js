@@ -26,7 +26,7 @@ assert.match(
 );
 assert.match(
   fogSource,
-  /const gunnerVisionRange = tank \? currentGunnerVisionRange\(unit\) : commanderVisionRange/,
+  /const gunnerVisionRange = tank \? currentGunnerVisionRange\(unit, weather\) : commanderVisionRange/,
   'tank gunner rays must not reuse commander range',
 );
 assert.match(docSource, /开舱时 = 车长视野 ∪ 炮手视野；关舱或车长阵亡时 = 车内视野 ∪ 炮手视野/, 'GDD must define union semantics');

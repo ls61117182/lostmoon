@@ -18,7 +18,8 @@ export function seawallJunctions(segments: readonly SeawallSegment[], size: numb
       point.edges.add(edge);
     }
   }
-  return [...points.values()].filter(point => point.edges.size >= 2);
+  // Cocos web builds lower iterable spread as array concatenation.
+  return Array.from(points.values()).filter(point => point.edges.size >= 2);
 }
 
 /** Intersect the actual offset wall outlines to form a flush miter, no cap block. */

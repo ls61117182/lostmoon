@@ -32,7 +32,7 @@ function sceneRoll(name, ctx, mode = 'hardcore') {
   const report = new Function(...Object.keys(deps), `${code}; return ${name};`)(...Object.values(deps))(ctx, { d6: () => 3 });
   // Ordinary shots pre-roll before aiming; their aim callback commits the hit.
   if (mode === 'hardcore') assert.equal(ctx.attacker.lockedFireTargetId, undefined);
-  rules.finishLockedFireAttack(ctx.attacker, ctx.target, report.hit, mode === 'hardcore');
+  rules.finishLockedFireAttack(ctx.attacker, ctx.target, report.hit, mode === 'hardcore', 'main');
   return report;
 }
 
@@ -68,6 +68,57 @@ test('HE and enemy tanks acquire locks; smoke, friendly tanks and non-tanks do n
   assert.equal(ctx.attacker.lockedFireTargetId, undefined);
   sceneRoll('rollAttack', ctx, 'classic');
   assert.equal(ctx.attacker.lockedFireTargetId, undefined);
+});
+
+test('fog permits AP/HVAP/HE locks and follow-up bonuses for player and enemy tanks', () => {
+  for (const shellType of ['ap', 'hvap', 'he']) for (const enemy of [false, true]) {
+    const ctx = { ...fixture(), weather: 'fog', shellType };
+    if (enemy) [ctx.attacker, ctx.target] = [ctx.target, ctx.attacker];
+    ctx.attacker.facing = enemy ? 3 : 0;
+    ctx.attacker.turretFacing = ctx.attacker.facing;
+    const first = sceneRoll(shellType === 'he' ? 'rollHighExplosiveAttack' : 'rollAttack', ctx);
+    assert.equal(first.hit, true);
+    assert.equal(ctx.attacker.lockedFireTargetId, ctx.target.id);
+    const second = sceneRoll(shellType === 'he' ? 'rollHighExplosiveAttack' : 'rollAttack', ctx);
+    assert.equal(second.threshold, first.threshold - 2);
+    assert(second.hitModifiers.some(m => m.labelKey === 'dice.rule.lockedFire' && m.value === -2));
+    assert.equal(ctx.attacker.lockedFireTargetId, ctx.target.id);
+  }
+});
+
+test('fog preserves saved lock bonuses and stacks precision modifiers', () => {
+  const ctx = { ...fixture(), weather: 'fog' };
+  const ordinary = combat.hitThreshold(ctx);
+  ctx.attacker.lockedFireTargetId = ctx.target.id;
+  assert.equal(rules.lockedFireModifier(ctx.attacker, ctx.target, true), -2);
+  assert.equal(combat.hitThreshold(ctx), ordinary - 2);
+  assert.equal(combat.hitThreshold({ ...ctx, hitThresholdModifier: -2 }), ordinary - 4);
+  const report = sceneRoll('rollAttack', ctx);
+  assert.equal(report.threshold, ordinary - 2);
+  assert(report.hitModifiers.some(m => m.labelKey === 'dice.rule.lockedFire'));
+  assert.equal(ctx.attacker.lockedFireTargetId, ctx.target.id);
+});
+
+test('all weather uses the same lock acquisition and bonus rules', () => {
+  const ctx = fixture();
+  for (const weather of [undefined, 'clear', 'rain', 'light_snow', 'heavy_snow', 'fog']) {
+    const ordinary = combat.hitThreshold({ ...ctx, weather, lockedFire: false });
+    rules.finishLockedFireAttack(ctx.attacker, ctx.target, true, true, 'main');
+    assert.equal(ctx.attacker.lockedFireTargetId, ctx.target.id);
+    assert.equal(combat.hitThreshold({ ...ctx, weather }), ordinary - 2);
+  }
+});
+
+test('fog displays the reticle for a visible target with a saved lock', () => {
+  const ctx = fixture();
+  const scene = sceneMethods(['drawLockedFireReticles'], { ...types, GameSession: { gameMode: 'hardcore' }, Color: class {} });
+  Object.assign(scene, { mission: { data: { weather: 'fog' } }, hexSize: 50, unitEffectTime: 0,
+    allUnits: () => [ctx.attacker, ctx.target], isUnitVisible: () => true,
+    interpolatedPos: () => ({ x: 0, y: 0 }) });
+  ctx.attacker.lockedFireTargetId = ctx.target.id;
+  let circles = 0;
+  scene.drawLockedFireReticles({ circle() { circles++; }, stroke() {}, moveTo() {}, lineTo() {} });
+  assert.equal(circles, 1);
 });
 
 test('only the locked target gets the bonus, precision stacks, MG consumes without reacquiring', () => {

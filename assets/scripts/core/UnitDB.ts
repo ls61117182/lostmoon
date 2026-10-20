@@ -180,9 +180,9 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer4: { // 4号G - 按后期加强装甲G型配置；五人三人炮塔；75毫米L43整装弹装填1
+  panzer4: { // 4号G - 谢尔曼基准重评2026-10-19；四号G加强装甲型；车体主要正面50+30毫米，炮塔正面50毫米；综合前甲11，不视为整面80毫米；75毫米KwK 40 L/43常规AP穿甲3、HE2、有效穿甲距离3；穿甲高于谢尔曼75的2，低于谢尔曼76的4；不按L/48炮配置；五人三人炮塔；协同2、装填1
     faction: "german",
-    firepower: 2, size: 4, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 4, highExplosivePower: 2, effectiveRange: 3, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: 2, size: 4, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 3, highExplosivePower: 2, effectiveRange: 3, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -193,9 +193,9 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer4_f: { // 4号F - 四号F型（F1）；短75毫米KwK 37 L/24；50毫米正面装甲；车身美术复用G型；短炮数值沿用三号N型尺度；五人三人炮塔；F1短75毫米整装弹装填1
+  panzer4_f: { // 4号F - 谢尔曼基准重评2026-10-19；四号F1；车体及炮塔正面50毫米，侧面30毫米；综合前甲9，前侧9与四号G及无裙板三号M/N同档；短75毫米KwK 37 L/24常规AP穿甲1、HE2、有效穿甲距离1，与三号N相同，不含HEAT；车身美术复用G型；五人三人炮塔；协同2、装填1
     faction: "german",
-    firepower: 2, size: 4, armorFront: 9, armorFrontSide: 8, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: 2, size: 4, armorFront: 9, armorFrontSide: 9, armorRearSide: 8, armorRear: 7, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 2, effectiveRange: 1, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -287,9 +287,9 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer3_m: { // 3号M - 谢尔曼基准史实方案；基础火力表示人机协同，装填速度由装填难度表达；五人三人炮塔；长50毫米整装弹装填1
+  panzer3_m: { // 3号M - 谢尔曼基准重评2026-10-19；三号M；车体正面50+20毫米间隙附甲，侧面30毫米；综合前甲10不另叠加炮盾；50毫米KwK 39 L/60常规AP穿甲2、HE1、有效穿甲距离2；五人三人炮塔；协同2、装填1；有裙板版本相对无裙板M型前侧与后侧装甲各+1，正面和后面不变
     faction: "german",
-    firepower: 2, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: 2, size: 5, armorFront: 10, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -300,9 +300,9 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer3_m_no_schurzen: { // 3号M - 仅移除车体侧裙与炮塔外围附加装甲；本体装甲和M型战斗参数沿用原单位；裙板不改变车组协同与装填流程，同三号M
+  panzer3_m_no_schurzen: { // 3号M - 谢尔曼基准重评2026-10-19；三号M无裙板；保留车体正面50+20毫米间隙附甲，仅移除车侧和炮塔外围Schurzen；前侧9、后侧8；正面与后面装甲及50毫米KwK 39 L/60弹道与有裙板M型相同；五人三人炮塔；协同2、装填1
     faction: "german",
-    firepower: 2, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: 2, size: 5, armorFront: 10, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 2, highExplosivePower: 1, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -313,9 +313,9 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer3_n: { // 3号N - 三号坦克N型；短75毫米KwK 37 L/24；沿用对应M型车身及装甲数据；五人三人炮塔；短75毫米整装弹装填1
+  panzer3_n: { // 3号N - 谢尔曼基准重评2026-10-19；三号N无裙板；选用车体正面50+20毫米附甲的后期配置，炮塔前甲差异按综合前甲10抽象，不照搬M型炮盾附甲；短75毫米KwK 37 L/24常规AP穿甲1、HE2、有效穿甲距离1，不含HEAT；五人三人炮塔；协同2、装填1
     faction: "german",
-    firepower: 2, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: 2, size: 5, armorFront: 10, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 2, effectiveRange: 1, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",
@@ -326,9 +326,9 @@ const DB: Record<UnitKind, UnitStats> = {
     actionTable: { attack: "attack1", move: "move1", misc: "misc1" },
     crewMembers: [1, 2, 3, 4, 5],
   },
-  panzer3_n_schurzen: { // 3号N - 三号坦克N型；短75毫米KwK 37 L/24；沿用对应M型车身及装甲数据；裙板不改变车组协同与装填流程，同三号N
+  panzer3_n_schurzen: { // 3号N - 谢尔曼基准重评2026-10-19；三号N有裙板；与无裙板N型采用相同后期车体前甲配置；Schurzen相对无裙板N型前侧与后侧装甲各+1，正面和后面不变；短75毫米KwK 37 L/24常规AP穿甲1、HE2、有效穿甲距离1，不含HEAT；五人三人炮塔；协同2、装填1
     faction: "german",
-    firepower: 2, size: 5, armorFront: 11, armorFrontSide: 9, armorRearSide: 8, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 2, effectiveRange: 2, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
+    firepower: 2, size: 5, armorFront: 10, armorFrontSide: 10, armorRearSide: 9, armorRear: 8, gunMantletArmor: 0, reloadDifficulty: 1, penetration: 1, highExplosivePower: 2, effectiveRange: 1, turretTraverseSpeed: 3, mobility: 3, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move",
     attackSound: "audio/cannon_fire",

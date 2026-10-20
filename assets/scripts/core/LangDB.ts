@@ -429,6 +429,8 @@ export const LANG_DB: Record<string, LangEntry> = {
   'tileInspect.seawall': { zh: "海堤：沿用防波堤规则。日军不受影响；盟军坦克仅能使用杂项阶段的前进动作跨越。", en: "Seawall uses breakwater crossing rules. Japanese units ignore it; Allied tanks cross only with a Misc-phase advance." },
   'dice.rule.crater': { zh: "弹坑掩护", en: "Crater cover" },
   'dice.rule.rockyCover': { zh: "岩石高地掩护", en: "Rocky high ground cover" },
+  'dice.rule.forestCover': { zh: "森林掩护", en: "Forest cover" },
+  'tileInspect.forestCover': { zh: "森林掩护：步兵受机枪攻击时命中所需点数+1。", en: "Forest cover: infantry hit threshold +1 against machine-gun attacks." },
   'tileInspect.rockyCover': { zh: "岩石高地掩护：步兵命中所需点数+1。", en: "Rocky high ground cover: infantry hit threshold +1." },
   'floater.hedgehogParalyzed': { zh: "进入拒马格：瘫痪", en: "Steel hedgehogs: immobilized" },
   'battleLog.wireCrushed': { zh: "{unitKind} 碾坏了铁丝网。", en: "{unitKind} crushed the barbed wire." },

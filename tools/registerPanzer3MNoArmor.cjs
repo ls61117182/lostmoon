@@ -22,7 +22,9 @@ function cloneCsvRow(file, edits) {
 cloneCsvRow('data/units.csv', {
   unitKind: kind,
   displayName: '3号坦克M型',
-  notes: '仅移除标注的外围附加装甲横条与支架；本体装甲和M型战斗参数沿用原单位',
+  armorFrontSide: 9,
+  armorRearSide: 8,
+  notes: '三号M无裙板；保留车体正面50+20毫米间隙附甲，仅移除车侧和炮塔外围Schurzen；前侧9、后侧8；正面与后面装甲及主炮参数与有裙板M型相同',
 });
 cloneCsvRow('data/tank_visuals.csv', {
   kind,

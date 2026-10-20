@@ -1,26 +1,16 @@
 {
   "id": "mission_13",
   "name": "诺曼底登陆：打开海滩出口",
-  "description": "你的坦克位于近岸浅水。先朝东驶上沙滩，再摧毁控制海滩的德军重炮碉堡和 Pak 38，然后沿内陆公路出口的红色箭头向东驶离。\n海堤有两处缺口：上方（5,1）附近有拒马；下方（5,4）弹坑较多。完好铁丝网可直接碾坏，不额外消耗骰子；拒马格会使坦克立即瘫痪。弹坑按泥地行动，允许坦克隐蔽。\n两支美军步兵随你推进。第3回合末车长获得一次额外行动，可协助装填、抢修或灭火；第6回合末德军从内陆投入一辆IV号坦克。其他守军不必全部消灭，清除碉堡和Pak 38后即可撤离。",
+  "description": "你的坦克位于近岸浅水。先朝东驶上沙滩，再",
   "_comment": "原创诺曼底登陆场景，非指定真实海滩的历史复原。按当前标准关卡尺寸重新配置：8×6 odd-r，共48格。col=0显示海面，col=1可通行浅水，col=2..4沙滩，col=5..7内陆。出生(1,3)朝东，第一步进入(2,3)沙滩弹坑。海堤边界仅允许经(5,1)、(5,4)两处缺口正常移动；拒马均可绕行。rid和eid各六处，胜利需清除重炮碉堡与Pak 38，再从(7,3)向东撤离。",
   "theater": "europe",
   "cameraRotation": 0,
-  "season": "summer",
-  "weather": "clear",
   "cols": 8,
   "rows": 6,
-  "enemyStartByDice": false,
   "tiles": [
     [
-      {
-        "t": "w",
-        "disp": 1
-      },
-      {
-        "t": "esw",
-        "rid": 1,
-        "rf": 0
-      },
+      null,
+      null,
       {
         "t": "eb",
         "sh": 1
@@ -37,19 +27,12 @@
         "t": "F"
       },
       {
-        "t": "f",
-        "eid": 5,
-        "ef": 3
+        "t": "f"
       },
-      {
-        "t": "F"
-      }
+      null
     ],
     [
-      {
-        "t": "w",
-        "disp": 1
-      },
+      null,
       {
         "t": "esw",
         "rid": 2,
@@ -74,17 +57,10 @@
       {
         "t": "f"
       },
-      {
-        "t": "f",
-        "eid": 1,
-        "ef": 3
-      }
+      null
     ],
     [
-      {
-        "t": "w",
-        "disp": 1
-      },
+      null,
       {
         "t": "esw",
         "rid": 3,
@@ -114,15 +90,15 @@
         "ef": 3
       },
       {
-        "t": "f",
+        "t": "r",
         "eid": 2,
-        "ef": 3
+        "ef": 3,
+        "rd": "101000"
       }
     ],
     [
       {
-        "t": "w",
-        "disp": 1
+        "t": "esw"
       },
       {
         "t": "esw"
@@ -146,18 +122,12 @@
       },
       {
         "t": "r",
-        "rd": "100100"
+        "rd": "000101"
       },
-      {
-        "t": "r",
-        "rd": "100100"
-      }
+      null
     ],
     [
-      {
-        "t": "w",
-        "disp": 1
-      },
+      null,
       {
         "t": "esw",
         "rid": 4,
@@ -185,15 +155,10 @@
       {
         "t": "f"
       },
-      {
-        "t": "F"
-      }
+      null
     ],
     [
-      {
-        "t": "w",
-        "disp": 1
-      },
+      null,
       {
         "t": "esw",
         "rid": 5,
@@ -215,23 +180,15 @@
       {
         "t": "F"
       },
-      {
-        "t": "f",
-        "eid": 4,
-        "ef": 3
-      },
-      {
-        "t": "f",
-        "eid": 6,
-        "ef": 3
-      }
+      null,
+      null
     ]
   ],
   "playerTank": {
     "kind": "sherman",
     "faction": "usa",
     "at": {
-      "col": 1,
+      "col": 0,
       "row": 3
     },
     "facing": 0,
@@ -304,8 +261,8 @@
       "kind": "german_infantry",
       "faction": "german",
       "at": {
-        "col": 7,
-        "row": 4
+        "col": 5,
+        "row": 5
       },
       "facing": 3,
       "unitLevel": "recruit"
@@ -319,7 +276,7 @@
     ],
     "evacAt": {
       "col": 7,
-      "row": 3
+      "row": 2
     },
     "evacExitDir": 0
   },
@@ -340,5 +297,15 @@
   ],
   "actionTableId": "standard",
   "aiTableId": "standard",
-  "eventTableId": "mission_13"
+  "eventTableId": "mission_13",
+  "sherman": {
+    "kind": "sherman",
+    "faction": "usa",
+    "at": {
+      "col": 0,
+      "row": 3
+    },
+    "facing": 0,
+    "hatchOpen": false
+  }
 }

@@ -2,6 +2,8 @@
 
 配置源：[units.csv](../data/units.csv)。生成命令：`node tools/buildUnitDB.js`。
 
+三号M/N和四号F/G的后续装甲与主炮重评见 [PanzerIIIPanzerIVBalance.md](PanzerIIIPanzerIVBalance.md)（2026-10-19）；该次调整保留本页的基础火力2、装填难度1。
+
 ## 设计尺度
 
 谢尔曼75毫米型为 **基础火力2、装填难度1**。基础火力表示车组分工与人机协同，影响硬核模式攻击骰；装填难度表示完成一发炮弹装填所需的动作次数。火力既不是炮弹威力，也不再用作重炮慢装填的代替参数。

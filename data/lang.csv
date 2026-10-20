@@ -418,6 +418,8 @@ tileInspect.crater,弹坑：行动效果与泥地相同。步兵命中所需点�
 tileInspect.seawall,海堤：沿用防波堤规则。日军不受影响；盟军坦克仅能使用杂项阶段的前进动作跨越。,Seawall uses breakwater crossing rules. Japanese units ignore it; Allied tanks cross only with a Misc-phase advance.
 dice.rule.crater,弹坑掩护,Crater cover
 dice.rule.rockyCover,岩石高地掩护,Rocky high ground cover
+dice.rule.forestCover,森林掩护,Forest cover
+tileInspect.forestCover,森林掩护：步兵受机枪攻击时命中所需点数+1。,Forest cover: infantry hit threshold +1 against machine-gun attacks.
 tileInspect.rockyCover,岩石高地掩护：步兵命中所需点数+1。,Rocky high ground cover: infantry hit threshold +1.
 floater.hedgehogParalyzed,进入拒马格：瘫痪,Steel hedgehogs: immobilized
 battleLog.wireCrushed,{unitKind} 碾坏了铁丝网。,{unitKind} crushed the barbed wire.

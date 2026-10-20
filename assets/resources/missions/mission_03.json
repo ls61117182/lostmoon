@@ -80,8 +80,8 @@
     { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 3 }, "facing": 3 },
     { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 3 }, "facing": 3 },
     { "kind": "infantry", "faction": "german", "at": { "col": 5, "row": 4 }, "facing": 3 },
-    { "kind": "panzer4", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" }
+    { "kind": "panzer4_f", "faction": "german" },
+    { "kind": "panzer4_f", "faction": "german" }
   ],
   "objective": {
     "type": "destroy_kind_evac",

@@ -2,7 +2,7 @@
   "id": "mission_09",
   "name": "跨过水域",
   "description": "目标：歼灭全部德军坦克（1 辆虎式 + 1 辆 IV 号），随后将谢尔曼开至带红色箭头的撤离格，沿 **`evacExitDir`** 方向驶离地图。\n谢尔曼初始位置与朝向见 JSON 的 `sherman`。\n1 辆虎式 + 1 辆 IV 号按 1d6 链式占位（不重掷）落在不同黑格 eid（1..6），朝向同格 ef。4 名德军步兵固定在建筑格 **`bd:1`**：`(col=2,row=0)`、`(1,2)`、`(3,2)`、`(2,5)`。",
-  "_comment": "8 列 × 6 行 odd-r。6 处 eid：`(6,0)=1`、`(6,1)=2`、`(6,2)=3`、`(6,3)=4`、`(5,4)=5`、`(5,5)=6`。\n4 名步兵固定在 **`bd:1` 建筑格**：`(2,0)`、`(1,2)`、`(3,2)`、`(2,5)`。\n撤离格见 `objective.evacAt` / `evacExitDir`。\n胜利：`destroy_kind_evac` + kinds tiger+panzer4；步兵不计入前置。\n回合结束：data/turn_end_events.csv mission_09。",
+  "_comment": "8 列 × 6 行 odd-r。6 处 eid：`(6,0)=1`、`(6,1)=2`、`(6,2)=3`、`(6,3)=4`、`(5,4)=5`、`(5,5)=6`。\n4 名步兵固定在 **`bd:1` 建筑格**：`(2,0)`、`(1,2)`、`(3,2)`、`(2,5)`。\n撤离格见 `objective.evacAt` / `evacExitDir`。\n胜利：`destroy_kind_evac` + kinds tiger+panzer4_f；步兵不计入前置。\n回合结束：data/turn_end_events.csv mission_09。",
   "cols": 8,
   "rows": 6,
   "enemyStartByDice": true,
@@ -74,7 +74,7 @@
   },
   "enemies": [
     { "kind": "tiger", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" },
+    { "kind": "panzer4_f", "faction": "german" },
     { "kind": "infantry", "faction": "german", "at": { "col": 2, "row": 0 }, "facing": 3 },
     { "kind": "infantry", "faction": "german", "at": { "col": 1, "row": 2 }, "facing": 3 },
     { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 2 }, "facing": 3 },
@@ -82,7 +82,7 @@
   ],
   "objective": {
     "type": "destroy_kind_evac",
-    "kinds": ["tiger", "panzer4"],
+    "kinds": ["tiger", "panzer4_f"],
     "evacAt": { "col": 2, "row": 0 },
     "evacExitDir": 5
   },

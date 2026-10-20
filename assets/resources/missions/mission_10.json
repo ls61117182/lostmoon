@@ -75,8 +75,8 @@
   },
   "enemies": [
     { "kind": "tiger", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" },
+    { "kind": "panzer4_f", "faction": "german" },
+    { "kind": "panzer4_f", "faction": "german" },
     { "kind": "infantry", "faction": "german" },
     { "kind": "infantry", "faction": "german" },
     { "kind": "infantry", "faction": "german" }

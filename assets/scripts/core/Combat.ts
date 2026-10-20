@@ -35,7 +35,7 @@ import {
   isDiagonalFireDirection,
   rotateDirection,
 } from './HexGrid';
-import { diagonalMainGunDirectionForHex, diagonalGunnerRuleDirectionForVisibleHex } from './FogOfWar';
+import { diagonalMainGunDirectionForHex, diagonalGunnerRuleDirectionForVisibleHex, isHexInOwnAttackVision } from './FogOfWar';
 import { markAmbushTargeted } from './Ambush';
 import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isHostile, isPlayerControlled, isSameSide, isTankUnit, neutralizeUncrewedTank, tileHasBuilding, ShellType, ShermanCrew, Theater, Unit, UnitKind, WeatherType } from './types';
 import { weatherHitThresholdModifier } from './Weather';
@@ -148,6 +148,8 @@ export interface AttackReport {
 }
 
 export interface AttackContext {
+  /** Fog-of-war shooting requires direct sight; shared radio intelligence is insufficient. */
+  requireOwnVision?: boolean;
   /** Hardcore: a previous main-gun hit grants -2 against the locked tank. */
   lockedFire?: boolean;
   attacker: Unit;
@@ -372,6 +374,7 @@ export type AttackDenyReason =
   | 'attack.reason.fixedGunFacing'
   | 'attack.reason.blocked'
   | 'attack.reason.outOfRange'
+  | 'attack.reason.turretAimRange'
   | 'attack.reason.turretDamaged'
   | 'attack.reason.camouflageNet'
   | 'attack.reason.precisionInvalidTarget'
@@ -433,6 +436,10 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   if (infantryAttack) {
     const range = infantryAttackRange(target);
     if (distance > range) return { ok: false, reason: 'attack.reason.outOfRange' };
+    if (ctx.requireOwnVision
+      && !isHexInOwnAttackVision(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)) {
+      return { ok: false, reason: 'attack.reason.turretAimRange' };
+    }
     return map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes)
       ? { ok: true }
       : { ok: false, reason: 'attack.reason.blocked' };
@@ -456,6 +463,10 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
     ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, raySmokeHexes)
     : map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
+  if (ctx.requireOwnVision && ctx.shellType !== 'smoke'
+    && !isHexInOwnAttackVision(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)) {
+    return { ok: false, reason: 'attack.reason.turretAimRange' };
+  }
   return { ok: true };
 }
 
@@ -492,6 +503,7 @@ export interface HitBreakdown {
   unitLevel?: number;
   crater?: number;
   rocky?: number;
+  forest?: number;      // 森林内步兵受机枪攻击时 +1
 }
 
 /** Intact friendly bunkers shelter infantry under the non-classic combat rules.
@@ -517,6 +529,7 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     || targetTile?.terrain === 'urban_destructible';
   const infantryMGTarget = ctx.attackKind === 'mg'
     && (isFootUnit(target) || (ctx.atGunCrewTargets === true && isControlledATGun(target)));
+  const forest = targetTile?.terrain === 'forest' && infantryMGTarget ? 1 : 0;
   const terrainBuilding = tileHasBuilding(targetTile) ? (urbanBuilding && infantryMGTarget ? 3 : 1) : 0;
   const bunkerBuilding = hasFriendlyBunkerCover(ctx) ? (infantryMGTarget ? 3 : 1) : 0;
   const building = Math.max(terrainBuilding, bunkerBuilding);
@@ -544,8 +557,8 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
   const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
   return {
     size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
-    crater, rocky,
-    threshold: size + distance + hedges + building + crater + rocky + smoke + concealed + trees + rearArc
+    crater, rocky, forest,
+    threshold: size + distance + hedges + building + crater + rocky + forest + smoke + concealed + trees + rearArc
       + frontArcModifier + actionModifier + weather + unitLevel,
   };
 }
@@ -1657,6 +1670,7 @@ export const MG_HIT_THRESHOLD = 7;
 export const MG_MAX_RANGE = 1;
 
 export type MGDenyReason =
+  | 'attack.reason.turretAimRange'
   | 'attack.reason.selfFire'
   | 'attack.reason.destroyedTarget'
   | 'attack.reason.mgRange'
@@ -1738,6 +1752,10 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
     ? map.hasDiagonalLineOfSight(attacker.pos, target.pos, fireDir, raySmokeHexes)
     : map.hasLineOfSight(attacker.pos, target.pos, raySmokeHexes));
   if (!hasSight) return { ok: false, reason: 'attack.reason.blocked' };
+  if (ctx.requireOwnVision
+    && !isHexInOwnAttackVision(map, attacker, target.pos, ctx.weather, ctx.smokeHexes)) {
+    return { ok: false, reason: 'attack.reason.turretAimRange' };
+  }
   return { ok: true };
 }
 

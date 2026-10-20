@@ -45,6 +45,7 @@ interface UnitSnapshot {
   turretVisualTarget?: { q: number; r: number };
   damaged?: boolean;
   destroyed?: boolean;
+  wreckPose?: { x: number; y: number; angle: number };
   /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
   smoked?: boolean;
   suppressed?: boolean;
@@ -154,6 +155,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     turretVisualTarget: u.turretVisualTarget ? { ...u.turretVisualTarget } : undefined,
     damaged: u.damaged,
     destroyed: u.destroyed,
+    wreckPose: u.destroyed && u.wreckPose ? { ...u.wreckPose } : undefined,
     fireLevel: u.fireLevel,
     turretDamaged: u.turretDamaged,
     paralyzed: u.paralyzed,
@@ -227,6 +229,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.turretVisualTarget = s.turretVisualTarget ? { ...s.turretVisualTarget } : undefined;
   live.damaged = s.damaged ?? false;
   live.destroyed = s.destroyed ?? false;
+  live.wreckPose = live.destroyed && s.wreckPose ? { ...s.wreckPose } : undefined;
   // A snapshot is authoritative. JSON.stringify omits properties whose value is
   // undefined, so retaining the live value here leaks damage acquired after a
   // checkpoint (notably when retrying a campaign segment).
@@ -474,6 +477,7 @@ export function applySave(
   // 谢尔曼不再使用 damaged 语义；旧档里若有也丢弃，避免地图误显示
   playerTank.damaged = false;
   playerTank.destroyed = savedPlayer.destroyed ?? false;
+  playerTank.wreckPose = playerTank.destroyed && savedPlayer.wreckPose ? { ...savedPlayer.wreckPose } : undefined;
   playerTank.faction = savedPlayer.faction ?? playerTank.stats.faction;
   playerTank.sideId = savedPlayer.sideId ?? 'player';
   playerTank.controller = savedPlayer.controller ?? 'local_player';

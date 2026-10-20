@@ -233,7 +233,7 @@ function validateRecords(records) {
   return rows;
 }
 
-function buildTs(rows) {
+function buildTs(rows, outPath = OUT_PATH) {
   const lines = [];
   lines.push('/**');
   lines.push(' * 回合结束事件表 - 自动生成，请勿手改。');
@@ -284,19 +284,22 @@ function buildTs(rows) {
   lines.push('}');
   lines.push('');
 
-  fs.writeFileSync(OUT_PATH, lines.join('\n'), 'utf8');
+  fs.writeFileSync(outPath, lines.join('\n'), 'utf8');
 }
 
-function build() {
-  const records = readRecordsSmart(CSV_PATH);
+function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
+  const records = readRecordsSmart(csvPath);
   const rows = validateRecords(records);
-  buildTs(rows);
-  console.log(`[buildTurnEndEventDB] OK ${rows.length} rows -> ${path.relative(ROOT, OUT_PATH)}`);
+  buildTs(rows, outPath);
+  console.log(`[buildTurnEndEventDB] OK ${rows.length} rows -> ${path.relative(ROOT, outPath)}`);
 }
 
-try {
-  build();
-} catch (e) {
-  console.error('[buildTurnEndEventDB] failed:', e.message);
-  process.exit(1);
+module.exports = { build };
+if (require.main === module) {
+  try {
+    build();
+  } catch (e) {
+    console.error('[buildTurnEndEventDB] failed:', e.message);
+    process.exit(1);
+  }
 }

@@ -27,6 +27,6 @@ assert.match(
   'opening a saved custom mission should restore its name into the editor draft',
 );
 assert.match(lang, /'levelEditor\.mission\.name': \{ zh: "关卡名称", en: "Mission Name" \}/);
-assert.match(lang, /'levelEditor\.mission\.namePlaceholder': \{ zh: "输入自定义关卡名称", en: "Enter a custom mission name" \}/);
+assert.match(lang, /'levelEditor\.mission\.namePlaceholder': \{ zh: "输入关卡名称", en: "Enter a mission name" \}/);
 
 console.log('level editor mission-name tests passed');

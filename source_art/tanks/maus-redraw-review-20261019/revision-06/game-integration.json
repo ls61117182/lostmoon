@@ -1,0 +1,113 @@
+{
+  "revision": 6,
+  "status": "installed_for_in_game_review",
+  "wreck_base": "exact accepted intact maus_top_hull.png",
+  "unchanged_normal_file_sha256": {
+    "maus_top.png": "301f6ae2e1e5fcf58bb75bdab1a4ca1cf209143c4f819e1a0023aab602e79384",
+    "maus_top_hull.png": "a51cd0553d0bbbda3a70a7bd221e6258eb2232102599c7e90885c6a03a5598a3",
+    "maus_top_turret.png": "1049a95c238d61954500cb41446ba80fe4695efe09c01eb7940d32a432a8e17d"
+  },
+  "damage_regions": [
+    {
+      "name": "ring",
+      "box": [
+        114,
+        7,
+        198,
+        91
+      ],
+      "ellipse": [
+        119,
+        11,
+        192,
+        87
+      ],
+      "mask_bounds": [
+        118,
+        10,
+        194,
+        89
+      ]
+    },
+    {
+      "name": "grille",
+      "box": [
+        54,
+        60,
+        117,
+        97
+      ],
+      "ellipse": [
+        60,
+        64,
+        115,
+        95
+      ],
+      "mask_bounds": [
+        59,
+        63,
+        117,
+        97
+      ]
+    },
+    {
+      "name": "rear-panel",
+      "box": [
+        178,
+        44,
+        227,
+        88
+      ],
+      "ellipse": [
+        181,
+        47,
+        225,
+        85
+      ],
+      "mask_bounds": [
+        180,
+        46,
+        227,
+        87
+      ]
+    },
+    {
+      "name": "skirt",
+      "box": [
+        113,
+        0,
+        151,
+        22
+      ],
+      "ellipse": [
+        119,
+        3,
+        146,
+        18
+      ],
+      "mask_bounds": [
+        118,
+        2,
+        148,
+        20
+      ]
+    }
+  ],
+  "changed_pixels": 7683,
+  "damage_mask_pixels": 8015,
+  "unchanged_pixels_outside_damage_mask": 17527,
+  "outside_damage_pixels_exactly_equal": true,
+  "alpha_silhouette_identical": true,
+  "fuel_pixels_exactly_equal": true,
+  "opaque_dark_pixels_before": 5258,
+  "opaque_dark_pixels_after": 5721,
+  "runtime_geometry": "unchanged; 258x99 hull and wreck; hull pivot (155,49)",
+  "backup": "asset_backups\\latest\\maus\\20261019_070505_before_stronger_damage",
+  "normal_gray_and_camouflage_files_unchanged": true,
+  "validation": {
+    "tank_validate": "PASS: 34 models audited, 21 tests, TypeScript check",
+    "late_war_rebuilt": true,
+    "small_size_preview_checked": true,
+    "in_game_visual_review": "pending user preview refresh"
+  }
+}

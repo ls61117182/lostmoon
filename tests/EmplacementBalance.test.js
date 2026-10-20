@@ -143,7 +143,8 @@ test('ordinary bunker AP preview displays penetration odds and consumes no hit d
       spawnPreviewLabel: (_x, _y, need, probability) => labels.push({ need, probability }),
     });
     scene.drawAttackableHighlights();
-    assert.deepEqual(labels, [{ need: expected.threshold, probability: expected.probability }]);
+    assert.deepEqual(labels, distance <= 4 ? [{ need: expected.threshold, probability: expected.probability }] : [],
+      'shared visibility cannot display a firing preview beyond the shooter\'s direct sight');
   }
 });
 test('direct AT-gun destruction skips the penetration row and ends after the hit reveal', () => {

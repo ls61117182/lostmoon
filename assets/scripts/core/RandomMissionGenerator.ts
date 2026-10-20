@@ -900,7 +900,7 @@ const EUROPE_ENEMY_POOL: WeightedKind[] = [
   { kind: 'truck', weight: 1, threat: 0 },
   { kind: 'panzer3', weight: 4, threat: 2 },
   { kind: 'panzer3_m', weight: 4, threat: 2 },
-  { kind: 'panzer4', weight: 4, threat: 3 },
+  { kind: 'panzer4_f', weight: 4, threat: 3 },
   { kind: 'stug3', weight: 3, threat: 3 },
   { kind: 'panther', weight: 2, threat: 4 },
   { kind: 'tiger', weight: 1, threat: 5 },
@@ -975,7 +975,7 @@ function buildEnemyRoster(
     const count = (kind: UnitKind) => kinds.filter(value => value === kind).length;
     if (theater === 'europe') {
       if (count('tiger') > 1 || count('tigerking') > 1 || count('maus') > 1
-        || count('panzer4') > 3 || count('pak38') > 3 || count('german_heavy_artillery') > 2) continue;
+        || count('panzer4_f') > 3 || count('pak38') > 3 || count('german_heavy_artillery') > 2) continue;
       if (objective.targetKind !== 'infantry'
         && !kinds.some(isTankKind)) continue;
     } else {
@@ -1187,7 +1187,7 @@ function buildTurnEndEvents(
   }
   if (objective.targetKind) {
     const forbidden: Partial<Record<UnitKind, TurnEndEffectType>> = {
-      infantry: 'infantry_spawn', panzer3: 'panzer3_spawn', panzer4: 'panzer4_spawn', tiger: 'tiger_spawn',
+      infantry: 'infantry_spawn', panzer3: 'panzer3_spawn', panzer4_f: 'panzer4_spawn', tiger: 'tiger_spawn',
       japanese_infantry: 'infantry_spawn', type95: 'type95_spawn', type97: 'type97_spawn',
     };
     const forbiddenEffect = forbidden[objective.targetKind];

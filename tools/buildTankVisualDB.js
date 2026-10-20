@@ -172,8 +172,8 @@ function emitString(s) {
   return JSON.stringify(s);
 }
 
-function build() {
-  const records = toRecords(readCsvRowsSmart(CSV_PATH, {
+function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
+  const records = toRecords(readCsvRowsSmart(csvPath, {
     toolName: 'buildTankVisualDB',
   }));
   const dataRecords = records.filter(rec => rec.kind !== '字段含义' && rec.kind !== '单位类型ID');
@@ -371,13 +371,17 @@ function build() {
   lines.push('}');
   lines.push('');
 
-  fs.writeFileSync(OUT_PATH, lines.join('\n'), 'utf8');
-  console.log(`[buildTankVisualDB] OK  ${dataRecords.length} rows -> ${path.relative(ROOT, OUT_PATH)}`);
+  fs.writeFileSync(outPath, lines.join('\n'), 'utf8');
+  console.log(`[buildTankVisualDB] OK  ${dataRecords.length} rows -> ${path.relative(ROOT, outPath)}`);
 }
 
-try {
-  build();
-} catch (e) {
-  console.error('[buildTankVisualDB] failed:', e.message);
-  process.exit(1);
+module.exports = { build };
+
+if (require.main === module) {
+  try {
+    build();
+  } catch (e) {
+    console.error('[buildTankVisualDB] failed:', e.message);
+    process.exit(1);
+  }
 }

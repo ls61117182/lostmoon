@@ -1,0 +1,38 @@
+{
+  "status": "awaiting_user_review",
+  "canvas": [
+    112,
+    300
+  ],
+  "front": "up",
+  "hull_source_bounds": [
+    120,
+    61,
+    776,
+    1737
+  ],
+  "turret_source_bounds": [
+    99,
+    25,
+    740,
+    1901
+  ],
+  "turret_uniform_scale_to_hull_source": 0.8698907956318253,
+  "source_hull_offset": [
+    12,
+    136
+  ],
+  "source_turret_offset": [
+    61,
+    12
+  ],
+  "notes": "Candidate layers share an aligned canvas. Runtime pivots/muzzle/hatch coordinates must be measured when approved for integration.",
+  "destroyed_alignment": {
+    "uniform_scale": 0.9078516902944384,
+    "source_offset": [
+      -1,
+      -1
+    ],
+    "reference": "front and rear intact hull edges"
+  }
+}

@@ -21,9 +21,9 @@ function addRow(file, key, edits) {
 }
 addRow('data/units.csv', 'unitKind', {
   unitKind: 'panzer4_f', displayName: '4号F',
-  armorFront: 9, armorFrontSide: 8, armorRearSide: 8, armorRear: 7,
-  penetration: 1, highExplosivePower: 2, effectiveRange: 2,
-  notes: '四号F型（F1）；短75毫米KwK 37 L/24；50毫米正面装甲；车身美术复用G型；短炮数值沿用三号N型尺度',
+  armorFront: 9, armorFrontSide: 9, armorRearSide: 8, armorRear: 7,
+  penetration: 1, highExplosivePower: 2, effectiveRange: 1,
+  notes: '谢尔曼基准重评2026-10-19；四号F1；车体及炮塔正面50毫米，侧面30毫米；短75毫米KwK 37 L/24常规AP穿甲1、HE2、有效穿甲距离1，与三号N相同，不含HEAT；车身美术复用G型',
 });
 addRow('data/tank_visuals.csv', 'kind', {
   kind: 'panzer4_f', displayName: 'Panzer IV Ausf. F1',

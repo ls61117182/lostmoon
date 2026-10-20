@@ -75,7 +75,7 @@
     { "kind": "infantry", "faction": "german", "at": { "col": 3, "row": 1 }, "facing": 3 },
     { "kind": "infantry", "faction": "german", "at": { "col": 4, "row": 5 }, "facing": 3 },
     { "kind": "tiger", "faction": "german" },
-    { "kind": "panzer4", "faction": "german" }
+    { "kind": "panzer4_f", "faction": "german" }
   ],
   "objective": {
     "type": "destroy_kind_evac",

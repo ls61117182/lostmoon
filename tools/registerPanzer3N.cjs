@@ -36,7 +36,9 @@ updateTable('data/units.csv', variant => ({
   displayName: variant.name,
   penetration: 1,
   highExplosivePower: 2,
-  notes: '三号坦克N型；短75毫米KwK 37 L/24；沿用对应M型车身及装甲数据',
+  effectiveRange: 1,
+  notes: '谢尔曼基准重评2026-10-19；三号N；选用车体正面50+20毫米附甲的后期配置；炮塔前甲按综合前甲10抽象；短75毫米KwK 37 L/24常规AP穿甲1、HE2、有效穿甲距离1，不含HEAT；'
+    + (variant.kind === 'panzer3_n_schurzen' ? '有裙板型相对无裙板型前侧与后侧装甲各+1' : '无裙板型前侧9、后侧8'),
 }));
 
 updateTable('data/tank_visuals.csv', variant => ({

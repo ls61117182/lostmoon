@@ -129,7 +129,7 @@ test('event table covers every 2d6 sum exactly once and timed reserve spawns at 
     prepared.apply();
     assert.equal(mission.enemies.length, before + 1);
     const tank = mission.enemies.at(-1);
-    assert.equal(tank.kind, 'panzer4'); assert.equal(tank.faction, 'german'); assert.equal(tank.sideId, 'enemy');
+    assert.equal(tank.kind, 'panzer4_f'); assert.equal(tank.faction, 'german'); assert.equal(tank.sideId, 'enemy');
     assert.equal(mission.map.canTankEnter(tank.pos, tank.faction), true);
     assert.equal(mission.map.get(tank.pos).steelHedgehogs, undefined);
   }

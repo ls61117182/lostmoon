@@ -28,14 +28,14 @@ const allowedTerrain = {
 };
 
 const threatByKind = {
-  infantry: 1, german_infantry: 1, officer: 1, truck: 0, panzer3: 2, panzer3_m: 2, panzer4: 3, stug3: 3, panther: 4, tiger: 5, tigerking: 6, maus: 6, pak38: 3, german_heavy_artillery: 4,
+  infantry: 1, german_infantry: 1, officer: 1, truck: 0, panzer3: 2, panzer3_m: 2, panzer4_f: 3, stug3: 3, panther: 4, tiger: 5, tigerking: 6, maus: 6, pak38: 3, german_heavy_artillery: 4,
   japanese_infantry: 1, type95: 2, type97: 3, at_gun: 3, heavy_artillery: 4,
 };
 
 const targetSpawnEffect = {
   infantry: 'infantry_spawn',
   panzer3: 'panzer3_spawn',
-  panzer4: 'panzer4_spawn',
+  panzer4_f: 'panzer4_spawn',
   tiger: 'tiger_spawn',
   japanese_infantry: 'infantry_spawn',
   type95: 'type95_spawn',

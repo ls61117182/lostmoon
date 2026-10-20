@@ -29,11 +29,12 @@ export function currentVisionRange(unit: Unit, weather?: WeatherType): number {
 }
 
 /** Gunner sight is deliberately separate from commander and interior vision. */
-export function currentGunnerVisionRange(unit: Unit): number {
-  return normalizedVisionRange(
+export function currentGunnerVisionRange(unit: Unit, weather?: WeatherType): number {
+  const baseRange = normalizedVisionRange(
     unit.gunnerVisionRange ?? unit.stats.gunnerVisionRange,
     DEFAULT_GUNNER_VISION_RANGE,
   );
+  return weatherVisionRange(unit, baseRange, weather, 'gunner');
 }
 
 /** Closed-hatch interior sight is deliberately separate from gunner sight. */
@@ -61,9 +62,26 @@ function normalizedVisionRange(raw: unknown, fallback: number): number {
  */
 export function isWithinOwnVisionRange(observer: Unit, target: Unit, weather?: WeatherType): boolean {
   const range = isTankUnit(observer)
-    ? currentGunnerVisionRange(observer)
+    ? currentGunnerVisionRange(observer, weather)
     : currentVisionRange(observer, weather);
   return hexDistance(observer.pos, target.pos) <= range;
+}
+
+/** Direct sight at shot time, after an intact turret has aimed; never merges radio intelligence. */
+export function isHexInOwnAttackVision(
+  map: HexMap,
+  observer: Unit,
+  target: Axial,
+  weather?: WeatherType,
+  smokeHexes?: ReadonlySet<string>,
+): boolean {
+  const canAim = observer.stats.visionType === 'turreted' && !observer.turretDamaged;
+  const direction = canAim
+    ? diagonalMainGunDirectionForHex(map, observer, target, weather, smokeHexes)
+      ?? fireDirectionTo(observer.pos, target)
+    : null;
+  const aimed = direction === null ? observer : { ...observer, turretFacing: direction };
+  return computeUnitVisibleHexes(map, aimed, weather, smokeHexes).has(HexMap.keyOf(target));
 }
 
 /** Runtime source of truth for the map coordinates visible to one unit. */
@@ -75,12 +93,18 @@ export function computeUnitVisibleHexes(
 ): Set<string> {
   const visible = new Set<string>();
   if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
+  const opaqueSmoke = weather === 'fog';
   const add = (p: Axial) => {
+    // Filter direct sight only. Radio sight is merged later, and must be able
+    // to reveal a transmitting friendly's occupied smoke hex to its teammates.
+    if (opaqueSmoke && !axialEquals(p, unit.pos) && smokeHexes?.has(HexMap.keyOf(p))) return;
     if (map.has(p)) visible.add(HexMap.keyOf(p));
   };
 
   add(unit.pos);
-  // In hardcore mode smoke behaves like a building/forest LoS blocker: its
+  // Fog-weather smoke isolates every direct sight type to the occupied hex.
+  if (opaqueSmoke && smokeHexes?.has(HexMap.keyOf(unit.pos))) return visible;
+  // In other weather smoke behaves like a building/forest LoS blocker: its
   // own hex remains visible, but it blocks hexes behind it. A unit standing in
   // smoke keeps every one of its own sight types, capped to range 1; unrestricted
   // friendly radio sight is merged separately by computeRadioSharedVisibleHexes.
@@ -148,7 +172,7 @@ export function computeUnitVisibleHexes(
     ? (unit.turretFacing ?? unit.facing)
     : unit.facing;
   if (sightFacing !== null) {
-    const gunnerVisionRange = tank ? currentGunnerVisionRange(unit) : commanderVisionRange;
+    const gunnerVisionRange = tank ? currentGunnerVisionRange(unit, weather) : commanderVisionRange;
     const limitedGunnerVisionRange = ownVisionRange(gunnerVisionRange);
     const rayVector = fireDirectionVector(sightFacing as FireDirection);
     const fireDirection = sightFacing as FireDirection;
@@ -235,7 +259,7 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
     if (direction === null) return null;
     if (hexDistance(unit.pos, target) > currentVisionRange(unit, weather)
       || !hasDirectionalFogLineOfSight(map, unit.pos, target, smokeHexes)) return null;
-    return diagonalGunnerClickPreference(map, unit, direction, target, smokeHexes) !== null
+    return diagonalGunnerClickPreference(map, unit, direction, target, smokeHexes, currentGunnerVisionRange(unit, weather)) !== null
       ? direction
       : null;
   }
@@ -247,7 +271,7 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
     map,
     unit,
     direction as FireDirection,
-    currentGunnerVisionRange(unit),
+    currentGunnerVisionRange(unit, weather),
     (pos) => { if (map.has(pos) && axialEquals(pos, target)) found = true; },
     smokeHexes,
   );
@@ -385,6 +409,7 @@ export function reconcileDiagonalGunnerSideAfterMove(
   map: HexMap,
   unit: Unit,
   smokeHexes?: ReadonlySet<string>,
+  weather?: WeatherType,
 ): void {
   const fireDirection = unit.turretFacing ?? unit.facing;
   const preferred = unit.diagonalGunnerSidePreference;
@@ -396,7 +421,7 @@ export function reconcileDiagonalGunnerSideAfterMove(
   const b = ((diagonalIndex + 1) % 6) as Direction;
   if (preferred !== a && preferred !== b) return;
 
-  const range = currentGunnerVisionRange(unit);
+  const range = currentGunnerVisionRange(unit, weather);
   const rayVector = fireDirectionVector(fireDirection as FireDirection);
   let current = unit.pos;
   for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
@@ -458,7 +483,7 @@ export function computeRadioSharedVisibleHexes(
     for (const friendly of friendlies) {
       if (friendly === receiver || !shareVisionFaction(friendly, receiver) || !hasRadioTransmit(friendly)) continue;
       for (const key of computeUnitVisibleHexes(map, friendly, weather, smokeHexes)) {
-        // A friendly inside smoke directly knows only its own occupied hex.
+        // In fog, a friendly inside smoke directly knows only its occupied hex.
         // That local awareness is valid radio intelligence for teammates, even
         // though nobody outside the smoke could reveal the hex by direct sight.
         visible.add(key);

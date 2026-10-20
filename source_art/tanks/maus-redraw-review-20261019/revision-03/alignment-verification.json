@@ -1,0 +1,50 @@
+{
+  "inputs": [
+    "maus_top_hull_candidate.png",
+    "maus_top_destroyed_candidate.png",
+    "maus_rear_fuel_drum_candidate.png"
+  ],
+  "size": [
+    112,
+    300
+  ],
+  "rear_sample_columns": [
+    20,
+    24,
+    27,
+    85,
+    89,
+    92
+  ],
+  "normal_rear_rows": {
+    "20": 268,
+    "24": 268,
+    "27": 268,
+    "85": 268,
+    "89": 268,
+    "92": 268
+  },
+  "destroyed_rear_rows": {
+    "20": 268,
+    "24": 268,
+    "27": 268,
+    "85": 268,
+    "89": 268,
+    "92": 268
+  },
+  "shared_fuel_bounds_alpha_gt_128": [
+    31,
+    256,
+    81,
+    283
+  ],
+  "exposed_fuel_pixel_max_difference_0_to_255": 1,
+  "preview_crop": [
+    0,
+    235,
+    112,
+    290
+  ],
+  "preview_scale": 3,
+  "note": "Preview uses final candidate PNGs only; identical crop and scale. No generated drafts."
+}

@@ -250,12 +250,13 @@ export class MenuOperations {
       f: [105, 122, 65], r: [147, 138, 106], m: [103, 79, 52], F: [40, 77, 45],
       w: [46, 88, 110], dw: [25, 55, 75], c: [167, 157, 114], T: [54, 103, 64],
       B: [139, 194, 211], H: [120, 121, 114], a: [139, 137, 120], b: [137, 111, 83],
+      eb: [194, 181, 151], esw: [139, 194, 211],
       u: [155, 153, 145], ur: [83, 84, 81], ui: [78, 88, 96], ud: [176, 91, 57],
     };
     cells.forEach(cell => {
       const x = (cell.x - (minX + maxX) / 2) * scale;
       const y = (cell.y - (minY + maxY) / 2) * scale;
-      const rgb = hidden ? [0, 0, 0] : mission?.season === 'winter' && !['w', 'dw'].includes(cell.tile!.t)
+      const rgb = hidden ? [0, 0, 0] : mission?.season === 'winter' && !['w', 'dw', 'esw'].includes(cell.tile!.t)
         ? [170, 183, 177] : palette[cell.tile!.t] ?? [90, 100, 70];
       g.fillColor = new Color(rgb[0], rgb[1], rgb[2]);
       g.strokeColor = hidden ? new Color(60, 64, 58) : new Color(20, 29, 22);

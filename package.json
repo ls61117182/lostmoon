@@ -9,6 +9,8 @@
     "server": "node server/server.js",
     "tank:prepare": "node tools/prepareTankArt.cjs",
     "tank:build": "node tools/buildTankVisualDB.js",
+    "tank:debug-server": "node tools/tankVisualDebugServer.cjs",
+    "editor:server": "node tools/tankVisualDebugServer.cjs",
     "tank:audit": "node tools/auditTankAssets.cjs",
     "tank:validate": "pnpm run tank:build && pnpm run tank:audit && node --test tests/prepareTankArt.test.js tests/MausBattleRendering.test.js tests/topDownTankFacing.test.js tests/GermanTankCamouflage.test.js tests/levelEditorTankCamouflage.test.js tests/TankVisualDebuggerCamouflage.test.js && pnpm run typecheck",
     "tank:late-war": "node tools/buildGermanLateWarTankArt.cjs && node tools/previewGermanLateWarTankArt.cjs",

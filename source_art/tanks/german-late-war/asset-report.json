@@ -124,52 +124,52 @@
     },
     {
       "kind": "maus",
-      "sourceMid": 107.8768,
+      "sourceMid": 137,
       "flattenedHullOffset": {
-        "x": 42,
+        "x": 20,
         "y": 0,
-        "score": 361.35
+        "score": 2367.062499999999
       },
       "files": [
         {
           "role": "top",
           "name": "maus_top.png",
-          "width": 142,
-          "height": 38,
-          "greySha256": "29705d6fc7faf09a8e8ff68182fe5651056fb4b1fe08c786844431db2486fb21",
-          "greyMetaSha256": "279f8b16b4df2031c09231091e88544de4eba6b64201e204ea1accfba4c9b6e7",
-          "alphaSha256": "b8bc6e87f03368135bc9fc7c89d6a456a0b23a9414bd7b505addcf92f448dc44",
-          "lateWarSha256": "1e1d841332155d8d86eaf04462d7f61891f106bc86f30186d2235de24ce785f5"
+          "width": 298,
+          "height": 99,
+          "greySha256": "301f6ae2e1e5fcf58bb75bdab1a4ca1cf209143c4f819e1a0023aab602e79384",
+          "greyMetaSha256": "ac6e29aebd636f9d370235c5710592333e5953d5c0f09cdf0bc729e06263313c",
+          "alphaSha256": "b5a85ac73a9cb1e21d3580caac4eefdc39e421522ccf08b4278dbefac7ccb265",
+          "lateWarSha256": "d8a0dd83bde2e48396c5ee641f31496b0d25b13e142838bcc46df00b9076d50c"
         },
         {
           "role": "hull",
           "name": "maus_top_hull.png",
-          "width": 100,
-          "height": 38,
-          "greySha256": "7145288b2f128bca578d56688e0592278bac330156f3f43cb194c268511aa280",
-          "greyMetaSha256": "f04cbdb171e00996df5583ae1b2d31c7e85e4567ea797f8c228369da99b82c27",
-          "alphaSha256": "bfc40becb3b8f9dca8275bfaadabd0683a41d61bddf4d79d4216f4a1015110cf",
-          "lateWarSha256": "ae5d1e22fbb2f4ba2c1f83ca3ef0416850d36d6c2c605348240ef14f62c9237d"
+          "width": 258,
+          "height": 99,
+          "greySha256": "a51cd0553d0bbbda3a70a7bd221e6258eb2232102599c7e90885c6a03a5598a3",
+          "greyMetaSha256": "2ea9cf929870501e2f3726833dfeccb4184dc5cd02c1b5b6b4072530ab0811b4",
+          "alphaSha256": "0916d25b9b5556b19884c03c68f7998adc194387b73388bcac84ac2405c733f0",
+          "lateWarSha256": "b6c1f22f8f9d47c983270ec0aa6ac00109fd108b406c67ab2bdbbe46826feae6"
         },
         {
           "role": "turret",
           "name": "maus_top_turret.png",
-          "width": 96,
-          "height": 34,
-          "greySha256": "13374a778f8333b1fbf6e24cb372313e7448ea90b6c222386b212115256d22d1",
-          "greyMetaSha256": "009116e54464e6fbd73d1e4f46c78a0d20a2991eb72ed8cada12e8c5dd920ad4",
-          "alphaSha256": "52abe0f4c5bc59e14a4bc370d23aa271ffd224149737f440f370c59a512014d4",
-          "lateWarSha256": "af6a83828a56a3f03725582fd455bbda55a78ffda3740a71841559914b6f75e7"
+          "width": 240,
+          "height": 83,
+          "greySha256": "1049a95c238d61954500cb41446ba80fe4695efe09c01eb7940d32a432a8e17d",
+          "greyMetaSha256": "086927e6e8250e9361ca555bd4d175ac3111ed3ffca43781b91bf5b1eec2b8ee",
+          "alphaSha256": "46b40af328d337c404c6e1e8e36646cb370bd4709e84fcb2d9c67424667701d1",
+          "lateWarSha256": "c81d340cd86be1bc2d0727f8354254c56fcc1e9041d327f09b08d53e11f1a039"
         },
         {
           "role": "destroyed",
           "name": "maus_top_destroyed.png",
-          "width": 100,
-          "height": 38,
-          "greySha256": "0d3d2fdfea2ab4708c2bec536562a9e27b1a4bf30422fb927a5288494f9c8f1d",
-          "greyMetaSha256": "746410fb16ab61fcadee7eb81bb9db5b39877bd9efb844d824c6ea4abd6c49da",
-          "alphaSha256": "cfeac21715a2997c42647112b38b7f0c55fc58ec3ccee03ae3dd96063005d88c",
-          "lateWarSha256": "eda960ec66a1d06e797633e5a87857f0a3ca7217fa6033544b7b66e6ebc630f5"
+          "width": 258,
+          "height": 99,
+          "greySha256": "4ce36d6ca2d96d10d137f065a7eca0813a930f63c66055494b0c3a042a57043b",
+          "greyMetaSha256": "7fcc2f9936f197e95848fe31f4a0ae8d704549f2c215334dbc10a214092839fa",
+          "alphaSha256": "0916d25b9b5556b19884c03c68f7998adc194387b73388bcac84ac2405c733f0",
+          "lateWarSha256": "bb45549ca5979ab90e7580df2290ea9d126c93ffbe17e593d6739a0e7ed6caf9"
         }
       ]
     },

@@ -1,0 +1,103 @@
+{
+  "revision": 5,
+  "status": "installed_for_in_game_review",
+  "normal_hull_file_unchanged": true,
+  "normal_hull_sha256": "a51cd0553d0bbbda3a70a7bd221e6258eb2232102599c7e90885c6a03a5598a3",
+  "wreck_base": "current intact maus_top_hull.png only",
+  "damage_regions": [
+    {
+      "name": "ring",
+      "box": [
+        121,
+        14,
+        189,
+        85
+      ],
+      "ellipse": [
+        126,
+        20,
+        184,
+        78
+      ],
+      "mask_bounds": [
+        125,
+        19,
+        186,
+        80
+      ]
+    },
+    {
+      "name": "grille",
+      "box": [
+        55,
+        65,
+        96,
+        94
+      ],
+      "ellipse": [
+        79,
+        75,
+        94,
+        92
+      ],
+      "mask_bounds": [
+        78,
+        74,
+        96,
+        94
+      ]
+    },
+    {
+      "name": "rear-panel",
+      "box": [
+        182,
+        50,
+        224,
+        84
+      ],
+      "ellipse": [
+        208,
+        65,
+        222,
+        81
+      ],
+      "mask_bounds": [
+        207,
+        64,
+        224,
+        83
+      ]
+    }
+  ],
+  "unchanged_pixels_outside_damage_mask": 22018,
+  "changed_pixels_inside_damage_mask": 3329,
+  "outside_damage_pixels_exactly_equal": true,
+  "alpha_silhouette_identical": true,
+  "fuel_pixels_exactly_equal": true,
+  "turret_color": {
+    "before_median_rgb": [
+      143.0,
+      147.0,
+      149.0
+    ],
+    "hull_reference_median_rgb": [
+      137.0,
+      137.0,
+      137.0
+    ],
+    "after_median_rgb": [
+      137.0,
+      137.0,
+      137.0
+    ],
+    "rgb_shift": [
+      -9.0,
+      -13.0,
+      -16.0
+    ],
+    "dark_and_transparent_pixels_locked": 11465
+  },
+  "runtime_geometry": "unchanged from revision 04; hull pivot (155,49), turret pivot (175,40)",
+  "backup": "asset_backups\\latest\\maus\\20261019_065013_before_base_hull_damage_and_paint_fix",
+  "validation": "pnpm run tank:validate passed: 34-model audit, 21 tests, TypeScript"
+}

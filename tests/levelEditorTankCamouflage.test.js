@@ -16,7 +16,7 @@ const compile = text => ts.transpileModule(text, { compilerOptions: { target: ts
 const builder = find(n => ts.isVariableDeclaration(n) && n.name.getText(ast) === 'buildDraftMission').initializer.getText(ast);
 const button = find(n => ts.isCallExpression(n) && n.expression.getText(ast) === 'addPlainBtn' && n.arguments[0].getText(ast).includes('German paint:')).getText(ast);
 function context() {
-  return vm.createContext({ captureMissionFields() {}, cloneJson: v => JSON.parse(JSON.stringify(v)),
+  return vm.createContext({ captureMissionFields() {}, cloneJson: v => JSON.parse(JSON.stringify(v)), editingExistingMission: null,
     draftBaseMission: { germanTankCamouflage: 'late_war' }, draftSherman: { kind: 'sherman', at: { col: 0, row: 0 }, facing: 0 },
     draftShermanStartByDice: false, draftName: 'Test', draftDescription: 'Test', draftTerrainCategory: 'europe', cols: 2, rows: 1,
     draftTiles: [[{ t: 'f' }, { t: 'f' }]], draftEnemies: [], draftObjective: { type: 'destroy_all_enemies' }, draftRoundEvents: [],

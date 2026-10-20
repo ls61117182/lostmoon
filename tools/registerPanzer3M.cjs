@@ -10,7 +10,12 @@ function addRow(file, key, edits) {
   rows.push(row);
   fs.writeFileSync(file, '\ufeff' + rowsToCsv(rows));
 }
-addRow('data/units.csv', 'panzer3_m', {unitKind:'panzer3_m', displayName:'3号坦克M型（附加装甲）', notes:'独立M型美术单位；战斗参数暂沿用panzer3，待单独平衡'});
+addRow('data/units.csv', 'panzer3_m', {
+  unitKind:'panzer3_m', displayName:'3号坦克M型（附加装甲）',
+  armorFront:10, armorFrontSide:10, armorRearSide:9, armorRear:8,
+  penetration:2, highExplosivePower:1, effectiveRange:2,
+  notes:'谢尔曼基准重评2026-10-19；三号M；车体正面50+20毫米间隙附甲；50毫米KwK 39 L/60常规AP穿甲2、HE1、有效穿甲距离2；裙板相对无裙板型前侧与后侧装甲各+1',
+});
 addRow('data/tank_visuals.csv', 'panzer3_m', {
   kind:'panzer3_m', displayName:'Panzer III Ausf. M (Additional Armor)',
   ...Object.fromEntries([['topSpritePath','top'],['hullSpritePath','top_hull'],['turretSpritePath','top_turret'],['destroyedSpritePath','top_destroyed']].map(([k,v])=>[k,`textures/units/panzer3_m_${v}/spriteFrame`])),

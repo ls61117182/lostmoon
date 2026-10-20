@@ -1,0 +1,37 @@
+{
+  "revision": 4,
+  "installed": true,
+  "hull_and_wreck_size": [
+    258,
+    99
+  ],
+  "alpha_silhouette_identical": true,
+  "normal_alpha_unchanged": true,
+  "fuel_pixels_unchanged": true,
+  "ring_shift_rearward_source_pixels": 17,
+  "hull_pivot": [
+    155,
+    49
+  ],
+  "turret_pivot": [
+    175,
+    40
+  ],
+  "intact_turret_placement_offset": [
+    -20,
+    9
+  ],
+  "backup": "asset_backups\\latest\\maus\\20261019_060521_before_ring_width_fix",
+  "validation": "pnpm run tank:validate passed: 34-model audit, 18 tests, TypeScript",
+  "status": "installed_for_in_game_review",
+  "dark_cavity_centroids": {
+    "normal": [
+      154.9004329004329,
+      48.5016835016835
+    ],
+    "destroyed": [
+      157.9544779811974,
+      48.74517565561603
+    ]
+  }
+}

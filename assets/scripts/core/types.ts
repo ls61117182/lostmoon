@@ -175,7 +175,7 @@ export function isFriendlyFaction(faction: Faction | string): boolean {
 }
 
 export type Theater = 'europe' | 'pacific' | 'north_africa' | 'soviet';
-export type WeatherType = 'clear' | 'rain' | 'light_snow' | 'heavy_snow';
+export type WeatherType = 'clear' | 'rain' | 'light_snow' | 'heavy_snow' | 'fog';
 /** Visual season only. Terrain rules continue to use the original terrain type. */
 export type SeasonType = 'summer' | 'winter';
 
@@ -453,6 +453,8 @@ export interface Unit {
   // 状态
   damaged?: boolean;        // 非主角坦克（敌方坦克 / 友方谢尔曼）的受损状态；视觉固定等同着火等级 2
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
+  /** Visual wreck displacement in hex-radius units (map-local X/Y), rotation in radians. */
+  wreckPose?: { x: number; y: number; angle: number };
   fireLevel?: number;       // 着火程度；重炮碉堡再次起火时直接摧毁
   turretDamaged?: boolean;  // 炮塔受损
   paralyzed?: boolean;

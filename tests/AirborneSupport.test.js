@@ -23,9 +23,10 @@ function mission() {
 }
 function plan(m, side = 'friendly', seed = 10, keys) { let id = 0; return planAirborneSupport(m, side, new RNG(seed), () => `drop_${++id}`, keys); }
 
-test('mission 1 is sunny and supports exactly rounds 1, 3, 5, including save/restore', () => {
+test('mission 1 retains its airborne schedule for a clear-weather variant, including save/restore', () => {
   const data = JSON.parse(fs.readFileSync('assets/resources/missions/mission_01.json', 'utf8'));
-  assert.equal(data.weather, 'clear');
+  // The resource currently previews fog; exercise airborne mechanics in clear weather.
+  data.weather = 'clear';
   for (let turn = 1; turn <= 6; turn++) assert.equal(roundEventsForTurn(data.roundEvents, turn).length, [1,3,5].includes(turn) ? 1 : 0);
   const loaded = loadMission(data, new RNG(1), { hardcore: true });
   const p = plan(loaded);

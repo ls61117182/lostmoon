@@ -1,0 +1,54 @@
+{
+  "installed": true,
+  "source_revision": 3,
+  "front": "left",
+  "backup": "asset_backups\\latest\\maus\\20261019_054218_before_confirmed_redraw",
+  "hull_and_destroyed_common_crop": [
+    25,
+    6,
+    283,
+    105
+  ],
+  "turret_crop": [
+    5,
+    15,
+    245,
+    98
+  ],
+  "hull_size": [
+    258,
+    99
+  ],
+  "turret_size": [
+    240,
+    83
+  ],
+  "top_size": [
+    298,
+    99
+  ],
+  "hull_pivot": [
+    138,
+    49
+  ],
+  "turret_pivot": [
+    158,
+    40
+  ],
+  "muzzle": [
+    1,
+    41
+  ],
+  "hatch": [
+    190,
+    53
+  ],
+  "hull_offset_in_top": [
+    20,
+    0
+  ],
+  "notes": "Runtime orientation/cropping only. No color changes or image generation during installation.",
+  "status": "installed_for_in_game_review",
+  "approved_for_project_replacement": true,
+  "validation": "pnpm run tank:validate passed: asset audit, 17 tests, TypeScript"
+}

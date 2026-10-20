@@ -1,0 +1,43 @@
+{
+  "status": "awaiting_user_confirmation",
+  "revision": 2,
+  "final_canvas": [
+    112,
+    300
+  ],
+  "front": "up",
+  "hull_source_bounds": [
+    111,
+    51,
+    732,
+    1783
+  ],
+  "turret_source_bounds": [
+    99,
+    24,
+    744,
+    1903
+  ],
+  "source_canvas": [
+    653,
+    1883
+  ],
+  "source_hull_raw_offset": [
+    -95,
+    88
+  ],
+  "source_turret_offset": [
+    62,
+    12
+  ],
+  "turret_uniform_scale": 0.8183720930232559,
+  "final_uniform_scale": 0.15492200107584722,
+  "final_offset": [
+    5,
+    4
+  ],
+  "main_barrel_axis_error_final_px": 0.2958289653101793,
+  "destroyed_basis": "hull-with-drum-generated.png only; turret completely absent",
+  "destroyed_alignment": "same source canvas and same placement, no independent tight crop or resize",
+  "approved_for_project_replacement": false
+}

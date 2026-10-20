@@ -378,7 +378,7 @@ export function playStukaFlyover(): void {
   playSfxKey(AudioKeys.stukaFlyover, 1.4, 1.4);
 }
 
-/** C-47 flyover: source recording trimmed from 28 to 38 seconds. */
+/** C-47 flyover: source seconds 28–38 compressed to 6 seconds, preserving pitch and fades. */
 export function playC47Flyover(): void {
   playSfxKey(AudioKeys.c47Flyover);
 }
