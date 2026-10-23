@@ -28,11 +28,12 @@ const Scene=sceneMethods(['playAirborneSupport','advanceAirborneSupport','isBusy
   t:key=>key,unitDisplayName:kind=>kind,playC47Flyover:()=>{},
 });
 function unit(id,kind,q,r,side) { const stats=getUnitStats(kind);return {id,kind,stats,faction:stats.faction,sideId:side,pos:{q,r},facing:0,turretFacing:0}; }
-function setup(side='friendly', reactions=false) {
+function setup(side='friendly', reactions=false, flyoverOnly=false) {
   const map=new HexMap(7,7);for(let q=0;q<7;q++)for(let r=0;r<7;r++) map.set({pos:{q,r},terrain:'field'});
   const mission={data:{weather:'clear',theater:'europe'},map,smokeHexes:new Set(),sherman:unit('player','sherman',0,0,'player'),allies:[],enemies:[]};
   if(reactions) mission.enemies=[unit('enemy1','infantry',2,3,'enemy'),unit('enemy2','infantry',3,2,'enemy')];
   const plan={side,target:{q:3,r:3},units:[unit('drop1','american_infantry',3,3,side==='friendly'?'player':'enemy'),unit('drop2','american_infantry',4,3,side==='friendly'?'player':'enemy'),unit('drop3','american_infantry',3,4,side==='friendly'?'player':'enemy')]};
+  if (flyoverOnly) { mission.data.weather = 'fog'; plan.units = []; }
   const scene=new Scene();const completed=[];const attacks=[];
   Object.assign(scene,{mission,node:new Node('scene'),mapNode:new Node('map'),hexSize:50,airborneFlight:null,diceShow:null,airborneReacted:new Set(),c47SpriteFrame:{},parachuteSpriteFrame:{},eventPhase:'round',
     project:(q,r)=>({x:(q+r/2)*50-225,y:r*40-120}),isEffectiveBattleTile:()=>true,
@@ -74,4 +75,23 @@ test('each enemy reacts once; next event waits for final MG resolution and fade'
   assert.equal(completed.length,1);
   assert.equal(new Set(attacks).size,2);assert.equal(attacks.length,2);
   assert.equal(JSON.stringify(mission.enemies),before,'reaction does not spend actions, ammunition or turn turret');
+});
+
+test('bad-weather transport flies across the map with no parachutes, landings or reactions',()=>{
+  for (const side of ['friendly', 'enemy']) {
+    const {scene,mission,completed,attacks}=setup(side,true,true);
+    const flight=scene.airborneFlight;
+    const before=JSON.stringify([mission.sherman,mission.allies,mission.enemies]);
+    const startX=flight.plane.position.x;
+    scene.advanceAirborneSupport(2);
+    assert.notEqual(flight.plane.position.x,startX);
+    assert.equal(completed.length,0);
+    assert.equal(flight.drops.length,0);
+    assert.equal(flight.root.children.length,1,'only the aircraft is drawn');
+    scene.advanceAirborneSupport(2);
+    assert.equal(completed.length,1);
+    assert.equal(flight.root.isValid,false);
+    assert.deepEqual(attacks,[]);
+    assert.equal(JSON.stringify([mission.sherman,mission.allies,mission.enemies]),before);
+  }
 });

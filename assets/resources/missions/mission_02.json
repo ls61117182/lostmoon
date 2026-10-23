@@ -1,5 +1,7 @@
 ﻿{
   "id": "mission_02",
+  "weatherPool": ["clear", "clear", "fog", "rain"],
+  "germanTankCamouflage": "grey",
   "name": "鐚庢潃铏庡紡",
   "description": "鐩爣锛氭懅姣佽檸寮忓潶鍏嬶紱闅忓悗浠庡彸渚ф挙绂荤偣锛堟湰鍥句笢渚у叕璺嚭鍙ｏ級椹跺嚭鍦板浘銆俓n铏庡紡鍦ㄥ紑灞€鏃舵寜 1d6 涓庨粦鏍?eid 鏀剧疆锛涚孩鏍?rid 涓烘鍏靛鎻淬€傚洖鍚堢粨鏉熶簨浠朵负鏈叧 2d6 琛ㄣ€?",
   "_comment": "浠诲姟2銆倀iles[row][col] 涓?odd-r銆傚熀搴?r=鍏矾 f=鐢板湴 m=娉ュ湴 F=鏋楀湴 w=姘达紱bd=寤虹瓚锛沨[i] 涓?ef 涓哄悓涓€濂楁柟鍚?0=E鈥?=NE锛堝悓 HexGrid锛夛紱rid=绾㈡暟锛沞id=榛戞暟銆?",

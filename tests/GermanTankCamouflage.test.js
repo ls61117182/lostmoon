@@ -18,8 +18,9 @@ const root = path.resolve(__dirname, '..');
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 const { GERMAN_LATE_WAR_VISUAL_KINDS: kinds, usesGermanLateWarCamouflage: usesLate, lateWarTankVisualAssetConfigOf: lateAssets } = camouflage;
 
-test('mission paint is opt-in and validated without changing existing mission JSON', () => {
+test('omitted mission paint defaults to grey and explicit paint is validated', () => {
   const data = JSON.parse(fs.readFileSync(path.join(root, 'assets/resources/missions/mission_01.json'), 'utf8'));
+  delete data.germanTankCamouflage;
   const m = loadMission(data, new RNG(7));
   assert.equal(data.germanTankCamouflage, undefined);
   assert.equal(camouflage.normalizeGermanTankCamouflage(undefined), 'grey');

@@ -17,6 +17,7 @@ import {
   rollAttack,
 } from './Combat';
 import { RNG } from './Dice';
+import { isAirborneWeather } from './RoundEvents';
 import {
   approximateDirection,
   directionTo,
@@ -74,6 +75,8 @@ export interface AdjacentInfantryVolleyPreview {
 
 export interface TurnEndPrepared {
   airbornePlan?: AirbornePlan;
+  /** Aircraft pass overhead without attacks, reactions or combat dice. */
+  flyoverOnly?: boolean;
   bodyKey: string;
   bodyParams: Record<string, string | number>;
   apply: () => void;
@@ -558,7 +561,7 @@ export function prepareTurnEndEvent(
     case 'airborne_support': {
       const plan = planAirborneSupport(mission, requireReinforcementSide(row), rng, ctx.nextEnemyId, ctx.airborneAllowedKeys);
       return {
-        bodyKey: plan ? 'turnEnd.airborne.placed' : 'turnEnd.airborne.cancelled',
+        bodyKey: plan ? (plan.units.length ? 'turnEnd.airborne.placed' : 'turnEnd.airborne.flyover') : 'turnEnd.airborne.cancelled',
         bodyParams: { ...baseParams, count: plan?.units.length ?? 0 },
         airbornePlan: plan ?? undefined,
         apply: () => { if (plan) plan.units.forEach(unit => landAirborneUnit(mission, plan, unit)); },
@@ -707,6 +710,9 @@ export function prepareTurnEndEvent(
       };
     }
     case 'stuka': {
+      if (!isAirborneWeather(ctx.weather ?? mission.data.weather)) {
+        return { bodyKey: 'turnEnd.stuka.flyover', bodyParams: baseParams, flyoverOnly: true, apply: () => {} };
+      }
       const sim = simulateStukaReport(sh, rng);
       const bp: Record<string, string | number> = { ...baseParams };
       if (sim.aa) {

@@ -503,7 +503,7 @@ export interface HitBreakdown {
   unitLevel?: number;
   crater?: number;
   rocky?: number;
-  forest?: number;      // 森林内步兵受机枪攻击时 +1
+  forest?: number;      // 森林内步兵受机枪或步兵攻击时 +1
 }
 
 /** Intact friendly bunkers shelter infantry under the non-classic combat rules.
@@ -529,7 +529,8 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     || targetTile?.terrain === 'urban_destructible';
   const infantryMGTarget = ctx.attackKind === 'mg'
     && (isFootUnit(target) || (ctx.atGunCrewTargets === true && isControlledATGun(target)));
-  const forest = targetTile?.terrain === 'forest' && infantryMGTarget ? 1 : 0;
+  const forest = targetTile?.terrain === 'forest'
+    && (infantryMGTarget || (isFootUnit(attacker) && isFootUnit(target))) ? 1 : 0;
   const terrainBuilding = tileHasBuilding(targetTile) ? (urbanBuilding && infantryMGTarget ? 3 : 1) : 0;
   const bunkerBuilding = hasFriendlyBunkerCover(ctx) ? (infantryMGTarget ? 3 : 1) : 0;
   const building = Math.max(terrainBuilding, bunkerBuilding);

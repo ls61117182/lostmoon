@@ -18,7 +18,9 @@ export function planAirborneSupport(
   mission: LoadedMission, side: ReinforcementSide, rng: RNG, nextId: () => string,
   allowedKeys?: ReadonlySet<string>,
 ): AirbornePlan | null {
-  if (!isAirborneWeather(mission.data.weather)) return null;
+  if (!isAirborneWeather(mission.data.weather)) {
+    return { target: { ...mission.sherman.pos }, side, units: [] };
+  }
   const tiles = mission.map.all().filter(tile => !tile.displayOnly && (!allowedKeys || allowedKeys.has(HexMap.keyOf(tile.pos))));
   const keys = new Set(tiles.map(tile => HexMap.keyOf(tile.pos)));
   const interior = tiles.filter(tile => [0, 1, 2, 3, 4, 5].every(dir => keys.has(HexMap.keyOf(neighbor(tile.pos, dir as 0 | 1 | 2 | 3 | 4 | 5)))));

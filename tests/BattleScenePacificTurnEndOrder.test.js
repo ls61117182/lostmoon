@@ -1,10 +1,16 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
+const fs = require('node:fs');
+const ts = require('typescript');
+require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+  compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
+}).outputText, filename);
+const { roundEventConditionMet } = require('../assets/scripts/core/RoundEvents.ts');
 const sceneMethods = require('./helpers/BattleSceneMethods.cjs');
 const Scene = sceneMethods(['maybeBeginTurnEndEventOrEndEnemyPhase','continueAfterTurnEndEvent','runNextRoundEvent','finishTurnEvent','onUsCasualtyConfirmClick'], {
   GameSession:{ isPvp:false },
   roundEventsForTurn:(events,turn)=>(events??[]).filter(e=>!e.turns||e.turns==='every'||e.turns.includes(turn)),
-  roundEventConditionMet:(e,weather)=> e.effectType !== 'airborne_support' || weather === 'clear',
+  roundEventConditionMet,
 });
 function fixture(events=[], pacific=false) {
   const scene=new Scene(); const calls=[];
@@ -29,8 +35,10 @@ test('no random table and no round events skips directly to next round',()=>{
   const {scene,calls}=fixture();scene.turnEndEventProvider.has=()=>false;
   scene.maybeBeginTurnEndEventOrEndEnemyPhase();assert.deepEqual(calls,['next round']);
 });
-test('unsuitable weather skips airborne but executes other matching events',()=>{
-  const {scene,calls}=fixture([{effectType:'airborne_support'},{effectType:'none'}]);scene.mission.data.weather='rain';
-  scene.continueAfterTurnEndEvent();assert.deepEqual(calls,['none']);
-  scene.finishTurnEvent();assert.deepEqual(calls,['none','next round']);
+test('unsuitable weather runs aircraft events and continues through the remaining queue',()=>{
+  const {scene,calls}=fixture([{effectType:'airborne_support',condition:'clear'},{effectType:'stuka',condition:'clear'},{effectType:'none'}]);scene.mission.data.weather='rain';
+  scene.continueAfterTurnEndEvent();assert.deepEqual(calls,['airborne_support']);
+  scene.finishTurnEvent();assert.deepEqual(calls,['airborne_support','stuka']);
+  scene.finishTurnEvent();assert.deepEqual(calls,['airborne_support','stuka','none']);
+  scene.finishTurnEvent();assert.deepEqual(calls,['airborne_support','stuka','none','next round']);
 });

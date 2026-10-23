@@ -77,19 +77,25 @@ test('city walls remain solid during the whole push and angled sliding', () => {
 });
 
 const { urbanBuildingState } = require('../assets/scripts/core/UrbanTerrain.ts');
-const { isTankUnit } = require('../assets/scripts/core/types.ts');
+const { isTankUnit, effectiveDiceTerrain } = require('../assets/scripts/core/types.ts');
 const Scene = require('./helpers/BattleSceneMethods.cjs')([
-  'advanceTankMoveTime', 'advanceTankWreckPush', 'interpolatedPos', 'drawUnitMaybeAnim',
-], { pushTankWrecks, tankWreckPushContact, WRECK_PUSH_STEP, WRECK_PUSH_SPEED_SCALE, isTankUnit, urbanBuildingState,
+  'advanceTankMoveTime', 'advanceTankWreckPush', 'updateTankWreckPose', 'interpolatedPos', 'drawUnitMaybeAnim',
+], { pushTankWrecks, tankWreckPushContact, wreckVisualHex, WRECK_PUSH_STEP, WRECK_PUSH_SPEED_SCALE, isTankUnit, effectiveDiceTerrain, urbanBuildingState,
   easeOutCubic: t => 1 - (1 - t) ** 3 });
 function fixture(tiles = []) {
   const scene = new Scene();
+  scene.syncTankWreckWater = () => false;
+  scene.knownPushedWreckPoses = new WeakMap();
+  scene.pushedWreckVisionMoves = new WeakMap();
+  scene.isUnitVisible = () => true;
   scene.hexSize = 100;
   scene.project = (q, r) => ({ x: Math.sqrt(3) * (q + r / 2) * scene.hexSize, y: -1.5 * r * scene.hexSize });
   const tank = (id, q, destroyed = false, kind = 'sherman') => ({ id, kind, pos: { q, r: 0 }, facing: 0, destroyed });
   const mover = tank('mover', 0);
   const wreck = tank('wreck', 1, true);
-  scene.mission = { sherman: mover, allies: [], enemies: [wreck], map: { all: () => tiles } };
+  scene.mission = { sherman: mover, allies: [], enemies: [wreck], map: {
+    all: () => tiles, get: pos => tiles.find(tile => tile.pos.q === pos.q && tile.pos.r === pos.r),
+  } };
   scene.tankWreckCollisionBody = unit => {
     const c = scene.interpolatedPos(unit);
     return body(unit.id, c.x / scene.hexSize, c.y / scene.hexSize, unit.wreckPose?.angle ?? 0);
@@ -149,6 +155,20 @@ test('distant wrecks, turning, infantry and trucks retain normal animation speed
   scene.mission.enemies = [];
   scene.advanceTankMoveTime(scene.anim, 0.2);
   assert.equal(scene.anim.t, 0.2);
+});
+
+test('mud and wreck pushing use the lower speed without stacking, then recover on release', () => {
+  const { scene, wreck } = fixture([
+    { pos: { q: 0, r: 0 }, terrain: 'mud' }, { pos: { q: 1, r: 0 }, terrain: 'mud' },
+  ]);
+  wreck.pos.q = 0.8 / Math.sqrt(3);
+  scene.advanceTankMoveTime(scene.anim, 0.2);
+  assert(Math.abs(scene.anim.t - 0.06) < 1e-9, 'mud pushing must stay at 30%, not 15%');
+  assert(wreck.wreckPose.x > 0);
+  const before = scene.anim.t;
+  wreck.pos.r = 20;
+  scene.advanceTankMoveTime(scene.anim, 0.1);
+  assert(Math.abs(scene.anim.t - before - 0.05) < 1e-9, 'releasing the wreck restores the 50% mud speed');
 });
 
 test('driving away from an overlapping wreck does not create resistance', () => {
@@ -236,7 +256,7 @@ test('wreck fire and off-map mask follow its visual location without revealing h
   const { neighbors } = require('../assets/scripts/core/HexGrid.ts');
   const MaskScene = require('./helpers/BattleSceneMethods.cjs')([
     'redrawVisibleHexMask', 'isUnitVisible', 'drawUnitEffects',
-  ], { wreckVisualHex, neighbors, Color: class {} });
+  ], { wreckVisualHex, neighbors, WRECK_SINK_DURATION: 1, Color: class {} });
   const scene = new MaskScene();
   const wreck = { id: 'wreck', destroyed: true, pos: { q: 0, r: 0 }, wreckPose: { x: Math.sqrt(3) * 4, y: 0, angle: 0 } };
   const tiles = [{ pos: { q: 0, r: 0 } }, { pos: { q: 3, r: 1 } }];
@@ -262,6 +282,7 @@ test('wreck fire and off-map mask follow its visual location without revealing h
   scene.drawFireEffect = (_, x, y) => { fireOrigin = { x, y }; };
   scene.drawAmbushMuzzleReticles = () => {};
   scene.drawLockedFireReticles = () => {};
+  scene.drawWreckWaterRipples = () => {};
   scene.drawUnitEffects();
   assert.deepEqual(fireOrigin, { x: 4, y: 0 });
   wreck.wreckPose = { x: Math.sqrt(3) * 3.5, y: -1.5, angle: 0 };
@@ -270,12 +291,16 @@ test('wreck fire and off-map mask follow its visual location without revealing h
 
 test('scene preserves the solver hull center when an offset sprite rotates', () => {
   const HullScene = require('./helpers/BattleSceneMethods.cjs')([
-    'advanceTankWreckPush', 'interpolatedPos', 'tankWreckCollisionBody', 'topDownForwardVec',
+    'advanceTankWreckPush', 'updateTankWreckPose', 'interpolatedPos', 'tankWreckCollisionBody', 'topDownForwardVec',
   ], { pushTankWrecks, WRECK_PUSH_STEP, isTankUnit, urbanBuildingState,
     tankVisualConfigOf: () => ({ offsetForward: 0.07, offsetRight: 0.02 }),
     easeOutCubic: t => 1 - (1 - t) ** 3 });
   const { scene: base, mover, wreck } = fixture();
   const scene = new HullScene();
+  scene.syncTankWreckWater = () => false;
+  scene.knownPushedWreckPoses = new WeakMap();
+  scene.pushedWreckVisionMoves = new WeakMap();
+  scene.isUnitVisible = () => true;
   scene.hexSize = 100;
   scene.project = base.project;
   scene.mission = base.mission;

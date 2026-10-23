@@ -410,6 +410,24 @@ export const DEFAULT_VISION_RANGE = 4;
 export const DEFAULT_GUNNER_VISION_RANGE = 4;
 export const DEFAULT_INTERIOR_VISION_RANGE = 1;
 
+/** Persistent visual state; offsets use the same hex-radius units as wreckPose. */
+export interface WreckWaterState {
+  fraction: number;
+  contactX: number;
+  contactY: number;
+  sink?: {
+    elapsed: number;
+    /** Water rings outlive the hull; older saves resume from elapsed. */
+    rippleElapsed?: number;
+    startX: number;
+    startY: number;
+    startAngle: number;
+    slideX: number;
+    slideY: number;
+    turn: number;
+  };
+}
+
 export interface Unit {
   id: string;
   kind: UnitKind;
@@ -455,6 +473,7 @@ export interface Unit {
   destroyed?: boolean;      // 摧毁。被摧毁后单位不再行动，且不阻塞移动（视作残骸）
   /** Visual wreck displacement in hex-radius units (map-local X/Y), rotation in radians. */
   wreckPose?: { x: number; y: number; angle: number };
+  wreckWater?: WreckWaterState;
   fireLevel?: number;       // 着火程度；重炮碉堡再次起火时直接摧毁
   turretDamaged?: boolean;  // 炮塔受损
   paralyzed?: boolean;
@@ -727,6 +746,8 @@ export interface MissionData {
   germanTankCamouflage?: GermanTankCamouflage;
   /** Fixed weather for the mission. Omitted missions use clear weather. */
   weather?: WeatherType;
+  /** Draw once at mission start; repeated entries increase that weather's probability. */
+  weatherPool?: WeatherType[];
   /** Battlefield view rotation in degrees counterclockwise; omitted means 0. Does not change map coordinates or facing. */
   cameraRotation?: 0 | 90;
   /** Guaranteed end-of-round events; omitted means skip this phase. */

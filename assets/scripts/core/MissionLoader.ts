@@ -237,11 +237,17 @@ function pickRestrictedNumberedSlot(
 
 export interface MissionLoadOptions {
   hardcore?: boolean;
+  /** Shared PvP resources keep their authored weather instead of a local random draw. */
+  randomizeWeather?: boolean;
   /** Campaign continuation preserves the player's chamber; other entrants are fresh. */
   preservePlayerReload?: boolean;
 }
 
 export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOptions = {}): LoadedMission {
+  if (options.randomizeWeather !== false && data.weatherPool?.length) {
+    // Copy the resource so another new game draws again instead of reusing its weather.
+    data = { ...data, weather: (rng ?? new RNG()).pick(data.weatherPool) };
+  }
   normalizeGermanTankCamouflage(data.germanTankCamouflage);
   const roundEventErrors = validateRoundEvents(data.roundEvents);
   if (roundEventErrors.length) throw new Error(`任务 ${data.id}：${roundEventErrors.join('; ')}`);

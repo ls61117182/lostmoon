@@ -25,7 +25,8 @@ function plan(m, side = 'friendly', seed = 10, keys) { let id = 0; return planAi
 
 test('mission 1 retains its airborne schedule for a clear-weather variant, including save/restore', () => {
   const data = JSON.parse(fs.readFileSync('assets/resources/missions/mission_01.json', 'utf8'));
-  // The resource currently previews fog; exercise airborne mechanics in clear weather.
+  // Exercise airborne mechanics with fixed clear weather instead of the random pool.
+  delete data.weatherPool;
   data.weather = 'clear';
   for (let turn = 1; turn <= 6; turn++) assert.equal(roundEventsForTurn(data.roundEvents, turn).length, [1,3,5].includes(turn) ? 1 : 0);
   const loaded = loadMission(data, new RNG(1), { hardcore: true });
@@ -40,10 +41,13 @@ test('mission 1 retains its airborne schedule for a clear-weather variant, inclu
   assert.equal(result.ok, true, result.reason);
   assert.equal(restored.allies.length, 3);
 });
-test('weather gate rejects rain, all snow and future fog', () => {
+test('unsuitable weather produces an empty flyover without landing units', () => {
   for (const weather of ['rain', 'light_snow', 'heavy_snow', 'fog']) {
     const m = mission(); m.data.weather = weather;
-    assert.equal(plan(m), null); assert.equal(isAirborneWeather(weather), false);
+    const p = plan(m);
+    assert.deepEqual(p.units, []);
+    assert.deepEqual(p.target, m.sherman.pos);
+    assert.equal(isAirborneWeather(weather), false);
   }
   assert.equal(isAirborneWeather(undefined), true);
 });

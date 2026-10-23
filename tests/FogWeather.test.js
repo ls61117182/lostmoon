@@ -91,13 +91,15 @@ test('fog preserves interior sight, smoke and terrain blockers; other weather re
   assert.equal(currentGunnerVisionRange(unit, 'heavy_snow'), 6);
 });
 
-test('Europe mission 1 loads with fog and cannot trigger sunny-only airborne events', () => {
+test('Europe mission 1 can draw fog and still trigger aircraft flyovers', () => {
   const data = JSON.parse(fs.readFileSync('assets/resources/missions/mission_01.json', 'utf8'));
-  assert.equal(data.weather, 'fog');
-  const mission = loadMission(data, new RNG(1), { hardcore: true });
+  const rng = new RNG(1);
+  const next = rng.next.bind(rng);
+  rng.next = () => { rng.next = next; return 0.5; };
+  const mission = loadMission(data, rng, { hardcore: true });
   assert.equal(normalizeWeather(mission.data.weather), 'fog');
   assert(mission.data.roundEvents.length > 0);
-  for (const event of mission.data.roundEvents) assert.equal(roundEventConditionMet(event, mission.data.weather), false);
+  for (const event of mission.data.roundEvents) assert.equal(roundEventConditionMet(event, mission.data.weather), true);
 });
 
 test('fog follows the displayed player through movement and camera changes without rebuilding its footprint', () => {

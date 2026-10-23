@@ -1,13 +1,14 @@
 import { profileStorageKey } from './BuildProfile';
 import type { LoadedMission } from './MissionLoader';
 import type { MissionSource } from './CustomMissionStore';
-import type { ATGunCrewKind, BattleSideId, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitController, UnitKind, UnitLevel } from './types';
+import type { ATGunCrewKind, BattleSideId, CrewLevels, CrewSkills, Direction, Faction, FireDirection, ShellType, ShermanCrew, Unit, UnitController, UnitKind, UnitLevel, WreckWaterState } from './types';
 import { createTankCrew, isAntiTankGunKind, isTankKind, neutralizeUncrewedTank, reloadDifficulty } from './types';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { getUnitStats } from './UnitDB';
 import { GameMode } from './GameMode';
 import { HexMap } from './HexGrid';
 import { AttackPositionMemory, cloneAttackPositionMemory } from './AttackPositionMemory';
+import { normalizeWeather, type WeatherType } from './Weather';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
@@ -46,6 +47,7 @@ interface UnitSnapshot {
   damaged?: boolean;
   destroyed?: boolean;
   wreckPose?: { x: number; y: number; angle: number };
+  wreckWater?: WreckWaterState;
   /** v3：烟雾掩护（谢尔曼 / 德军均可能） */
   smoked?: boolean;
   suppressed?: boolean;
@@ -89,6 +91,8 @@ export interface SaveData {
   gameMode?: GameMode;
   missionId: string;
   missionSource?: MissionSource;
+  /** The weather already drawn for this game, including an explicit clear result. */
+  weather?: WeatherType;
   turn: number;
   phase: 'player' | 'enemy';
   movesLeft: number;
@@ -139,6 +143,10 @@ export interface SnapshotParams {
   attackPositionMemory?: AttackPositionMemory;
 }
 
+function cloneWreckWater(state: WreckWaterState | undefined): WreckWaterState | undefined {
+  return state ? { ...state, sink: state.sink ? { ...state.sink } : undefined } : undefined;
+}
+
 function captureUnit(u: Unit): UnitSnapshot {
   return {
     id: u.id,
@@ -156,6 +164,7 @@ function captureUnit(u: Unit): UnitSnapshot {
     damaged: u.damaged,
     destroyed: u.destroyed,
     wreckPose: u.destroyed && u.wreckPose ? { ...u.wreckPose } : undefined,
+    wreckWater: u.destroyed ? cloneWreckWater(u.wreckWater) : undefined,
     fireLevel: u.fireLevel,
     turretDamaged: u.turretDamaged,
     paralyzed: u.paralyzed,
@@ -230,6 +239,7 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   live.damaged = s.damaged ?? false;
   live.destroyed = s.destroyed ?? false;
   live.wreckPose = live.destroyed && s.wreckPose ? { ...s.wreckPose } : undefined;
+  live.wreckWater = live.destroyed ? cloneWreckWater(s.wreckWater) : undefined;
   // A snapshot is authoritative. JSON.stringify omits properties whose value is
   // undefined, so retaining the live value here leaks damage acquired after a
   // checkpoint (notably when retrying a campaign segment).
@@ -310,6 +320,7 @@ export function captureSave(p: SnapshotParams): SaveData {
     gameMode: p.gameMode,
     missionId: p.missionId,
     missionSource: p.missionSource,
+    weather: normalizeWeather(p.mission.data.weather),
     turn: p.turn,
     phase: p.phase,
     movesLeft: p.movesLeft,
@@ -465,6 +476,7 @@ export function applySave(
   }
 
   // 校验通过，写入状态
+  if (save.weather !== undefined) mission.data.weather = normalizeWeather(save.weather);
   playerTank.pos = { q: savedPlayer.q, r: savedPlayer.r };
   mission.enemies.push(...extraEnemies);
   mission.allies.push(...extraAllies);
@@ -478,6 +490,7 @@ export function applySave(
   playerTank.damaged = false;
   playerTank.destroyed = savedPlayer.destroyed ?? false;
   playerTank.wreckPose = playerTank.destroyed && savedPlayer.wreckPose ? { ...savedPlayer.wreckPose } : undefined;
+  playerTank.wreckWater = playerTank.destroyed ? cloneWreckWater(savedPlayer.wreckWater) : undefined;
   playerTank.faction = savedPlayer.faction ?? playerTank.stats.faction;
   playerTank.sideId = savedPlayer.sideId ?? 'player';
   playerTank.controller = savedPlayer.controller ?? 'local_player';

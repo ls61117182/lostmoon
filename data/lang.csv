@@ -5,7 +5,9 @@ hud.roundEvents,第 {n} 回合 · 回合事件,Round {n} · Round events
 hud.randomEvents,第 {n} 回合 · 回合随机事件,Round {n} · Random round events
 battle.turnEndList.effect.airborne_support,空降兵支援,Airborne support
 turnEnd.airborne.placed,空降 {count} 名美军步兵。,Deploy {count} American paratroopers.
-turnEnd.airborne.cancelled,空降兵支援取消：天气或空降位置不满足条件。,Airborne support cancelled: weather or landing positions are unsuitable.
+turnEnd.airborne.cancelled,空降兵支援取消：空降位置不满足条件。,Airborne support cancelled: landing positions are unsuitable.
+turnEnd.airborne.flyover,天气不适合空降，运输机飞过，未投放伞兵。,Unsuitable weather: the transport flies past without dropping paratroopers.
+turnEnd.stuka.flyover,天气不适合空袭，斯图卡飞过，未发起攻击，车长不反击。,Unsuitable weather: the Stuka flies past without attacking or drawing commander fire.
 roundEvent.airborne.started,空降兵支援：投放 {count} 名伞兵。,Airborne support: deploying {count} paratroopers.
 roundEvent.reference,{turns}：{effect}（{side}）,{turns}: {effect} ({side})
 roundEvent.every,每回合,Every round
@@ -419,7 +421,7 @@ tileInspect.seawall,海堤：沿用防波堤规则。日军不受影响；盟军
 dice.rule.crater,弹坑掩护,Crater cover
 dice.rule.rockyCover,岩石高地掩护,Rocky high ground cover
 dice.rule.forestCover,森林掩护,Forest cover
-tileInspect.forestCover,森林掩护：步兵受机枪攻击时命中所需点数+1。,Forest cover: infantry hit threshold +1 against machine-gun attacks.
+tileInspect.forestCover,森林掩护：步兵受机枪或步兵攻击时命中所需点数+1。,Forest cover: infantry hit threshold +1 against machine-gun or infantry attacks.
 tileInspect.rockyCover,岩石高地掩护：步兵命中所需点数+1。,Rocky high ground cover: infantry hit threshold +1.
 floater.hedgehogParalyzed,进入拒马格：瘫痪,Steel hedgehogs: immobilized
 battleLog.wireCrushed,{unitKind} 碾坏了铁丝网。,{unitKind} crushed the barbed wire.

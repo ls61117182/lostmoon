@@ -7,7 +7,9 @@ export function isAirborneWeather(weather: unknown): boolean {
 }
 
 export function roundEventConditionMet(event: RoundEventConfig, weather: WeatherType | undefined): boolean {
-  return (event.condition !== 'clear' && event.effectType !== 'airborne_support') || isAirborneWeather(weather);
+  // Aircraft still pass overhead in bad weather; only their gameplay effects are gated.
+  if (event.effectType === 'airborne_support' || event.effectType === 'stuka') return true;
+  return event.condition !== 'clear' || isAirborneWeather(weather);
 }
 
 export function roundEventsForTurn(events: readonly RoundEventConfig[] | undefined, turn: number): RoundEventConfig[] {

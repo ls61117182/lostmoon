@@ -1,5 +1,7 @@
 {
   "id": "mission_05",
+  "weatherPool": ["clear", "clear", "fog", "rain"],
+  "germanTankCamouflage": "grey",
   "name": "摧毁卡车",
   "description": "目标：击毁德军卡车，随后按红箭方向撤离出地图。谢尔曼置于带黑箭头的公路格、朝向与黑箭一致；卡车置于 truckPath 首格。回合结束 2d6 见本关 event 表。",
   "_comment": "8列×6行 odd-r；h 六位轴向。truckPath 为卡车沿路推进格序（须全为公路、两两相邻），与回合结束效果 german_truck_move 一致。",

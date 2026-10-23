@@ -5,7 +5,8 @@ import { drawBeachEdge, drawBeachOverlays, drawSeawallJoints } from './BeachTerr
 import type { SeawallSegment } from '../core/SeawallJunctions';
 import { FogOverlayRenderer } from './FogOverlayRenderer';
 import { FogWeatherRenderer } from './FogWeatherRenderer';
-import { pushTankWrecks, tankWreckPushContact, wreckVisualHex, WRECK_PUSH_STEP, WRECK_PUSH_SPEED_SCALE, WreckBody } from './TankWreckPush';
+import { pushTankWrecks, tankWreckPushContact, wreckBodyPolygon, wreckPolygonContact, wreckVisualHex, WRECK_PUSH_STEP, WRECK_PUSH_SPEED_SCALE, WreckBody } from './TankWreckPush';
+import { advanceWreckSinking, sampleWreckWater, startWreckWater, wreckWaterAppearance, wreckWaterRippleRings, WRECK_SINK_DURATION, WreckWaterSample } from './TankWreckWater';
 import type { FogMaskCell } from './FogMaskRaster';
 import { ObjectShadowRenderer } from './ObjectShadowRenderer';
 import { assignRockyHighlandVariants, rockyCellKey, ROCKY_HIGHLAND_SPRITE_PATHS } from './RockyHighlandVariants';
@@ -1083,6 +1084,7 @@ interface RepairIndicator {
 /** A map-local Stuka pass. The plane is deliberately separate from unit redraws. */
 interface StukaFlyover {
   shotDown: boolean;
+  flyoverOnly?: boolean;
   defender: Unit;
   aaBurst?: MachineGunBurst;
   aaAttackStarted?: boolean;
@@ -1759,6 +1761,14 @@ export class BattleScene extends Component {
   private tankContentNode: Node | null = null;
   private tankWreckLayer: Node | null = null;
   private tankWreckTrackLayer: Node | null = null;
+  private pushedWreckMaskNode: Node | null = null;
+  private pushedWreckContentNode: Node | null = null;
+  private pushedWreckTrackLayer: Node | null = null;
+  private pushedWreckVisibilityGraphics: Graphics | null = null;
+  private pushedWreckShadows: ObjectShadowRenderer | null = null;
+  /** Pose identity invalidates remembered visibility when a save/snapshot replaces it. */
+  private knownPushedWreckPoses = new WeakMap<Unit, NonNullable<Unit['wreckPose']>>();
+  private pushedWreckVisionMoves = new WeakMap<Unit, MoveAnim>();
   private tankDamageTrackLayer: Node | null = null;
   private tankDamageTrackNodes = new Map<Node, Node>();
   private infantryContentNode: Node | null = null;
@@ -1839,6 +1849,11 @@ export class BattleScene extends Component {
   }>();
   private unitEffectNode: Node | null = null;
   private unitEffectGraphics: Graphics | null = null;
+  private wreckRippleNode: Node | null = null;
+  private wreckRippleGraphics: Graphics | null = null;
+  private wreckRippleMaskGraphics: Graphics | null = null;
+  private wreckRippleMaskMap: HexMap | null = null;
+  private wreckRippleMaskLayout = '';
   /** Smoke screens render below vision fog and above map units. */
   private smokeScreenEffectNode: Node | null = null;
   private smokeScreenEffectGraphics: Graphics | null = null;
@@ -1890,6 +1905,8 @@ export class BattleScene extends Component {
   private urbanBuildingSpritePoolNext = 0;
   private urbanRubbleSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private urbanRubbleSpritePoolNext = 0;
+  private ruralPropSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private ruralPropSpritePoolNext = 0;
   private ruralLayoutCache = new Map<string, RuralBuilding[]>();
   private ruralPropCache = new Map<string, RuralProp[]>();
   /** Pause map painting until the terrain texture batch has fully settled. */
@@ -2016,6 +2033,7 @@ export class BattleScene extends Component {
   private offsetY = 0;
   private standardHexSize = 0;
   private anim: MoveAnim | null = null;
+  private wreckWaterProbe = new WeakMap<Unit, { x: number; y: number; angle: number; size: number; offsetX: number; offsetY: number; state: Unit['wreckWater']; sample: WreckWaterSample }>();
   private leavingBattle = false;
   private resolvingAmbush = false;
   private ambushSightHighlightUntil = new Map<string, number>();
@@ -2771,6 +2789,13 @@ export class BattleScene extends Component {
 
     this.sceneryShadows = new ObjectShadowRenderer(gNode, 'SceneryGroundShadows');
 
+    // Haystacks and wells stay below both infantry and tanks, outside roof occlusion.
+    const ruralPropLayerNode = new Node('RuralPropSprites');
+    ruralPropLayerNode.layer = this.node.layer;
+    ruralPropLayerNode.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(ruralPropLayerNode);
+    this.sceneryPoolParents.set(this.ruralPropSpritePool, ruralPropLayerNode);
+
     const urbanBuildingLayerNode = new Node('UrbanBuildingSprites');
     urbanBuildingLayerNode.layer = this.node.layer;
     urbanBuildingLayerNode.addComponent(UITransform).setContentSize(1280, 720);
@@ -2883,6 +2908,7 @@ export class BattleScene extends Component {
     wreckTrackLayer.addComponent(UITransform).setContentSize(1280, 720);
     wreckLayer.addChild(wreckTrackLayer);
     this.tankWreckTrackLayer = wreckTrackLayer;
+    this.createPushedWreckVisionLayer(gNode, tankMaskNode);
     // Live tracks stay beneath live hulls, but above every wreck sprite.
     const damageTrackLayer = new Node('TankDamageTracksBelowHulls');
     damageTrackLayer.layer = this.node.layer;
@@ -2991,6 +3017,19 @@ export class BattleScene extends Component {
     this.unitEffectGraphics = effectNode.addComponent(Graphics);
     this.unitEffectNode = effectNode;
     gNode.addChild(effectNode);
+    const rippleNode = new Node('WreckWaterRipples');
+    rippleNode.layer = this.node.layer;
+    rippleNode.addComponent(UITransform).setContentSize(1280, 720);
+    const rippleMask = rippleNode.addComponent(Mask);
+    rippleMask.type = Mask.Type.GRAPHICS_STENCIL;
+    this.wreckRippleMaskGraphics = rippleMask.subComp as Graphics;
+    const rippleRingsNode = new Node('WaterClippedRippleRings');
+    rippleRingsNode.layer = this.node.layer;
+    rippleRingsNode.addComponent(UITransform).setContentSize(1280, 720);
+    this.wreckRippleGraphics = rippleRingsNode.addComponent(Graphics);
+    rippleNode.addChild(rippleRingsNode);
+    this.wreckRippleNode = rippleNode;
+    gNode.addChild(rippleNode);
 
     // Keep smoke in its own animated layer, below vision fog and map UI.
     const smokeScreenEffectNode = new Node('SmokeScreenEffects');
@@ -5354,7 +5393,7 @@ export class BattleScene extends Component {
     this.airborneReactionTurn = -1;
     this.casualtyCheckedTurn = -1;
     this.rng = new RNG(this.rngSeed || undefined);
-    this.mission = loadMission(data, this.rng, { hardcore: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), preservePlayerReload: options.preservePlayerReload });
+    this.mission = loadMission(data, this.rng, { hardcore: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), preservePlayerReload: options.preservePlayerReload, randomizeWeather: !GameSession.isPvp });
     this.loadMissionTankCamouflage();
     this.applyBattlefieldCameraRotation();
     if (this.campaignUpgradesEnabled()) {
@@ -5406,6 +5445,8 @@ export class BattleScene extends Component {
     this.pvpPendingRemoteSnapshots = [];
     this.transientFogRevealKeys.clear();
     this.fogVisionTransition = null;
+    this.knownPushedWreckPoses = new WeakMap();
+    this.pushedWreckVisionMoves = new WeakMap();
     this.clearFloaters();
     this.clearMuzzleFlashes();
     this.clearMuzzleSmokes();
@@ -5689,6 +5730,8 @@ export class BattleScene extends Component {
     for (const { node } of this.urbanBuildingSpritePool) node.active = false;
     this.urbanRubbleSpritePoolNext = 0;
     for (const { node } of this.urbanRubbleSpritePool) node.active = false;
+    this.ruralPropSpritePoolNext = 0;
+    for (const { node } of this.ruralPropSpritePool) node.active = false;
     this.foliageSpritePoolNext = 0;
     for (const { node } of this.foliageSpritePool) node.active = false;
     this.enemyTopPoolNext = 0;
@@ -6031,10 +6074,10 @@ export class BattleScene extends Component {
         if (!turrets.has(sprite.spriteFrame)) scenery.draw(sprite, 'building', this.hexSize);
       }
       for (let i = 0; i < this.urbanBuildingSpritePoolNext; i++) {
-        const sprite = this.urbanBuildingSpritePool[i].sprite;
-        const groundProp = sprite.spriteFrame === this.redesignObjectFrames.rural_hay
-          || sprite.spriteFrame === this.redesignObjectFrames.rural_well;
-        scenery.draw(sprite, groundProp ? 'groundProp' : 'building', this.hexSize);
+        scenery.draw(this.urbanBuildingSpritePool[i].sprite, 'building', this.hexSize);
+      }
+      for (let i = 0; i < this.ruralPropSpritePoolNext; i++) {
+        scenery.draw(this.ruralPropSpritePool[i].sprite, 'groundProp', this.hexSize);
       }
       for (let i = 0; i < this.urbanRubbleSpritePoolNext; i++) {
         scenery.draw(this.urbanRubbleSpritePool[i].sprite, 'building', this.hexSize);
@@ -6047,12 +6090,18 @@ export class BattleScene extends Component {
     const vehicles = this.vehicleShadows;
     if (vehicles) {
       vehicles.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
-      if (this.shermanTopSprite) vehicles.draw(this.shermanTopSprite, 'vehicle', this.hexSize);
+      const pushed = this.pushedWreckShadows;
+      pushed?.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
+      const vehicleShadow = (sprite: Sprite) => {
+        const target = sprite.node.parent === this.pushedWreckContentNode ? (pushed ?? vehicles) : vehicles;
+        target.draw(sprite, 'vehicle', this.hexSize);
+      };
+      if (this.shermanTopSprite) vehicleShadow(this.shermanTopSprite);
       // Bunkers already cast in the scenery layer; retain masked shadows for mobile units.
       for (let i = 0; i < this.enemyTopPoolNext; i++) {
         const sprite = this.enemyTopSpritePool[i].sprite;
         if (!this.bunkerOcclusionSprites.has(sprite) && !turrets.has(sprite.spriteFrame)) {
-          vehicles.draw(sprite, 'vehicle', this.hexSize);
+          vehicleShadow(sprite);
         }
       }
       for (let i = 0; i < this.infantryTopPoolNext; i++) {
@@ -6062,6 +6111,7 @@ export class BattleScene extends Component {
         vehicles.draw(this.officerTopSpritePool[i].sprite, 'infantry', this.hexSize);
       }
       vehicles.end();
+      pushed?.end();
     }
   }
 
@@ -6373,8 +6423,12 @@ export class BattleScene extends Component {
   }
 
   private isUnitVisible(unit: Unit): boolean {
+    if (unit.destroyed && (unit.wreckWater?.sink?.elapsed ?? -1) >= WRECK_SINK_DURATION) return false;
     if (unit.destroyed && unit.wreckPose && this.mission) {
       const pos = wreckVisualHex(unit.pos, unit.wreckPose);
+      if ((this.fogVisionTransition?.expanding || this.anim?.kind === 'move') && this.usesPushedWreckVision(unit)
+        && ((this.anim?.kind === 'move' && this.pushedWreckVisionMoves.get(unit) === this.anim)
+          || this.visibleHexKeys.has(HexMap.keyOf(pos)))) return true;
       if (this.mission.map.has(pos)) return this.isHexVisible(pos);
       return this.isHexVisible(unit.pos) || neighbors(pos).some(p => this.isHexVisible(p));
     }
@@ -6530,12 +6584,90 @@ export class BattleScene extends Component {
     g.stroke();
   }
 
+  private createPushedWreckVisionLayer(mapNode: Node, before: Node): void {
+    const maskNode = new Node('VisiblePushedWreckMask');
+    maskNode.layer = this.node.layer;
+    maskNode.addComponent(UITransform).setContentSize(1280, 720);
+    const mask = maskNode.addComponent(Mask);
+    mask.type = Mask.Type.GRAPHICS_STENCIL;
+    this.pushedWreckVisibilityGraphics = mask.subComp as Graphics;
+    this.pushedWreckMaskNode = maskNode;
+    mapNode.insertChild(maskNode, before.getSiblingIndex());
+    const content = new Node('KnownPushedWrecks');
+    content.layer = this.node.layer;
+    content.addComponent(UITransform).setContentSize(1280, 720);
+    maskNode.addChild(content);
+    this.pushedWreckContentNode = content;
+    const tracks = new Node('KnownPushedWreckTracks');
+    tracks.layer = this.node.layer;
+    tracks.addComponent(UITransform).setContentSize(1280, 720);
+    content.addChild(tracks);
+    this.pushedWreckTrackLayer = tracks;
+    this.pushedWreckShadows = new ObjectShadowRenderer(maskNode, 'KnownPushedWreckShadows', 0);
+    maskNode.active = false;
+  }
+
+  private usesPushedWreckVision(unit: Unit): boolean {
+    const moving = this.anim?.kind === 'move' && this.pushedWreckVisionMoves.get(unit) === this.anim;
+    return (!!this.fogVisionTransition?.expanding || moving) && unit.destroyed === true && isTankUnit(unit)
+      && !!unit.wreckPose && this.knownPushedWreckPoses.get(unit) === unit.wreckPose
+      && (unit.wreckWater?.sink?.elapsed ?? -1) < WRECK_SINK_DURATION;
+  }
+
+  /** Match the full rendered wreck, including art alignment and loose tracks. */
+  private tankWreckVisionBody(unit: Unit): WreckBody {
+    const body = this.tankWreckCollisionBody(unit);
+    const meta = this.destroyedTankTopMetaFor(unit);
+    if (meta) {
+      const size = this.destroyedTankDisplaySize(unit.kind, meta.dw || meta.sf.width, meta.dh || meta.sf.height, this.hexSize);
+      body.halfLength = size.w / this.hexSize / 2;
+      body.halfWidth = size.h / this.hexSize / 2;
+    }
+    const margin = unit.paralyzed ? 0.16 : 0.10;
+    return { ...body, halfLength: body.halfLength + margin, halfWidth: body.halfWidth + margin };
+  }
+
+  /** The center may be hidden while a visible fragment is already being pushed. */
+  private isTankWreckPartVisible(unit: Unit): boolean {
+    if (!this.mission) return false;
+    const hull = wreckBodyPolygon(this.tankWreckVisionBody(unit));
+    const center = wreckVisualHex(unit.pos, unit.wreckPose ?? { x: 0, y: 0 });
+    const candidates = [center, ...neighbors(center), ...neighbors(center).flatMap(pos => neighbors(pos))];
+    const checked = new Set<string>();
+    for (const pos of candidates) {
+      const key = HexMap.keyOf(pos);
+      if (checked.has(key)) continue;
+      checked.add(key);
+      if (!this.isHexVisible(pos) || !this.mission.map.has(pos)) continue;
+      const c = this.project(pos.q, pos.r);
+      const hex = Array.from({ length: 6 }, (_, i) => {
+        const angle = Math.PI / 6 + i * Math.PI / 3;
+        return { x: c.x / this.hexSize + Math.cos(angle), y: c.y / this.hexSize + Math.sin(angle) };
+      });
+      if (wreckPolygonContact(hull, hex)) return true;
+    }
+    return false;
+  }
+
+  private tankWreckVisualLayer(unit: Unit, tracks = false): Node | null {
+    if (this.usesPushedWreckVision(unit)) {
+      return tracks ? this.pushedWreckTrackLayer : this.pushedWreckContentNode;
+    }
+    return tracks ? this.tankWreckTrackLayer : this.tankWreckLayer;
+  }
+
   private redrawUnitVisibilityMask() {
     if (!this.mission) return;
     if (this.tankVisibilityGraphics) this.redrawVisibleHexMask(this.tankVisibilityGraphics, true);
     if (this.unitVisibilityMaskGraphics) this.redrawVisibleHexMask(this.unitVisibilityMaskGraphics, true);
     if (this.trackVisibilityMaskGraphics) this.redrawVisibleHexMask(this.trackVisibilityMaskGraphics);
     if (this.silhouetteVisibilityGraphics) this.redrawVisibleHexMask(this.silhouetteVisibilityGraphics, true);
+    if (this.pushedWreckVisibilityGraphics && this.pushedWreckMaskNode) {
+      const active = this.allUnits().some(unit => this.usesPushedWreckVision(unit));
+      this.pushedWreckMaskNode.active = active;
+      if (active) this.redrawVisibleHexMask(this.pushedWreckVisibilityGraphics, true, true);
+      else this.pushedWreckVisibilityGraphics.clear();
+    }
   }
 
   private playerTankEvacVisibilityExtension(): Axial | null {
@@ -6553,13 +6685,16 @@ export class BattleScene extends Component {
     return pos && !this.mission.map.has(pos) ? pos : null;
   }
 
-  private redrawVisibleHexMask(mask: Graphics, includePlayerEvacExit = false) {
+  private redrawVisibleHexMask(mask: Graphics, includePlayerEvacExit = false, revealKnownWrecks = false) {
     if (!this.mission) return;
     mask.clear();
     mask.fillColor = new Color(255, 255, 255, 0);
     const outsideUnitHexes = new Map<string, Axial>();
     for (const tile of this.mission.map.all()) {
-      if (!this.isHexVisible(tile.pos)) continue;
+      // Only the separate known-wreck layer can use the already-unlocked
+      // target set while terrain fog is still fading. Other units stay clipped.
+      if (!this.isHexVisible(tile.pos) && !(revealKnownWrecks && this.fogVisionTransition?.expanding
+        && this.visibleHexKeys.has(HexMap.keyOf(tile.pos)))) continue;
       const c = this.project(tile.pos.q, tile.pos.r);
       this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
       mask.fill();
@@ -6593,6 +6728,21 @@ export class BattleScene extends Component {
       const c = this.project(evacExit.q, evacExit.r);
       this.traceHexPathOn(mask, c.x, c.y, this.hexSize);
       mask.fill();
+    }
+    // During a normal move, rules vision stays at the departure hex until
+    // arrival. Preserve only the known pushed object's footprint through that
+    // delay; terrain and all other units keep their original visibility masks.
+    if (revealKnownWrecks && this.anim?.kind === 'move') {
+      for (const unit of this.allUnits()) {
+        if (this.pushedWreckVisionMoves.get(unit) !== this.anim || !this.usesPushedWreckVision(unit)) continue;
+        const polygon = wreckBodyPolygon(this.tankWreckVisionBody(unit));
+        polygon.forEach((point, i) => {
+          const x = point.x * this.hexSize, y = point.y * this.hexSize;
+          if (i === 0) mask.moveTo(x, y); else mask.lineTo(x, y);
+        });
+        mask.close();
+        mask.fill();
+      }
     }
   }
 
@@ -7536,6 +7686,7 @@ export class BattleScene extends Component {
 
   /** Newly destroyed tanks burn at level 1 until the next turn starts. */
   private fireEffectLevel(u: Unit): number {
+    if (u.destroyed && u.wreckWater?.sink) return 0;
     return visualFireEffectLevel(
       u,
       this.mission?.sherman.id,
@@ -7597,13 +7748,16 @@ export class BattleScene extends Component {
     scorchRadius = 0,
   ) {
     let overlay = node.getChildByName('TankDamageOverlay');
+    const waterMask = node.getChildByName('WreckWaterMask');
+    if (waterMask && !u.destroyed) waterMask.active = false;
     const liveTank = isTankUnit(u) && !u.destroyed;
     const showTrack = isTankUnit(u) && part !== 'turret' && u.paralyzed;
     const showScorch = liveTank && part !== 'hull' && u.turretDamaged;
-    const alpha = u.hidden && !u.destroyed ? TANK_CONCEALED_ALPHA / 255 : 1;
+    const alpha = (u.hidden && !u.destroyed ? TANK_CONCEALED_ALPHA / 255 : 1)
+      * (u.destroyed ? wreckWaterAppearance(u.wreckWater).alpha : 1);
     const body = this.tankBodyDisplaySizePx(u);
     let track = this.tankDamageTrackNodes.get(node);
-    const trackLayer = u.destroyed ? this.tankWreckTrackLayer : this.tankDamageTrackLayer;
+    const trackLayer = u.destroyed ? this.tankWreckVisualLayer(u, true) : this.tankDamageTrackLayer;
     if (showTrack && trackLayer) {
       if (!track) {
         track = new Node('SlippedTrackBelowHull');
@@ -7982,6 +8136,9 @@ export class BattleScene extends Component {
     }
     this.drawAmbushMuzzleReticles(g);
     this.drawLockedFireReticles(g);
+    this.wreckRippleGraphics?.clear();
+    this.drawWreckWaterRipples(this.wreckRippleGraphics ?? g);
+    if (this.wreckRippleNode) this.placeWreckRippleLayerAboveUnits();
     const smokeScreenGraphics = this.smokeScreenEffectGraphics;
     if (!smokeScreenGraphics) return;
     smokeScreenGraphics.clear();
@@ -8256,7 +8413,7 @@ export class BattleScene extends Component {
         this.silhouetteClaimed.add(sprite);
         const bunker = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(unit);
         const parent = bunker ? this.bunkerContentNode : isTankUnit(unit)
-          ? (unit.destroyed ? this.tankWreckLayer : this.tankContentNode)
+          ? (unit.destroyed ? this.tankWreckVisualLayer(unit) : this.tankContentNode)
           : this.infantryContentNode;
         if (parent && sprite.node.parent !== parent) parent.addChild(sprite.node);
         // Pool slots can move between infantry and tank layers. Restore draw
@@ -8473,6 +8630,7 @@ export class BattleScene extends Component {
   /** 是否绘制本回合击毁残骸（灰圆+红叉）及「已毁」标签（与 `destroyWreckVisualIds` 同步）。 */
   private shouldShowDestroyWreckVisual(u: Unit): boolean {
     if (isFootUnit(u)) return false;
+    if (u.wreckWater?.sink) return false;
     return u.destroyed && this.destroyWreckVisualIds.has(u.id);
   }
 
@@ -8481,7 +8639,7 @@ export class BattleScene extends Component {
     if (!this.mission) return false;
     const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
     for (const o of all) {
-      if (o === u || (o.destroyed && !isTankUnit(o))) continue;
+      if (o === u || (o.destroyed && (!isTankUnit(o) || o.wreckWater?.sink))) continue;
       if (GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(o)) continue;
       if (o.pos.q === u.pos.q && o.pos.r === u.pos.r) return true;
     }
@@ -10688,7 +10846,7 @@ export class BattleScene extends Component {
    * Plays a Stuka across the target row. `attackerIsPlayer` makes the same
    * presentation usable by future player/PvP air-strike events.
    */
-  private playStukaFlyover(target: Unit, attackerIsPlayer: boolean, onDone: () => void, shotDown = false) {
+  private playStukaFlyover(target: Unit, attackerIsPlayer: boolean, onDone: () => void, shotDown = false, flyoverOnly = false) {
     if (!this.mission || !this.mapNode || this.stukaFlyover) {
       onDone();
       return;
@@ -10706,7 +10864,7 @@ export class BattleScene extends Component {
       ? screenRight + offscreenPad
       : screenLeft - offscreenPad;
     this.stukaFlyover = {
-      shotDown, defender: target,
+      shotDown: shotDown && !flyoverOnly, flyoverOnly, defender: target,
       target: { ...target.pos }, fromX, toX, y: targetPoint.y + mapPos.y,
       t: 0, dur: 4, cannonT: -1, cannonSoundStarted: false,
       cannonSeed: this.hashStringToSeed(`stuka:${target.id}:${this.turn}`),
@@ -10744,7 +10902,7 @@ export class BattleScene extends Component {
     const dropX = target.x + mapPos.x - direction * this.hexSize * Math.sqrt(3) * 3;
     const dropT = Math.max(0, Math.min(4, 4 * (dropX - fromX) / (toX - fromX)));
     this.airborneFlight = { plan, root, plane, t: 0, fromX, toX, y: target.y + mapPos.y, dropT, onDone, drops: [], reactions: [], reactionBusy: false };
-    this.battleLog(t('roundEvent.airborne.started', { count: plan.units.length }));
+    this.battleLog(t(plan.units.length ? 'roundEvent.airborne.started' : 'turnEnd.airborne.flyover', { count: plan.units.length }));
     playC47Flyover();
   }
 
@@ -10841,20 +10999,20 @@ export class BattleScene extends Component {
     const attackStartT = pass.dur * Math.abs(
       (attackStartX - pass.fromX) / (pass.toX - pass.fromX),
     );
-    if (!pass.shotDown && !pass.cannonSoundStarted && pass.t >= Math.max(0, attackStartT - 1)) {
+    if (!pass.flyoverOnly && !pass.shotDown && !pass.cannonSoundStarted && pass.t >= Math.max(0, attackStartT - 1)) {
       pass.cannonSoundStarted = true;
       playStukaCannonFire();
     }
-    if (!pass.shotDown && pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
+    if (!pass.flyoverOnly && !pass.shotDown && pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
       pass.cannonT = 0;
     }
-    if (pass.cannonT >= 0) {
+    if (!pass.flyoverOnly && pass.cannonT >= 0) {
       pass.cannonT += dt;
       // The Ju 87 G attacks with its BK 3.7 cannon pods.  The visuals are
       // deliberately a compact burst: combat resolution stays unchanged.
       this.drawStukaCannonBurst(pass);
     }
-    if (pass.shotDown && p < 1) this.drawStukaShotDown(pass, x);
+    if (!pass.flyoverOnly && pass.shotDown && p < 1) this.drawStukaShotDown(pass, x);
     const plane = this.stukaSpriteNode;
     if (plane) {
       const sprite = plane.getComponent(Sprite);
@@ -11125,6 +11283,7 @@ export class BattleScene extends Component {
       this.continuousTerrain = null;
       this.resourceRedrawPending = true;
     }
+    if (this.advanceTankWreckWater(dt)) this.resourceRedrawPending = true;
     if (this.resourceRedrawPending) this.redraw();
     this.syncTerrainLoadingOverlay(dt);
     this.continuousTerrain?.update(dt);
@@ -11276,7 +11435,6 @@ export class BattleScene extends Component {
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
       const crushedWire = this.mission.map.applyMovementTerrainEffects(finishedUnit, { q: anim.fromQ, r: anim.fromR }, finishedUnit.pos);
       if (crushedWire) this.battleLogI18n('battleLog.wireCrushed', { unitKind: finishedUnit.kind });
-      this.consumeMovementDiceOnMudEntry(finishedUnit);
       if (isTankUnit(finishedUnit) && this.mission.map.get(finishedUnit.pos)?.steelHedgehogs) {
         this.spawnFloater(finishedUnit.pos.q, finishedUnit.pos.r, t('floater.hedgehogParalyzed'), new Color(200, 160, 240, 255), { size: 22 });
         this.battleLogI18n('battleLog.hedgehogParalyzed', { unitKind: finishedUnit.kind });
@@ -11935,8 +12093,8 @@ export class BattleScene extends Component {
           n.addComponent(UITransform); const sp = n.addComponent(Sprite);
           sp.spriteFrame = frame; sp.sizeMode = Sprite.SizeMode.CUSTOM; parent.addChild(n);
         } else {
-          if (!this.ensureScenerySlot(this.urbanBuildingSpritePool, this.urbanBuildingSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL * 3)) break;
-          const slot = this.urbanBuildingSpritePool[this.urbanBuildingSpritePoolNext++];
+          if (!this.ensureScenerySlot(this.ruralPropSpritePool, this.ruralPropSpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL * 3)) break;
+          const slot = this.ruralPropSpritePool[this.ruralPropSpritePoolNext++];
           n = slot.node; slot.sprite.spriteFrame = frame;
         }
         n.getComponent(UITransform)!.setContentSize(size * prop.size, size * prop.size * frame.rect.height / frame.rect.width);
@@ -13396,15 +13554,116 @@ export class BattleScene extends Component {
     };
   }
 
+  private sampleTankWreckWater(unit: Unit): WreckWaterSample {
+    const origin = this.project(0, 0);
+    return sampleWreckWater(this.tankWreckCollisionBody(unit), point => {
+      const pos = wreckVisualHex({ q: 0, r: 0 }, {
+        x: point.x - origin.x / this.hexSize, y: point.y - origin.y / this.hexSize,
+      });
+      const tile = this.mission?.map.get(pos);
+      if (!tile || (tile.terrain !== 'water' && tile.terrain !== 'deep_water') || tileHasBridge(tile)) return null;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      return { x: c.x / this.hexSize, y: c.y / this.hexSize };
+    });
+  }
+
+  private syncTankWreckWater(unit: Unit): boolean {
+    if (!unit.destroyed || !isTankUnit(unit) || unit.wreckWater?.sink) return false;
+    const pose = unit.wreckPose ?? { x: 0, y: 0, angle: 0 };
+    const cached = this.wreckWaterProbe.get(unit);
+    if (cached && cached.x === pose.x && cached.y === pose.y && cached.angle === pose.angle
+      && cached.size === this.hexSize && cached.offsetX === this.offsetX && cached.offsetY === this.offsetY
+      && cached.state === unit.wreckWater) return false;
+    const sample = this.sampleTankWreckWater(unit);
+    const c = this.project(unit.pos.q, unit.pos.r);
+    const old = unit.wreckWater;
+    unit.wreckWater = startWreckWater(this.tankWreckCollisionBody(unit), pose,
+      { x: c.x / this.hexSize, y: c.y / this.hexSize }, sample);
+    this.wreckWaterProbe.set(unit, { ...pose, size: this.hexSize, offsetX: this.offsetX, offsetY: this.offsetY, state: unit.wreckWater, sample });
+    if (unit.wreckWater?.sink) {
+      unit.wreckPose ??= { ...pose };
+      this.unitEffectVisuals.delete(unit.id);
+    }
+    return !!old || !!unit.wreckWater;
+  }
+
+  private advanceTankWreckWater(dt: number): boolean {
+    if (!this.mission) return false;
+    let changed = false;
+    for (const unit of this.allUnits()) {
+      if (!unit.destroyed || !isTankUnit(unit)) continue;
+      changed = this.syncTankWreckWater(unit) || changed;
+      if (!unit.wreckWater?.sink) continue;
+      const pose = advanceWreckSinking(unit.wreckWater, dt);
+      if (pose) { this.updateTankWreckPose(unit, pose); changed = true; }
+    }
+    return changed;
+  }
+
+  private placeWreckRippleLayerAboveUnits(): void {
+    const node = this.wreckRippleNode;
+    const mapNode = this.mapNode;
+    if (!node || !mapNode || node.parent !== mapNode) return;
+    const anchors = [this.unitEffectNode, this.tankContentNode?.parent, this.pushedWreckMaskNode, this.unitOcclusion?.root];
+    const highest = Math.max(-1, ...anchors.filter(anchor => anchor?.parent === mapNode).map(anchor => anchor.getSiblingIndex()));
+    const target = highest + 1 - (node.getSiblingIndex() < highest ? 1 : 0);
+    if (node.getSiblingIndex() !== target) node.setSiblingIndex(target);
+  }
+
+  private syncWreckRippleWaterMask(): void {
+    const map = this.mission?.map;
+    const g = this.wreckRippleMaskGraphics;
+    if (!map || !g) return;
+    const layout = `${this.hexSize},${this.offsetX},${this.offsetY}`;
+    if (this.wreckRippleMaskMap === map && this.wreckRippleMaskLayout === layout) return;
+    this.wreckRippleMaskMap = map;
+    this.wreckRippleMaskLayout = layout;
+    g.clear();
+    g.fillColor = new Color(255, 255, 255, 255);
+    for (const tile of map.all()) {
+      if ((tile.terrain !== 'water' && tile.terrain !== 'deep_water') || tileHasBridge(tile)) continue;
+      const c = this.project(tile.pos.q, tile.pos.r);
+      this.traceHexPathOn(g, c.x, c.y, this.hexSize);
+      g.fill();
+    }
+  }
+
+  private drawWreckWaterRipples(g: Graphics): void {
+    if (!this.mission) return;
+    if (this.wreckRippleMaskGraphics) this.syncWreckRippleWaterMask();
+    let drawn = false;
+    for (const unit of this.allUnits()) {
+      const water = unit.wreckWater;
+      if (!unit.destroyed || !water) continue;
+      // Water visibility is independent of the hull: the hull may have slid
+      // out of sight or sunk completely while its entry point remains visible.
+      const contactHex = wreckVisualHex(unit.pos, { x: water.contactX, y: water.contactY });
+      const revealingKnownContact = this.fogVisionTransition?.expanding && unit.wreckPose
+        && this.knownPushedWreckPoses.get(unit) === unit.wreckPose
+        && this.visibleHexKeys.has(HexMap.keyOf(contactHex));
+      if (!this.isHexVisible(contactHex) && !revealingKnownContact) continue;
+      const c = this.project(unit.pos.q, unit.pos.r);
+      const x = c.x + water.contactX * this.hexSize, y = c.y + water.contactY * this.hexSize;
+      for (const ring of wreckWaterRippleRings(water, this.unitEffectTime, this.hexSize)) {
+        // The camera is directly overhead: rotation preserves a true circle.
+        // The parent water stencil clips every stroke at shores and bridges.
+        g.strokeColor = new Color(210, 240, 250, ring.alpha);
+        g.lineWidth = ring.width;
+        g.circle(x, y, ring.radius);
+        g.stroke();
+        drawn = true;
+      }
+    }
+    if (this.wreckRippleNode) this.wreckRippleNode.active = drawn;
+  }
+
   private advanceTankMoveTime(anim: MoveAnim, dt: number): void {
-    const wreckUnits = this.mission && anim.kind === 'move' && !anim.unit.destroyed && isTankUnit(anim.unit)
-      ? [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies]
-        .filter(unit => unit.destroyed && isTankUnit(unit))
-      : [];
-    if (wreckUnits.length === 0) {
+    if (!this.mission || anim.kind !== 'move' || anim.unit.destroyed || !isTankUnit(anim.unit)) {
       anim.t += dt / anim.dur;
       return;
     }
+    const wreckUnits = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies]
+      .filter(unit => unit.destroyed && isTankUnit(unit) && !unit.wreckWater?.sink);
     const from = this.project(anim.fromQ, anim.fromR);
     const to = this.project(anim.toQ, anim.toR);
     const dx = (to.x - from.x) / this.hexSize, dy = (to.y - from.y) / this.hexSize;
@@ -13412,17 +13671,27 @@ export class BattleScene extends Component {
     if (steps === 0) { anim.t += dt / anim.dur; return; }
     let remaining = dt / anim.dur;
     // Integrate at the same fixed spatial boundaries as the push solver.
-    // Contact changes partway through a frame must only slow that part of it.
+    // Contact and terrain changes partway through a frame only slow that portion.
     while (remaining > 1e-10 && anim.t < 1) {
-      const step = Math.min(steps, Math.floor(easeOutCubic(anim.t) * steps + 1e-8) + 1);
-      const boundaryT = 1 - Math.cbrt(1 - step / steps);
-      const mover = this.tankWreckCollisionBody(anim.unit);
-      const current = this.interpolatedPos(anim.unit);
-      mover.x += (from.x - current.x) / this.hexSize + dx * step / steps;
-      mover.y += (from.y - current.y) / this.hexSize + dy * step / steps;
-      const travel = { x: dx / steps, y: dy / steps };
-      const pushing = wreckUnits.some(unit => tankWreckPushContact(this.tankWreckCollisionBody(unit), mover, travel));
-      const speed = pushing ? WRECK_PUSH_SPEED_SCALE : 1;
+      const progress = easeOutCubic(anim.t);
+      const step = Math.min(steps, Math.floor(progress * steps + 1e-8) + 1);
+      // Adjacent hexes meet halfway along the move. Split there as well as at
+      // solver samples so crossing the mud edge changes speed at the edge.
+      const boundary = progress < 0.5 - 1e-10 ? Math.min(0.5, step / steps) : step / steps;
+      const boundaryT = 1 - Math.cbrt(1 - boundary);
+      const sample = (progress + boundary) / 2;
+      const terrainHex = wreckVisualHex({ q: anim.fromQ, r: anim.fromR }, { x: dx * sample, y: dy * sample });
+      const terrainSpeed = effectiveDiceTerrain(this.mission.map.get(terrainHex)) === 'mud' ? 0.5 : 1;
+      let pushing = false;
+      if (wreckUnits.length > 0) {
+        const mover = this.tankWreckCollisionBody(anim.unit);
+        const current = this.interpolatedPos(anim.unit);
+        mover.x += (from.x - current.x) / this.hexSize + dx * step / steps;
+        mover.y += (from.y - current.y) / this.hexSize + dy * step / steps;
+        const travel = { x: dx / steps, y: dy / steps };
+        pushing = wreckUnits.some(unit => !unit.wreckWater?.sink && tankWreckPushContact(this.tankWreckCollisionBody(unit), mover, travel));
+      }
+      const speed = Math.min(terrainSpeed, pushing ? WRECK_PUSH_SPEED_SCALE : 1);
       const timeToBoundary = Math.max(0, boundaryT - anim.t) / speed;
       if (remaining < timeToBoundary) {
         anim.t += remaining * speed;
@@ -13430,14 +13699,27 @@ export class BattleScene extends Component {
       }
       anim.t = boundaryT;
       remaining -= timeToBoundary;
-      this.advanceTankWreckPush(anim);
+      if (wreckUnits.length > 0) this.advanceTankWreckPush(anim);
+    }
+  }
+
+  private updateTankWreckPose(unit: Unit, pose: NonNullable<Unit['wreckPose']>, pushed = false): void {
+    const known = (!!unit.wreckPose && this.knownPushedWreckPoses.get(unit) === unit.wreckPose)
+      || (pushed && (this.isUnitVisible(unit) || this.isTankWreckPartVisible(unit)));
+    unit.wreckPose = pose;
+    if (known) {
+      this.knownPushedWreckPoses.set(unit, pose);
+      if (pushed && this.anim?.kind === 'move') this.pushedWreckVisionMoves.set(unit, this.anim);
+    } else {
+      this.knownPushedWreckPoses.delete(unit);
+      this.pushedWreckVisionMoves.delete(unit);
     }
   }
 
   private advanceTankWreckPush(anim: MoveAnim): void {
     if (!this.mission || anim.kind !== 'move' || anim.unit.destroyed || !isTankUnit(anim.unit)) return;
     const units = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
-    const wreckUnits = units.filter(unit => unit.destroyed && isTankUnit(unit))
+    const wreckUnits = units.filter(unit => unit.destroyed && isTankUnit(unit) && !unit.wreckWater?.sink)
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     if (wreckUnits.length === 0) return;
     const from = this.project(anim.fromQ, anim.fromR);
@@ -13468,13 +13750,14 @@ export class BattleScene extends Component {
     for (let step = (anim.wreckPushStep ?? 0) + 1; step <= targetStep; step++) {
       mover.x = from.x / this.hexSize + dx * step / steps + ox;
       mover.y = from.y / this.hexSize + dy * step / steps + oy;
-      const wrecks = wreckUnits.map(unit => this.tankWreckCollisionBody(unit));
+      const activeWreckUnits = wreckUnits.filter(unit => !unit.wreckWater?.sink);
+      const wrecks = activeWreckUnits.map(unit => this.tankWreckCollisionBody(unit));
       const originals = wrecks.map(body => ({ ...body }));
       pushTankWrecks(wrecks, mover, { x: dx / steps, y: dy / steps }, live, buildings);
       wrecks.forEach((body, i) => {
         const original = originals[i];
         if (body.x === original.x && body.y === original.y && body.angle === original.angle) return;
-        const unit = wreckUnits[i];
+        const unit = activeWreckUnits[i];
         const old = unit.wreckPose ?? { x: 0, y: 0, angle: 0 };
         const angle = old.angle + body.angle - original.angle;
         // The sprite's local alignment offset rotates around the logical
@@ -13484,11 +13767,12 @@ export class BattleScene extends Component {
         const turn = angle - old.angle;
         const rotatedX = localX * Math.cos(turn) - localY * Math.sin(turn);
         const rotatedY = localX * Math.sin(turn) + localY * Math.cos(turn);
-        unit.wreckPose = {
+        this.updateTankWreckPose(unit, {
           x: old.x + body.x - original.x + localX - rotatedX,
           y: old.y + body.y - original.y + localY - rotatedY,
           angle,
-        };
+        }, true);
+        this.syncTankWreckWater(unit);
       });
     }
     anim.wreckPushStep = targetStep;
@@ -14076,14 +14360,61 @@ export class BattleScene extends Component {
 
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
-    sp.color = new Color(255, 255, 255, 255);
+    const waterAppearance = wreckWaterAppearance(u.wreckWater);
+    sp.color = new Color(waterAppearance.shade, waterAppearance.shade, waterAppearance.shade, Math.round(255 * waterAppearance.alpha));
     const ut = node.getComponent(UITransform)!;
     ut.setContentSize(size.w, size.h);
     ut.setAnchorPoint(0.5, 0.5);
-    node.setScale(1, 1, 1);
+    node.setScale(waterAppearance.scale, waterAppearance.scale, 1);
     node.setPosition(c.x + f * body.ux + r * body.uy, c.y + f * body.uy + r * (-body.ux), 0);
     node.angle = (Math.atan2(body.uy, body.ux) * 180) / Math.PI + 180;
     this.syncTankDamageOverlay(node, u, 'hull');
+    this.syncWreckWaterOverlay(node, sp, u, size);
+  }
+
+  /** Repeat the wreck texture through a water-hex stencil, tinting only wet pixels. */
+  private syncWreckWaterOverlay(node: Node, sprite: Sprite, unit: Unit, size: { w: number; h: number }): void {
+    let maskNode = node.getChildByName('WreckWaterMask');
+    if (!unit.wreckWater || unit.wreckWater.sink) {
+      if (maskNode) maskNode.active = false;
+      return;
+    }
+    if (!maskNode) {
+      maskNode = new Node('WreckWaterMask');
+      maskNode.layer = node.layer;
+      maskNode.addComponent(UITransform);
+      maskNode.addComponent(Mask).type = Mask.Type.GRAPHICS_STENCIL;
+      const wetNode = new Node('SubmergedHullTint');
+      wetNode.layer = node.layer;
+      wetNode.addComponent(UITransform);
+      wetNode.addComponent(Sprite);
+      maskNode.addChild(wetNode);
+      node.addChild(maskNode);
+    }
+    maskNode.active = true;
+    maskNode.getComponent(UITransform)!.setContentSize(size.w, size.h);
+    const wetNode = maskNode.getChildByName('SubmergedHullTint')!;
+    const wetSprite = wetNode.getComponent(Sprite)!;
+    wetSprite.spriteFrame = sprite.spriteFrame;
+    wetSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    wetSprite.color = new Color(85, 120, 135, 210);
+    wetNode.getComponent(UITransform)!.setContentSize(size.w, size.h);
+    const g = maskNode.getComponent(Mask)!.subComp as Graphics;
+    g.clear();
+    g.fillColor = new Color(255, 255, 255, 255);
+    const sample = this.wreckWaterProbe.get(unit)?.sample ?? this.sampleTankWreckWater(unit);
+    const angle = node.angle * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+    for (const center of sample.cells) {
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 6 + i * Math.PI / 3;
+        const dx = (center.x + Math.cos(a)) * this.hexSize - node.position.x;
+        const dy = (center.y + Math.sin(a)) * this.hexSize - node.position.y;
+        const x = dx * cos + dy * sin, y = -dx * sin + dy * cos;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.close();
+      g.fill();
+    }
   }
 
   private applySplitTankHullSprite(
@@ -14808,6 +15139,7 @@ export class BattleScene extends Component {
 
     // 摧毁：暗灰色 + 穿心 X（仅本回合内显示；下回合起格上不再留残骸图）
     if (u.destroyed) {
+      if ((u.wreckWater?.sink?.elapsed ?? -1) >= WRECK_SINK_DURATION) return;
       if (this.drawDestroyedTankSprite(u, c, facingLerp)) {
         return;
       }
@@ -18366,27 +18698,6 @@ export class BattleScene extends Component {
     }
     if (this.phaseDice.length > 0 && !this.phaseDice.some(die => !die.used)) {
       this.pendingAutoEndStep = this.playerStep;
-    }
-  }
-
-  /** 非经典模式：坦克抵达泥地后耗尽本组移动骰，攻击骰和杂项骰保留。 */
-  private consumeMovementDiceOnMudEntry(unit: Unit) {
-    if (!this.mission || GameSession.gameMode === 'classic' || !isTankUnit(unit)
-      || effectiveDiceTerrain(this.mission.map.get(unit.pos)) !== 'mud') return;
-    if (this.phase === 'player' && unit === this.mission.sherman) {
-      const indices = this.phaseDice.reduce<number[]>((result, die, index) => {
-        if (!die.used && this.dieStep(index) === 'movement') result.push(index);
-        return result;
-      }, []);
-      if (indices.length === 0) return;
-      this.usePhaseDice(indices);
-      this.refreshPhaseUI();
-    } else if ((this.phase === 'ally' || this.phase === 'enemy')
-      && unit === this.enemyOrder[this.enemyIndex]) {
-      for (let index = 0; index < this.enemyDiceTypes.length; index++) {
-        if (this.enemyDiceTypes[index] === 'move') this.enemyDiceUsed[index] = true;
-      }
-      this.refreshEnemyDiceTray();
     }
   }
 
@@ -28670,6 +28981,11 @@ export class BattleScene extends Component {
         this.battleLog(t('turnEnd.airborne.cancelled'));
         this.finishTurnEvent();
       }
+      return;
+    }
+    if (row.effectType === 'stuka' && prepared.flyoverOnly) {
+      this.battleLog(t(prepared.bodyKey));
+      this.playStukaFlyover(this.mission.sherman, false, () => this.finishTurnEvent(), false, true);
       return;
     }
     const extraPhases = prepared.extraDicePhases ?? [];

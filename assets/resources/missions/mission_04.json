@@ -1,5 +1,7 @@
 {
   "id": "mission_04",
+  "weatherPool": ["clear", "clear", "fog", "rain"],
+  "germanTankCamouflage": "grey",
   "name": "只是路过：湖泊",
   "description": "目标：仅沿红箭头方向将谢尔曼驶出地图（不必歼灭敌军）。\n黑箭头为谢尔曼起始与朝向；黑格 eid 上 1 辆虎式 + 1 辆 IV 号掷骰出生；红格 rid2、rid6 为农场，各 1 名步兵。中央泥地/水域为湖泊与泥泞。回合结束为 2d6 表。",
   "_comment": "底图由任务1 改：rid2 为 f+bd 农场；保留 rid1,3,4,5,6 供事件；湖用 w。仅撤离时 objective 省略 kind。h/ef 方向 0=E…5=NE 同 HexGrid。",
