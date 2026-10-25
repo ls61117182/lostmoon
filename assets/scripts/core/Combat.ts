@@ -366,6 +366,7 @@ function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: nu
  * 保持 core 层和文案无关，避免双语循环依赖。
  */
 export type AttackDenyReason =
+  | 'attack.reason.mounted'
   | 'attack.reason.selfFire'
   | 'attack.reason.destroyedTarget'
   | 'attack.reason.gunVsInfantry'
@@ -396,6 +397,7 @@ export function infantryAttackRange(_target: Unit): number {
 
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   const { attacker, target, map } = ctx;
+  if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   if (ctx.precisionFire === true
@@ -1671,6 +1673,7 @@ export const MG_HIT_THRESHOLD = 7;
 export const MG_MAX_RANGE = 1;
 
 export type MGDenyReason =
+  | 'attack.reason.mounted'
   | 'attack.reason.turretAimRange'
   | 'attack.reason.selfFire'
   | 'attack.reason.destroyedTarget'
@@ -1709,6 +1712,7 @@ function mgTankHitModifier(ctx: AttackContext): number {
 
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
   const { attacker, target, map } = ctx;
+  if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(target);

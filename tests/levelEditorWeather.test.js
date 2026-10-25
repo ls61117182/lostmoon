@@ -61,8 +61,9 @@ assert(
   'the season button should open a picker and apply the selected season',
 );
 assert(
-  /if\s*\(draftSeason\s*===\s*'winter'\s*&&\s*draftTerrainCategory\s*===\s*'europe'\)\s*mission\.season\s*=\s*'winter'/.test(menu),
-  'winter season should persist for European missions',
+  /if\s*\(draftTerrainCategory\s*===\s*'europe'\s*&&\s*draftSeason\s*!==\s*'summer'\)\s*mission\.season\s*=\s*draftSeason/.test(menu)
+    && /mission\.snowCover = draftSnowCover/.test(menu),
+  'all European seasons and explicit winter ground cover should persist',
 );
 
 console.log('level editor weather test passed');

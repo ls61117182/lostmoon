@@ -382,6 +382,10 @@ function sanitizePvpBattleUnit(raw, fallback) {
   const n = (value, fallbackValue) => Number.isFinite(Number(value)) ? Number(value) : fallbackValue;
   return {
     ...base,
+    mountedOnUnitId: base.kind === 'american_infantry' && typeof src.mountedOnUnitId === 'string'
+      ? src.mountedOnUnitId.slice(0, 128) : undefined,
+    mountedDoubleSide: base.kind === 'american_infantry' && typeof src.mountedOnUnitId === 'string'
+      && (src.mountedDoubleSide === 'left' || src.mountedDoubleSide === 'right') ? src.mountedDoubleSide : undefined,
     pos: {
       q: n(pos?.q, base.pos?.q ?? 0),
       r: n(pos?.r, base.pos?.r ?? 0),

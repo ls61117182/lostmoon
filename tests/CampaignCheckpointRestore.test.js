@@ -16,19 +16,16 @@ function loadSaveLoad() {
   }).outputText;
   const mod = { exports: {} };
   const req = (id) => {
+    if (id === './TerrainSeason' || id === './Weather' || id === './types') {
+      const helper = { exports: {} };
+      const helperJS = ts.transpileModule(fs.readFileSync(path.join(repo, `assets/scripts/core/${id.slice(2)}.ts`), 'utf8'), {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+      }).outputText;
+      new Function('require', 'module', 'exports', helperJS)(req, helper, helper.exports);
+      return helper.exports;
+    }
+    if (id === './TankRiding') return { syncTankRiders: () => {} };
     if (id === './BuildProfile') return { profileStorageKey: key => key };
-    if (id === './types') return {
-      isTankKind: (kind) => kind === 'sherman',
-      neutralizeUncrewedTank: (unit) => {
-        if (!unit.destroyed && unit.crew && !Object.values(unit.crew).some(Boolean)) {
-          unit.faction = 'neutral';
-          unit.hatchOpen = false;
-          unit.visionRange = 0;
-          return true;
-        }
-        return false;
-      },
-    };
     if (id === './UnitDB') return { getUnitStats: () => ({ faction: 'usa' }) };
     if (id === './HexGrid') return { HexMap: { keyOf: (p) => `${p.q},${p.r}` } };
     if (id === './UnitLevel') return {
@@ -71,6 +68,7 @@ const sherman = {
 };
 const mission = {
   data: { theater: 'pacific' },
+  map: { all: () => [], get: () => undefined },
   sherman,
   allies: [],
   enemies: [],

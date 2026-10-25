@@ -1,4 +1,5 @@
 import { Color, Graphics, Node, Sprite, UITransform } from 'cc';
+import type { UnitFogRenderer } from './UnitFogRenderer';
 
 export type ObjectShadowKind = 'tree' | 'building' | 'rocky' | 'vehicle' | 'groundProp' | 'infantry';
 
@@ -21,6 +22,12 @@ export class ObjectShadowRenderer {
   private pool: Array<{ root: Node; sprite: Sprite }> = [];
   private next = 0;
   private cameraRotation = 0;
+  private fog: UnitFogRenderer | null = null;
+
+  setFogRenderer(fog: UnitFogRenderer | null): void {
+    this.fog = fog;
+    fog?.bind(this.contacts, 'hidden');
+  }
 
   constructor(parent: Node, name: string, siblingIndex?: number) {
     this.layer = new Node(name);
@@ -32,12 +39,13 @@ export class ObjectShadowRenderer {
   }
 
   begin(cameraRotation = 0): void {
+    this.fog?.bind(this.contacts, 'hidden');
     this.cameraRotation = cameraRotation;
     this.next = 0;
     this.contacts.clear();
   }
 
-  draw(source: Sprite, kind: ObjectShadowKind, hexSize: number): void {
+  draw(source: Sprite, kind: ObjectShadowKind, hexSize: number, visibilityAlpha = 1): void {
     const node = source.node;
     const transform = node.getComponent(UITransform);
     if (!node.active || !source.spriteFrame || !transform) return;
@@ -57,7 +65,7 @@ export class ObjectShadowRenderer {
       slot = { root, sprite };
       this.pool.push(slot);
     }
-    const opacity = source.color.a / 255;
+    const opacity = source.color.a / 255 * visibilityAlpha;
     const width = transform.width * Math.abs(node.scale.x);
     const height = transform.height * Math.abs(node.scale.y);
     // Trees, buildings and tanks share the same hex-relative offset.
@@ -80,6 +88,7 @@ export class ObjectShadowRenderer {
     shadowTransform.setAnchorPoint(transform.anchorPoint);
     slot.sprite.node.angle = node.angle + this.cameraRotation;
     slot.sprite.node.setScale(node.scale);
+    this.fog?.bind(slot.sprite, this.fog.policyOf(source.node));
 
     // Compact ground contact makes the object feel seated, even with a long cast.
     const radius = Math.min(width, height) * profile.contact * 0.5;

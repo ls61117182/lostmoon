@@ -19,6 +19,7 @@ export function tankTrackAlphaAfterTurns(baseAlpha: number, fadeSteps: number): 
 export function tankTrackStyleForTerrain(
   terrain: string | undefined,
   hasBridge: boolean,
+  onRoadSurface = false,
 ): TankTrackStyle {
   if (hasBridge) return 'faint';
   switch (terrain) {
@@ -31,6 +32,7 @@ export function tankTrackStyleForTerrain(
     case 'europe_beach':
       return 'shallow';
     case 'road':
+      return onRoadSurface ? 'faint' : 'normal';
     case 'urban_road':
     case 'airstrip':
       return 'faint';
@@ -143,6 +145,42 @@ export interface TankTrackRenderedSegment {
   toX: number;
   toY: number;
   lineWidth: number;
+}
+
+/** Split each actual tread at surface boundaries, independently of the hull centre. */
+export function tankTrackSurfaceIntervals(
+  segment: TankTrackRenderedSegment,
+  styleAt: (x: number, y: number) => TankTrackStyle,
+  sampleSpacing = 1,
+): Array<{ from: number; to: number; style: TankTrackStyle }> {
+  const dx = segment.toX - segment.fromX;
+  const dy = segment.toY - segment.fromY;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.001) return [];
+  const samples = Math.max(1, Math.ceil(length / Math.max(0.25, sampleSpacing)));
+  const at = (t: number) => styleAt(segment.fromX + dx * t, segment.fromY + dy * t);
+  const intervals: Array<{ from: number; to: number; style: TankTrackStyle }> = [];
+  let from = 0;
+  let style = at(0);
+  for (let i = 1; i <= samples; i++) {
+    const t = i / samples;
+    const next = at(t);
+    if (next === style) continue;
+    let low = (i - 1) / samples;
+    let high = t;
+    // Refine colour transitions so slow animation does not move the road edge.
+    for (let step = 0; step < 8; step++) {
+      const mid = (low + high) * 0.5;
+      if (at(mid) === style) low = mid;
+      else high = mid;
+    }
+    const boundary = (low + high) * 0.5;
+    intervals.push({ from, to: boundary, style });
+    from = boundary;
+    style = next;
+  }
+  intervals.push({ from, to: 1, style });
+  return intervals;
 }
 
 /**

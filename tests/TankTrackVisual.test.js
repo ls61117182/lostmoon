@@ -27,6 +27,7 @@ const {
   tankTrackLineWidth,
   tankTrackProgressSegment,
   tankTrackStyleForTerrain,
+  tankTrackSurfaceIntervals,
   tankTrackSweptSegment,
   tankTrackTurnArcPoints,
   tankTrackVisibleIntervals,
@@ -39,7 +40,9 @@ assert.strictEqual(tankTrackStyleForTerrain('mud', false), 'strong');
 assert.strictEqual(tankTrackStyleForTerrain('field', false), 'normal');
 assert.strictEqual(tankTrackStyleForTerrain('clear', false), 'shallow');
 assert.strictEqual(tankTrackStyleForTerrain('beach', false), 'none');
-assert.strictEqual(tankTrackStyleForTerrain('road', false), 'faint');
+assert.strictEqual(tankTrackStyleForTerrain('road', false), 'normal', 'roadside grass must match fields');
+assert.strictEqual(tankTrackStyleForTerrain('road', false, true), 'faint', 'only the road surface is faint');
+assert.strictEqual(tankTrackStyleForTerrain('urban_road', false), 'faint');
 assert.strictEqual(tankTrackStyleForTerrain('airstrip', false), 'faint');
 assert.strictEqual(tankTrackStyleForTerrain('water', false), 'none');
 assert.strictEqual(tankTrackStyleForTerrain('deep_water', false), 'none');
@@ -187,6 +190,123 @@ assert(
 );
 
 const battleScene = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
+
+// Exercise the actual renderer with a small map and a recording Graphics object.
+// This catches assigning one style to a whole hex or to both treads together.
+function loadView(file, deps = {}) {
+  const code = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const module = { exports: {} };
+  new Function('module', 'exports', 'require', code)(module, module.exports, name => {
+    assert(name in deps, `unexpected dependency ${name}`);
+    return deps[name];
+  });
+  return module.exports;
+}
+const roadGeometry = loadView('assets/scripts/core/UrbanTerrain.ts');
+const roadRaster = loadView('assets/scripts/view/TerrainGroundRaster.ts', { '../core/UrbanTerrain': roadGeometry });
+const sceneAst = ts.createSourceFile('BattleScene.ts', battleScene, ts.ScriptTarget.Latest, true);
+const sceneClass = sceneAst.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === 'BattleScene');
+const methodNames = ['redrawTankTracks', 'appendTankTrackPair', 'appendTankTrackSegment', 'pixelToNearestAxial'];
+const renderCode = ts.transpileModule(`class TrackScene {
+  ${sceneClass.members.filter(node => methodNames.includes(node.name?.getText(sceneAst))).map(node => node.getText(sceneAst)).join('\n')}
+}`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
+class Color {
+  constructor(r, g, b, a) { Object.assign(this, { r, g, b, a }); }
+}
+const renderDeps = {
+  ...loaded.exports, ...roadGeometry, ...roadRaster, Color,
+  tileHasBridge: tile => !!tile?.bridgeEnds,
+  ROAD_SURFACE_OVERLAP_SCALE: 1.025,
+  TANK_TRACK_COLORS: {
+    strong: new Color(18, 16, 13, 78), normal: new Color(18, 16, 13, 53),
+    shallow: new Color(48, 40, 28, 23), faint: new Color(20, 18, 15, 14),
+  },
+};
+const TrackScene = new Function(...Object.keys(renderDeps), `${renderCode}; return TrackScene;`)(...Object.values(renderDeps));
+const scene = new TrackScene();
+Object.assign(scene, {
+  hexSize: 60, offsetX: 137, offsetY: -53, missionId: 'track-road-regression', continuousTerrain: {},
+  usesEuropeanSummerVisuals: () => true, usesWinterTerrainVisuals: () => false,
+  project(q, r) { return { x: 137 + Math.sqrt(3) * 60 * (q + r / 2), y: -53 - 90 * r }; },
+});
+let strokes = [], point;
+scene.tankTrackGraphics = {
+  clear() { strokes = []; },
+  moveTo(x, y) { point = { x, y }; },
+  lineTo(x, y) { this.end = { x, y }; },
+  stroke() { strokes.push({ from: point, to: this.end, alpha: this.strokeColor.a }); },
+};
+const tileMap = new Map();
+for (let q = -2; q <= 2; q++) for (let r = -2; r <= 2; r++) {
+  tileMap.set(`${q},${r}`, { pos: { q, r }, terrain: 'road', roads: [true, false, false, true, false, false] });
+}
+scene.mission = { map: { get: ({ q, r }) => tileMap.get(`${q},${r}`) } };
+const moveTrack = {
+  serial: 1, fromQ: 0, fromR: 1, toQ: 0, toR: 0,
+  halfBodyLength: 20, halfGap: 15, lineWidth: 6, progress: 1,
+  extendFrom: true, extendTo: true, fadeSteps: 0,
+};
+scene.tankTracks = [moveTrack];
+scene.tankTurnTracks = [];
+scene.redrawTankTracks();
+assert(strokes.some(s => s.alpha === 53), 'crossing a road hex must leave field-depth marks in its grass');
+assert(strokes.some(s => s.alpha === 14), 'crossing the visible road must retain faint hard-surface marks');
+function verifyRoadStrokes() {
+  for (const stroke of strokes) {
+    const x = (stroke.from.x + stroke.to.x) / 2, y = (stroke.from.y + stroke.to.y) / 2;
+    const tile = scene.mission.map.get(scene.pixelToNearestAxial(x, y));
+    const center = scene.project(tile.pos.q, tile.pos.r);
+    const distance = roadRaster.europeanCountryRoadDistance(tile.roads,
+      (x - center.x) / 60, (y - center.y) / 60, roadGeometry.europeanRoadVariantIndex(tile.pos.q, tile.pos.r));
+    const width = roadRaster.europeanCountryRoadHalfWidth((x - 137) / 60, -(y + 53) / 60);
+    assert.strictEqual(stroke.alpha, distance <= width ? 14 : 53,
+      'each tread segment must follow the visible road curve and width, including camera offsets');
+  }
+}
+verifyRoadStrokes();
+const fullRoadStrokes = strokes.map(s => s.alpha);
+tileMap.forEach(tile => { tile.terrain = 'field'; });
+scene.redrawTankTracks();
+assert(strokes.every(s => s.alpha === 53), 'ordinary fields retain their existing depth');
+tileMap.forEach(tile => { tile.terrain = 'road'; tile.roads = Array(6).fill(false); });
+scene.redrawTankTracks();
+assert(strokes.every(s => s.alpha === 53), 'road hexes without a visible road are grass throughout');
+tileMap.forEach(tile => { tile.roads = [true, false, false, true, false, false]; });
+moveTrack.fadeSteps = 1;
+scene.redrawTankTracks();
+assert.deepStrictEqual(strokes.map(s => s.alpha), fullRoadStrokes.map(alpha => Math.round(alpha / 2)),
+  'both road and grass marks retain the existing per-turn fade');
+moveTrack.fadeSteps = 0;
+moveTrack.progress = 0;
+scene.redrawTankTracks();
+const p0 = scene.project(0, 1), p1 = scene.project(0, 0);
+const ux = (p1.x - p0.x) / Math.hypot(p1.x - p0.x, p1.y - p0.y);
+const uy = (p1.y - p0.y) / Math.hypot(p1.x - p0.x, p1.y - p0.y);
+for (const stroke of strokes) for (const point of [stroke.from, stroke.to]) {
+  assert((point.x - p0.x) * ux + (point.y - p0.y) * uy <= 20.001,
+    'surface splitting must not reveal track ahead of the animated hull');
+}
+scene.tankTracks = [];
+scene.tankTurnTracks = [{ serial: 2, q: 0, r: 0, halfBodyLength: 30, halfGap: 15,
+  fromAngle: 0, toAngle: Math.PI / 2, progress: 1, lineWidth: 6, fadeSteps: 0 }];
+for (const roads of [[true, false, false, true, false, false], [true, true, false, false, false, false]]) {
+  tileMap.forEach(tile => { tile.roads = roads; });
+  scene.redrawTankTracks();
+  assert(strokes.some(s => s.alpha === 53) && strokes.some(s => s.alpha === 14),
+    'pivot arcs must change depth at straight and curved road edges');
+  verifyRoadStrokes();
+}
+const crossingDrawn = [];
+const sampleSeam = (x, y) => x < 137 ? 'normal' : 'faint';
+scene.appendTankTrackSegment(scene.tankTrackGraphics, 100, 0, 174, 0, 6, 0, crossingDrawn, sampleSeam);
+assert.strictEqual(crossingDrawn.length, 1, 'a colour transition must not split crossing ownership');
+const crossingVisible = tankTrackVisibleIntervals(
+  { fromX: 137, fromY: -30, toX: 137, toY: 30, lineWidth: 6 }, crossingDrawn,
+);
+assert.strictEqual(crossingVisible.length, 2, 'crossings at a road/grass colour join must still avoid overlap');
+
 const tankVisualDb = fs.readFileSync(path.join(root, 'assets/scripts/core/TankVisualDB.ts'), 'utf8');
 assert(
   /stug3: \{[^\n]*trackBodyLengthScale: 0\.82, trackBodyWidthScale: 1/.test(tankVisualDb),

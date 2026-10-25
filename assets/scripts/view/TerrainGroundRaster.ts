@@ -1,11 +1,15 @@
 import type { Tile } from '../core/types';
+import type { EuropeanTerrainLook } from '../core/TerrainSeason';
 import { europeanRoadCenterlineDistance, europeanRoadVariantIndex } from '../core/UrbanTerrain';
 
 /** Pure, platform-independent terrain compositor. Coordinates are Y-down,
  * pointy-top axial. Chunk boundaries never restart material or transition UVs. */
 export interface TerrainMaterialData { width: number; height: number; rgb: string; }
 export interface TerrainBridgeArtwork { width:number; height:number; rgba:string; }
-export interface TerrainMaterialBundle { version: number; materials: Record<string, TerrainMaterialData>; europeanSummer?: TerrainMaterialBundle; europeanWinter?: TerrainMaterialBundle; bridgeArtwork?:TerrainBridgeArtwork; winterArtwork?: boolean; fieldBasedLand?: boolean; curvedRoads?: boolean; }
+export interface TerrainMaterialBundle { version: number; materials: Record<string, TerrainMaterialData>; europeanSummer?: TerrainMaterialBundle; europeanWinter?: TerrainMaterialBundle; europeanSeasons?: Partial<Record<EuropeanTerrainLook,TerrainMaterialBundle>>; bridgeArtwork?:TerrainBridgeArtwork; winterArtwork?: boolean; fieldBasedLand?: boolean; curvedRoads?: boolean; }
+export function selectEuropeanTerrainBundle(bundle:TerrainMaterialBundle,look:EuropeanTerrainLook):TerrainMaterialBundle {
+  return bundle.europeanSeasons?.[look] ?? (look==='winter_snow'?bundle.europeanWinter:bundle.europeanSummer) ?? bundle;
+}
 export interface GroundChunk { x: number; y: number; width: number; height: number; textureWidth: number; textureHeight: number; pixels: Uint8Array; waterMask: Uint8Array; hasWater: boolean; }
 interface GroundTile { q: number; r: number; x: number; y: number; material: string; roads: number; roadFlags: boolean[]; roadVariant: number; bridge: number; runway: boolean; mudPatches: boolean; ruralYard: boolean; }
 interface Material { width: number; height: number; pixels: Uint8Array; }
@@ -87,6 +91,10 @@ export function europeanCountryRoadDistance(roads:readonly boolean[],x:number,y:
   const envelope=smooth(0,.68,inset),phase=(variant%3)*2.1;
   const dx=.07*Math.sin(y*1.9+phase+.5)*envelope,dy=.11*Math.sin(x*2.3+phase+1.0)*envelope;
   return europeanRoadCenterlineDistance(roads,x+dx,y+dy,variant);
+}
+/** Visible road half-width in hex radii; world coordinates are Y-down. */
+export function europeanCountryRoadHalfWidth(worldX:number,worldY:number):number {
+  return .17+noise(worldX*60*.85+13,worldY*60*.85-91)*.018;
 }
 /** Mud footprint in canonical world coordinates, independent of chunk bounds. */
 export function europeanMudCoverage(q:number,r:number,gx:number,gy:number,mudNeighbors=0):number {
@@ -210,30 +218,26 @@ export class TerrainGroundRaster {
       const fx=gx-ox-.5+noise(wx*.82+38,wy*.9)*warp,fy=gy-oy-.5+noise(wx*.83-17,wy*.84+53)*warp;
       let sum=0,water=0;for(let i=0;i<ids.length;i++){const w=fieldAt(arrays[i],fx,fy,fw,fh);weights[i]=w;sum+=w;if(WATER.has(ids[i]))water+=w;}
       if(sum<=0)continue;water/=sum;
-      let waterAlpha=smooth(.70,.90,water);
-      // The blurred union of water tiles rounds convex and concave corners.
-      // Threshold above one half retreats that curved contour into water.
+      // Same compact C2 region field as terrain-bake.effect. Unlike clipping
+      // against each land hex, this rounds both convex and concave shore joins.
       let shoreLand:GroundTile|undefined,landDistance=Infinity;
-      if(water>.0001){
-        for(const [dq,dr] of [[0,0],...AXES]){
-          const land=lut.get(key(q+dq,r+dr));if(!land||WATER.has(land.material))continue;
-          const d=distance(gx,gy,land);if(d<landDistance){landDistance=d;shoreLand=land;}
-        }
-        if(shoreLand){
-          // Only a narrow safety margin uses the exact grid boundary. The
-          // visible bank follows the smooth region mask rather than six lines.
-          waterAlpha*=smooth(GROUND_RADIUS*.01,GROUND_RADIUS*.04,landDistance);
-          // A warped sample can contain only water even inside the new bank.
-          // Seed its adjacent land material so the bank still has a substrate.
-          if(water>.9999&&waterAlpha<1){
-            const i=ids.indexOf(shoreLand.material);weights[i]+=sum*.001;sum*=1.001;water/=1.001;
-          }
+      let coastSum=0,coastWater=0,gradientX=0,gradientY=0,waterGradientX=0,waterGradientY=0;
+      for(let j=0;j<7;j++){
+        const [dq,dr]=j===0?[0,0]:AXES[j-1],neighbor=lut.get(key(q+dq,r+dr));if(!neighbor)continue;
+        const isWater=WATER.has(neighbor.material)?1:0,dx=gx-neighbor.x,dy=gy-neighbor.y,invSupport=1/(GROUND_RADIUS*1.9);
+        const t=Math.hypot(dx,dy)*invSupport,h=Math.max(0,1-t),kernel=h*h*h*h*(1+4*t),slope=-20*invSupport*invSupport*h*h*h;
+        coastSum+=kernel;coastWater+=kernel*isWater;
+        gradientX+=slope*dx;gradientY+=slope*dy;waterGradientX+=slope*dx*isWater;waterGradientY+=slope*dy*isWater;
+        if(!isWater){
+          const d=distance(gx,gy,neighbor);if(d<landDistance){landDistance=d;shoreLand=neighbor;}
         }
       }
-      // Fade before the bank/ice fringe; the mask uses the same continuous field
-      // as the ground, including the padding shared by adjacent chunks.
-      let motion=smooth(.96,1,waterAlpha);
-      const shoreline=water>.0001&&water<.9999;let color=[0,0,0];
+      coastSum=Math.max(coastSum,.00001);const coastField=coastWater/coastSum;
+      const gradient=Math.hypot((waterGradientX-coastField*gradientX)/coastSum,(waterGradientY-coastField*gradientY)/coastSum);
+      const variation=noise(gx*.35+71,gy*.35-29),shoreDistance=(coastField-(.72+variation*.012))/Math.max(gradient,.001);
+      const waterAlpha=smooth(-1,1.5,shoreDistance),shallowWidth=GROUND_RADIUS*(.30+variation*.035),nearShore=1-smooth(1.5,shallowWidth,shoreDistance);
+      let motion=waterAlpha*smooth(2.5,shallowWidth+GROUND_RADIUS*.06,shoreDistance);
+      let color=[0,0,0],landColor=[0,0,0],waterColor=[0,0,0],landSum=0,waterSum=0;
       // Blend snow coverage before thresholding it. Thresholding each material
       // separately clipped the same snow patch differently on neighbouring tiles.
       let coverage=0;
@@ -241,21 +245,31 @@ export class TerrainGroundRaster {
       coverage/=Math.max(.00001,1-water);
       const frost=winter?smooth(-.18,.18,noise(wx*.48,wy*.48)*.65+coverage-.44)*(this.winterArtwork?.35:1):0;
       for(let i=0;i<ids.length;i++){
-        const mat=ids[i];let weight=weights[i]/sum;if(shoreline)weight=WATER.has(mat)?weight/water*waterAlpha:weight/(1-water)*(1-waterAlpha);if(weight<.00001)continue;
+        const mat=ids[i],weight=weights[i]/sum;if(weight<.00001)continue;
         let c=this.sample(mat,wx,wy);
         if(WATER.has(mat)){
           const a=this.sample(mat,wx-8,wy+5),b=this.sample(mat,wx+8,wy-5);
           c=c.map((v,k)=>v*.70+(a[k]+b[k])*.15);
         }
         if(winter&&!WATER.has(mat)){const snow=this.sample('snow',wx,wy);c=c.map((v,k)=>v+(snow[k]-v)*frost);}
-        for(let k=0;k<3;k++)color[k]+=c[k]*weight;
+        if(WATER.has(mat)){waterSum+=weight;for(let k=0;k<3;k++)waterColor[k]+=c[k]*weight;}
+        else {landSum+=weight;for(let k=0;k<3;k++)landColor[k]+=c[k]*weight;}
       }
-      if(shoreline){
-        const bank=4*waterAlpha*(1-waterAlpha)*(winter?.96:.88),sand=this.sample(winter?'snow':'sand',wx,wy),dark=(1-smooth(.045,.10,Math.abs(waterAlpha-.83)))*(winter?.04:.12);
-        // A cold ice fringe blends into the water beyond the snow-covered bank.
-        const ice=winter?smooth(.55,.72,waterAlpha)*(1-smooth(.86,.99,waterAlpha))*.42:0;
-        for(let k=0;k<3;k++)color[k]=(color[k]+(sand[k]-color[k])*bank)*(1-dark)*(1-ice)+[168,190,194][k]*ice;
+      if(landSum<.00001&&shoreLand){landColor=this.sample(shoreLand.material,wx,wy);if(winter){const snow=this.sample('snow',wx,wy);landColor=landColor.map((v,k)=>v+(snow[k]-v)*frost);}landSum=1;}
+      landColor=landColor.map(v=>v/Math.max(landSum,.00001));waterColor=waterColor.map(v=>v/Math.max(waterSum,.00001));
+      if(shoreDistance>-GROUND_RADIUS*.18&&shoreDistance<shallowWidth){
+        const wet=smooth(-GROUND_RADIUS*(.14+variation*.015),-1,shoreDistance)*(1-waterAlpha),earth=this.sample(winter?'snow':'mud',wx,wy);
+        const bedTint=winter?[136,166,168]:[78,126,116];
+        for(let k=0;k<3;k++){
+          const wetEarth=landColor[k]*.78+(earth[k]*.70-landColor[k]*.78)*(winter?.08:.25);
+          landColor[k]+=(wetEarth-landColor[k])*wet*(winter?.28:.65);
+          const bed=landColor[k]*.20+bedTint[k]*.80;
+          waterColor[k]+=(waterColor[k]*.40+bed*.60-waterColor[k])*nearShore*(winter?.55:.85);
+        }
       }
+      const contact=(1-smooth(.25,1.5,Math.abs(shoreDistance-.4)))*(.65+variation*.20);
+      const ice=winter?smooth(0,2,shoreDistance)*(1-smooth(5,10,shoreDistance))*.25:0;
+      for(let k=0;k<3;k++)color[k]=(landColor[k]+(waterColor[k]-landColor[k])*waterAlpha)*(1-contact*(winter?.025:.085))*(1-ice)+[168,190,194][k]*ice;
       if(tile.ruralYard&&this.materials.rural_yard){
         motion=0;
         const alpha=ruralYardCoverage((gx-tile.x)/GROUND_RADIUS,(gy-tile.y)/GROUND_RADIUS),earth=this.sample(winter&&this.materials.winter_yard?'winter_yard':'rural_yard',wx,wy);
@@ -294,7 +308,7 @@ export class TerrainGroundRaster {
         const curved=this.curvedRoads&&(!winter||this.winterArtwork);
         let d=tile.roads?roadDistance(gx,gy,tile,curved):Infinity;
         for(const [dq,dr]of AXES){const n=lut.get(key(q+dq,r+dr));if(n?.roads&&n.bridge<0&&!n.runway)d=Math.min(d,roadDistance(gx,gy,n,curved));}
-        if(d<GROUND_RADIUS*(winter?.36:curved?.40:.25)){const paving=fields.get(winter?'winter_paving':'paving'),city=paving?smooth(.08,.92,fieldAt(paving,fx,fy,fw,fh)):0,half=GROUND_RADIUS*(curved?.17+noise(wx*.85+13,wy*.85-91)*.018:.185+.010*city),alpha=1-smooth(half-GROUND_RADIUS*(curved?.014:.006),half+GROUND_RADIUS*(curved?.022:.034),d);
+        if(d<GROUND_RADIUS*(winter?.36:curved?.40:.25)){const paving=fields.get(winter?'winter_paving':'paving'),city=paving?smooth(.08,.92,fieldAt(paving,fx,fy,fw,fh)):0,half=GROUND_RADIUS*(curved?europeanCountryRoadHalfWidth(gx/GROUND_RADIUS,gy/GROUND_RADIUS):.185+.010*city),alpha=1-smooth(half-GROUND_RADIUS*(curved?.014:.006),half+GROUND_RADIUS*(curved?.022:.034),d);
           const rural=this.sample(winter?'winter_soil':curved&&this.materials.road_surface?'road_surface':'soil',wx,wy),urban=this.sample(winter?'winter_paving':'paving',wx,wy),snow=winter?this.sample('snow',wx,wy):null,edge=curved?0:smooth(half*.84,half,d)*.18;
           if(curved){
             const variation=noise(wx*.8+32,wy*.8-18),outer=half+GROUND_RADIUS*(.21+variation*.025);

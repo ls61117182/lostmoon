@@ -37,6 +37,6 @@ assert.deepStrictEqual(winter.turnEndEvents, normal.turnEndEvents, 'winter must 
 
 const menu = fs.readFileSync('assets/scripts/view/MainMenuScene.ts', 'utf8');
 assert.match(menu, /season: meta\.randomSeason/);
-assert.match(menu, /meta\.randomSeason === 'winter'/);
+assert.match(menu, /snowCover: meta\.randomSnowCover/);
 
 console.log('European winter random mission tests passed');

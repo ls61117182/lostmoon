@@ -60,13 +60,14 @@ test('only overlapping active sprites get silhouettes, with exact frame and fact
   r.sync(new Map(), [blocker]); assert.equal(stencil.active, false);
   r.sync(new Map([[unit, red]]), [blocker]); assert.equal(root.children.length, 1);
 });
-test('scene clips silhouettes with the same fog mask and excludes destroyed units', () => {
+test('scene uses whole-unit visibility and retains roof/foliage stencils', () => {
   const s = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
-  assert.match(s, /redrawVisibleHexMask\(this.silhouetteVisibilityGraphics, true\)/);
-  assert.match(s, /!unit.destroyed && this.isUnitVisible\(unit\)/);
+  assert.equal(s.includes('silhouetteRoot.addComponent(Mask)'), false, 'fog must not cut unit outlines');
+  assert.equal(s.includes('!unit.destroyed\n            && (this.drawingUnitFogId || this.isUnitVisible(unit))'), true);
   assert.match(s, /insertChild\(unitMaskNode, urbanBuildingLayerNode.getSiblingIndex\(\)\)/);
-  assert.match(s, /this\.unitOcclusion\?\.sync\(this\.silhouetteSources,\s*\[\s*\.\.\.this\.urbanBuildingSpritePool\.map\(slot => slot\.sprite\),\s*\.\.\.this\.foliageSpritePool\.map\(slot => slot\.sprite\),\s*\], this\.occlusionShapes, this\.vectorSilhouettes, this\.bunkerInfantryOccluders\(\)\);/,
-    'map redraw must submit collected units, roofs, foliage and vector fallbacks to the silhouette renderer');
+  assert.equal(s.includes('this.syncUnitOcclusion();'), true);
+  assert.equal(s.includes('], this.occlusionShapes, this.vectorSilhouettes, this.bunkerInfantryOccluders());'), true,
+    'stationary and moving units must share the same occlusion pass and soft fog texture');
   const shader = fs.readFileSync('assets/resources/effects/unit-silhouette.effect', 'utf8');
   assert.match(shader, /center \* \(1\.0 - interior\) \* color\.a/);
   assert.match(shader, /vec2 dx = outlineStep\.xy/);

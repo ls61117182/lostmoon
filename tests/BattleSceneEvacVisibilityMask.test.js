@@ -6,8 +6,8 @@ const battleScene = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8'
 const redrawMasks = battleScene.match(/private\s+redrawUnitVisibilityMask\s*\(\)\s*{[\s\S]*?\n  }\n\n/);
 assert(redrawMasks, 'redrawUnitVisibilityMask() should be found');
 assert(
-  redrawMasks[0].includes('this.redrawVisibleHexMask(this.unitVisibilityMaskGraphics, true)'),
-  'The unit stencil should include the player tank off-map evacuation extension',
+  !redrawMasks[0].includes('this.unitVisibilityMaskGraphics'),
+  'Whole units may overhang fog and off-map evacuation edges without a stencil',
 );
 assert(
   redrawMasks[0].includes('this.redrawVisibleHexMask(this.trackVisibilityMaskGraphics)'),

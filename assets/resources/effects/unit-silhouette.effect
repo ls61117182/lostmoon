@@ -16,6 +16,11 @@ CCEffect %{
       rasterizerState:
         cullMode: none
       properties:
+        unitFogTexture: { value: white }
+        unitFogUvX: { value: [0, 0, 0, 0] }
+        unitFogUvY: { value: [0, 0, 0, 0] }
+        unitFogBounds: { value: [0, 0, 1, 1] }
+        unitFogShape: { value: [1, 0.055, 0.25, 0.75] }
         alphaThreshold: { value: 0.01 }
         uvBounds: { value: [0, 0, 1, 1] }
         outlineStep: { value: [0.002, 0, 0, 0.002] }
@@ -34,6 +39,7 @@ CCProgram sprite-vs %{
   in vec2 a_texCoord;
   in vec4 a_color;
 
+  #include <unit-fog-vs>
   out vec4 color;
   out vec2 uv0;
 
@@ -44,6 +50,7 @@ CCProgram sprite-vs %{
       pos = cc_matWorld * pos;
     #endif
 
+    unitFogUV = unitFogCoords(pos.xy);
     #if USE_PIXEL_ALIGNMENT
       pos = cc_matView * pos;
       pos.xyz = floor(pos.xyz);
@@ -66,6 +73,7 @@ CCProgram sprite-fs %{
   precision highp float;
   #include <builtin/internal/embedded-alpha>
   #include <builtin/internal/alpha-test>
+  #include <unit-fog-fs>
 
   in vec4 color;
 
@@ -105,6 +113,7 @@ CCProgram sprite-fs %{
     #else
       vec4 o = vec4(0.0);
     #endif
+    o.a *= unitFogVisibility();
     ALPHA_TEST(o);
     return o;
   }

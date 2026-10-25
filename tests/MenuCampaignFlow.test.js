@@ -112,11 +112,11 @@ test('invalid campaign saves are rejected without damaging the mission slot', ()
   }
 });
 
-test('mission catalog exposes thirteen European and twelve Pacific levels plus three random choices', () => {
+test('mission catalog exposes thirteen European and twelve Pacific levels plus all seasonal random choices', () => {
   assert.equal(getChapterLevels('europe').length, 13);
   assert.equal(getChapterLevels('pacific').length, 12);
   const before = new Map(storage);
-  assert.equal(getRandomMissionLevels().length, 3);
+  assert.equal(getRandomMissionLevels().length, 6);
   assert.deepEqual(storage, before);
 });
 

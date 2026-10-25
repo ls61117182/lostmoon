@@ -160,11 +160,12 @@ test('all diagonal road mouths bleed past the hex border to cover rotated seams'
 });
 
 test('battle renderer preloads seasonal European road sprites and rotates canonical shapes', () => {
-  assert.match(battleScene, /for \(const season of \['summer', 'winter'\]\)/);
+  assert.ok(battleScene.includes("for (const season of ['summer', 'winter'])"));
+  assert.ok(battleScene.includes('private loadMissionTerrainSeason()'));
   assert.match(battleScene, /european_road_surface_\$\{season\}_\$\{rd\}_v\$\{variant\}/);
   assert.match(battleScene, /tile\.terrain !== 'road'[\s\S]*?roadSpriteTransform\(tile\.roads\)/);
   assert.match(battleScene, /european_road_surface_\$\{season\}_\$\{transform\.canonicalFlags\}_v\$\{variant\}/);
-  assert.match(battleScene, /europeanRoadVariantIndex\(tile\.pos\.q, tile\.pos\.r, this\.missionId\)/);
+  assert.ok(battleScene.includes("europeanRoadSeason(europeanTerrainLook(this.mission?.data))"));
   assert.match(battleScene, /drawTerrainSpriteFrame\([\s\S]*?this\.hexSize \* ROAD_SURFACE_OVERLAP_SCALE, info\.frame, info\.rotationDegrees/);
   assert.match(battleScene, /addTileInspectRoadSurfaceSprite\(preview, tile/);
 });

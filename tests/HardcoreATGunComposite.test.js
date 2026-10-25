@@ -59,7 +59,7 @@ assert.doesNotMatch(
   /infantry\.(?:faction|unitLevel|crewSkills)\s*=/,
   'releasing a captured gun crew must preserve the controller faction, level, and skills',
 );
-assert.match(scene, /if \(isControlledATGun\(u\)\) this\.drawATGunCrewMaybeAnim\(u\)/, 'all modes should render three operator infantry on controlled guns');
+assert.match(scene, /if \(isControlledATGun\(u\)\) \{\s*this\.drawPresentedUnit\(u, true\)/, 'all modes should render controlled gun crews with whole-unit visibility');
 assert.match(scene, /\{ forward: this\.hexSize \* 0\.47, side: -this\.hexSize \* 0\.43 \}[\s\S]*?\{ forward: this\.hexSize \* 0\.82, side: 0 \}[\s\S]*?\{ forward: this\.hexSize \* 0\.47, side: this\.hexSize \* 0\.43 \}/, 'AT-gun crew should occupy the reference image side of the gun in an upper-right, far-right, lower-right triangle');
 assert.match(scene, /const forwardShift = this\.hexSize \* 0\.25;[\s\S]*?forward \* crewSide \+ forwardShift/, 'the complete AT-gun crew formation should retain its tuned forward offset');
 assert.match(scene, /private atGunCrewFormationOffsets[\s\S]*?facingLerp\?: DirectionLerp[\s\S]*?this\.topDownForwardVec\(gun, origin, facingLerp\)/, 'AT-gun crew formation should use the same interpolated facing basis as the gun');

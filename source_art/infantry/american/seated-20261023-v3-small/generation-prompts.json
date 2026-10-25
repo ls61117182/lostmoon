@@ -1,0 +1,21 @@
+{
+  "tool": "built-in image_gen.imagegen",
+  "intent": "Simplified seated American infantry for approximately 34x40 screen-pixel sprite canvases on 100px tank hulls. Plain helmet, large contiguous uniform/skin shapes, no netting or granular equipment, straight weapons. Original pose/camera/hips anchor preserved.",
+  "files": [
+    {
+      "file": "AmericanInfantry01_seated_simple.png",
+      "source": "exec-c1b3623b-4a32-4ba3-a0c5-00a7e3734a86.png",
+      "prompt": "Use case: style-transfer. Edit this seated American infantry game sprite into a MUCH SIMPLER SMALL-SCREEN SPRITE. The supplied image is the POSE, CAMERA, CANVAS ALIGNMENT AND PROPORTION reference only. Keep its EXACT 90-degree straight-down orthographic view, no face and no visible torso, its seated forward thighs and short hanging boot tips, approved thigh length, helmet center and hip position, horizontal straight wood-stock rifle, one isolated figure on true transparency. Intended actual on-screen canvas is ONLY 34 pixels wide by 40 pixels high. Design it as a real 34x40 pixel tactical-game sprite enlarged with very large uniform square pixel blocks. Use about 10-12 flat colors TOTAL, including a dark charcoal outline, 3 subdued gray-sage uniform shades, 2 green helmet shades, khaki, skin, brown wood and dark metal. Each major part must be a clear solid contiguous shape that survives reduction to 34 pixels wide. Draw a plain solid olive M1 helmet with ONE broad highlight patch, no netting at all. Shoulders and bent sleeves are simple broad lighter gray-sage blocks; two flat peach mitt-like hands without fingers; two distinct flat broad thighs separated by a dark gap, at most one broad shadow block per thigh, two tiny brown boot tips. Only a simple khaki backpack silhouette behind the helmet, NO pouches, straps, loops, buckles, straps around helmet, tiny compartments or decorative gear. Rifle is one rigid perfectly straight horizontal brown-and-charcoal silhouette across lap, simple wood stock and continuous straight barrel, no fine mechanical detail. Outline about ONE virtual pixel at the target size, not a thick black band, and simplify internal outlines aggressively. All color regions large; no dithering, no texture, no speckles, no intricate pixel noise, no tiny highlights, no fabric folds, no camo pattern, no realistic shading, no gradients, no anti-aliasing. Keep muted WWII US appearance and natural human seated anatomy, not chibi or cartoon mascot. Main silhouette and feature positions must remain compatible with original hips anchor x=0.5 and y=0.39 from bottom of entire image. Keep original canvas aspect ratio and comparable transparent margins. Helmet, shoulders, arms and thighs should read immediately when the ENTIRE picture is reduced to 34x40 pixels. Only one soldier, no vehicle, no seat, no shadow outside body, no background, no labels, no grids, no inset previews. This is static non-combat game art."
+    },
+    {
+      "file": "AmericanInfantry02_seated_simple.png",
+      "source": "exec-2e9513c8-37b7-4ca1-ad9f-c08b67c96b4a.png",
+      "prompt": "制作一张静态的二战策略游戏美军步兵坐姿精灵。图1是已经确定的简化画风和坐姿模板；图2仅用于参考原角色所持自动步枪的外形。整体严格沿用图1：90度正上方俯视，纯色钢盔挡住脸和躯干，只见头盔、肩膀、胳膊、双手、坐姿大腿和一点鞋尖，腿长、人物比例、位置及透明留白不变。把图1腿上普通步枪换成图2那种带一个向下方形弹匣的自动步枪，但大幅简化成笔直、水平、黑色金属加棕色木质的清楚轮廓，枪管不弯折，双手两侧自然对齐。不要增加其他武器。最终整个画布会缩到34×40像素显示，所以要用非常大的像素方块和宽阔平整的色块来画，总共约10到12种颜色；轮廓相当于小图的一像素粗。纯色头盔只留一处大高光，衣服只留一两块明暗，双手不画手指，双腿用两个分开的大色块。去掉网纹、密集衣褶、零碎背带、口袋、徽章、细小反光、颗粒和纹理，不画渐变，不画脸。头盔深橄榄绿，衣服浅灰鼠尾草绿，背包简化成后方卡其色轮廓。保持图1的粗像素风和髋部锚点（全画布横向50%，从底部起39%处）。一个完整角色，真实透明背景，原画布比例，不画坦克、椅子、地面、背景、外部投影、文字、格线或额外视角。"
+    },
+    {
+      "file": "AmericanInfantry03_seated_simple.png",
+      "source": "exec-d4415a61-531e-4f3e-a22b-6ac4bdf717e7.png",
+      "prompt": "制作一张静态二战策略游戏美军火箭筒兵的简化坐姿精灵。图1是已经确定的简化画风、严格俯视坐姿和尺寸模板；图2仅参考该角色腿上横放的橄榄绿色火箭筒外观。沿用图1的纯色钢盔、浅灰鼠尾草绿袖子、卡其色简化背包、块状双手、两块分开的大腿和一点棕色鞋尖，人物位置、腿长和透明留白不变。只把腿上普通步枪换成一根笔直、水平横放的粗橄榄绿色筒状轮廓，两条长边完全水平平行，双手自然扶住，筒身穿过双手前后保持对齐，左右端口只画简单深色口与一道轮廓。去掉火箭筒背带，去掉手榴弹、零碎口袋、小把手和细密装具，避免线条缠在一起。实际显示整个画布只有34×40像素，因此按真正的低分辨率小精灵设计，用非常大的均匀像素方块、约10到12种颜色、一像素等效的深灰轮廓，以及宽阔连贯的平整色块。头盔只一处大高光，衣服和裤腿最多一两块明暗；不画手指、网纹、纹理、衣褶、颗粒、渐变、细小反光或徽章。严格90度正上方俯视，头盔挡住脸和躯干，只见头盔、肩膀、胳膊、双手和坐姿大腿。髋部锚点仍是全画布横向50%、从底部起39%处，画布比例与图1相同。人物比例自然，不做大头Q版。一个完整角色，真实透明背景，不画坦克、座椅、地面、外部投影、文字、格线或多视图。"
+    }
+  ]
+}

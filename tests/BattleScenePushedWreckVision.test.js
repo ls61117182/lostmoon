@@ -36,6 +36,7 @@ class Node {
 }
 class ObjectShadowRenderer {
   constructor(parent, name, index) { const node = new Node(name); parent.insertChild(node, index); }
+  setFogRenderer() {}
 }
 class Color { constructor(r, g, b, a) { Object.assign(this, { r, g, b, a }); } }
 const Scene = require('./helpers/BattleSceneMethods.cjs')([
@@ -91,7 +92,7 @@ function fixture() {
   return { scene, known, unseen, live, sprite: scene.enemyTopSpritePool[0].sprite };
 }
 
-test('known pushed wrecks use unlocked target hexes while other units retain the displayed mask', () => {
+test('known pushed wrecks use unlocked target hexes while ground tracks retain their mask', () => {
   const { scene, known, unseen, live } = fixture();
   scene.updateTankWreckPose(known, { x: 1.1, y: 0, angle: 0 }, true);
   scene.redrawUnitVisibilityMask();
@@ -99,7 +100,7 @@ test('known pushed wrecks use unlocked target hexes while other units retain the
   assert(scene.pushedWreckVisibilityGraphics.hexes.includes('1,0'), 'active reveal ring must not cut away the wreck');
   assert(scene.pushedWreckVisibilityGraphics.hexes.includes('2,0'), 'known shape can stay dim beneath a pending fog ring');
   assert(!scene.pushedWreckVisibilityGraphics.hexes.includes('3,0'), 'genuinely hidden terrain must remain clipped');
-  for (const g of [scene.tankVisibilityGraphics, scene.unitVisibilityMaskGraphics, scene.trackVisibilityMaskGraphics, scene.silhouetteVisibilityGraphics]) {
+  for (const g of [scene.trackVisibilityMaskGraphics]) {
     assert(!g.hexes.includes('1,0') && !g.hexes.includes('2,0'), 'other units must not inherit the extra visibility');
   }
   assert.equal(scene.isUnitVisible(known), true);
@@ -120,13 +121,13 @@ test('ordinary movement preserves a known wreck before the arrival hex unlocks, 
   assert.equal(scene.isHexVisible({ q: 1, r: 0 }), false, 'arrival visibility must remain governed by the game rules');
   assert.equal(scene.pushedWreckVisibilityGraphics.polygons.length, 1, 'the mask must preserve the hull geometry, not just switch layers');
   assert(scene.pushedWreckVisibilityGraphics.polygons[0].some(point => point.x > 1), 'the geometry must reach beyond the old visible hex');
-  assert.equal(scene.tankVisibilityGraphics.polygons.length, 0, 'hidden live units must not inherit the footprint exception');
+  assert.equal(scene.trackVisibilityMaskGraphics.polygons.length, 0, 'ground tracks must not inherit the footprint exception');
   scene.mission.sherman.pos = { q: 1, r: 0 };
   scene.visibleHexKeys.add('1,0');
   scene.anim = null;
   scene.redrawUnitVisibilityMask();
   assert.equal(scene.pushedWreckMaskNode.active, false);
-  assert(scene.tankVisibilityGraphics.hexes.includes('1,0'), 'normal visibility takes over on arrival');
+  assert.equal(scene.isUnitVisible(known), true, 'normal visibility takes over on arrival');
 });
 
 test('a visibly clipped fragment is sufficient to remember a wreck whose center is still hidden', () => {
@@ -186,12 +187,12 @@ test('mission 09 building approach preserves a pushed wreck while the real sight
   const hiddenHex = Array.from({ length: 6 }, (_, i) => ({ x: c.x + Math.cos(Math.PI / 6 + i * Math.PI / 3), y: c.y + Math.sin(Math.PI / 6 + i * Math.PI / 3) }));
   const polygon = scene.pushedWreckVisibilityGraphics.polygons[0];
   assert(wreckPolygonContact(polygon, hiddenHex), 'the known wreck footprint must survive on the still-hidden side of the building');
-  assert(!scene.tankVisibilityGraphics.hexes.includes(`${c.x},${c.y}`), 'ordinary enemies beyond the building must stay clipped');
+  assert(!scene.trackVisibilityMaskGraphics.hexes.includes(`${c.x},${c.y}`), 'ground tracks beyond the building must stay clipped');
   assert.equal(scene.isHexVisible(farSide), false);
   player.pos = to; scene.anim = null; scene.visibleHexKeys = after;
   scene.redrawUnitVisibilityMask();
   assert.equal(scene.pushedWreckMaskNode.active, false);
-  assert(scene.tankVisibilityGraphics.hexes.includes(`${c.x},${c.y}`));
+  assert.equal(scene.isUnitVisible(wreck), true);
 });
 
 test('wrecks stay under the fading fog and existing scenery, and below live hulls', () => {
@@ -230,7 +231,7 @@ test('ending or reversing a reveal restores normal clipping and disables the ext
   scene.redrawUnitVisibilityMask(); scene.captureSilhouetteSources(known);
   assert.equal(scene.pushedWreckMaskNode.active, false);
   assert.equal(sprite.node.parent, scene.tankWreckLayer);
-  assert(scene.tankVisibilityGraphics.hexes.includes('1,0'), 'completed reveal must retain the visible wreck without a pop');
+  assert.equal(scene.isUnitVisible(known), true, 'completed reveal must retain the visible wreck without a pop');
   scene.fogVisionTransition = { expanding: false, displayedHexKeys: new Set(['0,0']), activeLayer: new Set(), elapsed: 0, layerInterval: 1 };
   scene.redrawUnitVisibilityMask();
   assert.equal(scene.usesPushedWreckVision(known), false);

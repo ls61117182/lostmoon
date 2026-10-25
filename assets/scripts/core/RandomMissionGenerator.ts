@@ -1,4 +1,6 @@
 import { RNG } from './Dice';
+import { europeanTerrainLook, normalizeSnowCover } from './TerrainSeason';
+import type { SnowCover } from './types';
 import {
   approximateDirection,
   axialToOffset,
@@ -30,8 +32,9 @@ export type RandomMissionTheater = 'europe' | 'pacific';
 export type RandomMissionObjectiveKind = 'destroy_all' | 'target_evac' | 'direct_evac';
 export interface RandomMissionGenerationOptions {
   pacificBattleType?: 'landing' | 'inland';
-  /** Visual-only season; winter is currently supported by European terrain. */
+  /** Visual-only European season; terrain rules and random layouts remain identical. */
   season?: SeasonType;
+  snowCover?: SnowCover;
   /** Fixed mission weather. */
   weather?: WeatherType;
   /** Restrict objective generation to these kinds; one is chosen uniformly. */
@@ -1278,7 +1281,8 @@ function generateAttempt(
     enemies.unshift({ kind: 'truck', faction: 'german', at: truckStart });
   }
   const missionId = `random_${theater}_${seed >>> 0}`;
-  const winter = theater === 'europe' && options.season === 'winter';
+  const seasonName = { spring:'春季', summer:'', autumn:'秋季', winter_bare:'冬季无雪', winter_snow:'冬季积雪' }[
+    europeanTerrainLook({theater,season:options.season,snowCover:options.snowCover})];
   const turnEndEvents = buildTurnEndEvents(missionId, theater, objectiveRoll, enemies, rng);
   if (!findTankPath(layout.tiles, START, EVAC)) throw new Error('final terrain disconnected player route');
   if (tankReachableShare(layout.tiles, START) < 1) throw new Error('not all passable tiles are player-connected');
@@ -1295,11 +1299,12 @@ function generateAttempt(
   const mission: MissionData = {
     id: missionId,
     name: theater === 'europe'
-      ? `随机关卡（欧洲${winter ? '冬季' : ''}）#${seed >>> 0}`
+      ? `随机关卡（欧洲${seasonName}）#${seed >>> 0}`
       : `随机关卡（太平洋）#${seed >>> 0}`,
     description: `由随机关卡生成器 v${RANDOM_MISSION_GENERATOR_VERSION} 生成；seed=${seed >>> 0}`,
     theater,
     ...(options.season ? { season: options.season } : {}),
+    ...(theater === 'europe' && options.season === 'winter' ? { snowCover: normalizeSnowCover(options.season, options.snowCover) } : {}),
     ...(options.weather && options.weather !== 'clear' ? { weather: options.weather } : {}),
     cols: COLS,
     rows: ROWS,
@@ -1324,7 +1329,7 @@ function generateAttempt(
     turnEndEvents,
     editor: {
       notes: `generatorVersion=${RANDOM_MISSION_GENERATOR_VERSION};seed=${seed >>> 0}`,
-      tags: ['random', theater, ...(winter ? ['winter'] : [])],
+      tags: ['random', theater, ...(theater === 'europe' && options.season && options.season !== 'summer' ? [options.season] : [])],
     },
   };
 }

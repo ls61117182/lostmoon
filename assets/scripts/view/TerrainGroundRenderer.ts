@@ -1,6 +1,7 @@
 import { director, EffectAsset, Material, Node, Rect, resources, Size, Sprite, SpriteFrame, UITransform, Vec4 } from 'cc';
 import type { Tile } from '../core/types';
-import { GROUND_RADIUS, GROUND_CHUNK_SIZE, terrainGroundFingerprint, type TerrainMaterialBundle } from './TerrainGroundRaster';
+import type { EuropeanTerrainLook } from '../core/TerrainSeason';
+import { GROUND_RADIUS, GROUND_CHUNK_SIZE, terrainGroundFingerprint, selectEuropeanTerrainBundle, type TerrainMaterialBundle } from './TerrainGroundRaster';
 import { TerrainGroundGpuData, type GpuChunkPlan } from './TerrainGroundGpuData';
 import { TerrainGroundGpuBaker, type GpuBakedChunk } from './TerrainGroundGpuBaker';
 
@@ -42,11 +43,12 @@ export class TerrainGroundRenderer {
   }
   get loading():boolean {return this.requested&&(!this.bakeEffect||this.busy||this.queue.length>0);}
   get progress():number {return this.totalChunks?this.completedChunks/this.totalChunks:this.requested&&this.bakeEffect?1:0;}
-  draw(tiles:readonly Tile[],winter:boolean,hexSize:number,offsetX:number,offsetY:number,europeanSummer=false):void {
+  draw(tiles:readonly Tile[],winter:boolean,hexSize:number,offsetX:number,offsetY:number,europeanSummer=false,look:EuropeanTerrainLook=winter?'winter_snow':'summer'):void {
     if(this.destroyed)return;
     this.visible=true;this.layout={size:hexSize,x:offsetX,y:offsetY};
-    const selected=winter&&this.bundle.europeanWinter?this.bundle.europeanWinter:europeanSummer&&!winter&&this.bundle.europeanSummer?this.bundle.europeanSummer:this.bundle;
-    const style=(selected===this.bundle.europeanWinter?'europe-winter':selected===this.bundle.europeanSummer?'europe-summer':'base')+(winter?'|winter':'|summer');
+    const european=winter||europeanSummer;
+    const selected=european?selectEuropeanTerrainBundle(this.bundle,look):this.bundle;
+    const style=(european?`europe-${look}`:'base')+(winter?'|snow':'|bare');
     if(style!==this.style){this.cancelWork(true);this.releaseChunks();this.style=style;this.mapSignature='';this.data=new TerrainGroundGpuData(selected);}
     const signature=terrainGroundFingerprint(tiles,winter);
     if(this.requested&&signature===this.mapSignature){this.position();return;}

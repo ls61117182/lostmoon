@@ -1,6 +1,8 @@
 import { Color, EffectAsset, Material, Node, Rect, resources, Size, Sprite, SpriteFrame, Texture2D, UITransform, Vec4 } from 'cc';
 import { buildFogMask, FogMaskCell, FogMaskData } from './FogMaskRaster';
 
+export interface UnitFogMaskState { texture: Texture2D; data: FogMaskData; params: Vec4; quad: Node }
+
 /** One cached low-resolution texture and one draw. Animation changes uniforms only. */
 export class FogOverlayRenderer {
   private sprite: Sprite | null;
@@ -12,6 +14,11 @@ export class FogOverlayRenderer {
   private data: FogMaskData | null = null;
   private disposed = false;
   private params = new Vec4();
+
+  getUnitFogState(): UnitFogMaskState | null {
+    return !this.disposed && this.texture && this.data && this.quad?.isValid
+      ? { texture: this.texture, data: this.data, params: this.params, quad: this.quad } : null;
+  }
 
   constructor(private node: Node, onReady: () => void) {
     const quad = new Node('ContinuousFogMask');

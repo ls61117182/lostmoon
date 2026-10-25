@@ -1,0 +1,12 @@
+uniform UnitFogParams {
+  vec4 unitFogUvX;
+  vec4 unitFogUvY;
+  vec4 unitFogBounds;
+  vec4 unitFogShape;
+};
+out vec2 unitFogUV;
+
+vec2 unitFogCoords(vec2 world) {
+  return vec2(dot(unitFogUvX.xyz, vec3(world, 1.0)),
+    dot(unitFogUvY.xyz, vec3(world, 1.0)));
+}

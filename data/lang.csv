@@ -527,9 +527,12 @@ level.11.title,钢铁角斗士,Steel Gladiator
 level.12.title,猎杀虎式Ⅱ,Hunt the Tiger II
 level.13.title,诺曼底登陆,Normandy Landing
 level.test.title,测试关卡,Test Mission
-level.test.random.europe.title,随机关卡（欧洲战场）,Random Mission (Europe)
-level.test.random.pacific.title,随机关卡（太平洋战场）,Random Mission (Pacific)
-level.test.random.europe_winter.title,随机关卡（欧洲冬季）,Random Mission (European Winter)
+level.test.random.europe.title,欧洲夏季,European Summer
+level.test.random.pacific.title,太平洋战场,Pacific Theater
+level.test.random.europe_winter.title,欧洲冬季积雪,European Winter With Snow
+level.test.random.europe_spring.title,欧洲春季,European Spring
+level.test.random.europe_autumn.title,欧洲秋季,European Autumn
+level.test.random.europe_winter_bare.title,欧洲冬季,European Winter
 level.custom.editor.title,关卡编辑器,Level Editor
 level.custom.mission.title,自定义关卡,Custom Mission
 levelEditor.placeholder.body,关卡编辑器入口已创建，编辑器功能正在接入中。当前不会再进入无响应的测试场景。下一步将实现地图、单位、目标和事件编辑界面。,"The level editor entry is ready, and the editor UI is being connected. It will no longer open the unresponsive test scene. Next up: map, unit, objective, and event editing."
@@ -989,3 +992,11 @@ menu.mode.test,测试,Test
 hud.attackMovementPhase,回合 {n} | 攻击移动阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack and movement phase | {loaded} | Dice {dice}{sel}
 battleLog.phase.attackMovement,攻击移动,Attack and movement
 btn.attackMovementPhase,攻击移动阶段,Attack / Move Phase
+attack.reason.mounted,搭乘步兵须先下车才能行动,Riding infantry must dismount before acting
+tankRiding.status,搭乘：{tank},Riding: {tank}
+tankRiding.carrying,搭载一支美军小队,Carrying one US infantry squad
+tankRiding.mount,乘坐{tank},Board {tank}
+tankRiding.dismount,下车,Dismount
+tankRiding.hint,与友军坦克同格时可上车，每车一支小队；搭乘期间不独立行动。,Board a friendly tank in the same hex. One squad per tank; riders do not act independently.
+tankRiding.logMount,{infantry}乘坐{tank}。,{infantry} boarded {tank}.
+tankRiding.logDismount,{infantry}下车。,{infantry} dismounted.

@@ -1,0 +1,8 @@
+Mode: built-in imagegen
+
+Use case: style-transfer
+Asset type: seamless orthographic top-down spring pasture ground texture for a historical 2D strategy game.
+Input image 1 is the edit target: current fine spring grass. Input image 2 is a style and readable foliage texture reference: existing summer grass.
+Primary request: improve the current fine spring grass so it reads as living low grass, not smooth mottled flooring, when reduced to 384 pixels square. Preserve its fresh muted yellow-green spring palette and strict straight-down lighting.
+Draw clearly resolved small irregular overlapping tufts of SHORT grass and clover leaves, broken leaf strokes, fine dry thatch and sparse tiny irregular exposed earth flecks. Use the second image's readable blades and organic relief, but keep tuft footprints about HALF the diameter of the second image's large tufts. Individual short strokes about 5–10 px and small irregular low tufts about 12–22 px at a 1024 square canvas; distribute details at all positions rather than leaving blurry smooth areas. Moderate crisp dark green undersides and warm pale leaf tips; diffuse even ambient lighting, no directional cast shadows. Small variations in grass density should form irregular natural patches with 85–95% grass coverage.
+Constraints: full square fills edge to edge, seamless tileable surface, no perspective, no horizon, no trees, no flowers, no objects, no tall isolated grass rosettes, no oversized plants, no large bare dirt blobs, no paving, no uniform grain filter, no blurry sponge texture, no text or borders. A finished hand-painted detailed grass ground material, consistent with the provided game art.

@@ -16,7 +16,7 @@ import { CustomMissionStore, CUSTOM_MISSION_MAX_SLOTS } from './CustomMissionSto
 import { DEFAULT_GAME_MODE, GameMode, normalizeSelectedGameMode } from './GameMode';
 import { CAMPAIGNS, CAMPAIGN_CHAPTER_ID } from './CampaignDB';
 import { isTankKind } from './types';
-import type { SeasonType, UnitKind } from './types';
+import type { SeasonType, SnowCover, UnitKind } from './types';
 import { DEFAULT_PLAYER_TANK_KIND, normalizeSelectedPlayerTankKind } from './PlayerTankSelection';
 
 export type ChapterId = string;
@@ -40,6 +40,7 @@ export interface LevelMeta {
   randomTheater?: 'europe' | 'pacific';
   /** Optional visual season for a generated random mission. */
   randomSeason?: SeasonType;
+  randomSnowCover?: SnowCover;
   /** Menu entry bypasses chapter progression and is immediately playable. */
   alwaysUnlocked?: boolean;
 }
@@ -133,16 +134,28 @@ const ALL_CHAPTERS: ChapterMeta[] = [
     levels: [
       { chapterId: 'test', id: 0, missionPath: 'missions/mission_test', titleKey: 'level.test.title', missionId: 'mission_test' },
       {
+        chapterId: 'test', id: 4, missionPath: '', titleKey: 'level.test.random.europe_spring.title',
+        missionId: 'random_europe_spring', entryKind: 'random', randomTheater: 'europe', randomSeason: 'spring', badgeOverride: 'RS',
+      },
+      {
         chapterId: 'test', id: 1, missionPath: '', titleKey: 'level.test.random.europe.title',
         missionId: 'random_europe', entryKind: 'random', randomTheater: 'europe', badgeOverride: 'RE',
       },
       {
-        chapterId: 'test', id: 2, missionPath: '', titleKey: 'level.test.random.pacific.title',
-        missionId: 'random_pacific', entryKind: 'random', randomTheater: 'pacific', badgeOverride: 'RP',
+        chapterId: 'test', id: 5, missionPath: '', titleKey: 'level.test.random.europe_autumn.title',
+        missionId: 'random_europe_autumn', entryKind: 'random', randomTheater: 'europe', randomSeason: 'autumn', badgeOverride: 'RA',
+      },
+      {
+        chapterId: 'test', id: 6, missionPath: '', titleKey: 'level.test.random.europe_winter_bare.title',
+        missionId: 'random_europe_winter_bare', entryKind: 'random', randomTheater: 'europe', randomSeason: 'winter', randomSnowCover: 'none', badgeOverride: 'RB',
       },
       {
         chapterId: 'test', id: 3, missionPath: '', titleKey: 'level.test.random.europe_winter.title',
         missionId: 'random_europe_winter', entryKind: 'random', randomTheater: 'europe', randomSeason: 'winter', badgeOverride: 'RW',
+      },
+      {
+        chapterId: 'test', id: 2, missionPath: '', titleKey: 'level.test.random.pacific.title',
+        missionId: 'random_pacific', entryKind: 'random', randomTheater: 'pacific', badgeOverride: 'RP',
       },
     ],
   },

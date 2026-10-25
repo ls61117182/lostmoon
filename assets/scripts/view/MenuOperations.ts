@@ -3,6 +3,7 @@ import {
   Label, Mask, Node, ScrollView, UITransform, Vec2, Vec3, VerticalTextAlignment, resources,
 } from 'cc';
 import { t } from '../core/Lang';
+import { europeanTerrainLook, seasonalTerrainRGB } from '../core/TerrainSeason';
 import { BUILD_FEATURES } from '../core/BuildProfile';
 import { CAMPAIGNS, getCampaign } from '../core/CampaignDB';
 import { getChapterLevels, getRandomMissionLevels, LevelMeta, MenuProgress } from '../core/LevelDB';
@@ -256,8 +257,9 @@ export class MenuOperations {
     cells.forEach(cell => {
       const x = (cell.x - (minX + maxX) / 2) * scale;
       const y = (cell.y - (minY + maxY) / 2) * scale;
-      const rgb = hidden ? [0, 0, 0] : mission?.season === 'winter' && !['w', 'dw', 'esw'].includes(cell.tile!.t)
-        ? [170, 183, 177] : palette[cell.tile!.t] ?? [90, 100, 70];
+      const seasonal = !hidden && cell.tile && (mission?.theater ?? 'europe') === 'europe'
+        ? seasonalTerrainRGB(europeanTerrainLook(mission), cell.tile!.t) : undefined;
+      const rgb = hidden ? [0, 0, 0] : seasonal ?? palette[cell.tile!.t] ?? [90, 100, 70];
       g.fillColor = new Color(rgb[0], rgb[1], rgb[2]);
       g.strokeColor = hidden ? new Color(60, 64, 58) : new Color(20, 29, 22);
       g.lineWidth = Math.max(0.5, scale * 0.045);

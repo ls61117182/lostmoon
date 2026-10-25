@@ -148,6 +148,8 @@ CCProgram terrain-fs %{
     vec2 warped=p+vec2(noise(wx*vec2(.82,.9)+vec2(38,0)),noise(wx*vec2(.83,.84)+vec2(-17,53)))*warp;
     float weights[7];float ids[7];vec4 data[7];vec2 positions[7];
     float sum=0.0,water=0.0,coverage=0.0,paving=0.0,deep=0.0,shallow=0.0,landDistance=1000.0,nearestLand=-1.0;
+    float coastSum=0.0,coastWater=0.0;
+    vec2 coastGradient=vec2(0),waterGradient=vec2(0);
     for(int i=0;i<7;i++) {
       positions[i]=qr+(i==0?vec2(0):neighbour(i-1));data[i]=tile(positions[i]);ids[i]=data[i].r-1.0;
       float d=hexDistance(warped-center(positions[i]));
@@ -155,12 +157,30 @@ CCProgram terrain-fs %{
       float w=weights[i];water+=waterMaterial(ids[i])*w;coverage+=(1.0-waterMaterial(ids[i]))*snowCoverage(ids[i])*w;
       if(ids[i]==6.0||ids[i]==15.0)paving+=w;if(ids[i]==5.0)deep+=w;if(ids[i]==11.0)shallow+=w;
       if(data[i].r>.5&&waterMaterial(ids[i])<.5) {float ld=hexDistance(p-center(positions[i]));if(ld<landDistance){landDistance=ld;nearestLand=ids[i];}}
+      // Compact C2 radial kernels smooth the whole water region, including
+      // concave joins. Support below 2R keeps the seven-cell stencil continuous
+      // when the owner hex changes. Shared with TerrainGroundRaster.
+      if(data[i].r>.5) {
+        vec2 delta=p-center(positions[i]);float invSupport=1.0/(R*1.9);
+        float t=length(delta)*invSupport,h=max(0.0,1.0-t);
+        float kernel=h*h*h*h*(1.0+4.0*t),isWater=waterMaterial(ids[i]);
+        vec2 gradient=-20.0*invSupport*invSupport*h*h*h*delta;
+        coastSum+=kernel;coastWater+=kernel*isWater;
+        coastGradient+=gradient;waterGradient+=gradient*isWater;
+      }
     }
     sum=max(sum,.00001);water/=sum;paving/=sum;deep/=sum;shallow/=sum;
     coverage/=max(.00001,sum*(1.0-water));
-    float waterAlpha=smoothstep(.70,.90,water);
-    if(nearestLand>=0.0)waterAlpha*=smoothstep(R*.01,R*.04,landDistance);
-    float motion=smoothstep(.96,1.0,waterAlpha);
+    float coastField=coastWater/max(coastSum,.00001);
+    vec2 gradient=(waterGradient-coastField*coastGradient)/max(coastSum,.00001);
+    float variation=noise(p*.35+vec2(71,-29));
+    // Bias into water to preserve dry hedge edges and the one-cell river core.
+    // The local gradient converts coverage to approximate map-pixel distance.
+    float shoreDistance=(coastField-(.72+variation*.012))/max(length(gradient),.001);
+    float waterAlpha=smoothstep(-1.0,1.5,shoreDistance);
+    float shallowWidth=R*(.30+variation*.035);
+    float nearShore=1.0-smoothstep(1.5,shallowWidth,shoreDistance);
+    float motion=waterAlpha*smoothstep(2.5,shallowWidth+R*.06,shoreDistance);
     float frost=winter?smoothstep(-.18,.18,noise(wx*.48)*.65+coverage-.44)*(terrainStyle.w>.5?.35:1.0):0.0;
     vec3 landColor=vec3(0),waterColor=vec3(0);float landSum=0.0,waterSum=0.0;
     for(int i=0;i<7;i++)if(weights[i]>.00001) {
@@ -169,13 +189,20 @@ CCProgram terrain-fs %{
       else {if(winter)c=mix(c,sampleArt(7.0,wx),frost);landColor+=c*weights[i];landSum+=weights[i];}
     }
     if(landSum<.00001&&nearestLand>=0.0) {landColor=sampleArt(nearestLand,wx);if(winter)landColor=mix(landColor,sampleArt(7.0,wx),frost);landSum=1.0;}
-    vec3 color=mix(landColor/max(landSum,.00001),waterColor/max(waterSum,.00001),waterAlpha);
-    if(water>.0001&&water<.9999) {
-      float bank=4.0*waterAlpha*(1.0-waterAlpha)*(winter?.96:.88);
-      float dark=(1.0-smoothstep(.045,.10,abs(waterAlpha-.83)))*(winter?.04:.12);
-      float ice=winter?smoothstep(.55,.72,waterAlpha)*(1.0-smoothstep(.86,.99,waterAlpha))*.42:0.0;
-      color=mix(mix(color,sampleArt(winter?7.0:3.0,wx),bank)*(1.0-dark),vec3(168,190,194)/255.0,ice);
+    landColor/=max(landSum,.00001);waterColor/=max(waterSum,.00001);
+    if(shoreDistance>-R*.18&&shoreDistance<shallowWidth) {
+      float wet=smoothstep(-R*(.14+variation*.015),-1.0,shoreDistance)*(1.0-waterAlpha);
+      vec3 wetEarth=mix(landColor*.78,sampleArt(winter?7.0:2.0,wx)*.70,winter?.08:.25);
+      landColor=mix(landColor,wetEarth,wet*(winter?.28:.65));
+      // Muted translucent shallows hide bright baked whitecaps at the bank.
+      vec3 bed=landColor*.20+(winter?vec3(136,166,168):vec3(78,126,116))/255.0*.80;
+      waterColor=mix(waterColor,waterColor*.40+bed*.60,nearShore*(winter?.55:.85));
     }
+    vec3 color=mix(landColor,waterColor,waterAlpha);
+    float contact=(1.0-smoothstep(.25,1.5,abs(shoreDistance-.4)))*(.65+variation*.20);
+    color*=1.0-contact*(winter?.025:.085);
+    float ice=winter?smoothstep(0.0,2.0,shoreDistance)*(1.0-smoothstep(5.0,10.0,shoreDistance))*.25:0.0;
+    color=mix(color,vec3(168,190,194)/255.0,ice);
     vec2 local=p-center(qr);vec4 ownRoad=roadInfo(qr);
     if(flag(owner.a,2.0)>.5) {
       float radius=length(local/R/vec2(.76,.67)),irregular=sin(local.x/R*12.0+local.y/R*7.0)*.025+sin(local.y/R*15.0-local.x/R*6.0)*.018;

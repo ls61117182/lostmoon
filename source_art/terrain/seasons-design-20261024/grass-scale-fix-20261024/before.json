@@ -1,0 +1,717 @@
+{
+  "files": [
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/materials.json",
+      "sha256": "bb68437501d45d3f68b24f9533ad28891a211a3259ac036efd364e3c90cfad0e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/rural_yard_patch.png",
+      "sha256": "cc4465110807703b4de128aaa950cdf229ac2f237886886c8e2c7e4c2a772368"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_beach.png",
+      "sha256": "cebe67adfe740bba3214e3b53a8cbffa63ee12a0a0a43f547638fa2c620b6f87"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_deep_water.png",
+      "sha256": "e22c8e25d498a800f100f9353df8f87dc2d346ffa586b5eb70c676eb9d61bd91"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_europe_beach.png",
+      "sha256": "695149fbecab449712f82eca361aa904ddba0340042c8b6c2590f38410302ba6"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_field.png",
+      "sha256": "18cdfdf3fd91a7ee413e72d799b236f2bbf80df497508af0d54082ca746941c4"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_forest.png",
+      "sha256": "6c474aafdd53344703a04b0e38edbe789b635993f974209e87502a0afea20af4"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_mud.png",
+      "sha256": "152e0c65ee4027a1cdcb1f2fa8de12bd6b703837d7a663ecfea00073c41d802e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_road.png",
+      "sha256": "18cdfdf3fd91a7ee413e72d799b236f2bbf80df497508af0d54082ca746941c4"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/terrain_water.png",
+      "sha256": "a50289770896e017927655420fab9b11f2bc9d8eaa55e3f62b832d9f2413299b"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/thumbnail_forest.png",
+      "sha256": "ff1ca14fd7dd253bbc47debb84ae6b1bfcc0ef341e9ccffc2227ab9eb744146c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/tree_01.png",
+      "sha256": "865b555b99a81300af990356eb5646c178d30604d56355d182d201aef29e83f3"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/tree_02.png",
+      "sha256": "7c66d3753f4498383fca0fba928349a9566b147b59e0bdcb3dadba74682be772"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/tree_03.png",
+      "sha256": "e0f2a9419f2e74e359d596b1da11582876d2bc5196c3f382c55ef731a2303918"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/spring/tree_04.png",
+      "sha256": "b436e99699b8626fdf601fcac18c009a15bbc8462a37b95856126791ccf31f5a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_bridge_surface_spring_v1.png",
+      "sha256": "60e2a1cc48186dbf1cd4ffe33d8f90ccc3de2d794c89f9fc948761297de85203"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_100000_v1.png",
+      "sha256": "42f6edd07a1548ba7ac975fd4fa9596c15dc331275532adec20d28747eac8a95"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_100000_v2.png",
+      "sha256": "92430e935c3e1e1c5d3826a77be915d69694eaa78d5ef3def46676093d665996"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_100000_v3.png",
+      "sha256": "26a3274ec2fb438963cf39861fa1bbb3262c41778755f03cfe3c170b5a201ded"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_100100_v1.png",
+      "sha256": "12b50a69daa9cb945f59da2abcd21167164b58ef70c308649f937ca340deb18c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_100100_v2.png",
+      "sha256": "f1844eb1994a855e1de8ec30d1b6181ccb83929b416354573c793c09ca61261e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_100100_v3.png",
+      "sha256": "9234c1589f73cc1aca85843df8847baed244f850aa639bac3c337698a5785639"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101000_v1.png",
+      "sha256": "bb9332f5e49b90fdbc55d56161cdc1e3148ba2bce268a6eb9a3b501ccfc8e3b9"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101000_v2.png",
+      "sha256": "6051d233b04e21cdb89fcb0a1bd77a1cdf0054436d405d001c5714f0f59c4047"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101000_v3.png",
+      "sha256": "1e51ca779996346dfecf005c1d17cd4da63bced394803c2be6f34488e1891330"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101010_v1.png",
+      "sha256": "2ed55ec4cd8fce11f61e9626d90e7faa148ab75238b0973871ae307ed9edf85d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101010_v2.png",
+      "sha256": "3e6ea4b8019e1a8f542261e5791cddb85126097445b9e46aabd9d330949b928a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101010_v3.png",
+      "sha256": "39d87ccd2660ba1c7bef545e2cf8f920c1ede835ee3e5540df03c88c0e4f034b"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101100_v1.png",
+      "sha256": "6e00fae7691b1944fba0241b664356843ad88ee2f8ee3377fabc6e64086912f8"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101100_v2.png",
+      "sha256": "43bda05c45a24c20b1df732b9de7b2f6a39d0237666de2e2f26d84755225c3cc"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_101100_v3.png",
+      "sha256": "79ceb11bf0d879f80ba34cd82ce358bf44a3a193cd305e7396dafe67893287aa"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110000_v1.png",
+      "sha256": "c116dfc2cd743ebd9a4addba316eba8180f0423db4c99ccb7aec08f2a3e71249"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110000_v2.png",
+      "sha256": "4404b0db3a78a2f477257f638d972fdf3e370eda564ad87110ecae61ebe958b8"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110000_v3.png",
+      "sha256": "fd39680189a97225d3a589f3c9947cfe6a6c6fc26344d9dce92ac72b59d87911"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110100_v1.png",
+      "sha256": "ea53b438590efeb74f9751ebfcf18fa7b85ce9909b9875f3ffcce895a4810436"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110100_v2.png",
+      "sha256": "0ac37dea65e2da658c53e612d159ea43ee8f9729202c8b68adb6cb8aef777d19"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110100_v3.png",
+      "sha256": "bcb83e621983ccd606705e517901423bea634848a5474ecde75ff50567f6dfb5"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110110_v1.png",
+      "sha256": "7e111571fff9d8895826acaa0c6989373b4e93371b00f5affd97361eab535a44"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110110_v2.png",
+      "sha256": "43b44f15af683929dc288ceeac48a1a2a24bb75d236fbc65c1bbf3d8390fa163"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_110110_v3.png",
+      "sha256": "bb7242277274483d24539928e445892e5ba8068a555bd42015db9fecfd19b641"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111000_v1.png",
+      "sha256": "9c9ab0f0c8df6eb77359a5143fd9829e946b40b1f62bda99d18c998e7d69b679"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111000_v2.png",
+      "sha256": "c94baee90b3205ebf375c604514938658c0cfdb9e9a675eb8e9a31fe7eba92b2"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111000_v3.png",
+      "sha256": "e3f29636687f0f8f24b97415c14d7e6295179c03a0478afdf1580078eeb7db60"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111010_v1.png",
+      "sha256": "d5bdac9d0d92331e4352d0c7efed1e1c0d67ebb3681957e6ecc20c6dc41e0c10"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111010_v2.png",
+      "sha256": "58839a5759d7d5a8cdc85e177d7fcde0598633377d1d6292c24495e42f5aa0ab"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111010_v3.png",
+      "sha256": "175be0b9900684ea1adcaeeb3a9ba19930bfed798e09ab978207c8ee00d6321e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111100_v1.png",
+      "sha256": "c80b3dfd584ed0a00b1399efe96a28bf1e773bf304bfdc5ca0b9bb58e4a8bfd4"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111100_v2.png",
+      "sha256": "b96cebe5d0f13be0cf89888e9eea9fe2dbee212cc404aa30d682b529092767cb"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111100_v3.png",
+      "sha256": "74a0b86ee8095981f6cc501badb3adc390364a2ac474a97b4eb6f443cd4e35f3"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111110_v1.png",
+      "sha256": "727b2d5b7a0790e390e38c02ffc098eaa3f7be5cc923210cd10f70688983d857"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111110_v2.png",
+      "sha256": "7fe52d95fb78c758a17db0350c5a10b1d5f26503e434c8ef660e51675e755e79"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111110_v3.png",
+      "sha256": "320d731bb53715d3883e18925c71a3e55aeeb5f1ef3a9c9cbfc7b8f62a9dd3db"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111111_v1.png",
+      "sha256": "80f58f0e7ad7c0ecd7510330e8eb0781d04586830c91ea4a453e48cb5fefc938"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111111_v2.png",
+      "sha256": "145bdfcd80484e5b74ef9b09184fe52cc52945d804b791858d7ba18b84055afd"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_spring_111111_v3.png",
+      "sha256": "dbd50f1ab8f672911ba9c98abaf2fc3eb876b0d0597751b88fdf8a1a425502bf"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/materials.json",
+      "sha256": "04921438cee420af1419acc40c621e15bc00b3b1adc5873ca89f88e2004046ae"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/rural_yard_patch.png",
+      "sha256": "f5ad51eb73fad7e3c789e5994b965ba4cde8de3e3dabbb612e0efda7ef14b4fd"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_beach.png",
+      "sha256": "23f8e05fa8f0d715cc9fa1ba05751dbda0720acc801d94f301e04d2199814519"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_deep_water.png",
+      "sha256": "76ce79ecd3725db4fb54f55a9d5d99d9b9d79d7ea0d542b0df46e3dadd32ad99"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_europe_beach.png",
+      "sha256": "d278649c95f85493b3be65d035d888cdb5cb135d255cfa9321b962fcf0254463"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_field.png",
+      "sha256": "fefcdfca58c9b9e3662c7e1cab8543aa84699dda965e9901d2a9e5c22fdf210c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_forest.png",
+      "sha256": "2ac1d6e3567dd9666733387e08b4ba5ce893770977183966bd817a647ec4e889"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_mud.png",
+      "sha256": "60c19a3a968bcfbe74a39f53b4ee7e6a5bff6de5fd3dc9b1330087ee3d509b25"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_road.png",
+      "sha256": "fefcdfca58c9b9e3662c7e1cab8543aa84699dda965e9901d2a9e5c22fdf210c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/terrain_water.png",
+      "sha256": "9af4ca87ddaa6e0746014e37479d0658529ab3b8f6cd382e07230e4d1f3f5234"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/thumbnail_forest.png",
+      "sha256": "b289917fff415008a61dc9acde60bf98575a495b07a556230dd1cc15d20bf08c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/tree_01.png",
+      "sha256": "f97607fffba460cd4ca542781552aac5af22b858f4f91282685c9e7c28f36b9a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/tree_02.png",
+      "sha256": "57b0cd73bbb80ea43b579a5160d2d6f03e33c02152ddb1cff055d6945f4cc975"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/tree_03.png",
+      "sha256": "a266e841d1e8a8ecbea004c17cc25167f0a17fabc650d2ecd348367775ce5f24"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/autumn/tree_04.png",
+      "sha256": "f4dc2989445671b343eaf194826aa5b6fcd5fddbbd85f55749bb4112ca640f80"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_bridge_surface_autumn_v1.png",
+      "sha256": "6ef2a9947813e9815792ca969804bba52ae4fbf4b1af1251796148f23de7a4bf"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_100000_v1.png",
+      "sha256": "b1f9a3c3f6bcc5c5465a4ffd55f787a7816b91e6b802cadb4efc6aeb8bcaf316"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_100000_v2.png",
+      "sha256": "c8c984c330d776f8a07c64d40888874f855a186d4823b58815e2bfe5e0047cf6"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_100000_v3.png",
+      "sha256": "22722532cb5215793174b4db2a1cd9d1d8ccb9303e94acfdfff7faf607f24f15"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_100100_v1.png",
+      "sha256": "4c0cb64145d13d0618e6fd4a8e259a4c0ffabec9d332b71b0ddd6f735df6a797"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_100100_v2.png",
+      "sha256": "382d112ecae252756fdd2000c8b6f08c3729e6035700f4d16282d9bc0a319599"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_100100_v3.png",
+      "sha256": "5a27a277f2d598cd56b86117ba6ddaf05ab608b9c2103601bd50b47f9af3ac1a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101000_v1.png",
+      "sha256": "9cd45f2f9a6420c5e1c05bb869fc5c179ac6798a35e40fb2548165aefb63ceaf"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101000_v2.png",
+      "sha256": "0df57d5b4e6b2df1a8397237f280a6785dd0e907d65ff304d6c38009a6dc56e9"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101000_v3.png",
+      "sha256": "c03d735efa470f3c09e448bbb47aee5d835544ecde3c474a0c6ee0d5d7690a2d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101010_v1.png",
+      "sha256": "35a2e00f8d3676770ab0a38e401b9942cab2646302317cbf85543a573524f562"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101010_v2.png",
+      "sha256": "886be59d88bd567363a69e2a456b207c940ecd6faa4132b7d71e4a63f5067eb7"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101010_v3.png",
+      "sha256": "40a5b5a12853e75f071fbe474f1ed03f602cbc14d6c8877cc6222bcee1453846"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101100_v1.png",
+      "sha256": "1e76a93ff4a7be4dd2b83019440a77cdb15c455fcf886072819f9a02a538a02c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101100_v2.png",
+      "sha256": "7763c335a8a6442897160cc521f774819c8a0ce12a6ce08f19872ca8f9898110"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_101100_v3.png",
+      "sha256": "3dd79e72830a263c8d076631b7f94e9a432964fb0ca44c771eea08b63e855c50"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110000_v1.png",
+      "sha256": "abcc7ec79723eeb7e3ca506e8ede1990e5be4233146af51ada4fc9b4a826091a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110000_v2.png",
+      "sha256": "b5d80dce14e453e3e3e459d2b4c0a9ca7532b708251cf72be7bf1e9205d20d82"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110000_v3.png",
+      "sha256": "991fc22ee838e968e23943138279df146eb6e85c36ea3e1c0e5704d963861926"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110100_v1.png",
+      "sha256": "31b8e4f59c2e01ebbe4cf84d6f1fa4871275061bed7aaee83b78dbcac9a84509"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110100_v2.png",
+      "sha256": "44f4abe2d6d0ecb237ea0365b50bf48f066b02af10d0b8639d96742645ce9639"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110100_v3.png",
+      "sha256": "8d9a9a5191e70fcaf90df3a9fc4d86349df21d3762e9375ad7db9790bab17e35"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110110_v1.png",
+      "sha256": "11140636270275d5d5370c2dabacf5fa995750fb611aa9109d50d3b37fa2f148"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110110_v2.png",
+      "sha256": "ead8e5fdb46978e0367e4b09185715cc92abd2e9186779814bbebc6fd90ec7ea"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_110110_v3.png",
+      "sha256": "516ebaf7b38595cdd15025440e872ad7c81b82d71a1a59d2ebd96973ef36c4fc"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111000_v1.png",
+      "sha256": "9f9f436438fe5d2eb39d5800993c5845055156d32157399490c2bc24513434f2"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111000_v2.png",
+      "sha256": "193384fe1f70faa1f8d108ffc6d886852f123b1c273fa7d1185da7f0d7a44bc3"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111000_v3.png",
+      "sha256": "6e00c34cd9d8bf01a2e544c70b7101e1355db2df014bfa420bbe03ebef1a3da9"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111010_v1.png",
+      "sha256": "77bbdc0edd5110cbb8dd31f86002e34ff9fd268ba13e4cd6ff1e980487fb17e9"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111010_v2.png",
+      "sha256": "11cc7484cb1dfef734a02601fe2850feaa9cb2737a1ef08171bd0d53b7de2613"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111010_v3.png",
+      "sha256": "ae2c1200916a087cc8654ca771502578e8b27223adf1dd92796147bedf158a57"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111100_v1.png",
+      "sha256": "c64d6f84c226f415dba147944f9b1dc55c52d2e6bdfbb9bda6ccce09d57079e1"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111100_v2.png",
+      "sha256": "c8fae05b8ac65d97a176d1098326a2417b0d713bfd636e7dc673c41a5bbd4baf"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111100_v3.png",
+      "sha256": "41b9e876d1f7e8eef57e56c2b50e3ba630471d02e7e44f2780249d317225ccbb"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111110_v1.png",
+      "sha256": "2d22a35b8d81baa337ed6649c94f409a25e87c5d8052912b0f6cdcad05db1e84"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111110_v2.png",
+      "sha256": "8a705197ea9bd47bb626b4cd48c043d44a2b2234deceb3117e04c91e904cdc2a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111110_v3.png",
+      "sha256": "35db3bf327d3d51414df16a9756dfd925e43999f3d1e18682f5425bf30254049"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111111_v1.png",
+      "sha256": "1662c1874e70e0dbbb451b86e3cd3971aadc6ba33103a3ea1127f7d940b75dca"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111111_v2.png",
+      "sha256": "d8eb8843d948f5c0d44ae3917ccfee0203f780e70255675995fb358a61a3aa5a"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_autumn_111111_v3.png",
+      "sha256": "3f593ce1ba238cdb06f882e1506647bae02fc2037a1f0519044596521fe1e070"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/materials.json",
+      "sha256": "7e59da7e3d00c6aaa7f714f71bf73c89455ec8b621a241b4745447b6b9a140f0"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/rural_yard_patch.png",
+      "sha256": "33ca1776c5d139b43285a91054e74b17aec24619806eb38d3788e954c46a196d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_beach.png",
+      "sha256": "bb1e6e4f1c0d4928d31f67cc479ac342260ca4640203db8a1a457754f0068597"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_deep_water.png",
+      "sha256": "7c93553629b21386ad1fbc93e072b0a38cbc747e2e7f248867e7a3997c481ec7"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_europe_beach.png",
+      "sha256": "7ec3e2a86febd1c3ada991f1558aaeb9ddf30d314e07ad3c1a8c677cc14bb91d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_field.png",
+      "sha256": "d5993a34e55c7e7e2db85162c263da9378e2f18d80fa4f3d19f078f519e7a82e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_forest.png",
+      "sha256": "ee4d317c1269897871976802e75b80c0e08228e6e250d03da3ec8fd930c71f1d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_mud.png",
+      "sha256": "40889c0f010b9e7f678fedfc0c23ca9217b975f0153c63bb48a774cf2561c0db"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_road.png",
+      "sha256": "d5993a34e55c7e7e2db85162c263da9378e2f18d80fa4f3d19f078f519e7a82e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/terrain_water.png",
+      "sha256": "f1033808e202cc877424207c5f49ba554aea4c345d3e1043a52a6e035e7f0112"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/thumbnail_forest.png",
+      "sha256": "29156a3eb1991137b18e38d9af9f8b4efbfda740a2f6f3f695b3ad969fc7a987"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/tree_01.png",
+      "sha256": "58b76861bd2b66d7c3b81695dea934d5f059fac05e619e425ea97249402f4e84"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/tree_02.png",
+      "sha256": "fb2cfc98af6b11dd286ee6b1578863810e237c87cd6957eda84314e1ef7c528d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/tree_03.png",
+      "sha256": "bc89fc93272970bd7e2874fac0b10d82b49117109ff4f3924d69c6eb87502d4e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/seasons/winter_bare/tree_04.png",
+      "sha256": "b4c84719f420d4f6f593a9ba859ca5d99c7fb06f7085023a96b0ff171d5a8538"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_bridge_surface_winter_bare_v1.png",
+      "sha256": "a9fe5cd2a6d0f52be12a81e57899b65d08cfa30f4cea0c09c18143e5120c99c0"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_100000_v1.png",
+      "sha256": "d8f89a81b876d59c43974d11d3d2e5175267726c5992b9afdcea26a9da96f737"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_100000_v2.png",
+      "sha256": "128c47287bd923866b24cdbf7a26baab391f96c70168358e81991444b63f3771"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_100000_v3.png",
+      "sha256": "dfe5a64c701df4f627296b414bec6ba39f9f8235c3185ddcc2bd21d7cf21431d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_100100_v1.png",
+      "sha256": "02ef99e4d6446c5dc5a1993151fecf03ac630734a0a49bbfc7dd7ba9c4f4e97c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_100100_v2.png",
+      "sha256": "6c4f23541a89da9db1f53613b1f558a055ddac44c517398f02428aeaec743632"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_100100_v3.png",
+      "sha256": "c16c4fa908d3aed84ee8c66304190e03d3d829444ef133043e3b61d27aa8a816"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101000_v1.png",
+      "sha256": "722d3ec51ce67b66779771b0ebfc809a6abd2446864a1160b678ad3fbce15e5c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101000_v2.png",
+      "sha256": "2827d9dc1cac0a022051f2917296293ca269d2ab46aa1b30f0d1cb9d9ba6739c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101000_v3.png",
+      "sha256": "80952df053465bf275218203082461f63e559f33fbfa70066c786602f904d7b4"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101010_v1.png",
+      "sha256": "8bc462fae183c7cfe1bc6fd3da136340115ddd99c4df0636722ec1ae9acd80e8"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101010_v2.png",
+      "sha256": "80bf8f8aa535ede77ccfd3cef51d8b0ffbf5500398f7a39f86e8ba3bb4f0630c"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101010_v3.png",
+      "sha256": "e1f2b9a523c8e9987d064694fffa0da1be332683345e2d1d300ec8852ba1980b"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101100_v1.png",
+      "sha256": "bdac02751ec132c5f8776e390ade7db992a60a39fe83102ddff34b9cd2ade9ae"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101100_v2.png",
+      "sha256": "17eb1809a0fe22210f485ba485d5dff18a880913d9226c8573fe6fecebab2f4f"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_101100_v3.png",
+      "sha256": "47c81e2a857932ff49904293ebfd6c752bd04906da0c6e6b15c087ff933a6834"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110000_v1.png",
+      "sha256": "655fe66c11b63fb833381a7d9b8eb987f9dc216bb780e8fb2bc7ae1593ee9fdb"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110000_v2.png",
+      "sha256": "3a6f4b7eac45693968d450c03fe5b29ef0286a32519864318ad8fb67d4005224"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110000_v3.png",
+      "sha256": "2488cfcac4581e5df536cb10bfbe6c719dc006e286f532750ba4155fc7067501"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110100_v1.png",
+      "sha256": "83ce3248439b0dca1029296fc02225790b05a4905166d1dbcef1b7e416932f97"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110100_v2.png",
+      "sha256": "39bb0de8b0dc5916d30ea3e969f909d8c4f04694031b589de0a23f66091dc3df"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110100_v3.png",
+      "sha256": "c4ff19208b3228d94b52d2c0b255347de5aa80f800a5c12dc39ab52dd8dee60d"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110110_v1.png",
+      "sha256": "ae16365abc207bebb1b67741e0b2d7e4b1ce299c5ad57c877f730817618fd5a6"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110110_v2.png",
+      "sha256": "b0ec57188d6c05519b683667d0a40a007de75593facb7ff903d59ee320d59212"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_110110_v3.png",
+      "sha256": "45daa647a54b58485703dd4635825bed700fb56d154ca67f188bb8fa2f35c8d2"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111000_v1.png",
+      "sha256": "bf39cb15624a8499b3d64d1385669fa61f0482015359fe2e8e042835ab71d1e7"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111000_v2.png",
+      "sha256": "2a0bf9368397536fec940ff52bd2b55c2212bb99cb4dc6a36e910089b2ed7ba6"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111000_v3.png",
+      "sha256": "6154821aa4bdd518494ef469d55e88777642b0ad071c8e1f30514a4735ca523f"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111010_v1.png",
+      "sha256": "6db96530b9934a038f039645ed677c714d06f5f5a217fe09e4a8e44169aacfa0"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111010_v2.png",
+      "sha256": "311e32e45a32ceb1ee0a089eb20758975081a14b60a75d425194d21700a737c1"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111010_v3.png",
+      "sha256": "f288c6646dbe4ddb84b1d3caa564d4118e8fa2024d0db48fd75ca9c11fa0dc1e"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111100_v1.png",
+      "sha256": "41565574394c300f2b92228334e761200ef86696ba72771094a292530a3cd2f2"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111100_v2.png",
+      "sha256": "f43d106b0c4a476f1154bfe858cb379e3f6f92955101aeec830a9c1d257b85cb"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111100_v3.png",
+      "sha256": "27e065bdd9bfdeb88da42bb4953242394d248077e5eb344b9f5c6514e2df85e1"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111110_v1.png",
+      "sha256": "7ce4944f0fc8bb30054e8fa830508b919a370af18f13cc5b1a4c3c9e8397a423"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111110_v2.png",
+      "sha256": "db290c041b4d32a1ec485173c19277479787966b2319fd53f9029e6fedad7823"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111110_v3.png",
+      "sha256": "631a0a35c1234581e2c25e15d9b8962cba3eb21b9eb94b96533ff963b3e3f9ee"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111111_v1.png",
+      "sha256": "99a91aac56d3549fe6dfb97755fbd34a9678ee2044ec322765ee0f85dd908b62"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111111_v2.png",
+      "sha256": "ce33030578637a0d1f07ae35b00a31b589a80dbff46306b2e89b203500893dc7"
+    },
+    {
+      "path": "assets/resources/textures/terrain/european_roads/european_road_surface_winter_bare_111111_v3.png",
+      "sha256": "10abb02d80023729d3b4ed1ec482f22e2c81bb432a5f7370cf847503e259426d"
+    }
+  ],
+  "materials": {
+    "spring": {
+      "grass": "59c261ae5b24ff9e15db8cc57d27267c087ecc0f19fd4226b49070bbf991bdd7",
+      "soil": "2c29195c5363cc0c8ac104084e8c8994fb25b218855abdaf65619a825e81bc46",
+      "mud": "d56a49d28f866c75101921537db4a069cf9b85ad9c95cc52a1fe0ca12291c615",
+      "sand": "90f4a8142e0295c340478370235ef6f02b025d86b634524b729bf40c6a6f0b82",
+      "water": "498096bc9aad3d8e8873157ddd44118aaa0df5e25a7286be039d47d6ee5c51db",
+      "deep_water": "5ae170e549ef7f0839f1a287bb1366d1ab337fc94e784c8428ae92f047e8bab2",
+      "paving": "22286c3f41a59d0f6588f2fae377e94fe0be5c0c3df37906d874f836e93c01ba",
+      "snow": "0af334cf3e20498116b71a18e4fa728f308b19479cdcef898f72539cba28ddeb",
+      "winter_water": "363c1685c88112e92005bc40061b8eb6f7f0b9026869586a8a3656378ef88c36",
+      "timber": "d6ee854e596c5bce903c632ceaab99406249a358b1196f8bb15cbfd98bb32d4a",
+      "road_surface": "f7c4b14c59bef315776781b4067f5feba3b859d4130a14fd880132577c8da7e5",
+      "forest_floor": "a7faebed871f3c9641ed576a1bf66eb790c4caf720613f08d8b25820b12fe517",
+      "rural_yard": "9223b51ae23f974d02ec750712b339c1da453eebb2df1fd30ad175787febfa82",
+      "europe_sand": "90f4a8142e0295c340478370235ef6f02b025d86b634524b729bf40c6a6f0b82",
+      "shallow_water": "e8cc8ffdff71fd405eaeb5161b0602c68470665e912c74d79ce12f50ba35d2d6"
+    },
+    "autumn": {
+      "grass": "78818a42568ee3b515e6dfa154fb649d667b9f7d68034ae739724252d52a4b6b",
+      "soil": "7d108bf3dc5f7106a088dd682eeab7c96b9638cd952762a1b7fb916b6b099f3a",
+      "mud": "0c417fd468779008d560af0f9bba8d2b6c9a008a919cfbafb55fa8447689422f",
+      "sand": "0ee7a02acc98091f34a77a7696d289ae550bccd9e69c1c2ec63c0f23bc0bf648",
+      "water": "f57072360063c481bbfbe7a5157ba7c44a91976521deda2af4b6a194d63028b1",
+      "deep_water": "472ebad608f548a2aa1e782404770eaee629acdecdea468bcde85a557ae077c3",
+      "paving": "22286c3f41a59d0f6588f2fae377e94fe0be5c0c3df37906d874f836e93c01ba",
+      "snow": "0af334cf3e20498116b71a18e4fa728f308b19479cdcef898f72539cba28ddeb",
+      "winter_water": "363c1685c88112e92005bc40061b8eb6f7f0b9026869586a8a3656378ef88c36",
+      "timber": "33bfd80372f0c41cf69f797b4e1195e53042b38c047eae411d11eed16ebd7a27",
+      "road_surface": "c9c7a5a621c41e529c007f12b97adc64980d9370fe0398e1820e9ca1e863b653",
+      "forest_floor": "0dbf060399151e17b13d433dab7ace88dfb3e099a0afb73630458c0335a50739",
+      "rural_yard": "d2a44ec90e8e290772d25c45bfcab0d021d72791245631e7863aaeeaada7cc6e",
+      "europe_sand": "0ee7a02acc98091f34a77a7696d289ae550bccd9e69c1c2ec63c0f23bc0bf648",
+      "shallow_water": "0a39d17236fe6397969a86f04903d9774019c0243d63d4581c3ccf0c81d3c26f"
+    },
+    "winter_bare": {
+      "grass": "893501d39bfed5703bdb7c14249c346842e3555ea1df6daf4ed6b9030ddd72ac",
+      "soil": "0517d072fcd0e210461c6ccd20c3ce2d245a6dc73712a52ae772efdcf0cd77bf",
+      "mud": "698b52cf97bc57e7bcbfbe1c201c93a878fac811c860154ab072be5365bc8a15",
+      "sand": "54e7995b690c28b986155f042f58e76ca07d25558e074ab9d6108bd2da0f09c1",
+      "water": "4537976ecbd57deace376d2e76f51843b4e6b60bb88928dcd9ad519cdaeb5b8b",
+      "deep_water": "cd578d864ded2fd8724f7b7aedeb8a37a897b812461cfc6f6b31b3a85919da0a",
+      "paving": "22286c3f41a59d0f6588f2fae377e94fe0be5c0c3df37906d874f836e93c01ba",
+      "snow": "0af334cf3e20498116b71a18e4fa728f308b19479cdcef898f72539cba28ddeb",
+      "winter_water": "363c1685c88112e92005bc40061b8eb6f7f0b9026869586a8a3656378ef88c36",
+      "timber": "98425b316bee4435718894255a7d6d9fdf4cfca136cc2cd392fdb78790c6aee8",
+      "road_surface": "d6119894230974c31f0330e2bdf84a104ec6ba6ffd1e685b03ca75a1efed9a0d",
+      "forest_floor": "7ce4d5859e979a706915aaf2bc52559b3002ca655a858f1b668b9751bc72bd7e",
+      "rural_yard": "17e0f3cac57a08642ad6e7b68c3e9d7edcf26cf77cd91a35c700e9eee9716820",
+      "europe_sand": "54e7995b690c28b986155f042f58e76ca07d25558e074ab9d6108bd2da0f09c1",
+      "shallow_water": "5d7b4f9f81fef832944c4716a57a06a768d3a609b4392a5f670b3b224e39b73f"
+    }
+  }
+}

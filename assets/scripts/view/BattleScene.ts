@@ -1,6 +1,8 @@
 import { createTankCrew, crewRoleAlive, effectiveTankCrew } from "../core/types";
 import { BUILD_FEATURES } from '../core/BuildProfile';
 import { TerrainGroundRenderer } from './TerrainGroundRenderer';
+import { europeanTerrainLook, europeanRoadSeason, seasonalTerrainPath, seasonalTerrainRGB, seasonalFoliageRGB, usesSnowTerrain, EXTRA_EUROPEAN_LOOKS } from '../core/TerrainSeason';
+import type { EuropeanTerrainLook } from '../core/TerrainSeason';
 import { drawBeachEdge, drawBeachOverlays, drawSeawallJoints } from './BeachTerrainVisual';
 import type { SeawallSegment } from '../core/SeawallJunctions';
 import { FogOverlayRenderer } from './FogOverlayRenderer';
@@ -11,7 +13,7 @@ import type { FogMaskCell } from './FogMaskRaster';
 import { ObjectShadowRenderer } from './ObjectShadowRenderer';
 import { assignRockyHighlandVariants, rockyCellKey, ROCKY_HIGHLAND_SPRITE_PATHS } from './RockyHighlandVariants';
 import type { TerrainMaterialBundle } from './TerrainGroundRaster';
-import { europeanCountryRoadDistance } from './TerrainGroundRaster';
+import { europeanCountryRoadDistance, europeanCountryRoadHalfWidth } from './TerrainGroundRaster';
 import { ruralBuildingLayout, ruralVillageProps, RuralBuilding, RuralProp } from '../core/RuralBuildings';
 /**
  * BattleScene —— 把 mission_01.json 渲染为六角格地图，支持骰子驱动的"移动阶段 /
@@ -47,6 +49,7 @@ import { ruralBuildingLayout, ruralVillageProps, RuralBuilding, RuralProp } from
  */
 
 import { OcclusionShape, UnitOcclusionRenderer, UnitSpriteOccluder } from './UnitOcclusionRenderer';
+import { UnitFogRenderer } from './UnitFogRenderer';
 
 import {
   _decorator,
@@ -238,6 +241,8 @@ import { normalizeWeather } from '../core/Weather';
 import { HEAVY_SNOW_VISUAL_SLOT_COUNT, LIGHT_SNOW_VISUAL_SLOT_COUNT, RAIN_VISUAL_SLOT_COUNT, sampleRainVisual, sampleSnowVisual } from './WeatherVisual';
 import type { RainVisualSample, SnowVisualSample } from './WeatherVisual';
 import { infantrySpriteAngle, infantrySquadOffsets, infantryVisualDirection } from './InfantryVisualFacing';
+import { canMountTank, mountTank, dismountTank, syncTankRiders, tankRiders } from '../core/TankRiding';
+import { TankRiderRenderer } from './TankRiderRenderer';
 import {
   TANK_EXHAUST_IDLE_RATE,
   TANK_EXHAUST_MAX_PARTICLES,
@@ -272,6 +277,7 @@ import {
   tankTrackTurnArcPoints,
   tankTrackVisibleIntervals,
   tankTrackStyleForTerrain,
+  tankTrackSurfaceIntervals,
   TankTrackRenderedSegment,
   TankTrackStyle,
 } from './TankTrackVisual';
@@ -1754,9 +1760,11 @@ export class BattleScene extends Component {
   private fogWeatherMap: HexMap | null = null;
   private fogWeatherCells: FogMaskCell[] = [];
   private unitVisibilityMaskNode: Node | null = null;
-  private unitVisibilityMaskGraphics: Graphics | null = null;
   private trackVisibilityMaskGraphics: Graphics | null = null;
   private unitGraphics: Graphics | null = null;
+  private unitFogRenderer: UnitFogRenderer | null = null;
+  private unitFallbackGraphics = new Map<string, Graphics>();
+  private drawingUnitFogId: string | null = null;
   private unitOcclusion: UnitOcclusionRenderer | null = null;
   private tankContentNode: Node | null = null;
   private tankWreckLayer: Node | null = null;
@@ -1777,15 +1785,13 @@ export class BattleScene extends Component {
   private bunkerOcclusionSprites = new Map<Sprite, Unit>();
   private infantryOcclusionSprites = new Map<Sprite, Unit>();
   private infantryVectorSilhouettes: Array<{ unit: Unit; vector: { circle: [number, number, number]; color: Color } }> = [];
-  private tankVisibilityGraphics: Graphics | null = null;
   private tankGraphics: Graphics | null = null;
   private buildingGraphics: Graphics | null = null;
-  private silhouetteVisibilityGraphics: Graphics | null = null;
   private silhouetteSources = new Map<Sprite, Color>();
   private silhouetteClaimed = new Set<Sprite>();
   private occlusionShapes: OcclusionShape[] = [];
   private vectorSilhouettes: Array<{ circle: [number, number, number]; color: Color }> = [];
-  /** Exhaust is clipped with units but drawn below every hull sprite. */
+  /** Exhaust is drawn below every hull sprite. Emitters require unit visibility. */
   private tankExhaustGraphics: Graphics | null = null;
   private tankExhaustParticles: TankExhaustParticle[] = Array.from(
     { length: TANK_EXHAUST_MAX_PARTICLES },
@@ -1912,6 +1918,14 @@ export class BattleScene extends Component {
   /** Pause map painting until the terrain texture batch has fully settled. */
   private pendingTerrainSpriteLoads = 0;
   private terrainSpriteBatchReady = false;
+  private terrainMaterialBundle: TerrainMaterialBundle | null = null;
+  private missionTerrainLook: EuropeanTerrainLook | null = null;
+  private seasonalGroundBundle: TerrainMaterialBundle | null = null;
+  private seasonalTerrainFrames: Partial<Record<TerrainType, SpriteFrame | null>> = {};
+  private seasonalTreeFrames: Array<SpriteFrame | null> = [null, null, null, null];
+  private seasonalYardFrame: SpriteFrame | null = null;
+  private pendingSeasonTerrainLoads = 0;
+  private seasonTerrainEpoch = 0;
   private rockyVariantFrames: Array<SpriteFrame | null> = ROCKY_HIGHLAND_SPRITE_PATHS.map(() => null);
   private rockyVariantLayoutSignature = '';
   private rockyVariantsByCell = new Map<string, number>();
@@ -1970,6 +1984,7 @@ export class BattleScene extends Component {
     american_infantry: [{ dw: 0, dh: 0 }, { dw: 0, dh: 0 }, { dw: 0, dh: 0 }],
   };
   private infantryTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private tankRiderRenderer = new TankRiderRenderer();
   private infantryTopPoolNext = 0;
   private static readonly INFANTRY_SPRITES_PER_UNIT = 3;
   private static readonly INFANTRY_TOP_SPRITE_POOL = 36; // 12 个步兵 × 3 张图，留余量
@@ -2817,6 +2832,8 @@ export class BattleScene extends Component {
     gNode.addChild(fogNode);
     this.fogOverlayRenderer?.destroy();
     this.fogOverlayRenderer = new FogOverlayRenderer(fogNode, () => this.requestResourceRedraw());
+    this.unitFogRenderer?.destroy();
+    this.unitFogRenderer = new UnitFogRenderer(() => { if (this.node?.isValid) this.requestResourceRedraw(); });
 
     // Preserve the original foliage depth when sprites are created later.
     const foliageLayerNode = new Node('FoliageSprites');
@@ -2831,10 +2848,8 @@ export class BattleScene extends Component {
     silhouetteRoot.layer = this.node.layer;
     silhouetteRoot.addComponent(UITransform).setContentSize(1280, 720);
     gNode.addChild(silhouetteRoot);
-    const silhouetteVisibility = silhouetteRoot.addComponent(Mask);
-    silhouetteVisibility.type = Mask.Type.GRAPHICS_STENCIL;
-    this.silhouetteVisibilityGraphics = silhouetteVisibility.subComp as Graphics;
     this.unitOcclusion = new UnitOcclusionRenderer(silhouetteRoot);
+    this.unitOcclusion.setFogRenderer(this.unitFogRenderer);
     resources.load('effects/unit-silhouette', EffectAsset, (err, effect) => {
       if (err || !effect || !this.node.isValid) return;
       const material = new Material();
@@ -2858,16 +2873,13 @@ export class BattleScene extends Component {
     gNode.insertChild(supportMarkerLayer, urbanBuildingLayerNode.getSiblingIndex());
 
     // 谢尔曼俯视图：子节点在父节点 MapGraphics 的 Graphics 之后绘制 → 叠在地形之上。
-    // Units are always rendered, then clipped to the union of currently visible hexes.
-    // This lets a moving tank emerge continuously without making terrain fog opaque.
+    // Unit materials sample the same continuous fog field as terrain. Roofs
+    // and foliage retain their existing occlusion through layer order.
     const unitMaskNode = new Node('VisibleUnitMask');
     unitMaskNode.layer = this.node.layer;
     unitMaskNode.addComponent(UITransform).setContentSize(1280, 720);
     gNode.insertChild(unitMaskNode, urbanBuildingLayerNode.getSiblingIndex());
-    const unitMask = unitMaskNode.addComponent(Mask);
-    unitMask.type = Mask.Type.GRAPHICS_STENCIL;
     this.unitVisibilityMaskNode = unitMaskNode;
-    this.unitVisibilityMaskGraphics = unitMask.subComp as Graphics;
 
     const unitContentNode = new Node('UnitContent');
     unitContentNode.layer = this.node.layer;
@@ -2880,11 +2892,8 @@ export class BattleScene extends Component {
     tankMaskNode.layer = this.node.layer;
     tankMaskNode.addComponent(UITransform).setContentSize(1280, 720);
     gNode.insertChild(tankMaskNode, urbanBuildingLayerNode.getSiblingIndex() + 1);
-    const tankMask = tankMaskNode.addComponent(Mask);
-    tankMask.type = Mask.Type.GRAPHICS_STENCIL;
-    this.tankVisibilityGraphics = tankMask.subComp as Graphics;
-    // Bunkers are scenery like city roofs: keep their bodies outside the visible-unit
-    // stencil so unseen intact structures and wrecks remain beneath the fog overlay.
+    // Bunkers are scenery like city roofs: unseen structures and their wrecks
+    // remain beneath the fog overlay, independent of mobile-unit visibility.
     const bunkerContent = new Node('BunkerContent');
     bunkerContent.layer = this.node.layer;
     bunkerContent.addComponent(UITransform).setContentSize(1280, 720);
@@ -2915,8 +2924,9 @@ export class BattleScene extends Component {
     damageTrackLayer.addComponent(UITransform).setContentSize(1280, 720);
     tankContent.addChild(damageTrackLayer);
     this.tankDamageTrackLayer = damageTrackLayer;
-    // Shadows precede unit graphics and all hull/turret sprites within the mask.
+    // Shadows precede unit graphics and all hull/turret sprites.
     this.vehicleShadows = new ObjectShadowRenderer(unitMaskNode, 'VehicleGroundShadows', 0);
+    this.vehicleShadows.setFogRenderer(this.unitFogRenderer);
 
     const tankExhaustNode = new Node('TankEngineExhaust');
     tankExhaustNode.layer = this.node.layer;
@@ -3070,6 +3080,7 @@ export class BattleScene extends Component {
       this.repairIconMaterial = material;
     });
     this.loadTankVisualSprites();
+    this.tankRiderRenderer.load(() => { if (this.node?.isValid) this.requestResourceRedraw(); });
     [
       'infantry_blood_stain',
       'infantry_blood_stain_02',
@@ -3224,13 +3235,11 @@ export class BattleScene extends Component {
       if (!this.isValid) return;
       if (err || !asset || !this.terrainLayerNode) {
         console.warn('[BattleScene] V3 terrain material load failed; using sprite fallback:', err);
-      } else {
-        try {
-          this.continuousTerrain = new TerrainGroundRenderer(this.terrainLayerNode, asset.json as TerrainMaterialBundle);
-        } catch (error) {
-          console.warn('[BattleScene] V3 terrain material decode failed; using sprite fallback:', error);
-        }
+        finishTerrainSpriteLoad();
+        return;
       }
+      this.terrainMaterialBundle = asset.json as TerrainMaterialBundle;
+      this.rebuildSeasonTerrainGround();
       finishTerrainSpriteLoad();
     });
     for (const name of ['tree_palm', 'tree_palm_2', 'tree_palm_3', 'tree_palm_4', 'rocks', 'building_intact', 'europe_building_intact', 'rural_roof_01', 'rural_roof_02', 'rural_roof_03', 'rural_roof_04', 'rural_hay', 'rural_well', 'rural_yard_patch', 'pacific_roof_01', 'pacific_roof_02', 'pacific_roof_03', 'pacific_roof_04', 'rural_roof_01_snow', 'rural_roof_02_snow', 'rural_roof_03_snow', 'rural_roof_04_snow', 'rural_yard_patch_snow']) {
@@ -3301,6 +3310,9 @@ export class BattleScene extends Component {
   }
 
   onDestroy() {
+    this.seasonTerrainEpoch++;
+    this.clearUnitFogVisibility();
+    this.tankRiderRenderer.clear();
     this.airborneFlight?.root.destroy();
     this.airborneFlight = null;
     this.roundEventDone = null;
@@ -3314,6 +3326,8 @@ export class BattleScene extends Component {
     this.fogWeatherCells = [];
     this.unitOcclusion?.destroy();
     this.unitOcclusion = null;
+    this.unitFogRenderer?.destroy();
+    this.unitFogRenderer = null;
     this.continuousTerrain?.destroy();
     this.continuousTerrain = null;
     // GameAudioRoot survives scene changes, so looped battle sounds must not outlive this scene.
@@ -3982,6 +3996,8 @@ export class BattleScene extends Component {
     const nextUnits = this.allUnits();
     const animations: MoveAnim[] = [];
     for (const unit of nextUnits) {
+      // Riding infantry is animated by its carrier, never as a second ground move.
+      if (unit.mountedOnUnitId) continue;
       const old = oldUnits.get(unit.id);
       if (!old) continue;
       const moved = old.pos.q !== unit.pos.q || old.pos.r !== unit.pos.r;
@@ -4110,6 +4126,8 @@ export class BattleScene extends Component {
       ambushReadyThisTurn: !!src.ambushReadyThisTurn,
       ambushEnteredOrder: src.ambushEnteredOrder,
       lockedFireTargetId: typeof src.lockedFireTargetId === 'string' ? src.lockedFireTargetId : undefined,
+      mountedOnUnitId: typeof src.mountedOnUnitId === 'string' ? src.mountedOnUnitId : undefined,
+      mountedDoubleSide: src.mountedDoubleSide === 'left' || src.mountedDoubleSide === 'right' ? src.mountedDoubleSide : undefined,
       ambushActedThisTurn: !!src.ambushActedThisTurn,
       unitLevel: src.role === 'support' && !isAntiTankGunKind(src.kind) ? normalizeUnitLevel(src.unitLevel) : undefined,
       atGunCrewLevel: isAntiTankGunKind(src.kind) ? normalizeUnitLevel(src.atGunCrewLevel ?? src.unitLevel) : undefined,
@@ -4154,6 +4172,8 @@ export class BattleScene extends Component {
       ambushReadyThisTurn: unit.ambushReadyThisTurn,
       ambushEnteredOrder: unit.ambushEnteredOrder,
       lockedFireTargetId: unit.lockedFireTargetId,
+      mountedOnUnitId: unit.mountedOnUnitId,
+      mountedDoubleSide: unit.mountedDoubleSide,
       ambushActedThisTurn: unit.ambushActedThisTurn,
       unitLevel: role === 'support' && !isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
       atGunCrewLevel: isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
@@ -4211,6 +4231,8 @@ export class BattleScene extends Component {
         ambushReadyThisTurn: unit.ambushReadyThisTurn,
         ambushEnteredOrder: unit.ambushEnteredOrder,
         lockedFireTargetId: unit.lockedFireTargetId,
+        mountedOnUnitId: unit.mountedOnUnitId,
+        mountedDoubleSide: unit.mountedDoubleSide,
         ambushActedThisTurn: unit.ambushActedThisTurn,
         unitLevel: !unit.crewLevels && !isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
         atGunCrewLevel: isAntiTankGunUnit(unit) ? unitLevelOf(unit) : undefined,
@@ -5367,6 +5389,7 @@ export class BattleScene extends Component {
   }
 
   private loadAndDraw(data: MissionData, options: { preservePlayerReload?: boolean } = {}) {
+    this.tankRiderRenderer.clear();
     if (this.terrainLoadingRoot) this.terrainLoadingRoot.active = false;
     this.terrainLoadingDisplayedProgress = 0;
     this.terrainLoadingFinishHold = 0;
@@ -5394,6 +5417,7 @@ export class BattleScene extends Component {
     this.casualtyCheckedTurn = -1;
     this.rng = new RNG(this.rngSeed || undefined);
     this.mission = loadMission(data, this.rng, { hardcore: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), preservePlayerReload: options.preservePlayerReload, randomizeWeather: !GameSession.isPvp });
+    this.loadMissionTerrainSeason();
     this.loadMissionTankCamouflage();
     this.applyBattlefieldCameraRotation();
     if (this.campaignUpgradesEnabled()) {
@@ -5445,6 +5469,7 @@ export class BattleScene extends Component {
     this.pvpPendingRemoteSnapshots = [];
     this.transientFogRevealKeys.clear();
     this.fogVisionTransition = null;
+    this.clearUnitFogVisibility();
     this.knownPushedWreckPoses = new WeakMap();
     this.pushedWreckVisionMoves = new WeakMap();
     this.clearFloaters();
@@ -5524,7 +5549,7 @@ export class BattleScene extends Component {
   private terrainLoadingDisplayedProgress = 0;
   private terrainLoadingFinishHold = 0;
   private syncTerrainLoadingOverlay(dt = 0) {
-    const loading = !!this.mission && (!this.terrainSpriteBatchReady || !!this.continuousTerrain?.loading);
+    const loading = !!this.mission && (!this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0 || !!this.continuousTerrain?.loading);
     if (!loading && (!this.terrainLoadingRoot?.active || !this.mission)) {
       if (this.terrainLoadingRoot) this.terrainLoadingRoot.active = false;
       return;
@@ -5532,14 +5557,14 @@ export class BattleScene extends Component {
     if (loading && !this.terrainLoadingRoot?.active) {
       this.terrainLoadingDisplayedProgress = 0;
       this.terrainLoadingFinishHold = 0;
-      this.terrainLoadingAssetTotal = Math.max(1, this.pendingTerrainSpriteLoads);
+      this.terrainLoadingAssetTotal = Math.max(1, this.pendingTerrainSpriteLoads + this.pendingSeasonTerrainLoads);
     }
     if (!this.terrainLoadingLabel) {
       const { node: root } = createAdaptiveFullscreenMask(
         this.node, 'TerrainLoading', new Color(19, 25, 22, 255), UI_ROOT_SCALE,
       );
       root.addComponent(BlockInputEvents);
-      this.terrainLoadingAssetTotal = Math.max(1, this.pendingTerrainSpriteLoads);
+      this.terrainLoadingAssetTotal = Math.max(1, this.pendingTerrainSpriteLoads + this.pendingSeasonTerrainLoads);
       const decoration = new Node('LoadingDecoration');
       decoration.layer = this.node.layer;
       decoration.addComponent(UITransform);
@@ -5594,8 +5619,8 @@ export class BattleScene extends Component {
       g.rect(-width / 2 + 28, -height / 2 + 28, width - 56, height - 56); g.stroke();
       g.moveTo(-180, height * .08 - 48); g.lineTo(180, height * .08 - 48); g.stroke();
     }
-    const assetProgress = 1 - this.pendingTerrainSpriteLoads / this.terrainLoadingAssetTotal;
-    const targetProgress = loading ? Math.max(0, Math.min(1, !this.terrainSpriteBatchReady
+    const assetProgress = 1 - (this.pendingTerrainSpriteLoads + this.pendingSeasonTerrainLoads) / this.terrainLoadingAssetTotal;
+    const targetProgress = loading ? Math.max(0, Math.min(1, !this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0
       ? assetProgress * .15 : .15 + .85 * (this.continuousTerrain?.progress ?? 1))) : 1;
     // Use frame time, not chunk completion callbacks. Keep the visual monotonic,
     // and cap long frames so returning to the window cannot teleport the tank.
@@ -5694,15 +5719,21 @@ export class BattleScene extends Component {
   }
   private redraw() {
     if (!this.g || !this.mapOcclusionGraphics || !this.mapDeepShadowGraphics || !this.unitGraphics || !this.mission) return;
+    syncTankRiders(this.allUnits());
+    this.tankRiderRenderer.begin();
     // Do not show vector fallback tiles and then replace terrain kinds one by
     // one as asynchronous SpriteFrame requests finish.
-    if (!this.terrainSpriteBatchReady) { this.syncTerrainLoadingOverlay(); return; }
+    if (!this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0) { this.syncTerrainLoadingOverlay(); return; }
     const usingContinuousTerrain = this.drawContinuousTerrain(this.mission.map.all());
     this.syncTerrainLoadingOverlay();
     if (this.continuousTerrain?.loading) return;
     this.resourceRedrawPending = false;
     this.refreshPlayerVisibility();
     this.redrawUnitVisibilityMask();
+    for (const graphics of this.unitFallbackGraphics.values()) {
+      graphics.clear();
+      graphics.node.active = false;
+    }
     const surfaceGraphics = this.g;
     const occlusionGraphics = this.mapOcclusionGraphics;
     const g = surfaceGraphics;
@@ -5999,16 +6030,14 @@ export class BattleScene extends Component {
       if (u.destroyed) {
         this.g = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(u)
           ? this.bunkerGraphics : isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
-        this.drawUnitMaybeAnim(u);
-        this.captureSilhouetteSources(u);
+        this.drawPresentedUnit(u);
       }
     }
     for (const u of units) {
       if (!u.destroyed) {
         this.g = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(u)
           ? this.bunkerGraphics : isTankUnit(u) ? this.tankGraphics : this.unitGraphics;
-        this.drawUnitMaybeAnim(u);
-        this.captureSilhouetteSources(u);
+        this.drawPresentedUnit(u);
       }
     }
     // Controlled AT guns are always rendered as a composite: gun sprite first,
@@ -6016,16 +6045,12 @@ export class BattleScene extends Component {
     this.g = this.unitGraphics;
     for (const u of units) {
       if (isControlledATGun(u)) {
-        this.drawATGunCrewMaybeAnim(u);
-        this.captureSilhouetteSources(u);
+        this.drawPresentedUnit(u, true);
       }
     }
     this.g = g;
     // Only standing buildings occlude units; rubble is below their bodies.
-    this.unitOcclusion?.sync(this.silhouetteSources, [
-      ...this.urbanBuildingSpritePool.map(slot => slot.sprite),
-      ...this.foliageSpritePool.map(slot => slot.sprite),
-    ], this.occlusionShapes, this.vectorSilhouettes, this.bunkerInfantryOccluders());
+    this.syncUnitOcclusion();
     this.redrawObjectShadows();
     this.placeUnitEffectLayerAboveUnits();
     this.syncUnitEffects(0);
@@ -6052,13 +6077,13 @@ export class BattleScene extends Component {
     this.maybeSendPvpActionResult();
   }
 
-  private redrawObjectShadows() {
+  private redrawObjectShadows(unitsOnly = false) {
     // Split units cast from their base only, including bunkers in the scenery layer.
     const turrets = new Set([
       ...Object.values(this.splitTankSprites), ...Object.values(this.lateWarSplitTankSprites),
     ].map(assets => assets?.turret));
     const rocks = this.rockyShadows;
-    if (rocks) {
+    if (rocks && !unitsOnly) {
       rocks.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
       for (let i = 0; i < this.rockySpritePoolNext; i++) {
         rocks.draw(this.rockySpritePool[i].sprite, 'rocky', this.hexSize);
@@ -6066,7 +6091,7 @@ export class BattleScene extends Component {
       rocks.end();
     }
     const scenery = this.sceneryShadows;
-    if (scenery) {
+    if (scenery && !unitsOnly) {
       scenery.begin(this.mission?.data?.cameraRotation === 90 ? 90 : 0);
       // Bunker bodies remain visible beneath fog, so their casts must share the
       // unmasked building layer rather than disappear with vehicle visibility.
@@ -6105,10 +6130,12 @@ export class BattleScene extends Component {
         }
       }
       for (let i = 0; i < this.infantryTopPoolNext; i++) {
-        vehicles.draw(this.infantryTopSpritePool[i].sprite, 'infantry', this.hexSize);
+        const sprite = this.infantryTopSpritePool[i].sprite;
+        vehicles.draw(sprite, 'infantry', this.hexSize);
       }
       for (let i = 0; i < this.officerTopPoolNext; i++) {
-        vehicles.draw(this.officerTopSpritePool[i].sprite, 'infantry', this.hexSize);
+        const sprite = this.officerTopSpritePool[i].sprite;
+        vehicles.draw(sprite, 'infantry', this.hexSize);
       }
       vehicles.end();
       pushed?.end();
@@ -6406,7 +6433,7 @@ export class BattleScene extends Component {
       transition.activeLayer = new Set(nextLayer);
     }
     // Only the fog layer needs per-frame work for the fade. A full redraw is
-    // reserved for ring boundaries, when unit clipping/visibility also changes.
+    // reserved for ring boundaries, when whole-unit visibility also changes.
     if (crossedLayerBoundary) this.redraw();
     else this.redrawFogOverlay();
   }
@@ -6433,6 +6460,52 @@ export class BattleScene extends Component {
       return this.isHexVisible(unit.pos) || neighbors(pos).some(p => this.isHexVisible(p));
     }
     return unit === this.mission?.sherman || this.isHexVisible(unit.pos);
+  }
+
+  private syncUnitOcclusion(): void {
+    this.unitOcclusion?.sync(this.silhouetteSources, [
+      ...this.urbanBuildingSpritePool.map(slot => slot.sprite),
+      ...this.foliageSpritePool.map(slot => slot.sprite),
+    ], this.occlusionShapes, this.vectorSilhouettes, this.bunkerInfantryOccluders());
+  }
+
+  private clearUnitFogVisibility(): void {
+    this.unitFogRenderer?.clear();
+    for (const graphics of this.unitFallbackGraphics.values()) if (graphics.node?.isValid) graphics.node.destroy();
+    this.unitFallbackGraphics.clear();
+  }
+
+  private drawPresentedUnit(unit: Unit, crewOnly = false): void {
+    const bunker = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(unit);
+    const policy = bunker || this.usesPushedWreckVision(unit) ? 'unmasked'
+      : this.isUnitVisible(unit) ? 'known' : 'hidden';
+    // Until shaders and the terrain mask are ready, never expose hidden units.
+    if (!bunker && !this.unitFogRenderer?.ready && !this.isUnitVisible(unit)) return;
+    const previous = this.g!;
+    if (!bunker) {
+      let graphics = this.unitFallbackGraphics.get(unit.id);
+      if (!graphics) {
+        const node = new Node('UnitVectorBody');
+        node.layer = this.node.layer;
+        node.addComponent(UITransform);
+        graphics = node.addComponent(Graphics);
+        this.unitFallbackGraphics.set(unit.id, graphics);
+      }
+      if (graphics.node.parent !== previous.node) previous.node.addChild(graphics.node);
+      graphics.node.active = true;
+      this.unitFogRenderer?.bind(graphics, policy);
+      this.g = graphics;
+    }
+    this.drawingUnitFogId = unit.id;
+    const markStart = this.suppressionMarkPoolNext;
+    if (crewOnly) this.drawATGunCrewMaybeAnim(unit);
+    else this.drawUnitMaybeAnim(unit);
+    this.captureSilhouetteSources(unit);
+    for (let i = markStart; i < this.suppressionMarkPoolNext; i++) {
+      this.unitFogRenderer?.bindTree(this.suppressionMarkPool[i].node, policy);
+    }
+    this.drawingUnitFogId = null;
+    this.g = previous;
   }
 
   private isCommanderHatchOpen(): boolean {
@@ -6604,6 +6677,7 @@ export class BattleScene extends Component {
     content.addChild(tracks);
     this.pushedWreckTrackLayer = tracks;
     this.pushedWreckShadows = new ObjectShadowRenderer(maskNode, 'KnownPushedWreckShadows', 0);
+    this.pushedWreckShadows.setFogRenderer(this.unitFogRenderer);
     maskNode.active = false;
   }
 
@@ -6658,10 +6732,7 @@ export class BattleScene extends Component {
 
   private redrawUnitVisibilityMask() {
     if (!this.mission) return;
-    if (this.tankVisibilityGraphics) this.redrawVisibleHexMask(this.tankVisibilityGraphics, true);
-    if (this.unitVisibilityMaskGraphics) this.redrawVisibleHexMask(this.unitVisibilityMaskGraphics, true);
     if (this.trackVisibilityMaskGraphics) this.redrawVisibleHexMask(this.trackVisibilityMaskGraphics);
-    if (this.silhouetteVisibilityGraphics) this.redrawVisibleHexMask(this.silhouetteVisibilityGraphics, true);
     if (this.pushedWreckVisibilityGraphics && this.pushedWreckMaskNode) {
       const active = this.allUnits().some(unit => this.usesPushedWreckVision(unit));
       this.pushedWreckMaskNode.active = active;
@@ -6785,6 +6856,7 @@ export class BattleScene extends Component {
       }
       fogNode.setSiblingIndex(this.mapNode.children.length - 1);
     }
+    this.unitFogRenderer?.update(this.fogOverlayRenderer?.getUnitFogState() ?? null, fogEnabled);
     this.redrawTurretAimOverlay();
     this.redrawSupportMarkers(this.mission.map.all());
   }
@@ -7843,6 +7915,7 @@ export class BattleScene extends Component {
   /** 生成单个名称；返回是否实际显示，以免隐藏单位占用同格名称行。 */
   private spawnUnitNameLabel(u: Unit, row: number): boolean {
     if (!this.mapNode) return false;
+    if (u.mountedOnUnitId) return false;
     if (isAttachedATGunCrew(u) || isAbandonedATGun(u)) return false;
     if (!this.isUnitVisible(u)) return false;
     if (u.destroyed && !this.shouldShowDestroyWreckVisual(u)) return false;
@@ -8029,6 +8102,10 @@ export class BattleScene extends Component {
 
   /** 单位若正在动画，返回插值像素位置；否则等价 project(u.pos)。给状态文字定位用。 */
   private interpolatedPos(u: Unit): { x: number; y: number } {
+    if (u.mountedOnUnitId) {
+      const carrier = this.allUnits().find(unit => unit.id === u.mountedOnUnitId && isTankUnit(unit));
+      if (carrier && carrier !== u) return this.interpolatedPos(carrier);
+    }
     if (u.destroyed && u.wreckPose) {
       const c = this.project(u.pos.q, u.pos.r);
       return { x: c.x + u.wreckPose.x * this.hexSize, y: c.y + u.wreckPose.y * this.hexSize };
@@ -8383,7 +8460,8 @@ export class BattleScene extends Component {
   }
 
   private recordVectorSilhouette(unit: Unit, x: number, y: number, radius: number) {
-    if (this.g !== this.unitGraphics || unit.destroyed || !this.isUnitVisible(unit)
+    if ((!this.drawingUnitFogId && this.g !== this.unitGraphics) || isTankUnit(unit)
+        || unit.destroyed || (!this.drawingUnitFogId && !this.isUnitVisible(unit))
         || !this.shouldDisplayUnitOutline(unit)) return;
     const vector = { circle: [x, y, radius] as [number, number, number], color: this.unitSilhouetteColor(unit) };
     this.vectorSilhouettes.push(vector);
@@ -8419,9 +8497,17 @@ export class BattleScene extends Component {
         // Pool slots can move between infantry and tank layers. Restore draw
         // order on every reuse so the turret stays above its hull.
         if (parent) sprite.node.setSiblingIndex(parent.children.length - 1);
+        if (this.unitFogRenderer) {
+          const policy = bunker || this.usesPushedWreckVision(unit) ? 'unmasked'
+            : this.isUnitVisible(unit) ? 'known' : 'hidden';
+          this.unitFogRenderer.bindTree(sprite.node, policy);
+          const track = this.tankDamageTrackNodes.get(sprite.node);
+          if (track?.active) this.unitFogRenderer.bindTree(track, policy);
+        }
         if (bunker) this.bunkerOcclusionSprites.set(sprite, unit);
         if (GameSession.gameMode !== 'classic' && isFootUnit(unit)) this.infantryOcclusionSprites.set(sprite, unit);
-        if (this.shouldDisplayUnitOutline(unit) && !unit.destroyed && this.isUnitVisible(unit)) this.silhouetteSources.set(sprite, color);
+        if (this.shouldDisplayUnitOutline(unit) && !unit.destroyed
+            && (this.drawingUnitFogId || this.isUnitVisible(unit))) this.silhouetteSources.set(sprite, color);
       }
     }
   }
@@ -8953,6 +9039,7 @@ export class BattleScene extends Component {
 
   /** Hardcore: infantry entering an abandoned gun hex becomes its operator group. */
   private captureAbandonedATGunsAt(infantry: Unit): void {
+    if (infantry.mountedOnUnitId) return;
     if ((GameSession.gameMode !== 'hardcore' && GameSession.gameMode !== 'test') || !isFootUnit(infantry) || infantry.destroyed) return;
     const gun = this.allUnits().find(unit =>
       isAbandonedATGun(unit)
@@ -8979,6 +9066,7 @@ export class BattleScene extends Component {
 
   /** Infantry entering an abandoned tank becomes a full replacement crew. */
   private captureAbandonedTanksAt(infantry: Unit): void {
+    if (infantry.mountedOnUnitId) return;
     if (!isFootUnit(infantry) || infantry.destroyed || isAttachedATGunCrew(infantry)) return;
     const tank = this.allUnits().find(unit =>
       isAbandonedTank(unit)
@@ -11289,6 +11377,7 @@ export class BattleScene extends Component {
     this.continuousTerrain?.update(dt);
     if (this.campaignUpgradeChoiceRoot || this.campaignUpgradeDetailRoot) return;
     this.advanceFogVisionTransition(dt);
+    this.unitFogRenderer?.update(this.fogOverlayRenderer?.getUnitFogState() ?? null, fogOfWarEnabled(GameSession.gameMode));
     this.advanceEngineVibration(dt);
     this.advanceTankEngineExhaust(dt);
     this.advanceTurnTransition(dt);
@@ -11433,6 +11522,7 @@ export class BattleScene extends Component {
         };
       }
       finishedUnit.pos = { q: anim.toQ, r: anim.toR };
+      syncTankRiders(this.allUnits());
       const crushedWire = this.mission.map.applyMovementTerrainEffects(finishedUnit, { q: anim.fromQ, r: anim.fromR }, finishedUnit.pos);
       if (crushedWire) this.battleLogI18n('battleLog.wireCrushed', { unitKind: finishedUnit.kind });
       if (isTankUnit(finishedUnit) && this.mission.map.get(finishedUnit.pos)?.steelHedgehogs) {
@@ -11569,7 +11659,7 @@ export class BattleScene extends Component {
   }
 
   private onMouseMoveMap(event: EventMouse): void {
-    if (!this.terrainSpriteBatchReady || this.continuousTerrain?.loading || this.terrainLoadingRoot?.active) return;
+    if (!this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0 || this.continuousTerrain?.loading || this.terrainLoadingRoot?.active) return;
     const tile = this.pickTileAtScreenUi(event);
     const target = this.isEffectiveBattleTile(tile) ? tile : null;
     if (this.hoveredTile === target) return;
@@ -11640,7 +11730,7 @@ export class BattleScene extends Component {
   private drawContinuousTerrain(tiles: Tile[]): boolean {
     if (!this.continuousTerrain) return false;
     try {
-      this.continuousTerrain.draw(tiles, this.usesWinterTerrainVisuals(), this.hexSize, this.offsetX, this.offsetY, this.usesEuropeanSummerVisuals());
+      this.continuousTerrain.draw(tiles, this.usesWinterTerrainVisuals(), this.hexSize, this.offsetX, this.offsetY, this.usesEuropeanSummerVisuals(), europeanTerrainLook(this.mission?.data));
       return true;
     } catch (error) {
       console.warn('[BattleScene] V3 terrain rendering failed; using sprite fallback:', error);
@@ -11681,8 +11771,84 @@ export class BattleScene extends Component {
   }
 
   private usesWinterTerrainVisuals(): boolean {
-    const data = this.mission?.data;
-    return data?.season === 'winter' && (data.theater ?? 'europe') === 'europe';
+    return usesSnowTerrain(this.mission?.data);
+  }
+
+  /** Mission data arrives after onLoad's common preload; choose its artwork here. */
+  private loadMissionTerrainSeason(): void {
+    const look = europeanTerrainLook(this.mission?.data);
+    if (this.missionTerrainLook === look) return;
+    this.missionTerrainLook = look;
+    const epoch = ++this.seasonTerrainEpoch;
+    this.pendingSeasonTerrainLoads = 0;
+    this.seasonalGroundBundle = null;
+    this.seasonalTerrainFrames = {};
+    this.seasonalTreeFrames = [null, null, null, null];
+    this.seasonalYardFrame = null;
+    this.continuousTerrain?.destroy();
+    this.continuousTerrain = null;
+    if (!EXTRA_EUROPEAN_LOOKS.some(id => id === look)) {
+      this.rebuildSeasonTerrainGround();
+      return;
+    }
+
+    const entries: Array<{ path: string; apply: (frame: SpriteFrame) => void }> = [];
+    for (const terrain of ['field','road','mud','forest','water','deep_water','europe_beach','beach'] as TerrainType[]) {
+      entries.push({path: seasonalTerrainPath(look, terrain)!, apply: frame => { this.seasonalTerrainFrames[terrain] = frame; }});
+    }
+    for (let i = 0; i < 4; i++) {
+      entries.push({path:`textures/terrain/seasons/${look}/tree_0${i+1}/spriteFrame`, apply: frame => { this.seasonalTreeFrames[i] = frame; }});
+    }
+    entries.push({path:`textures/terrain/seasons/${look}/rural_yard_patch/spriteFrame`, apply: frame => { this.seasonalYardFrame = frame; }});
+    for (const mask of ROAD_CANONICAL_MASKS) {
+      const flags = Array.from({length:6}, (_, i) => mask & (1 << i) ? '1' : '0').join('');
+      for (let variant = 1; variant <= EUROPEAN_ROAD_VARIANT_COUNT; variant++) {
+        const path = `textures/terrain/european_roads/european_road_surface_${look}_${flags}_v${variant}/spriteFrame`;
+        entries.push({path, apply: frame => { this.urbanOverlaySpriteFrames[path] = frame; }});
+      }
+    }
+    const bridgePath = `textures/terrain/european_roads/european_bridge_surface_${look}_v1/spriteFrame`;
+    entries.push({path:bridgePath, apply:frame => { this.urbanOverlaySpriteFrames[bridgePath] = frame; }});
+    this.pendingSeasonTerrainLoads = entries.length + 1;
+    const current = () => this.isValid && epoch === this.seasonTerrainEpoch;
+    const finish = () => {
+      if (!current()) return;
+      this.pendingSeasonTerrainLoads--;
+      if (this.pendingSeasonTerrainLoads === 0) this.rebuildSeasonTerrainGround();
+      this.requestResourceRedraw();
+    };
+    for (const entry of entries) {
+      resources.load(entry.path, SpriteFrame, (error, frame) => {
+        if (!current()) return;
+        if (error || !frame) console.warn('[BattleScene] Seasonal sprite unavailable:', entry.path, error);
+        else entry.apply(frame);
+        finish();
+      });
+    }
+    resources.load(`textures/terrain/seasons/${look}/materials`, JsonAsset, (error, asset) => {
+      if (!current()) return;
+      if (error || !asset) console.warn('[BattleScene] Seasonal materials unavailable; using sprite fallback:', look, error);
+      else this.seasonalGroundBundle = asset.json as TerrainMaterialBundle;
+      finish();
+    });
+  }
+
+  private rebuildSeasonTerrainGround(): void {
+    if (!this.isValid || !this.terrainLayerNode || !this.terrainMaterialBundle || this.pendingSeasonTerrainLoads > 0) return;
+    const look = europeanTerrainLook(this.mission?.data);
+    const extra = EXTRA_EUROPEAN_LOOKS.some(id => id === look);
+    if (extra && !this.seasonalGroundBundle) return;
+    const bundle = extra
+      ? { ...this.terrainMaterialBundle, europeanSeasons: { [look]: this.seasonalGroundBundle! } }
+      : this.terrainMaterialBundle;
+    this.continuousTerrain?.destroy();
+    this.continuousTerrain = null;
+    try {
+      this.continuousTerrain = new TerrainGroundRenderer(this.terrainLayerNode, bundle);
+    } catch (error) {
+      console.warn('[BattleScene] Seasonal ground initialization failed; using sprite fallback:', error);
+    }
+    this.requestResourceRedraw();
   }
   private usesEuropeanSummerVisuals(): boolean {
     return (this.mission?.data.theater ?? 'europe') === 'europe' && !this.usesWinterTerrainVisuals();
@@ -11698,6 +11864,7 @@ export class BattleScene extends Component {
   }
 
   private terrainSpriteFrameFor(terrain: TerrainType, tile?: Tile): SpriteFrame | null {
+    if (this.seasonalTerrainFrames[terrain]) return this.seasonalTerrainFrames[terrain]!;
     if (terrain === 'rocky' && tile) {
       const variant = this.rockyVariantsByCell.get(rockyCellKey(tile.pos));
       if (variant !== undefined && this.rockyVariantFrames[variant]) return this.rockyVariantFrames[variant];
@@ -11709,12 +11876,17 @@ export class BattleScene extends Component {
   }
 
   private terrainColorFor(terrain: TerrainType): Color {
+    if ((this.mission?.data.theater ?? 'europe') === 'europe') {
+      const rgb = seasonalTerrainRGB(europeanTerrainLook(this.mission?.data), terrain);
+      if (rgb) return new Color(rgb[0], rgb[1], rgb[2], 255);
+    }
     return this.usesWinterTerrainVisuals()
       ? (WINTER_TERRAIN_COLORS[terrain] ?? TERRAIN_COLORS[terrain])
       : TERRAIN_COLORS[terrain];
   }
 
   private activeTreeSpriteFrames(): Array<SpriteFrame | null> {
+    if (this.seasonalTreeFrames.every(Boolean)) return this.seasonalTreeFrames;
     if (this.usesEuropeanSummerVisuals() && this.europeanSummerTreeSpriteFrames.every(Boolean)) return this.europeanSummerTreeSpriteFrames;
     if (!this.usesWinterTerrainVisuals()) return this.treeSpriteFrames;
     return this.winterTreeSpriteFrames.some(Boolean) ? this.winterTreeSpriteFrames : this.treeSpriteFrames;
@@ -11977,18 +12149,25 @@ export class BattleScene extends Component {
     }
     const g = this.g!;
     const winter = this.usesWinterTerrainVisuals();
+    const look = europeanTerrainLook(this.mission?.data);
+    if (look === 'winter_bare') {
+      this.drawBareWinterBranches(x, y, r);
+      return;
+    }
+    const foliage = seasonalFoliageRGB(look);
+    const foliageColor = (i: number) => new Color(...foliage[i], 255);
     const sh = r * 0.42;
     g.lineWidth = 0;
     g.fillColor = FOREST_SHADE;
     g.circle(x - sh, y - sh, r * 0.92);
     g.fill();
-    g.fillColor = winter ? new Color(66, 47, 34, 255) : FOREST_TREE_DARK;
+    g.fillColor = winter ? new Color(66, 47, 34, 255) : foliageColor(0);
     g.circle(x - r * 0.1, y + r * 0.06, r);
     g.fill();
-    g.fillColor = winter ? new Color(102, 75, 52, 255) : FOREST_TREE_MID;
+    g.fillColor = winter ? new Color(102, 75, 52, 255) : foliageColor(1);
     g.circle(x + r * 0.2, y - r * 0.04, r * 0.8);
     g.fill();
-    g.fillColor = winter ? new Color(145, 112, 78, 255) : FOREST_TREE_LIGHT;
+    g.fillColor = winter ? new Color(145, 112, 78, 255) : foliageColor(2);
     g.circle(x, y, r * 0.52);
     g.fill();
     if (winter) {
@@ -12059,7 +12238,7 @@ export class BattleScene extends Component {
   private drawRuralBuildingSprites(cx: number, cy: number, size: number, tile: Tile, parent?: Node) {
     if (this.hasBunkerAt(tile.pos)) return;
     const village = !tile.roads?.some(Boolean);
-    const yardFrame = this.redesignObjectFrames[this.usesWinterTerrainVisuals() ? 'rural_yard_patch_snow' : 'rural_yard_patch'];
+    const yardFrame = this.seasonalYardFrame ?? this.redesignObjectFrames[this.usesWinterTerrainVisuals() ? 'rural_yard_patch_snow' : 'rural_yard_patch'];
     if (parent && village && yardFrame) {
       const n = new Node('TileInspectRuralYard'); n.layer = this.node.layer;
       n.addComponent(UITransform).setContentSize(size * 2, size * 2);
@@ -13078,10 +13257,37 @@ export class BattleScene extends Component {
   }
 
   /** 树篱单丛：结构与林地树冠类似，配色略深以便与田地/公路上的树篱区分 */
+  private drawBareWinterBranches(x: number, y: number, r: number) {
+    const g = this.g!;
+    g.strokeColor = new Color(80, 70, 54, 255);
+    for (let i = 0; i < 9; i++) {
+      const a = i * Math.PI * 2 / 9 + .18;
+      const reach = r * (.78 + (i % 3) * .09);
+      const bx = x + Math.cos(a) * reach, by = y + Math.sin(a) * reach;
+      g.lineWidth = Math.max(.9, r * .1);
+      g.moveTo(x, y); g.lineTo(bx, by); g.stroke();
+      g.lineWidth = Math.max(.65, r * .055);
+      for (const side of [-1, 1]) {
+        const sx = x + (bx-x)*.52, sy = y + (by-y)*.52;
+        g.moveTo(sx, sy);
+        g.lineTo(sx + Math.cos(a+side*.65)*r*.43, sy + Math.sin(a+side*.65)*r*.43);
+        g.stroke();
+      }
+    }
+    g.lineWidth = 1;
+  }
+
   private drawHedgeTreeClump(x: number, y: number, r: number, rng?: RNG) {
     const g = this.g!;
     const local = rng ?? new RNG(1);
     const winter = this.usesWinterTerrainVisuals();
+    const look = europeanTerrainLook(this.mission?.data);
+    if (look === 'winter_bare') {
+      this.drawBareWinterBranches(x, y, r);
+      return;
+    }
+    const foliage = seasonalFoliageRGB(look);
+    const foliageColor = (i: number) => new Color(...foliage[i], 255);
     const sh = r * 0.24;
     g.lineWidth = 0;
     g.fillColor = HEDGE_SHADE;
@@ -13095,11 +13301,11 @@ export class BattleScene extends Component {
       const roll = local.next();
       g.fillColor = winter
         ? (roll < 0.32 ? new Color(61, 43, 31, 255) : roll < 0.68 ? new Color(91, 65, 45, 255) : new Color(126, 94, 64, 255))
-        : (roll < 0.32 ? HEDGE_BUSH_DEEP : roll < 0.68 ? HEDGE_BUSH_DARK : HEDGE_BUSH_MID);
+        : foliageColor(roll < 0.32 ? 0 : roll < 0.68 ? 1 : 2);
       g.circle(x + Math.cos(a) * d, y + Math.sin(a) * d, rr);
       g.fill();
     }
-    g.fillColor = winter ? new Color(160, 125, 86, 245) : HEDGE_BUSH_LIGHT;
+    g.fillColor = winter ? new Color(160, 125, 86, 245) : foliageColor(3);
     g.circle(x - r * 0.16, y + r * 0.18, r * (0.18 + local.next() * 0.10));
     g.fill();
     if (winter && local.next() > 0.55) {
@@ -13205,6 +13411,7 @@ export class BattleScene extends Component {
     node.angle = angle;
     this.registerEngineVibrationVisual(node, u, c.x + ox + recoil.x, c.y + oy + recoil.y, angle, angle - 180);
     this.syncTankDamageOverlay(node, u, 'whole');
+    if (isTankUnit(u)) this.tankRiderRenderer.draw(u, sp, this.allUnits());
   }
 
   private registerEngineVibrationVisual(
@@ -13930,19 +14137,49 @@ export class BattleScene extends Component {
 
     g.clear();
     const drawnSegments: TankTrackRenderedSegment[] = [];
-    const setStroke = (
-      style: Exclude<TankTrackStyle, 'none'>,
-      fadeSteps: number,
-      lineWidth: number,
-    ) => {
-      const baseColor = TANK_TRACK_COLORS[style];
-      g.strokeColor = new Color(
-        baseColor.r,
-        baseColor.g,
-        baseColor.b,
-        tankTrackAlphaAfterTurns(baseColor.a, fadeSteps),
-      );
-      g.lineWidth = lineWidth;
+    const surfaces = new Map<Tile, { x: number; y: number; clearance?: (x: number, y: number) => number }>();
+    const styleAt = (x: number, y: number): TankTrackStyle => {
+      const tile = map.get(this.pixelToNearestAxial(x, y));
+      if (!tile) return 'none';
+      if (tile.terrain !== 'road' || tileHasBridge(tile)) {
+        return tankTrackStyleForTerrain(tile.terrain, tileHasBridge(tile));
+      }
+      let surface = surfaces.get(tile);
+      if (!surface) {
+        const center = this.project(tile.pos.q, tile.pos.r);
+        const roads = tile.roads?.some(Boolean) ? tile.roads : undefined;
+        const european = this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals();
+        const variant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, european ? '' : this.missionId);
+        let clearance: ((x: number, y: number) => number) | undefined;
+        if (roads && this.continuousTerrain && european) {
+          // Match the GPU terrain's country-road curve and variable width.
+          const worldX = (center.x - this.offsetX) / this.hexSize;
+          const worldY = -(center.y - this.offsetY) / this.hexSize;
+          clearance = (x, y) => europeanCountryRoadDistance(roads, x, y, variant)
+            - europeanCountryRoadHalfWidth(worldX + x, worldY - y);
+        } else if (roads && this.continuousTerrain) {
+          // The base terrain uses straight road rays rather than country bends.
+          clearance = (x, y) => {
+            let distance = Infinity;
+            const end = Math.sqrt(3) / 2 + .08;
+            for (let i = 0; i < 6; i++) if (roads[i]) {
+              const ux = Math.cos(i * Math.PI / 3), uy = -Math.sin(i * Math.PI / 3);
+              const along = Math.max(0, Math.min(end, x * ux + y * uy));
+              distance = Math.min(distance, Math.hypot(x - ux * along, y - uy * along));
+            }
+            return distance - .185;
+          };
+        } else if (roads) {
+          clearance = (x, y) => europeanRoadSurfaceClearance(
+            roads, x / ROAD_SURFACE_OVERLAP_SCALE, y / ROAD_SURFACE_OVERLAP_SCALE, variant,
+          );
+        }
+        surface = { ...center, clearance };
+        surfaces.set(tile, surface);
+      }
+      const onRoad = !!surface.clearance
+        && surface.clearance((x - surface.x) / this.hexSize, (y - surface.y) / this.hexSize) <= 0;
+      return tankTrackStyleForTerrain(tile.terrain, false, onRoad);
     };
     const records: Array<
       { kind: 'move'; track: TankTrackMove }
@@ -13970,52 +14207,14 @@ export class BattleScene extends Component {
           track.extendFrom,
           track.extendTo,
         );
-        const moveDx = toCenter.x - fromCenter.x;
-        const moveDy = toCenter.y - fromCenter.y;
-        const moveLength = Math.hypot(moveDx, moveDy) || 1;
-        const moveUx = moveDx / moveLength;
-        const moveUy = moveDy / moveLength;
-        const reachedDistance = (swept.toX - fromCenter.x) * moveUx
-          + (swept.toY - fromCenter.y) * moveUy;
-        const reachedBoundary = reachedDistance >= moveLength * 0.5;
-        const boundaryX = (fromCenter.x + toCenter.x) * 0.5;
-        const boundaryY = (fromCenter.y + toCenter.y) * 0.5;
-        const fromTile = map.get({ q: track.fromQ, r: track.fromR });
-        const toTile = map.get({ q: track.toQ, r: track.toR });
-        const fromStyle = tankTrackStyleForTerrain(fromTile?.terrain, tileHasBridge(fromTile));
-        if (fromStyle !== 'none') {
-          setStroke(fromStyle, track.fadeSteps, track.lineWidth);
-          if (this.appendTankTrackPair(
-            g,
-            swept.fromX,
-            swept.fromY,
-            reachedBoundary ? boundaryX : swept.toX,
-            reachedBoundary ? boundaryY : swept.toY,
-            track.halfGap,
-            drawnSegments,
-          )) g.stroke();
-        }
-        const toStyle = tankTrackStyleForTerrain(toTile?.terrain, tileHasBridge(toTile));
-        if (reachedBoundary && toStyle !== 'none') {
-          setStroke(toStyle, track.fadeSteps, track.lineWidth);
-          if (this.appendTankTrackPair(
-            g,
-            boundaryX,
-            boundaryY,
-            swept.toX,
-            swept.toY,
-            track.halfGap,
-            drawnSegments,
-          )) g.stroke();
-        }
+        this.appendTankTrackPair(
+          g, swept.fromX, swept.fromY, swept.toX, swept.toY,
+          track.halfGap, track.lineWidth, track.fadeSteps, drawnSegments, styleAt,
+        );
         continue;
       }
 
       const track = record.track;
-      const tile = map.get({ q: track.q, r: track.r });
-      const style = tankTrackStyleForTerrain(tile?.terrain, tileHasBridge(tile));
-      if (style === 'none') continue;
-      setStroke(style, track.fadeSteps, track.lineWidth);
       const center = this.project(track.q, track.r);
       const arcs = tankTrackTurnArcPoints(
         center.x,
@@ -14026,17 +14225,16 @@ export class BattleScene extends Component {
         track.toAngle,
         track.progress,
       );
-      let hasPath = false;
       for (const arc of arcs) {
         for (let i = 1; i < arc.length; i++) {
           const from = arc[i - 1]!;
           const to = arc[i]!;
-          if (this.appendTankTrackSegment(
-            g, from.x, from.y, to.x, to.y, track.lineWidth, drawnSegments,
-          )) hasPath = true;
+          this.appendTankTrackSegment(
+            g, from.x, from.y, to.x, to.y, track.lineWidth,
+            track.fadeSteps, drawnSegments, styleAt,
+          );
         }
       }
-      if (hasPath) g.stroke();
     }
   }
 
@@ -14081,7 +14279,10 @@ export class BattleScene extends Component {
     toX: number,
     toY: number,
     halfGap: number,
+    lineWidth: number,
+    fadeSteps: number,
     drawnSegments: TankTrackRenderedSegment[],
+    styleAt: (x: number, y: number) => TankTrackStyle,
   ): boolean {
     const dx = toX - fromX;
     const dy = toY - fromY;
@@ -14096,8 +14297,10 @@ export class BattleScene extends Component {
       fromY + offsetY,
       toX + offsetX,
       toY + offsetY,
-      g.lineWidth,
+      lineWidth,
+      fadeSteps,
       drawnSegments,
+      styleAt,
     );
     const drewSecond = this.appendTankTrackSegment(
       g,
@@ -14105,8 +14308,10 @@ export class BattleScene extends Component {
       fromY - offsetY,
       toX - offsetX,
       toY - offsetY,
-      g.lineWidth,
+      lineWidth,
+      fadeSteps,
       drawnSegments,
+      styleAt,
     );
     return drewFirst || drewSecond;
   }
@@ -14118,7 +14323,9 @@ export class BattleScene extends Component {
     toX: number,
     toY: number,
     lineWidth: number,
+    fadeSteps: number,
     drawnSegments: TankTrackRenderedSegment[],
+    styleAt: (x: number, y: number) => TankTrackStyle,
   ): boolean {
     const segment: TankTrackRenderedSegment = {
       fromX, fromY, toX, toY, lineWidth,
@@ -14126,6 +14333,7 @@ export class BattleScene extends Component {
     const intervals = tankTrackVisibleIntervals(segment, drawnSegments);
     const dx = toX - fromX;
     const dy = toY - fromY;
+    let hasPath = false;
     for (const interval of intervals) {
       const visible: TankTrackRenderedSegment = {
         fromX: fromX + dx * interval.from,
@@ -14134,11 +14342,44 @@ export class BattleScene extends Component {
         toY: fromY + dy * interval.to,
         lineWidth,
       };
-      g.moveTo(visible.fromX, visible.fromY);
-      g.lineTo(visible.toX, visible.toY);
-      drawnSegments.push(visible);
+      const surfaceIntervals = tankTrackSurfaceIntervals(visible, styleAt, this.hexSize / 60);
+      let blockingFrom: number | null = null;
+      const visibleDx = visible.toX - visible.fromX;
+      const visibleDy = visible.toY - visible.fromY;
+      for (let i = 0; i < surfaceIntervals.length; i++) {
+        const surface = surfaceIntervals[i];
+        if (surface.style !== 'none') {
+          const base = TANK_TRACK_COLORS[surface.style];
+          const alpha = tankTrackAlphaAfterTurns(base.a, fadeSteps);
+          if (alpha > 0) {
+            g.strokeColor = new Color(base.r, base.g, base.b, alpha);
+            g.lineWidth = lineWidth;
+            g.moveTo(visible.fromX + visibleDx * surface.from, visible.fromY + visibleDy * surface.from);
+            g.lineTo(visible.fromX + visibleDx * surface.to, visible.fromY + visibleDy * surface.to);
+            g.stroke();
+            hasPath = true;
+            blockingFrom ??= surface.from;
+          }
+        }
+        const atEnd = i === surfaceIntervals.length - 1;
+        // Keep colour boundaries inside one crossing blocker, so a later tread
+        // cannot slip through the road/grass join and darken their intersection.
+        const transparent = surface.style === 'none'
+          || tankTrackAlphaAfterTurns(TANK_TRACK_COLORS[surface.style].a, fadeSteps) === 0;
+        if (blockingFrom !== null && (transparent || atEnd)) {
+          const end = transparent ? surface.from : surface.to;
+          drawnSegments.push({
+            fromX: visible.fromX + visibleDx * blockingFrom,
+            fromY: visible.fromY + visibleDy * blockingFrom,
+            toX: visible.fromX + visibleDx * end,
+            toY: visible.fromY + visibleDy * end,
+            lineWidth,
+          });
+          blockingFrom = null;
+        }
+      }
     }
-    return intervals.length > 0;
+    return hasPath;
   }
 
   private splitHullDisplayBasis(kind: UnitKind): { trimW: number; trimH: number; fitScale: number; offsetForward: number; offsetRight: number } | null {
@@ -14454,6 +14695,7 @@ export class BattleScene extends Component {
     node.active = true;
     this.registerEngineVibrationVisual(node, u, baseX, baseY, angle, bodyAngleDeg);
     this.syncTankDamageOverlay(node, u, 'hull');
+    this.tankRiderRenderer.draw(u, sp, this.allUnits());
   }
 
   private applySplitTankTurretSprite(
@@ -15114,7 +15356,7 @@ export class BattleScene extends Component {
     overrideY?: number,
     facingLerp?: DirectionLerp | null,
   ) {
-    if (isAttachedATGunCrew(u)) return;
+    if (isAttachedATGunCrew(u) || u.mountedOnUnitId) return;
     const g = this.g!;
     const c = overrideX !== undefined && overrideY !== undefined
       ? { x: overrideX, y: overrideY }
@@ -21352,6 +21594,11 @@ export class BattleScene extends Component {
 
   private collectUnitInspectStatusLines(u: Unit): string[] {
     const parts: string[] = [];
+    if (u.mountedOnUnitId) {
+      const tank = this.allUnits().find(unit => unit.id === u.mountedOnUnitId);
+      if (tank) parts.push(t('tankRiding.status', { tank: unitDisplayName(tank.kind) }));
+    }
+    if (isTankUnit(u) && tankRiders(u, this.allUnits()).length > 0) parts.push(t('tankRiding.carrying'));
     const tankLike = !isFootUnit(u);
     if (u === this.mission?.sherman) {
       if ((u.fireLevel ?? 0) > 0) {
@@ -21378,6 +21625,29 @@ export class BattleScene extends Component {
       if (this.hasSmokeAt(u.pos) || u.smoked) parts.push(t('tileInspect.status.smoked'));
     }
     return parts;
+  }
+
+  private canManageTankRiders(infantry: Unit): boolean {
+    return !!this.mission && infantry.kind === 'american_infantry' && !infantry.destroyed
+      && isSameSide(infantry, this.mission.sherman) && this.phase === 'player'
+      && this.outcome === 'ongoing' && !this.anim && !this.diceShow && !this.turretAimAnim;
+  }
+
+  private changeTankRiding(infantry: Unit, tank?: Unit): void {
+    this.closeTileInspectModal();
+    if (!this.canManageTankRiders(infantry) || this.isBusy()) return;
+    const units = this.allUnits();
+    syncTankRiders(units);
+    const carrierId = tank?.id ?? infantry.mountedOnUnitId;
+    if (!tank && !this.mission!.map.canUnitEnter(infantry.pos, infantry.faction)) return;
+    const changed = tank ? mountTank(infantry, tank, units) : dismountTank(infantry, units);
+    if (!changed) return;
+    this.battleLogI18n(tank ? 'tankRiding.logMount' : 'tankRiding.logDismount', {
+      infantry: unitDisplayName(infantry.kind), tank: tank ? unitDisplayName(tank.kind) : '',
+    });
+    this.sendPvpActionResult(tank ? 'tank_mount' : 'tank_dismount', { actorId: infantry.id, tankId: carrierId });
+    this.redraw();
+    this.writeCurrentSave({ silent: true });
   }
 
   /** 格子文字（不含最上行地形名——见左上角；不含单位——见下方面板） */
@@ -21797,6 +22067,24 @@ export class BattleScene extends Component {
         );
         y = y - hs;
       }
+      if (u.kind === 'american_infantry' && this.mission && isSameSide(u, this.mission.sherman)) {
+        y -= 10;
+        const { h: ridingHintH } = this.makeTileScrollText(content, x0, y, textW, t('tankRiding.hint'), 14);
+        y -= ridingHintH + 8;
+        if (this.canManageTankRiders(u)) {
+          const carriers = u.mountedOnUnitId ? [] : this.allUnits().filter(tank => canMountTank(u, tank, this.allUnits()));
+          const actions: Array<{ label: string; tank?: Unit }> = u.mountedOnUnitId
+            ? [{ label: t('tankRiding.dismount') }]
+            : carriers.map(tank => ({ label: t('tankRiding.mount', { tank: unitDisplayName(tank.kind) }), tank }));
+          for (const action of actions) {
+            const button = this.makeBattleRectButton(content, x0 + textW / 2, y - 19, textW, 38,
+              new Color(63, 80, 51, 255), () => this.changeTankRiding(u, action.tank));
+            const label = this.makeBattleModalLabel(button.node, action.label, 0, 0, textW - 12, 36, 16, STATUS_TITLE_COLOR);
+            this.mirrorBattleModalButtonLabel(label, () => this.changeTankRiding(u, action.tank));
+            y -= 46;
+          }
+        }
+      }
       const unitBlockH = Math.max(unitTopY - y, 92);
       mark(unitTopY, unitBlockH);
       y = unitTopY - unitBlockH;
@@ -22037,7 +22325,7 @@ export class BattleScene extends Component {
     if (tile.terrain !== 'road') return null;
     const transform = roadSpriteTransform(tile.roads);
     if (!transform) return null;
-    const season = this.usesWinterTerrainVisuals() ? 'winter' : 'summer';
+    const season = europeanRoadSeason(europeanTerrainLook(this.mission?.data));
     const variant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, (this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals()) ? '' : this.missionId) + 1;
     const path = `textures/terrain/european_roads/european_road_surface_${season}_${transform.canonicalFlags}_v${variant}/spriteFrame`;
     const frame = this.urbanOverlaySpriteFrames[path];
@@ -22050,7 +22338,7 @@ export class BattleScene extends Component {
       tile.bridgeEnds!.includes(direction as Direction));
     const transform = roadSpriteTransform(bridgeRoads);
     if (!transform || transform.canonicalMask !== 9) return null;
-    const season = this.usesWinterTerrainVisuals() ? 'winter' : 'summer';
+    const season = europeanRoadSeason(europeanTerrainLook(this.mission?.data));
     const path = `textures/terrain/european_roads/european_bridge_surface_${season}_v1/spriteFrame`;
     const frame = this.urbanOverlaySpriteFrames[path];
     return frame ? { frame, rotationDegrees: transform.rotationDegrees } : null;
@@ -22514,6 +22802,7 @@ export class BattleScene extends Component {
   }
 
   private openTileInspectModal(tile: Tile) {
+    syncTankRiders(this.allUnits());
     this.closeTileInspectModal();
     const panelW = 600;
     const maxPanelH = 520;
@@ -23222,6 +23511,7 @@ export class BattleScene extends Component {
 
   /** Apply the runtime state common to normal saves and campaign checkpoints. */
   private restoreAppliedSave(result: ReturnType<typeof applySave>, skipHint?: boolean) {
+    this.loadMissionTerrainSeason();
     this.airborneFlight?.root.destroy();
     this.airborneFlight = null;
     this.eventPhase = null;
@@ -23308,7 +23598,7 @@ export class BattleScene extends Component {
     // 跳过死亡 / 越界
     while (this.enemyIndex < this.enemyOrder.length) {
       const e = this.enemyOrder[this.enemyIndex];
-      if (!e || e.destroyed) {
+      if (!e || e.destroyed || e.mountedOnUnitId) {
         this.clearAIMoveState(e);
         this.clearActiveActingUnit(e);
         this.enemyIndex++;
@@ -24154,7 +24444,7 @@ export class BattleScene extends Component {
    * 返回 'animating' = 已启动动画（移动 / 掷骰 show），调用方必须 return。
    */
   private executeEnemyAction(enemy: Unit, action: EnemyAction): 'done' | 'animating' {
-    if (!this.mission) return 'done';
+    if (!this.mission || enemy.mountedOnUnitId) return 'done';
     const { map } = this.mission;
     const plannedMoveState = this.pendingAIMoveState
       && this.pendingAIMoveState.unit === enemy
@@ -28096,7 +28386,7 @@ export class BattleScene extends Component {
 
   /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
   private isBusy(): boolean {
-    return !this.terrainSpriteBatchReady || !!this.continuousTerrain?.loading || !!this.terrainLoadingRoot?.active
+    return !this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0 || !!this.continuousTerrain?.loading || !!this.terrainLoadingRoot?.active
       || this.turnTransition !== null || this.campaignTransitionActive || this.campaignPanAnim !== null
       || this.campaignUpgradeChoiceRoot !== null || this.campaignUpgradeDetailRoot !== null
       || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null

@@ -1,0 +1,14 @@
+{
+  "tool": "built-in imagegen",
+  "transparent_background": true,
+  "prompts": [
+    [
+      "spring",
+      "Refine this existing 2x2 top-down tree atlas for production at 40px per tree. Keep all FOUR crowns centered in their original quadrants, the same overall size and silhouette, transparent background, strict vertical overhead view, painterly natural rendering, light from upper left. Make the SPRING canopy clearly distinct from yellow-olive mature summer: light fresh COOL SAGE GREEN and muted medium green leaves, avoid yellow chartreuse highlights, no yellow flowers. Slightly fewer leaf clusters, about 60% canopy coverage, opening organic transparent gaps to expose thicker gray-brown radial branches. Fresh young foliage, restrained saturation, no lime or neon green. Keep every whole crown separated, no text, frame or ground. The sheet remains a square regular 2x2 grid with actual transparent alpha."
+    ],
+    [
+      "winter_bare",
+      "Refine this existing 2x2 bare winter top-down tree atlas for a tactical game where each crown is only 32 to 40 pixels wide. Preserve all FOUR crown centers in their existing quadrants, the same crown diameters and overall organic rounded silhouettes, transparent background and direct vertical overhead camera. Improve small-size readability: each tree has 6-8 BOLDER main radial branches, medium muted gray-tan upper faces and dark-brown outlines, with clear thick forks. Main limbs should be about 6-8% of crown DIAMETER wide near the central fork, tapering toward tips. Retain secondary branches, remove the dense hairlike brown haze BETWEEN branches so those gaps are truly transparent. Bare dormant deciduous crowns, ZERO green foliage, ZERO snow, ZERO frost, ZERO white bark or bright highlights, no ground or filled brown crown disc. The main branches must remain clearly visible against dark brown forest floor without using white. Four distinct trees, isolated regular 2x2 square grid, no border or text."
+    ]
+  ]
+}

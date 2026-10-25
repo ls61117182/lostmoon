@@ -3,7 +3,7 @@ function shader(gl,type,source){const s=gl.createShader(type);gl.shaderSource(s,
 function program(gl,frag,two){const p=gl.createProgram();gl.attachShader(p,shader(gl,gl.VERTEX_SHADER,two?'#version 300 es\nin vec2 p;out vec2 mapUV;void main(){gl_Position=vec4(p,0,1);mapUV=vec2(p.x*.5+.5,.5-p.y*.5);}':'attribute vec2 p;varying vec2 mapUV;void main(){gl_Position=vec4(p,0,1);mapUV=vec2(p.x*.5+.5,.5-p.y*.5);}'));const body=frag.replace(/layout\(std140\) uniform TerrainParams \{([^}]+)\};/,(_,fields)=>fields.split(';').filter(s=>s.trim()).map(s=>'uniform '+s.trim()+';').join('\n'));gl.attachShader(p,shader(gl,gl.FRAGMENT_SHADER,(two?'#version 300 es\n':'')+body));gl.linkProgram(p);check(gl.getProgramParameter(p,gl.LINK_STATUS),gl.getProgramInfoLog(p));gl.useProgram(p);const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);const loc=gl.getAttribLocation(p,'p');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);return p;}
 function texture(gl,unit,w,h,data,nearest,image){const t=gl.createTexture();gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,t);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,nearest?gl.NEAREST:gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,nearest?gl.NEAREST:gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);if(image)gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);else gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(data));return t;}
 function image(path){return new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=path;});}
-async function main(){const canvas=document.getElementById('preview'),gl=canvas.getContext('webgl2',{preserveDrawingBuffer:true,alpha:false});check(gl,'WebGL2 unavailable');const p=program(gl,input.glsl3,true),reports=[];
+async function main(){const canvas=document.getElementById('preview'),gl=canvas.getContext('webgl2',{preserveDrawingBuffer:true,alpha:false});check(gl,'WebGL2 unavailable');const p=program(gl,input.glsl3,true),reports=[],previews=[];
  const one=document.createElement('canvas').getContext('webgl');check(one,'WebGL1 unavailable');program(one,input.glsl1,false);
  const uniform=(k,a)=>gl.uniform4fv(gl.getUniformLocation(p,k),a);
  function render(c,x,y,w,h,mask=0){canvas.width=w+2;canvas.height=h+2;gl.viewport(0,0,canvas.width,canvas.height);uniform('chunkBounds',[x-1,y-1,w+2,h+2]);uniform('bakeOptions',[mask,c.b.roadSurface?1:0,c.b.winterYard?1:0,c.b.bridgeArtwork?1:0]);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);const pixels=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);check(gl.getError()===gl.NO_ERROR,'WebGL draw error');return {pixels,width:canvas.width,height:canvas.height};}
@@ -11,11 +11,22 @@ async function main(){const canvas=document.getElementById('preview'),gl=canvas.
  tex.push(c.b.bridgeArtwork?texture(gl,3,0,0,null,false,await image('bridge-'+c.name+'.png')):texture(gl,3,1,1,[255,255,255,255],false));gl.uniform1i(gl.getUniformLocation(p,'bridgeArtwork'),3);
  let maxSeam=0,opaque=0;for(const mask of [0,1]){const a=render(c,0,0,128,192,mask),b=render(c,128,0,128,192,mask);for(let y=0;y<a.height;y++)for(let s=0;s<2;s++)for(let k=0;k<4;k++){const ai=(y*a.width+128+s)*4+k,bi=(y*b.width+s)*4+k;maxSeam=Math.max(maxSeam,Math.abs(a.pixels[ai]-b.pixels[bi]));if(k===3&&a.pixels[ai])opaque++;}}
  check(maxSeam<=2,c.name+' chunk seam mismatch '+maxSeam);check(opaque>200,'seam test has no visible terrain');
+ if(c.shoreline){
+   const mask=render(c,-140,-110,360,360,1),at=(x,y)=>((mask.height-1-(y+111))*mask.width+x+141)*4;
+   let maxReferenceError=0,partial=0,full=0;
+   for(const [x,y,expected]of c.probes){const actual=mask.pixels[at(x,y)];maxReferenceError=Math.max(maxReferenceError,Math.abs(actual-expected));if(actual>0&&actual<255)partial++;if(actual===255)full++;}
+   check(maxReferenceError<=2,c.name+' CPU/GPU shoreline mismatch '+maxReferenceError);
+   check(partial>30,c.name+' lacks graduated shallow-water motion');check(full>50,c.name+' lost its open-water interior');
+   for(const [q,r]of [[0,0],[1,0],[-1,1],[0,1]]){const x=Math.round(Math.sqrt(3)*48*(q+r*.5)),y=72*r,ix=q-e.q,iy=r-e.r,id=e.ground[(iy*e.width+ix)*4]-1;
+     const water=[4,5,8,11].includes(id);check(water?mask.pixels[at(x,y)]>200:mask.pixels[at(x,y)]===0,c.name+' changed tile-center water/land identity');}
+   render(c,-150,-110,500,420);previews.push({name:c.name,png:canvas.toDataURL('image/png')});
+   reports.push({style:c.name,maxSeam,maxReferenceError,partial,full});for(const t of tex)gl.deleteTexture(t);continue;
+ }
  const m=render(c,-100,-100,300,300,1),pixel=(x,y)=>{const px=Math.floor(x+101),py=m.height-1-Math.floor(y+101);return m.pixels.slice((py*m.width+px)*4,(py*m.width+px)*4+4);};check(pixel(0,0)[0]>200,c.name+' lake interior does not animate');check(pixel(0,144)[0]===0,c.name+' bridge moves');check(pixel(-83,0)[0]===0,c.name+' land moves');
  let paintedBridge=false;if(c.b.bridgeArtwork&&!c.w){const art=render(c,-50,124,100,40),legacy=render({...c,b:{...c.b,bridgeArtwork:false}},-50,124,100,40);paintedBridge=art.pixels.some((v,i)=>v!==legacy.pixels[i]);check(paintedBridge,c.name+' did not sample the painted bridge artwork');}
  reports.push({style:c.name,maxSeam,opaque,water:pixel(0,0)[0],bridge:pixel(0,144)[0],paintedBridge});render(c,-150,-110,650,450,0);
  if(c.name!=='pacific')for(const t of tex)gl.deleteTexture(t);
  }
- document.getElementById('result').textContent=JSON.stringify({passed:true,webgl1Compiled:true,reports});
+ document.getElementById('result').textContent=JSON.stringify({passed:true,webgl1Compiled:true,reports,previews});
 }
 main().catch(e=>{document.getElementById('result').textContent=JSON.stringify({passed:false,error:e.stack||String(e)});});

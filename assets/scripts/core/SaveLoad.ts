@@ -9,6 +9,9 @@ import { GameMode } from './GameMode';
 import { HexMap } from './HexGrid';
 import { AttackPositionMemory, cloneAttackPositionMemory } from './AttackPositionMemory';
 import { normalizeWeather, type WeatherType } from './Weather';
+import { normalizeSeason, normalizeSnowCover } from './TerrainSeason';
+import type { SeasonType, SnowCover } from './types';
+import { syncTankRiders } from './TankRiding';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
@@ -83,6 +86,8 @@ interface UnitSnapshot {
   atGunCrewGeneration?: number;
   atGunControllerUnitId?: string;
   attachedToATGunId?: string;
+  mountedOnUnitId?: string;
+  mountedDoubleSide?: 'left' | 'right';
 }
 
 export interface SaveData {
@@ -93,6 +98,8 @@ export interface SaveData {
   missionSource?: MissionSource;
   /** The weather already drawn for this game, including an explicit clear result. */
   weather?: WeatherType;
+  season?: SeasonType;
+  snowCover?: SnowCover;
   turn: number;
   phase: 'player' | 'enemy';
   movesLeft: number;
@@ -198,6 +205,8 @@ function captureUnit(u: Unit): UnitSnapshot {
     atGunCrewGeneration: u.atGunCrewGeneration,
     atGunControllerUnitId: u.atGunControllerUnitId,
     attachedToATGunId: u.attachedToATGunId,
+    mountedOnUnitId: u.mountedOnUnitId,
+    mountedDoubleSide: u.mountedDoubleSide,
     smoked: u.smoked,
     suppressed: u.suppressed,
   };
@@ -282,6 +291,8 @@ function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFactio
   if (s.atGunCrewGeneration !== undefined) live.atGunCrewGeneration = s.atGunCrewGeneration;
   live.atGunControllerUnitId = s.atGunControllerUnitId;
   live.attachedToATGunId = s.attachedToATGunId;
+  live.mountedOnUnitId = typeof s.mountedOnUnitId === 'string' ? s.mountedOnUnitId : undefined;
+  live.mountedDoubleSide = s.mountedDoubleSide === 'left' || s.mountedDoubleSide === 'right' ? s.mountedDoubleSide : undefined;
   live.hatchOpen = s.hatchOpen === true && live.crew?.commander !== false;
   neutralizeUncrewedTank(live);
 }
@@ -311,6 +322,7 @@ function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMissi
  */
 export function captureSave(p: SnapshotParams): SaveData {
   const sh = p.mission.playerTank ?? p.mission.sherman;
+  syncTankRiders([sh, ...p.mission.allies, ...p.mission.enemies]);
   const playerTankSnapshot = {
     ...captureUnit(sh),
     damaged: false,
@@ -321,6 +333,8 @@ export function captureSave(p: SnapshotParams): SaveData {
     missionId: p.missionId,
     missionSource: p.missionSource,
     weather: normalizeWeather(p.mission.data.weather),
+    season: normalizeSeason(p.mission.data.season),
+    snowCover: normalizeSnowCover(p.mission.data.season, p.mission.data.snowCover),
     turn: p.turn,
     phase: p.phase,
     movesLeft: p.movesLeft,
@@ -477,6 +491,10 @@ export function applySave(
 
   // 校验通过，写入状态
   if (save.weather !== undefined) mission.data.weather = normalizeWeather(save.weather);
+  if (save.season !== undefined) {
+    mission.data.season = normalizeSeason(save.season);
+    mission.data.snowCover = normalizeSnowCover(save.season, save.snowCover);
+  }
   playerTank.pos = { q: savedPlayer.q, r: savedPlayer.r };
   mission.enemies.push(...extraEnemies);
   mission.allies.push(...extraAllies);
@@ -625,6 +643,7 @@ export function applySave(
     seenIds.add(unit.id);
   }
 
+  syncTankRiders(units);
   return {
     ok: true,
     turn: save.turn,

@@ -52,7 +52,7 @@ async function assertTransparentRgbPreserved(sourceFile, winterFile, label) {
     const winter = await alphaBytes(winterPath);
     assert.strictEqual(winter.width, summer.width, `${winterName} width must match the original`);
     assert.strictEqual(winter.height, summer.height, `${winterName} height must match the original`);
-    assert.deepStrictEqual(winter.alpha, summer.alpha, `${winterName} must preserve the original silhouette exactly`);
+    assert.ok(winter.alpha.equals(summer.alpha), `${winterName} must preserve the original silhouette exactly`);
     if (summerName.startsWith('terrain_')) {
       await assertTransparentRgbPreserved(summerPath, winterPath, winterName);
     }
@@ -114,11 +114,11 @@ async function assertTransparentRgbPreserved(sourceFile, winterFile, label) {
     'winter trees should not fall back to circular snow-dot patches');
 
   const types = fs.readFileSync(path.join(root, 'assets/scripts/core/types.ts'), 'utf8');
-  assert.match(types, /export type SeasonType = 'summer' \| 'winter'/);
+  assert.match(types, /export type SeasonType = 'spring' \| 'summer' \| 'autumn' \| 'winter'/);
   assert.match(types, /season\?: SeasonType/);
 
   const battle = fs.readFileSync(path.join(root, 'assets/scripts/view/BattleScene.ts'), 'utf8');
-  assert.match(battle, /data\?\.season === 'winter' && \(data\.theater \?\? 'europe'\) === 'europe'/);
+  assert.match(battle, /return usesSnowTerrain\(this\.mission\?\.data\)/);
   for (const [, winterName] of pairs.slice(0, 5)) {
     assert.ok(battle.includes(path.basename(winterName, '.png')), `BattleScene should load ${winterName}`);
   }
@@ -127,7 +127,7 @@ async function assertTransparentRgbPreserved(sourceFile, winterFile, label) {
   assert.match(battle, /activeTreeSpriteFrames\(\)/);
 
   const editor = fs.readFileSync(path.join(root, 'assets/scripts/view/MainMenuScene.ts'), 'utf8');
-  assert.match(editor, /mission\.season = 'winter'/);
+  assert.match(editor, /mission\.season = draftSeason/);
   assert.match(editor, /季节：\$\{seasonLabel\(draftSeason\)\}/);
 
   const lang = fs.readFileSync(path.join(root, 'data/lang.csv'), 'utf8');

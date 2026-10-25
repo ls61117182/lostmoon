@@ -177,7 +177,9 @@ export function isFriendlyFaction(faction: Faction | string): boolean {
 export type Theater = 'europe' | 'pacific' | 'north_africa' | 'soviet';
 export type WeatherType = 'clear' | 'rain' | 'light_snow' | 'heavy_snow' | 'fog';
 /** Visual season only. Terrain rules continue to use the original terrain type. */
-export type SeasonType = 'summer' | 'winter';
+export type SeasonType = 'spring' | 'summer' | 'autumn' | 'winter';
+/** Existing winter missions without this field retain their snowy appearance. */
+export type SnowCover = 'none' | 'snow';
 
 export type UnitKind =
   | 'sherman'
@@ -526,6 +528,10 @@ export interface Unit {
   atGunControllerUnitId?: string;
   /** Infantry folded into an AT-gun composite unit after entering an abandoned gun's hex. */
   attachedToATGunId?: string;
+  /** Exterior tank rider; retains its own identity and remains exposed to enemy fire. */
+  mountedOnUnitId?: string;
+  /** Vehicle side with two exterior riders; chosen once per boarding. */
+  mountedDoubleSide?: 'left' | 'right';
 }
 
 export function battleSideIdOf(unit: Pick<Unit, 'sideId' | 'faction'>): BattleSideId {
@@ -740,8 +746,10 @@ export interface MissionData {
   name: string;
   description: string;
   theater?: Theater;
-  /** Visual season. Omitted missions use summer; winter currently skins European terrain only. */
+  /** Visual season for European terrain. Omitted missions use summer. */
   season?: SeasonType;
+  /** Ground cover, independent of falling snow/weather; winter defaults to snow for legacy missions. */
+  snowCover?: SnowCover;
   /** Applies to every German tank, including allies, the player, reinforcements and wrecks. */
   germanTankCamouflage?: GermanTankCamouflage;
   /** Fixed weather for the mission. Omitted missions use clear weather. */

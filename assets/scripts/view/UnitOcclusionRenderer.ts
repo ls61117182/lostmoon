@@ -1,4 +1,5 @@
 import { Color, Graphics, Mask, Material, Node, Sprite, UITransform, Vec4, dynamicAtlasManager } from 'cc';
+import type { UnitFogRenderer } from './UnitFogRenderer';
 
 export type OcclusionShape = { circle: [number, number, number] } | { polygon: Array<[number, number]> };
 export type UnitSpriteOccluder = {
@@ -8,13 +9,16 @@ export type UnitSpriteOccluder = {
 };
 
 /** Sprite alpha stencils clip the second unit pass to actual foliage/roof pixels.
- * The parent visibility stencil also clips silhouettes at fog boundaries. */
+ * The scene's shared terrain fog texture also fades each outline pixel. */
 export class UnitOcclusionRenderer {
   private material: Material | null = null;
+  private fog: UnitFogRenderer | null = null;
   private liveCopies: Array<{ source: Sprite; copy: Sprite }> = [];
   private slots: Array<{ node: Node; mask: Mask; copies: Sprite[]; vectors?: Graphics }> = [];
 
   constructor(public readonly root: Node) {}
+
+  setFogRenderer(fog: UnitFogRenderer | null): void { this.fog = fog; }
 
   setMaterial(material: Material) {
     this.material?.destroy();
@@ -87,6 +91,7 @@ export class UnitOcclusionRenderer {
         slot.vectors = node.addComponent(Graphics);
       }
       if (slot.vectors) {
+        this.fog?.bind(slot.vectors, 'hidden');
         slot.vectors.clear();
         slot.vectors.node.setWorldPosition(this.root.worldPosition);
         slot.vectors.node.setWorldRotation(this.root.worldRotation);
@@ -115,6 +120,7 @@ export class UnitOcclusionRenderer {
         dynamicAtlasManager?.packToDynamicAtlas(source, source.spriteFrame!);
         copy.spriteFrame = source.spriteFrame;
         this.updateOutlineSampling(source, copy);
+        this.fog?.configure(copy.getMaterialInstance(0)!, this.fog.policyOf(source.node));
         copy.trim = source.trim;
         copy.color = color;
         const original = source.getComponent(UITransform)!;

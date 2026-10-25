@@ -1,0 +1,17 @@
+{
+  "verifiedOn": "2026-10-24",
+  "runtimeAssets": 165,
+  "newLooks": ["spring", "autumn", "winter_bare"],
+  "reusedLooks": ["summer", "winter_snow"],
+  "typecheck": "passed",
+  "regressionTests": {"passed": 38, "failed": 0, "log": "tmp/season-final-regression.log"},
+  "gpu": {"webgl1Compiled": true, "styles": 7, "maximumSeamError": 0, "report": "tmp/terrain-gpu/pixel-result.json"},
+  "liveCocosPreview": ["winter_bare battlefield", "all seasonal random menu entries", "editor four seasons", "winter accumulated snow toggle"],
+  "imageGeneration": {"mode": "built-in imagegen", "prompts": ["material-prompts.json", "tree-prompts.json", "tree-revision-prompts.json"]},
+  "existingBaselineFailures": [
+    "EuropeanTerrainVersions.test.js: archived Pacific rock hash",
+    "WinterTerrain.test.js: original snow tree alpha silhouette",
+    "EuropeanRoadAssets.test.js: original road mouth color equality",
+    "EuropeanRoadAssets.test.js: original road mouth bleed"
+  ]
+}

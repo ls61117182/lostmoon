@@ -159,7 +159,7 @@ class Node {
   }
 }
 
-test('bunkers and wrecks remain under fog as scenery while unseen infantry stays visibility-masked', () => {
+test('bunkers remain fog-darkened scenery and infantry bodies have no hex stencil', () => {
   class UITransform { setContentSize() {} }
   class Graphics {}
   class Mask { static Type = { GRAPHICS_STENCIL: 1 }; subComp = new Graphics(); }
@@ -206,7 +206,7 @@ test('bunkers and wrecks remain under fog as scenery while unseen infantry stays
           'bunkers still occlude infantry');
         assert(scene.bunkerContentNode.getSiblingIndex() < fog.getSiblingIndex(), 'fog darkens bunker bodies');
         assert.equal(body.node.parent, scene.infantryContentNode);
-        assert(scene.unitVisibilityMaskNode.getComponent(Mask), 'infantry remains visibility-masked');
+        assert.equal(scene.unitVisibilityMaskNode.getComponent(Mask), undefined, 'unit bodies must not be sliced at fog edges');
         assert.equal(scene.bunkerInfantryOccluders()[0].sources.size, 0, 'no hidden infantry outline leaks through fog');
       }
     }

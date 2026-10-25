@@ -244,6 +244,7 @@ export function isAIActorUnit(u: Unit, includeHardcoreInfantry = false): boolean
     && !isAbandonedATGun(u)
     && !isAbandonedTank(u)
     && !isAttachedATGunCrew(u)
+    && !u.mountedOnUnitId
     && u.kind !== 'truck'
     && (!isFootUnit(u)
       || u.kind === 'japanese_infantry'
@@ -445,7 +446,7 @@ export function canExecuteAction(
   occupied: Set<string>,
   smokeHexes?: ReadonlySet<string>,
 ): boolean {
-  if (enemy.destroyed) return false;
+  if (enemy.destroyed || enemy.mountedOnUnitId) return false;
   if (isImmobileGunUnit(enemy) && ['turn', 'advance', 'reverse', 'advance_to_building', 'infantry_move'].includes(action)) return false;
   const currentTile = map.get(enemy.pos);
   switch (action) {

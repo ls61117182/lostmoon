@@ -1,0 +1,32 @@
+uniform UnitFogParams {
+  vec4 unitFogUvX;
+  vec4 unitFogUvY;
+  vec4 unitFogBounds;
+  vec4 unitFogShape;
+};
+uniform sampler2D unitFogTexture;
+in vec2 unitFogUV;
+
+float unitFogHash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float unitFogNoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(unitFogHash(i), unitFogHash(i + vec2(1.0, 0.0)), f.x),
+    mix(unitFogHash(i + vec2(0.0, 1.0)), unitFogHash(i + vec2(1.0)), f.x), f.y);
+}
+float unitFogVisibility() {
+  if (unitFogUvX.w < 0.5) return 1.0;
+  // Known edge units may overhang absent map tiles. Hidden edge units must
+  // never leak through the empty padding around the terrain fog texture.
+  float outside = unitFogUvY.w;
+  if (any(lessThan(unitFogUV, vec2(0.0))) || any(greaterThan(unitFogUV, vec2(1.0)))) return outside;
+  vec4 mask = texture(unitFogTexture, unitFogUV);
+  vec2 p = vec2(unitFogBounds.x + unitFogUV.x * unitFogBounds.z,
+    unitFogBounds.y - unitFogUV.y * unitFogBounds.w);
+  float noise = (unitFogNoise(p * 0.85) - 0.5) * 2.0 * unitFogShape.y;
+  float a = smoothstep(unitFogShape.z, unitFogShape.w, mask.r + noise);
+  float b = smoothstep(unitFogShape.z, unitFogShape.w, mask.g + noise);
+  return mix(outside, 1.0 - mix(a, b, unitFogShape.x), mask.b);
+}

@@ -44,6 +44,8 @@ export interface PvpBattleUnitSnapshot {
   ambushReadyThisTurn?: boolean;
   ambushEnteredOrder?: number;
   lockedFireTargetId?: string;
+  mountedOnUnitId?: string;
+  mountedDoubleSide?: 'left' | 'right';
   ambushActedThisTurn?: boolean;
 }
 
