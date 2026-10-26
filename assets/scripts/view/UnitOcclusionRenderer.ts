@@ -1,4 +1,4 @@
-import { Color, Graphics, Mask, Material, Node, Sprite, UITransform, Vec4, dynamicAtlasManager } from 'cc';
+import { Color, Graphics, Mask, Material, Node, Rect, Sprite, UITransform, Vec4, dynamicAtlasManager } from 'cc';
 import type { UnitFogRenderer } from './UnitFogRenderer';
 
 export type OcclusionShape = { circle: [number, number, number] } | { polygon: Array<[number, number]> };
@@ -30,16 +30,49 @@ export class UnitOcclusionRenderer {
     for (const slot of this.slots) slot.node.active = false;
     if (!this.material) return;
     let next = 0;
+    // World bounds walk node transforms. Compute them once per source for this
+    // sync, rather than once for every tree/roof against every unit.
+    const boundsCache = new Map<Sprite, Rect>();
+    const boundsOf = (sprite: Sprite) => {
+      let bounds = boundsCache.get(sprite);
+      if (!bounds) {
+        bounds = sprite.getComponent(UITransform)!.getBoundingBoxToWorld();
+        boundsCache.set(sprite, bounds);
+      }
+      return bounds;
+    };
+    const sourceCache = new Map<Map<Sprite, Color>, Array<[Sprite, Color]>>();
+    const sourcesOf = (entries: Map<Sprite, Color>) => {
+      let active = sourceCache.get(entries);
+      if (!active) {
+        active = Array.from(entries).filter(([sprite]) => sprite.node.activeInHierarchy && !!sprite.spriteFrame);
+        sourceCache.set(entries, active);
+      }
+      return active;
+    };
+    const vectorBounds = new Map<typeof vectors[number], Rect>();
     const passes: Array<{ blocker: Sprite | null; sources: Map<Sprite, Color>; vectors: typeof vectors }> = [
       ...[...blockers, ...(shapes.length ? [null] : [])].map(blocker => ({ blocker, sources, vectors })),
       ...unitBlockers.map(entry => ({ ...entry, vectors: entry.vectors ?? [] })),
     ];
     for (const { blocker, sources: passSources, vectors: passVectors } of passes) {
       if (blocker && (!blocker.node.activeInHierarchy || !blocker.spriteFrame)) continue;
-      const bounds = blocker?.getComponent(UITransform)!.getBoundingBoxToWorld();
-      const overlapping = Array.from(passSources.entries()).filter(([sprite]) => sprite.node.activeInHierarchy
-        && !!sprite.spriteFrame && (!bounds || bounds.intersects(sprite.getComponent(UITransform)!.getBoundingBoxToWorld())));
-      if (!overlapping.length && !passVectors.length) continue;
+      if (!passSources.size && !passVectors.length) continue;
+      const bounds = blocker ? boundsOf(blocker) : null;
+      const overlapping = sourcesOf(passSources).filter(([sprite]) => !bounds || bounds.intersects(boundsOf(sprite)));
+      const overlappingVectors = bounds ? passVectors.filter(vector => {
+        let rect = vectorBounds.get(vector);
+        if (!rect) {
+          const [x, y, radius] = vector.circle, r = radius + 2;
+          const m = this.root.worldMatrix;
+          const cx = m.m00 * x + m.m04 * y + m.m12, cy = m.m01 * x + m.m05 * y + m.m13;
+          const rx = r * Math.hypot(m.m00, m.m04), ry = r * Math.hypot(m.m01, m.m05);
+          rect = new Rect(cx - rx, cy - ry, rx * 2, ry * 2);
+          vectorBounds.set(vector, rect);
+        }
+        return bounds.intersects(rect);
+      }) : passVectors;
+      if (!overlapping.length && !overlappingVectors.length) continue;
       let slot = this.slots[next++];
       if (!slot) {
         const node = new Node('OccluderAlphaStencil');
@@ -83,7 +116,7 @@ export class UnitOcclusionRenderer {
           graphics.fill();
         }
       }
-      if (passVectors.length && !slot.vectors) {
+      if (overlappingVectors.length && !slot.vectors) {
         const node = new Node('VectorUnitSilhouettes');
         node.layer = this.root.layer;
         node.addComponent(UITransform);
@@ -96,7 +129,7 @@ export class UnitOcclusionRenderer {
         slot.vectors.node.setWorldPosition(this.root.worldPosition);
         slot.vectors.node.setWorldRotation(this.root.worldRotation);
         slot.vectors.node.setWorldScale(this.root.worldScale);
-        for (const vector of passVectors) {
+        for (const vector of overlappingVectors) {
           slot.vectors.strokeColor = vector.color;
           slot.vectors.lineWidth = 2;
           slot.vectors.circle(...vector.circle);

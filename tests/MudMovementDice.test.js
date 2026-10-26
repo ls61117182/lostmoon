@@ -16,6 +16,7 @@ const Scene = sceneMethods(['update', 'advanceTankMoveTime', 'dieStep', 'usePhas
   'completePhaseDiceAction', 'autoEndPhaseIfDone'], {
   ...types, GameSession, wreckVisualHex, WRECK_PUSH_STEP, easeOutCubic: t => 1 - (1 - t) ** 3,
   reconcileDiagonalGunnerSideAfterMove() {},
+  syncTankRiders() {},
   startManeuverSound() {}, stopManeuverSound() {}, playInfantryMove() {},
 });
 
@@ -28,9 +29,11 @@ function fixture({ mode = 'hardcore', phase = 'player', step = 'movement', kind 
   map.set({ pos: { q: 0, r: 0 }, terrain: 'field' });
   map.set({ pos: { q: 1, r: 0 }, terrain, ...tileExtra });
   Object.assign(h, {
-    mission: { sherman: phase === 'player' ? mover : {}, map, allies: [], enemies: [] }, phase, playerStep: step,
+    mission: { data: {}, sherman: phase === 'player' ? mover : {}, map, allies: [], enemies: [] }, phase, playerStep: step,
     hexSize: 100,
     currentWeather: () => 'clear',
+    allUnits: () => [mover],
+    startMultiRegionPan: () => false,
     project: (q, r) => ({ x: Math.sqrt(3) * (q + r / 2) * 100, y: -1.5 * r * 100 }),
     outcome: 'ongoing', phaseDice: [{ pip: 5, type: 'movement', used: true },
       { pip: 1, type: 'movement' }, { pip: 4, type: 'movement' }],
@@ -49,7 +52,7 @@ function fixture({ mode = 'hardcore', phase = 'player', step = 'movement', kind 
     'advanceTankTrackAnimation', 'finishTankTrackAnimation', 'finishCampaignExitTurretAlignment',
     'battleLogI18n', 'crushEnemyATGunsAt', 'captureAbandonedATGunsAt', 'captureAbandonedTanksAt',
     'drainPvpPendingRemoteSnapshot', 'tryResolveAmbushAfterMove', 'refreshEnemyDiceTray',
-    'refreshPhaseUI', 'updateHUD', 'redraw', 'runNextEnemyStep']) h[name] = () => {};
+    'refreshPhaseUI', 'updateHUD', 'redraw', 'redrawAnimatedUnits', 'playMoveStartSound', 'runNextEnemyStep']) h[name] = () => {};
   return h;
 }
 const used = h => Array.from(h.phaseDice, d => !!d.used);

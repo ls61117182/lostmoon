@@ -23,7 +23,7 @@ assert.match(
 );
 assert.match(
   playerAttack[0],
-  /applyMachineGunAttackResult\(target, \{ hit \}\)/,
+  /applyMachineGunAttackResult\(target, \{ hit \}, sherman, secondaryReport \? \[report, secondaryReport\] : \[report\]\)/,
   'the combined player result should be applied only after both reports exist',
 );
 assert.match(
@@ -54,7 +54,7 @@ assert.match(
 );
 assert.match(
   aiAttack[0],
-  /applyMachineGunAttackResult\(target, \{ hit \}\)/,
+  /applyMachineGunAttackResult\(target, \{ hit \}, actor, secondaryReport \? \[report, secondaryReport\] : \[report\]\)/,
   'AI should apply the OR of both independent attack results',
 );
 

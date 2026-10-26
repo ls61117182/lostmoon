@@ -594,7 +594,7 @@ tileInspect.bunkerWreck,碉堡残骸：坦克不可进入；双方步兵均可�
 tileInspect.rules.blocksVision,阻挡视野,Blocks line of sight
 tileInspect.rules.impassable,无法驶入,Impassable
 tileInspect.rules.water,水域：任何单位不可进入；不遮挡视线。,Water: impassable to all units; does not block line of sight.
-tileInspect.rules.bridge,桥梁：坦克只能从桥梁连接的 {a}、{b} 方向进出；按公路地形计算行动骰。,Bridge: tanks may enter or leave only through connected sides {a} and {b}; action dice use road terrain values.
+tileInspect.rules.bridge,桥梁：所有地面单位只能从桥梁连接的 {a}、{b} 方向进出；按公路地形计算行动骰。,Bridge: all ground units may enter or leave only through connected sides {a} and {b}; action dice use road terrain values.
 tileInspect.hedges,主炮射击时视线上的每个树篱使命中所需点数+1，但攻击者相邻的树篱不增加命中所需点数。,"For main-gun fire, each hedge along the line of sight adds +1 to the hit number, but hedges adjacent to the attacker do not increase the hit number."
 tileInspect.breakwaters,防波堤：日军单位移动不受影响；盟军坦克在移动阶段不能跨越，仅杂项阶段 3 点的前进动作可跨越。,Breakwater: Japanese units ignore it. Allied tanks cannot cross it during the Move phase; only the Misc-phase 3-pip advance may cross.
 tileInspect.markerRid,援军标记 rid={n},Reinforcement marker rid={n}
@@ -998,6 +998,22 @@ tankRiding.status,搭乘：{tank},Riding: {tank}
 tankRiding.carrying,搭载一支美军小队,Carrying one US infantry squad
 tankRiding.mount,乘坐{tank},Board {tank}
 tankRiding.dismount,下车,Dismount
+tankRiding.dismountBlocked,同格已有其他步兵，无法下车。,Cannot dismount while other infantry occupy this hex.
 tankRiding.hint,与友军坦克同格时可上车，每车一支小队；搭乘期间不独立行动。,Board a friendly tank in the same hex. One squad per tank; riders do not act independently.
 tankRiding.logMount,{infantry}乘坐{tank}。,{infantry} boarded {tank}.
 tankRiding.logDismount,{infantry}下车。,{infantry} dismounted.
+outcome.report.scope,战斗报告 · 第 {turn} 回合 · 玩家主角坦克,Battle report · Turn {turn} · Your tank
+outcome.report.received,承伤记录,INCOMING FIRE
+outcome.report.attacks,受到攻击,Attacks received
+outcome.report.hits,被命中,Hits received
+outcome.report.penetrations,被击穿,Penetrations received
+outcome.report.mainGun,主炮表现,MAIN GUN
+outcome.report.machineGun,机枪表现,MACHINE GUNS
+outcome.report.hitRate,命中率,Hit rate
+outcome.report.penetrationRate,击穿率,Penetration rate
+outcome.report.hitFraction,{hits} 命中 / {checks} 次判定,{hits} hits / {checks} checks
+outcome.report.penFraction,{hits} 击穿 / {checks} 次穿甲判定,{hits} pens / {checks} armor checks
+outcome.report.rules.main,主炮命中率仅计命中检定；击穿率仅计穿甲检定，无判定显示「—」。,Main gun rates use hit / armor checks respectively. No checks: —.
+outcome.report.rules.mg,机枪双枪独立统计；高爆波及不重复计数，烟幕弹不计入。,Each MG counts separately. HE collateral and smoke add no shots.
+outcome.pvp.win,敌方主角坦克被击毁,Enemy tank destroyed
+outcome.pvp.lose,你的主角坦克被击毁,Your tank destroyed

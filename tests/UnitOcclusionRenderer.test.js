@@ -8,13 +8,20 @@ class UITransform {
   setAnchorPoint(v) { this.anchorPoint = v; }
   setContentSize(v) { this.contentSize = v; }
   getBoundingBoxToWorld() {
+    this.boundsReads = (this.boundsReads ?? 0) + 1;
     const n = this.node, w = this.contentSize.width, h = this.contentSize.height;
-    return { intersects(other) { return Math.abs(n.worldPosition.x - other.x) < (w + other.w) / 2; }, x: n.worldPosition.x, w };
+    return new Rect(n.worldPosition.x - w / 2, n.worldPosition.y - h / 2, w, h);
   }
+}
+class Rect {
+  constructor(x, y, width, height) { Object.assign(this, { x, y, width, height, w: width }); }
+  intersects(other) { return this.x < other.x + other.width && this.x + this.width > other.x
+    && this.y < other.y + other.height && this.y + this.height > other.y; }
 }
 class Node {
   active = true; children = []; components = new Map(); layer = 1;
   worldPosition = { x: 0, y: 0, z: 0 }; worldRotation = {}; worldScale = { x: 1, y: 1, z: 1 };
+  worldMatrix = { m00: 1, m01: 0, m04: 0, m05: 1, m12: 0, m13: 0 };
   constructor(name) { this.name = name; }
   get activeInHierarchy() { return this.active; }
   addComponent(Type) { const c = new Type(); c.node = this; this.components.set(Type, c); return c; }
@@ -40,7 +47,7 @@ class Mask {
 }
 const code = ts.transpileModule(fs.readFileSync('assets/scripts/view/UnitOcclusionRenderer.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
 const moduleObject = { exports: {} };
-vm.runInNewContext(code, { exports: moduleObject.exports, require: () => ({ Node, Sprite, Mask, UITransform, Graphics, Vec4 }) });
+vm.runInNewContext(code, { exports: moduleObject.exports, require: () => ({ Node, Sprite, Mask, Rect, UITransform, Graphics, Vec4 }) });
 const Renderer = moduleObject.exports.UnitOcclusionRenderer;
 function sprite(x) { const n = new Node('source'); n.worldPosition.x = x; n.addComponent(UITransform); const s = n.addComponent(Sprite); s.spriteFrame = { uv: [0, 0, 1, 0, 0, 1, 1, 1] }; return s; }
 test('only overlapping active sprites get silhouettes, with exact frame and faction color', () => {
@@ -104,4 +111,41 @@ test('bunker passes clip only their selected infantry and keep existing building
   bunker.node.active = false;
   r.sync(new Map(), [], [], [], [{ blocker: bunker, sources: new Map([[infantry, color]]) }]);
   assert(root.children.every(node => !node.active), 'pooled bunker passes reset when no longer visible');
+});
+
+test('a dense map computes each world bound once per sync, including shared bunker sources', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const units = Array.from({ length: 24 }, (_, i) => sprite(i * 3));
+  const blockers = Array.from({ length: 300 }, (_, i) => sprite(1000 + i * 30));
+  const sources = new Map(units.map(unit => [unit, {}]));
+  renderer.sync(sources, blockers, [], [], [{ blocker: blockers[0], sources: new Map([[units[0], {}]]) }]);
+  assert.equal(root.children.length, 0, 'distant trees must not allocate stencil nodes');
+  const reads = [...units, ...blockers].reduce((sum, sprite) => sum + sprite.getComponent(UITransform).boundsReads, 0);
+  assert.equal(reads, 324, '24 units and 300 trees must not perform 7200 unit transform walks');
+  units[0].node.worldPosition.x = 1000;
+  renderer.sync(sources, blockers);
+  assert(root.children.some(node => node.active), 'the next sync must pick up newly overlapping motion');
+});
+
+test('fallback infantry vectors allocate stencils only for overlapping trees and roofs', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const vector = { circle: [0, 0, 4], color: {} };
+  const blockers = Array.from({ length: 300 }, (_, i) => sprite(100 + i * 30));
+  renderer.sync(new Map(), blockers, [], [vector]);
+  assert.equal(root.children.length, 0);
+  blockers[0].node.worldPosition.x = 0;
+  renderer.sync(new Map(), blockers, [], [vector]);
+  assert.equal(root.children.filter(node => node.active).length, 1);
+  assert.deepEqual(root.children[0].children[0].getComponent(Graphics).circles[0], [0, 0, 4]);
+});
+
+test('vector overlap follows map pan, zoom and rotation in world coordinates', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  root.worldMatrix = { m00: 0, m01: 2, m04: -2, m05: 0, m12: 100, m13: 200 };
+  const blocker = sprite(100); blocker.node.worldPosition.y = 220;
+  renderer.sync(new Map(), [blocker], [], [{ circle: [10, 0, 4], color: {} }]);
+  assert.equal(root.children.length, 1);
+  blocker.node.worldPosition.y = 300;
+  renderer.sync(new Map(), [blocker], [], [{ circle: [10, 0, 4], color: {} }]);
+  assert.equal(root.children[0].active, false);
 });

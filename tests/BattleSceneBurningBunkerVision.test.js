@@ -1,18 +1,7 @@
 const assert = require('assert');
-const fs = require('fs');
-const ts = require('typescript');
-const vm = require('vm');
-const source = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
-function method(name, next) {
-  const start = source.indexOf(`  private ${name}(`);
-  const end = source.indexOf(`\n  private ${next}(`, start);
-  assert.ok(start >= 0 && end > start);
-  return vm.runInNewContext(ts.transpile(source.slice(start, end)
-    .replace(`private ${name}`, `function ${name}`),
-    { target: ts.ScriptTarget.ES2020 }) + `\n${name};`);
-}
-const sync = method('syncUnitEffects', 'approachEffectAlpha');
-const draw = method('drawUnitEffects', 'drawAmbushMuzzleReticles');
+const Scene = require('./helpers/BattleSceneMethods.cjs')(['syncUnitEffects', 'drawUnitEffects']);
+const sync = Scene.prototype.syncUnitEffects;
+const draw = Scene.prototype.drawUnitEffects;
 const bunker = { id: 'heavy-bunker', fireLevel: 1, destroyed: false };
 let visible = true;
 let draws = 0;
@@ -29,6 +18,7 @@ const scene = {
   unitEffectGraphics: { clear() {} },
   interpolatedPos: () => ({ x: 0, y: 0 }),
   drawFireEffect() { draws++; }, drawAmbushMuzzleReticles() {},
+  drawLockedFireReticles() {}, drawWreckWaterRipples() {},
 };
 function frame(dt) { sync.call(scene, dt); draw.call(scene); }
 frame(0);

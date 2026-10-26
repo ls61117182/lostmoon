@@ -45,6 +45,7 @@ Object.assign(host, {
   enemyTurretFacing: new Map(), project: (q, r) => ({ x: q * 100, y: r * 100 }),
   directionScreenAngle: (_pos, _c, dir) => dir * Math.PI / 3,
   enemySupportsSplitTurret: () => true, currentWeather: () => 'clear', redraw: () => {},
+  redrawAnimatedUnits: () => {},
 });
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
 const target = { q: 2, r: 1 };

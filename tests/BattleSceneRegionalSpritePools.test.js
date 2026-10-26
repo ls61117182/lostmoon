@@ -15,7 +15,7 @@ class Node {
   addChild(node) { if (node.parent) node.parent.children.splice(node.parent.children.indexOf(node), 1); this.children.push(node); node.parent = this; }
   setSiblingIndex(index) { const siblings = this.parent.children; siblings.splice(siblings.indexOf(this), 1); siblings.splice(index, 0, this); }
 }
-const Scene = sceneMethods(['reserveUnitSpritePools', 'growUnitSpritePool', 'isOutsidePlayerRegion', 'drawUnit', 'captureSilhouetteSources'], {
+const Scene = sceneMethods(['reserveUnitSpritePools', 'growUnitSpritePool', 'isOutsidePlayerRegion', 'isRegionalBoundaryMove', 'drawUnit', 'captureSilhouetteSources'], {
   ...types, Node, Sprite, UITransform, GameSession: { gameMode: 'classic' },
   WRECK_SINK_DURATION: 5,
   isEnemyTopKind: () => true, isSplitTankKind: () => true, commanderHatchVisualState: () => 'hidden',

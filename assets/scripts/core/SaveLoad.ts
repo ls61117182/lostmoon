@@ -13,6 +13,7 @@ import { normalizeSeason, normalizeSnowCover } from './TerrainSeason';
 import type { SeasonType, SnowCover } from './types';
 import { syncTankRiders } from './TankRiding';
 import { cloneRegionalState } from './MultiRegion';
+import { BattleStatistics, cloneBattleStatistics } from './BattleStatistics';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
@@ -92,6 +93,7 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
+  battleStatistics?: BattleStatistics;
   multiRegionState?: import('./types').MultiRegionState;
   multiRegionHistory?: unknown[];
   rngState?: number;
@@ -333,6 +335,7 @@ export function captureSave(p: SnapshotParams): SaveData {
   };
   return {
     version: SAVE_VERSION,
+    battleStatistics: cloneBattleStatistics(p.mission.battleStatistics),
     multiRegionState: cloneRegionalState(p.mission.multiRegionState),
     gameMode: p.gameMode,
     missionId: p.missionId,
@@ -649,6 +652,7 @@ export function applySave(
   }
 
   syncTankRiders(units);
+  mission.battleStatistics = cloneBattleStatistics(save.battleStatistics);
   if (mission.data.multiRegion && save.multiRegionState) {
     mission.multiRegionState = cloneRegionalState(save.multiRegionState);
   }

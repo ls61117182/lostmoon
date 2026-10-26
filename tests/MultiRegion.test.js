@@ -18,6 +18,7 @@ const { applyRegionalReinforcement } = require('../assets/scripts/core/MultiRegi
 const { markAmbushAction } = require('../assets/scripts/core/Ambush.ts');
 const { clearLockedFire } = require('../assets/scripts/core/LockedFire.ts');
 const { missionWithSelectedPlayerTank } = require('../assets/scripts/core/PlayerTankSelection.ts');
+const { isTankUnit, isFootUnit } = require('../assets/scripts/core/types.ts');
 const { captureSave, applySave } = require('../assets/scripts/core/SaveLoad.ts');
 const sceneMethods = require('./helpers/BattleSceneMethods.cjs');
 const fixture = (seed = 20261026, count = 4) => loadMission(generateMultiRegionPackage(seed, count).mission, new RNG(1), { hardcore: true });
@@ -129,6 +130,28 @@ test('first test mission has two companies, exactly four objective tanks, and in
   }
   assert.deepEqual(m.multiRegionState.intel.map(intel => intel.state), ['contested', 'contested', 'enemy', 'enemy']);
   assert.equal(m.multiRegionState.intel[2].enemyPower, null);
+});
+
+test('initial allied tanks leave the player front hex clear while initial infantry may share tank hexes', () => {
+  for (let seed = 1; seed <= 30; seed++) {
+    const m = fixture(seed), front = HexMap.keyOf(neighbor(m.sherman.pos, m.sherman.facing));
+    assert(m.allies.filter(isTankUnit).every(unit => HexMap.keyOf(unit.pos) !== front));
+    for (const id of ['A1', 'A2']) {
+      const units = runtime.regionalCombatants(m, id).filter(unit => unit.sideId === 'player');
+      const tanks = units.filter(isTankUnit), infantry = units.filter(isFootUnit);
+      const tankKeys = new Set(tanks.map(unit => HexMap.keyOf(unit.pos)));
+      assert.equal(tankKeys.size, 4, 'vehicles still need distinct initial hexes');
+      assert.equal(new Set(infantry.map(unit => HexMap.keyOf(unit.pos))).size, 4, 'one squad per initial infantry slot');
+      assert(infantry.some(unit => tankKeys.has(HexMap.keyOf(unit.pos))), 'tank occupation must not exclude infantry');
+      assert(infantry.every(unit => !unit.mountedOnUnitId), 'sharing a hex does not automatically mount infantry');
+    }
+    for (const region of m.data.multiRegion.regions) {
+      const units = runtime.regionalCombatants(m, region.id).filter(unit => unit.sideId === 'enemy');
+      const tanks = new Set(units.filter(isTankUnit).map(unit => HexMap.keyOf(unit.pos)));
+      const infantry = units.filter(isFootUnit);
+      if (infantry.length) assert(infantry.some(unit => tanks.has(HexMap.keyOf(unit.pos))), 'enemy infantry use the same co-location rule');
+    }
+  }
 });
 
 test('cross-region shooting, MG and shared radio vision are blocked while movement remains legal', () => {

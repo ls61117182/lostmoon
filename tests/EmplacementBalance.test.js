@@ -156,7 +156,8 @@ test('direct AT-gun destruction skips the penetration row and ends after the hit
 const names = ['rollHighExplosiveCollateralResults', 'applyHighExplosiveAttackResult', 'atGunController', 'killATGunCrew', 'releaseATGunCrew', 'playerMainGunTargets'];
 const methods = names.map(name => sceneClass.members.find(m => m.name?.getText(source) === name).getText(source));
 const js = ts.transpileModule(`class Scene { ${methods.join('\n')} }`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
-const Scene = vm.runInNewContext(js + '\nScene', { ...types, ...combat });
+const Scene = vm.runInNewContext(js + '\nScene', { ...types, ...combat, rollHEAttack: combat.rollHighExplosiveAttack });
+Scene.prototype.recordSettledBattleAttack = () => {};
 test('attached AT-gun crew cannot be targeted directly or revived by crushing the gun', () => {
   const gun = unit('pak38');
   const crew = unit('german_infantry');
@@ -165,7 +166,7 @@ test('attached AT-gun crew cannot be targeted directly or revived by crushing th
   crew.attachedToATGunId = gun.id;
   const scene = new Scene();
   Object.assign(scene, {
-    mission: { enemies: [gun, crew], allies: [] },
+    mission: { enemies: [gun, crew], allies: [], sherman: unit('sherman'), map },
     allUnits: () => [gun, crew],
   });
   assert.deepEqual(Array.from(scene.playerMainGunTargets()), [gun]);

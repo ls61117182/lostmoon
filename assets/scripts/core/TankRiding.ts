@@ -1,4 +1,4 @@
-import { isAbandonedTank, isSameSide, isTankUnit, type Unit } from './types';
+import { isAbandonedTank, isFootUnit, isSameSide, isTankUnit, type Unit } from './types';
 
 /** One three-person American squad occupies one tank's exterior seats. */
 export function tankRiders(tank: Unit, units: readonly Unit[]): Unit[] {
@@ -30,9 +30,18 @@ export function mountTank(infantry: Unit, tank: Unit, units: readonly Unit[], ra
   return true;
 }
 
-/** Dismount into the carrier's hex; the existing shared-hex formation takes over. */
+/** Other live infantry already occupy the landing hex, regardless of their side. */
+export function canDismountTank(infantry: Unit, units: readonly Unit[]): boolean {
+  if (infantry.kind !== 'american_infantry' || infantry.destroyed || !infantry.mountedOnUnitId) return false;
+  const tank = units.find(unit => unit.id === infantry.mountedOnUnitId);
+  if (!tank) return false;
+  return !units.some(unit => unit.id !== infantry.id && !unit.destroyed && isFootUnit(unit)
+    && unit.pos.q === tank.pos.q && unit.pos.r === tank.pos.r);
+}
+
+/** Voluntary dismount requires a free infantry slot in the carrier's hex. */
 export function dismountTank(infantry: Unit, units: readonly Unit[]): boolean {
-  if (!infantry.mountedOnUnitId) return false;
+  if (!canDismountTank(infantry, units)) return false;
   const tank = units.find(unit => unit.id === infantry.mountedOnUnitId);
   if (tank) infantry.pos = { ...tank.pos };
   infantry.mountedOnUnitId = undefined;

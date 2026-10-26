@@ -5,11 +5,12 @@ const ts = require('typescript');
 require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
   compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
 }).outputText, filename);
-const { canMountTank, mountTank, dismountTank, syncTankRiders, tankRiders } = require('../assets/scripts/core/TankRiding.ts');
+const { canMountTank, canDismountTank, mountTank, dismountTank, syncTankRiders, tankRiders } = require('../assets/scripts/core/TankRiding.ts');
 const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
 const { createTankCrew } = require('../assets/scripts/core/types.ts');
 const { isAIActorUnit, canExecuteAction, currentTargetFor } = require('../assets/scripts/core/EnemyAI.ts');
-const { canAttack, canMGAttack } = require('../assets/scripts/core/Combat.ts');
+const { canAttack, canMGAttack, mgHitThreshold, rollMGAttack, rollSelectedTankMachineGunAttacks } = require('../assets/scripts/core/Combat.ts');
+const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
 const { captureSave, applySave } = require('../assets/scripts/core/SaveLoad.ts');
 const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
 const { RNG } = require('../assets/scripts/core/Dice.ts');
@@ -59,12 +60,105 @@ test('riders follow movement, cannot act, remain targetable, and resume after di
   const enemy = unit('enemy', 'german_infantry', 'enemy');
   assert.equal(currentTargetFor(enemy, [infantry], [], new RNG(1)), infantry, 'riders remain exposed');
   for (const check of [canAttack, canMGAttack]) {
-    assert.deepEqual(check({ attacker: infantry, target: enemy }), { ok: false, reason: 'attack.reason.mounted' });
+    assert.deepEqual(check({ attacker: infantry, target: enemy, map: new HexMap(8, 8) }), { ok: false, reason: 'attack.reason.mounted' });
   }
   assert.equal(dismountTank(infantry, units), true);
   assert.deepEqual(infantry.pos, tank.pos);
   assert.equal(isAIActorUnit(infantry, true), true);
   assert.equal(dismountTank(infantry, units), false);
+});
+
+test('other live infantry in the carrier hex block voluntary dismount, without mutating riding state', () => {
+  for (const kind of ['american_infantry', 'german_infantry', 'japanese_infantry', 'officer']) {
+    const { tank, infantry, units } = setup();
+    mountTank(infantry, tank, units, () => 0);
+    const other = unit('ground', kind, 'enemy'); units.push(other);
+    assert.equal(canDismountTank(infantry, units), false, kind);
+    assert.equal(dismountTank(infantry, units), false, kind);
+    assert.equal(infantry.mountedOnUnitId, tank.id); assert.equal(infantry.mountedDoubleSide, 'left');
+    other.destroyed = true;
+    assert.equal(canDismountTank(infantry, units), true, 'destroyed infantry do not occupy the landing slot');
+    other.destroyed = false; other.pos = { q: 2, r: 2 };
+    assert.equal(dismountTank(infantry, units), true, 'infantry leaving the hex unlock dismount');
+  }
+  const { tank, infantry, units } = setup(); mountTank(infantry, tank, units);
+  const otherTank = unit('otherTank', 'sherman'); units.push(otherTank);
+  assert.equal(canDismountTank(infantry, units), true, 'another vehicle alone does not block');
+  tank.pos = { q: 3, r: 3 };
+  const ground = unit('ground', 'american_infantry'); ground.pos = { ...tank.pos }; units.push(ground);
+  assert.equal(canDismountTank(infantry, units), false, 'check the current carrier hex, even before rider positions sync');
+  tank.fireLevel = 1; syncTankRiders(units);
+  assert.equal(infantry.mountedOnUnitId, undefined, 'forced evacuation from a burning carrier still works');
+});
+
+test('mounted MG targets receive no coordination bonus while same-hex ground infantry retain theirs', () => {
+  const { tank, infantry, units } = setup();
+  const attacker = unit('shooter', 'panzer4', 'enemy'); attacker.pos = { q: 0, r: 2 }; attacker.facing = 0;
+  const ground = unit('ground', 'american_infantry'); units.push(ground, attacker);
+  tank.stats = { ...tank.stats, infantryTankCoordination: 2 };
+  const map = new HexMap(5, 5);
+  map.set({ pos: { ...attacker.pos }, terrain: 'field' }); map.set({ pos: { ...tank.pos }, terrain: 'field' });
+  mountTank(infantry, tank, units);
+  for (const hardcoreTankMachineGuns of [false, true]) {
+    const ctx = { attacker, target: infantry, map, units, hardcoreTankMachineGuns, tankMachineGun: 'both' };
+    const unprotectedNeed = mgHitThreshold({ ...ctx, units: [attacker, infantry] });
+    const groundCtx = { ...ctx, target: ground };
+    assert.equal(mgHitThreshold(ctx), unprotectedNeed);
+    assert.equal(mgHitThreshold(groundCtx), unprotectedNeed + 2);
+    const report = rollMGAttack(ctx, { d6: () => unprotectedNeed });
+    assert.equal(report.hit, true);
+    assert.equal(report.hitModifiers.some(d => d.labelKey === 'dice.rule.infantryTankCoordination'), false);
+    const groundReport = rollMGAttack(groundCtx, { d6: () => unprotectedNeed });
+    assert.equal(groundReport.hit, false);
+    assert.equal(groundReport.hitModifiers.find(d => d.labelKey === 'dice.rule.infantryTankCoordination').value, 2);
+    const dual = rollSelectedTankMachineGunAttacks(ctx, { d6: () => unprotectedNeed });
+    assert(dual.every(shot => shot.report.hit && shot.report.threshold === unprotectedNeed), 'both MGs use the unprotected rider threshold');
+  }
+  ground.pos = { q: 2, r: 2 }; assert(dismountTank(infantry, units));
+  const dismountedCtx = { attacker, target: infantry, map, units };
+  assert.equal(mgHitThreshold(dismountedCtx), mgHitThreshold({ ...dismountedCtx, units: [] }) + 2,
+    'dismounted infantry regain the ordinary ground coordination bonus');
+});
+
+test('AI machine guns prefer legal hostile riders over same-hex ground infantry, retaining vision and range gates', () => {
+  const rules = Object.assign({}, ...['HexGrid', 'FogOfWar', 'Combat', 'types', 'GameMode', 'EnemyAI', 'Suppression']
+    .map(name => require(`../assets/scripts/core/${name}.ts`)));
+  const GameSession = { gameMode: 'hardcore' };
+  const Scene = require('./helpers/BattleSceneMethods.cjs')(['selectAIMGTarget', 'tankMachineGunContext'], { ...rules, GameSession });
+  for (const mode of ['classic', 'hardcore', 'test']) {
+    GameSession.gameMode = mode;
+    const { tank, infantry, units } = setup();
+    const ground = unit('ground', 'american_infantry');
+    const attacker = unit('shooter', 'panzer4', 'enemy');
+    Object.assign(attacker, { pos: { q: 0, r: 2 }, facing: 0, turretFacing: 0, hatchOpen: true,
+      visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1, unitLevel: 'elite' });
+    units.push(ground, attacker); mountTank(infantry, tank, units);
+    const map = new HexMap(5, 5);
+    for (let q = 0; q < 5; q++) for (let r = 0; r < 5; r++) map.set({ pos: { q, r }, terrain: 'field' });
+    const scene = new Scene(); let targets = [ground, infantry];
+    Object.assign(scene, { mission: { map, data: { theater: 'europe' }, smokeHexes: new Set() },
+      allUnits: () => units, aiTargetsFor: () => targets, aiFriendliesFor: () => [attacker],
+      aiMissionTargetsFor: () => [ground], currentWeather: () => 'clear',
+      tankMachineGunSelection: () => ({ weapon: 'both', rotateTurret: false }),
+      rng: { intRange: () => { throw new Error('unique rider priority must not randomize with ground infantry'); } } });
+    for (const order of [[ground, infantry], [infantry, ground]]) {
+      targets = order;
+      assert.equal(scene.selectAIMGTarget(attacker, false), infantry, mode);
+      assert.equal(scene.selectAIMGTarget(attacker, true), infantry, mode);
+    }
+    infantry.pos = { q: 3, r: 2 };
+    assert.equal(scene.selectAIMGTarget(attacker, false), ground, 'out-of-range riders cannot steal the target');
+    infantry.pos = { ...tank.pos }; infantry.destroyed = true;
+    assert.equal(scene.selectAIMGTarget(attacker, false), ground, 'destroyed riders cannot steal the target');
+    infantry.destroyed = false; infantry.sideId = 'enemy';
+    assert.equal(scene.selectAIMGTarget(attacker, false), ground, 'friendly riders cannot steal the target');
+    infantry.sideId = 'player';
+    if (mode !== 'classic') {
+      scene.currentWeather = () => 'fog';
+      scene.mission.smokeHexes.add(HexMap.keyOf(infantry.pos));
+      assert.equal(scene.selectAIMGTarget(attacker, false), null, 'riding priority never bypasses smoke/vision');
+    }
+  }
 });
 
 test('boarding chooses either double side once, redraw/sync preserve it, and legacy links migrate deterministically', () => {
@@ -230,6 +324,11 @@ test('tile-detail commands board and dismount, save the result and reject out-of
   assert.equal(infantry.mountedOnUnitId, tank.id); assert.equal(saves, 1); assert.equal(draws, 1);
   assert.deepEqual(events, ['tank_mount']);
   assert.doesNotThrow(() => p.drawUnit(infantry), 'mounted infantry must exit before the ground draw path');
+  const ground = unit('ground', 'american_infantry'); units.push(ground);
+  p.changeTankRiding(infantry);
+  assert.equal(infantry.mountedOnUnitId, tank.id, 'scene commands cannot bypass an occupied landing hex');
+  assert.equal(saves, 1); assert.equal(draws, 1); assert.deepEqual(events, ['tank_mount']);
+  ground.pos = { q: 2, r: 2 };
   p.phase = 'enemy'; p.changeTankRiding(infantry);
   assert.equal(infantry.mountedOnUnitId, tank.id); assert.equal(saves, 1);
   p.phase = 'player'; p.changeTankRiding(infantry);

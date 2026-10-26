@@ -16,7 +16,7 @@ function loadSaveLoad() {
   }).outputText;
   const mod = { exports: {} };
   const req = (id) => {
-    if (id === './TerrainSeason' || id === './Weather' || id === './types') {
+    if (id === './TerrainSeason' || id === './Weather' || id === './types' || id === './BattleStatistics') {
       const helper = { exports: {} };
       const helperJS = ts.transpileModule(fs.readFileSync(path.join(repo, `assets/scripts/core/${id.slice(2)}.ts`), 'utf8'), {
         compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
@@ -25,6 +25,7 @@ function loadSaveLoad() {
       return helper.exports;
     }
     if (id === './TankRiding') return { syncTankRiders: () => {} };
+    if (id === './MultiRegion') return { cloneRegionalState: value => value ? JSON.parse(JSON.stringify(value)) : undefined };
     if (id === './BuildProfile') return { profileStorageKey: key => key };
     if (id === './UnitDB') return { getUnitStats: () => ({ faction: 'usa' }) };
     if (id === './HexGrid') return { HexMap: { keyOf: (p) => `${p.q},${p.r}` } };
@@ -74,6 +75,7 @@ const mission = {
   enemies: [],
   smokeHexes: new Set(),
   smokeHexOwners: new Map(),
+  battleStatistics: { attacksReceived: 4, mainGunHitChecks: 3, mainGunHits: 2 },
 };
 
 // Campaign checkpoints pass through localStorage JSON. Clean-state optional
@@ -105,9 +107,13 @@ sherman.loadedShell = null;
 sherman.hvapAmmoRemaining = 0;
 sherman.hatchOpen = false;
 sherman.crew.gunner = false;
+mission.battleStatistics.attacksReceived = 9;
 
 const result = applySave(mission, 'campaign_peleliu_02', checkpoint);
 assert.strictEqual(result.ok, true);
+assert.strictEqual(mission.battleStatistics.attacksReceived, 4, 'retry restores the segment-start statistics');
+assert.strictEqual(mission.battleStatistics.mainGunHits, 2);
+assert.notStrictEqual(mission.battleStatistics, checkpoint.battleStatistics);
 assert.strictEqual(sherman.fireLevel, 0);
 assert.strictEqual(sherman.turretDamaged, false);
 assert.strictEqual(sherman.paralyzed, false);

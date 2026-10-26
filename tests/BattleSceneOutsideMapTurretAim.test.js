@@ -28,6 +28,7 @@ Object.assign(scene, {
   phase: 'player', playerStep: 'attack', selectedGunDieIdx: 0, selectedGunHitThresholdModifier: 0,
   hasTurretReconGunSelection: () => true, playerTurretCanRotate: () => true,
   canWeaponAimDirection: (_unit, direction) => direction !== 3,
+  currentWeather: () => undefined,
 });
 offsets.forEach(([q, r], direction) => assert.equal(scene.outsideMapTurretAimDirection({ q, r }), direction === 3 ? null : direction));
 assert.equal(scene.outsideMapTurretAimDirection({ q: 2, r: 0 }), 0);
@@ -84,6 +85,7 @@ Object.assign(host, {
   phaseDice: [{ used: false }],
   isBusy: () => false, hasTurretReconGunSelection: () => true, playerTurretCanRotate: () => true,
   canWeaponAimDirection: () => true, playerHasFixedWeaponArc: () => false, currentTurretFacingFor: () => 0,
+  currentWeather: () => undefined,
   closeDiePopover: () => {}, hideTurretTargetOverlayForCommittedAction: () => {},
   startShermanTurretAimDirection: (direction, done) => { rotatedTo = direction; done(); },
   usePhaseDice: indices => { consumed = indices; }, clearGunSelection: () => {},

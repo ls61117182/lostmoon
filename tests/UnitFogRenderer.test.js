@@ -147,3 +147,18 @@ test('scene submits hidden moving bodies to the shared spatial shader before log
   scene.drawPresentedUnit(enemy);
   assert.deepEqual(calls, [], 'loading fallback never exposes a hidden body');
 });
+
+test('reused moving silhouettes upload uniforms only when fog state or their policy changes', () => {
+  const { fog, state } = setup(), material = new Material();
+  fog.configure(material, 'hidden');
+  const initial = material.calls;
+  for (let frame = 0; frame < 60; frame++) {
+    fog.configure(material, 'hidden');
+    fog.update(state, true);
+  }
+  assert.equal(material.calls, initial);
+  state.params.x = .25; fog.update(state, true);
+  assert.equal(material.values.unitFogShape.x, .25);
+  fog.configure(material, 'known');
+  assert.equal(material.values.unitFogUvY.w, 1);
+});

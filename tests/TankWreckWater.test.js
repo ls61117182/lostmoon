@@ -57,7 +57,7 @@ test('sinking completes in one second without a pusher, with frame-independent p
 const Scene = require('./helpers/BattleSceneMethods.cjs')([
   'sampleTankWreckWater', 'syncTankWreckWater', 'advanceTankWreckWater', 'interpolatedPos',
   'advanceTankMoveTime', 'advanceTankWreckPush', 'fireEffectLevel', 'isUnitVisible', 'drawWreckWaterRipples',
-  'updateTankWreckPose', 'usesPushedWreckVision',
+  'updateTankWreckPose',
   'placeWreckRippleLayerAboveUnits',
   'syncWreckRippleWaterMask',
 ], { ...water, ...push, isTankUnit, effectiveDiceTerrain: require('../assets/scripts/core/types.ts').effectiveDiceTerrain, tileHasBridge, neighbors, urbanBuildingState,
@@ -77,8 +77,6 @@ function fixture(terrain = 'water', bridge = false) {
     wreckPose: { x: 0.70, y: 0, angle: 0 } };
   scene.mission = { sherman: player, allies: [], enemies: [wreck], map };
   scene.anim = null;
-  scene.knownPushedWreckPoses = new WeakMap();
-  scene.pushedWreckVisionMoves = new WeakMap();
   scene.wreckWaterProbe = new WeakMap(); scene.unitEffectVisuals = new Map(); scene.destroyWreckVisualIds = new Set(['wreck']);
   scene.isHexVisible = () => true;
   scene.allUnits = () => [player, wreck];
@@ -240,7 +238,7 @@ test('the ripple stencil includes only open-water hexes and caches its geometry'
   assert.equal(stencil.hexes.length, 0, 'a new mission must discard old water geometry');
 });
 
-test('ripple layer stays above both normal and pushed tank layers, below the fog', () => {
+test('ripple layer stays above unit layers, below the fog', () => {
   class Layer {
     constructor(parent) { this.children = []; if (parent) parent.add(this); }
     add(node) { node.parent = this; this.children.push(node); }
@@ -251,13 +249,12 @@ test('ripple layer stays above both normal and pushed tank layers, below the fog
   const map = scene.mapNode = new Layer();
   scene.wreckRippleNode = new Layer(map);
   scene.unitEffectNode = new Layer(map);
-  scene.pushedWreckMaskNode = new Layer(map);
   const tankMask = new Layer(map);
   scene.tankContentNode = new Layer(tankMask);
   scene.unitOcclusion = { root: new Layer(map) };
   const fog = new Layer(map);
   scene.placeWreckRippleLayerAboveUnits();
-  for (const anchor of [scene.unitEffectNode, scene.pushedWreckMaskNode, tankMask, scene.unitOcclusion.root]) {
+  for (const anchor of [scene.unitEffectNode, tankMask, scene.unitOcclusion.root]) {
     assert(scene.wreckRippleNode.getSiblingIndex() > anchor.getSiblingIndex());
   }
   assert(scene.wreckRippleNode.getSiblingIndex() < fog.getSiblingIndex());

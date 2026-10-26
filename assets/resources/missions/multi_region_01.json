@@ -62,7 +62,7 @@
         "t": "m"
       },
       {
-        "t": "f"
+        "t": "F"
       },
       null
     ],
@@ -190,7 +190,7 @@
         "t": "F"
       },
       {
-        "t": "f"
+        "t": "F"
       },
       {
         "t": "f"
@@ -569,7 +569,7 @@
         "t": "f"
       },
       {
-        "t": "f"
+        "t": "F"
       },
       {
         "t": "r",
@@ -656,6 +656,16 @@
       "faction": "usa",
       "at": {
         "col": 1,
+        "row": 8
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 0,
         "row": 7
       },
       "facing": 0,
@@ -666,7 +676,7 @@
       "faction": "usa",
       "at": {
         "col": 1,
-        "row": 8
+        "row": 5
       },
       "facing": 0,
       "hatchOpen": true
@@ -676,7 +686,7 @@
       "faction": "usa",
       "at": {
         "col": 1,
-        "row": 9
+        "row": 6
       },
       "facing": 0,
       "hatchOpen": true
@@ -685,18 +695,8 @@
       "kind": "american_infantry",
       "faction": "usa",
       "at": {
-        "col": 2,
-        "row": 4
-      },
-      "facing": 0,
-      "hatchOpen": true
-    },
-    {
-      "kind": "american_infantry",
-      "faction": "usa",
-      "at": {
-        "col": 2,
-        "row": 5
+        "col": 1,
+        "row": 7
       },
       "facing": 0,
       "hatchOpen": true
@@ -745,8 +745,8 @@
       "kind": "american_infantry",
       "faction": "usa",
       "at": {
-        "col": 7,
-        "row": 4
+        "col": 6,
+        "row": 3
       },
       "facing": 0,
       "hatchOpen": true
@@ -756,27 +756,27 @@
       "faction": "usa",
       "at": {
         "col": 7,
-        "row": 5
-      },
-      "facing": 0,
-      "hatchOpen": true
-    },
-    {
-      "kind": "american_infantry",
-      "faction": "usa",
-      "at": {
-        "col": 8,
-        "row": 0
-      },
-      "facing": 0,
-      "hatchOpen": true
-    },
-    {
-      "kind": "american_infantry",
-      "faction": "usa",
-      "at": {
-        "col": 8,
         "row": 1
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 2
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 3
       },
       "facing": 0,
       "hatchOpen": true
@@ -807,6 +807,16 @@
       "kind": "german_infantry",
       "faction": "german",
       "at": {
+        "col": 7,
+        "row": 6
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4_f",
+      "faction": "german",
+      "at": {
         "col": 6,
         "row": 7
       },
@@ -819,16 +829,6 @@
       "at": {
         "col": 6,
         "row": 6
-      },
-      "facing": 3,
-      "hatchOpen": true
-    },
-    {
-      "kind": "panzer4_f",
-      "faction": "german",
-      "at": {
-        "col": 6,
-        "row": 5
       },
       "facing": 3,
       "hatchOpen": true
@@ -877,14 +877,24 @@
       "kind": "german_infantry",
       "faction": "german",
       "at": {
-        "col": 12,
-        "row": 1
+        "col": 13,
+        "row": 2
       },
       "facing": 3,
       "hatchOpen": true
     },
     {
       "kind": "panzer4",
+      "faction": "german",
+      "at": {
+        "col": 7,
+        "row": 12
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
       "faction": "german",
       "at": {
         "col": 7,
@@ -904,7 +914,17 @@
       "hatchOpen": true
     },
     {
-      "kind": "german_infantry",
+      "kind": "panzer4_f",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 14
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer3",
       "faction": "german",
       "at": {
         "col": 6,
@@ -914,7 +934,7 @@
       "hatchOpen": true
     },
     {
-      "kind": "panzer4_f",
+      "kind": "stug3",
       "faction": "german",
       "at": {
         "col": 6,
@@ -934,30 +954,10 @@
       "hatchOpen": true
     },
     {
-      "kind": "stug3",
-      "faction": "german",
-      "at": {
-        "col": 5,
-        "row": 15
-      },
-      "facing": 3,
-      "hatchOpen": true
-    },
-    {
-      "kind": "panzer3",
-      "faction": "german",
-      "at": {
-        "col": 5,
-        "row": 14
-      },
-      "facing": 3,
-      "hatchOpen": true
-    },
-    {
       "kind": "german_infantry",
       "faction": "german",
       "at": {
-        "col": 5,
+        "col": 6,
         "row": 13
       },
       "facing": 3,
@@ -997,7 +997,7 @@
       "kind": "german_infantry",
       "faction": "german",
       "at": {
-        "col": 12,
+        "col": 13,
         "row": 8
       },
       "facing": 3,
@@ -1008,7 +1008,7 @@
       "faction": "german",
       "at": {
         "col": 12,
-        "row": 7
+        "row": 10
       },
       "facing": 3,
       "hatchOpen": true
@@ -1018,7 +1018,7 @@
       "faction": "german",
       "at": {
         "col": 12,
-        "row": 6
+        "row": 8
       },
       "facing": 3,
       "hatchOpen": true
@@ -1027,8 +1027,8 @@
       "kind": "panzer3",
       "faction": "german",
       "at": {
-        "col": 11,
-        "row": 10
+        "col": 12,
+        "row": 7
       },
       "facing": 3,
       "hatchOpen": true

@@ -22,9 +22,9 @@ const Scene = require('./helpers/BattleSceneMethods.cjs')([
 
 function fixture() {
   const scene = new Scene();
-  const map = new grid.HexMap(9, 9);
-  for (let q = -4; q <= 4; q++) for (let r = -4; r <= 4; r++) {
-    if (grid.hexDistance({ q: 0, r: 0 }, { q, r }) <= 4) map.set({ pos: { q, r }, terrain: 'field' });
+  const map = new grid.HexMap(13, 13);
+  for (let q = -6; q <= 6; q++) for (let r = -6; r <= 6; r++) {
+    if (grid.hexDistance({ q: 0, r: 0 }, { q, r }) <= 6) map.set({ pos: { q, r }, terrain: 'field' });
   }
   const tank = { id: 'player', kind: 'sherman', faction: 'usa', pos: { q: 0, r: 0 },
     facing: 0, turretFacing: 3, loaded: true, loadedShell: 'ap',
@@ -56,6 +56,7 @@ function fixture() {
     clearGunSelection() { scene.selectedGunDieIdx = -1; },
     refreshPhaseUI() {}, updateHUD() {}, redraw() {}, completePhaseDiceAction() {},
     openTileInspectModal() { actions.push('inspect'); }, tryAttack() { actions.push('fire'); },
+    showGunAimWarning(reason) { actions.push(reason); },
   });
   return { scene, map, tank, masks, edges, actions };
 }
@@ -126,4 +127,43 @@ for (const visible of [true, false]) for (const shell of ['ap', 'smoke']) {
   scene.onTouchMap(event);
   assert.deepEqual(actions, ['rotate'], 'a shared visible enemy behind cover also permits rotation only');
 }
-console.log('Main-gun occlusion fill, firing-arc boundary and rotation tests passed');
+// Shared radio vision must not enlarge either the blue area or its clickable range.
+for (const mode of ['hardcore', 'test']) for (const visible of [true, false]) {
+  GameSession.gameMode = mode;
+  for (const [configuredRange, weather, range] of [[4, 'clear', 4], [2, 'clear', 2], [5, 'clear', 5], [4, 'fog', 2]]) {
+    for (const shell of ['ap', 'smoke']) for (const occupied of [false, true]) {
+      const { scene, map, tank, masks, edges, actions } = fixture();
+      tank.gunnerVisionRange = configuredRange;
+      tank.loadedShell = shell;
+      scene.currentWeather = () => weather;
+      scene.isHexVisible = () => visible;
+      const target = { ...tank, id: 'distant-enemy', faction: 'german', pos: { q: range + 1, r: 0 } };
+      scene.allUnits = () => occupied ? [tank, target] : [tank];
+      scene.playerMainGunTargets = () => occupied ? [target] : [];
+      scene.canPlayerMainGunAttack = () => false;
+      scene.pickTileAtScreenUi = () => map.get(target.pos);
+      scene.redrawTurretAimOverlay();
+      assert(masks.has(`${range},0`), 'the last gunner-visible hex keeps its blue fill');
+      assert(edges.has(`${range},0:0`), 'the blue boundary closes at the gunner range');
+      for (const key of [...masks, ...edges].map(key => key.split(':')[0])) {
+        const [q, r] = key.split(',').map(Number);
+        assert(grid.hexDistance(tank.pos, { q, r }) <= range, 'no fill or boundary may originate beyond gunner range');
+      }
+      scene.onTouchMap(event);
+      assert.deepEqual(actions, ['attack.reason.turretAimRange'], 'distant empty/enemy clicks cannot rotate, even with shared vision');
+      assert.equal(tank.turretFacing, 3);
+      assert.equal(scene.phaseDice[0].used, false);
+      assert.equal(scene.selectedGunDieIdx, 0);
+      assert.equal(tank.loadedShell, shell);
+      actions.length = 0;
+      scene.tryAimShermanTurretAtFogTile(0, target.pos);
+      assert.deepEqual(actions, ['attack.reason.turretAimRange'], 'direct rotation callbacks must also reject distant targets');
+      actions.length = 0;
+      scene.pickTileAtScreenUi = () => map.get({ q: range, r: 0 });
+      scene.onTouchMap(event);
+      assert.deepEqual(actions, ['rotate'], 'clicks at the gunner range boundary still rotate');
+      assert.equal(scene.phaseDice[0].used, true);
+    }
+  }
+}
+console.log('Main-gun occlusion, gunner-limited masks, boundaries and rotation tests passed');

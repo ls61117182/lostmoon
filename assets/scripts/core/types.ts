@@ -100,8 +100,8 @@ export interface Tile {
   enemyStartFacing?: Direction;
   /**
    * 桥梁两端方向（仅水域格 `terrain==='water'` 上有效；GDD §3.2「桥梁」叠加项）：
-   * 桥梁本身不是独立地形，叠加在水域格上 → 该格对坦克 / 卡车变为可入；移动 / 攻击 / 杂项的基础骰数与公路相同（见 `effectiveDiceTerrain`），移动力消耗与公路相同（见 `terrainMoveCost`）。
-   * 两端方向 `[a, b]` 决定哪两条格边「贯通」：车辆只能从这两个方向之一驶入 / 驶出本格，其余 4 条边仍视为水面。
+   * 桥梁本身不是独立地形，叠加在水域格上 → 该格对所有地面单位变为可入，且只能从桥梁两端方向进出；移动 / 攻击 / 杂项的基础骰数与公路相同（见 `effectiveDiceTerrain`），移动力消耗与公路相同（见 `terrainMoveCost`）。
+   * 两端方向 `[a, b]` 决定哪两条格边「贯通」：所有地面单位只能从这两个方向之一进入 / 离开本格，其余 4 条边仍视为水面。
    * 关卡 JSON 字段：`TileDef.br = [a, b]`；MissionLoader 强校验「水域基底 + 两个相反方向」。
    */
   bridgeEnds?: [Direction, Direction];

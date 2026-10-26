@@ -360,7 +360,7 @@ export class HexMap {
    * - 其他基底（公路 / 田地 / 泥地）一律可入。
    *
    * 注意：本函数**只**校验目标格本身是否「物理上能站」。是否能从某条边跨入桥梁格、
-   * 是否能从桥梁格沿某条边跨出，需另用 `canTankCrossEdge` 做边向校验。
+   * 是否能从桥梁格沿某条边跨出，需另用 `canUnitCrossEdge` / `canTankCrossEdge` 做边向校验。
    */
   /** Common unit-entry rules that apply regardless of unit kind. */
   canUnitEnter(p: Axial, faction?: Faction): boolean {
@@ -405,7 +405,7 @@ export class HexMap {
   }
 
   canUnitCrossEdge(from: Axial, to: Axial, unit: Unit, opts: { ignoreBreakwater?: boolean; faction?: Faction } = {}): boolean {
-    if (hexDistance(from, to) !== 1 || !this.canUnitEnter(to, unit.faction)) return false;
+    if (!this.canCrossBridgeEdge(from, to) || !this.canUnitEnter(to, unit.faction)) return false;
     if ((isFootUnit(unit) || isAntiTankGunUnit(unit)) && this.barbedWireBetween(from, to) === 1) return false;
     if (isFootUnit(unit) || isAntiTankGunUnit(unit)) return true;
     return this.canTankCrossEdge(from, to, { ...opts, faction: unit.faction });
@@ -439,9 +439,15 @@ export class HexMap {
    * 不在桥梁场景下，本函数行为退化为 `canTankEnter(to) && from-to 相邻`，与旧逻辑一致。
    */
   canTankCrossEdge(from: Axial, to: Axial, opts: { ignoreBreakwater?: boolean; faction?: Faction } = {}): boolean {
-    if (hexDistance(from, to) !== 1) return false;
+    if (!this.canCrossBridgeEdge(from, to)) return false;
     if (!this.canTankEnter(to, opts.faction)) return false;
     if (!opts.ignoreBreakwater && this.hasBreakwaterBetween(from, to)) return false;
+    return true;
+  }
+
+  /** Every ground unit must cross adjacent bridge tiles through their connected ends. */
+  private canCrossBridgeEdge(from: Axial, to: Axial): boolean {
+    if (hexDistance(from, to) !== 1) return false;
     const tFrom = this.get(from);
     const tTo = this.get(to);
     if (tileHasBridge(tFrom)) {

@@ -1693,7 +1693,7 @@ function tankCoordinationBonus(unit: Unit): number {
 }
 
 function mgTankCoordinationModifier(ctx: AttackContext): number {
-  if (!isFootUnit(ctx.target)) return 0;
+  if (!isFootUnit(ctx.target) || ctx.target.mountedOnUnitId) return 0;
   const units = ctx.units;
   if (!units) return 0;
   let bonus = 0;

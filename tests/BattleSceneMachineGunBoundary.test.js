@@ -12,7 +12,8 @@ const GameSession = { gameMode: 'hardcore' };
 const Scene = require('./helpers/BattleSceneMethods.cjs')([
   'redrawTurretAimOverlay', 'machineGunAimDirection', 'canTurretReachDirection',
   'turretTraverseSpeedFor', 'playerTurretCanRotate', 'playerHasFixedWeaponArc', 'canWeaponAimDirection',
-], { ...grid, ...combat, ...types, ...require('../assets/scripts/core/TurretTraverse.ts'), GameSession });
+], { ...grid, ...combat, ...types, ...require('../assets/scripts/core/FogOfWar.ts'),
+  ...require('../assets/scripts/core/TurretTraverse.ts'), GameSession });
 
 function fixture() {
   const scene = new Scene();
@@ -29,6 +30,7 @@ function fixture() {
     turretAimOverlayGraphics: { clear() { masks.clear(); edges.clear(); } },
     hasTurretReconGunSelection: () => true, playerWeaponTargetHexKeys: () => new Set(),
     isDeepShadowTile: () => false, currentTurretFacingFor: unit => unit.turretFacing,
+    currentWeather: () => undefined,
     project: (q, r) => ({ x: q, y: r }),
     drawTurretAimHex: (_g, q, r) => masks.add(`${q},${r}`),
     drawTurretAimBoundaryEdge: (_g, q, r, dir) => edges.add(`${q},${r}:${dir}`),

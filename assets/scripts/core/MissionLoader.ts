@@ -103,6 +103,7 @@ function addStartOccupant(occupied: Map<string, StartOccupant[]>, pos: Axial, oc
 }
 
 export interface LoadedMission {
+  battleStatistics?: import('./BattleStatistics').BattleStatistics;
   multiRegionState?: import('./types').MultiRegionState;
   map: HexMap;
   /** The one locally controlled protagonist vehicle. */

@@ -30,6 +30,7 @@ import {
 import { LoadedMission } from './MissionLoader';
 import { ReinforcementSide, TurnEndEffectType, TurnEndEventRow } from './TurnEndEventDB';
 import { getUnitStats } from './UnitDB';
+import { cloneBattleStatistics, recordBattleAttack } from './BattleStatistics';
 import { initialMainGunLoadingState, Axial, Direction, effectiveDiceTerrain, isAntiTankGunKind, isAntiTankGunUnit, isAttachedATGunCrew, isFootKind, isFootUnit, isTankKind, neutralizeUncrewedTank, Offset, restoreFullTankCrew, Unit, UnitKind, WeatherType } from './types';
 
 export interface TurnEndApplyContext {
@@ -556,6 +557,10 @@ export function prepareTurnEndEvent(
   const d1 = primaryDice[0] ?? 0;
   const d2 = primaryDice[1] ?? 0;
   const baseParams: Record<string, string | number> = { d1, d2, sum };
+  const recordIncoming = (report: Partial<AttackReport> & Pick<AttackReport, 'hit'>) => {
+    const stats = mission.battleStatistics ?? (mission.battleStatistics = cloneBattleStatistics());
+    recordBattleAttack(stats, false, true, 'main', [report]);
+  };
 
   switch (row.effectType as TurnEndEffectType) {
     case 'airborne_support': {
@@ -591,6 +596,7 @@ export function prepareTurnEndEvent(
         sniperWillKill: threatened,
         apply: () => {
           if (!threatened || !sh.crew) return;
+          recordIncoming({ hit: true });
           if (shielded && sh.campaignCommanderShieldAvailable === true) {
             sh.campaignCommanderShieldAvailable = false;
             return;
@@ -689,6 +695,7 @@ export function prepareTurnEndEvent(
         apply: () => {
           const sherman = mission.sherman;
           for (const rep of reports) {
+            recordIncoming(rep);
             applyAttack(sherman, rep);
             if (sherman.destroyed) return;
           }
@@ -738,6 +745,13 @@ export function prepareTurnEndEvent(
         bodyParams: bp,
         extraDicePhases: extraDicePhases.length ? extraDicePhases : undefined,
         apply: () => {
+          if (sim.bomb) {
+            recordIncoming({
+              hit: sim.bomb[0] + sim.bomb[1] >= 8,
+              penThreshold: sim.bomb[0] + sim.bomb[1] >= 8 ? 3 : undefined,
+              penetrated: !!rep,
+            });
+          }
           if (rep) applyAttack(sh, rep);
         },
       };
@@ -891,7 +905,7 @@ export function prepareTurnEndEvent(
           bodyKey: 'turnEnd.mine.ric',
           bodyParams: { ...baseParams, penDie },
           extraDicePhases: [{ dice: [penDie], captionKey: 'turnEnd.extra.minePen' }],
-          apply: () => {},
+          apply: () => recordIncoming({ hit: true, penThreshold: penTh, penetrated: false }),
         };
       }
       const damageDie = rng.d6();
@@ -923,7 +937,7 @@ export function prepareTurnEndEvent(
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
           ...(crewCheck ? [{ dice: [crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' }] : []),
         ],
-        apply: () => applyAttack(sh, rep),
+        apply: () => { recordIncoming(rep); applyAttack(sh, rep); },
       };
     }
     case 'clear_mine': {
@@ -971,7 +985,7 @@ export function prepareTurnEndEvent(
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
           ...(crewCheck ? [{ dice: [crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' }] : []),
         ],
-        apply: () => applyAttack(sh, rep),
+        apply: () => { recordIncoming(rep); applyAttack(sh, rep); },
       };
     }
     case 'heavy_mortar': {
@@ -993,7 +1007,7 @@ export function prepareTurnEndEvent(
           bodyKey: 'turnEnd.heavyMortar.ric',
           bodyParams: { ...baseParams, pen1: penDice[0], pen2: penDice[1], penSum, penThreshold },
           extraDicePhases: [{ dice: penDice, captionKey: 'turnEnd.extra.mortarPen' }],
-          apply: () => {},
+          apply: () => recordIncoming({ hit: true, penThreshold, penetrated: false }),
         };
       }
       const damageDie = rng.d6();
@@ -1033,7 +1047,7 @@ export function prepareTurnEndEvent(
           { dice: [damageDie], captionKey: 'turnEnd.extra.mineDmg' },
           ...(crewCheck ? [{ dice: [crewCheck.die], captionKey: 'turnEnd.extra.stukaCrew' }] : []),
         ],
-        apply: () => applyAttack(sh, rep),
+        apply: () => { recordIncoming(rep); applyAttack(sh, rep); },
       };
     }
     default:

@@ -2,6 +2,7 @@ import { RNG } from './Dice';
 import { axialToOffset, HexMap, neighbor, offsetToAxial } from './HexGrid';
 import { standardMapOffsets } from './StandardMapLayout';
 import { generateMultiRegionTerrain, type RegionalTerrainCell } from './MultiRegionTerrain';
+import { isFootKind } from './types';
 import type { CustomMissionPackage } from './CustomMissionStore';
 import type { TurnEndEventRow, TurnEndEffectType } from './TurnEndEventDB';
 import type { Axial, Direction, MissionData, MultiRegionDefinition, UnitKind, UnitPlacement } from './types';
@@ -53,7 +54,9 @@ export function generateMultiRegionPackage(seed = Date.now(), count: 4 | 5 | 6 =
       { min: 10, max: 10, side: 'player', kind: 'american_infantry', airborne: true },
     ],
   }));
-  const occupied = new Set<string>();
+  // Initial infantry may share a hex with a vehicle; reserve each category separately.
+  const occupiedVehicles = new Set<string>(), occupiedInfantry = new Set<string>();
+  const reservedFriendlyTankKeys = new Set<string>();
   const allies: UnitPlacement[] = [], enemies: UnitPlacement[] = [];
   let player: UnitPlacement;
   origins.forEach((origin, index) => {
@@ -67,7 +70,10 @@ export function generateMultiRegionPackage(seed = Date.now(), count: 4 | 5 | 6 =
     regions[index].enemySpawnKeys = enemyZone.map(cell => HexMap.keyOf(global(cell.pos)));
     const place = (kind: UnitKind, friendly: boolean): UnitPlacement => {
       const zone = friendly ? friendlyZone : enemyZone;
-      const cell = zone.find(candidate => !occupied.has(HexMap.keyOf(candidate.pos)));
+      const infantry = isFootKind(kind);
+      const occupied = infantry ? occupiedInfantry : occupiedVehicles;
+      const cell = zone.find(candidate => !occupied.has(HexMap.keyOf(candidate.pos))
+        && (infantry || !friendly || !reservedFriendlyTankKeys.has(HexMap.keyOf(global(candidate.pos)))));
       if (!cell) throw new Error(`No legal spawn in A${index + 1}`);
       occupied.add(HexMap.keyOf(cell.pos));
       // Spawn zones are authored as passable land; never erase the global river or road.
@@ -79,7 +85,10 @@ export function generateMultiRegionPackage(seed = Date.now(), count: 4 | 5 | 6 =
         'american_infantry', 'american_infantry', 'american_infantry', 'american_infantry'];
       company.forEach((kind, slot) => {
         const unit = place(kind, true);
-        if (index === 0 && slot === 0) player = unit;
+        if (index === 0 && slot === 0) {
+          player = unit;
+          reservedFriendlyTankKeys.add(HexMap.keyOf(neighbor(offsetToAxial(unit.at!), unit.facing ?? 0)));
+        }
         else allies.push(unit);
       });
     }
@@ -87,10 +96,20 @@ export function generateMultiRegionPackage(seed = Date.now(), count: 4 | 5 | 6 =
     enemies.push(place('panzer4', false));
     let remaining = regions[index].enemyBudget - MULTI_REGION_POWER.panzer4!;
     while (remaining > 0) {
-      const slots = enemyZone.filter(cell => !occupied.has(HexMap.keyOf(cell.pos))).length;
+      const vehicleSlots = enemyZone.filter(cell => !occupiedVehicles.has(HexMap.keyOf(cell.pos))).length;
+      const infantrySlots = enemyZone.filter(cell => !occupiedInfantry.has(HexMap.keyOf(cell.pos))).length;
       const available = (['panzer3', 'panzer4_f', 'stug3', 'german_infantry'] as UnitKind[])
-        .filter(kind => MULTI_REGION_POWER[kind]! <= remaining
-          && Math.ceil((remaining - MULTI_REGION_POWER[kind]!) / 3) <= slots - 1);
+        .filter(kind => {
+          const foot = isFootKind(kind), budget = remaining - MULTI_REGION_POWER[kind]!;
+          const vehicles = vehicleSlots - (foot ? 0 : 1), infantry = infantrySlots - (foot ? 1 : 0);
+          if (budget < 0 || vehicles < 0 || infantry < 0) return false;
+          // Infantry cost 1; the remaining vehicles can each cost 2 or 3.
+          for (let squads = 0; squads <= Math.min(infantry, budget); squads++) {
+            const power = budget - squads;
+            if (power === 0 || Math.ceil(power / 3) <= Math.min(vehicles, Math.floor(power / 2))) return true;
+          }
+          return false;
+        });
       if (!available.length) throw new Error(`Insufficient deployment cells in A${index + 1}`);
       const kind = rng.pick(available);
       enemies.push(place(kind, false));

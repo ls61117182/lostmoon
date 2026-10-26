@@ -80,6 +80,9 @@ export class UnitFogRenderer {
 
   configure(material: Material, policy: UnitFogPolicy): void {
     if (this.disposed) return;
+    // Outline copies and stencil instances are rebound while units move.
+    // update() already propagates changed fog/camera uniforms to known materials.
+    if (this.materials.get(material) === policy) return;
     this.materials.set(material, policy);
     this.apply(material, policy);
   }
