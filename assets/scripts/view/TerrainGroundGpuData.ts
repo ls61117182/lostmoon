@@ -40,7 +40,7 @@ export class TerrainGroundGpuData {
       for(let cy=Math.floor((ty-GROUND_RADIUS)/GROUND_CHUNK_SIZE);cy<=Math.floor((ty+GROUND_RADIUS)/GROUND_CHUNK_SIZE);cy++)
         for(let cx=Math.floor((tx-sq*GROUND_RADIUS/2)/GROUND_CHUNK_SIZE);cx<=Math.floor((tx+sq*GROUND_RADIUS/2)/GROUND_CHUNK_SIZE);cx++)origins.set(`${cx},${cy}`,{x:cx*GROUND_CHUNK_SIZE,y:cy*GROUND_CHUNK_SIZE});
     }
-    return [...origins.values()].map(({x,y})=>{
+    return Array.from(origins.values()).map(({x,y})=>{
       const nearby=tiles.filter(t=>{const tx=sq*GROUND_RADIUS*(t.pos.q+t.pos.r/2),ty=1.5*GROUND_RADIUS*t.pos.r;return tx>=x-halo&&tx<=x+GROUND_CHUNK_SIZE+halo&&ty>=y-halo&&ty<=y+GROUND_CHUNK_SIZE+halo;});
       nearby.sort((a,b)=>a.pos.r-b.pos.r||a.pos.q-b.pos.q);
       return {x,y,key:`${x},${y}`,tiles:nearby,fingerprint:terrainGroundFingerprint(nearby,winter)};

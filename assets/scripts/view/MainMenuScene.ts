@@ -49,6 +49,7 @@ import {
   RANDOM_MISSION_TRANSIENT_IDS,
 } from '../core/RandomMissionGenerator';
 import type { RandomMissionTheater } from '../core/RandomMissionGenerator';
+import { generateMultiRegionPackage } from '../core/MultiRegionGenerator';
 import { initGameAudio, onMenuVolumesChanged, playBgmMenu, playUiClick } from '../audio/GameAudio';
 import {
   CHAPTERS,
@@ -1039,7 +1040,8 @@ export class MainMenuScene extends Component {
     if (save.missionSource?.type === 'custom') {
       const pkg = CustomMissionStore.load(save.missionSource.packageId);
       if (pkg) {
-        GameSession.setMissionMenuTab(save.missionSource.packageId.startsWith('generated_random_') ? 'random' : 'custom');
+        GameSession.setMissionMenuTab(save.missionSource.packageId.startsWith('generated_random_')
+          || save.missionSource.packageId.startsWith('generated_multi_region') ? 'random' : 'custom');
         GameSession.resumeCustomMission(save.missionSource.packageId);
         GameSession.setGameMode(savedMode);
         this.loadBattleScene();
@@ -1309,12 +1311,12 @@ export class MainMenuScene extends Component {
         return;
       }
       try {
-        const pkg = generateRandomMissionPackage(meta.randomTheater, Date.now(), {
+        const pkg = meta.randomMultiRegion ? generateMultiRegionPackage(Date.now()) : generateRandomMissionPackage(meta.randomTheater, Date.now(), {
           season: meta.randomSeason,
           snowCover: meta.randomSnowCover,
         });
         const packageId = CustomMissionStore.saveTransient(
-          meta.randomSeason && meta.randomSeason !== 'summer'
+          meta.randomMultiRegion ? 'generated_multi_region' : meta.randomSeason && meta.randomSeason !== 'summer'
             ? `${RANDOM_MISSION_TRANSIENT_IDS[meta.randomTheater]}_${meta.randomSeason}${meta.randomSnowCover === 'none' ? '_bare' : ''}`
             : RANDOM_MISSION_TRANSIENT_IDS[meta.randomTheater],
           pkg,

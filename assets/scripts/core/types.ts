@@ -635,6 +635,8 @@ export type ObjectiveType =
 
 export interface MissionObjective {
   type: ObjectiveType;
+  /** Optional cumulative destroyed-unit requirement, rather than all units of a kind. */
+  count?: number;
   /** destroy_kind / destroy_kind_evac 用 */
   kind?: UnitKind;
   /**
@@ -743,6 +745,8 @@ export type GermanTankCamouflage = 'grey' | 'late_war';
 
 export interface MissionData {
   id: string;
+  /** Simultaneous regions on a single continuous hex grid. */
+  multiRegion?: MultiRegionConfig;
   name: string;
   description: string;
   theater?: Theater;
@@ -807,6 +811,41 @@ export interface MissionData {
    * 仅最后一格的 `exitDir` 会被使用，中间格上写了也会被忽略。
    */
   truckPath?: TruckPathEntry[];
+}
+
+export interface MultiRegionDefinition {
+  id: string;
+  center: Axial;
+  /** Global axial keys; every playable tile belongs to exactly one region. */
+  tileKeys: string[];
+  enemyBudget: number;
+  friendlySpawnKeys: string[];
+  enemySpawnKeys: string[];
+  events?: Array<{ min: number; max: number; side: 'player' | 'enemy'; kind: UnitKind; airborne?: boolean }>;
+}
+
+export interface MultiRegionConfig {
+  version: 1;
+  seed: number;
+  regions: MultiRegionDefinition[];
+  reinforcementLimit: number;
+  /** Positive, shared cost scale for initial budgets and minimap intelligence. */
+  powerCosts: Partial<Record<UnitKind, number>>;
+}
+
+export interface MultiRegionIntel {
+  id: string;
+  state: 'empty' | 'friendly' | 'enemy' | 'contested';
+  friendlyPower: number;
+  enemyPower: number | null;
+}
+
+export interface MultiRegionState {
+  intelTurn: number;
+  intel: MultiRegionIntel[];
+  supportTargets: Record<string, string>;
+  seenDestroyedIds: string[];
+  localVictory: boolean;
 }
 
 /**

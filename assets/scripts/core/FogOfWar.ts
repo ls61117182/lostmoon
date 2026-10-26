@@ -95,6 +95,7 @@ export function computeUnitVisibleHexes(
   if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
   const opaqueSmoke = weather === 'fog';
   const add = (p: Axial) => {
+    if (!map.sameRegion(unit.pos, p)) return;
     // Filter direct sight only. Radio sight is merged later, and must be able
     // to reveal a transmitting friendly's occupied smoke hex to its teammates.
     if (opaqueSmoke && !axialEquals(p, unit.pos) && smokeHexes?.has(HexMap.keyOf(p))) return;
@@ -481,6 +482,7 @@ export function computeRadioSharedVisibleHexes(
   if (isHeavyArtilleryUnit(receiver)) return visible;
   if (hasRadioReceive(receiver)) {
     for (const friendly of friendlies) {
+      if (!map.sameRegion(receiver.pos, friendly.pos)) continue;
       if (friendly === receiver || !shareVisionFaction(friendly, receiver) || !hasRadioTransmit(friendly)) continue;
       for (const key of computeUnitVisibleHexes(map, friendly, weather, smokeHexes)) {
         // In fog, a friendly inside smoke directly knows only its occupied hex.
@@ -526,6 +528,7 @@ export function computePlayerVisibleHexes(
     ? computeRadioSharedVisibleHexes(map, sherman, allies, weather, smokeHexes)
     : computeUnitVisibleHexes(map, sherman, weather, smokeHexes);
   for (const ally of allies) {
+    if (!map.sameRegion(sherman.pos, ally.pos)) continue;
     const key = HexMap.keyOf(ally.pos);
     if (!ally.destroyed && map.has(ally.pos) && !smokeHexes?.has(key)) visible.add(key);
   }
@@ -558,6 +561,7 @@ export function hasFogLineOfSight(
   to: Axial,
   smokeHexes?: ReadonlySet<string>,
 ): boolean {
+  if (!map.sameRegion(from, to)) return false;
   if (axialEquals(from, to)) return true;
   const a = axialToPixel(from, GEOMETRY_HEX_SIZE);
   const b = axialToPixel(to, GEOMETRY_HEX_SIZE);

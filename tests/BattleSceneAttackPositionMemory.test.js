@@ -7,11 +7,25 @@ const source = fs.readFileSync(
   'utf8',
 );
 
-assert.match(
-  source,
-  /visibleAITurnTargetPositionFor\([\s\S]*?previousEnemyAttackPosition\(this\.attackPositionMemory, actor\)/,
-  'turn fallback must use the observing side previous-round enemy attack position',
-);
+// Check the fallback value rather than requiring the memory read to be inlined
+// in the targeting call: regional battles must reject memories across a border.
+const sceneMethods = require('./helpers/BattleSceneMethods.cjs');
+const actor = { sideId: 'enemy', pos: { q: 0, r: 0 } };
+let remembered = { q: 20, r: 0 };
+const Scene = sceneMethods(['currentAITurnTargetPosition'], {
+  GameSession: { gameMode: 'hardcore' }, getGameModeConfig: () => ({ radioVisionSharing: false }),
+  computeUnitVisibleHexes: () => new Set(), regionalSupportStep: () => null, regionAt: () => 'A1',
+  previousEnemyAttackPosition: (_memory, observer) => { assert.strictEqual(observer, actor); return remembered; },
+  visibleAITurnTargetPositionFor: (...args) => args[6],
+});
+const scene = new Scene();
+Object.assign(scene, { mission: { map: { sameRegion: (a, b) => (a.q < 10) === (b.q < 10) },
+  data: {}, smokeHexes: new Set() }, currentWeather: () => 'clear', aiTargetsFor: () => [], aiMissionTargetsFor: () => [] });
+assert.strictEqual(scene.currentAITurnTargetPosition(actor), remembered, 'ordinary missions retain the previous enemy attack position');
+scene.mission.data.multiRegion = { regions: [{ id: 'A1', friendlySpawnKeys: ['1,0'], enemySpawnKeys: ['3,0'] }] };
+assert.deepEqual({ ...scene.currentAITurnTargetPosition(actor) }, { q: 1, r: 0 }, 'off-region memories use the local fallback');
+remembered = { q: 2, r: 0 };
+assert.strictEqual(scene.currentAITurnTargetPosition(actor), remembered, 'local enemy attack positions remain valid');
 assert.match(
   source,
   /private rememberAttackPosition[\s\S]*?recordAttackPositionForMemory\(this\.attackPositionMemory, attacker\)/,

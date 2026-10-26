@@ -38,6 +38,7 @@ export interface LevelMeta {
   titleOverride?: string;
   badgeOverride?: string;
   randomTheater?: 'europe' | 'pacific';
+  randomMultiRegion?: boolean;
   /** Optional visual season for a generated random mission. */
   randomSeason?: SeasonType;
   randomSnowCover?: SnowCover;
@@ -132,6 +133,9 @@ const ALL_CHAPTERS: ChapterMeta[] = [
     titleKey: 'chapter.test.title',
     subtitleKey: 'chapter.test.subtitle',
     levels: [
+      { chapterId: 'test', id: 7, missionPath: '', titleKey: 'level.multiRegion.title',
+        missionId: 'multi_region_01', entryKind: 'random',
+        randomTheater: 'europe', randomMultiRegion: true, badgeOverride: 'MR', alwaysUnlocked: true },
       { chapterId: 'test', id: 0, missionPath: 'missions/mission_test', titleKey: 'level.test.title', missionId: 'mission_test' },
       {
         chapterId: 'test', id: 4, missionPath: '', titleKey: 'level.test.random.europe_spring.title',

@@ -397,6 +397,7 @@ export function infantryAttackRange(_target: Unit): number {
 
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   const { attacker, target, map } = ctx;
+  if (!map.sameRegion(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
@@ -1712,6 +1713,7 @@ function mgTankHitModifier(ctx: AttackContext): number {
 
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
   const { attacker, target, map } = ctx;
+  if (!map.sameRegion(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
   if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };

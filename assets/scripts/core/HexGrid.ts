@@ -317,6 +317,12 @@ function cubeRound(qf: number, rf: number): Axial {
 
 // ---------- 地图容器 ----------
 export class HexMap {
+  /** Empty for normal missions. Movement crosses these boundaries; combat/vision cannot. */
+  readonly regions = new Map<string, string>();
+  sameRegion(a: Axial, b: Axial): boolean {
+    return this.regions.size === 0 || (!!this.regions.get(HexMap.keyOf(a))
+      && this.regions.get(HexMap.keyOf(a)) === this.regions.get(HexMap.keyOf(b)));
+  }
   private grid: Map<string, Tile> = new Map();
   readonly cols: number;
   readonly rows: number;

@@ -91,6 +91,8 @@ export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): b
     case 'destroy_all_enemies':
       return mission.enemies.length > 0 && liveEnemyCount(mission) === 0;
     case 'destroy_kind': {
+      if (obj.count != null) return mission.enemies.filter(unit =>
+        unit.kind === obj.kind && unit.destroyed && !isAttachedATGunCrew(unit)).length >= obj.count;
       return !!obj.kind && allEnemiesOfKindDestroyed(mission, obj.kind);
     }
     case 'destroy_kind_evac': {

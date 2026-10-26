@@ -1,4 +1,5 @@
 import { RNG } from './Dice';
+import { STANDARD_MAP_COLS as COLS, STANDARD_MAP_ROWS as ROWS, standardMapOffsets } from './StandardMapLayout';
 import { europeanTerrainLook, normalizeSnowCover } from './TerrainSeason';
 import type { SnowCover } from './types';
 import {
@@ -52,13 +53,8 @@ export const RANDOM_MISSION_TRANSIENT_IDS: Record<RandomMissionTheater, string> 
   pacific: 'generated_random_pacific',
 };
 
-const COLS = 8;
-const ROWS = 6;
 const START: Offset = { col: 0, row: 3 };
 const EVAC: Offset = { col: 7, row: 2 };
-const ACTIVE_ROW_RANGES: ReadonlyArray<readonly [number, number]> = [
-  [2, 6], [1, 6], [1, 7], [0, 6], [1, 6], [1, 5],
-];
 
 interface GeneratedLayout {
   tiles: Array<Array<TileDef | null>>;
@@ -92,12 +88,7 @@ function cloneOffset(o: Offset): Offset {
 }
 
 function activeOffsets(): Offset[] {
-  const out: Offset[] = [];
-  for (let row = 0; row < ROWS; row++) {
-    const [minCol, maxCol] = ACTIVE_ROW_RANGES[row]!;
-    for (let col = minCol; col <= maxCol; col++) out.push({ col, row });
-  }
-  return out;
+  return standardMapOffsets();
 }
 
 const ACTIVE = activeOffsets();

@@ -39,6 +39,7 @@ import { RNG } from './Dice';
 import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { createUrbanVariantAllocator } from './UrbanTerrain';
 import { normalizeGermanTankCamouflage } from './TankCamouflage';
+import { initializeMultiRegion } from './MultiRegion';
 
 /** TileDef 简写（不含已废弃的整格 b）→ TerrainType */
 const TERRAIN_MAP = {
@@ -102,6 +103,7 @@ function addStartOccupant(occupied: Map<string, StartOccupant[]>, pos: Axial, oc
 }
 
 export interface LoadedMission {
+  multiRegionState?: import('./types').MultiRegionState;
   map: HexMap;
   /** The one locally controlled protagonist vehicle. */
   playerTank: Unit;
@@ -466,6 +468,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
       truckU.facing = face;
     }
   }
+  initializeMultiRegion(mission);
   return mission;
 }
 
@@ -764,7 +767,7 @@ interface UnitRuntimeRole {
   controller: UnitController;
 }
 
-function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: UnitRuntimeRole): Unit {
+export function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: UnitRuntimeRole): Unit {
   if (!p.at) {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }

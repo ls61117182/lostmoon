@@ -34,7 +34,7 @@ export function objectiveDestroyProgressLangKey(kind: UnitKind): string {
 
 function kindProgress(mission: LoadedMission, kind: UnitKind): { cur: number; total: number } {
   const group = mission.enemies.filter(e => e.kind === kind && !isAttachedATGunCrew(e));
-  const total = group.length;
+  const total = mission.data.objective.kind === kind ? mission.data.objective.count ?? group.length : group.length;
   const cur = group.filter(e => e.destroyed).length;
   return { cur, total };
 }
@@ -130,7 +130,7 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
     case 'destroy_kind': {
       if (!obj.kind) return withUsCasualties([]);
       const { cur, total } = kindProgress(mission, obj.kind);
-      const done = allEnemiesOfKindDestroyed(mission, obj.kind);
+      const done = obj.count != null ? cur >= total : allEnemiesOfKindDestroyed(mission, obj.kind);
       return withUsCasualties([{
         displayIndex: 1,
         state: done ? 'done' : 'active',

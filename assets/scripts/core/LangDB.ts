@@ -539,6 +539,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'level.13.title': { zh: "诺曼底登陆", en: "Normandy Landing" },
   'level.test.title': { zh: "测试关卡", en: "Test Mission" },
   'level.test.random.europe.title': { zh: "欧洲夏季", en: "European Summer" },
+  'level.multiRegion.title': { zh: "多区域关卡", en: "Multi-region Battle" },
   'level.test.random.pacific.title': { zh: "太平洋战场", en: "Pacific Theater" },
   'level.test.random.europe_winter.title': { zh: "欧洲冬季积雪", en: "European Winter With Snow" },
   'level.test.random.europe_spring.title': { zh: "欧洲春季", en: "European Spring" },

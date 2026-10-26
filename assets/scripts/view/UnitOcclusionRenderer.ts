@@ -37,7 +37,7 @@ export class UnitOcclusionRenderer {
     for (const { blocker, sources: passSources, vectors: passVectors } of passes) {
       if (blocker && (!blocker.node.activeInHierarchy || !blocker.spriteFrame)) continue;
       const bounds = blocker?.getComponent(UITransform)!.getBoundingBoxToWorld();
-      const overlapping = [...passSources].filter(([sprite]) => sprite.node.activeInHierarchy
+      const overlapping = Array.from(passSources.entries()).filter(([sprite]) => sprite.node.activeInHierarchy
         && !!sprite.spriteFrame && (!bounds || bounds.intersects(sprite.getComponent(UITransform)!.getBoundingBoxToWorld())));
       if (!overlapping.length && !passVectors.length) continue;
       let slot = this.slots[next++];

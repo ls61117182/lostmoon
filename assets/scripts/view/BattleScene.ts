@@ -207,6 +207,9 @@ function turnEndListEffectKey(effectType: TurnEndEffectType, theater?: string): 
 }
 import { applySave, captureSave, SaveData, SavePlayerStep } from '../core/SaveLoad';
 import { GameSession } from '../core/GameSession';
+import { currentRegionDefinition, refreshRegionIntel, regionAt, regionalSupportStep, regionalSupportTurn,
+  updateRegionalVictory, regionalReinforcementAllowed } from '../core/MultiRegion';
+import { applyRegionalReinforcement, rollRegionalEvent } from '../core/MultiRegionEvents';
 import { missionWithSelectedPlayerTank } from '../core/PlayerTankSelection';
 import { CAMPAIGN_CHAPTER_ID, getCampaign } from '../core/CampaignDB';
 import {
@@ -757,6 +760,7 @@ type DestroyedTurretLaunchCause = 'impact' | 'ammoExplosion';
 /** One detached turret sprite animated in map-local screen space. */
 interface DestroyedTurretVisual {
   unitId: string;
+  origin: Axial;
   node: Node;
   opacity: UIOpacity;
   startX: number;
@@ -1015,6 +1019,8 @@ interface CombatLogI18nEntry {
   key: string;
   params?: CombatLogParams;
   replay?: CombatLogReplay;
+  regionId?: string;
+  regionTurn?: number;
 }
 type CombatLogEntry = string | CombatLogI18nEntry;
 type CombatLogTone = 'good' | 'bad' | 'neutral';
@@ -1143,6 +1149,7 @@ type ProjectileTraceMode = 'miss' | 'ricochet' | 'penetration' | 'overpenetratio
 type ProjectileTracePhase = 'flight' | 'ricochet' | 'impact' | 'overpenetration-hidden' | 'overpenetration';
 
 interface ProjectileTrace {
+  impactHex?: Axial;
   shellType: ShellType;
   node: Node;
   g: Graphics;
@@ -1214,6 +1221,7 @@ interface InfantryBulletVolley {
 }
 
 interface InfantryRocketTrace {
+  impactHex?: Axial;
   node: Node;
   g: Graphics;
   mode: ProjectileTraceMode;
@@ -1236,6 +1244,7 @@ interface InfantryRocketTrace {
 }
 
 interface SniperBulletTrace {
+  impactHex?: Axial;
   node: Node;
   g: Graphics;
   startX: number;
@@ -1958,6 +1967,7 @@ export class BattleScene extends Component {
   private lateWarDestroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private enemyTopPoolNext = 0;
+  /** Initial capacities; crowded battles grow these pools before drawing. */
   private static readonly ENEMY_TOP_SPRITE_POOL = 16;
   /** Presentation-only transforms for living engine-powered vehicles in the current redraw. */
   private engineVibrationTime = 0;
@@ -1967,7 +1977,7 @@ export class BattleScene extends Component {
   private static readonly COMMANDER_HATCH_SPRITE_POOL = 12;
   /**
    * 步兵 / 军官小队俯视图：每个徒步单位用 3 张 Infantry01~03.png 组成"3 人小队"。
-   * 池大小 = 单位数上限 × 3；redraw 开头与坦克池一并清零。
+   * 每个单位预留 3 张图，按当前区域兵力扩容；redraw 开头与坦克池一并清零。
    */
   private infantrySpriteFramesByKind: Record<InfantryVisualKind, Array<SpriteFrame | null>> = {
     infantry: [null, null, null],
@@ -2020,6 +2030,9 @@ export class BattleScene extends Component {
   private mission: LoadedMission | null = null;
   private campaignRuntime: StitchedCampaignData | null = null;
   private activeCampaignSegmentIndex = 0;
+  private multiRegionCameraId: string | null = null;
+  private multiRegionMinimap: Node | null = null;
+  private multiRegionRoundEndCheck = false;
   private campaignViewSegmentIndexOverride: number | null = null;
   private campaignTransitionActive = false;
   private campaignPanAnim: CampaignPanAnim | null = null;
@@ -5257,6 +5270,7 @@ export class BattleScene extends Component {
   }
 
   private currentTurnEndMissionId(): string {
+    if (this.mission?.data.multiRegion) return `${this.mission.data.id}_${regionAt(this.mission, this.mission.sherman.pos)}`;
     if (this.campaignRuntime) {
       const segment = this.campaignRuntime.segments[this.activeCampaignSegmentIndex];
       return this.mission?.data.eventTableId
@@ -5291,6 +5305,11 @@ export class BattleScene extends Component {
 
   private cameraReferenceTiles(): Tile[] {
     if (!this.mission) return [];
+    const region = this.mission.data.multiRegion ? currentRegionDefinition(this.mission) : undefined;
+    if (region) return region.tileKeys.map(key => {
+      const [q, r] = key.split(',').map(Number);
+      return this.mission!.map.get({ q, r });
+    }).filter((tile): tile is Tile => !!tile);
     if (this.campaignRuntime) {
       const viewIndex = this.campaignViewSegmentIndexOverride ?? this.activeCampaignSegmentIndex;
       return this.cameraReferenceTilesForSegment(viewIndex);
@@ -5415,8 +5434,12 @@ export class BattleScene extends Component {
     this.airborneReacted.clear();
     this.airborneReactionTurn = -1;
     this.casualtyCheckedTurn = -1;
-    this.rng = new RNG(this.rngSeed || undefined);
+    this.rng = new RNG(this.rngSeed || data.multiRegion?.seed || undefined);
     this.mission = loadMission(data, this.rng, { hardcore: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), preservePlayerReload: options.preservePlayerReload, randomizeWeather: !GameSession.isPvp });
+    this.multiRegionCameraId = regionAt(this.mission, this.mission.sherman.pos);
+    this.multiRegionRoundEndCheck = false;
+    this.multiRegionMinimap?.destroy();
+    this.multiRegionMinimap = null;
     this.loadMissionTerrainSeason();
     this.loadMissionTankCamouflage();
     this.applyBattlefieldCameraRotation();
@@ -5720,6 +5743,7 @@ export class BattleScene extends Component {
   private redraw() {
     if (!this.g || !this.mapOcclusionGraphics || !this.mapDeepShadowGraphics || !this.unitGraphics || !this.mission) return;
     syncTankRiders(this.allUnits());
+    if (this.mission.data.multiRegion) this.refreshMultiRegionMinimap();
     this.tankRiderRenderer.begin();
     // Do not show vector fallback tiles and then replace terrain kinds one by
     // one as asynchronous SpriteFrame requests finish.
@@ -6025,6 +6049,7 @@ export class BattleScene extends Component {
 
     // 5. 单位 —— 残骸先画，活动单位后画；同格时残骸不遮挡活动坦克。
     const units: Unit[] = [sherman, ...this.mission.allies, ...enemies];
+    this.reserveUnitSpritePools(units);
     this.g = this.unitGraphics;
     for (const u of units) {
       if (u.destroyed) {
@@ -6354,6 +6379,7 @@ export class BattleScene extends Component {
   }
 
   private isHexVisible(pos: Axial): boolean {
+    if (this.mission?.data?.multiRegion && !this.mission.map.sameRegion(this.mission.sherman.pos, pos)) return false;
     if (!this.mission || !fogOfWarEnabled(GameSession.gameMode)) return true;
     const key = HexMap.keyOf(pos);
     // Smoke normally keeps its hex out of visibleHexKeys. If an intact-radio
@@ -6450,6 +6476,7 @@ export class BattleScene extends Component {
   }
 
   private isUnitVisible(unit: Unit): boolean {
+    if (this.mission?.data?.multiRegion && this.isOutsidePlayerRegion(unit)) return false;
     if (unit.destroyed && (unit.wreckWater?.sink?.elapsed ?? -1) >= WRECK_SINK_DURATION) return false;
     if (unit.destroyed && unit.wreckPose && this.mission) {
       const pos = wreckVisualHex(unit.pos, unit.wreckPose);
@@ -6475,7 +6502,48 @@ export class BattleScene extends Component {
     this.unitFallbackGraphics.clear();
   }
 
+  private growUnitSpritePool(pool: Array<{ node: Node; sprite: Sprite }>, required: number, prefix: string): void {
+    const parent = this.unitGraphics?.node;
+    if (!parent) return;
+    while (pool.length < required) {
+      const node = new Node(`${prefix}_${pool.length}`);
+      node.layer = this.node.layer;
+      node.addComponent(UITransform).setContentSize(1, 1);
+      const sprite = node.addComponent(Sprite);
+      sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      node.active = false;
+      parent.addChild(node);
+      pool.push({ node, sprite });
+    }
+  }
+
+  /** Reserve every part together; units hidden by fog still consume masked sprite slots. */
+  private reserveUnitSpritePools(units: Unit[]): void {
+    let bodies = 0, hatches = 0, infantry = 0, officers = 0;
+    for (const unit of units) {
+      if (this.isOutsidePlayerRegion(unit)) continue;
+      if (isFootUnit(unit)) {
+        if (!unit.destroyed && !unit.mountedOnUnitId) {
+          if (unit.kind === 'officer') officers++;
+          else infantry += 3;
+        }
+      } else {
+        // Includes wrecks and guns; two slots also cover split hull/turret art.
+        bodies += 2;
+        if (!unit.destroyed) {
+          hatches++;
+          if (isControlledATGun(unit)) infantry += 3;
+        }
+      }
+    }
+    this.growUnitSpritePool(this.enemyTopSpritePool, bodies, 'EnemyTop');
+    this.growUnitSpritePool(this.commanderHatchSpritePool, hatches, 'CommanderHatch');
+    this.growUnitSpritePool(this.infantryTopSpritePool, infantry, 'InfantryTop');
+    this.growUnitSpritePool(this.officerTopSpritePool, officers, 'OfficerTop');
+  }
+
   private drawPresentedUnit(unit: Unit, crewOnly = false): void {
+    if (this.mission?.data.multiRegion && this.isOutsidePlayerRegion(unit)) return;
     const bunker = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(unit);
     const policy = bunker || this.usesPushedWreckVision(unit) ? 'unmasked'
       : this.isUnitVisible(unit) ? 'known' : 'hidden';
@@ -6583,12 +6651,13 @@ export class BattleScene extends Component {
 
   /** Natural player vision only; transient firing reveals must not unlock detailed combat UI. */
   private isUnitOutsideFog(unit: Unit): boolean {
+    if (this.mission?.data.multiRegion && this.isOutsidePlayerRegion(unit)) return false;
     if (unit === this.mission?.sherman || !fogOfWarEnabled(GameSession.gameMode)) return true;
     return this.visibleHexKeys.has(HexMap.keyOf(unit.pos));
   }
 
   private redrawCampaignShadow() {
-    if (!this.mapDeepShadowGraphics || !this.mission || !this.campaignRuntime) return;
+    if (!this.mapDeepShadowGraphics || !this.mission || (!this.campaignRuntime && !this.mission.data.multiRegion)) return;
     const g = this.mapDeepShadowGraphics;
     g.fillColor = CAMPAIGN_SHADOW_COLOR;
     for (const tile of this.mission.map.all()) {
@@ -6601,6 +6670,7 @@ export class BattleScene extends Component {
   }
 
   private isCampaignShadowTile(tile: Tile): boolean {
+    if (this.mission?.data.multiRegion) return !this.mission.map.sameRegion(this.mission.sherman.pos, tile.pos);
     if (!this.mission || !this.campaignRuntime) return false;
     const rowParityOffset = this.mission.data.rowParityOffset === 1 ? 1 : 0;
     const offset = axialToOffset(tile.pos, rowParityOffset);
@@ -7119,6 +7189,7 @@ export class BattleScene extends Component {
 
   private applyUrbanBuildingDamage(tile: Tile, highExplosivePower: number): number {
     const damage = applyUrbanStructureDamage(tile, highExplosivePower);
+    if (this.mission?.data?.multiRegion && !this.canHearBattleAt(tile.pos)) return damage;
     if (damage > 0) playBuildingCollapse();
     return damage;
   }
@@ -8044,7 +8115,7 @@ export class BattleScene extends Component {
     this.mission.smokeHexes.add(key);
     this.mission.smokeHexOwners.set(key, owner);
     if (!this.smokeScreenAges.has(key)) this.smokeScreenAges.set(key, 0);
-    if (isNewSmoke) playSmokeDeploy();
+    if (isNewSmoke && this.canHearBattleAt(pos)) playSmokeDeploy();
     if (before) this.startFogVisionTransition(before, false, SMOKE_VISION_LAYER_INTERVAL);
   }
 
@@ -8856,7 +8927,7 @@ export class BattleScene extends Component {
 
   private playTankDestroySoundOnce(u: Unit): void {
     if (!u.destroyed || !isTankUnit(u) || this.destroyWreckVisualIds.has(u.id)) return;
-    playTankExplosion();
+    if (this.canHearBattleAt(u.pos)) playTankExplosion();
   }
 
   private spawnDestroyedTurretVisual(
@@ -8865,6 +8936,11 @@ export class BattleScene extends Component {
     attacker: Unit | null,
   ): void {
     if (this.destroyedTurretVisualIds.has(u.id) || !isSplitTankKind(u.kind)) return;
+    if (this.mission?.data?.multiRegion && this.isOutsidePlayerRegion(u)) {
+      // The destruction is permanent, but its presentation must never replay on entry.
+      this.destroyedTurretVisualIds.add(u.id);
+      return;
+    }
     const assets = this.splitTankSpritesFor(u, u.kind);
     const layer = this.unitEffectNode;
     if (!assets?.turret || !layer) return;
@@ -8927,6 +9003,7 @@ export class BattleScene extends Component {
     this.destroyedTurretVisualIds.add(u.id);
     this.destroyedTurretVisuals.push({
       unitId: u.id,
+      origin: { ...u.pos },
       node,
       opacity,
       startX,
@@ -8951,6 +9028,12 @@ export class BattleScene extends Component {
     for (let i = this.destroyedTurretVisuals.length - 1; i >= 0; i--) {
       const visual = this.destroyedTurretVisuals[i];
       if (!visual.node.isValid) {
+        this.destroyedTurretVisuals.splice(i, 1);
+        continue;
+      }
+      if (this.mission?.data?.multiRegion
+        && !this.mission.map.sameRegion(this.mission.sherman.pos, visual.origin)) {
+        visual.node.destroy();
         this.destroyedTurretVisuals.splice(i, 1);
         continue;
       }
@@ -9369,11 +9452,17 @@ export class BattleScene extends Component {
     report?: AttackReport,
     onPenetrationImpact?: () => void,
   ) {
+    const audible = this.canHearBattleAt(attacker?.pos ?? target?.pos);
     if (report) {
       if (this.firedAttackCueReports.has(report)) return;
       this.firedAttackCueReports.add(report);
     }
     if (!mg) this.rememberAttackPosition(attacker);
+    if (this.mission?.data?.multiRegion && attacker && this.isOutsidePlayerRegion(attacker)) {
+      if (mg) this.rememberAttackPosition(attacker);
+      if (report?.hit && (report.penetrated || report.overpenetrated)) onPenetrationImpact?.();
+      return;
+    }
     if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isTankUnit(target)) {
       // Face the squad toward the tank before selecting one member as the
       // launcher operator. The other two soldiers turn only; they do not fire.
@@ -9384,7 +9473,7 @@ export class BattleScene extends Component {
       if (onPenetrationImpact && this.infantryRocketTraces.length > rocketTraceStart) {
         this.infantryRocketTraces[rocketTraceStart].onPenetrationImpact = onPenetrationImpact;
       }
-      playInfantryAntiTankFire();
+      if (audible) playInfantryAntiTankFire();
       return;
     }
     if (attacker && target) {
@@ -9394,7 +9483,7 @@ export class BattleScene extends Component {
     if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer'
       && (isFootUnit(target) || isControlledATGun(target))) {
       this.spawnInfantryBulletVolley(attacker, target);
-      playInfantryAttack();
+      if (audible) playInfantryAttack();
       return;
     }
     if (mg) {
@@ -9405,26 +9494,28 @@ export class BattleScene extends Component {
     this.spawnMuzzleSmoke(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
     this.spawnProjectileTrace(attacker, target, report, { onPenetrationImpact });
-    playConfiguredAttackSound(attackSound);
+    if (audible) playConfiguredAttackSound(attackSound);
   }
 
   private playMachineGunFireCue(attacker: Unit | null, target: Unit | null, hit: boolean) {
+    const audible = this.canHearBattleAt(attacker?.pos ?? target?.pos);
     this.rememberAttackPosition(attacker);
+    if (this.mission?.data?.multiRegion && attacker && this.isOutsidePlayerRegion(attacker)) return;
     if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer' && isTankUnit(target)) {
       this.setInfantryVisualFacing(attacker, target.pos);
       this.redraw();
       this.spawnInfantryRocketTrace(attacker, target, { hit, penetrated: hit, roll: 0 });
-      playInfantryAntiTankFire();
+      if (audible) playInfantryAntiTankFire();
       return;
     }
     if (attacker && target && isFootUnit(attacker) && attacker.kind !== 'officer'
       && (isFootUnit(target) || isControlledATGun(target))) {
       this.spawnInfantryBulletVolley(attacker, target);
-      playInfantryAttack();
+      if (audible) playInfantryAttack();
       return;
     }
     this.spawnMachineGunBurst(attacker, target, hit);
-    playMgFire();
+    if (audible) playMgFire();
   }
 
   private playHighExplosiveSuppressionCue(
@@ -9434,6 +9525,10 @@ export class BattleScene extends Component {
     onImpact?: () => void,
   ) {
     this.rememberAttackPosition(attacker);
+    if (this.mission?.data?.multiRegion && this.isOutsidePlayerRegion(attacker)) {
+      if (report?.hit ?? true) onImpact?.();
+      return;
+    }
     this.startMainGunRecoil(attacker, target);
     this.spawnMuzzleSmoke(attacker, target);
     this.spawnMuzzleFlash(attacker, target);
@@ -9448,8 +9543,10 @@ export class BattleScene extends Component {
     const handleImpact = (x: number, y: number) => {
       if (impactHandled) return;
       impactHandled = true;
-      playHighExplosiveHit();
-      this.spawnHighExplosiveBlast(x, y, seed);
+      if (this.canHearBattleAt(target.pos)) playHighExplosiveHit();
+      if (!this.mission?.data?.multiRegion || !this.isOutsidePlayerRegion(target)) {
+        this.spawnHighExplosiveBlast(x, y, seed);
+      }
       // Commit the hit only after the blast exists, so destroyed infantry and
       // blood decals first appear underneath the explosion on the same frame.
       onImpact?.();
@@ -9473,7 +9570,7 @@ export class BattleScene extends Component {
       const pos = this.project(target.pos.q, target.pos.r);
       handleImpact(pos.x, pos.y);
     }
-    playConfiguredAttackSound(attacker.stats.attackSound);
+    if (this.canHearBattleAt(attacker.pos)) playConfiguredAttackSound(attacker.stats.attackSound);
   }
 
   private startMainGunRecoil(attacker: Unit | null, target: Unit | null) {
@@ -9659,6 +9756,7 @@ export class BattleScene extends Component {
     this.placeProjectileTraceNode(n);
 
     const trace: ProjectileTrace = {
+      impactHex: { ...target.pos },
       shellType,
       node: n,
       g,
@@ -10139,11 +10237,14 @@ export class BattleScene extends Component {
   private advanceProjectileTraces(dt: number) {
     for (let i = this.projectileTraces.length - 1; i >= 0; i--) {
       const tr = this.projectileTraces[i];
+      if (this.mission?.data?.multiRegion) {
+        tr.node.active = !!tr.impactHex && this.mission.map.sameRegion(this.mission.sherman.pos, tr.impactHex);
+      }
       tr.t += dt;
       const p = Math.min(tr.t / tr.dur, 1);
       if (p >= 1) {
         if (tr.phase === 'flight' && tr.mode === 'ricochet') {
-          playTankHitRicochet();
+          if (this.canHearBattleAt(tr.impactHex)) playTankHitRicochet();
           tr.phase = 'ricochet';
           tr.startX = tr.impactX;
           tr.startY = tr.impactY;
@@ -10164,7 +10265,7 @@ export class BattleScene extends Component {
             this.projectileTraces.splice(i, 1);
             continue;
           }
-          playTankHitPenetration();
+          if (this.canHearBattleAt(tr.impactHex)) playTankHitPenetration();
           tr.phase = 'impact';
           tr.startX = tr.impactX;
           tr.startY = tr.impactY;
@@ -10175,7 +10276,7 @@ export class BattleScene extends Component {
         }
         if (tr.phase === 'flight' && tr.mode === 'overpenetration') {
           tr.onPenetrationImpact?.(tr.impactX, tr.impactY);
-          playTankHitPenetration();
+          if (this.canHearBattleAt(tr.impactHex)) playTankHitPenetration();
           // The shell is now inside the target: briefly hide the tracer while
           // retaining a tight entry spark, then reveal it at the far hull edge.
           tr.phase = 'overpenetration-hidden';
@@ -10586,6 +10687,7 @@ export class BattleScene extends Component {
     this.placeProjectileTraceNode(n);
 
     const trace: InfantryRocketTrace = {
+      impactHex: { ...target.pos },
       node: n, g, mode, startX, startY, impactX, impactY, endX, endY, ux, uy,
       bounceUx: Math.cos(bounceAngle), bounceUy: Math.sin(bounceAngle),
       t: 0, flightDur, dur: flightDur + 0.58, seed, impactSoundPlayed: false,
@@ -10597,14 +10699,17 @@ export class BattleScene extends Component {
   private advanceInfantryRocketTraces(dt: number) {
     for (let i = this.infantryRocketTraces.length - 1; i >= 0; i--) {
       const trace = this.infantryRocketTraces[i];
+      if (this.mission?.data?.multiRegion) {
+        trace.node.active = !!trace.impactHex && this.mission.map.sameRegion(this.mission.sherman.pos, trace.impactHex);
+      }
       trace.t += Math.max(0, dt);
       if (!trace.impactSoundPlayed && trace.t >= trace.flightDur) {
         trace.impactSoundPlayed = true;
         if (trace.mode === 'penetration') {
           trace.onPenetrationImpact?.();
-          playTankHitPenetration();
+          if (this.canHearBattleAt(trace.impactHex)) playTankHitPenetration();
         }
-        else if (trace.mode === 'ricochet') playTankHitRicochet();
+        else if (trace.mode === 'ricochet' && this.canHearBattleAt(trace.impactHex)) playTankHitRicochet();
       }
       if (trace.t >= trace.dur) {
         trace.node.destroy();
@@ -10756,10 +10861,11 @@ export class BattleScene extends Component {
 
   private playTurnEndSniperShot(attacker: Unit, target: Unit, onImpact: () => void) {
     this.rememberAttackPosition(attacker);
+    if (this.mission?.data?.multiRegion && this.isOutsidePlayerRegion(attacker)) { onImpact(); return; }
     this.setInfantryVisualFacing(attacker, target.pos);
     this.redraw();
     this.spawnSniperBulletTrace(attacker, target, onImpact);
-    playSniperFire();
+    if (this.canHearBattleAt(attacker.pos)) playSniperFire();
   }
 
   /** One actual member of the triggering infantry squad fires one guaranteed-hit round. */
@@ -10792,6 +10898,7 @@ export class BattleScene extends Component {
     this.placeProjectileTraceNode(n);
 
     const trace: SniperBulletTrace = {
+      impactHex: { ...target.pos },
       node: n,
       g,
       startX: a.x + shooterOffset.ox + ux * muzzleForward,
@@ -10812,6 +10919,9 @@ export class BattleScene extends Component {
   private advanceSniperBulletTraces(dt: number) {
     for (let i = this.sniperBulletTraces.length - 1; i >= 0; i--) {
       const trace = this.sniperBulletTraces[i];
+      if (this.mission?.data?.multiRegion) {
+        trace.node.active = !!trace.impactHex && this.mission.map.sameRegion(this.mission.sherman.pos, trace.impactHex);
+      }
       trace.t += dt;
       const p = Math.min(trace.t / trace.dur, 1);
       if (!trace.impacted && p >= 0.68) {
@@ -10961,7 +11071,7 @@ export class BattleScene extends Component {
     if (this.stukaSpriteNode) {
       this.stukaSpriteNode.active = true;
     }
-    playStukaFlyover();
+    if (this.canHearBattleAt(target.pos)) playStukaFlyover();
   }
 
   private playAirborneSupport(plan: AirbornePlan, onDone: () => void): void {
@@ -10991,7 +11101,7 @@ export class BattleScene extends Component {
     const dropT = Math.max(0, Math.min(4, 4 * (dropX - fromX) / (toX - fromX)));
     this.airborneFlight = { plan, root, plane, t: 0, fromX, toX, y: target.y + mapPos.y, dropT, onDone, drops: [], reactions: [], reactionBusy: false };
     this.battleLog(t(plan.units.length ? 'roundEvent.airborne.started' : 'turnEnd.airborne.flyover', { count: plan.units.length }));
-    playC47Flyover();
+    if (this.canHearBattleAt(plan.target)) playC47Flyover();
   }
 
   private advanceAirborneSupport(dt: number): void {
@@ -11089,7 +11199,7 @@ export class BattleScene extends Component {
     );
     if (!pass.flyoverOnly && !pass.shotDown && !pass.cannonSoundStarted && pass.t >= Math.max(0, attackStartT - 1)) {
       pass.cannonSoundStarted = true;
-      playStukaCannonFire();
+      if (this.canHearBattleAt(pass.target)) playStukaCannonFire();
     }
     if (!pass.flyoverOnly && !pass.shotDown && pass.cannonT < 0 && (direction < 0 ? x <= attackStartX : x >= attackStartX)) {
       pass.cannonT = 0;
@@ -11494,12 +11604,7 @@ export class BattleScene extends Component {
     const maneuverSound = (this.anim.kind === 'move' || this.anim.kind === 'turn')
       ? this.anim.unit.stats.moveSound
       : '';
-    if (this.anim.t === 0 && maneuverSound) {
-      startManeuverSound(maneuverSound);
-    }
-    if (this.anim.t === 0 && this.anim.kind === 'move' && isFootUnit(this.anim.unit)) {
-      playInfantryMove();
-    }
+    this.playMoveStartSound(this.anim);
     this.advanceTankMoveTime(this.anim, dt);
     this.advanceTankTrackAnimation(this.anim);
     if (this.anim.t < 1) {
@@ -11587,6 +11692,7 @@ export class BattleScene extends Component {
       const continuesAsOneNonPlayerMove = finishedUnit !== this.mission!.sherman
         && nextAnim?.unit === finishedUnit
         && (nextAnim.kind === 'move' || nextAnim.kind === 'turn')
+        && this.canHearBattleAt(nextAnim.unit.pos)
         && nextAnim.unit.stats.moveSound === maneuverSound;
       if (!continuesAsOneNonPlayerMove) stopManeuverSound();
     };
@@ -11643,6 +11749,9 @@ export class BattleScene extends Component {
     // 若处于敌方阶段，紧接着调度下一颗骰（骰子托盘固定在 UI 上，无需每步重建）
     if (this.phase === 'ally' || this.phase === 'enemy') {
       this.enemyDiceHighlightIdx = -1;
+      if (this.mission?.data.multiRegion && !this.enemyDiceTrayRoot && !this.isOutsidePlayerRegion(finishedUnit)) {
+        this.buildEnemyDiceTray(finishedUnit, { playSort: false });
+      }
       this.refreshEnemyDiceTray();
       this.runNextEnemyStep();
       finishManeuverSound(this.anim);
@@ -11653,6 +11762,7 @@ export class BattleScene extends Component {
     if (this.phase === 'player'
         && (this.playerStep === 'movement' || this.playerStep === 'misc'
           || (GameSession.gameMode === 'test' && this.playerStep === 'attack'))) {
+      if (this.startMultiRegionPan(() => { this.updateHUD(); this.completePhaseDiceAction(); })) return;
       this.updateHUD();
       this.completePhaseDiceAction();
     }
@@ -13841,7 +13951,8 @@ export class BattleScene extends Component {
     let drawn = false;
     for (const unit of this.allUnits()) {
       const water = unit.wreckWater;
-      if (!unit.destroyed || !water) continue;
+      if (!unit.destroyed || !water
+        || (this.mission.data?.multiRegion && this.isOutsidePlayerRegion(unit))) continue;
       // Water visibility is independent of the hull: the hull may have slid
       // out of sight or sunk completely while its entry point remains visible.
       const contactHex = wreckVisualHex(unit.pos, { x: water.contactX, y: water.contactY });
@@ -16589,6 +16700,10 @@ export class BattleScene extends Component {
   }
 
   private combatLogDisplayText(entry: CombatLogEntry): string {
+    if (typeof entry !== 'string' && entry.regionId) {
+      const plain = { ...entry, regionId: undefined };
+      return `[${entry.regionId} · ${entry.regionTurn}] ${this.combatLogDisplayText(plain)}`;
+    }
     if (typeof entry !== 'string' && entry.key === 'battleLog.playerTurnStart') {
       return t('battleLog.turnDivider', { turn: entry.params?.turn ?? '' });
     }
@@ -16630,6 +16745,10 @@ export class BattleScene extends Component {
   }
 
   private combatLogDisplayRichLine(entry: CombatLogEntry): string {
+    if (typeof entry !== 'string' && entry.regionId) {
+      return `<color=#b8b092>[${entry.regionId} · ${entry.regionTurn}]</color> `
+        + this.combatLogDisplayRichLine({ ...entry, regionId: undefined });
+    }
     if (typeof entry !== 'string' && entry.key === 'battleLog.playerTurnStart') {
       return `<color=#f1d77a><b>${this.escapeCombatLogRichText(this.combatLogDisplayText(entry))}</b></color>`;
     }
@@ -16722,10 +16841,17 @@ export class BattleScene extends Component {
   }
 
   private pushCombatLogEntry(entry: CombatLogEntry) {
+    if (this.mission?.data.multiRegion) {
+      const actor = this.phase === 'ally' || this.phase === 'enemy' ? this.enemyOrder[this.enemyIndex] : null;
+      if (actor && this.isOutsidePlayerRegion(actor)) return;
+      if (typeof entry !== 'string' && !entry.regionId) entry = {
+        ...entry, regionId: regionAt(this.mission, this.mission.sherman.pos) ?? undefined, regionTurn: this.turn,
+      };
+    }
     console.log(this.combatLogText(entry));
     this.combatLogLines.push(entry);
     let removed: CombatLogEntry[] = [];
-    if (this.combatLogLines.length > BattleScene.COMBAT_LOG_MAX) {
+    if (!this.mission?.data.multiRegion && this.combatLogLines.length > BattleScene.COMBAT_LOG_MAX) {
       removed = this.combatLogLines.splice(0, this.combatLogLines.length - BattleScene.COMBAT_LOG_MAX);
     }
     if (!this.combatLogContent) return;
@@ -17790,6 +17916,12 @@ export class BattleScene extends Component {
     if (!this.mission) return 'ongoing';
     if (!GameSession.isPvp) {
       const outcome = checkOutcome(this.mission);
+      if (this.mission.data.multiRegion) {
+        const local = updateRegionalVictory(this.mission);
+        if (outcome === 'defeat') return 'defeat';
+        if (outcome === 'victory') return local || this.multiRegionRoundEndCheck ? 'victory' : 'ongoing';
+        return 'ongoing';
+      }
       if (outcome === 'victory'
         && this.campaignRuntime?.campaign.autoEvacAfterDestroyAll
         && this.mission.data.objective.type === 'destroy_all_enemies'
@@ -20824,6 +20956,124 @@ export class BattleScene extends Component {
     return [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
   }
 
+  private isOutsidePlayerRegion(unit: Unit): boolean {
+    return !!this.mission?.data?.multiRegion && !this.mission.map.sameRegion(this.mission.sherman.pos, unit.pos);
+  }
+
+  /** Region membership filters battle audio independently of tactical fog. */
+  private canHearBattleAt(pos?: Axial): boolean {
+    return !this.mission?.data?.multiRegion
+      || !!pos && this.mission.map.sameRegion(this.mission.sherman.pos, pos);
+  }
+
+  private playMoveStartSound(anim: MoveAnim): void {
+    if (anim.t !== 0 || !this.canHearBattleAt(anim.unit.pos)) return;
+    const sound = anim.kind === 'move' || anim.kind === 'turn' ? anim.unit.stats.moveSound : '';
+    if (sound) startManeuverSound(sound);
+    if (anim.kind === 'move' && isFootUnit(anim.unit)) playInfantryMove();
+  }
+
+  private refreshMultiRegionMinimap(): void {
+    const mission = this.mission, state = mission?.multiRegionState;
+    if (!mission?.data.multiRegion || !state || this.multiRegionMinimap?.isValid) return;
+    const root = new Node('MultiRegionMinimap');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(284, 190);
+    const { width } = visibleSizeInRootSpace(UI_ROOT_SCALE);
+    root.setPosition(-width / 2 + 154, 130, 0);
+    this.node.addChild(root);
+    this.multiRegionMinimap = root;
+    const g = root.addComponent(Graphics);
+    g.fillColor = new Color(26, 32, 25, 245);
+    g.strokeColor = new Color(160, 150, 105, 255);
+    g.lineWidth = 2;
+    g.roundRect(-142, -95, 284, 190, 8); g.fill(); g.stroke();
+    this.makeBattleModalLabel(root, `区域态势 · 回合 ${state.intelTurn}`, 0, 76, 270, 25, 17, new Color(235, 224, 184));
+    const definitions = mission.data.multiRegion.regions;
+    const pixels = definitions.map(region => axialToPixel(region.center, 1));
+    const minX = Math.min(...pixels.map(p => p.x)), maxX = Math.max(...pixels.map(p => p.x));
+    const minY = Math.min(...pixels.map(p => p.y)), maxY = Math.max(...pixels.map(p => p.y));
+    const scale = Math.min(190 / Math.max(1, maxX - minX), 106 / Math.max(1, maxY - minY));
+    const boxWidth = definitions.length <= 4 ? 80 : 60;
+    const colors = { empty: new Color(74, 77, 72), friendly: new Color(62, 108, 64), enemy: new Color(137, 67, 56), contested: new Color(151, 117, 52) };
+    const names = { empty: '无人区', friendly: '己方控制', enemy: '敌方控制', contested: '交战中' };
+    definitions.forEach((region, index) => {
+      const intel = state.intel.find(item => item.id === region.id)!;
+      const x = (pixels[index].x - (minX + maxX) / 2) * scale;
+      const y = -12 - (pixels[index].y - (minY + maxY) / 2) * scale;
+      g.fillColor = colors[intel.state]; g.roundRect(x - boxWidth / 2, y - 22, boxWidth, 44, 5); g.fill();
+      this.makeBattleModalLabel(root, `${region.id} ${names[intel.state]}\n我 ${intel.friendlyPower} / 敌 ${intel.enemyPower ?? '？'}`,
+        x, y, boxWidth, 43, definitions.length <= 4 ? 13 : 10, Color.WHITE);
+    });
+  }
+
+  private clearRegionalTransientEffects(): void {
+    // Keep destruction IDs so entering or revisiting a region cannot replay a past kill.
+    for (const visual of this.destroyedTurretVisuals) if (visual.node.isValid) visual.node.destroy();
+    this.destroyedTurretVisuals.length = 0;
+    this.clearMuzzleFlashes();
+    this.clearMuzzleSmokes();
+    this.clearHighExplosiveBlasts();
+    this.clearMachineGunBursts();
+    this.clearInfantryBulletVolleys();
+    this.clearTankEngineExhaust();
+    this.clearFloaters();
+    // Impact callbacks still own combat resolution: hide their nodes, but keep
+    // advancing them until they commit their result exactly once.
+    for (const trace of [...this.projectileTraces, ...this.infantryRocketTraces, ...this.sniperBulletTraces]) {
+      trace.node.active = !!trace.impactHex && this.mission!.map.sameRegion(this.mission!.sherman.pos, trace.impactHex);
+    }
+  }
+
+  private startMultiRegionPan(onDone: () => void): boolean {
+    if (!this.mission?.data.multiRegion) return false;
+    const region = currentRegionDefinition(this.mission);
+    if (!region || region.id === this.multiRegionCameraId) return false;
+    // Cancel old-region loops, one-shots and audio loads before the camera moves.
+    stopBattleSfx();
+    this.clearRegionalTransientEffects();
+    this.multiRegionCameraId = region.id;
+    const center = this.tileBoundsCenter(this.cameraReferenceTiles())!;
+    const fromX = this.mapNode?.position.x ?? 0, fromY = this.mapNode?.position.y ?? 0;
+    this.campaignTransitionActive = true;
+    this.campaignPanAnim = { fromX, fromY, toX: -center.x - this.offsetX,
+      toY: center.y - this.offsetY + BOARD_CENTER_OFFSET_Y, t: 0, dur: .5,
+      onDone: () => {
+        this.campaignPanAnim = null;
+        this.campaignTransitionActive = false;
+        this.refreshPlayerVisibility(); this.redraw(); onDone();
+      } };
+    return true;
+  }
+
+  private runMultiRegionEvents(): void {
+    if (!this.mission?.data.multiRegion) return;
+    const mission = this.mission;
+    const regions = [...mission.data.multiRegion.regions];
+    let index = 0;
+    const next = () => {
+      if (this.outcome !== 'ongoing' || index >= regions.length) { this.endEnemyPhase(); return; }
+      const region = regions[index++];
+      const { sum, event } = rollRegionalEvent(region, this.rng);
+      const local = region.id === regionAt(mission, mission.sherman.pos);
+      if (!event || !regionalReinforcementAllowed(mission, region.id, event.side, !!event.airborne)) { next(); return; }
+      if (event.airborne && local) {
+        this.roundEventDone = next;
+        this.startTurnEndEventFlow(mission.data.id, { effectType: 'airborne_support', reinforcementSide: event.side === 'player' ? 'friendly' : 'enemy' });
+        return;
+      }
+      const spawned = applyRegionalReinforcement(mission, region, event, this.rng,
+        () => this.nextTurnEndUnitId(), GameSession.gameMode !== 'classic');
+      if (local && spawned.length) {
+        this.battleLogI18n('battleLog.turnEndResult', { dice: sum, result: `${region.id} ${unitDisplayName(event.kind)} ×${spawned.length}` });
+        this.spawnFloater(spawned[0].pos.q, spawned[0].pos.r, `${unitDisplayName(spawned[0].kind)} 增援`, new Color(230, 219, 163));
+      }
+      this.outcome = this.computeOutcome(); this.updateOutcomeOverlay();
+      next();
+    };
+    this.clearActiveActingUnit(); this.destroyEnemyDiceTray(); next();
+  }
+
   /** Bunker sites retain their bare floor after destruction, including in saved games. */
   private hasBunkerAt(pos: Axial): boolean {
     return GameSession.gameMode !== 'classic' && this.allUnits().some(unit =>
@@ -20836,7 +21086,7 @@ export class BattleScene extends Component {
     const sideTargets = this.allUnits().filter(unit => isHostile(actor, unit));
     // Abandoned tanks are capturable battlefield objects, not combatants.
     // Neither side's AI should spend attacks destroying them.
-    return sideTargets.filter(u => u !== actor && !isAbandonedTank(u));
+    return sideTargets.filter(u => u !== actor && !isAbandonedTank(u) && this.mission!.map.sameRegion(actor.pos, u.pos));
   }
 
   private playerMainGunTargets(): Unit[] {
@@ -20845,7 +21095,7 @@ export class BattleScene extends Component {
     // An attached AT-gun controller is represented by the gun, not a second
     // independently targetable infantry unit in the same hex.
     return Array.from(new Set([...this.mission.enemies, ...abandonedTanks]))
-      .filter(unit => !isAttachedATGunCrew(unit));
+      .filter(unit => !isAttachedATGunCrew(unit) && this.mission!.map.sameRegion(this.mission!.sherman.pos, unit.pos));
   }
 
   /** One click/preview target per hex; non-infantry takes precedence over infantry. */
@@ -20855,7 +21105,7 @@ export class BattleScene extends Component {
 
   private aiFriendliesFor(actor: Unit): Unit[] {
     if (!this.mission) return [];
-    return this.allUnits().filter(u => u !== actor && isSameSide(actor, u));
+    return this.allUnits().filter(u => u !== actor && isSameSide(actor, u) && this.mission!.map.sameRegion(actor.pos, u.pos));
   }
 
   private aiMissionTargetsFor(actor: Unit): Unit[] {
@@ -20883,12 +21133,18 @@ export class BattleScene extends Component {
   /** 转向优先追踪共享视野内敌人，其次上回合敌方最后攻击格，最后才是对方出生格。 */
   private currentAITurnTargetPosition(actor: Unit): Axial {
     if (!this.mission) return { ...actor.pos };
+    const support = this.mission.data?.multiRegion ? regionalSupportStep(this.mission, actor) : null;
+    if (support) return support;
     const { map, smokeHexes, data } = this.mission;
     const weather = this.currentWeather();
     const radioVisionSharing = getGameModeConfig(GameSession.gameMode).radioVisionSharing;
     const visibleHexes = radioVisionSharing
       ? computeRadioSharedVisibleHexes(map, actor, this.aiFriendliesFor(actor), weather, smokeHexes)
       : computeUnitVisibleHexes(map, actor, weather, smokeHexes);
+    const remembered = previousEnemyAttackPosition(this.attackPositionMemory, actor);
+    const ownRegion = data.multiRegion?.regions.find(region => region.id === regionAt(this.mission!, actor.pos));
+    const fallbackKey = actor.sideId === 'player' ? ownRegion?.enemySpawnKeys[0] : ownRegion?.friendlySpawnKeys[0];
+    const localFallback = fallbackKey ? (() => { const [q, r] = fallbackKey.split(',').map(Number); return { q, r }; })() : actor.pos;
     return visibleAITurnTargetPositionFor(
       actor,
       this.aiTargetsFor(actor),
@@ -20896,7 +21152,7 @@ export class BattleScene extends Component {
       target => visibleHexes.has(HexMap.keyOf(target.pos)),
       this.rng,
       data.rowParityOffset === 1 ? 1 : 0,
-      previousEnemyAttackPosition(this.attackPositionMemory, actor),
+      data.multiRegion ? remembered && map.sameRegion(actor.pos, remembered) ? remembered : localFallback : remembered,
     );
   }
 
@@ -21158,6 +21414,10 @@ export class BattleScene extends Component {
   }
 
   private beginPlayerPhaseForNewTurn() {
+    if (this.mission?.data.multiRegion) {
+      refreshRegionIntel(this.mission, this.turn);
+      this.multiRegionMinimap?.destroy(); this.multiRegionMinimap = null;
+    }
     this.phase = 'player';
     this.aiSide = 'german';
     this.enemyOrder = [];
@@ -23444,6 +23704,10 @@ export class BattleScene extends Component {
       attackPositionMemory: this.attackPositionMemory,
       missionSource: this.missionSource,
     });
+    if (this.mission.data.multiRegion) {
+      data.multiRegionHistory = this.combatLogLines;
+      data.rngState = this.rng.getState();
+    }
     try {
       if (this.campaignRuntime) {
         writeCampaignRun({
@@ -23480,7 +23744,9 @@ export class BattleScene extends Component {
   /** @param skipHint 主菜单「继续游戏」自动读档时为 true，不飘「已读档」以免干扰开场 */
   private onLoad_Save(skipHint?: boolean) {
     if (!this.mission) return;
-    if (this.isBusy()) {
+    // Automatic resume runs immediately after loadAndDraw; terrain assets may
+    // still be streaming, but no new-game action sequence has started.
+    if (!skipHint && this.isBusy()) {
       this.flashBattleSettingsHint(t('battle.load.busy'));
       return;
     }
@@ -23507,6 +23773,19 @@ export class BattleScene extends Component {
       return;
     }
     this.restoreAppliedSave(result, skipHint);
+    if (this.mission.data.multiRegion) {
+      if (save.rngState !== undefined) this.rng = new RNG(save.rngState);
+      this.multiRegionMinimap?.destroy(); this.multiRegionMinimap = null;
+      this.multiRegionCameraId = null;
+      const center = this.tileBoundsCenter(this.cameraReferenceTiles())!;
+      this.applyMapViewPosition(-center.x - this.offsetX, center.y - this.offsetY + BOARD_CENTER_OFFSET_Y);
+      this.multiRegionCameraId = regionAt(this.mission, this.mission.sherman.pos);
+      if (save.multiRegionHistory) {
+        this.combatLogLines = save.multiRegionHistory as CombatLogEntry[];
+        this.refreshCombatLogText();
+      }
+      this.redraw();
+    }
   }
 
   /** Apply the runtime state common to normal saves and campaign checkpoints. */
@@ -23649,7 +23928,7 @@ export class BattleScene extends Component {
         this.clearActiveActingUnit(enemy);
         this.enemyIndex++;
         this.beginCurrentEnemyTurn();
-      }, 0.78);
+      }, this.mission?.data.multiRegion && this.isOutsidePlayerRegion(enemy) ? 0 : 0.78);
       return;
     }
     this.updateNonPlayerTankCommanderHatch(enemy);
@@ -23690,7 +23969,7 @@ export class BattleScene extends Component {
           this.clearActiveActingUnit(enemy);
           this.enemyIndex++;
           this.beginCurrentEnemyTurn();
-        }, 0.78);
+        }, this.mission?.data.multiRegion && this.isOutsidePlayerRegion(enemy) ? 0 : 0.78);
         return;
       }
       this.enemyDice = [];
@@ -24265,8 +24544,8 @@ export class BattleScene extends Component {
     if (unit.hatchOpen === nextOpen) return;
     const visibilityBefore = nextOpen ? this.displayedFogVisionSnapshot() : null;
     unit.hatchOpen = nextOpen;
-    // 音效不受迷雾可见性影响：未发现的坦克切换舱盖也能被听见。
-    playCommanderHatch(nextOpen);
+    // 本区音效不受迷雾可见性影响；其它分区保持静默。
+    if (this.canHearBattleAt(unit.pos)) playCommanderHatch(nextOpen);
     if (visibilityBefore) {
       this.startFogVisionTransition(visibilityBefore, true, HATCH_VISION_LAYER_INTERVAL);
     } else {
@@ -24316,7 +24595,7 @@ export class BattleScene extends Component {
         this.clearAIMoveState(enemy);
         this.clearActiveActingUnit(enemy);
         this.refreshEnemyDiceTray();
-        if (!this.enemyDidActThisTurn) {
+        if (!this.enemyDidActThisTurn && !this.isOutsidePlayerRegion(enemy)) {
           this.enemyDiceResultHold = { t: 0, dur: 1.0 };
           return;
         }
@@ -24381,7 +24660,8 @@ export class BattleScene extends Component {
   ): EnemyAction | null {
     if (!this.mission) return null;
     const { map } = this.mission;
-    const target = this.currentAITarget(enemy);
+    const support = this.mission.data?.multiRegion ? regionalSupportStep(this.mission, enemy) : null;
+    const target = this.currentAITarget(enemy) ?? (support ? { ...enemy, pos: support } : null);
     const occupied = this.buildOccupiedSet(enemy);
     if (opts.commitMoveState) this.pendingAIMoveState = null;
 
@@ -24391,6 +24671,10 @@ export class BattleScene extends Component {
       if (a === 'reload') return (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
         && !enemy.destroyed && isTankUnit(enemy) && !isMainGunLoaded(enemy, true);
       if (!target) return false;
+      if (support && ['advance', 'advance_to_building', 'reverse'].includes(a)) {
+        const destination = this.aiMoveDestinationForAction(enemy, a);
+        if (!destination || !axialEquals(destination, support)) return false;
+      }
       if (a === 'shoot_adjacent') {
         return !!this.selectAIShootTarget(enemy, false, true);
       }
@@ -24445,6 +24729,36 @@ export class BattleScene extends Component {
    */
   private executeEnemyAction(enemy: Unit, action: EnemyAction): 'done' | 'animating' {
     if (!this.mission || enemy.mountedOnUnitId) return 'done';
+    if (this.mission.data?.multiRegion && this.isOutsidePlayerRegion(enemy)) {
+      const destination = action === 'infantry_move' ? this.findInfantryAIMove(enemy) : this.aiMoveDestinationForAction(enemy, action);
+      if (destination && this.isOutsidePlayerRegion({ ...enemy, pos: destination })) {
+        markAmbushAction(enemy); clearLockedFire(enemy); this.breakConcealment(enemy);
+        const from = { ...enemy.pos };
+        this.mission.map.applyMovementTerrainEffects(enemy, from, destination);
+        enemy.pos = { ...destination };
+        this.pendingAIMoveState = null;
+        this.crushEnemyATGunsAt(enemy);
+        this.captureAbandonedATGunsAt(enemy); this.captureAbandonedTanksAt(enemy);
+        syncTankRiders(this.allUnits());
+        return 'done';
+      }
+      if (action === 'turn' && enemy.facing !== null) {
+        const target = this.currentAITurnTargetPosition(enemy);
+        const planned = this.pendingAIMoveState?.unit === enemy ? this.pendingAIMoveState.state : undefined;
+        const decision = planned === 'turn_cw' ? 'cw' : planned === 'turn_ccw' ? 'ccw' : planned === null ? 'stay'
+          : regionalSupportTurn(this.mission, enemy) ?? decideEnemyTurn(enemy, target, this.mission.map, this.buildOccupiedSet(enemy), this.rng);
+        const from = enemy.facing;
+        const to = decision === 'stay' ? from : rotateDirection(from, decision === 'cw' ? 1 : 5);
+        if (to !== from) {
+          markAmbushAction(enemy); clearLockedFire(enemy); this.breakConcealment(enemy);
+          enemy.facing = to;
+          enemy.turretFacing = turretFacingAfterHullTurn(enemy.turretFacing ?? from, from, to);
+          this.enemyTurretFacing.set(enemy.id, enemy.turretFacing);
+        }
+        this.pendingAIMoveState = null;
+        return 'done';
+      }
+    }
     const { map } = this.mission;
     const plannedMoveState = this.pendingAIMoveState
       && this.pendingAIMoveState.unit === enemy
@@ -24494,7 +24808,8 @@ export class BattleScene extends Component {
             ? 'ccw'
             : plannedMoveState === null
               ? 'stay'
-              : decideEnemyTurn(enemy, target, map, occupied, this.rng);
+              : (this.mission.data.multiRegion ? regionalSupportTurn(this.mission, enemy) : null)
+                ?? decideEnemyTurn(enemy, target, map, occupied, this.rng);
         if (decision === 'stay') {
           this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 转向 → 保持 facing=${enemy.facing}`);
           this.redraw();
@@ -24649,6 +24964,8 @@ export class BattleScene extends Component {
 
   private findInfantryAIMove(enemy: Unit): Axial | null {
     if (!this.mission || !isFootUnit(enemy) || enemy.kind === 'officer') return null;
+    const support = this.mission.data?.multiRegion ? regionalSupportStep(this.mission, enemy) : null;
+    if (support) return support;
     const target = this.nearestInfantryAITarget(enemy);
     if (!target) return null;
     const currentDist = hexDistance(enemy.pos, target.pos);
@@ -24795,7 +25112,8 @@ export class BattleScene extends Component {
     if (!this.mission) return null;
     switch (action) {
       case 'turn': {
-        const decision = decideEnemyTurn(enemy, target, this.mission.map, occupied, opts.useRng ? this.rng : undefined);
+        const decision = (this.mission.data?.multiRegion ? regionalSupportTurn(this.mission, enemy) : null)
+          ?? decideEnemyTurn(enemy, target, this.mission.map, occupied, opts.useRng ? this.rng : undefined);
         if (decision === 'stay') return null;
         return decision === 'cw' ? 'turn_cw' : 'turn_ccw';
       }
@@ -24957,6 +25275,13 @@ export class BattleScene extends Component {
 
   private endEnemyPhase() {
     if (this.pauseAIFlowForCombatLogReplay(() => this.endEnemyPhase())) return;
+    if (this.mission?.data.multiRegion && this.outcome === 'ongoing') {
+      this.multiRegionRoundEndCheck = true;
+      this.outcome = this.computeOutcome();
+      this.multiRegionRoundEndCheck = false;
+      this.updateOutcomeOverlay();
+      if (this.outcome !== 'ongoing') { this.updateHUD(); this.redraw(); return; }
+    }
     for (const unit of this.allUnits()) clearLockedFire(unit);
     if (GameSession.isPvp) {
       this.enterPvpWaitingForOpponent();
@@ -25407,6 +25732,17 @@ export class BattleScene extends Component {
   }
 
   private beginTurretAimAnim(anim: TurretAimAnim) {
+    if (this.mission?.data?.multiRegion && this.isOutsidePlayerRegion(anim.unit)) {
+      clearLockedFire(anim.unit);
+      if (!anim.preserveRuleFacing) {
+        anim.unit.previousTurretFacing = anim.from;
+        anim.unit.turretFacing = anim.to;
+        this.enemyTurretFacing.set(anim.unit.id, anim.to);
+      }
+      anim.unit.turretVisualTarget = anim.toVisualTarget;
+      anim.onDone();
+      return;
+    }
     clearLockedFire(anim.unit);
     // Visual aim can differ from the rules heading, including within one rules
     // direction. Measure the actual shortest rotation before allowing fire.
@@ -25423,7 +25759,8 @@ export class BattleScene extends Component {
       anim.dur = Math.max(0.01, delta / (Math.PI / 6) / speed);
     }
     this.turretAimAnim = anim;
-    if (!anim.suppressTurretSound && (anim.from !== anim.to || anim.dur > 0.01)) startTurretTraverseSound();
+    if (!anim.suppressTurretSound && (anim.from !== anim.to || anim.dur > 0.01)
+      && (!this.mission?.data?.multiRegion || this.canHearBattleAt(anim.unit.pos))) startTurretTraverseSound();
   }
 
   private startEnemyMachineGunAim(
@@ -26310,6 +26647,12 @@ export class BattleScene extends Component {
       highExplosiveCollateral?: HighExplosiveCollateralResult[];
     } = {},
   ) {
+    if (this.mission?.data.multiRegion && opts.attacker && this.isOutsidePlayerRegion(opts.attacker)) {
+      opts.onHighExplosiveImpact?.();
+      opts.onHold?.();
+      onDone();
+      return;
+    }
     // 已有一个面板在播（理论上不该走到这里，守一下）：先强结束旧的，避免叠加
     if (this.diceShow) this.finalizeDiceShow(/*skip=*/true);
     if (!opts.keepTurnEndPanel) this.destroyTurnEndEventUI();
@@ -27834,6 +28177,7 @@ export class BattleScene extends Component {
    * @param playSort true：新回合掷骰后播约 1s 排序动画再开始执行；false：直接摆在升序槽位（如射击面板关闭后重建托盘）
    */
   private buildEnemyDiceTray(enemy: Unit, opts: { playSort?: boolean } = {}) {
+    if (this.mission?.data.multiRegion && this.isOutsidePlayerRegion(enemy)) { this.destroyEnemyDiceTray(); return; }
     const playSort = opts.playSort !== false;
     this.destroyEnemyDiceTray();
     const count = this.enemyDice.length;
@@ -28947,6 +29291,7 @@ export class BattleScene extends Component {
       this.endEnemyPhase();
       return;
     }
+    if (this.mission.data.multiRegion) { this.runMultiRegionEvents(); return; }
     this.clearActiveActingUnit();
     this.redraw();
     /** 胜负态在 BattleScene.this.outcome；mission 对象无 outcome 字段，勿用 this.mission.outcome */
@@ -29191,6 +29536,7 @@ export class BattleScene extends Component {
     };
 
     if (impossible && !secondaryReport) {
+      if (this.mission.data.multiRegion && this.isOutsidePlayerRegion(actor)) { finish(); return true; }
       const revealKey = HexMap.keyOf(actor.pos);
       const hiddenActor = !this.isUnitVisible(actor);
       if (hiddenActor) this.transientFogRevealKeys.add(revealKey);
@@ -29262,7 +29608,8 @@ export class BattleScene extends Component {
       gunMantletArmor: getGameModeConfig(GameSession.gameMode).gunMantletArmor,
       unitDamageTargetClass: getGameModeConfig(GameSession.gameMode).unitDamageTargetClass,
       weather: this.currentWeather(),
-      airborneAllowedKeys: new Set(this.mission.map.all().filter(tile => this.isEffectiveBattleTile(tile)).map(tile => HexMap.keyOf(tile.pos))),
+      airborneAllowedKeys: new Set(currentRegionDefinition(this.mission)?.tileKeys
+        ?? this.mission.map.all().filter(tile => this.isEffectiveBattleTile(tile)).map(tile => HexMap.keyOf(tile.pos))),
     };
     const prepared = prepareTurnEndEvent(row, primaryDice, sum, ctx);
     if (row.effectType === 'airborne_support') {

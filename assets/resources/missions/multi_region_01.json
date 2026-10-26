@@ -1,0 +1,1524 @@
+{
+  "id": "multi_region_01",
+  "name": "多区域关卡",
+  "theater": "europe",
+  "season": "summer",
+  "weather": "clear",
+  "description": "4区域联合作战：击毁4辆4号G。每区使用标准8×6轮廓；A1、A2各一个美军连队。seed=20261026",
+  "cols": 14,
+  "rows": 16,
+  "tiles": [
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001000"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "010001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "rd": "010010"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      }
+    ],
+    [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "110010"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001100"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      null,
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001011"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "m"
+      },
+      {
+        "t": "m",
+        "bd": 1
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "rd": "001001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      null,
+      null
+    ],
+    [
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "bd": 1
+      },
+      {
+        "t": "r",
+        "rd": "001001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "010000"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001001"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "010010"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001001"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      }
+    ],
+    [
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "010010"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "rd": "010001"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "r",
+        "rd": "101000"
+      },
+      {
+        "t": "r",
+        "rd": "000100"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "011010"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "101010"
+      },
+      {
+        "t": "r",
+        "rd": "000101"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "w"
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w",
+        "br": [
+          2,
+          5
+        ],
+        "rd": "001001"
+      },
+      {
+        "t": "w",
+        "br": [
+          4,
+          1
+        ],
+        "rd": "010010"
+      },
+      {
+        "t": "w",
+        "br": [
+          5,
+          2
+        ],
+        "rd": "001001"
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w"
+      },
+      {
+        "t": "w"
+      },
+      null,
+      null
+    ],
+    [
+      null,
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "010011"
+      },
+      {
+        "t": "f"
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "000001"
+      },
+      {
+        "t": "F"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "bd": 1,
+        "rd": "001010"
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      {
+        "t": "m"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "r",
+        "rd": "000001"
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    [
+      null,
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  ],
+  "playerTank": {
+    "kind": "sherman",
+    "faction": "usa",
+    "at": {
+      "col": 0,
+      "row": 7
+    },
+    "facing": 0,
+    "hatchOpen": true
+  },
+  "sherman": {
+    "kind": "sherman",
+    "faction": "usa",
+    "at": {
+      "col": 0,
+      "row": 7
+    },
+    "facing": 0,
+    "hatchOpen": true
+  },
+  "allies": [
+    {
+      "kind": "sherman",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 5
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "sherman76",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 6
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "sherman76",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 7
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 8
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 1,
+        "row": 9
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 2,
+        "row": 4
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 2,
+        "row": 5
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "sherman",
+      "faction": "usa",
+      "at": {
+        "col": 6,
+        "row": 3
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "sherman",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 1
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "sherman76",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 2
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "sherman76",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 3
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 4
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 7,
+        "row": 5
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 8,
+        "row": 0
+      },
+      "facing": 0,
+      "hatchOpen": true
+    },
+    {
+      "kind": "american_infantry",
+      "faction": "usa",
+      "at": {
+        "col": 8,
+        "row": 1
+      },
+      "facing": 0,
+      "hatchOpen": true
+    }
+  ],
+  "enemies": [
+    {
+      "kind": "panzer4",
+      "faction": "german",
+      "at": {
+        "col": 7,
+        "row": 6
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer3",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 8
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 7
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4_f",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 6
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4_f",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 5
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4",
+      "faction": "german",
+      "at": {
+        "col": 13,
+        "row": 2
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4_f",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 4
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "stug3",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 3
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer3",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 2
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 1
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4",
+      "faction": "german",
+      "at": {
+        "col": 7,
+        "row": 12
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 14
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 13
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4_f",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 12
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer3",
+      "faction": "german",
+      "at": {
+        "col": 6,
+        "row": 10
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "stug3",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 15
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer3",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 14
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 5,
+        "row": 13
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer4",
+      "faction": "german",
+      "at": {
+        "col": 13,
+        "row": 8
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "stug3",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 10
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "stug3",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 9
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 8
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "german_infantry",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 7
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "stug3",
+      "faction": "german",
+      "at": {
+        "col": 12,
+        "row": 6
+      },
+      "facing": 3,
+      "hatchOpen": true
+    },
+    {
+      "kind": "panzer3",
+      "faction": "german",
+      "at": {
+        "col": 11,
+        "row": 10
+      },
+      "facing": 3,
+      "hatchOpen": true
+    }
+  ],
+  "objective": {
+    "type": "destroy_kind",
+    "kind": "panzer4",
+    "count": 4
+  },
+  "multiRegion": {
+    "version": 1,
+    "seed": 20261026,
+    "regions": [
+      {
+        "id": "A1",
+        "center": {
+          "q": 0,
+          "r": 7
+        },
+        "tileKeys": [
+          "0,4",
+          "1,4",
+          "2,4",
+          "3,4",
+          "4,4",
+          "-1,5",
+          "0,5",
+          "1,5",
+          "2,5",
+          "3,5",
+          "4,5",
+          "-2,6",
+          "-1,6",
+          "0,6",
+          "1,6",
+          "2,6",
+          "3,6",
+          "4,6",
+          "-3,7",
+          "-2,7",
+          "-1,7",
+          "0,7",
+          "1,7",
+          "2,7",
+          "3,7",
+          "-3,8",
+          "-2,8",
+          "-1,8",
+          "0,8",
+          "1,8",
+          "2,8",
+          "-3,9",
+          "-2,9",
+          "-1,9",
+          "0,9",
+          "1,9"
+        ],
+        "enemyBudget": 12,
+        "friendlySpawnKeys": [
+          "-3,7",
+          "-1,5",
+          "-2,6",
+          "-2,7",
+          "-3,8",
+          "-3,9",
+          "0,4",
+          "0,5",
+          "-1,6",
+          "-1,7",
+          "-2,8",
+          "-2,9",
+          "1,4",
+          "1,5",
+          "0,6",
+          "0,7",
+          "-1,8",
+          "-1,9"
+        ],
+        "enemySpawnKeys": [
+          "4,6",
+          "2,8",
+          "3,7",
+          "3,6",
+          "4,5",
+          "4,4",
+          "1,9",
+          "1,8",
+          "2,7",
+          "2,6",
+          "3,5",
+          "3,4",
+          "0,9",
+          "0,8",
+          "1,7",
+          "1,6",
+          "2,5",
+          "2,4"
+        ],
+        "events": [
+          {
+            "min": 2,
+            "max": 3,
+            "side": "player",
+            "kind": "american_infantry"
+          },
+          {
+            "min": 4,
+            "max": 5,
+            "side": "enemy",
+            "kind": "german_infantry"
+          },
+          {
+            "min": 8,
+            "max": 8,
+            "side": "player",
+            "kind": "sherman"
+          },
+          {
+            "min": 9,
+            "max": 9,
+            "side": "enemy",
+            "kind": "panzer3"
+          },
+          {
+            "min": 10,
+            "max": 10,
+            "side": "player",
+            "kind": "american_infantry",
+            "airborne": true
+          }
+        ]
+      },
+      {
+        "id": "A2",
+        "center": {
+          "q": 8,
+          "r": 3
+        },
+        "tileKeys": [
+          "8,0",
+          "9,0",
+          "10,0",
+          "11,0",
+          "12,0",
+          "7,1",
+          "8,1",
+          "9,1",
+          "10,1",
+          "11,1",
+          "12,1",
+          "6,2",
+          "7,2",
+          "8,2",
+          "9,2",
+          "10,2",
+          "11,2",
+          "12,2",
+          "5,3",
+          "6,3",
+          "7,3",
+          "8,3",
+          "9,3",
+          "10,3",
+          "11,3",
+          "5,4",
+          "6,4",
+          "7,4",
+          "8,4",
+          "9,4",
+          "10,4",
+          "5,5",
+          "6,5",
+          "7,5",
+          "8,5",
+          "9,5"
+        ],
+        "enemyBudget": 12,
+        "friendlySpawnKeys": [
+          "5,3",
+          "7,1",
+          "6,2",
+          "6,3",
+          "5,4",
+          "5,5",
+          "8,0",
+          "8,1",
+          "7,2",
+          "7,3",
+          "6,4",
+          "6,5",
+          "9,0",
+          "9,1",
+          "8,2",
+          "8,3",
+          "7,4",
+          "7,5"
+        ],
+        "enemySpawnKeys": [
+          "12,2",
+          "10,4",
+          "11,3",
+          "11,2",
+          "12,1",
+          "12,0",
+          "9,5",
+          "9,4",
+          "10,3",
+          "10,2",
+          "11,1",
+          "11,0",
+          "8,5",
+          "8,4",
+          "9,3",
+          "9,2",
+          "10,1",
+          "10,0"
+        ],
+        "events": [
+          {
+            "min": 2,
+            "max": 3,
+            "side": "player",
+            "kind": "american_infantry"
+          },
+          {
+            "min": 4,
+            "max": 5,
+            "side": "enemy",
+            "kind": "german_infantry"
+          },
+          {
+            "min": 8,
+            "max": 8,
+            "side": "player",
+            "kind": "sherman"
+          },
+          {
+            "min": 9,
+            "max": 9,
+            "side": "enemy",
+            "kind": "panzer3"
+          },
+          {
+            "min": 10,
+            "max": 10,
+            "side": "player",
+            "kind": "american_infantry",
+            "airborne": true
+          }
+        ]
+      },
+      {
+        "id": "A3",
+        "center": {
+          "q": -3,
+          "r": 13
+        },
+        "tileKeys": [
+          "-3,10",
+          "-2,10",
+          "-1,10",
+          "0,10",
+          "1,10",
+          "-4,11",
+          "-3,11",
+          "-2,11",
+          "-1,11",
+          "0,11",
+          "1,11",
+          "-5,12",
+          "-4,12",
+          "-3,12",
+          "-2,12",
+          "-1,12",
+          "0,12",
+          "1,12",
+          "-6,13",
+          "-5,13",
+          "-4,13",
+          "-3,13",
+          "-2,13",
+          "-1,13",
+          "0,13",
+          "-6,14",
+          "-5,14",
+          "-4,14",
+          "-3,14",
+          "-2,14",
+          "-1,14",
+          "-6,15",
+          "-5,15",
+          "-4,15",
+          "-3,15",
+          "-2,15"
+        ],
+        "enemyBudget": 16,
+        "friendlySpawnKeys": [
+          "-6,13",
+          "-5,12",
+          "-5,13",
+          "-6,14",
+          "-6,15",
+          "-3,10",
+          "-4,12",
+          "-4,13",
+          "-5,14",
+          "-5,15",
+          "-2,10",
+          "-3,12",
+          "-3,13",
+          "-4,14",
+          "-4,15"
+        ],
+        "enemySpawnKeys": [
+          "1,12",
+          "-1,14",
+          "0,13",
+          "0,12",
+          "1,10",
+          "-2,15",
+          "-2,14",
+          "-1,13",
+          "-1,12",
+          "0,10",
+          "-3,15",
+          "-3,14",
+          "-2,13",
+          "-2,12",
+          "-1,10"
+        ],
+        "events": [
+          {
+            "min": 2,
+            "max": 3,
+            "side": "player",
+            "kind": "american_infantry"
+          },
+          {
+            "min": 4,
+            "max": 5,
+            "side": "enemy",
+            "kind": "german_infantry"
+          },
+          {
+            "min": 8,
+            "max": 8,
+            "side": "player",
+            "kind": "sherman"
+          },
+          {
+            "min": 9,
+            "max": 9,
+            "side": "enemy",
+            "kind": "panzer3"
+          },
+          {
+            "min": 10,
+            "max": 10,
+            "side": "player",
+            "kind": "american_infantry",
+            "airborne": true
+          }
+        ]
+      },
+      {
+        "id": "A4",
+        "center": {
+          "q": 5,
+          "r": 9
+        },
+        "tileKeys": [
+          "5,6",
+          "6,6",
+          "7,6",
+          "8,6",
+          "9,6",
+          "4,7",
+          "5,7",
+          "6,7",
+          "7,7",
+          "8,7",
+          "9,7",
+          "3,8",
+          "4,8",
+          "5,8",
+          "6,8",
+          "7,8",
+          "8,8",
+          "9,8",
+          "2,9",
+          "3,9",
+          "4,9",
+          "5,9",
+          "6,9",
+          "7,9",
+          "8,9",
+          "2,10",
+          "3,10",
+          "4,10",
+          "5,10",
+          "6,10",
+          "7,10",
+          "2,11",
+          "3,11",
+          "4,11",
+          "5,11",
+          "6,11"
+        ],
+        "enemyBudget": 16,
+        "friendlySpawnKeys": [
+          "2,9",
+          "4,7",
+          "3,8",
+          "3,9",
+          "2,10",
+          "5,6",
+          "5,7",
+          "4,8",
+          "4,9",
+          "3,10",
+          "6,6",
+          "6,7",
+          "5,8",
+          "5,9",
+          "4,10"
+        ],
+        "enemySpawnKeys": [
+          "9,8",
+          "7,10",
+          "8,9",
+          "8,8",
+          "9,7",
+          "9,6",
+          "6,10",
+          "7,9",
+          "7,8",
+          "8,7",
+          "8,6",
+          "5,10",
+          "6,9",
+          "6,8",
+          "7,7",
+          "7,6"
+        ],
+        "events": [
+          {
+            "min": 2,
+            "max": 3,
+            "side": "player",
+            "kind": "american_infantry"
+          },
+          {
+            "min": 4,
+            "max": 5,
+            "side": "enemy",
+            "kind": "german_infantry"
+          },
+          {
+            "min": 8,
+            "max": 8,
+            "side": "player",
+            "kind": "sherman"
+          },
+          {
+            "min": 9,
+            "max": 9,
+            "side": "enemy",
+            "kind": "panzer3"
+          },
+          {
+            "min": 10,
+            "max": 10,
+            "side": "player",
+            "kind": "american_infantry",
+            "airborne": true
+          }
+        ]
+      }
+    ],
+    "reinforcementLimit": 10,
+    "powerCosts": {
+      "sherman": 3,
+      "sherman76": 4,
+      "american_infantry": 1,
+      "german_infantry": 1,
+      "panzer3": 2,
+      "panzer4": 3,
+      "panzer4_f": 3,
+      "stug3": 3
+    }
+  }
+}

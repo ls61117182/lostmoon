@@ -27,6 +27,8 @@ export function normalizeSelectedPlayerTankKind(kind: unknown): UnitKind {
  * independently assigns the local player side/controller at runtime.
  */
 export function missionWithSelectedPlayerTank(data: MissionData, selectedKind: unknown): MissionData {
+  // A multi-region company includes its configured protagonist in the four-tank roster.
+  if (data.multiRegion) return data;
   const source = data.playerTank ?? data.sherman;
   if (!source) return data;
 
