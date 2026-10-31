@@ -314,6 +314,7 @@ test('crossing regions pans to the entered board and delays the remaining player
 test('offscreen movement applies instantly but entry into the player region uses the ordinary movement animation', () => {
   const grid = require('../assets/scripts/core/HexGrid.ts');
   const Scene = sceneMethods(['executeEnemyAction', 'isOutsidePlayerRegion', 'aiMoveDestinationForAction'], {
+    ...require('../assets/scripts/core/TankRiding.ts'),
     ...grid, markAmbushAction, clearLockedFire, isImmobileGunUnit: () => false,
     syncTankRiders() {}, unitDisplayName: kind => kind, GameSession: { gameMode: 'hardcore' },
   });

@@ -7,6 +7,9 @@ export interface CachedUnitAnimation {
   unit: Unit; center: { x: number; y: number }; nodes: Set<Node>; passes: UnitDrawPass[];
   wreckPose: Unit['wreckPose'];
   visible?: boolean;
+  infantryCoLocated?: boolean;
+  infantryFormationKey?: string;
+  infantryOffsets?: Array<{ ox: number; oy: number }>;
   vectors: Array<{ circle: [number, number, number] }>;
 }
 

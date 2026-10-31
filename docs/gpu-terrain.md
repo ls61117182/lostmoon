@@ -21,6 +21,8 @@
 
 结果仍保存在既有颜色贴图与水面遮罩中，不增加运行时贴图、绘制批次、贴图尺寸或每帧岸线计算。新增计算只发生在地图加载、季节切换或局部地形变化的烘焙阶段，手机实际生成耗时仍需真机测量。
 
+格子详情使用 `TerrainGroundRenderer.addTilePreview`，按格子的轴向坐标和标准半径定位地图缓存，以六边形 stencil 裁剪相交分块的同一份颜色帧。跨分块、负坐标和桥梁附近的 2 倍采样沿用缓存的实际 padding，不受地图缩放或平移影响；详情的相机旋转仍由预览容器统一处理。详情不再重复叠加旧沙岸、公路或桥面，建筑、树篱等独立附加物继续绘制。该预览为静态地形，不额外烘焙、读取 GPU 像素或分配地形贴图；缓存重建时同步更新借用帧，关闭详情不释放地图资源。
+
 ## 手机与内存
 
 默认生成倍率为 1，每块输出 386×386，单张 RGBA8 颜色贴图约 0.57 MiB；有水的块另外保存同尺寸遮罩。RenderTexture 默认还有深度/模板附件，设备实际占用需另计。基础图集为 1544×1930 RGBA8，约 11.4 MiB。构造 `TerrainGroundRenderer` 时第三个参数可选 1 或 2；2 倍会增加分块贴图的内存和生成开销。
@@ -32,6 +34,8 @@
 ```text
 npm run typecheck
 node tests/TerrainGroundGpu.test.js
+node tests/BattleSceneTileInspectGround.test.js
+node tests/BattleSceneTileInspectRotation.test.js
 node tests/TerrainGroundRaster.test.js
 node tests/TerrainShoreline.test.js
 npm run terrain:validate:gpu

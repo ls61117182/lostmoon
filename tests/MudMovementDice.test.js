@@ -14,7 +14,7 @@ const sceneMethods = require('./helpers/BattleSceneMethods.cjs');
 const GameSession = { gameMode: 'hardcore', isPvp: false };
 const Scene = sceneMethods(['update', 'advanceTankMoveTime', 'dieStep', 'usePhaseDice',
   'completePhaseDiceAction', 'autoEndPhaseIfDone'], {
-  ...types, GameSession, wreckVisualHex, WRECK_PUSH_STEP, easeOutCubic: t => 1 - (1 - t) ** 3,
+  ...types, ...require('../assets/scripts/core/TankRiding.ts'), GameSession, wreckVisualHex, WRECK_PUSH_STEP, easeOutCubic: t => 1 - (1 - t) ** 3,
   reconcileDiagonalGunnerSideAfterMove() {},
   syncTankRiders() {},
   startManeuverSound() {}, stopManeuverSound() {}, playInfantryMove() {},

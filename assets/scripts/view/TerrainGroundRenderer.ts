@@ -1,4 +1,4 @@
-import { director, EffectAsset, Material, Node, Rect, resources, Size, Sprite, SpriteFrame, UITransform, Vec4 } from 'cc';
+import { director, EffectAsset, Graphics, Mask, Material, Node, Rect, resources, Size, Sprite, SpriteFrame, UITransform, Vec4 } from 'cc';
 import type { Tile } from '../core/types';
 import type { EuropeanTerrainLook } from '../core/TerrainSeason';
 import { GROUND_RADIUS, GROUND_CHUNK_SIZE, terrainGroundFingerprint, selectEuropeanTerrainBundle, type TerrainMaterialBundle } from './TerrainGroundRaster';
@@ -6,6 +6,7 @@ import { TerrainGroundGpuData, type GpuChunkPlan } from './TerrainGroundGpuData'
 import { TerrainGroundGpuBaker, type GpuBakedChunk } from './TerrainGroundGpuBaker';
 
 interface CachedChunk extends GpuBakedChunk { key:string; fingerprint:string; node:Node; frame:SpriteFrame; material:Material|null; x:number; y:number; }
+interface TileGroundPreview { node:Node; x:number; y:number; scale:number; chunks:CachedChunk[]; }
 /** GPU-composited immutable blocks. Camera/unit/UI redraws only transform sprites. */
 export class TerrainGroundRenderer {
   private data:TerrainGroundGpuData|null=null;
@@ -16,6 +17,7 @@ export class TerrainGroundRenderer {
   private style='';
   private mapSignature='';
   private chunks=new Map<string,CachedChunk>();
+  private previews=new Set<TileGroundPreview>();
   private queue:GpuChunkPlan[]=[];
   private busy=false;
   private completionPending=false;
@@ -87,6 +89,7 @@ export class TerrainGroundRenderer {
       this.parent.addChild(node);node.setSiblingIndex(0);
       const chunk:CachedChunk={...result,key:plan.key,fingerprint:plan.fingerprint,node,frame,material:null,x:plan.x,y:plan.y};
       this.chunks.set(plan.key,chunk);this.applyWaterMaterial(chunk);this.queue.shift();this.completedChunks++;
+      this.refreshTilePreviews();
       this.completionPending=this.queue.length===0;this.position();
     });}catch(error){this.busy=false;this.cancelWork();throw error;}
     return false;
@@ -100,8 +103,62 @@ export class TerrainGroundRenderer {
     }
   }
   hide():void {this.visible=false;this.position();}
+  /** Crop the actual baked ground in canonical map coordinates. The inspector
+   * supplies its own artwork rotation; map zoom/pan never enter this crop.
+   * Reuse the colour frames as a static preview: no readback or extra bake. */
+  addTilePreview(parent:Node,q:number,r:number,cx:number,cy:number,hexRadius:number):boolean {
+    if(this.destroyed||this.loading||!this.visible)return false;
+    const x=Math.sqrt(3)*GROUND_RADIUS*(q+r*.5),y=1.5*GROUND_RADIUS*r;
+    const chunks=this.tilePreviewChunks(x,y);if(!chunks)return false;
+    const node=new Node('TileInspectBakedGround');node.layer=parent.layer;
+    node.addComponent(UITransform).setContentSize(hexRadius*Math.sqrt(3),hexRadius*2);
+    node.setPosition(cx,cy,0);parent.addChild(node);
+    const mask=node.addComponent(Mask);mask.type=Mask.Type.GRAPHICS_STENCIL;
+    // Mask starts with a rectangular path. Clear it before supplying the hex;
+    // retain its transparent fill so the stencil itself never paints the UI.
+    const graphics=mask.subComp as Graphics;graphics.clear();
+    for(let i=0;i<6;i++) {
+      const a=(-30+60*i)*Math.PI/180,px=hexRadius*Math.cos(a),py=hexRadius*Math.sin(a);
+      if(i===0)graphics.moveTo(px,py);else graphics.lineTo(px,py);
+    }
+    graphics.close();graphics.fill();
+    const preview:TileGroundPreview={node,x,y,scale:hexRadius/GROUND_RADIUS,chunks:[]};
+    this.previews.add(preview);this.drawTilePreview(preview,chunks);return true;
+  }
+  private tilePreviewChunks(x:number,y:number):CachedChunk[]|null {
+    const result:CachedChunk[]=[],halfWidth=GROUND_RADIUS*Math.sqrt(3)*.5;
+    for(let row=Math.floor((y-GROUND_RADIUS)/GROUND_CHUNK_SIZE);row<=Math.floor((y+GROUND_RADIUS)/GROUND_CHUNK_SIZE);row++)
+      for(let col=Math.floor((x-halfWidth)/GROUND_CHUNK_SIZE);col<=Math.floor((x+halfWidth)/GROUND_CHUNK_SIZE);col++) {
+        const chunk=this.chunks.get(`${col*GROUND_CHUNK_SIZE},${row*GROUND_CHUNK_SIZE}`);if(!chunk)return null;result.push(chunk);
+      }
+    return result;
+  }
+  private clearTilePreview(preview:TileGroundPreview):void {
+    preview.node.active=false;
+    for(const child of [...preview.node.children]){child.active=false;child.destroy();}
+    preview.chunks=[];
+  }
+  private drawTilePreview(preview:TileGroundPreview,chunks:CachedChunk[]):void {
+    this.clearTilePreview(preview);
+    for(const chunk of chunks) {
+      const node=new Node('TileInspectGroundChunk');node.layer=preview.node.layer;
+      node.addComponent(UITransform).setContentSize((GROUND_CHUNK_SIZE+2*chunk.padding)*preview.scale,(GROUND_CHUNK_SIZE+2*chunk.padding)*preview.scale);
+      const sprite=node.addComponent(Sprite);sprite.sizeMode=Sprite.SizeMode.CUSTOM;sprite.spriteFrame=chunk.frame;
+      node.setPosition((chunk.x+GROUND_CHUNK_SIZE/2-preview.x)*preview.scale,-(chunk.y+GROUND_CHUNK_SIZE/2-preview.y)*preview.scale,0);
+      preview.node.addChild(node);
+    }
+    preview.chunks=chunks;preview.node.active=true;
+  }
+  private refreshTilePreviews():void {
+    for(const preview of this.previews) {
+      if(!preview.node.isValid){this.previews.delete(preview);continue;}
+      const chunks=this.tilePreviewChunks(preview.x,preview.y);
+      if(chunks&&(chunks.length!==preview.chunks.length||chunks.some((c,i)=>c!==preview.chunks[i])))this.drawTilePreview(preview,chunks);
+    }
+  }
   update(dt:number):void {
     if(this.destroyed||!Number.isFinite(dt)||dt<=0)return;
+    for(const preview of this.previews)if(!preview.node.isValid)this.previews.delete(preview);
     this.waterClock.x+=Math.min(dt,.1);
     for(const c of this.chunks.values())if(c.node.active&&c.material) {
       c.material.setProperty('waterClock',this.waterClock);
@@ -124,7 +181,13 @@ export class TerrainGroundRenderer {
     if(releaseBaker){this.baker?.destroy();this.baker=null;}
     this.busy=false;this.queue=[];this.completionPending=false;
   }
-  private releaseChunk(c:CachedChunk):void {c.node.destroy();c.material?.destroy();c.frame.destroy();c.texture.destroy();c.mask?.destroy();}
+  private releaseChunk(c:CachedChunk):void {
+    for(const preview of this.previews)if(preview.node.isValid&&preview.chunks.includes(c))this.clearTilePreview(preview);
+    c.node.destroy();c.material?.destroy();c.frame.destroy();c.texture.destroy();c.mask?.destroy();
+  }
   private releaseChunks():void {for(const c of this.chunks.values())this.releaseChunk(c);this.chunks.clear();}
-  destroy():void {this.destroyed=true;this.requested=false;this.cancelWork(true);this.releaseChunks();this.data=null;}
+  destroy():void {
+    this.destroyed=true;this.requested=false;this.cancelWork(true);this.releaseChunks();this.data=null;
+    for(const preview of this.previews)if(preview.node.isValid)preview.node.destroy();this.previews.clear();
+  }
 }

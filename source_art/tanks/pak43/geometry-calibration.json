@@ -1,0 +1,143 @@
+{
+  "reference": {
+    "wheelDiameter": 215,
+    "axle": {
+      "x": 816,
+      "y": 207
+    },
+    "muzzle": {
+      "x": 21,
+      "y": 207
+    },
+    "wheelCentersY": [
+      35,
+      379
+    ],
+    "wheelTreadWidth": 52,
+    "trails": [
+      {
+        "hinge": {
+          "x": 903,
+          "y": 138
+        },
+        "spade": {
+          "x": 1409,
+          "y": 136
+        }
+      },
+      {
+        "hinge": {
+          "x": 903,
+          "y": 276
+        },
+        "spade": {
+          "x": 1409,
+          "y": 279
+        }
+      }
+    ]
+  },
+  "generated": {
+    "wheelDiameter": 263,
+    "axle": {
+      "x": 1113,
+      "y": 355
+    },
+    "muzzle": {
+      "x": 60,
+      "y": 355
+    },
+    "wheels": [
+      {
+        "crop": {
+          "left": 970,
+          "top": 135,
+          "width": 285,
+          "height": 75
+        },
+        "centerY": 174.5,
+        "treadWidth": 55
+      },
+      {
+        "crop": {
+          "left": 970,
+          "top": 505,
+          "width": 285,
+          "height": 80
+        },
+        "centerY": 540.5,
+        "treadWidth": 51
+      }
+    ],
+    "trails": [
+      {
+        "hinge": {
+          "x": 1225,
+          "y": 292
+        },
+        "spade": {
+          "x": 1969,
+          "y": 84
+        }
+      },
+      {
+        "hinge": {
+          "x": 1225,
+          "y": 439
+        },
+        "spade": {
+          "x": 1982,
+          "y": 638
+        }
+      }
+    ]
+  },
+  "canvas": {
+    "width": 1500,
+    "height": 600,
+    "yOffset": 80
+  },
+  "wheelLayout": {
+    "centersY": [
+      47,
+      367
+    ],
+    "insetFromPrevious": 12
+  },
+  "commonScale": 0.8174904942965779,
+  "straightTubeRemovedSourcePixels": 80.51162790697674,
+  "originalBarrelReachInWheelDiameters": 4.003802281368821,
+  "correctedBarrelReachInWheelDiameters": 3.697674418604651,
+  "trails": [
+    {
+      "referenceLength": 506.0039525537325,
+      "generatedLength": 772.5283166331186,
+      "originalLengthInWheelDiameters": 2.937370025220983,
+      "correctedLengthInWheelDiameters": 2.3535067560638723,
+      "beamScale": 0.7716734953896536,
+      "spadeScale": 1,
+      "deploymentDegrees": -15.619392138710781
+    },
+    {
+      "referenceLength": 506.00889320248115,
+      "generatedLength": 782.7196177431609,
+      "originalLengthInWheelDiameters": 2.976120219555745,
+      "correctedLengthInWheelDiameters": 2.353529735825494,
+      "beamScale": 0.7601631871040572,
+      "spadeScale": 1,
+      "deploymentDegrees": 14.728659525709672
+    }
+  ],
+  "output": {
+    "width": 200,
+    "height": 80,
+    "muzzle": {
+      "x": 2.8,
+      "y": 38.266666666666666
+    },
+    "axle": {
+      "x": 108.8,
+      "y": 38.266666666666666
+    }
+  }
+}

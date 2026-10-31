@@ -73,7 +73,7 @@ test('scene uses whole-unit visibility and retains roof/foliage stencils', () =>
   assert.equal(s.includes('!unit.destroyed\n            && (this.drawingUnitFogId || this.isUnitVisible(unit))'), true);
   assert.match(s, /insertChild\(unitMaskNode, urbanBuildingLayerNode.getSiblingIndex\(\)\)/);
   assert.equal(s.includes('this.syncUnitOcclusion();'), true);
-  assert.equal(s.includes('], this.occlusionShapes, this.vectorSilhouettes, this.bunkerInfantryOccluders());'), true,
+  assert.match(s, /\], this\.occlusionShapes, this\.vectorSilhouettes, \[[\s\S]*?\.\.\.this\.bunkerInfantryOccluders\(\), \.\.\.this\.tankTrenchInfantryOccluders\(\)/,
     'stationary and moving units must share the same occlusion pass and soft fog texture');
   const shader = fs.readFileSync('assets/resources/effects/unit-silhouette.effect', 'utf8');
   assert.match(shader, /center \* \(1\.0 - interior\) \* color\.a/);
@@ -111,6 +111,24 @@ test('bunker passes clip only their selected infantry and keep existing building
   bunker.node.active = false;
   r.sync(new Map(), [], [], [], [{ blocker: bunker, sources: new Map([[infantry, color]]) }]);
   assert(root.children.every(node => !node.active), 'pooled bunker passes reset when no longer visible');
+});
+
+test('tank masks appear only on overlap, follow movement and rotation, and release when the tank leaves', () => {
+  const root=new Node('root'),renderer=new Renderer(root);renderer.setMaterial({destroy(){}});
+  const infantry=sprite(0),other=sprite(0),tank=sprite(100),red={r:240,g:65,b:65};
+  const sources=new Map([[infantry,red]]),passes=[{blocker:tank,sources}];
+  renderer.sync(new Map([[infantry,red],[other,red]]),[],[],[],passes);
+  assert.equal(root.children.length,0,'no stencil or outline is allocated for a distant tank');
+  tank.node.worldPosition.x=4;renderer.sync(new Map(),[],[],[],passes);
+  const mask=root.children[0],copy=mask.children[0].getComponent(Sprite);
+  assert.equal(mask.getComponent(Mask).subComp.spriteFrame,tank.spriteFrame,'clip against the tank alpha, not its rectangular bounds');
+  assert.equal(mask.children.length,1);assert.equal(copy.spriteFrame,infantry.spriteFrame);assert.equal(copy.color,red);
+  tank.node.worldPosition.x=8;tank.node.worldRotation={angle:37};tank.node.worldScale={x:1.2,y:1.2,z:1};
+  renderer.syncTransforms();
+  assert.equal(mask.worldPosition.x,8);assert.equal(mask.worldRotation.angle,37);assert.equal(mask.worldScale.x,1.2);
+  assert.equal(copy.node.worldPosition.x,0,'moving the mask must not move the stationary soldier outline');
+  tank.node.worldPosition.x=100;renderer.sync(new Map(),[],[],[],passes);
+  assert.equal(mask.active,false);assert.equal(root.children.length,1,'reuse the stencil rather than creating more nodes');
 });
 
 test('a dense map computes each world bound once per sync, including shared bunker sources', () => {

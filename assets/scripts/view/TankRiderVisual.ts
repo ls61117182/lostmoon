@@ -1,3 +1,6 @@
+import type { Faction, UnitKind } from '../core/types';
+import type { InfantryVisualKind } from '../core/InfantryVisualDB';
+
 /** Hull artwork faces left; +X is the rear deck. Keep heads behind the turret's rear edge.
  * Seats use the hull's displayed, unscaled local dimensions.
  */
@@ -33,3 +36,29 @@ export const AMERICAN_SEATED_SPRITE_PATHS = [
   'textures/units/AmericanInfantry02_seated_olive/spriteFrame',
   'textures/units/AmericanInfantry03_seated_olive/spriteFrame',
 ] as const;
+
+const EUROPEAN_SEATED = {
+  paths: [1, 2, 3].map(i => `textures/units/Infantry0${i}_seated/spriteFrame`),
+  colors: [{ r: 153, g: 153, b: 148 }, { r: 143, g: 145, b: 141 }, { r: 176, g: 178, b: 159 }],
+};
+export const SEATED_INFANTRY_VISUALS: Record<InfantryVisualKind, {
+  paths: readonly string[]; colors: readonly { r: number; g: number; b: number }[];
+}> = {
+  infantry: EUROPEAN_SEATED,
+  german_infantry: EUROPEAN_SEATED,
+  soviet_infantry: EUROPEAN_SEATED,
+  japanese_infantry: {
+    paths: [1, 2, 3].map(i => `textures/units/JapaneseInfantry0${i}_seated/spriteFrame`),
+    colors: [{ r: 173, g: 172, b: 173 }, { r: 164, g: 167, b: 177 }, { r: 173, g: 172, b: 173 }],
+  },
+  american_infantry: { paths: AMERICAN_SEATED_SPRITE_PATHS, colors: TANK_RIDER_COLORS },
+};
+
+export function seatedInfantryVisualOf(kind: UnitKind) {
+  return SEATED_INFANTRY_VISUALS[kind as InfantryVisualKind] ?? SEATED_INFANTRY_VISUALS.american_infantry;
+}
+
+export function seatedInfantryKindForFaction(faction: Faction): InfantryVisualKind {
+  return faction === 'german' ? 'german_infantry' : faction === 'soviet' ? 'soviet_infantry'
+    : faction === 'japanese' ? 'japanese_infantry' : 'american_infantry';
+}

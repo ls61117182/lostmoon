@@ -1,0 +1,105 @@
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: elevation-vs:vert
+      frag: elevation-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.001 }
+        neighbor0: { value: white }
+        neighbor1: { value: white }
+        neighbor2: { value: white }
+        neighbor3: { value: white }
+        mainInfo: { value: [1.333333, 0, 0, 0] }
+        mapU0: { value: [0, 0, 0, 0] }
+        mapV0: { value: [0, 0, 0, 0] }
+        mapU1: { value: [0, 0, 0, 0] }
+        mapV1: { value: [0, 0, 0, 0] }
+        mapU2: { value: [0, 0, 0, 0] }
+        mapV2: { value: [0, 0, 0, 0] }
+        mapU3: { value: [0, 0, 0, 0] }
+        mapV3: { value: [0, 0, 0, 0] }
+}%
+CCProgram elevation-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+  out vec2 uv0;
+  out vec4 color;
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1.0);
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+    uv0 = a_texCoord;
+    color = a_color;
+    return cc_matViewProj * pos;
+  }
+}%
+CCProgram elevation-fs %{
+  precision highp float;
+  #include <builtin/internal/embedded-alpha>
+  #include <builtin/internal/alpha-test>
+  in vec2 uv0;
+  in vec4 color;
+  #pragma builtin(local)
+  layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  uniform sampler2D neighbor0;
+  uniform sampler2D neighbor1;
+  uniform sampler2D neighbor2;
+  uniform sampler2D neighbor3;
+  uniform ElevationJoinParams {
+    vec4 mainInfo;
+    vec4 mapU0; vec4 mapV0;
+    vec4 mapU1; vec4 mapV1;
+    vec4 mapU2; vec4 mapV2;
+    vec4 mapU3; vec4 mapV3;
+  };
+  float edgeDistance(vec2 uv, float height) {
+    vec2 p = (uv - .5) * vec2(2.0, height);
+    return length(vec2(max(abs(p.x) - .5, 0.0), p.y));
+  }
+  vec2 neighborUV(vec4 u, vec4 v) {
+    return vec2(dot(vec3(uv0, 1.0), u.xyz), dot(vec3(uv0, 1.0), v.xyz));
+  }
+  void contribute(vec4 sampleColor, vec2 uv, vec4 u, vec4 v, float distance,
+    inout vec4 sum, inout float owner) {
+    if (u.w <= 0.0 || sampleColor.a < .001 || uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return;
+    float other = edgeDistance(uv, u.w);
+    // A tiny stable priority bias avoids asymmetric near-ties at rounded segment endpoints.
+    if (other + v.w * .01 < distance + mainInfo.y * .01) owner = 0.0;
+    sum += vec4(sampleColor.rgb * sampleColor.a, sampleColor.a);
+  }
+  vec4 frag () {
+    vec4 source = CCSampleWithAlphaSeparated(cc_spriteTexture, uv0);
+    if (source.a < .001) discard;
+    vec4 sum = vec4(source.rgb * source.a, source.a);
+    float distance = edgeDistance(uv0, mainInfo.x), owner = 1.0;
+    vec2 p0 = neighborUV(mapU0, mapV0), p1 = neighborUV(mapU1, mapV1);
+    vec2 p2 = neighborUV(mapU2, mapV2), p3 = neighborUV(mapU3, mapV3);
+    contribute(texture(neighbor0, p0), p0, mapU0, mapV0, distance, sum, owner);
+    contribute(texture(neighbor1, p1), p1, mapU1, mapV1, distance, sum, owner);
+    contribute(texture(neighbor2, p2), p2, mapU2, mapV2, distance, sum, owner);
+    contribute(texture(neighbor3, p3), p3, mapU3, mapV3, distance, sum, owner);
+    if (owner < .5) discard;
+    // Normalize both materials and their light before compositing the terrain once.
+    vec4 o = vec4(sum.rgb / max(sum.a, .001), min(sum.a, 1.0)) * color;
+    ALPHA_TEST(o);
+    return o;
+  }
+}%

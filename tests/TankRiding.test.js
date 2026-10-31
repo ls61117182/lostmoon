@@ -37,7 +37,7 @@ test('only an available same-side American squad in the same hex may board, one 
   assert.deepEqual(tankRiders(tank, units), [infantry]);
   assert.equal(dismountTank(infantry, units), true);
   assert.equal(canMountTank(other, tank, [...units, other]), true);
-  for (const change of [u => u.kind = 'german_infantry', u => u.destroyed = true,
+  for (const change of [u => u.kind = 'officer', u => u.destroyed = true,
     u => u.suppressed = true, u => u.attachedToATGunId = 'gun', u => u.sideId = 'enemy',
     u => u.pos = { q: 2, r: 2 }]) {
     const f = setup(); change(f.infantry); assert.equal(canMountTank(f.infantry, f.tank, f.units), false);
@@ -192,13 +192,14 @@ test('both layouts put two riders along one hull side and one opposite, with out
   assert.deepEqual(tankRiderSeats('left').map(s => s.x), tankRiderSeats('right').map(s => s.x));
 });
 
-test('fire, destruction, capture, missing carrier and stale/duplicate links safely release riders', () => {
-  for (const damage of [tank => tank.fireLevel = 1, tank => tank.destroyed = true,
+test('fire, capture, missing carrier and stale/duplicate links safely release riders', () => {
+  for (const damage of [tank => tank.fireLevel = 1,
     tank => tank.sideId = 'enemy', tank => tank.crew = {}, tank => tank.kind = 'truck']) {
     const { tank, infantry, units } = setup();
     mountTank(infantry, tank, units); tank.pos = { q: 3, r: 4 }; damage(tank); syncTankRiders(units);
     assert.equal(infantry.mountedOnUnitId, undefined);
     assert.deepEqual(infantry.pos, tank.pos);
+    assert.equal(!!infantry.destroyed, false);
   }
   const { tank, infantry, units } = setup();
   infantry.mountedOnUnitId = 'missing'; syncTankRiders(units);
@@ -209,6 +210,30 @@ test('fire, destruction, capture, missing carrier and stale/duplicate links safe
   assert.equal(duplicate.mountedOnUnitId, undefined);
   infantry.destroyed = true; syncTankRiders(units);
   assert.equal(infantry.mountedOnUnitId, undefined);
+});
+
+test('destroyed carriers kill mounted squads of every faction without adding a ground squad', () => {
+  for (const kind of ['infantry', 'german_infantry', 'soviet_infantry', 'japanese_infantry', 'american_infantry']) {
+    for (const occupied of [false, true]) {
+      const { tank, infantry, units } = setup();
+      infantry.kind = kind; infantry.faction = getUnitStats(kind).faction; tank.faction = infantry.faction;
+      assert(mountTank(infantry, tank, units));
+      tank.pos = { q: 3, r: 4 };
+      const ground = unit('ground', kind); ground.pos = { ...tank.pos };
+      if (occupied) units.push(ground);
+      tank.destroyed = true;
+      assert.equal(canDismountTank(infantry, units), false);
+      assert.equal(dismountTank(infantry, units), false);
+      // Deliberately put the rider before its carrier: reconciliation is order independent.
+      syncTankRiders([...units].reverse()); syncTankRiders(units);
+      assert.equal(infantry.destroyed, true, kind);
+      assert.deepEqual(infantry.pos, tank.pos);
+      assert.equal(infantry.mountedOnUnitId, undefined);
+      assert.equal(infantry.mountedDoubleSide, undefined);
+      assert.equal(!!ground.destroyed, false);
+      assert.equal(units.filter(u => u !== tank && !u.destroyed && !u.mountedOnUnitId).length, occupied ? 1 : 0);
+    }
+  }
 });
 
 test('save/load preserves riding, follows the carrier and clears legacy or invalid saved state', () => {
@@ -239,6 +264,11 @@ test('save/load preserves riding, follows the carrier and clears legacy or inval
   saved.allies.find(u => u.id === infantry.id).mountedOnUnitId = 'missing';
   assert.equal(applySave(restored.mission, data.id, saved).ok, true);
   assert.equal(restored.infantry.mountedOnUnitId, undefined);
+  saved.allies.find(u => u.id === infantry.id).mountedOnUnitId = saved.sherman.id;
+  saved.sherman.destroyed = saved.playerTank.destroyed = true;
+  assert.equal(applySave(restored.mission, data.id, saved).ok, true);
+  assert.equal(restored.infantry.destroyed, true, 'loading a destroyed carrier must not evacuate its surviving saved riders');
+  assert.equal(restored.infantry.mountedOnUnitId, undefined);
 });
 
 test('seat sprites are actual hull children and survive hull movement, turret turns, slot reuse and cleanup', () => {
@@ -261,7 +291,7 @@ test('seat sprites are actual hull children and survive hull movement, turret tu
   class Graphics { clear() {} ellipse() {} fill() {} circle() {} }
   class Color { constructor(r,g,b,a) { Object.assign(this,{r,g,b,a}); } }
   const cc = { Node, UITransform, Sprite, Graphics, Color, SpriteFrame: class {},
-    resources: { load(_path, _type, callback) { callback(null, { rect: { width: 1158, height: 1359 } }); } } };
+    resources: { load(path, _type, callback) { callback(null, { path, rect: { width: 1158, height: 1359 } }); } } };
   const source = fs.readFileSync('assets/scripts/view/TankRiderRenderer.ts', 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS } }).outputText;
   const module = { exports: {} };
@@ -286,6 +316,12 @@ test('seat sprites are actual hull children and survive hull movement, turret tu
       assert.deepEqual({ ...n.getComponent(Sprite).color }, { ...TANK_RIDER_COLORS[i], a: 128 });
     });
   }
+  const { SEATED_INFANTRY_VISUALS } = require('../assets/scripts/view/TankRiderVisual.ts');
+  for (const [kind, visual] of Object.entries(SEATED_INFANTRY_VISUALS)) {
+    infantry.kind = kind; renderer.draw(tank, sprite, units);
+    group.children.forEach((n, i) => assert.equal(n.getComponent(Sprite).spriteFrame.path, visual.paths[i]));
+  }
+  infantry.kind = 'american_infantry'; renderer.draw(tank, sprite, units);
   const first = group.children[0]; const before = first.worldPoint();
   hull.setPosition(50, 60); hull.angle = 90;
   const after = first.worldPoint();
@@ -301,39 +337,10 @@ test('seat sprites are actual hull children and survive hull movement, turret tu
   renderer.clear(); assert.equal(group.isValid, false);
 });
 
-test('tile-detail commands board and dismount, save the result and reject out-of-turn changes', () => {
+test('battle details have no manual riding actions', () => {
   const source = fs.readFileSync('assets/scripts/view/BattleScene.ts', 'utf8');
-  const ast = ts.createSourceFile('BattleScene.ts', source, ts.ScriptTarget.Latest, true);
-  const scene = ast.statements.find(node => ts.isClassDeclaration(node) && node.name.text === 'BattleScene');
-  const methods = ['canManageTankRiders', 'changeTankRiding', 'drawUnit'].map(name =>
-    scene.members.find(member => member.name?.getText(ast) === name).getText(ast).replace(/^private\s+/, ''));
-  const compiled = ts.transpileModule(`class RidingProbe { ${methods.join('\n')} }`, {
-    compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS },
-  }).outputText;
-  const { isSameSide } = require('../assets/scripts/core/types.ts');
-  const Probe = new Function('isSameSide', 'canMountTank', 'mountTank', 'dismountTank', 'syncTankRiders',
-    'unitDisplayName', 'isAttachedATGunCrew', `${compiled}; return RidingProbe;`)(
-    isSameSide, canMountTank, mountTank, dismountTank, syncTankRiders, value => value, () => false);
-  const { tank, infantry, units } = setup();
-  const p = new Probe();
-  let saves = 0, draws = 0; const events = [];
-  Object.assign(p, { mission: { sherman: tank, map: { canUnitEnter: () => true } }, phase: 'player', outcome: 'ongoing',
-    allUnits: () => units, closeTileInspectModal() {}, isBusy: () => false, battleLogI18n() {},
-    sendPvpActionResult: name => events.push(name), redraw: () => draws++, writeCurrentSave: () => saves++ });
-  p.changeTankRiding(infantry, tank);
-  assert.equal(infantry.mountedOnUnitId, tank.id); assert.equal(saves, 1); assert.equal(draws, 1);
-  assert.deepEqual(events, ['tank_mount']);
-  assert.doesNotThrow(() => p.drawUnit(infantry), 'mounted infantry must exit before the ground draw path');
-  const ground = unit('ground', 'american_infantry'); units.push(ground);
-  p.changeTankRiding(infantry);
-  assert.equal(infantry.mountedOnUnitId, tank.id, 'scene commands cannot bypass an occupied landing hex');
-  assert.equal(saves, 1); assert.equal(draws, 1); assert.deepEqual(events, ['tank_mount']);
-  ground.pos = { q: 2, r: 2 };
-  p.phase = 'enemy'; p.changeTankRiding(infantry);
-  assert.equal(infantry.mountedOnUnitId, tank.id); assert.equal(saves, 1);
-  p.phase = 'player'; p.changeTankRiding(infantry);
-  assert.equal(infantry.mountedOnUnitId, undefined); assert.equal(saves, 2);
-  assert.deepEqual(events, ['tank_mount', 'tank_dismount']);
+  assert(!source.includes('private changeTankRiding('));
+  assert(!source.includes('private canManageTankRiders('));
 });
 
 test('PVP server retains and clears the optional American riding link', () => {
@@ -345,7 +352,7 @@ test('PVP server retains and clears the optional American riding link', () => {
   assert.equal(sanitize({ mountedOnUnitId: 'pvp_tank' }, fallback).mountedOnUnitId, 'pvp_tank');
   assert.equal(sanitize({}, { ...fallback, mountedOnUnitId: 'pvp_tank' }).mountedOnUnitId, undefined);
   assert.equal(sanitize({ mountedOnUnitId: 42 }, fallback).mountedOnUnitId, undefined);
-  assert.equal(sanitize({ mountedOnUnitId: 'pvp_tank' }, { ...fallback, kind: 'japanese_infantry' }).mountedOnUnitId, undefined);
+  assert.equal(sanitize({ mountedOnUnitId: 'pvp_tank' }, { ...fallback, kind: 'officer' }).mountedOnUnitId, undefined);
   for (const side of ['left', 'right']) assert.equal(sanitize({ mountedOnUnitId: 'pvp_tank', mountedDoubleSide: side }, fallback).mountedDoubleSide, side);
   assert.equal(sanitize({ mountedOnUnitId: 'pvp_tank', mountedDoubleSide: 'invalid' }, fallback).mountedDoubleSide, undefined);
   assert.equal(sanitize({ mountedDoubleSide: 'left' }, fallback).mountedDoubleSide, undefined);
@@ -354,7 +361,7 @@ test('PVP server retains and clears the optional American riding link', () => {
 
 test('rendered seated RGB averages match each original standing sprite after small-size sampling', async () => {
   const sharp = require('sharp');
-  const { TANK_RIDER_COLORS } = require('../assets/scripts/view/TankRiderVisual.ts');
+  const { SEATED_INFANTRY_VISUALS } = require('../assets/scripts/view/TankRiderVisual.ts');
   async function average(path, tint = { r: 255, g: 255, b: 255 }) {
     const data = await sharp(path).ensureAlpha().resize(24, 24, { fit: 'inside' }).raw().toBuffer();
     const sum = [0, 0, 0]; let alpha = 0; const gains = [tint.r, tint.g, tint.b];
@@ -364,19 +371,23 @@ test('rendered seated RGB averages match each original standing sprite after sma
     }
     return sum.map(v => v / alpha);
   }
-  for (let i = 0; i < 3; i++) {
-    const base = `assets/resources/textures/units/AmericanInfantry0${i + 1}`;
-    const original = await average(base + '.png');
-    const seated = await average(base + '_seated_olive.png', TANK_RIDER_COLORS[i]);
-    for (let c = 0; c < 3; c++) assert(Math.abs(original[c] - seated[c]) < 2,
-      `soldier ${i + 1}, channel ${c}: standing ${original[c]}, seated ${seated[c]}`);
+  for (const visual of new Set(Object.values(SEATED_INFANTRY_VISUALS))) {
+    for (let i = 0; i < 3; i++) {
+      const seatedPath = `assets/resources/${visual.paths[i].replace('/spriteFrame', '.png')}`;
+      const original = await average(seatedPath.replace(/_seated(?:_olive)?/, ''));
+      const seated = await average(seatedPath, visual.colors[i]);
+      for (let c = 0; c < 3; c++) assert(Math.abs(original[c] - seated[c]) < 2,
+        `${seatedPath}, channel ${c}: standing ${original[c]}, seated ${seated[c]}`);
+    }
   }
 });
 
 test('all seated assets retain consistent full-canvas hip anchors and independent UUIDs', () => {
   const uuids = new Set();
-  const { AMERICAN_SEATED_SPRITE_PATHS } = require('../assets/scripts/view/TankRiderVisual.ts');
-  for (const spritePath of AMERICAN_SEATED_SPRITE_PATHS) {
+  const { SEATED_INFANTRY_VISUALS } = require('../assets/scripts/view/TankRiderVisual.ts');
+  const paths = new Set(Object.values(SEATED_INFANTRY_VISUALS).flatMap(visual => [...visual.paths]));
+  assert.equal(Object.keys(SEATED_INFANTRY_VISUALS).length, 5); assert(!('officer' in SEATED_INFANTRY_VISUALS));
+  for (const spritePath of paths) {
     const file = `assets/resources/${spritePath.replace('/spriteFrame', '.png')}`;
     const png = fs.readFileSync(file); const meta = JSON.parse(fs.readFileSync(file + '.meta', 'utf8'));
     const frame = meta.subMetas.f9941.userData;
@@ -386,5 +397,5 @@ test('all seated assets retain consistent full-canvas hip anchors and independen
     assert.equal(meta.subMetas['6c48a'].userData.minfilter, 'linear');
     uuids.add(meta.uuid);
   }
-  assert.equal(uuids.size, 3);
+  assert.equal(uuids.size, 9);
 });

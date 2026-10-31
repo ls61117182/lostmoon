@@ -75,7 +75,8 @@ const mission = {
   enemies: [],
   smokeHexes: new Set(),
   smokeHexOwners: new Map(),
-  battleStatistics: { attacksReceived: 4, mainGunHitChecks: 3, mainGunHits: 2 },
+  battleStatistics: { attacksReceived: 4, mainGunHitChecks: 3, mainGunHits: 2,
+    killsByKind: { tiger: 2 }, countedKillIds: ['previous:tiger1', 'previous:tiger2'] },
 };
 
 // Campaign checkpoints pass through localStorage JSON. Clean-state optional
@@ -114,6 +115,8 @@ assert.strictEqual(result.ok, true);
 assert.strictEqual(mission.battleStatistics.attacksReceived, 4, 'retry restores the segment-start statistics');
 assert.strictEqual(mission.battleStatistics.mainGunHits, 2);
 assert.notStrictEqual(mission.battleStatistics, checkpoint.battleStatistics);
+assert.deepStrictEqual(mission.battleStatistics.killsByKind, { tiger: 2 });
+assert.notStrictEqual(mission.battleStatistics.killsByKind, checkpoint.battleStatistics.killsByKind);
 assert.strictEqual(sherman.fireLevel, 0);
 assert.strictEqual(sherman.turretDamaged, false);
 assert.strictEqual(sherman.paralyzed, false);

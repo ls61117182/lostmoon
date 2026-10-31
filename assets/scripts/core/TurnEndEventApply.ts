@@ -814,6 +814,9 @@ export function prepareTurnEndEvent(
         } else {
           targetCell = neighbor(cursor, simFace);
         }
+        if (ctx.mission.map.hasCliffBetween(cursor, targetCell)) {
+          return { bodyKey: 'tileInspect.cliff', bodyParams: baseParams, apply: () => {} };
+        }
         const targetDir = directionTo(cursor, targetCell);
         if (targetDir !== null) {
           while (simFace !== targetDir) {

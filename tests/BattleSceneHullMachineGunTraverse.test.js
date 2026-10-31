@@ -11,7 +11,7 @@ const onTouchMap = battleScene.match(
 assert.ok(onTouchMap, 'BattleScene.onTouchMap() should exist');
 assert.match(
   onTouchMap[0],
-  /const hullMGCanFireWhileTurretPartiallyTraverses = GameSession\.gameMode === 'hardcore'[\s\S]*?legalMGSelection\?\.weapon === 'hull'/,
+  /const hullMGCanFireWhileTurretPartiallyTraverses = \(GameSession\.gameMode === 'hardcore' \|\| GameSession\.gameMode === 'test'\)[\s\S]*?legalMGSelection\?\.weapon === 'hull'/,
   'a legal hardcore hull-MG target should be recognized independently of full turret traverse',
 );
 assert.match(

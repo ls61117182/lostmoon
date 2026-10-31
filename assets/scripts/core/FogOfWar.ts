@@ -4,6 +4,7 @@ import { getGameModeConfig, GameMode } from './GameMode';
 import { Axial, DEFAULT_GUNNER_VISION_RANGE, DEFAULT_INTERIOR_VISION_RANGE, DEFAULT_VISION_RANGE, Direction, FireDirection, isAbandonedATGun, isAttachedATGunCrew, isControlledATGun, isFootUnit, isHeavyArtilleryUnit, isSameSide, isTankUnit, Unit, WeatherType } from './types';
 import { weatherVisionRange } from './Weather';
 import { turretTurnDistance } from './TurretTraverse';
+import { tileHeight } from './Elevation';
 
 const GEOMETRY_HEX_SIZE = 1;
 const INTERSECTION_EPSILON = 1e-9;
@@ -80,7 +81,19 @@ export function isHexInOwnAttackVision(
     ? diagonalMainGunDirectionForHex(map, observer, target, weather, smokeHexes)
       ?? fireDirectionTo(observer.pos, target)
     : null;
-  const aimed = direction === null ? observer : { ...observer, turretFacing: direction };
+  // Validate the sight the shot will actually use. A flank target selects its
+  // own gunner path when the attack is committed; previews must simulate that
+  // selection without changing the observer's current view.
+  const attackedSide = direction !== null && isDiagonalFireDirection(direction)
+    ? diagonalGunnerClickPreference(
+      map, observer, direction, target, smokeHexes, currentGunnerVisionRange(observer, weather),
+    )
+    : null;
+  const aimed = direction === null ? observer : {
+    ...observer,
+    turretFacing: direction,
+    diagonalGunnerSidePreference: attackedSide ?? observer.diagonalGunnerSidePreference,
+  };
   return computeUnitVisibleHexes(map, aimed, weather, smokeHexes).has(HexMap.keyOf(target));
 }
 
@@ -94,8 +107,10 @@ export function computeUnitVisibleHexes(
   const visible = new Set<string>();
   if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
   const opaqueSmoke = weather === 'fog';
+  const observerHeight = tileHeight(map.get(unit.pos));
   const add = (p: Axial) => {
     if (!map.sameRegion(unit.pos, p)) return;
+    if (tileHeight(map.get(p)) > observerHeight) return;
     // Filter direct sight only. Radio sight is merged later, and must be able
     // to reveal a transmitting friendly's occupied smoke hex to its teammates.
     if (opaqueSmoke && !axialEquals(p, unit.pos) && smokeHexes?.has(HexMap.keyOf(p))) return;
@@ -184,11 +199,12 @@ export function computeUnitVisibleHexes(
     }
     let p = axialAdd(unit.pos, rayVector);
     while (hexDistance(unit.pos, p) <= limitedGunnerVisionRange && map.has(p)) {
-      if (diagonalRay) {
-        if (!map.hasDiagonalLineOfSight(unit.pos, p, fireDirection, smokeHexes)) break;
-      }
+      // A hidden low cell does not end the ray: a later, higher cell may be visible.
+      const pathVisible = diagonalRay
+        ? map.hasDiagonalLineOfSight(unit.pos, p, fireDirection, smokeHexes)
+        : map.hasLineOfSight(unit.pos, p, smokeHexes);
       const tile = map.get(p)!;
-      add(p);
+      if (pathVisible) add(p);
       if (smokeHexes?.has(HexMap.keyOf(p)) || map.lineOfSightBlockedByTile(tile)) break;
       p = axialAdd(p, rayVector);
     }
@@ -292,7 +308,22 @@ export function diagonalGunnerClickPreference(
   smokeHexes?: ReadonlySet<string>,
   maxRange = currentGunnerVisionRange(unit),
 ): Direction | null {
+  return diagonalGunnerPathSide(map, unit, fireDirection, target, smokeHexes, maxRange, false);
+}
+
+/** Validate each candidate against its own height, retaining one continuous flank path. */
+function diagonalGunnerPathSide(
+  map: HexMap,
+  unit: Unit,
+  fireDirection: FireDirection,
+  target: Axial,
+  smokeHexes: ReadonlySet<string> | undefined,
+  maxRange: number,
+  includeCenter: boolean,
+): Direction | null {
   if (!isDiagonalFireDirection(fireDirection)) return null;
+  const sightHeight = tileHeight(map.get(target));
+  if (sightHeight > tileHeight(map.get(unit.pos))) return null;
   const diagonalIndex = fireDirection - 6;
   const a = diagonalIndex as Direction;
   const b = ((diagonalIndex + 1) % 6) as Direction;
@@ -311,14 +342,16 @@ export function diagonalGunnerClickPreference(
       return clickedPathOpen && map.has(target) ? clickedSide : null;
     }
 
-    if (diagonalFlankBlocked(map, aPos, smokeHexes)) aOpen = false;
-    if (diagonalFlankBlocked(map, bPos, smokeHexes)) bOpen = false;
+    if (diagonalFlankBlocked(map, aPos, smokeHexes, sightHeight)) aOpen = false;
+    if (diagonalFlankBlocked(map, bPos, smokeHexes, sightHeight)) bOpen = false;
 
     const evenDistance = oddDistance + 1;
     if (evenDistance > range || (!aOpen && !bOpen)) return null;
     const center = axialAdd(current, rayVector);
     const centerTile = map.get(center);
-    if (!centerTile || smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile)) return null;
+    if (!centerTile) return null;
+    if (includeCenter && axialEquals(target, center)) return aOpen ? a : b;
+    if (smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile, sightHeight)) return null;
     current = center;
   }
   return null;
@@ -343,27 +376,17 @@ function addClosedTankDiagonalGunnerVision(
   const b = ((diagonalIndex + 1) % 6) as Direction;
   const rayVector = fireDirectionVector(fireDirection);
   const chosen = chooseDiagonalGunnerSide(map, unit, fireDirection, range, a, b, rayVector, smokeHexes);
-  let aOpen = true;
-  let bOpen = true;
   let current = unit.pos;
 
   for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
-    const aPos = neighbor(current, a);
-    const bPos = neighbor(current, b);
-    const chosenOpen = chosen === a ? aOpen : bOpen;
-    const chosenPos = chosen === a ? aPos : bPos;
-    if (chosenOpen) add(chosenPos);
-
-    if (diagonalFlankBlocked(map, aPos, smokeHexes)) aOpen = false;
-    if (diagonalFlankBlocked(map, bPos, smokeHexes)) bOpen = false;
+    const chosenPos = neighbor(current, chosen);
+    if (diagonalGunnerPathSide(map, unit, fireDirection, chosenPos, smokeHexes, range, false) === chosen) add(chosenPos);
 
     const evenDistance = oddDistance + 1;
-    if (evenDistance > range || (!aOpen && !bOpen)) break;
+    if (evenDistance > range) break;
     const center = axialAdd(current, rayVector);
     if (!map.has(center)) break;
-    const centerTile = map.get(center)!;
-    add(center);
-    if (smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile)) break;
+    if (diagonalGunnerPathSide(map, unit, fireDirection, center, smokeHexes, range, true) !== null) add(center);
     current = center;
   }
 }
@@ -381,10 +404,11 @@ function chooseDiagonalGunnerSide(
   const clickedPreference = unit.diagonalGunnerSidePreference;
   if (clickedPreference === a || clickedPreference === b) return clickedPreference;
 
+  const sightHeight = tileHeight(map.get(unit.pos));
   let current = unit.pos;
   for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
-    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a), smokeHexes);
-    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b), smokeHexes);
+    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a), smokeHexes, sightHeight);
+    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b), smokeHexes, sightHeight);
     if (aBlocked !== bBlocked) return aBlocked ? b : a;
     if (aBlocked) break;
 
@@ -392,7 +416,7 @@ function chooseDiagonalGunnerSide(
     if (evenDistance > range) break;
     const center = axialAdd(current, rayVector);
     const centerTile = map.get(center);
-    if (!centerTile || smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile)) break;
+    if (!centerTile || smokeHexes?.has(HexMap.keyOf(center)) || map.lineOfSightBlockedByTile(centerTile, sightHeight)) break;
     current = center;
   }
 
@@ -423,11 +447,12 @@ export function reconcileDiagonalGunnerSideAfterMove(
   if (preferred !== a && preferred !== b) return;
 
   const range = currentGunnerVisionRange(unit, weather);
+  const sightHeight = tileHeight(map.get(unit.pos));
   const rayVector = fireDirectionVector(fireDirection as FireDirection);
   let current = unit.pos;
   for (let oddDistance = 1; oddDistance <= range; oddDistance += 2) {
-    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a), smokeHexes);
-    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b), smokeHexes);
+    const aBlocked = diagonalFlankBlocked(map, neighbor(current, a), smokeHexes, sightHeight);
+    const bBlocked = diagonalFlankBlocked(map, neighbor(current, b), smokeHexes, sightHeight);
     if (aBlocked !== bBlocked) {
       const preferredBlocked = preferred === a ? aBlocked : bBlocked;
       if (preferredBlocked) unit.diagonalGunnerSidePreference = preferred === a ? b : a;
@@ -441,14 +466,14 @@ export function reconcileDiagonalGunnerSideAfterMove(
     const center = axialAdd(current, rayVector);
     const centerTile = map.get(center);
     if (!centerTile || smokeHexes?.has(HexMap.keyOf(center))
-      || map.lineOfSightBlockedByTile(centerTile)) return;
+      || map.lineOfSightBlockedByTile(centerTile, sightHeight)) return;
     current = center;
   }
 }
 
-function diagonalFlankBlocked(map: HexMap, pos: Axial, smokeHexes?: ReadonlySet<string>): boolean {
+function diagonalFlankBlocked(map: HexMap, pos: Axial, smokeHexes?: ReadonlySet<string>, sightHeight?: number): boolean {
   const tile = map.get(pos);
-  return !tile || smokeHexes?.has(HexMap.keyOf(pos)) === true || map.lineOfSightBlockedByTile(tile);
+  return !tile || smokeHexes?.has(HexMap.keyOf(pos)) === true || map.lineOfSightBlockedByTile(tile, sightHeight);
 }
 
 function clockStepDistance(a: number, b: number): number {
@@ -553,7 +578,7 @@ export function isUnitInVision(
 /**
  * Fog LoS uses rendered geometry, not a rounded hex path: the segment joining
  * observer and target centers is blocked when it intersects an intermediate
- * blocking hex. The endpoints themselves never block their own visibility.
+ * blocking hex. Higher targets are hidden; intermediate heights above the target block.
  */
 export function hasFogLineOfSight(
   map: HexMap,
@@ -563,11 +588,13 @@ export function hasFogLineOfSight(
 ): boolean {
   if (!map.sameRegion(from, to)) return false;
   if (axialEquals(from, to)) return true;
+  const sightHeight = tileHeight(map.get(to));
+  if (sightHeight > tileHeight(map.get(from))) return false;
   const a = axialToPixel(from, GEOMETRY_HEX_SIZE);
   const b = axialToPixel(to, GEOMETRY_HEX_SIZE);
   for (const tile of map.all()) {
     if (axialEquals(tile.pos, from) || axialEquals(tile.pos, to)) continue;
-    if (!map.lineOfSightBlockedByTile(tile) && !smokeHexes?.has(HexMap.keyOf(tile.pos))) continue;
+    if (!map.lineOfSightBlockedByTile(tile, sightHeight) && !smokeHexes?.has(HexMap.keyOf(tile.pos))) continue;
     const center = axialToPixel(tile.pos, GEOMETRY_HEX_SIZE);
     if (segmentIntersectsPointyHex(a, b, center, GEOMETRY_HEX_SIZE)) return false;
   }

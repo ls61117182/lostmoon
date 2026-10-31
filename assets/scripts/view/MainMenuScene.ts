@@ -1,9 +1,13 @@
 import { createMenuBackground } from './MenuBackground';
 import { EXTRA_EUROPEAN_LOOKS, europeanTerrainLook, normalizeSeason, normalizeSnowCover, seasonalTerrainPath, seasonalTerrainRGB, seasonalFoliageRGB } from '../core/TerrainSeason';
-import type { SnowCover } from '../core/types';
+import type { SnowCover, Direction } from '../core/types';
 import { drawBeachEdge, drawBeachOverlays, drawSeawallJoints } from './BeachTerrainVisual';
 import type { SeawallSegment } from '../core/SeawallJunctions';
 import { applyNormandyEditorBrush, normandyEditorEdgeState, setNormandyEditorEdge, type NormandyEditorBrush } from '../core/NormandyEditor';
+import { fortificationArtTransform, FORTIFICATION_ART_MASKS, type FortificationArtKind } from '../core/FortificationArt';
+import { setEditorFortification, setEditorFortificationConnection } from '../core/Fortification';
+import { SLOPE_DIRECTIONS, tileHeight, editorCliffState, setEditorCliff, editorElevationTiles } from '../core/Elevation';
+import { ElevationRenderer } from './ElevationRenderer';
 import { supportMarkerVisuals } from './SupportMarkerVisual';
 import { BUILD_FEATURES } from '../core/BuildProfile';
 /**
@@ -72,6 +76,9 @@ import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
 import { selectablePlayerTankKinds } from '../core/PlayerTankSelection';
 import { fixedTankCommanderHatchTransform } from '../core/CommanderHatch';
 import { TankRiderRenderer } from './TankRiderRenderer';
+import { seatedInfantryKindForFaction } from './TankRiderVisual';
+import { machineGunSpritePoint, machineGunSpriteCoordinates, isMachineGunMuzzleConfigured } from './MachineGunBurstGeometry';
+import type { MachineGunSpriteTransform } from './MachineGunBurstGeometry';
 import {
   ACTIVE_TERRAIN_CATEGORIES,
   activeTerrainCategoryForMission,
@@ -209,6 +216,10 @@ type TankVisualDebugKey =
   | 'turretPivotY'
   | 'muzzleSpriteX'
   | 'muzzleSpriteY'
+  | 'coaxialMuzzleSpriteX'
+  | 'coaxialMuzzleSpriteY'
+  | 'hullMuzzleSpriteX'
+  | 'hullMuzzleSpriteY'
   | 'commanderHatchSpriteX'
   | 'commanderHatchSpriteY'
   | 'commanderHatchScale'
@@ -1474,6 +1485,8 @@ export class MainMenuScene extends Component {
     let dragMode: 'body' | 'turret' | null = null;
     let lastPivot = { x: 0, y: 0 };
     let showMuzzleFlash = false;
+    let machineGunPick: 'coaxial' | 'hull' | null = null;
+    let machineGunTransforms: Partial<Record<'coaxial' | 'hull', MachineGunSpriteTransform>> = {};
     let commanderHatchState: 'closed' | 'open' | 'open-dead' = 'closed';
     let showDestroyed = false;
     let showTankRiders = false;
@@ -1515,6 +1528,10 @@ export class MainMenuScene extends Component {
         turretPivotY: geometry?.pivot.bodyY ?? 0,
         muzzleSpriteX: geometry?.muzzle.spriteX ?? top.muzzle.spriteX,
         muzzleSpriteY: geometry?.muzzle.spriteY ?? top.muzzle.spriteY,
+        coaxialMuzzleSpriteX: top.coaxialMuzzleSpriteX,
+        coaxialMuzzleSpriteY: top.coaxialMuzzleSpriteY,
+        hullMuzzleSpriteX: top.hullMuzzleSpriteX,
+        hullMuzzleSpriteY: top.hullMuzzleSpriteY,
         commanderHatchSpriteX: split?.commanderHatchSpriteX ?? top.commanderHatchSpriteX,
         commanderHatchSpriteY: split?.commanderHatchSpriteY ?? top.commanderHatchSpriteY,
         commanderHatchScale: split?.commanderHatchScale ?? top.commanderHatchScale,
@@ -1690,6 +1707,15 @@ export class MainMenuScene extends Component {
     saveConfigBtn.node.name = 'SaveTankVisualConfig';
     saveConfigBtn.label = this.makeLabel(saveConfigBtn.node, '保存配置', 0, 0, 158, 22, 15, TEXT_PRIMARY);
 
+    const machineGunPickBtn = this.makeRectButton(stage, -205, 174, 230, 30, MODE_BTN_IDLE, () => {
+      if (!isTankKind(selectedKind) || showDestroyed) return;
+      machineGunPick = machineGunPick === null ? 'coaxial' : machineGunPick === 'coaxial' ? 'hull' : null;
+      refreshPreview();
+    });
+    machineGunPickBtn.label = this.makeLabel(machineGunPickBtn.node, '机枪定位：关闭', 0, 0, 214, 22, 14, TEXT_PRIMARY);
+    const machineGunHint = this.makeLabel(stage, '青：同轴 / 黄：航向；开火预览显示弹道', 110, 174, 400, 24, 13, TEXT_SUBTITLE);
+    machineGunHint.overflow = Label.Overflow.SHRINK;
+
     const saveCurrentConfig = async () => {
       if (savingConfig) return;
       const kind = selectedKind;
@@ -1821,6 +1847,10 @@ export class MainMenuScene extends Component {
     panel.addChild(propsPanel);
 
     const fieldDefs: Array<{ key: TankVisualDebugKey; label: string }> = [
+      { key: 'coaxialMuzzleSpriteX', label: '同轴枪口图X' },
+      { key: 'coaxialMuzzleSpriteY', label: '同轴枪口图Y' },
+      { key: 'hullMuzzleSpriteX', label: '航向枪口图X' },
+      { key: 'hullMuzzleSpriteY', label: '航向枪口图Y' },
       { key: 'fitScale', label: '完整图缩放' },
       { key: 'offsetForward', label: '完整图前后' },
       { key: 'offsetRight', label: '完整图右侧' },
@@ -1983,7 +2013,7 @@ export class MainMenuScene extends Component {
       const sample = tankEngineVibrationSample(
         engineVibrationElapsed,
         bodyAngleDeg,
-        engineVibrationEnabled && !showDestroyed,
+        engineVibrationEnabled && !showDestroyed && machineGunPick === null,
       );
       engineVibrationLayer.setPosition(sample.x, sample.y, 0);
       engineVibrationLayer.angle = sample.angleDeg;
@@ -2063,11 +2093,36 @@ export class MainMenuScene extends Component {
       refreshPreview();
     };
     const beginDrag = (mode: 'body' | 'turret', ev: EventTouch | EventMouse) => {
+      if (machineGunPick && !showDestroyed && isTankKind(selectedKind)) {
+        ev.propagationStopped = true;
+        const transform = machineGunTransforms[machineGunPick];
+        if (!transform) return;
+        const point = machineGunSpriteCoordinates(pointerLocal(ev), transform);
+        const draft = drafts[selectedKind]!;
+        const xKey = machineGunPick === 'coaxial' ? 'coaxialMuzzleSpriteX' : 'hullMuzzleSpriteX';
+        const yKey = machineGunPick === 'coaxial' ? 'coaxialMuzzleSpriteY' : 'hullMuzzleSpriteY';
+        // Keep subpixel accuracy; direct numeric input can refine either axis further.
+        draft[xKey] = Math.round(point.x * 100) / 100;
+        draft[yKey] = Math.round(point.y * 100) / 100;
+        for (const key of [xKey, yKey] as TankVisualDebugKey[]) {
+          const input = debugInputs.get(key);
+          if (input) input.string = formatTankDebugNumber(draft[key]);
+        }
+        refreshPreview();
+        return;
+      }
       if (mode === 'turret' && isTankKind(selectedKind) && !splitKindSet.has(selectedKind)) return;
       dragMode = mode;
       ev.propagationStopped = true;
       updateDragAngle(ev);
     };
+    // Allow picking exposed hull ports even where the turret overlaps the hull hit box.
+    previewRoot.on(Node.EventType.TOUCH_START, (ev: EventTouch) => {
+      if (machineGunPick) beginDrag('body', ev);
+    }, this);
+    previewRoot.on(Node.EventType.MOUSE_DOWN, (ev: EventMouse) => {
+      if (machineGunPick) beginDrag('body', ev);
+    }, this);
     previewRoot.on(Node.EventType.TOUCH_MOVE, (ev: EventTouch) => {
       if (!dragMode) return;
       ev.propagationStopped = true;
@@ -2219,11 +2274,52 @@ export class MainMenuScene extends Component {
       parent.addChild(n);
     };
 
+    const addMachineGunPorts = (parent: Node) => {
+      if (!isTankKind(selectedKind)) return;
+      const draft = drafts[selectedKind]!;
+      for (const weapon of ['coaxial', 'hull'] as const) {
+        const transform = machineGunTransforms[weapon];
+        if (!transform) continue;
+        const x = weapon === 'coaxial' ? draft.coaxialMuzzleSpriteX : draft.hullMuzzleSpriteX;
+        const y = weapon === 'coaxial' ? draft.coaxialMuzzleSpriteY : draft.hullMuzzleSpriteY;
+        if (!isMachineGunMuzzleConfigured(x, y)) continue;
+        const point = machineGunSpritePoint(x, y, transform);
+        const n = new Node(`MachineGunPort_${weapon}`);
+        n.layer = parent.layer;
+        n.addComponent(UITransform).setContentSize(16, 16);
+        n.setPosition(point.x, point.y, 0);
+        const g = n.addComponent(Graphics);
+        g.strokeColor = weapon === 'coaxial' ? new Color(60, 235, 255, 255) : new Color(255, 225, 70, 255);
+        g.lineWidth = 1.5;
+        g.circle(0, 0, 3);
+        g.moveTo(-7, 0); g.lineTo(7, 0);
+        g.moveTo(0, -7); g.lineTo(0, 7);
+        g.stroke();
+        if (showMuzzleFlash) {
+          g.moveTo(0, 0);
+          g.lineTo(transform.ux * hexR * 0.8, transform.uy * hexR * 0.8);
+          g.stroke();
+          g.fillColor = new Color(255, 250, 205, 255);
+          g.circle(0, 0, 2);
+          g.fill();
+        }
+        parent.addChild(n);
+      }
+    };
+
     function refreshPreview() {
       if (!previewRoot.isValid) return;
       tankRiderRenderer.clear();
       refreshTankRidersButton();
       previewRoot.removeAllChildren();
+      machineGunTransforms = {};
+      const picking = machineGunPick !== null && isTankKind(selectedKind) && !showDestroyed;
+      machineGunPickBtn.redraw(picking ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: picking });
+      if (machineGunPickBtn.label) machineGunPickBtn.label.string = picking
+        ? `点击定位：${machineGunPick === 'coaxial' ? '同轴机枪' : '航向机枪'}` : '机枪定位：关闭';
+      machineGunHint.string = picking
+        ? '点击射击孔；再次点击按钮切换，第三次退出'
+        : '青：同轴 / 黄：航向；炮口火焰可预览弹道';
       engineVibrationLayer = null;
       exhaustPreviewGraphics = null;
       drawHex(previewRoot);
@@ -2326,7 +2422,7 @@ export class MainMenuScene extends Component {
         lastPivot = { x: pivotX, y: pivotY };
 
         const hullSprite = addSprite(livingTankLayer, loaded.hull, topTrim.w * scale, topTrim.h * scale, baseX, baseY, body.deg + 180, 0.5, 0.5, 'body');
-        if (showTankRiders && isTankKind(selectedKind)) tankRiderRenderer.drawPreview('tank_debug', hullSprite, tankRiderDoubleSide);
+        if (showTankRiders && isTankKind(selectedKind)) tankRiderRenderer.drawPreview('tank_debug', hullSprite, tankRiderDoubleSide, seatedInfantryKindForFaction(getUnitStats(selectedKind).faction));
         addSprite(
           livingTankLayer,
           loaded.turret,
@@ -2392,9 +2488,21 @@ export class MainMenuScene extends Component {
             turret,
           );
         }
+        machineGunTransforms.hull = {
+          originX: baseX, originY: baseY,
+          anchorX: topTrim.x + topTrim.w / 2, anchorY: topTrim.y + topTrim.h / 2,
+          scaleX: scale, scaleY: scale, ...body,
+        };
+        machineGunTransforms.coaxial = {
+          originX: pivotX + turretF * turret.ux + turretR * turret.uy,
+          originY: pivotY + turretF * turret.uy - turretR * turret.ux,
+          anchorX: pivot.spriteX, anchorY: pivot.spriteY,
+          scaleX: turretScale, scaleY: turretScale, ...turret,
+        };
+        addMachineGunPorts(livingTankLayer);
         addExhaustPortDots(previewRoot);
         addPivotDot(previewRoot, pivotX, pivotY);
-        statusLabel.string = '粉色圆点为炮塔转轴；橙色圆点为发动机排气口。';
+        statusLabel.string = '粉：转轴 / 橙：排气 / 青：同轴 / 黄：航向；两坐标为0表示未校准。';
         return;
       }
 
@@ -2427,7 +2535,7 @@ export class MainMenuScene extends Component {
           0.5,
           'body',
         );
-        if (showTankRiders && isTankKind(selectedKind)) tankRiderRenderer.drawPreview('tank_debug', hullSprite, tankRiderDoubleSide);
+        if (showTankRiders && isTankKind(selectedKind)) tankRiderRenderer.drawPreview('tank_debug', hullSprite, tankRiderDoubleSide, seatedInfantryKindForFaction(getUnitStats(selectedKind).faction));
         const commanderHatchFrame = commanderHatchState === 'open-dead'
           ? emptyCommanderHatchFrame
           : commanderHatchFrames[getUnitStats(selectedKind).commanderSpritePath ?? ''];
@@ -2456,9 +2564,16 @@ export class MainMenuScene extends Component {
             );
           }
         }
+        const machineGunTransform = {
+          originX: baseX, originY: baseY, anchorX: displayW / 2, anchorY: displayH / 2,
+          scaleX: (tw0 * k) / (displayW || 1), scaleY: (th0 / k) / (displayH || 1), ...body,
+        };
+        machineGunTransforms.hull = machineGunTransform;
+        machineGunTransforms.coaxial = machineGunTransform;
+        addMachineGunPorts(livingTankLayer);
         addExhaustPortDots(previewRoot);
         addPivotDot(previewRoot, 0, 0);
-        statusLabel.string = '完整俯视图预览；橙色圆点为发动机排气口。';
+        statusLabel.string = '完整图坐标；青：同轴 / 黄：航向；两坐标为0表示未校准。';
         return;
       }
 
@@ -3382,6 +3497,7 @@ export class MainMenuScene extends Component {
       maus: '鼠式',
       at_gun: t('unit.name.at_gun'),
       pak38: 'pak38',
+      pak43: t('unit.name.pak43'),
       flak88: '88mm高射炮',
       japanese_infantry: 'JP Inf',
       american_infantry: 'US Inf',
@@ -3526,7 +3642,7 @@ export class MainMenuScene extends Component {
       if (tile.t === 'dw') delete tile.h;
       if (tile.t !== 'c' && tile.t !== 'T') delete tile.bw;
       if (tile.t !== 'eb') { delete tile.sh; delete tile.cr; }
-      if (['w', 'dw', 'B', 'esw'].includes(tile.t)) { delete tile.wire; delete tile.sw; }
+      if (['w', 'dw', 'B', 'esw'].includes(tile.t)) { delete tile.wire; delete tile.sw; delete tile.fort; }
       if (tile.t !== 'w') delete tile.br;
       if (tile.t !== 'r' && tile.t !== 'ur' && tile.t !== 'a') {
         delete tile.rd;
@@ -3545,6 +3661,90 @@ export class MainMenuScene extends Component {
         delete tile.eid;
         delete tile.ef;
       }
+    };
+    const openFortificationProps = (tile: TileDef) => {
+      const popup = new Node('FortificationProps');
+      popup.layer = this.node.layer;
+      popup.addComponent(UITransform).setContentSize(330, 370);
+      const background = popup.addComponent(Graphics);
+      background.fillColor = new Color(30, 37, 32, 255);
+      background.rect(-165, -185, 330, 370); background.fill();
+      propRoot.addChild(popup);
+      const refresh = () => {
+        popup.removeAllChildren();
+        const zh = getLang() === 'zh';
+        this.makeLabel(popup, zh ? '战壕与反坦克炮位' : 'Trenches and gun pits', 0, 155, 310, 30, 17, TEXT_TITLE);
+        const button = (text: string, x: number, y: number, w: number, active: boolean, action: () => void) => {
+          const btn = this.makeRectButton(popup, x, y, w, 30, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+            action(); redrawAllCells(); refresh();
+          });
+          this.makeLabel(btn.node, text, 0, 0, w - 8, 28, 13, TEXT_PRIMARY);
+        };
+        ([null, 'trench', 'gun_pit'] as Array<FortificationArtKind | null>).forEach((kind, i) => {
+          button(zh ? ['无', '步兵战壕', '反坦克炮位'][i] : ['None', 'Trench', 'Gun pit'][i], (i-1)*102, 108, 96,
+            (tile.fort?.kind ?? null) === kind, () => { setEditorFortification(draftTiles, selectedRow, selectedCol, kind); });
+        });
+        this.makeLabel(popup, zh ? '交通壕连接方向（与道路相同）' : 'Connections (same order as roads)', 0, 64, 300, 28, 13, TEXT_SUBTITLE);
+        const labels = zh ? ['东 E','东南 SE','西南 SW','西 W','西北 NW','东北 NE'] : ['E','SE','SW','W','NW','NE'];
+        labels.forEach((label, d) => button(label, (d%3-1)*102, 20-Math.floor(d/3)*42, 96,
+          tile.fort?.connections[d] === '1', () => {
+            if (!tile.fort) setEditorFortification(draftTiles, selectedRow, selectedCol, 'trench');
+            setEditorFortificationConnection(draftTiles, selectedRow, selectedCol, d as Direction, tile.fort!.connections[d] !== '1', draftRowParityOffset);
+          }));
+        this.makeLabel(popup, zh ? '独立工事：关闭全部方向。炮位连接口不限制射界。' : 'All exits off: isolated. Gun pits do not restrict firing arcs.', 0, -77, 304, 48, 12, TEXT_SUBTITLE);
+        const done = this.makeRectButton(popup, 0, -145, 130, 30, BTN_LEVEL_UNLOCKED, () => { popup.destroy(); refreshSelection(); });
+        this.makeLabel(done.node, zh ? '完成' : 'Done', 0, 0, 120, 28, 14, TEXT_PRIMARY);
+      };
+      refresh();
+    };
+    const openElevationProps = (tile: TileDef) => {
+      const popup = new Node('ElevationProps'); popup.layer = this.node.layer;
+      popup.addComponent(UITransform).setContentSize(330, 390); popup.addComponent(BlockInputEvents);
+      const background = popup.addComponent(Graphics); background.fillColor = new Color(30, 37, 32, 255);
+      background.rect(-165, -195, 330, 390); background.fill(); propRoot.addChild(popup);
+      const refresh = () => {
+        popup.removeAllChildren(); const zh = getLang() === 'zh';
+        this.makeLabel(popup, zh ? '高度与边坡' : 'Height and slopes', 0, 164, 310, 28, 17, TEXT_TITLE);
+        const input = this.makeInputField(popup, 0, 122, 100, 30, '0', false, String(tileHeight(tile)));
+        const commit = () => {
+          const height = Number(input.string.trim());
+          if (!Number.isFinite(height)) { statusLabel.string = zh ? '高度必须为有限数值，可为负数。' : 'Height must be finite; negative values are valid.'; return false; }
+          if (height === 0) delete tile.height; else tile.height = height;
+          redrawAllCells(); return true;
+        };
+        input.node.on('editing-did-ended', () => { if (input.node.parent === popup) commit(); });
+        const button = (text: string, x: number, y: number, w: number, active: boolean, action: () => void) => {
+          const btn = this.makeRectButton(popup, x, y, w, 28, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, action);
+          this.makeLabel(btn.node, text, 0, 0, w - 6, 26, 12, TEXT_PRIMARY);
+        };
+        [-1, 1].forEach(step => button(step < 0 ? '−1' : '+1', step * 106, 122, 62, false, () => {
+          if (!commit()) return; const next = tileHeight(tile) + step;
+          if (next === 0) delete tile.height; else tile.height = next;
+          redrawAllCells(); refresh();
+        }));
+        SLOPE_DIRECTIONS.forEach((dir, i) => {
+          const adjacentOffset = editorNeighborOffset(selectedRow, selectedCol, i);
+          const adjacent = draftTiles[adjacentOffset.row]?.[adjacentOffset.col];
+          const delta = adjacent ? tileHeight(adjacent) - tileHeight(tile) : null;
+          const blocked = editorCliffState(draftTiles, selectedRow, selectedCol, i, draftRowParityOffset);
+          const y = 75 - i * 32;
+          this.makeLabel(popup, `${dir}  ${delta === null ? '—' : delta > 0 ? '+' + delta : delta}`, -92, y, 112, 26, 13, TEXT_TITLE);
+          button(zh ? (blocked ? '陡坡 · 不可通行' : '缓坡 · 可通行') : (blocked ? 'Cliff · blocked' : 'Slope · passable'), 61, y, 174, blocked, () => {
+            if (!commit()) return;
+            setEditorCliff(draftTiles, selectedRow, selectedCol, i, !blocked, draftRowParityOffset);
+            redrawAllCells(); refresh();
+          });
+        });
+        this.makeLabel(popup, zh ? '默认高度 0，可设负数；同高无边坡。\n高差默认可通行，陡坡两侧均禁止跨越。' : 'Default height 0; negatives allowed. Equal heights have no slope.\nSlopes are passable unless marked as cliffs.', 0, -126, 306, 42, 12, TEXT_SUBTITLE);
+        button(zh ? '完成' : 'Done', 0, -169, 124, false, () => { if (commit()) { popup.destroy(); refreshSelection(); } });
+      };
+      refresh();
+    };
+    const elevationHeading = (tile: TileDef | null, y: number) => {
+      const text = `${getLang() === 'zh' ? '格子' : 'Hex'} ${selectedCol},${selectedRow}`;
+      if (!tile) { this.makeLabel(propRoot, text, 0, y, 300, 26, 18, TEXT_TITLE); return; }
+      const btn = this.makeRectButton(propRoot, 0, y, 300, 28, BTN_LEVEL_UNLOCKED, () => openElevationProps(tile));
+      this.makeLabel(btn.node, `${text} · ${getLang() === 'zh' ? '高度' : 'Height'} ${tileHeight(tile)} / ${getLang() === 'zh' ? '边坡' : 'Slopes'}`, 0, 0, 290, 26, 14, TEXT_PRIMARY);
     };
     const openBeachProps = (tile: TileDef) => {
       const popup = new Node('BeachObstacleProps');
@@ -3583,6 +3783,15 @@ export class MainMenuScene extends Component {
       };
       refresh();
     };
+    let editorElevation: ElevationRenderer | null = null;
+    const redrawEditorSlopes = () => {
+      if (!editorElevation) editorElevation = new ElevationRenderer(gridContent);
+      const radius = 27, stepX = radius * Math.sqrt(3) + 5, stepY = radius * 1.5 + 5;
+      editorElevation.draw(editorElevationTiles(draftTiles, draftRowParityOffset), spriteFrames, radius, (q, r) => {
+        const col = q + ((r + draftRowParityOffset - ((r + draftRowParityOffset) & 1)) >> 1);
+        return { x: -(cols - 1) * stepX / 2 + col * stepX + ((r + draftRowParityOffset) % 2 ? stepX / 2 : 0), y: (rows - 1) * stepY / 2 - r * stepY };
+      });
+    };
     const redrawAllCells = () => {
       for (let row = 0; row < rows; row++) {
         for (let col = 0; col < cols; col++) {
@@ -3590,6 +3799,7 @@ export class MainMenuScene extends Component {
         }
       }
       drawEffectiveBattlefieldBoundary();
+      redrawEditorSlopes();
     };
     const propRoot = new Node('EditorTileProps');
     propRoot.layer = this.node.layer;
@@ -4071,7 +4281,7 @@ export class MainMenuScene extends Component {
         }
 
         const tile = draftTiles[selectedRow]?.[selectedCol] ?? null;
-        this.makeLabel(propRoot, `格子 ${selectedCol},${selectedRow}`, 0, 150, 250, 24, 18, TEXT_TITLE);
+        elevationHeading(tile, 150);
         if (!tile) {
           this.makeLabel(propRoot, '当前为“无”。请切到“地形”子项选择刷子，再点击地图格子。', 0, 112, 300, 54, 15, TEXT_SUBTITLE);
           return;
@@ -4123,7 +4333,8 @@ export class MainMenuScene extends Component {
           });
         }
         addBtn('清空附加', allowsBuilding ? 72 : 0, 82, 112, 28, false, () => {
-          delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
+          for (let dir = 0; dir < 6; dir++) setEditorCliff(draftTiles, selectedRow, selectedCol, dir, false, draftRowParityOffset);
+          delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef; delete tile.fort;
         });
         const sectionY = 8;
         if (allowsHedge) {
@@ -4169,8 +4380,10 @@ export class MainMenuScene extends Component {
         }
         const raw = JSON.stringify(tile);
         if (!['w', 'dw', 'B', 'esw'].includes(tile.t)) {
-          const obstacleBtn = this.makeRectButton(propRoot, 0, -210, 224, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
-          this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩附加物' : 'Wire / seawall / beach overlays', 0, 0, 216, 24, 12, TEXT_PRIMARY);
+          const fortBtn = this.makeRectButton(propRoot, -79, -210, 150, 26, BTN_LEVEL_UNLOCKED, () => openFortificationProps(tile));
+          this.makeLabel(fortBtn.node, getLang() === 'zh' ? '战壕 / 反坦克炮位' : 'Trench / gun pit', 0, 0, 142, 24, 12, TEXT_PRIMARY);
+          const obstacleBtn = this.makeRectButton(propRoot, 79, -210, 150, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
+          this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩' : 'Wire / seawall / beach', 0, 0, 142, 24, 12, TEXT_PRIMARY);
         }
         const rawLabel = this.makeLabel(propRoot, raw, 0, -242, 310, 20, 10, TEXT_SUBTITLE);
         rawLabel.overflow = Label.Overflow.SHRINK;
@@ -4178,7 +4391,7 @@ export class MainMenuScene extends Component {
       }
       propRoot.removeAllChildren();
       const tile = draftTiles[selectedRow]?.[selectedCol] ?? null;
-      this.makeLabel(propRoot, `格子 ${selectedCol},${selectedRow}`, 0, 180, 250, 24, 18, TEXT_TITLE);
+      elevationHeading(tile, 180);
       if (!tile) {
         this.makeLabel(propRoot, '当前为“无”。请切到“地形”子项选择刷子，再点击地图格子。', 0, 142, 300, 54, 15, TEXT_SUBTITLE);
         return;
@@ -4228,7 +4441,8 @@ export class MainMenuScene extends Component {
         });
       }
       addBtn('清空附加', allowsBuilding ? 72 : 0, 146, 112, 28, false, () => {
-        delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef;
+        for (let dir = 0; dir < 6; dir++) setEditorCliff(draftTiles, selectedRow, selectedCol, dir, false, draftRowParityOffset);
+        delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef; delete tile.fort;
       });
       const sectionY = 66;
       if (allowsHedge) {
@@ -4274,8 +4488,10 @@ export class MainMenuScene extends Component {
       }
       const raw = JSON.stringify(tile);
       if (!['w', 'dw', 'B', 'esw'].includes(tile.t)) {
-        const obstacleBtn = this.makeRectButton(propRoot, 0, -210, 224, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
-        this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩附加物' : 'Wire / seawall / beach overlays', 0, 0, 216, 24, 12, TEXT_PRIMARY);
+        const fortBtn = this.makeRectButton(propRoot, -79, -210, 150, 26, BTN_LEVEL_UNLOCKED, () => openFortificationProps(tile));
+        this.makeLabel(fortBtn.node, getLang() === 'zh' ? '战壕 / 反坦克炮位' : 'Trench / gun pit', 0, 0, 142, 24, 12, TEXT_PRIMARY);
+        const obstacleBtn = this.makeRectButton(propRoot, 79, -210, 150, 26, BTN_LEVEL_UNLOCKED, () => openBeachProps(tile));
+        this.makeLabel(obstacleBtn.node, getLang() === 'zh' ? '铁丝网 / 海堤 / 沙滩' : 'Wire / seawall / beach', 0, 0, 142, 24, 12, TEXT_PRIMARY);
       }
       const rawLabel = this.makeLabel(propRoot, raw, 0, -242, 310, 20, 10, TEXT_SUBTITLE);
       rawLabel.overflow = Label.Overflow.SHRINK;
@@ -4432,6 +4648,13 @@ export class MainMenuScene extends Component {
       const sprite = spriteNode.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
       node.addChild(spriteNode);
+      const fortNode = new Node('EditorFortification');
+      fortNode.layer = this.node.layer;
+      fortNode.addComponent(UITransform).setContentSize(w, h);
+      const fortSprite = fortNode.addComponent(Sprite);
+      fortSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      fortNode.active = false;
+      node.addChild(fortNode);
       const outlineNode = new Node('EditorHexOutline');
       outlineNode.layer = this.node.layer;
       outlineNode.addComponent(UITransform).setContentSize(w, h);
@@ -4683,6 +4906,10 @@ export class MainMenuScene extends Component {
         sprite.spriteFrame = spriteKey ? (spriteFrames[spriteKey] ?? null) : null;
         spriteNode.getComponent(UITransform)?.setContentSize(w, h);
         spriteNode.active = !!sprite.spriteFrame;
+        const fortArt = tile?.fort ? fortificationArtTransform(tile.fort) : null;
+        fortSprite.spriteFrame = fortArt ? spriteFrames[fortArt.surface] ?? null : null;
+        fortNode.active = !!fortSprite.spriteFrame;
+        fortNode.angle = fortArt?.rotationDegrees ?? 0;
         drawHex(colorForTile(tile));
         drawTileOverlays(tile);
         const markers = supportMarkerVisuals(tile?.rid, tile?.rf, tile?.eid, tile?.ef, radius);
@@ -4727,6 +4954,7 @@ export class MainMenuScene extends Component {
     };
 
     const rebuildGrid = (resetView = false) => {
+      editorElevation?.destroy(); editorElevation = null;
       gridContent.removeAllChildren();
       cells.length = 0;
       const radius = 27;
@@ -4745,6 +4973,7 @@ export class MainMenuScene extends Component {
         }
       }
       drawEffectiveBattlefieldBoundary();
+      redrawEditorSlopes();
       if (resetView) {
         gridContent.setPosition(0, 0, 0);
         setGridScale(1);
@@ -5246,6 +5475,15 @@ export class MainMenuScene extends Component {
     const extendLeft = makeExtendButton('+←', -605, 10, 'left');
     const extendRight = makeExtendButton('+→', 245, 10, 'right');
     rebuildGrid(true);
+    for (const kind of ['trench', 'gun_pit'] as const) for (const mask of FORTIFICATION_ART_MASKS) {
+      const connections = Array.from({ length: 6 }, (_, d) => (mask >> d) & 1).join('');
+      const art = fortificationArtTransform({ kind, connections });
+      resources.load(art.surface, SpriteFrame, (err, frame) => {
+        if (err || !frame || !panel.isValid) return;
+        spriteFrames[art.surface] = frame;
+        redrawAllCells();
+      });
+    }
     for (const [key, path] of Object.entries(terrainSpritePaths)) {
       resources.load(path, SpriteFrame, (err, sf) => {
         if (err || !sf || !panel.isValid) return;
@@ -5833,6 +6071,7 @@ function tankVisualAssetName(kind: TankVisualKind): string {
     case 'type97': return '九七式';
       case 'at_gun': return t('unit.name.at_gun');
       case 'pak38': return 'pak38';
+      case 'pak43': return t('unit.name.pak43');
       case 'flak88': return '88mm高射炮';
     case 'heavy_artillery': return 'Artillery';
     case 'german_heavy_artillery': return 'German Artillery';

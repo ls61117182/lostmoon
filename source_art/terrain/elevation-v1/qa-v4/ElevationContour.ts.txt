@@ -1,0 +1,168 @@
+import { elevationEdges, elevationSurfaceTint, slopeDepth, tileHeight, type ElevationEdge } from '../core/Elevation';
+import type { Tile } from '../core/types';
+import { decodeBase64 } from './TerrainGroundRaster';
+
+/** Canonical map coordinates, Y down. Rounded contours keep ground, normals and material continuous. */
+export const ELEVATION_RADIUS = 48;
+export const ELEVATION_CHUNK = 256;
+interface Point { x: number; y: number; }
+export interface ContourSegment {
+  a: Point; b: Point; na: Point; nb: Point;
+  rockA: number; rockB: number; depthA: number; depthB: number;
+  high: number; low: number;
+}
+export interface ElevationMaterialData { version: number; rock: { width: number; height: number; rgb: string }; }
+export interface ElevationChunk { x: number; y: number; size: number; pixels: Uint8Array; }
+const SQ = Math.sqrt(3), R = ELEVATION_RADIUS;
+const clamp = (x: number, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+function smooth(a: number, b: number, x: number): number { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); }
+const point = (a: Point, b: Point, t: number): Point => ({ x: mix(a.x, b.x, t), y: mix(a.y, b.y, t) });
+function normal(t: Point): Point { const d = Math.hypot(t.x, t.y) || 1; return { x: t.y / d, y: -t.x / d }; }
+const vertexKey = (p: Point) => `${Math.round(p.x * 1e4)},${Math.round(p.y * 1e4)}`;
+
+/** Each ordinary two-edge corner is one quadratic curve, with a shared tangent at both ends.
+ * Three-height junctions keep their physical endpoint rather than rounding unrelated terraces together. */
+export function elevationContour(tiles: readonly Tile[]): ContourSegment[] {
+  const edges = elevationEdges([...tiles].sort((a, b) => a.pos.r - b.pos.r || a.pos.q - b.pos.q));
+  const lines = edges.map(edge => {
+    const theta = edge.direction * Math.PI / 3, n = { x: Math.cos(theta), y: Math.sin(theta) };
+    const t = { x: -n.y, y: n.x };
+    const c = { x: SQ * (edge.high.pos.q + edge.high.pos.r / 2) + n.x * SQ / 2,
+      y: edge.high.pos.r * 1.5 + n.y * SQ / 2 };
+    return { edge, n, a: { x: c.x - .5 * t.x, y: c.y - .5 * t.y }, b: { x: c.x + .5 * t.x, y: c.y + .5 * t.y } };
+  });
+  const at = new Map<string, number[]>();
+  lines.forEach((line, i) => { for (const p of [line.a, line.b]) { const key = vertexKey(p); const list = at.get(key) ?? []; list.push(i); at.set(key, list); } });
+  const compatible = (a: ElevationEdge, b: ElevationEdge) => tileHeight(a.high) === tileHeight(b.high) && tileHeight(a.low) === tileHeight(b.low);
+  const next = lines.map((line, i) => {
+    const list = at.get(vertexKey(line.b))!;
+    if (list.length !== 2) return -1;
+    const j = list.find(j => j !== i)!;
+    return vertexKey(lines[j].a) === vertexKey(line.b) && compatible(line.edge, lines[j].edge) ? j : -1;
+  });
+  const previous = lines.map(() => -1); next.forEach((j, i) => { if (j >= 0) previous[j] = i; });
+  const result: ContourSegment[] = [], trim = .27;
+  lines.forEach((line, i) => {
+    const edge = line.edge, a = point(line.a, line.b, previous[i] >= 0 ? trim : 0), b = point(line.a, line.b, next[i] >= 0 ? 1 - trim : 1);
+    const rock = edge.blocked ? 1 : 0, depth = slopeDepth(edge.difference);
+    const common = { high: tileHeight(edge.high), low: tileHeight(edge.low) };
+    result.push({ a, b, na: line.n, nb: line.n, rockA: rock, rockB: rock, depthA: depth, depthB: depth, ...common });
+    const j = next[i]; if (j < 0) return;
+    const other = lines[j], c = point(other.a, other.b, trim), rockB = other.edge.blocked ? 1 : 0, depthB = slopeDepth(other.edge.difference);
+    // Subdivide only the small corner; straight parts remain exact line segments.
+    for (let k = 0; k < 12; k++) {
+      const sample = (u: number) => {
+        const p = point(point(b, line.b, u), point(line.b, c, u), u);
+        const tangent = { x: (line.b.x - b.x) * (1 - u) + (c.x - line.b.x) * u,
+          y: (line.b.y - b.y) * (1 - u) + (c.y - line.b.y) * u };
+        return { p, n: normal(tangent) };
+      };
+      const u = k / 12, v = (k + 1) / 12, sa = sample(u), sb = sample(v);
+      result.push({ a: sa.p, b: sb.p, na: sa.n, nb: sb.n,
+        rockA: mix(rock, rockB, smooth(0, 1, u)), rockB: mix(rock, rockB, smooth(0, 1, v)),
+        depthA: mix(depth, depthB, u), depthB: mix(depth, depthB, v), ...common });
+    }
+  });
+  return result;
+}
+
+export function elevationFingerprint(tiles: readonly Tile[], camera: number): string {
+  return `${camera === 90 ? 90 : 0}|` + tiles.map(t => `${t.pos.q},${t.pos.r}:${tileHeight(t)}:${t.cliffs?.map(Number).join('') ?? ''}`).sort().join('|');
+}
+function axialAt(x: number, y: number): string {
+  const r = y / 1.5, q = x / SQ - r / 2;
+  let a = Math.round(q), b = Math.round(r), c = Math.round(-q - r);
+  const da = Math.abs(a - q), db = Math.abs(b - r), dc = Math.abs(c + q + r);
+  if (da > db && da > dc) a = -b - c; else if (db > dc) b = -a - c;
+  return `${a},${b}`;
+}
+function noise(x: number, y: number): number {
+  return Math.sin(x * .115 + y * .072) * .55 + Math.sin(x * .211 - y * .137) * .25 + Math.sin(x * .47 + y * .31) * .20;
+}
+
+/** One immutable overlay per chunk. Each pixel samples a single continuous contour field;
+ * there are no separate edge rectangles or alpha-composited joints. Zoom/pan reuse the output. */
+export class ElevationContourRaster {
+  private rock: Uint8Array;
+  constructor(private material: ElevationMaterialData) { this.rock = decodeBase64(material.rock.rgb); }
+  plans(tiles: readonly Tile[]): Array<{ x: number; y: number }> {
+    const keys = new Set<string>(), add = (x: number, y: number) => keys.add(`${x},${y}`);
+    for (const tile of tiles) {
+      if (tileHeight(tile) === 0) continue;
+      const x = SQ * R * (tile.pos.q + tile.pos.r / 2), y = R * 1.5 * tile.pos.r;
+      // Includes the lower half of the widest allowed slope plus a one-pixel gutter.
+      for (let row = Math.floor((y - 1.7 * R) / ELEVATION_CHUNK); row <= Math.floor((y + 1.7 * R) / ELEVATION_CHUNK); row++)
+        for (let col = Math.floor((x - 1.7 * R) / ELEVATION_CHUNK); col <= Math.floor((x + 1.7 * R) / ELEVATION_CHUNK); col++) add(col * ELEVATION_CHUNK, row * ELEVATION_CHUNK);
+    }
+    return [...keys].sort().map(key => { const [x, y] = key.split(',').map(Number); return { x, y }; });
+  }
+  render(tiles: readonly Tile[], segments: readonly ContourSegment[], x: number, y: number, size = ELEVATION_CHUNK, camera = 0): ElevationChunk {
+    // Matching world sample positions in the gutter make adjacent chunk filtering seamless.
+    const width = size + 2, count = width * width, pixels = new Uint8Array(count * 4);
+    const distance = new Float32Array(count).fill(Infinity), signed = new Float32Array(count), nx = new Float32Array(count), ny = new Float32Array(count);
+    const rock = new Float32Array(count), depth = new Float32Array(count), high = new Float32Array(count), low = new Float32Array(count);
+    for (const segment of segments) {
+      const a = { x: segment.a.x * R, y: segment.a.y * R }, b = { x: segment.b.x * R, y: segment.b.y * R };
+      const reach = .67 * R * Math.max(segment.depthA, segment.depthB), dx = b.x - a.x, dy = b.y - a.y, length2 = dx * dx + dy * dy;
+      const x0 = Math.max(0, Math.floor(Math.min(a.x, b.x) - reach - x + 1)), x1 = Math.min(width - 1, Math.ceil(Math.max(a.x, b.x) + reach - x + 1));
+      const y0 = Math.max(0, Math.floor(Math.min(a.y, b.y) - reach - y + 1)), y1 = Math.min(width - 1, Math.ceil(Math.max(a.y, b.y) + reach - y + 1));
+      for (let py = y0; py <= y1; py++) for (let px = x0; px <= x1; px++) {
+        const gx = x + px - .5, gy = y + py - .5, u = clamp(((gx - a.x) * dx + (gy - a.y) * dy) / (length2 || 1));
+        const ox = gx - a.x - dx * u, oy = gy - a.y - dy * u, d2 = ox * ox + oy * oy, index = py * width + px;
+        if (d2 >= distance[index]) continue;
+        distance[index] = d2;
+        const n = point(segment.na, segment.nb, u), len = Math.hypot(n.x, n.y);
+        nx[index] = n.x / len; ny[index] = n.y / len;
+        signed[index] = (ox * n.x + oy * n.y >= 0 ? 1 : -1) * Math.sqrt(d2);
+        rock[index] = mix(segment.rockA, segment.rockB, u); depth[index] = mix(segment.depthA, segment.depthB, u);
+        high[index] = segment.high; low[index] = segment.low;
+      }
+    }
+    const lookup = new Map(tiles.map(t => [`${t.pos.q},${t.pos.r}`, tileHeight(t)]));
+    const rotation = camera === 90 ? Math.PI / 2 : 0;
+    // Same screen-space sun as ObjectShadowRenderer, transformed into Y-down map coordinates.
+    const lx = (-Math.cos(rotation) + Math.sin(rotation)) / Math.SQRT2, ly = -(Math.sin(rotation) + Math.cos(rotation)) / Math.SQRT2;
+    const mw = this.material.rock.width, mh = this.material.rock.height;
+    const reflected = (v: number, length: number) => { const n = ((Math.floor(v) % (length * 2)) + length * 2) % (length * 2); return n < length ? n : length * 2 - n - 1; };
+    for (let py = 0; py < width; py++) for (let px = 0; px < width; px++) {
+      const gx = x + px - .5, gy = y + py - .5, index = py * width + px, at = index * 4;
+      let height = lookup.get(axialAt(gx / R, gy / R)); if (height === undefined) continue;
+      const k = rock[index], half = mix(.30, .215, k) * R * depth[index];
+      const d = signed[index] + noise(gx, gy) * mix(.9, 1.5, k), u = clamp((d + half) / (2 * half || 1));
+      const tint = elevationSurfaceTint(height);
+      let cr = tint?.value ?? 0, cg = cr, cb = cr, alpha = (tint?.alpha ?? 0) / 255;
+      if (distance[index] < Infinity) {
+        const blend = smooth(-half, half, d), a = elevationSurfaceTint(high[index]), b = elevationSurfaceTint(low[index]);
+        const aa = (a?.alpha ?? 0) / 255 * (1 - blend), ab = (b?.alpha ?? 0) / 255 * blend;
+        alpha = aa + ab; cr = cg = cb = alpha > 0 ? ((a?.value ?? 0) * aa + (b?.value ?? 0) * ab) / alpha : 0;
+      }
+      const over = (r: number, g: number, b: number, a: number) => {
+        const out = a + alpha * (1 - a); if (out <= 0) return;
+        cr = (r * a + cr * alpha * (1 - a)) / out; cg = (g * a + cg * alpha * (1 - a)) / out; cb = (b * a + cb * alpha * (1 - a)) / out; alpha = out;
+      };
+      if (distance[index] < Infinity && Math.abs(d) < half + 14) {
+        const face = smooth(-half - mix(5, 1.5, k), -half + mix(4, 1.5, k), d)
+          * (1 - smooth(half - 2, half + mix(7, 2.5, k), d));
+        const facing = lx * nx[index] + ly * ny[index];
+        const shoulder = Math.exp(-Math.pow((d + half * .83) / mix(6, 3.5, k), 2));
+        const foot = Math.exp(-Math.pow((d - half * .85) / mix(6.5, 4.5, k), 2));
+        // Shade the actual ground through transparent light/shadow; do not paste another grass patch.
+        const lighting = 1 + facing * .38 * Math.sin(Math.PI * u) + shoulder * .15 - foot * (.23 + .08 * Math.max(0, -facing));
+        if (lighting < 1) over(0, 0, 0, clamp(1 - lighting) * face);
+        else over(255, 250, 216, clamp((lighting - 1) * .55) * face);
+        const rockAmount = k * face * smooth(-half - 1, -half + 3, d);
+        if (rockAmount > .001) {
+          // One world-space rock field crosses every old hex edge and every rounded corner.
+          const tx = reflected(gx * 1.4, mw), ty = reflected(gy * 1.4, mh), t = (ty * mw + tx) * 3;
+          const light = clamp(.94 + facing * .22 + shoulder * .07 - foot * .12, .5, 1.2);
+          over(this.rock[t] * light, this.rock[t + 1] * light, this.rock[t + 2] * light, rockAmount);
+        }
+        const cast = Math.exp(-Math.pow((d - half - 2) / (4 + 4 * Math.max(0, -facing)), 2));
+        over(0, 0, 0, cast * mix(.09, .23, k) * (.35 + .65 * Math.max(0, -facing)));
+      }
+      pixels[at] = Math.round(clamp(cr, 0, 255)); pixels[at + 1] = Math.round(clamp(cg, 0, 255)); pixels[at + 2] = Math.round(clamp(cb, 0, 255)); pixels[at + 3] = Math.round(alpha * 255);
+    }
+    return { x, y, size, pixels };
+  }
+}

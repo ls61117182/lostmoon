@@ -7,7 +7,7 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
 ).outputText, filename);
 
-const rules = Object.assign({}, ...['HexGrid', 'FogOfWar', 'Combat', 'types', 'GameMode', 'EnemyAI', 'Suppression', 'Ambush']
+const rules = Object.assign({}, ...['HexGrid', 'FogOfWar', 'Combat', 'TankRiding', 'types', 'GameMode', 'EnemyAI', 'Suppression', 'Ambush']
   .map(name => require(`../assets/scripts/core/${name}.ts`)));
 const GameSession = { gameMode: 'hardcore' };
 const Scene = require('./helpers/BattleSceneMethods.cjs')([

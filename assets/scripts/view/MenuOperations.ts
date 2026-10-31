@@ -130,6 +130,8 @@ export class MenuOperations {
     if (BUILD_FEATURES.testChapter) {
       const test = getChapterLevels('test').find(level => level.entryKind !== 'random');
       if (test) tools.push({ id: 'TestBattle', title: 'level.test.title', desc: 'menu.operations.testBattleHint', run: () => this.actions.start(test) });
+      const elevation = getChapterLevels('test').find(level => level.missionId === 'elevation_visual_test');
+      if (elevation) tools.push({ id: 'ElevationBattle', title: 'menu.operations.elevation', desc: 'menu.operations.elevationHint', run: () => this.actions.start(elevation) });
     }
     tools.forEach((tool, i) => {
       const x = -295 + (i % 2) * 590;

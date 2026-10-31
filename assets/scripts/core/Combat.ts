@@ -16,6 +16,7 @@ import { crewRoleAlive } from "./types";
  */
 
 import { RNG } from './Dice';
+import { mountedMachineGunTarget } from './TankRiding';
 import { immobilizeTank } from './TankTrackDamage';
 import { turretTurnDistance } from './TurretTraverse';
 import { ATTACK_DIRECTION_RULES } from './AttackDirectionDB';
@@ -41,6 +42,7 @@ import { Axial, battleSideIdOf, CrewSlot, FireDirection, isAntiTankGunUnit, isCo
 import { weatherHitThresholdModifier } from './Weather';
 import { unitLevelHitThresholdModifier } from './UnitLevel';
 import { lockedFireModifier } from './LockedFire';
+import { trenchCoverModifier } from './Fortification';
 
 export type { ArmorFace, DamageCheckType } from './AttackDirectionDB';
 
@@ -507,6 +509,7 @@ export interface HitBreakdown {
   crater?: number;
   rocky?: number;
   forest?: number;      // 森林内步兵受机枪或步兵攻击时 +1
+  trench?: number;      // 跨壕射击 +2；防护修正只取最高，不与其它掩护叠加
 }
 
 /** Intact friendly bunkers shelter infantry under the non-classic combat rules.
@@ -559,10 +562,19 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     ? weatherHitThresholdModifier(ctx.weather)
     : 0;
   const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
+  const trench = !target.mountedOnUnitId && (infantryMGTarget || (isFootUnit(attacker) && isFootUnit(target)))
+    ? trenchCoverModifier(targetTile, attacker.pos, target.pos) : 0;
+  const defense = { trench, hedges, building, crater, rocky, forest, smoke, concealed, trees };
+  if (trench > 0) {
+    // The strongest single protection wins; distance/size/rank/weather are not cover.
+    const keys = Object.keys(defense) as Array<keyof typeof defense>;
+    let winner: keyof typeof defense = 'trench';
+    for (const key of keys) if (defense[key] > defense[winner]) winner = key;
+    for (const key of keys) if (key !== winner) defense[key] = 0;
+  }
   return {
-    size, distance, hedges, building, smoke, concealed, trees, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
-    crater, rocky, forest,
-    threshold: size + distance + hedges + building + crater + rocky + forest + smoke + concealed + trees + rearArc
+    size, distance, ...defense, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
+    threshold: size + distance + Object.values(defense).reduce((sum, value) => sum + value, 0) + rearArc
       + frontArcModifier + actionModifier + weather + unitLevel,
   };
 }
@@ -799,6 +811,8 @@ export interface HighExplosiveReport {
   infantryInCover?: boolean;
   infantryCoverValue?: number;
   infantryCoverSource?: InfantryHighExplosiveCoverSource;
+  /** Directional earthwork bonus applies only to destruction, never suppression. */
+  fortificationCoverValue?: number;
   outcome: HighExplosiveOutcome;
   commanderKilledByHitDoubles?: boolean;
   commanderShieldBlocked?: boolean;
@@ -822,14 +836,28 @@ export function infantryHighExplosiveCoverSource(
     && unit.pos.r === ctx.target.pos.r) === true ? 'friendly_tank' : undefined;
 }
 
-/** Buildings, woods and a friendly tank in the same hex each use the current binary cover value (0/1). */
+/** Legacy shared cover affecting BOTH destruction and suppression; earthworks are separate. */
 export function infantryHighExplosiveCoverValue(ctx: AttackContext): number {
   return infantryHighExplosiveCoverSource(ctx) ? 1 : 0;
 }
 
+/** Infantry use either earthwork; AT-gun bodies receive this bonus only in gun pits. */
+export function highExplosiveFortificationCoverValue(ctx: AttackContext): number {
+  const tile = ctx.map.get(ctx.target.pos);
+  const eligible = (isFootUnit(ctx.target) && !ctx.target.mountedOnUnitId)
+    || (isAntiTankGunUnit(ctx.target) && tile?.fortification?.kind === 'gun_pit');
+  return eligible && trenchCoverModifier(tile, ctx.attacker.pos, ctx.target.pos) > 0 ? 1 : 0;
+}
+
+/** Shared by actual infantry/gun-body HE resolution and map destruction previews. */
+export function highExplosiveDestroyThreshold(ctx: AttackContext): number {
+  return 12 + infantryHighExplosiveCoverValue(ctx) + highExplosiveFortificationCoverValue(ctx)
+    - (ctx.attacker.stats.highExplosivePower ?? 0);
+}
+
 /** Compatibility helper retained for callers that only need a yes/no cover preview. */
 export function infantryHasHighExplosiveCover(ctx: AttackContext): boolean {
-  return infantryHighExplosiveCoverValue(ctx) > 0;
+  return infantryHighExplosiveCoverValue(ctx) > 0 || highExplosiveFortificationCoverValue(ctx) > 0;
 }
 
 export function rollHighExplosiveInfantryOutcome(
@@ -837,6 +865,7 @@ export function rollHighExplosiveInfantryOutcome(
   highExplosivePower: number,
   rng: RNG,
   suppressBase = 6,
+  destroyOnlyCoverValue = 0,
 ): {
   dice: [number, number];
   roll: number;
@@ -846,7 +875,7 @@ export function rollHighExplosiveInfantryOutcome(
 } {
   const dice: [number, number] = [rng.d6(), rng.d6()];
   const roll = dice[0] + dice[1];
-  const destroyThreshold = 12 + coverValue - highExplosivePower;
+  const destroyThreshold = 12 + coverValue + destroyOnlyCoverValue - highExplosivePower;
   const suppressThreshold = suppressBase + coverValue - highExplosivePower;
   const outcome = roll >= destroyThreshold
     ? 'destroyed'
@@ -893,17 +922,19 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   if (isFootUnit(target)) {
     const infantryCoverSource = infantryHighExplosiveCoverSource(ctx);
     const infantryCoverValue = infantryCoverSource ? 1 : 0;
+    const fortificationCoverValue = highExplosiveFortificationCoverValue(ctx);
     const suppressBase = target.attachedToATGunId ? 8 : 6;
-    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryCoverValue, power, rng, suppressBase);
+    const infantryEffect = rollHighExplosiveInfantryOutcome(infantryCoverValue, power, rng, suppressBase, fortificationCoverValue);
     const effectRoll = infantryEffect.roll;
     const effectThreshold = infantryEffect.outcome === 'destroyed'
       ? infantryEffect.destroyThreshold
       : infantryEffect.suppressThreshold;
     return {
       ...base,
-      infantryInCover: infantryCoverValue > 0,
+      infantryInCover: infantryCoverValue > 0 || fortificationCoverValue > 0,
       infantryCoverValue,
       infantryCoverSource,
+      fortificationCoverValue,
       effectDice: infantryEffect.dice,
       effectRoll,
       effectThreshold,
@@ -919,14 +950,16 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   if (isAntiTankGunUnit(target)) {
     const infantryCoverSource = infantryHighExplosiveCoverSource(ctx);
     const infantryCoverValue = infantryCoverSource ? 1 : 0;
+    const fortificationCoverValue = highExplosiveFortificationCoverValue(ctx);
     const effectDice: [number, number] = [rng.d6(), rng.d6()];
     const effectRoll = effectDice[0] + effectDice[1];
-    const destroyThreshold = 12 + infantryCoverValue - power;
+    const destroyThreshold = highExplosiveDestroyThreshold(ctx);
     return {
       ...base,
-      infantryInCover: infantryCoverValue > 0,
+      infantryInCover: infantryCoverValue > 0 || fortificationCoverValue > 0,
       infantryCoverValue,
       infantryCoverSource,
+      fortificationCoverValue,
       effectDice,
       effectRoll,
       effectThreshold: destroyThreshold,
@@ -1675,6 +1708,7 @@ export const MG_MAX_RANGE = 1;
 
 export type MGDenyReason =
   | 'attack.reason.mounted'
+  | 'attack.reason.ridersFirst'
   | 'attack.reason.turretAimRange'
   | 'attack.reason.selfFire'
   | 'attack.reason.destroyedTarget'
@@ -1719,6 +1753,7 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(target);
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
+  if (ctx.units && mountedMachineGunTarget(target, ctx.units) !== target) return { ok: false, reason: 'attack.reason.ridersFirst' };
   const distance = hexDistance(attacker.pos, target.pos);
   if (distance === 0 || distance > MG_MAX_RANGE) return { ok: false, reason: 'attack.reason.mgRange' };
   const raySmokeHexes = firingRaySmokeHexes(ctx);

@@ -1,21 +1,22 @@
 import { Color, Graphics, Node, resources, Sprite, SpriteFrame, UITransform } from 'cc';
 import { tankRiders } from '../core/TankRiding';
-import type { Unit } from '../core/types';
-import { AMERICAN_SEATED_SPRITE_PATHS, TANK_RIDER_COLORS, TANK_RIDER_HIP_ANCHOR, TANK_RIDER_INWARD_OFFSET_TO_HEIGHT, TANK_RIDER_SEATS, TANK_RIDER_WIDTH_TO_HULL, tankRiderSeats } from './TankRiderVisual';
+import type { Unit, UnitKind } from '../core/types';
+import { SEATED_INFANTRY_VISUALS, seatedInfantryVisualOf, TANK_RIDER_HIP_ANCHOR, TANK_RIDER_INWARD_OFFSET_TO_HEIGHT, TANK_RIDER_SEATS, TANK_RIDER_WIDTH_TO_HULL, tankRiderSeats } from './TankRiderVisual';
 
 interface RiderSlot { sprite: Sprite; fallback: Graphics }
 interface RiderGroup { root: Node; slots: RiderSlot[]; shadow: Graphics }
 
 /** Children of the hull inherit move/turn interpolation and engine vibration, never turret rotation. */
 export class TankRiderRenderer {
-  private frames: Array<SpriteFrame | null> = [null, null, null];
+  private frames = new Map<string, SpriteFrame>();
   private groups = new Map<string, RiderGroup>();
 
   load(onReady: () => void): void {
-    AMERICAN_SEATED_SPRITE_PATHS.forEach((path, index) => {
+    const paths = new Set(Object.values(SEATED_INFANTRY_VISUALS).flatMap(visual => [...visual.paths]));
+    paths.forEach(path => {
       resources.load(path, SpriteFrame, (error, frame) => {
         if (error || !frame) { console.warn(`[TankRiders] Cannot load ${path}`, error); return; }
-        this.frames[index] = frame;
+        this.frames.set(path, frame);
         onReady();
       });
     });
@@ -33,11 +34,12 @@ export class TankRiderRenderer {
   draw(tank: Unit, hull: Sprite, units: readonly Unit[]): void {
     const infantry = tankRiders(tank, units)[0];
     if (tank.destroyed || !infantry) return;
-    this.drawPreview(tank.id, hull, infantry.mountedDoubleSide);
+    this.drawPreview(tank.id, hull, infantry.mountedDoubleSide, infantry.kind);
   }
 
   /** The tank image debugger shares the runtime seats, sprites and hull parenting. */
-  drawPreview(id: string, hull: Sprite, doubleSide: 'left' | 'right' = 'right'): void {
+  drawPreview(id: string, hull: Sprite, doubleSide: 'left' | 'right' = 'right', kind: UnitKind = 'american_infantry'): void {
+    const visual = seatedInfantryVisualOf(kind);
     let group = this.groups.get(id);
     if (!group) {
       const root = new Node(`TankRiders_${id}`);
@@ -45,7 +47,7 @@ export class TankRiderRenderer {
       root.addComponent(UITransform).setContentSize(1, 1);
       const shadow = root.addComponent(Graphics);
       const slots = TANK_RIDER_SEATS.map((_, index) => {
-        const node = new Node(`SeatedAmerican_${index + 1}`);
+        const node = new Node(`SeatedInfantry_${index + 1}`);
         node.layer = hull.node.layer;
         node.addComponent(UITransform);
         const sprite = node.addComponent(Sprite);
@@ -69,7 +71,7 @@ export class TankRiderRenderer {
     group.shadow.fillColor = new Color(0, 0, 0, Math.round(hull.color.a * 0.35));
     tankRiderSeats(doubleSide).forEach((seat, index) => {
       const { sprite, fallback } = group!.slots[index];
-      const frame = this.frames[index];
+      const frame = this.frames.get(visual.paths[index]) ?? null;
       const height = width * (frame ? frame.rect.height / frame.rect.width : 1359 / 1158);
       const node = sprite.node;
       const x = seat.x * size.width;
@@ -79,7 +81,7 @@ export class TankRiderRenderer {
       node.setPosition(x, y, 0);
       node.angle = seat.angle;
       sprite.spriteFrame = frame;
-      const color = TANK_RIDER_COLORS[index];
+      const color = visual.colors[index];
       sprite.color = new Color(color.r, color.g, color.b, hull.color.a);
       const transform = node.getComponent(UITransform)!;
       transform.setAnchorPoint(TANK_RIDER_HIP_ANCHOR.x, TANK_RIDER_HIP_ANCHOR.y);

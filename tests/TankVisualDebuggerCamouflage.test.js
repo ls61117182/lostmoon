@@ -40,9 +40,11 @@ function setup() {
     previewRoot: new Node(), engineVibrationLayer: null, exhaustPreviewGraphics: null,
     hexR: 185, bodyAngleDeg: 35, turretAngleDeg: 90, lastPivot: { x: 0, y: 0 },
     commanderHatchState: 'closed', commanderHatchFrames: {}, showMuzzleFlash: false,
+    machineGunPick: null, machineGunTransforms: {}, machineGunPickBtn: { label: {}, redraw() {} },
+    machineGunHint: {}, addMachineGunPorts() {},
     showTankRiders: false, tankRiderDoubleSide: 'right', tankRidersBtn: { label: {}, redraw() {} },
     tankRiderRenderer: { clear() { riderDraws.length = 0; },
-      drawPreview(id, hull, doubleSide) { riderDraws.push({ id, hull, doubleSide, spriteCount: sprites.length }); } },
+      drawPreview(id, hull, doubleSide, kind) { riderDraws.push({ id, hull, doubleSide, kind, spriteCount: sprites.length }); } },
     selectedLabel: {}, bodyAngleLabel: {}, turretAngleLabel: {}, statusLabel: {},
     camouflageBtn: { label: {}, redraw() {} },
     MODE_BTN_ACTIVE: 'active', MODE_BTN_IDLE: 'idle', TEXT_DISABLED: 'disabled', TEXT_TITLE: 'title', TEXT_PRIMARY: 'primary',
@@ -52,7 +54,8 @@ function setup() {
     addSprite: (parent, sf, ...transform) => {
       const sprite = { path: sf.path, transform }; sprites.push(sprite); return sprite;
     },
-    getUnitStats: () => ({}),
+    getUnitStats: k => ({ faction: k === 'sherman' ? 'usa' : 'german' }),
+    seatedInfantryKindForFaction: require('../assets/scripts/view/TankRiderVisual.ts').seatedInfantryKindForFaction,
     resources: { load: (path, Type, callback) => pending.push({ path, callback }) },
   });
   const api = vm.runInContext(compiled, ctx);
@@ -113,6 +116,7 @@ test('rider toggle shares the hull renderer, preserves drafts and hides riders o
   assert.equal(ctx.tankRidersBtn.label.string, '卸载步兵');
   assert.equal(riderDraws.length, 1);
   assert.equal(riderDraws[0].doubleSide, 'left');
+  assert.equal(riderDraws[0].kind, 'german_infantry');
   assert.match(riderDraws[0].hull.path, /tiger_top_hull/);
   assert.equal(riderDraws[0].spriteCount, 1, 'riders attach to the hull before the turret is drawn');
   ctx.turretAngleDeg = 135; sprites.length = 0; api.refreshPreview();

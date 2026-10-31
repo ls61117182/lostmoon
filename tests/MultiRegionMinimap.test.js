@@ -8,6 +8,7 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
 const { generateMultiRegionPackage } = require('../assets/scripts/core/MultiRegionGenerator.ts');
 const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
 const { RNG } = require('../assets/scripts/core/Dice.ts');
+const { neighbors } = require('../assets/scripts/core/HexGrid.ts');
 const { buildMultiRegionMinimap } = require('../assets/scripts/view/MultiRegionMinimap.ts');
 const fixture = count => loadMission(generateMultiRegionPackage(20261026, count).mission, new RNG(1), { hardcore: true });
 
@@ -17,6 +18,21 @@ test('4–6 region terrain thumbnails fit the UI, preserve shared edges, and kee
     assert.equal(map.cells.length, 36 * count);
     assert.equal(map.regions.length, count);
     assert.equal(map.regions.filter(region => region.current).length, 1);
+    if (count === 4) {
+      const [a1, a2, a3, a4] = ['A1', 'A2', 'A3', 'A4'].map(id => map.regions.find(region => region.id === id));
+      assert(Math.abs(a1.x - a2.x) < 1e-6, 'A1/A2 share the left column');
+      assert(Math.abs(a3.x - a4.x) < 1e-6, 'A3/A4 share the right column');
+      assert(a1.x < a3.x && a2.x < a4.x);
+      assert(a1.y < a2.y && a3.y < a4.y, 'UI Y increases upward: A1/A3 below A2/A4');
+      const regionById = id => mission.data.multiRegion.regions.find(region => region.id === id);
+      for (const [left, right] of [['A1', 'A2'], ['A1', 'A3'], ['A2', 'A4'], ['A3', 'A4']]) {
+        const adjacent = new Set(regionById(right).tileKeys);
+        assert(regionById(left).tileKeys.some(key => {
+          const [q, r] = key.split(',').map(Number);
+          return neighbors({ q, r }).some(pos => adjacent.has(`${pos.q},${pos.r}`));
+        }), `${left}/${right} must meet along playable hex edges`);
+      }
+    }
     for (const cell of map.cells) for (const point of cell.corners) {
       assert(Math.abs(point.x) <= 99.001);
       assert(point.y >= -68.001 && point.y <= 74.001);

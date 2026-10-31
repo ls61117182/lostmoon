@@ -1,0 +1,1325 @@
+{
+  "version": 1,
+  "size": [
+    222,
+    256
+  ],
+  "pivot": [
+    0.5,
+    0.5
+  ],
+  "directionOrder": [
+    "E",
+    "SE",
+    "SW",
+    "W",
+    "NW",
+    "NE"
+  ],
+  "artOnly": true,
+  "canonicalShapeCountPerKind": 14,
+  "surfaceCount": 28,
+  "foregroundCount": 28,
+  "trenchFloorWidth": 28,
+  "pitFloorDiameter": 120,
+  "mouthBleed": 2,
+  "unitFacingRestriction": false,
+  "canonicalMasks": [
+    0,
+    1,
+    3,
+    5,
+    7,
+    9,
+    11,
+    13,
+    15,
+    21,
+    23,
+    27,
+    31,
+    63
+  ],
+  "note": "Reuse road rotation mapping. 000000 is an isolated earthwork, not absence. Missing configuration means no fortification. Connections are communications trenches, never weapon firing arcs. Draw ground, surface, units, then optional foreground rim. Floor and rim contain no units, grass, text or baked effects.",
+  "variants": [
+    {
+      "connections": "000000",
+      "directions": [],
+      "canonicalMask": 0,
+      "canonicalConnections": "000000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_000000_v1.png",
+        "foreground": "trench_000000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_000000_v1.png",
+        "foreground": "gun_pit_000000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100000",
+      "directions": [
+        "E"
+      ],
+      "canonicalMask": 1,
+      "canonicalConnections": "100000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_100000_v1.png",
+        "foreground": "trench_100000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100000_v1.png",
+        "foreground": "gun_pit_100000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010000",
+      "directions": [
+        "SE"
+      ],
+      "canonicalMask": 1,
+      "canonicalConnections": "100000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_100000_v1.png",
+        "foreground": "trench_100000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100000_v1.png",
+        "foreground": "gun_pit_100000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110000",
+      "directions": [
+        "E",
+        "SE"
+      ],
+      "canonicalMask": 3,
+      "canonicalConnections": "110000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_110000_v1.png",
+        "foreground": "trench_110000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110000_v1.png",
+        "foreground": "gun_pit_110000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001000",
+      "directions": [
+        "SW"
+      ],
+      "canonicalMask": 1,
+      "canonicalConnections": "100000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_100000_v1.png",
+        "foreground": "trench_100000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100000_v1.png",
+        "foreground": "gun_pit_100000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101000",
+      "directions": [
+        "E",
+        "SW"
+      ],
+      "canonicalMask": 5,
+      "canonicalConnections": "101000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_101000_v1.png",
+        "foreground": "trench_101000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101000_v1.png",
+        "foreground": "gun_pit_101000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011000",
+      "directions": [
+        "SE",
+        "SW"
+      ],
+      "canonicalMask": 3,
+      "canonicalConnections": "110000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_110000_v1.png",
+        "foreground": "trench_110000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110000_v1.png",
+        "foreground": "gun_pit_110000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111000",
+      "directions": [
+        "E",
+        "SE",
+        "SW"
+      ],
+      "canonicalMask": 7,
+      "canonicalConnections": "111000",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_111000_v1.png",
+        "foreground": "trench_111000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111000_v1.png",
+        "foreground": "gun_pit_111000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000100",
+      "directions": [
+        "W"
+      ],
+      "canonicalMask": 1,
+      "canonicalConnections": "100000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_100000_v1.png",
+        "foreground": "trench_100000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100000_v1.png",
+        "foreground": "gun_pit_100000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100100",
+      "directions": [
+        "E",
+        "W"
+      ],
+      "canonicalMask": 9,
+      "canonicalConnections": "100100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_100100_v1.png",
+        "foreground": "trench_100100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100100_v1.png",
+        "foreground": "gun_pit_100100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010100",
+      "directions": [
+        "SE",
+        "W"
+      ],
+      "canonicalMask": 5,
+      "canonicalConnections": "101000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_101000_v1.png",
+        "foreground": "trench_101000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101000_v1.png",
+        "foreground": "gun_pit_101000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110100",
+      "directions": [
+        "E",
+        "SE",
+        "W"
+      ],
+      "canonicalMask": 11,
+      "canonicalConnections": "110100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_110100_v1.png",
+        "foreground": "trench_110100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110100_v1.png",
+        "foreground": "gun_pit_110100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001100",
+      "directions": [
+        "SW",
+        "W"
+      ],
+      "canonicalMask": 3,
+      "canonicalConnections": "110000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_110000_v1.png",
+        "foreground": "trench_110000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110000_v1.png",
+        "foreground": "gun_pit_110000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101100",
+      "directions": [
+        "E",
+        "SW",
+        "W"
+      ],
+      "canonicalMask": 13,
+      "canonicalConnections": "101100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_101100_v1.png",
+        "foreground": "trench_101100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101100_v1.png",
+        "foreground": "gun_pit_101100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011100",
+      "directions": [
+        "SE",
+        "SW",
+        "W"
+      ],
+      "canonicalMask": 7,
+      "canonicalConnections": "111000",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_111000_v1.png",
+        "foreground": "trench_111000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111000_v1.png",
+        "foreground": "gun_pit_111000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111100",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W"
+      ],
+      "canonicalMask": 15,
+      "canonicalConnections": "111100",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_111100_v1.png",
+        "foreground": "trench_111100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111100_v1.png",
+        "foreground": "gun_pit_111100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000010",
+      "directions": [
+        "NW"
+      ],
+      "canonicalMask": 1,
+      "canonicalConnections": "100000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_100000_v1.png",
+        "foreground": "trench_100000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100000_v1.png",
+        "foreground": "gun_pit_100000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100010",
+      "directions": [
+        "E",
+        "NW"
+      ],
+      "canonicalMask": 5,
+      "canonicalConnections": "101000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_101000_v1.png",
+        "foreground": "trench_101000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101000_v1.png",
+        "foreground": "gun_pit_101000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010010",
+      "directions": [
+        "SE",
+        "NW"
+      ],
+      "canonicalMask": 9,
+      "canonicalConnections": "100100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_100100_v1.png",
+        "foreground": "trench_100100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100100_v1.png",
+        "foreground": "gun_pit_100100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110010",
+      "directions": [
+        "E",
+        "SE",
+        "NW"
+      ],
+      "canonicalMask": 13,
+      "canonicalConnections": "101100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_101100_v1.png",
+        "foreground": "trench_101100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101100_v1.png",
+        "foreground": "gun_pit_101100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001010",
+      "directions": [
+        "SW",
+        "NW"
+      ],
+      "canonicalMask": 5,
+      "canonicalConnections": "101000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_101000_v1.png",
+        "foreground": "trench_101000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101000_v1.png",
+        "foreground": "gun_pit_101000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101010",
+      "directions": [
+        "E",
+        "SW",
+        "NW"
+      ],
+      "canonicalMask": 21,
+      "canonicalConnections": "101010",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_101010_v1.png",
+        "foreground": "trench_101010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101010_v1.png",
+        "foreground": "gun_pit_101010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011010",
+      "directions": [
+        "SE",
+        "SW",
+        "NW"
+      ],
+      "canonicalMask": 11,
+      "canonicalConnections": "110100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_110100_v1.png",
+        "foreground": "trench_110100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110100_v1.png",
+        "foreground": "gun_pit_110100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111010",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NW"
+      ],
+      "canonicalMask": 23,
+      "canonicalConnections": "111010",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_111010_v1.png",
+        "foreground": "trench_111010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111010_v1.png",
+        "foreground": "gun_pit_111010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000110",
+      "directions": [
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 3,
+      "canonicalConnections": "110000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_110000_v1.png",
+        "foreground": "trench_110000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110000_v1.png",
+        "foreground": "gun_pit_110000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100110",
+      "directions": [
+        "E",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 11,
+      "canonicalConnections": "110100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_110100_v1.png",
+        "foreground": "trench_110100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110100_v1.png",
+        "foreground": "gun_pit_110100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010110",
+      "directions": [
+        "SE",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 13,
+      "canonicalConnections": "101100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_101100_v1.png",
+        "foreground": "trench_101100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101100_v1.png",
+        "foreground": "gun_pit_101100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110110",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 27,
+      "canonicalConnections": "110110",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_110110_v1.png",
+        "foreground": "trench_110110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110110_v1.png",
+        "foreground": "gun_pit_110110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001110",
+      "directions": [
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 7,
+      "canonicalConnections": "111000",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_111000_v1.png",
+        "foreground": "trench_111000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111000_v1.png",
+        "foreground": "gun_pit_111000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101110",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 23,
+      "canonicalConnections": "111010",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_111010_v1.png",
+        "foreground": "trench_111010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111010_v1.png",
+        "foreground": "gun_pit_111010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011110",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 15,
+      "canonicalConnections": "111100",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_111100_v1.png",
+        "foreground": "trench_111100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111100_v1.png",
+        "foreground": "gun_pit_111100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111110",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NW"
+      ],
+      "canonicalMask": 31,
+      "canonicalConnections": "111110",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_111110_v1.png",
+        "foreground": "trench_111110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111110_v1.png",
+        "foreground": "gun_pit_111110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000001",
+      "directions": [
+        "NE"
+      ],
+      "canonicalMask": 1,
+      "canonicalConnections": "100000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_100000_v1.png",
+        "foreground": "trench_100000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100000_v1.png",
+        "foreground": "gun_pit_100000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100001",
+      "directions": [
+        "E",
+        "NE"
+      ],
+      "canonicalMask": 3,
+      "canonicalConnections": "110000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_110000_v1.png",
+        "foreground": "trench_110000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110000_v1.png",
+        "foreground": "gun_pit_110000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010001",
+      "directions": [
+        "SE",
+        "NE"
+      ],
+      "canonicalMask": 5,
+      "canonicalConnections": "101000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_101000_v1.png",
+        "foreground": "trench_101000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101000_v1.png",
+        "foreground": "gun_pit_101000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110001",
+      "directions": [
+        "E",
+        "SE",
+        "NE"
+      ],
+      "canonicalMask": 7,
+      "canonicalConnections": "111000",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_111000_v1.png",
+        "foreground": "trench_111000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111000_v1.png",
+        "foreground": "gun_pit_111000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001001",
+      "directions": [
+        "SW",
+        "NE"
+      ],
+      "canonicalMask": 9,
+      "canonicalConnections": "100100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_100100_v1.png",
+        "foreground": "trench_100100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_100100_v1.png",
+        "foreground": "gun_pit_100100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101001",
+      "directions": [
+        "E",
+        "SW",
+        "NE"
+      ],
+      "canonicalMask": 11,
+      "canonicalConnections": "110100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_110100_v1.png",
+        "foreground": "trench_110100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110100_v1.png",
+        "foreground": "gun_pit_110100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011001",
+      "directions": [
+        "SE",
+        "SW",
+        "NE"
+      ],
+      "canonicalMask": 13,
+      "canonicalConnections": "101100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_101100_v1.png",
+        "foreground": "trench_101100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101100_v1.png",
+        "foreground": "gun_pit_101100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111001",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NE"
+      ],
+      "canonicalMask": 15,
+      "canonicalConnections": "111100",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_111100_v1.png",
+        "foreground": "trench_111100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111100_v1.png",
+        "foreground": "gun_pit_111100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000101",
+      "directions": [
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 5,
+      "canonicalConnections": "101000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_101000_v1.png",
+        "foreground": "trench_101000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101000_v1.png",
+        "foreground": "gun_pit_101000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100101",
+      "directions": [
+        "E",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 13,
+      "canonicalConnections": "101100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_101100_v1.png",
+        "foreground": "trench_101100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101100_v1.png",
+        "foreground": "gun_pit_101100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010101",
+      "directions": [
+        "SE",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 21,
+      "canonicalConnections": "101010",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_101010_v1.png",
+        "foreground": "trench_101010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101010_v1.png",
+        "foreground": "gun_pit_101010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110101",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 23,
+      "canonicalConnections": "111010",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_111010_v1.png",
+        "foreground": "trench_111010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111010_v1.png",
+        "foreground": "gun_pit_111010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001101",
+      "directions": [
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 11,
+      "canonicalConnections": "110100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_110100_v1.png",
+        "foreground": "trench_110100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110100_v1.png",
+        "foreground": "gun_pit_110100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101101",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 27,
+      "canonicalConnections": "110110",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_110110_v1.png",
+        "foreground": "trench_110110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110110_v1.png",
+        "foreground": "gun_pit_110110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011101",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 23,
+      "canonicalConnections": "111010",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_111010_v1.png",
+        "foreground": "trench_111010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111010_v1.png",
+        "foreground": "gun_pit_111010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111101",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NE"
+      ],
+      "canonicalMask": 31,
+      "canonicalConnections": "111110",
+      "rotationSteps": 5,
+      "rotationDegrees": -300,
+      "trench": {
+        "surface": "trench_111110_v1.png",
+        "foreground": "trench_111110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111110_v1.png",
+        "foreground": "gun_pit_111110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000011",
+      "directions": [
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 3,
+      "canonicalConnections": "110000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_110000_v1.png",
+        "foreground": "trench_110000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110000_v1.png",
+        "foreground": "gun_pit_110000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100011",
+      "directions": [
+        "E",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 7,
+      "canonicalConnections": "111000",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_111000_v1.png",
+        "foreground": "trench_111000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111000_v1.png",
+        "foreground": "gun_pit_111000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010011",
+      "directions": [
+        "SE",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 11,
+      "canonicalConnections": "110100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_110100_v1.png",
+        "foreground": "trench_110100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110100_v1.png",
+        "foreground": "gun_pit_110100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110011",
+      "directions": [
+        "E",
+        "SE",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 15,
+      "canonicalConnections": "111100",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_111100_v1.png",
+        "foreground": "trench_111100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111100_v1.png",
+        "foreground": "gun_pit_111100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001011",
+      "directions": [
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 13,
+      "canonicalConnections": "101100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_101100_v1.png",
+        "foreground": "trench_101100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_101100_v1.png",
+        "foreground": "gun_pit_101100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101011",
+      "directions": [
+        "E",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 23,
+      "canonicalConnections": "111010",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_111010_v1.png",
+        "foreground": "trench_111010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111010_v1.png",
+        "foreground": "gun_pit_111010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011011",
+      "directions": [
+        "SE",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 27,
+      "canonicalConnections": "110110",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_110110_v1.png",
+        "foreground": "trench_110110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_110110_v1.png",
+        "foreground": "gun_pit_110110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111011",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 31,
+      "canonicalConnections": "111110",
+      "rotationSteps": 4,
+      "rotationDegrees": -240,
+      "trench": {
+        "surface": "trench_111110_v1.png",
+        "foreground": "trench_111110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111110_v1.png",
+        "foreground": "gun_pit_111110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "000111",
+      "directions": [
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 7,
+      "canonicalConnections": "111000",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_111000_v1.png",
+        "foreground": "trench_111000_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111000_v1.png",
+        "foreground": "gun_pit_111000_v1_rim.png"
+      }
+    },
+    {
+      "connections": "100111",
+      "directions": [
+        "E",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 15,
+      "canonicalConnections": "111100",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_111100_v1.png",
+        "foreground": "trench_111100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111100_v1.png",
+        "foreground": "gun_pit_111100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "010111",
+      "directions": [
+        "SE",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 23,
+      "canonicalConnections": "111010",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_111010_v1.png",
+        "foreground": "trench_111010_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111010_v1.png",
+        "foreground": "gun_pit_111010_v1_rim.png"
+      }
+    },
+    {
+      "connections": "110111",
+      "directions": [
+        "E",
+        "SE",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 31,
+      "canonicalConnections": "111110",
+      "rotationSteps": 3,
+      "rotationDegrees": -180,
+      "trench": {
+        "surface": "trench_111110_v1.png",
+        "foreground": "trench_111110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111110_v1.png",
+        "foreground": "gun_pit_111110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "001111",
+      "directions": [
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 15,
+      "canonicalConnections": "111100",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_111100_v1.png",
+        "foreground": "trench_111100_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111100_v1.png",
+        "foreground": "gun_pit_111100_v1_rim.png"
+      }
+    },
+    {
+      "connections": "101111",
+      "directions": [
+        "E",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 31,
+      "canonicalConnections": "111110",
+      "rotationSteps": 2,
+      "rotationDegrees": -120,
+      "trench": {
+        "surface": "trench_111110_v1.png",
+        "foreground": "trench_111110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111110_v1.png",
+        "foreground": "gun_pit_111110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "011111",
+      "directions": [
+        "SE",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 31,
+      "canonicalConnections": "111110",
+      "rotationSteps": 1,
+      "rotationDegrees": -60,
+      "trench": {
+        "surface": "trench_111110_v1.png",
+        "foreground": "trench_111110_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111110_v1.png",
+        "foreground": "gun_pit_111110_v1_rim.png"
+      }
+    },
+    {
+      "connections": "111111",
+      "directions": [
+        "E",
+        "SE",
+        "SW",
+        "W",
+        "NW",
+        "NE"
+      ],
+      "canonicalMask": 63,
+      "canonicalConnections": "111111",
+      "rotationSteps": 0,
+      "rotationDegrees": 0,
+      "trench": {
+        "surface": "trench_111111_v1.png",
+        "foreground": "trench_111111_v1_rim.png"
+      },
+      "gun_pit": {
+        "surface": "gun_pit_111111_v1.png",
+        "foreground": "gun_pit_111111_v1_rim.png"
+      }
+    }
+  ]
+}

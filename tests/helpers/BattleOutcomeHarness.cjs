@@ -12,8 +12,15 @@ class Node {
   setScale(x) { this.scale = x; }
   setSiblingIndex(index) { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent.children.splice(index, 0, this); }
   on(name, fn) { this.events[name] = fn; }
+  removeFromParent() { this.parent.children.splice(this.parent.children.indexOf(this), 1); this.parent = null; }
+  destroy() { this.destroyed = true; }
 }
-class UITransform { setContentSize(width, height) { this.contentSize = { width, height }; } }
+class UITransform {
+  setContentSize(width, height) { this.contentSize = { width, height }; }
+  setAnchorPoint(x, y) { this.anchorPoint = { x, y }; }
+}
+class Mask { static Type = { GRAPHICS_RECT: 0 }; }
+class ScrollView { scrollToTop() { this.content.setPosition(0, 102); } }
 class Label { static Overflow = { SHRINK: 1 }; }
 class Color { constructor(r, g, b, a = 255) { Object.assign(this, { r, g, b, a }); } }
 class Graphics {
@@ -24,7 +31,7 @@ class Graphics {
   fill() { this.shapes.push({ ...this.pending, fill: this.fillColor }); }
   stroke() { this.shapes.push({ ...this.pending, stroke: this.strokeColor }); }
 }
-const cc = { Node, Label, Color, UITransform, Graphics, BlockInputEvents: class {}, HorizontalTextAlignment: { LEFT: 0, CENTER: 1 }, VerticalTextAlignment: { CENTER: 1 } };
+const cc = { Node, Label, Color, UITransform, Graphics, Mask, ScrollView, BlockInputEvents: class {}, HorizontalTextAlignment: { LEFT: 0, CENTER: 1 }, VerticalTextAlignment: { CENTER: 1 } };
 function load(name, requires = {}) {
   const file = path.resolve(__dirname, '../../assets/scripts', name + '.ts');
   const mod = { exports: {} };
@@ -44,8 +51,10 @@ function create(width = 1280, height = 720, hostWidth = 100, hostHeight = 100) {
   const parent = new Node('BattleScene');
   parent.addComponent(UITransform).setContentSize(hostWidth, hostHeight);
   const calls = [];
-  const panel = new BattleOutcomePanel(parent, () => calls.push('retry'), () => calls.push('menu'), { width, height });
-  return { panel, parent, calls };
+  const viewChanges = [];
+  const panel = new BattleOutcomePanel(parent, () => calls.push('retry'), () => calls.push('menu'), { width, height },
+    viewing => viewChanges.push(viewing));
+  return { panel, parent, calls, viewChanges };
 }
 function find(node, name) { return node.name === name ? node : node.children.map(n => find(n, name)).find(Boolean); }
 module.exports = { ...cc, ...statistics, ...lang, create, find };

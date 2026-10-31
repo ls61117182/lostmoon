@@ -10,6 +10,7 @@
 
 // ---------- 坐标 ----------
 import type { TurnEndEffectType, ReinforcementSide } from './TurnEndEventDB';
+import type { FortificationArtConfig } from './FortificationArt';
 
 export interface RoundEventConfig {
   effectType: TurnEndEffectType;
@@ -63,6 +64,10 @@ export type UrbanTileKind = 'ground' | 'road' | 'indestructible' | 'destructible
 export interface Tile {
   pos: Axial;
   terrain: TerrainType;
+  /** Absolute terrain height; omitted means zero. Negative values are valid. */
+  height?: number;
+  /** Impassable height transitions, E, SE, SW, W, NW, NE. Either side may mark an edge. */
+  cliffs?: [boolean, boolean, boolean, boolean, boolean, boolean];
   /** Purely visual terrain outside the playable battlefield; units cannot enter. */
   displayOnly?: boolean;
   /** 建筑叠加：非独立地形；坦克可入；视线仅路径中间格阻挡；目标仍 +1 掩护 */
@@ -83,6 +88,8 @@ export interface Tile {
   barbedWire?: [number, number, number, number, number, number];
   steelHedgehogs?: boolean;
   crater?: boolean;
+  /** Static earthwork; infantry occupy it automatically. Does not block sight. */
+  fortification?: FortificationArtConfig;
   /**
    * 公路视觉：第 i 位为 true 表示本格与「第 i 向邻格」之间那条格边中点 → 本格心绘有一段道路。
    * 仅对 `terrain==='road'` 或叠桥水域有效；纯视觉字段，不影响移动 / 视线 / 骰子规则。
@@ -216,6 +223,7 @@ export type UnitKind =
   | 'type4'
   | 'at_gun'
   | 'pak38'
+  | 'pak43'
   | 'flak88'
   | 'japanese_infantry'
   | 'american_infantry'
@@ -276,6 +284,7 @@ export function infantryKindForFaction(faction: Faction): ATGunCrewKind {
 const ANTI_TANK_GUN_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
   'at_gun',
   'pak38',
+  'pak43',
   'flak88',
 ]);
 
@@ -858,6 +867,10 @@ export interface TruckPathEntry extends Offset {
 }
 
 export interface TileDef {
+  /** Absolute terrain height, default 0; finite negative values are allowed. */
+  height?: number;
+  /** Impassable slopes: six 0/1 flags, E, SE, SW, W, NW, NE. Equal heights ignore these flags. */
+  cliff?: string;
   /**
    * 基底地形简写：r=公路 f=田地 m=泥地 F=林地 w=水域。
    * 旧版 `b` 表示「整格为建筑」已废弃，见 MissionLoader 会转为 f+建筑。
@@ -890,6 +903,8 @@ export interface TileDef {
    * 纯视觉字段，不影响移动 / 视线 / 骰子；缺省时本格不绘制道路条带（视觉退化为整格平涂的公路色）。
    */
   rd?: string;
+  /** Earthwork overlay, connections in road rd order E,SE,SW,W,NW,NE. */
+  fort?: FortificationArtConfig;
   /** 援军编号 1..6（红格；掷骰放置步兵时用，全图不重复） */
   rid?: number;
   /** `rid` support spawn facing; same 0..5 direction index as `ef`. */

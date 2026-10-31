@@ -325,7 +325,7 @@ assert.match(battleSceneSource,
   /highExplosiveCollateral\.length[\s\S]*?attackerLabel} → \$\{unitDisplayName\(collateral\.target\.kind\)}[\s\S]*?highExplosiveCollateralRows\.push/,
   'the tank HE result panel must add an attacker-to-infantry result section below the tank result');
 assert.match(battleSceneSource,
-  /basePanelH \+ highExplosiveCollateral\.length \* 116[\s\S]*?collateralAnchorY = heHasEffectRow \? penDiceY : hitDiceY[\s\S]*?rowY = collateralAnchorY - 126 - i \* 110[\s\S]*?rowY \+ 54/,
+  /basePanelH \+ \(secondaryMGReport \? 80 : 0\) \+ highExplosiveCollateral\.length \* 116[\s\S]*?collateralAnchorY = heHasEffectRow \? penDiceY : hitDiceY[\s\S]*?rowY = collateralAnchorY - 126 - i \* 110[\s\S]*?rowY \+ 54/,
   'collateral HE rows must reserve separate vertical space for their title and dice');
 assert.match(battleSceneSource,
   /applyHighExplosiveAttackResult\([\s\S]*?collateralResults[\s\S]*?applyHighExplosiveAttack\(collateral\.target, collateral\.report\)/,
@@ -334,7 +334,7 @@ assert.match(battleSceneSource,
   /else \{[\s\S]*?penVerdictLabel\.node\.active = false[\s\S]*?for \(let i = 0; i < show\.highExplosiveCollateralRows\.length; i\+\+\)/,
   'collateral infantry results must still be revealed when the primary HE attack misses');
 assert.match(battleSceneSource,
-  /shellType === 'he' && isFootUnit\(e\)[\s\S]*?destroyNeed = 12 \+ infantryHighExplosiveCoverValue\(ctx\)[\s\S]*?sherman\.stats\.highExplosivePower[\s\S]*?probHit2d6\(destroyNeed\)/,
+  /shellType === 'he' && isFootUnit\(e\)[\s\S]*?destroyNeed = highExplosiveDestroyThreshold\(ctx\)[\s\S]*?probHit2d6\(destroyNeed\)/,
   'HE infantry targeting preview must show only the cover-dependent destruction threshold and chance');
 assert.match(battleSceneSource,
   /if \(!automaticHit\)[\s\S]*?else \{[\s\S]*?d1\.node\.parent!\.active = false[\s\S]*?hitVerdict\.node\.active = false/,

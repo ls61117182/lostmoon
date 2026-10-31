@@ -1,0 +1,101 @@
+import type { Axial, Direction, Tile, TileDef } from './types';
+
+export const SLOPE_DIRECTIONS = ['E', 'SE', 'SW', 'W', 'NW', 'NE'] as const;
+const STEPS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]] as const;
+export const tileHeight = (tile: { height?: number } | null | undefined): number => tile?.height ?? 0;
+/** A restrained surface value supports the slope relief without replacing the base material. */
+export function elevationSurfaceTint(height: number): { value: number; alpha: number } | null {
+  return height === 0 ? null : { value: height > 0 ? 255 : 0,
+    alpha: Math.min(26, (height > 0 ? 12 : 18) + Math.log2(Math.max(1, Math.abs(height))) * 3) };
+}
+
+export function validateElevation(tile: Pick<TileDef, 'height' | 'cliff'>): void {
+  if (tile.height !== undefined && (typeof tile.height !== 'number' || !Number.isFinite(tile.height))) {
+    throw new Error('height must be a finite number (default 0; negative heights are allowed)');
+  }
+  if (tile.cliff !== undefined && (typeof tile.cliff !== 'string' || !/^[01]{6}$/.test(tile.cliff))) {
+    throw new Error('cliff must contain six 0/1 edge flags (E, SE, SW, W, NW, NE)');
+  }
+}
+
+export function isCliffEdge(a: Tile | undefined, b: Tile | undefined, dir: number): boolean {
+  return !!a && !!b && tileHeight(a) !== tileHeight(b)
+    && (!!a.cliffs?.[dir] || !!b.cliffs?.[(dir + 3) % 6]);
+}
+
+export interface ElevationEdge {
+  high: Tile;
+  low: Tile;
+  /** From the higher cell towards the lower cell, independent of which side holds the cliff flag. */
+  direction: Direction;
+  difference: number;
+  blocked: boolean;
+}
+
+/** Emit each shared border once, from its higher side; map holes have no implicit height. */
+export function elevationEdges(tiles: readonly Tile[]): ElevationEdge[] {
+  const key = (p: Axial) => `${p.q},${p.r}`;
+  const lookup = new Map(tiles.map(tile => [key(tile.pos), tile]));
+  const result: ElevationEdge[] = [];
+  for (const high of tiles) for (let direction = 0; direction < 6; direction++) {
+    const step = STEPS[direction];
+    const low = lookup.get(key({ q: high.pos.q + step[0], r: high.pos.r + step[1] }));
+    if (!low || tileHeight(high) <= tileHeight(low)) continue;
+    result.push({ high, low, direction: direction as Direction,
+      difference: tileHeight(high) - tileHeight(low), blocked: isCliffEdge(high, low, direction) });
+  }
+  return result;
+}
+
+/** Height changes change the width of the slope, never the grid or the unit positions. */
+export function slopeDepth(difference: number): number {
+  return Math.min(1.7, 1 + Math.log2(Math.max(1, Math.abs(difference))) * 0.22);
+}
+
+/** Every direction and each supported camera orientation has its own baked lighting. */
+export function slopeSpritePath(direction: number, blocked: boolean, cameraRotation = 0): string {
+  return `textures/terrain/elevation/${blocked ? 'cliff' : 'slope'}_${SLOPE_DIRECTIONS[direction].toLowerCase()}_c${cameraRotation === 90 ? 90 : 0}_v1/spriteFrame`;
+}
+export const SLOPE_SPRITE_PATHS = [0, 90].flatMap(camera => [false, true].flatMap(blocked =>
+  SLOPE_DIRECTIONS.map((_, direction) => slopeSpritePath(direction, blocked, camera))));
+
+/** Local artwork: tangent X, downhill -Y, crest at y=0 (image y=32 of 128). */
+export function slopePlacement(edge: ElevationEdge, size: number) {
+  const a = -edge.direction * Math.PI / 3;
+  const distance = size * Math.sqrt(3) / 2;
+  return { x: Math.cos(a) * distance, y: Math.sin(a) * distance,
+    angle: 90 - edge.direction * 60, width: size * 1.5,
+    height: size * 0.75 * slopeDepth(edge.difference) };
+}
+
+type EditorGrid = Array<Array<TileDef | null>>;
+/** Only height/edge data is needed for the editor's shared slope renderer. */
+export function editorElevationTiles(grid: EditorGrid, parity: 0 | 1 = 0): Tile[] {
+  const result: Tile[] = [];
+  grid.forEach((row, r) => row.forEach((tile, col) => {
+    if (!tile) return;
+    result.push({ pos: { q: col - ((r + parity - ((r + parity) & 1)) >> 1), r }, terrain: 'clear',
+      height: tileHeight(tile), cliffs: tile.cliff?.split('').map(bit => bit === '1') as Tile['cliffs'] });
+  }));
+  return result;
+}
+function editorNeighbor(row: number, col: number, dir: number, parity: 0 | 1) {
+  const step = STEPS[dir], r = row + step[1];
+  const q = col - ((row + parity - ((row + parity) & 1)) >> 1) + step[0];
+  return { row: r, col: q + ((r + parity - ((r + parity) & 1)) >> 1) };
+}
+export function editorCliffState(grid: EditorGrid, row: number, col: number, dir: number, parity: 0 | 1 = 0): boolean {
+  const n = editorNeighbor(row, col, dir, parity);
+  return grid[row]?.[col]?.cliff?.[dir] === '1' || grid[n.row]?.[n.col]?.cliff?.[(dir + 3) % 6] === '1';
+}
+export function setEditorCliff(grid: EditorGrid, row: number, col: number, dir: number, blocked: boolean, parity: 0 | 1 = 0): boolean {
+  if (!Number.isInteger(dir) || dir < 0 || dir > 5 || !grid[row]?.[col]) return false;
+  const write = (tile: TileDef, direction: number) => {
+    const flags = (tile.cliff ?? '000000').split(''); flags[direction] = blocked ? '1' : '0';
+    if (flags.some(bit => bit === '1')) tile.cliff = flags.join(''); else delete tile.cliff;
+  };
+  write(grid[row][col]!, dir);
+  const n = editorNeighbor(row, col, dir, parity), adjacent = grid[n.row]?.[n.col], back = (dir + 3) % 6;
+  if (adjacent?.cliff?.[back] === '1') write(adjacent, back);
+  return true;
+}

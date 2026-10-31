@@ -16,7 +16,7 @@ const ROOT = path.resolve(__dirname, '..');
 const CSV_PATH = path.join(ROOT, 'data', 'tank_visuals.csv');
 const OUT_PATH = path.join(ROOT, 'assets', 'scripts', 'core', 'TankVisualDB.ts');
 
-const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer4_f', 'stug3', 'sturmtiger', 'jagdtiger', 'jagdpanther', 'elefant', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'flak88', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
+const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer4_f', 'stug3', 'sturmtiger', 'jagdtiger', 'jagdpanther', 'elefant', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'type97', 'type95', 'type4', 'at_gun', 'pak38', 'pak43', 'flak88', 'heavy_artillery', 'german_heavy_artillery', 'truck'];
 const SPLIT_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer4_f', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'type97', 'type95', 'type4', 'flak88', 'heavy_artillery', 'german_heavy_artillery'];
 const NUM_FIELDS = [
   'fitScale',
@@ -45,6 +45,10 @@ const NUM_FIELDS = [
   'turretSpritePivotY',
   'muzzleSpriteX',
   'muzzleSpriteY',
+  'coaxialMuzzleSpriteX',
+  'coaxialMuzzleSpriteY',
+  'hullMuzzleSpriteX',
+  'hullMuzzleSpriteY',
   'destroyedOffsetForward',
   'destroyedOffsetRight',
   'destroyedFitScale',
@@ -192,6 +196,8 @@ function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
         ? numberOrDefault(rec, field, 1)
         : (field === 'trackBodyLengthScale' || field === 'trackBodyWidthScale')
           ? numberOrDefault(rec, field, 1)
+        : /^(coaxial|hull)MuzzleSprite[XY]$/.test(field)
+          ? numberOrDefault(rec, field, 0)
         : numberOrThrow(rec, field);
     }
     for (const field of STRING_FIELDS) {
@@ -240,6 +246,9 @@ function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
   lines.push('  trackBodyLengthScale: number;');
   lines.push('  trackBodyWidthScale: number;');
   lines.push('  muzzle: { spriteX: number; spriteY: number };');
+  for (const field of ['coaxialMuzzleSpriteX', 'coaxialMuzzleSpriteY', 'hullMuzzleSpriteX', 'hullMuzzleSpriteY']) {
+    lines.push(`  ${field}: number;`);
+  }
   lines.push('  destroyedOffsetForward: number;');
   lines.push('  destroyedOffsetRight: number;');
   lines.push('  destroyedFitScale: number;');
@@ -276,6 +285,9 @@ function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
   lines.push('  trackBodyLengthScale: 1,');
   lines.push('  trackBodyWidthScale: 1,');
   lines.push('  muzzle: { spriteX: 0, spriteY: 0 },');
+  for (const field of ['coaxialMuzzleSpriteX', 'coaxialMuzzleSpriteY', 'hullMuzzleSpriteX', 'hullMuzzleSpriteY']) {
+    lines.push(`  ${field}: 0,`);
+  }
   lines.push('  destroyedOffsetForward: 0,');
   lines.push('  destroyedOffsetRight: 0,');
   lines.push('  destroyedFitScale: 1,');
@@ -302,7 +314,7 @@ function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
     const exhaustLiteral = exhaustPorts
       .map(port => `{ forward: ${emitNum(port.forward)}, right: ${emitNum(port.right)} }`)
       .join(', ');
-    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, trackBodyLengthScale: ${emitNum(r.trackBodyLengthScale)}, trackBodyWidthScale: ${emitNum(r.trackBodyWidthScale)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)}, commanderHatchSpriteX: ${emitNum(r.commanderHatchSpriteX)}, commanderHatchSpriteY: ${emitNum(r.commanderHatchSpriteY)}, commanderHatchScale: ${emitNum(r.commanderHatchScale)}, exhaustPorts: [${exhaustLiteral}] },`);
+    lines.push(`  ${kind}: { fitScale: ${emitNum(r.fitScale)}, offsetForward: ${emitNum(r.offsetForward)}, offsetRight: ${emitNum(r.offsetRight)}, aspectRatioMul: ${emitNum(r.aspectRatioMul)}, trackBodyLengthScale: ${emitNum(r.trackBodyLengthScale)}, trackBodyWidthScale: ${emitNum(r.trackBodyWidthScale)}, muzzle: { spriteX: ${emitNum(r.muzzleSpriteX)}, spriteY: ${emitNum(r.muzzleSpriteY)} }, coaxialMuzzleSpriteX: ${emitNum(r.coaxialMuzzleSpriteX)}, coaxialMuzzleSpriteY: ${emitNum(r.coaxialMuzzleSpriteY)}, hullMuzzleSpriteX: ${emitNum(r.hullMuzzleSpriteX)}, hullMuzzleSpriteY: ${emitNum(r.hullMuzzleSpriteY)}, destroyedOffsetForward: ${emitNum(r.destroyedOffsetForward)}, destroyedOffsetRight: ${emitNum(r.destroyedOffsetRight)}, destroyedFitScale: ${emitNum(r.destroyedFitScale)}, commanderHatchSpriteX: ${emitNum(r.commanderHatchSpriteX)}, commanderHatchSpriteY: ${emitNum(r.commanderHatchSpriteY)}, commanderHatchScale: ${emitNum(r.commanderHatchScale)}, exhaustPorts: [${exhaustLiteral}] },`);
   }
   lines.push('};');
   lines.push('');

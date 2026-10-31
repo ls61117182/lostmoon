@@ -18,8 +18,12 @@ export function generateMultiRegionPackage(seed = Date.now(), count: 4 | 5 | 6 =
   if (![4, 5, 6].includes(count)) throw new Error('Multi-region maps require 4–6 regions');
   seed = (seed >>> 0) || 1;
   const rng = new RNG(seed);
-  const origins = Array.from({ length: count }, (_, index) => {
-    const col = index % (count === 4 ? 2 : 3), row = Math.floor(index / (count === 4 ? 2 : 3));
+  // Four boards form two staggered columns: A2/A1 on the left, A4/A3 on the right.
+  // Move the former bottom-left board above A1; all offsets remain on the tiling lattice.
+  const origins = count === 4 ? [
+    { q: 0, r: 0 }, { q: 3, r: -6 }, { q: 5, r: 2 }, { q: 8, r: -4 },
+  ] : Array.from({ length: count }, (_, index) => {
+    const col = index % 3, row = Math.floor(index / 3);
     // Even row translations preserve the standard odd-r row alignment as well as its exact outline.
     return { q: col * 8 - row * 3, r: col * -4 + row * 6 };
   });

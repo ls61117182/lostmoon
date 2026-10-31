@@ -40,7 +40,7 @@ assert.match(
 );
 
 const showDiePopover = source.match(
-  /private showDiePopover\(idx: number\) \{[\s\S]*?\n  \}\n\n  \/\/ ---------- 移动阶段动作/,
+  /private playerDieActionItems\(idx: number\) \{[\s\S]*?\n  \}\n\n  \/\/ ---------- 移动阶段动作/,
 );
 assert(showDiePopover, 'BattleScene.showDiePopover() should be found');
 assert.match(

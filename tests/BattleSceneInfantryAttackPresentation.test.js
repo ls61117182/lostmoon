@@ -23,11 +23,12 @@ assert.match(
 
 const volley = battleScene.match(/private\s+spawnInfantryBulletVolley\s*\([\s\S]*?\n  }\n\n/);
 assert(volley, 'spawnInfantryBulletVolley() should be found');
-assert.match(volley[0], /infantrySquadOffsets\(this\.hexSize/);
+assert.match(volley[0], /this\.infantryFormationOffsets\(attacker\)/);
+assert.match(volley[0], /this\.infantryFormationOffsets\(target\)/);
 assert.match(volley[0], /startX:\s*a\.x\s*\+\s*offset\.ox/);
-assert.match(volley[0], /targetX:\s*b\.x\s*\+\s*offset\.ox/);
+assert.match(volley[0], /targetX:\s*b\.x\s*\+\s*targetOffsets\[index\]\.ox/);
 assert.match(volley[0], /startY:\s*a\.y\s*\+\s*offset\.oy/);
-assert.match(volley[0], /targetY:\s*b\.y\s*\+\s*offset\.oy/);
+assert.match(volley[0], /targetY:\s*b\.y\s*\+\s*targetOffsets\[index\]\.oy/);
 assert.match(volley[0], /!isFootUnit\(target\) && !isControlledATGun\(target\)/,
   'the infantry volley should accept a crewed AT gun as its target');
 

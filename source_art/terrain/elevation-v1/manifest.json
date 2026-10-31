@@ -1,0 +1,292 @@
+{
+  "version": 3,
+  "width": 384,
+  "height": 256,
+  "center": 128,
+  "crest": {
+    "slope": 71,
+    "cliff": 87
+  },
+  "anchor": [
+    0.5,
+    0.5
+  ],
+  "lightScreen": [
+    -1,
+    1
+  ],
+  "directions": [
+    "E",
+    "SE",
+    "SW",
+    "W",
+    "NW",
+    "NE"
+  ],
+  "assets": [
+    {
+      "file": "slope_e_c0_v1.png",
+      "direction": 0,
+      "camera": 0,
+      "blocked": false,
+      "lightLocal": [
+        0.7071067811865475,
+        -0.7071067811865475
+      ],
+      "sha256": "ad131a97d0f1172e86c5586bb065f377adef11844704680fc7c82e86f1b997ef"
+    },
+    {
+      "file": "slope_se_c0_v1.png",
+      "direction": 1,
+      "camera": 0,
+      "blocked": false,
+      "lightLocal": [
+        -0.2588190451025207,
+        -0.9659258262890682
+      ],
+      "sha256": "ad555812544caceccb22462e9bde4a4f3d24253ae2dbb2c45aa0cb9edd87cc52"
+    },
+    {
+      "file": "slope_sw_c0_v1.png",
+      "direction": 2,
+      "camera": 0,
+      "blocked": false,
+      "lightLocal": [
+        -0.965925826289068,
+        -0.2588190451025209
+      ],
+      "sha256": "619bb5b8b712aed18800757bf3fd3b8bdac48a3bce916fdcc3966ea92b90ab9e"
+    },
+    {
+      "file": "slope_w_c0_v1.png",
+      "direction": 3,
+      "camera": 0,
+      "blocked": false,
+      "lightLocal": [
+        -0.7071067811865476,
+        0.7071067811865474
+      ],
+      "sha256": "8ce617e2ef42ca80fc369b570f3b911a1794616ba6ddebcb17347bbe06808487"
+    },
+    {
+      "file": "slope_nw_c0_v1.png",
+      "direction": 4,
+      "camera": 0,
+      "blocked": false,
+      "lightLocal": [
+        0.2588190451025203,
+        0.9659258262890684
+      ],
+      "sha256": "b3efd04739a96896c19a8d436680444ab960c55d32d7d187cebc9a63e7dce3d2"
+    },
+    {
+      "file": "slope_ne_c0_v1.png",
+      "direction": 5,
+      "camera": 0,
+      "blocked": false,
+      "lightLocal": [
+        0.9659258262890682,
+        0.2588190451025207
+      ],
+      "sha256": "d59ff44b81673fc35383d8ff2fd64e13f4bbd5f10b13f52504ba1b54214e3d20"
+    },
+    {
+      "file": "cliff_e_c0_v1.png",
+      "direction": 0,
+      "camera": 0,
+      "blocked": true,
+      "lightLocal": [
+        0.7071067811865475,
+        -0.7071067811865475
+      ],
+      "sha256": "60ba3d63bc0dd77ce88b8e02756c44957985dfefea06a3bd965e2e593c9f7352"
+    },
+    {
+      "file": "cliff_se_c0_v1.png",
+      "direction": 1,
+      "camera": 0,
+      "blocked": true,
+      "lightLocal": [
+        -0.2588190451025207,
+        -0.9659258262890682
+      ],
+      "sha256": "596db136f85208a5b6c5b46c6f375d060996cf4878f7262cbfd78a7634c52cef"
+    },
+    {
+      "file": "cliff_sw_c0_v1.png",
+      "direction": 2,
+      "camera": 0,
+      "blocked": true,
+      "lightLocal": [
+        -0.965925826289068,
+        -0.2588190451025209
+      ],
+      "sha256": "88a591d393d21e4fc5e618f98f9e3297f0dc3e29be62b8cf7022b249ee49d676"
+    },
+    {
+      "file": "cliff_w_c0_v1.png",
+      "direction": 3,
+      "camera": 0,
+      "blocked": true,
+      "lightLocal": [
+        -0.7071067811865476,
+        0.7071067811865474
+      ],
+      "sha256": "72a48bbd09c1dd924cd4d673d806c0c93eb12687f780ccccbe9b706cc08467bc"
+    },
+    {
+      "file": "cliff_nw_c0_v1.png",
+      "direction": 4,
+      "camera": 0,
+      "blocked": true,
+      "lightLocal": [
+        0.2588190451025203,
+        0.9659258262890684
+      ],
+      "sha256": "6dd5d44a483917faf8a25214a7ec449ab0e6eb844c37047fb11bd1541c764ffd"
+    },
+    {
+      "file": "cliff_ne_c0_v1.png",
+      "direction": 5,
+      "camera": 0,
+      "blocked": true,
+      "lightLocal": [
+        0.9659258262890682,
+        0.2588190451025207
+      ],
+      "sha256": "b988962fefad2804c586273755aca2f07759c20323ec62d4b1a4300530be9de8"
+    },
+    {
+      "file": "slope_e_c90_v1.png",
+      "direction": 0,
+      "camera": 90,
+      "blocked": false,
+      "lightLocal": [
+        0.7071067811865475,
+        0.7071067811865474
+      ],
+      "sha256": "57e166605645ea3f661305088abcb02e4dd6450d71761fc1b497b64ae46ef551"
+    },
+    {
+      "file": "slope_se_c90_v1.png",
+      "direction": 1,
+      "camera": 90,
+      "blocked": false,
+      "lightLocal": [
+        0.9659258262890682,
+        -0.25881904510252074
+      ],
+      "sha256": "3c2daeda67d1a2979b44a77a71f5f6d539b4392411c36548d164bb8b842e419c"
+    },
+    {
+      "file": "slope_sw_c90_v1.png",
+      "direction": 2,
+      "camera": 90,
+      "blocked": false,
+      "lightLocal": [
+        0.2588190451025209,
+        -0.965925826289068
+      ],
+      "sha256": "6f09353c5bd17cfd41155cfdfcf0c95661190b61e504d4cbe8dd416223b736f0"
+    },
+    {
+      "file": "slope_w_c90_v1.png",
+      "direction": 3,
+      "camera": 90,
+      "blocked": false,
+      "lightLocal": [
+        -0.7071067811865474,
+        -0.7071067811865475
+      ],
+      "sha256": "14f1bb8ee094624731c76cbc062085ae2c3e2771777e19ac9e6ad09f26f041da"
+    },
+    {
+      "file": "slope_nw_c90_v1.png",
+      "direction": 4,
+      "camera": 90,
+      "blocked": false,
+      "lightLocal": [
+        -0.9659258262890683,
+        0.25881904510252035
+      ],
+      "sha256": "e2b4669a2d67c6737303c0ef83e71f71baa526a9a08b34b676007f838561cf71"
+    },
+    {
+      "file": "slope_ne_c90_v1.png",
+      "direction": 5,
+      "camera": 90,
+      "blocked": false,
+      "lightLocal": [
+        -0.2588190451025206,
+        0.9659258262890682
+      ],
+      "sha256": "62db65e111573ede5f7d9ababf32ab4f311f594ca941ae6f390584915d3b3333"
+    },
+    {
+      "file": "cliff_e_c90_v1.png",
+      "direction": 0,
+      "camera": 90,
+      "blocked": true,
+      "lightLocal": [
+        0.7071067811865475,
+        0.7071067811865474
+      ],
+      "sha256": "bf2f8cc4c4df970c400d531ae12454d5699c253003d65f96c8060e5c21e42a28"
+    },
+    {
+      "file": "cliff_se_c90_v1.png",
+      "direction": 1,
+      "camera": 90,
+      "blocked": true,
+      "lightLocal": [
+        0.9659258262890682,
+        -0.25881904510252074
+      ],
+      "sha256": "aad481aac0b2199febc4996929aa8f228ee8cebbc1fbdaf431d93c78cd634f03"
+    },
+    {
+      "file": "cliff_sw_c90_v1.png",
+      "direction": 2,
+      "camera": 90,
+      "blocked": true,
+      "lightLocal": [
+        0.2588190451025209,
+        -0.965925826289068
+      ],
+      "sha256": "8c44058fd40c9254d0b3b5ce82868f14271936ee4044f94ed58d20a9985fb903"
+    },
+    {
+      "file": "cliff_w_c90_v1.png",
+      "direction": 3,
+      "camera": 90,
+      "blocked": true,
+      "lightLocal": [
+        -0.7071067811865474,
+        -0.7071067811865475
+      ],
+      "sha256": "5da612151697d07c09e959cf3e5f37fc2b5f820cf29cb307992a338ec58ab35f"
+    },
+    {
+      "file": "cliff_nw_c90_v1.png",
+      "direction": 4,
+      "camera": 90,
+      "blocked": true,
+      "lightLocal": [
+        -0.9659258262890683,
+        0.25881904510252035
+      ],
+      "sha256": "79e014d3d87cb9432a6833823128358b20335b6264c684c5105af43bee6f3684"
+    },
+    {
+      "file": "cliff_ne_c90_v1.png",
+      "direction": 5,
+      "camera": 90,
+      "blocked": true,
+      "lightLocal": [
+        -0.2588190451025206,
+        0.9659258262890682
+      ],
+      "sha256": "b2124ab5a7b2a4f09937a81c3e003ee289689d31b09f12e77725dcedf3a5e3d9"
+    }
+  ]
+}

@@ -7,7 +7,9 @@
  */
 
 import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialToOffset, hedgeFlagsFromMapJson, hexDistance, roadFlagsFromMapJson } from './HexGrid';
+import { validateElevation } from './Elevation';
 import { validateRoundEvents } from './RoundEvents';
+import { parseFortification } from './Fortification';
 import {
   createTankCrew,
   Axial,
@@ -275,6 +277,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
       const def: TileDef | null | undefined = data.tiles[row]?.[col];
       if (!def) continue;
       const { terrain, hasBuilding } = parseTileDefBase(def);
+      validateElevation(def);
       if (def.wire !== undefined && !/^[012]{6}$/.test(def.wire)) throw new Error('wire must contain six 0/1/2 edge states');
       if (def.sw !== undefined && !/^[01]{6}$/.test(def.sw)) throw new Error('sw must contain six 0/1 edge flags');
       if ((def.sh !== undefined || def.cr !== undefined) && (def.t !== 'eb' || (def.sh !== undefined && def.sh !== 1) || (def.cr !== undefined && def.cr !== 1))) {
@@ -292,6 +295,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
         : undefined;
       const bridgeEnds = parseBridgeEnds(data.id, { col, row }, terrain, def.br);
       const roads = parseRoadFlags(data.id, { col, row }, terrain, !!bridgeEnds, def.rd);
+      const fortification = parseFortification(def.fort, terrain);
       const tile: Tile = {
         pos: offsetToAxial({ col, row }, rowParityOffset),
         terrain,
@@ -300,10 +304,13 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
         hedges: hedgeFlagsFromMapJson(def.h),
         breakwaters: breakwaterFlagsFromMapJson(def.bw),
         seawalls: breakwaterFlagsFromMapJson(def.sw),
+        ...(def.height !== undefined ? { height: def.height } : {}),
+        ...(def.cliff ? { cliffs: hedgeFlagsFromMapJson(def.cliff) } : {}),
         ...(def.wire ? { barbedWire: def.wire.split('').map(Number) as Tile['barbedWire'] } : {}),
         ...(def.sh === 1 ? { steelHedgehogs: true } : {}),
         ...(def.cr === 1 ? { crater: true } : {}),
         ...(roads ? { roads } : {}),
+        ...(fortification ? { fortification } : {}),
         reinforceId: def.rid,
         ...(reinforceFacing !== undefined ? { reinforceFacing } : {}),
         ...(eid !== undefined && eid !== null ? { enemyStartId: eid } : {}),

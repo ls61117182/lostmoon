@@ -21,12 +21,15 @@ const readRows = root => chooseParsedRows(fs.readFileSync(path.join(root, 'data/
 
 test('saving patches only selected fields, retains descriptions/other tanks, and regenerates runtime data', t => {
   const root = fixture(t), before = readRows(root);
-  saveTankVisualPatch(root, { kind: 'maus', values: { turretPivotX: 156, hullOffsetRight: 0.0123, destroyedFitScale: 1.2 } });
+  saveTankVisualPatch(root, { kind: 'maus', values: { turretPivotX: 156, hullOffsetRight: 0.0123, destroyedFitScale: 1.2,
+    coaxialMuzzleSpriteX: 58.25, coaxialMuzzleSpriteY: 33.5, hullMuzzleSpriteX: 40.125, hullMuzzleSpriteY: 62.75 } });
   const after = readRows(root), expected = structuredClone(before);
   const maus = expected.find(row => row[0] === 'maus');
   maus[expected[0].indexOf('turretPivotX')] = '156';
   maus[expected[0].indexOf('hullOffsetRight')] = '0.0123';
   maus[expected[0].indexOf('destroyedFitScale')] = '1.2';
+  for (const [key, value] of Object.entries({ coaxialMuzzleSpriteX: 58.25, coaxialMuzzleSpriteY: 33.5,
+    hullMuzzleSpriteX: 40.125, hullMuzzleSpriteY: 62.75 })) maus[expected[0].indexOf(key)] = String(value);
   assert.deepEqual(after, expected);
   assert.equal(fs.readFileSync(path.join(root, 'data/tank_visuals.csv')).subarray(0, 3).toString('hex'), 'efbbbf');
   const code = fs.readFileSync(path.join(root, 'assets/scripts/core/TankVisualDB.ts'), 'utf8');
@@ -36,6 +39,10 @@ test('saving patches only selected fields, retains descriptions/other tanks, and
   assert.equal(ctx.exports.splitTankGeometryConfigOf('maus').pivot.bodyX, 156);
   assert.equal(ctx.exports.splitTankVisualConfigOf('maus').hullOffsetRight, 0.0123);
   assert.equal(ctx.exports.tankVisualConfigOf('maus').destroyedFitScale, 1.2);
+  assert.equal(ctx.exports.tankVisualConfigOf('maus').coaxialMuzzleSpriteX, 58.25);
+  assert.equal(ctx.exports.tankVisualConfigOf('maus').coaxialMuzzleSpriteY, 33.5);
+  assert.equal(ctx.exports.tankVisualConfigOf('maus').hullMuzzleSpriteX, 40.125);
+  assert.equal(ctx.exports.tankVisualConfigOf('maus').hullMuzzleSpriteY, 62.75);
   // Fixed-gun tanks use the full-sprite fields and the same save path.
   saveTankVisualPatch(root, { kind: 'jagdtiger', values: { muzzleSpriteY: 42, offsetForward: 0.18 } });
   assert.equal(readRows(root).find(row => row[0] === 'jagdtiger')[before[0].indexOf('muzzleSpriteY')], '42');

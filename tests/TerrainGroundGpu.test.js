@@ -35,9 +35,11 @@ class MeshRenderer{setSharedMaterial(m){this.material=m;}}
 class Camera{static ProjectionType={ORTHO:1};static ClearFlag={SOLID_COLOR:1};constructor(){cameras.push(this);this.enabled=true;}}
 class Canvas{}
 class Color{constructor(r,g,b,a){Object.assign(this,{r,g,b,a});}}
+class Graphics{constructor(){this.points=[];}clear(){this.points=[];}moveTo(x,y){this.points.push([x,y]);}lineTo(x,y){this.points.push([x,y]);}close(){}fill(){}}
+class Mask{static Type={GRAPHICS_STENCIL:1};constructor(){this.subComp=new Graphics();this.subComp.points=[[0,0],[1,0],[1,1],[0,1]];}}
 const events=new Map(),director={root:{device:{capabilities:{screenSpaceSignY:1}}},once(k,fn){events.set(k,fn);},off(k,fn){if(events.get(k)===fn)events.delete(k);}},Director={EVENT_AFTER_DRAW:'draw'};
 const callbacks=new Map(),requests=[];
-const cc={Node,UITransform,Sprite,SpriteFrame,Rect,Size,Texture2D,RenderTexture,Material,MeshRenderer,Camera,Canvas,Color,Vec4,director,Director,EffectAsset:class{},utils:{createMesh(){return {destroy(){this.destroyed=true;}};}},resources:{load(path,type,callback){requests.push(path);callbacks.set(path,callback);}}};
+const cc={Node,UITransform,Sprite,SpriteFrame,Rect,Size,Texture2D,RenderTexture,Material,MeshRenderer,Camera,Canvas,Color,Graphics,Mask,Vec4,director,Director,EffectAsset:class{},utils:{createMesh(){return {destroy(){this.destroyed=true;}};}},resources:{load(path,type,callback){requests.push(path);callbacks.set(path,callback);}}};
 const baker=load('assets/scripts/view/TerrainGroundGpuBaker.ts',{'cc':cc,'./TerrainGroundRaster':raster,'./TerrainGroundGpuData':data});
 const {TerrainGroundRenderer}=load('assets/scripts/view/TerrainGroundRenderer.ts',{'cc':cc,'./TerrainGroundRaster':raster,'./TerrainGroundGpuData':data,'./TerrainGroundGpuBaker':baker});
 function frame(){const fn=events.get('draw');if(fn){events.delete('draw');fn();}}
@@ -91,4 +93,40 @@ if(bundle.europeanSummer.bridgeArtwork){
  const paintedTexture=paintedMaterial.bridgeArtwork;bridgeRenderer.destroy();assert(paintedTexture.destroyed,'painted bridge texture is released');
  assert(textures.every(t=>t.destroyed),'density changes and artwork textures do not leak');
 }
-console.log('GPU terrain: compact map data, atlas padding, offscreen lifecycle, redraw cache, local invalidation, cancellation, water clocks, painted bridge density and shader failure passed.');
+// The inspector clips the SAME baked colour frames, including all four blocks
+// at a block corner. Neither map transforms nor modal closure rebuild terrain.
+{
+ const mapParent=new Node('inspect-map'),r=new TerrainGroundRenderer(mapParent,bundle),modal=new Node('inspect-modal');
+ const map=[tile(0,0,'water',{bridgeEnds:[1,4]}),tile(1,0),tile(-1,-1)];
+ r.draw(map,false,60,123,456,true);assert.equal(r.addTilePreview(modal,0,0,0,24,38),false,'unfinished caches use the existing fallback');
+ effects();ready(r,map,false,60,123,456,true);
+ const beforeBakes=bakes,beforeUploads=uploads;
+ assert(r.addTilePreview(modal,0,0,0,24,38));
+ const preview=modal.children[0],parts=preview.children.filter(n=>n.isValid);
+ assert.equal(parts.length,4,'a tile on a chunk corner includes every intersecting block');
+ assert.equal(preview.getComponent(Mask).subComp.points.length,6,'crop uses a hexagonal stencil');
+ assert.deepEqual(preview.position,{x:0,y:24,z:0});
+ const frames=[];
+ for(const part of parts){
+   const frame=part.getComponent(Sprite).spriteFrame,source=[...r.chunks.values()].find(c=>c.frame===frame);frames.push(frame);
+   assert(source,'preview must borrow the actual map frame, not a rebuilt terrain icon');
+   const k=38/48,ut=part.getComponent(UITransform);
+   assert.equal(ut.width,(384+2*source.padding)*k,'honours the actual 1x/2x padding');
+   assert.equal(part.position.x,(source.x+192)*k,'crop is independent of map zoom and offset');
+   assert.equal(part.position.y,-(source.y+192)*k,'Y-down bake becomes Y-up UI exactly once');
+ }
+ ready(r,map,false,90,-500,700,true);
+ assert.equal(bakes,beforeBakes);assert.equal(uploads,beforeUploads);
+ assert(parts.every((n,i)=>n.getComponent(Sprite).spriteFrame===frames[i]));
+ assert.equal(r.addTilePreview(modal,30,30,0,24,38),false,'missing blocks cannot produce a partial thumbnail');
+ assert.equal(modal.children.length,1);
+ preview.destroy();r.update(.02);assert.equal(r.previews.size,0,'closing the modal removes borrowed references');
+ assert(frames.every(f=>!f.destroyed),'closing the modal cannot destroy map-owned frames');
+ assert(r.addTilePreview(modal,0,0,0,24,38));const seasonal=modal.children[1];
+ ready(r,map,true,60,0,0,true);
+ assert(seasonal.active&&seasonal.isValid,'an open crop refreshes after a seasonal rebake');
+ assert(seasonal.children.filter(n=>n.isValid).every(n=>!frames.includes(n.getComponent(Sprite).spriteFrame)),'no stale frames survive rebaking');
+ r.destroy();assert(!seasonal.isValid);assert.equal(r.previews.size,0);
+ assert(textures.every(t=>t.destroyed),'preview sharing cannot leak render targets');
+}
+console.log('GPU terrain: cache lifecycle, water clocks, bridges, shader fallback and exact cached tile-inspector crops passed.');

@@ -1,0 +1,25 @@
+{
+  "date": "2026-10-28",
+  "generator": "built-in image_gen",
+  "strategy": "Generate raster earth materials, then export reproducible transparent hex overlays with fixed geometry and the project's road rotation mapping.",
+  "materials": [
+    {
+      "saved": "sources/trench-floor-generated.png",
+      "generatedOriginal": "C:/Users/Administrator/.codex/generated_images/01a1811c-39bf-7aa3-ace2-7acc39b38695/exec-4d15fed4-fed5-4b9b-a8b7-769a7317c2cc.png",
+      "prompt": "Use case: game terrain material, production raster texture. Generate a square seamless tileable material swatch viewed from exact 90-degree top-down, filling the whole canvas edge to edge. Subject: compacted dark umber/brown earth on the FLOOR of a WWII infantry trench. Warm desaturated dark earth, medium-small readable dirt clods and a few embedded rounded small stones, broadly level surface. Semi-realistic hand-painted miniature strategy-game terrain, crisp restrained shapes with subtle texture, no dramatic shadows. Color target dark brown around RGB 78 56 38, with local variation and clear but sparse broad granular shapes, avoid almost-black regions. Texture must be evenly distributed with no central focus and no directional lighting, easy to map on narrow trench floor strips. NO trench walls, NO grass, NO plants, NO wood, NO objects, NO sandbags, NO crater, NO hex boundary, NO text, NO border, NO watermark, NO perspective. This image is ONLY a continuous earth material sample, not a scene or trench illustration."
+    },
+    {
+      "saved": "sources/earth-lip-generated.png",
+      "generatedOriginal": "C:/Users/Administrator/.codex/generated_images/01a1811c-39bf-7aa3-ace2-7acc39b38695/exec-79918ecb-04c8-4ab4-aeee-1414733e90e6.png",
+      "prompt": "Use case: game terrain material, production raster texture. Generate a square seamless tileable material swatch viewed from exact 90-degree top-down, filling the canvas edge to edge. Subject: freshly dug dry ochre-brown earthen spoil, used as low trench earth lips in a WWII top-down hex strategy game. Warm muted sandy tan soil around RGB 165 129 78, low saturation, chunky compact dirt clods with a few small beige rounded stones, readable hand-painted miniature semi-realistic terrain at small sizes. Dense earth, no gaps showing grass. Larger broad readable shapes, subtle medium-scale variety, limited sparse pebble detail. Uniform density edge to edge, no central composition, no strongly directional light, no deep shadows. NO trench or cavity, NO grass, NO plants, NO wooden planks, NO objects, NO sandbags, NO hex boundaries, NO text, NO borders, NO watermark, NO perspective. This image is ONLY a continuous earthen material sample, not a scene."
+    }
+  ],
+  "derivedAssets": {
+    "script": "tools/prepareFortificationArt.cjs",
+    "directionAndRotationSource": "assets/scripts/core/UrbanTerrain.ts",
+    "surfaceSize": [222, 256],
+    "geometry": "Fixed edge-midpoint exits, central doglegs for infantry trenches, shallow circular gun platforms without a fixed firing axis; the same exit profile is used for both kinds.",
+    "decorations": "Procedural short duckboard strips and sandbag clusters, kept away from shared tile edges.",
+    "notBakedIntoAssets": ["grass", "hex grid", "infantry", "guns", "weapon effects"]
+  }
+}

@@ -13,6 +13,7 @@
  */
 
 import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBuilding, tileHasBridge, Unit, isFootUnit, isAntiTankGunUnit, isTankUnit } from './types';
+import { isCliffEdge, tileHeight } from './Elevation';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -396,6 +397,11 @@ export class HexMap {
     return false;
   }
 
+  hasCliffBetween(from: Axial, to: Axial): boolean {
+    if (hexDistance(from, to) !== 1) return false;
+    return isCliffEdge(this.get(from), this.get(to), directionTo(from, to)!);
+  }
+
   /** Shared edges may be encoded on either side; intact always wins. */
   barbedWireBetween(from: Axial, to: Axial): number {
     if (hexDistance(from, to) !== 1) return 0;
@@ -405,6 +411,9 @@ export class HexMap {
   }
 
   canUnitCrossEdge(from: Axial, to: Axial, unit: Unit, opts: { ignoreBreakwater?: boolean; faction?: Faction } = {}): boolean {
+    if (isAntiTankGunUnit(unit)
+      && (this.get(from)?.fortification?.kind === 'gun_pit'
+        || this.get(to)?.fortification?.kind === 'trench')) return false;
     if (!this.canCrossBridgeEdge(from, to) || !this.canUnitEnter(to, unit.faction)) return false;
     if ((isFootUnit(unit) || isAntiTankGunUnit(unit)) && this.barbedWireBetween(from, to) === 1) return false;
     if (isFootUnit(unit) || isAntiTankGunUnit(unit)) return true;
@@ -450,6 +459,7 @@ export class HexMap {
     if (hexDistance(from, to) !== 1) return false;
     const tFrom = this.get(from);
     const tTo = this.get(to);
+    if (this.hasCliffBetween(from, to)) return false;
     if (tileHasBridge(tFrom)) {
       const dirOut = directionTo(from, to);
       if (dirOut === null) return false;
@@ -467,8 +477,10 @@ export class HexMap {
    * 当某格在视线路径的**中间**（非起点、非终点）时，是否因此截断视线。
    * 林地、以及路径**中间**的带建筑格均阻挡；水域**不**阻挡视线（任何单位仍不可入）；
    * 建筑在起止格不调用本方法故不挡视线（含：建筑格内的单位可作为视线起点向外射击）。
+   * sightHeight 为目标格高度；未提供时只查询原有地形遮挡。
    */
-  lineOfSightBlockedByTile(t: Tile): boolean {
+  lineOfSightBlockedByTile(t: Tile, sightHeight?: number): boolean {
+    if (sightHeight !== undefined && tileHeight(t) > sightHeight) return true;
     if (t.terrain === 'forest' || t.terrain === 'rocky') return true;
     if (tileHasBuilding(t)) return true;
     return false;
@@ -476,15 +488,17 @@ export class HexMap {
 
   /**
    * 计算 from → to 之间是否有视线。
-   * 规则：除起止格外，路径上任何阻挡视线的地形/建筑（中间格）会切断视线。
+   * 不能向更高格观察；中间格高于目标格时遮挡，地形/建筑仍按原规则遮挡。
    */
   hasLineOfSight(from: Axial, to: Axial, blockedHexes?: ReadonlySet<string>): boolean {
+    const sightHeight = tileHeight(this.get(to));
+    if (sightHeight > tileHeight(this.get(from))) return false;
     const path = hexLine(from, to);
     for (let i = 1; i < path.length - 1; i++) {
       const t = this.get(path[i]);
       if (!t) return false;
       if (blockedHexes?.has(HexMap.keyOf(path[i]))) return false;
-      if (this.lineOfSightBlockedByTile(t)) return false;
+      if (this.lineOfSightBlockedByTile(t, sightHeight)) return false;
     }
     return true;
   }
@@ -499,6 +513,8 @@ export class HexMap {
     fireDirection: FireDirection,
     blockedHexes?: ReadonlySet<string>,
   ): boolean {
+    const sightHeight = tileHeight(this.get(to));
+    if (sightHeight > tileHeight(this.get(from))) return false;
     const diagonalIndex = fireDirection - 6;
     const a = diagonalIndex as Direction;
     const b = ((diagonalIndex + 1) % 6) as Direction;
@@ -509,9 +525,9 @@ export class HexMap {
     for (let step = 0; step < steps; step++) {
       const left = this.get(neighbor(current, a));
       const right = this.get(neighbor(current, b));
-      const leftBlocked = !!left && (this.lineOfSightBlockedByTile(left)
+      const leftBlocked = !!left && (this.lineOfSightBlockedByTile(left, sightHeight)
         || blockedHexes?.has(HexMap.keyOf(left.pos)) === true);
-      const rightBlocked = !!right && (this.lineOfSightBlockedByTile(right)
+      const rightBlocked = !!right && (this.lineOfSightBlockedByTile(right, sightHeight)
         || blockedHexes?.has(HexMap.keyOf(right.pos)) === true);
       if (leftBlocked && rightBlocked) {
         return false;
@@ -522,7 +538,7 @@ export class HexMap {
         const centerTile = this.get(current);
         if (!centerTile
           || blockedHexes?.has(HexMap.keyOf(centerTile.pos))
-          || this.lineOfSightBlockedByTile(centerTile)) return false;
+          || this.lineOfSightBlockedByTile(centerTile, sightHeight)) return false;
       }
     }
 

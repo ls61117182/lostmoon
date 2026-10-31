@@ -137,6 +137,8 @@ const ALL_CHAPTERS: ChapterMeta[] = [
         missionId: 'multi_region_01', entryKind: 'random',
         randomTheater: 'europe', randomMultiRegion: true, badgeOverride: 'MR', alwaysUnlocked: true },
       { chapterId: 'test', id: 0, missionPath: 'missions/mission_test', titleKey: 'level.test.title', missionId: 'mission_test' },
+      { chapterId: 'test', id: 8, missionPath: 'missions/elevation_visual_test', titleKey: 'menu.operations.elevation',
+        missionId: 'elevation_visual_test', badgeOverride: 'H', alwaysUnlocked: true },
       {
         chapterId: 'test', id: 4, missionPath: '', titleKey: 'level.test.random.europe_spring.title',
         missionId: 'random_europe_spring', entryKind: 'random', randomTheater: 'europe', randomSeason: 'spring', badgeOverride: 'RS',

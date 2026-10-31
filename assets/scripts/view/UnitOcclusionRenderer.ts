@@ -14,6 +14,7 @@ export class UnitOcclusionRenderer {
   private material: Material | null = null;
   private fog: UnitFogRenderer | null = null;
   private liveCopies: Array<{ source: Sprite; copy: Sprite }> = [];
+  private liveUnitBlockers: Array<{ source: Sprite; mask: Node }> = [];
   private slots: Array<{ node: Node; mask: Mask; copies: Sprite[]; vectors?: Graphics }> = [];
 
   constructor(public readonly root: Node) {}
@@ -27,6 +28,7 @@ export class UnitOcclusionRenderer {
 
   sync(sources: Map<Sprite, Color>, blockers: Sprite[], shapes: OcclusionShape[] = [], vectors: Array<{ circle: [number, number, number]; color: Color }> = [], unitBlockers: UnitSpriteOccluder[] = []) {
     this.liveCopies.length = 0;
+    this.liveUnitBlockers.length = 0;
     for (const slot of this.slots) slot.node.active = false;
     if (!this.material) return;
     let next = 0;
@@ -51,11 +53,11 @@ export class UnitOcclusionRenderer {
       return active;
     };
     const vectorBounds = new Map<typeof vectors[number], Rect>();
-    const passes: Array<{ blocker: Sprite | null; sources: Map<Sprite, Color>; vectors: typeof vectors }> = [
+    const passes: Array<{ blocker: Sprite | null; sources: Map<Sprite, Color>; vectors: typeof vectors; moving?: boolean }> = [
       ...[...blockers, ...(shapes.length ? [null] : [])].map(blocker => ({ blocker, sources, vectors })),
-      ...unitBlockers.map(entry => ({ ...entry, vectors: entry.vectors ?? [] })),
+      ...unitBlockers.map(entry => ({ ...entry, vectors: entry.vectors ?? [], moving: true })),
     ];
-    for (const { blocker, sources: passSources, vectors: passVectors } of passes) {
+    for (const { blocker, sources: passSources, vectors: passVectors, moving } of passes) {
       if (blocker && (!blocker.node.activeInHierarchy || !blocker.spriteFrame)) continue;
       if (!passSources.size && !passVectors.length) continue;
       const bounds = blocker ? boundsOf(blocker) : null;
@@ -99,6 +101,7 @@ export class UnitOcclusionRenderer {
         slot.node.setWorldPosition(blocker.node.worldPosition);
         slot.node.setWorldRotation(blocker.node.worldRotation);
         slot.node.setWorldScale(blocker.node.worldScale);
+        if (moving) this.liveUnitBlockers.push({ source: blocker, mask: slot.node });
       } else {
         slot.node.setPosition(0, 0, 0);
         slot.node.setRotationFromEuler(0, 0, 0);
@@ -185,6 +188,11 @@ export class UnitOcclusionRenderer {
   }
 
   syncTransforms() {
+    for (const { source, mask } of this.liveUnitBlockers) {
+      mask.setWorldPosition(source.node.worldPosition);
+      mask.setWorldRotation(source.node.worldRotation);
+      mask.setWorldScale(source.node.worldScale);
+    }
     for (const { source, copy } of this.liveCopies) {
       this.updateOutlineSampling(source, copy);
       copy.node.setWorldPosition(source.node.worldPosition);

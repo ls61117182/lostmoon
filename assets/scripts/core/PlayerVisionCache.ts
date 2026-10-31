@@ -1,4 +1,5 @@
 import { HexMap } from './HexGrid';
+import { tileHeight } from './Elevation';
 import { computePlayerVisibleHexes } from './FogOfWar';
 import type { LoadedMission } from './MissionLoader';
 import type { Unit, WeatherType } from './types';
@@ -38,7 +39,7 @@ export class PlayerVisionCache {
     }
     const smoke = Array.from(mission.smokeHexes).filter(key => !region || map.regions.get(key) === region).sort();
     const signature = JSON.stringify([weather, fog, radio, region, sightState(player), allies.map(sightState),
-      tiles.map(tile => [tile.pos.q, tile.pos.r, map.lineOfSightBlockedByTile(tile)]), smoke]);
+      tiles.map(tile => [tile.pos.q, tile.pos.r, tileHeight(tile), map.lineOfSightBlockedByTile(tile)]), smoke]);
     if (signature !== this.signature) {
       this.visible = fog
         ? this.compute(this.regionMap ?? map, player, allies, radio, weather, mission.smokeHexes)

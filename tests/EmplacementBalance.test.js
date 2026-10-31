@@ -156,8 +156,9 @@ test('direct AT-gun destruction skips the penetration row and ends after the hit
 const names = ['rollHighExplosiveCollateralResults', 'applyHighExplosiveAttackResult', 'atGunController', 'killATGunCrew', 'releaseATGunCrew', 'playerMainGunTargets'];
 const methods = names.map(name => sceneClass.members.find(m => m.name?.getText(source) === name).getText(source));
 const js = ts.transpileModule(`class Scene { ${methods.join('\n')} }`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
-const Scene = vm.runInNewContext(js + '\nScene', { ...types, ...combat, rollHEAttack: combat.rollHighExplosiveAttack });
+const Scene = vm.runInNewContext(js + '\nScene', { ...types, ...combat, ...require('../assets/scripts/core/TankRiding.ts'), rollHEAttack: combat.rollHighExplosiveAttack });
 Scene.prototype.recordSettledBattleAttack = () => {};
+Scene.prototype.recordPlayerBattleKill = () => {};
 test('attached AT-gun crew cannot be targeted directly or revived by crushing the gun', () => {
   const gun = unit('pak38');
   const crew = unit('german_infantry');

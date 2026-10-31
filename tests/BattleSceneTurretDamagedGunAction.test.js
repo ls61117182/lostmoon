@@ -20,7 +20,7 @@ test('turret damage disables fire/rotate actions with the turret-damaged prompt'
     'turret damage should take priority so clicking always reports 炮塔受损',
   );
 
-  const popoverStart = source.indexOf('private showDiePopover(idx: number)');
+  const popoverStart = source.indexOf('private playerDieActionItems(idx: number)');
   const popoverEnd = source.indexOf('// ---------- 移动阶段动作 ----------', popoverStart);
   const popover = source.slice(popoverStart, popoverEnd);
   assert.match(popover, /color: unavailableReason \? DIE_ACTION_UNAVAILABLE : color/);

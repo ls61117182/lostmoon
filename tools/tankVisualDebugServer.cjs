@@ -18,6 +18,7 @@ const EDITABLE_FIELDS = new Set([
   'destroyedOffsetRight', 'destroyedFitScale', 'aspectRatioMul', 'hullFitScale',
   'turretScale', 'hullOffsetForward', 'hullOffsetRight', 'turretOffsetForward',
   'turretOffsetRight', 'turretPivotX', 'turretPivotY', 'muzzleSpriteX', 'muzzleSpriteY',
+  'coaxialMuzzleSpriteX', 'coaxialMuzzleSpriteY', 'hullMuzzleSpriteX', 'hullMuzzleSpriteY',
   'commanderHatchSpriteX', 'commanderHatchSpriteY', 'commanderHatchScale',
   'exhaustPort1Forward', 'exhaustPort1Right', 'exhaustPort2Forward', 'exhaustPort2Right',
 ]);

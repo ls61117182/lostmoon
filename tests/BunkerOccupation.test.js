@@ -183,6 +183,9 @@ test('bunkers remain fog-darkened scenery and infantry bodies have no hex stenci
         const fog = new Node('FogOfWar');
         map.addChild(buildings); map.addChild(fog);
         scene.node = { layer: 1 };
+        scene.sceneryPoolParents = new Map();
+        scene.fortificationSpritePool = [];
+        scene.fortificationRimPool = [];
         setup.call(scene, map, buildings);
         const roof = { node: new Node('bunker') }, body = { node: new Node('infantry') };
         Object.assign(scene, {

@@ -28,7 +28,7 @@ test('only result entries are shown and replayable entries are underlined', () =
 
 test('a history click waits for the active action and reopens a read-only result', () => {
   assert.match(source, /pendingCombatLogReplay/);
-  assert.match(source, /if \(!replay \|\| this\.isBusy\(\)\) return false/);
+  assert.match(source, /if \(!replay \|\| \(this\.isBusy\(\) && !this\.isOutcomeBattlefieldReview\(\)\)\) return false/);
   assert.match(source, /if \(this\.pendingCombatLogReplay\)[\s\S]*?openPendingCombatLogReplayIfReady\(\)[\s\S]*?return/);
   assert.match(source, /historyReplay: true/);
   assert.match(source, /fireEffectPlayed: true, requireManualClose: true/);

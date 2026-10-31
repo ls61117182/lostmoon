@@ -41,7 +41,7 @@ assert.match(
 );
 assert.match(
   battleScene,
-  /private\s+spawnInfantryBloodDecals\s*\(u:\s*Unit\)[\s\S]*?infantrySquadOffsets\(this\.hexSize,\s*coLocateOtherUnit\)/,
+  /private\s+spawnInfantryBloodDecals\s*\(u:\s*Unit\)[\s\S]*?this\.infantryFormationOffsets\(u,\s*coLocateOtherUnit\)/,
   'blood decal placement should use the same three-person squad offsets as live infantry sprites',
 );
 assert.match(
@@ -96,11 +96,14 @@ assert(
   /trackMaskNode\.addChild\(bloodDecalNode\)/.test(battleScene),
   'blood decal layer should use the terrain-level visibility mask',
 );
-assert.match(
-  battleScene,
-  /private\s+applyMapViewPosition\s*\([^)]*\)[\s\S]*?this\.terrainLayerNode\?\.setPosition\(clampedX,\s*clampedY,\s*0\);[\s\S]*?this\.mapNode\?\.setPosition\(clampedX,\s*clampedY,\s*0\);/,
-  'blood decal layer should follow camera/pan through MapGraphics rather than as a separate root layer',
-);
+const PanScene = require('./helpers/BattleSceneMethods.cjs')(['applyMapViewPosition']);
+const panScene = new PanScene(), terrainPan = [], mapPan = [];
+panScene.terrainLayerNode = { setPosition: (...args) => terrainPan.push(args) };
+panScene.mapNode = { setPosition: (...args) => mapPan.push(args) };
+panScene.applyMapViewPosition(34, -56);
+assert.deepStrictEqual(terrainPan, [[34, -56, 0]]);
+assert.deepStrictEqual(mapPan, terrainPan,
+  'blood decal layer should follow camera/pan through MapGraphics rather than as a separate root layer');
 assert(
   !/applyMapViewPosition[\s\S]*?infantryBloodDecalLayerNode\?\.setPosition/.test(battleScene),
   'blood decal layer should not be independently panned when it is a MapGraphics child',

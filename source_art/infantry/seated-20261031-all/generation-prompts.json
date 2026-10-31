@@ -1,0 +1,56 @@
+{
+  "mode": "built-in",
+  "assets": [
+    {
+      "name": "Infantry01_seated",
+      "pose": "AmericanInfantry01_seated_olive",
+      "source": "Infantry01",
+      "identity": "European rifleman: dark desaturated blue-grey uniform, grey-green steel helmet, brown leather webbing, a straight brown-stock bolt-action rifle.",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent tiny-scale strategy-game seated infantry sprite. Image 1 is the EDIT TARGET: approved seated pose and exact full-canvas framing/hip anchor. Image 2 is the IDENTITY/PALETTE reference for the desired soldier. Change only identity, uniform/helmet/gear colors and weapon to match image 2. European rifleman: dark desaturated blue-grey uniform, grey-green steel helmet, brown leather webbing, a straight brown-stock bolt-action rifle. Preserve image 1's strict 90-degree directly overhead orthographic camera, compact sitting pose (NOT squatting), helmet/head fully occluding torso, only head, shoulders, arms and two short bent thighs/boots visible. Maintain EXACT same seated silhouette proportions, relative footprint, transparent margins, down-facing legs, centered hips at x=50%, y=61% from top, and overall canvas aspect as image 1. Simplified chunky pixel/sprite shapes, thick dark outlines, few broad shadow blocks, readability at 20-25 px actual display. Match image 2's DARK MUTED palette and dark outlines, no pale/yellow US uniform, no bright highlights. Weapons perfectly straight and held horizontally. No tank, no background, no scene, no text, no panel, no white/checkerboard matte. Genuine alpha background. Single soldier only.",
+      "mode": "built-in",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a16791-e073-78c3-b39c-f7fa15223423\\exec-ba1f424c-f666-428b-8465-f3fdc147dccf.png"
+    },
+    {
+      "name": "Infantry02_seated",
+      "pose": "AmericanInfantry02_seated_olive",
+      "source": "Infantry02",
+      "identity": "European automatic-weapon soldier: dark desaturated blue-grey uniform, grey-green steel helmet, brown/khaki backpack; hold the compact dark metal automatic gun from image 2 horizontally, with a perfectly straight barrel.",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent tiny-scale strategy-game seated infantry sprite. Image 1 is the EDIT TARGET: approved seated pose and exact full-canvas framing/hip anchor. Image 2 is the IDENTITY/PALETTE reference for the desired soldier. Change only identity, uniform/helmet/gear colors and weapon to match image 2. European automatic-weapon soldier: dark desaturated blue-grey uniform, grey-green steel helmet, brown/khaki backpack; hold the compact dark metal automatic gun from image 2 horizontally, with a perfectly straight barrel. Preserve image 1's strict 90-degree directly overhead orthographic camera, compact sitting pose (NOT squatting), helmet/head fully occluding torso, only head, shoulders, arms and two short bent thighs/boots visible. Maintain EXACT same seated silhouette proportions, relative footprint, transparent margins, down-facing legs, centered hips at x=50%, y=61% from top, and overall canvas aspect as image 1. Simplified chunky pixel/sprite shapes, thick dark outlines, few broad shadow blocks, readability at 20-25 px actual display. Match image 2's DARK MUTED palette and dark outlines, no pale/yellow US uniform, no bright highlights. Weapons perfectly straight and held horizontally. No tank, no background, no scene, no text, no panel, no white/checkerboard matte. Genuine alpha background. Single soldier only.",
+      "mode": "built-in",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a16791-e073-78c3-b39c-f7fa15223423\\exec-df397af6-5b41-41a6-8068-f4400d719659.png"
+    },
+    {
+      "name": "Infantry03_seated",
+      "pose": "AmericanInfantry03_seated_olive",
+      "source": "Infantry03",
+      "identity": "European anti-tank soldier: dark desaturated blue-grey uniform, grey-green helmet, olive drab straight anti-tank launcher matching image 2, across the lap. Tube must be straight and rigid.",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent tiny-scale strategy-game seated infantry sprite. Image 1 is the EDIT TARGET: approved seated pose and exact full-canvas framing/hip anchor. Image 2 is the IDENTITY/PALETTE reference for the desired soldier. Change only identity, uniform/helmet/gear colors and weapon to match image 2. European anti-tank soldier: dark desaturated blue-grey uniform, grey-green helmet, olive drab straight anti-tank launcher matching image 2, across the lap. Tube must be straight and rigid. Preserve image 1's strict 90-degree directly overhead orthographic camera, compact sitting pose (NOT squatting), helmet/head fully occluding torso, only head, shoulders, arms and two short bent thighs/boots visible. Maintain EXACT same seated silhouette proportions, relative footprint, transparent margins, down-facing legs, centered hips at x=50%, y=61% from top, and overall canvas aspect as image 1. Simplified chunky pixel/sprite shapes, thick dark outlines, few broad shadow blocks, readability at 20-25 px actual display. Match image 2's DARK MUTED palette and dark outlines, no pale/yellow US uniform, no bright highlights. Weapons perfectly straight and held horizontally. No tank, no background, no scene, no text, no panel, no white/checkerboard matte. Genuine alpha background. Single soldier only.",
+      "mode": "built-in",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a16791-e073-78c3-b39c-f7fa15223423\\exec-19639881-5196-4add-85d3-d10014789883.png"
+    },
+    {
+      "name": "JapaneseInfantry01_seated",
+      "pose": "AmericanInfantry01_seated_olive",
+      "source": "JapaneseInfantry01",
+      "identity": "Japanese rifleman with the original khaki field CAP (not steel helmet), brown/khaki uniform and gear, straight dark barrel and brown wooden rifle across lap. Cap completely hides face from above.",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent tiny-scale strategy-game seated infantry sprite. Image 1 is the EDIT TARGET: approved seated pose and exact full-canvas framing/hip anchor. Image 2 is the IDENTITY/PALETTE reference for the desired soldier. Change only identity, uniform/helmet/gear colors and weapon to match image 2. Japanese rifleman with the original khaki field CAP (not steel helmet), brown/khaki uniform and gear, straight dark barrel and brown wooden rifle across lap. Cap completely hides face from above. Preserve image 1's strict 90-degree directly overhead orthographic camera, compact sitting pose (NOT squatting), helmet/head fully occluding torso, only head, shoulders, arms and two short bent thighs/boots visible. Maintain EXACT same seated silhouette proportions, relative footprint, transparent margins, down-facing legs, centered hips at x=50%, y=61% from top, and overall canvas aspect as image 1. Simplified chunky pixel/sprite shapes, thick dark outlines, few broad shadow blocks, readability at 20-25 px actual display. Match image 2's DARK MUTED palette and dark outlines, no pale/yellow US uniform, no bright highlights. Weapons perfectly straight and held horizontally. No tank, no background, no scene, no text, no panel, no white/checkerboard matte. Genuine alpha background. Single soldier only.",
+      "mode": "built-in",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a16791-e073-78c3-b39c-f7fa15223423\\exec-c09b796d-c26d-4bf5-a53e-9ce7ac91197b.png"
+    },
+    {
+      "name": "JapaneseInfantry02_seated",
+      "pose": "AmericanInfantry01_seated_olive",
+      "source": "JapaneseInfantry02",
+      "identity": "Japanese rifleman with the original rounded brown steel HELMET and subtle small star, khaki/brown uniform, straight rifle across lap. No visible face.",
+      "prompt": "Use case: precise-object-edit. Asset type: transparent tiny-scale strategy-game seated infantry sprite. Image 1 is the EDIT TARGET: approved seated pose and exact full-canvas framing/hip anchor. Image 2 is the IDENTITY/PALETTE reference for the desired soldier. Change only identity, uniform/helmet/gear colors and weapon to match image 2. Japanese rifleman with the original rounded brown steel HELMET and subtle small star, khaki/brown uniform, straight rifle across lap. No visible face. Preserve image 1's strict 90-degree directly overhead orthographic camera, compact sitting pose (NOT squatting), helmet/head fully occluding torso, only head, shoulders, arms and two short bent thighs/boots visible. Maintain EXACT same seated silhouette proportions, relative footprint, transparent margins, down-facing legs, centered hips at x=50%, y=61% from top, and overall canvas aspect as image 1. Simplified chunky pixel/sprite shapes, thick dark outlines, few broad shadow blocks, readability at 20-25 px actual display. Match image 2's DARK MUTED palette and dark outlines, no pale/yellow US uniform, no bright highlights. Weapons perfectly straight and held horizontally. No tank, no background, no scene, no text, no panel, no white/checkerboard matte. Genuine alpha background. Single soldier only.",
+      "mode": "built-in",
+      "generatedPath": "C:\\Users\\Administrator\\.codex\\generated_images\\01a16791-e073-78c3-b39c-f7fa15223423\\exec-19da4aa2-388f-42d2-a01c-faef006b4dde.png"
+    }
+  ],
+  "reuse": {
+    "JapaneseInfantry03_seated": "JapaneseInfantry01_seated",
+    "soviet_infantry": "Infantry01/02/03_seated",
+    "infantry": "Infantry01/02/03_seated",
+    "german_infantry": "Infantry01/02/03_seated"
+  }
+}

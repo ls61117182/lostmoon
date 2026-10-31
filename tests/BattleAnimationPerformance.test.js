@@ -11,6 +11,7 @@ const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
 const { RNG } = require('../assets/scripts/core/Dice.ts');
 const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
 const { computePlayerVisibleHexes } = require('../assets/scripts/core/FogOfWar.ts');
+const { isTankUnit } = require('../assets/scripts/core/types.ts');
 const sceneMethods = require('./helpers/BattleSceneMethods.cjs');
 const fixture = () => loadMission(generateMultiRegionPackage(20261026).mission, new RNG(1), { hardcore: true });
 class Node {
@@ -21,7 +22,7 @@ const cursor = () => ({ tank: 0, hatch: 0, infantry: 0, officer: 0, suppression:
 const pass = () => ({ start: cursor(), end: cursor(), crewOnly: false });
 
 test('60 movement frames translate only cached unit nodes, labels and engine origins without scene or visibility rebuilds', () => {
-  const Scene = sceneMethods(['redrawAnimatedUnits']);
+  const Scene = sceneMethods(['redrawAnimatedUnits'], { isTankUnit });
   const scene = new Scene(), unit = { id: 'tank' }, other = { id: 'other' }, map = {}, cache = new UnitAnimationCache();
   const hull = new Node(), turret = new Node(1, 2), commander = new Node(3, 4, turret), label = new Node(10, -20), stationary = new Node(100, 100);
   cache.record(unit, { x: 0, y: 0 }, [hull, turret, commander, label], pass());
@@ -95,6 +96,59 @@ test('unit visibility changes fall back to a rules redraw instead of retaining s
   assert.equal(redraws, 1);
 });
 
+test('pushed wrecks refresh changed infantry formations during motion without rebuilding the scene', () => {
+  const { isFootUnit, isTankUnit, isHeavyArtilleryUnit } = require('../assets/scripts/core/types.ts');
+  const { wreckVisualHex } = require('../assets/scripts/view/TankWreckPush.ts');
+  const Scene = sceneMethods(['redrawAnimatedUnits', 'cacheUnitAnimation', 'unitSpriteCursor', 'infantrySharesHexWithOtherUnit'], {
+    isFootUnit, isTankUnit, isHeavyArtilleryUnit, wreckVisualHex, GameSession: { gameMode: 'hardcore' },
+  });
+  const scene = new Scene(), map = {}, cache = new UnitAnimationCache();
+  const squad = (id, q) => ({ id, kind: 'american_infantry', pos: { q, r: 0 }, destroyed: false });
+  const source = squad('source', 0), destination = squad('destination', 2), remote = squad('remote', 6);
+  const wreck = { id: 'wreck', kind: 'sherman', pos: { q: 0, r: 0 }, destroyed: true };
+  const mover = { id: 'mover', kind: 'sherman', pos: { q: 10, r: 0 }, destroyed: false };
+  const squads = [source, destination, remote], replays = [];
+  Object.assign(scene, {
+    mission: { map, sherman: mover, allies: squads, enemies: [wreck] }, sceneryCacheMap: map, unitAnimationCache: cache,
+    mainGunRecoils: new Map(), engineVibrationVisuals: [], tankDamageTrackNodes: new Map(), vectorSilhouettes: [],
+    unitFallbackGraphics: new Map(squads.map(unit => [unit.id, { node: new Node() }])),
+    enemyTopSpritePool: [], commanderHatchSpritePool: [], infantryTopSpritePool: [], officerTopSpritePool: [], suppressionMarkPool: [],
+    enemyTopPoolNext: 0, commanderHatchPoolNext: 0, infantryTopPoolNext: 0, officerTopPoolNext: 0, suppressionMarkPoolNext: 0,
+    interpolatedPos: unit => ({ x: unit.pos.q * Math.sqrt(3) + (unit.wreckPose?.x ?? 0), y: 0 }),
+    isUnitVisible: () => true, isOutsidePlayerRegion: () => false,
+    infantryFormationKey: unit => String(scene.infantrySharesHexWithOtherUnit(unit)),
+    infantryFormationOffsets: () => [{ ox: 0, oy: 0 }],
+    redraw: () => assert.fail('a changed infantry formation rebuilt the scene'),
+    replayAnimatedUnit: entry => { replays.push(entry.unit.id); return true; },
+    redrawUnitVisibilityMask() {}, syncUnitOcclusion() {}, redrawObjectShadows() {}, syncActiveActingUnitFrame() {},
+  });
+  for (const unit of squads) scene.cacheUnitAnimation(unit, false, {}, cursor(), 0);
+  cache.record(wreck, scene.interpolatedPos(wreck), [new Node()], pass());
+  assert.equal(cache.entries.get(source).infantryCoLocated, true);
+  assert.equal(cache.entries.get(destination).infantryCoLocated, false);
+
+  wreck.wreckPose = { x: Math.sqrt(3) * 2, y: 0, angle: 0 };
+  scene.redrawAnimatedUnits();
+  assert.deepEqual(replays, ['wreck', 'source', 'destination']);
+  assert.equal(cache.entries.get(source).infantryCoLocated, false, 'the old hex must reform immediately');
+  assert.equal(cache.entries.get(destination).infantryCoLocated, true, 'the new hex must spread immediately');
+  assert.equal(cache.entries.get(remote).infantryCoLocated, false);
+
+  replays.length = 0;
+  wreck.wreckPose = { x: Math.sqrt(3) * 2 + 0.1, y: 0, angle: 0.1 };
+  scene.redrawAnimatedUnits();
+  assert.deepEqual(replays, ['wreck'], 'unchanged formations must retain their cached sprites');
+
+  const otherWreck = { id: 'other-wreck', kind: 'sherman', pos: { ...destination.pos }, destroyed: true };
+  scene.mission.enemies.push(otherWreck);
+  replays.length = 0;
+  wreck.wreckPose = { x: Math.sqrt(3) * 12, y: 0, angle: 0 };
+  scene.redrawAnimatedUnits();
+  assert.deepEqual(replays, ['wreck'], 'another wreck in the hex must keep the squad spread');
+  assert.equal(cache.entries.get(destination).infantryCoLocated, true);
+  assert.deepEqual(wreck.pos, { q: 0, r: 0 }, 'visual updates must preserve the rules position');
+});
+
 test('rules redraws reuse static scenery until terrain or resource state changes', () => {
   const Scene = sceneMethods(['redraw', 'requestResourceRedraw'], {
     syncTankRiders() {}, europeanTerrainLook: () => 'summer', GameSession: { gameMode: 'hardcore' },
@@ -120,7 +174,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
     drawContinuousTerrain: () => { ground++; return true; }, drawForestCanopy: () => trees++, drawBuildingOverlay: () => buildings++,
     anim: null, phase: 'player', playerStep: 'choose', selectedGunDieIdx: -1, selectedMGDieIdx: -1,
   });
-  for (const name of ['terrainSpritePool', 'rockySpritePool', 'bridgeSpritePool', 'urbanBuildingSpritePool', 'urbanRubbleSpritePool',
+  for (const name of ['terrainSpritePool', 'fortificationSpritePool', 'fortificationRimPool', 'rockySpritePool', 'bridgeSpritePool', 'urbanBuildingSpritePool', 'urbanRubbleSpritePool',
     'ruralPropSpritePool', 'foliageSpritePool', 'enemyTopSpritePool', 'commanderHatchSpritePool', 'infantryTopSpritePool',
     'officerTopSpritePool', 'suppressionMarkPool']) scene[name] = [];
   scene.redraw();
@@ -179,7 +233,7 @@ test('cached sight agrees with direct rules calculation for ordinary and regiona
 });
 
 test('stationary dice and result holds never rebuild unit shadows or occlusion', () => {
-  const Scene = sceneMethods(['redrawAnimatedUnits']);
+  const Scene = sceneMethods(['redrawAnimatedUnits'], { isTankUnit });
   const scene = new Scene(), unit = { id: 'held-actor' }, map = {}, cache = new UnitAnimationCache();
   cache.record(unit, { x: 12, y: 4 }, [new Node(12, 4)], pass());
   Object.assign(scene, { mission: { map }, sceneryCacheMap: map, unitAnimationCache: cache,
@@ -193,7 +247,7 @@ test('stationary dice and result holds never rebuild unit shadows or occlusion',
 });
 
 test('moving effects draw once per frame after the current position is applied', () => {
-  const Scene = sceneMethods(['redrawAnimatedUnits', 'advanceUnitEffects', 'lateUpdate']);
+  const Scene = sceneMethods(['redrawAnimatedUnits', 'advanceUnitEffects', 'lateUpdate'], { isTankUnit });
   const scene = new Scene(), unit = { id: 'actor' }, map = {}, cache = new UnitAnimationCache(), node = new Node();
   cache.record(unit, { x: 0, y: 0 }, [node], pass());
   let x = 0, draws = 0;

@@ -5,9 +5,12 @@ const sharp = require('sharp');
 const root = path.resolve(__dirname, '..');
 
 async function main() {
-  for (let index = 1; index <= 3; index++) {
-    const name = `AmericanInfantry0${index}_seated_olive`;
-    const source = path.join(root, 'source_art/infantry/american/seated-20261024-v4-palette', `${name}.png`);
+  const assets = [
+    ...[1, 2, 3].map(index => ({ name: `AmericanInfantry0${index}_seated_olive`, directory: 'source_art/infantry/american/seated-20261024-v4-palette' })),
+    ...['Infantry', 'JapaneseInfantry'].flatMap(prefix => [1, 2, 3].map(index => ({ name: `${prefix}0${index}_seated`, directory: 'source_art/infantry/seated-20261031-all' }))),
+  ];
+  for (const { name, directory } of assets) {
+    const source = path.join(root, directory, `${name}.png`);
     const target = path.join(root, 'assets/resources/textures/units', `${name}.png`);
     const { width, height, hasAlpha } = await sharp(source).metadata();
     if (!hasAlpha) throw new Error(`${source} must have alpha`);

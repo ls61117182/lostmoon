@@ -1,4 +1,15 @@
 import type { AttackReport, HighExplosiveReport } from './Combat';
+import type { Unit, UnitKind } from './types';
+
+export interface BattleCrewStatus { slot: number; alive: boolean }
+
+export function battleCrewStatus(player?: Unit): BattleCrewStatus[] {
+  if (!player) return [];
+  const roles = ['commander', 'gunner', 'loader', 'driver', 'coDriver', 'secondLoader'] as const;
+  return (player.stats.crewMembers ?? [1, 2, 3, 4, 5]).map(slot => ({
+    slot, alive: player.crew?.[roles[slot - 1]] ?? true,
+  }));
+}
 
 /** Counts belong to the local protagonist, across the current battle/campaign. */
 export interface BattleStatistics {
@@ -11,6 +22,8 @@ export interface BattleStatistics {
   mainGunPenetrations: number;
   machineGunShots: number;
   machineGunHits: number;
+  killsByKind: Partial<Record<UnitKind, number>>;
+  countedKillIds: string[];
 }
 
 export function cloneBattleStatistics(saved?: Partial<BattleStatistics>): BattleStatistics {
@@ -19,12 +32,25 @@ export function cloneBattleStatistics(saved?: Partial<BattleStatistics>): Battle
     mainGunHitChecks: 0, mainGunHits: 0,
     mainGunPenetrationChecks: 0, mainGunPenetrations: 0,
     machineGunShots: 0, machineGunHits: 0,
+    killsByKind: {}, countedKillIds: [],
   };
   for (const key of Object.keys(result) as (keyof BattleStatistics)[]) {
+    if (key === 'killsByKind' || key === 'countedKillIds') continue;
     const value = saved?.[key];
     if (typeof value === 'number' && Number.isFinite(value)) result[key] = Math.max(0, Math.floor(value));
   }
+  for (const [kind, count] of Object.entries(saved?.killsByKind ?? {})) {
+    if (typeof count === 'number' && Number.isFinite(count) && count > 0) result.killsByKind[kind as UnitKind] = Math.floor(count);
+  }
+  result.countedKillIds = Array.from(new Set((saved?.countedKillIds ?? []).filter(id => typeof id === 'string')));
   return result;
+}
+
+/** Stable unit identity prevents impact presentation and final settlement double counting. */
+export function recordBattleKill(stats: BattleStatistics, id: string, kind: UnitKind): void {
+  if (stats.countedKillIds.includes(id)) return;
+  stats.countedKillIds.push(id);
+  stats.killsByKind[kind] = (stats.killsByKind[kind] ?? 0) + 1;
 }
 
 type StatisticalReport = Pick<AttackReport, 'hit'> & Partial<AttackReport>;

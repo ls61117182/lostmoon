@@ -160,6 +160,7 @@ test('reinforcement movement begins immediately and finishes without confirmatio
   const unit = { id: 'reinforcement' };
   h.mission = { allies: [], enemies: [] };
   h.canMoveToBattleTile = () => true;
+  h.hasBunkerAt = () => false;
   h.snapshotDestroyedUnitIds = () => new Set();
   h.registerNewlyDestroyedSince = h.refreshStatusPanel = h.redraw = () => {};
   let applications = 0;

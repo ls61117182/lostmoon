@@ -1,0 +1,144 @@
+import { Color, EffectAsset, Graphics, Mask, Material, Node, resources, Sprite, SpriteFrame, UITransform, Vec4 } from 'cc';
+import { elevationEdges, elevationJoins, elevationSurfaceTint, tileHeight, slopePlacement, slopeSpritePath, SLOPE_ART, type ElevationEdge, type ElevationJoin } from '../core/Elevation';
+import type { Tile } from '../core/types';
+
+type Frames = Record<string, SpriteFrame | null>;
+type Project = (q: number, r: number) => { x: number; y: number };
+let joinEffect: EffectAsset | null = null;
+let effectLoading = false;
+const effectWaiters: Array<(effect: EffectAsset) => void> = [];
+function withJoinEffect(ready: (effect: EffectAsset) => void): void {
+  if (joinEffect) { ready(joinEffect); return; }
+  effectWaiters.push(ready);
+  if (effectLoading) return;
+  effectLoading = true;
+  resources.load('effects/elevation-join', EffectAsset, (error, effect) => {
+    effectLoading = false;
+    if (error || !effect) { effectWaiters.length = 0; console.warn('[Elevation] Join material unavailable:', error); return; }
+    joinEffect = effect;
+    for (const waiter of effectWaiters.splice(0)) waiter(effect);
+  });
+}
+function joinMaterial(join: ElevationJoin, frames: Frames, camera: number, cache: Map<string, Material>): Material | null {
+  if (!joinEffect) return null;
+  const available = join.neighbors.filter(n => !!frames[slopeSpritePath(n.edge.direction, n.edge.blocked, camera)]);
+  const key = JSON.stringify([join.edge.direction, join.edge.difference, camera, available.map(n =>
+    [slopeSpritePath(n.edge.direction, n.edge.blocked, camera), n.rowU, n.rowV])]);
+  let material = cache.get(key);
+  if (material) return material;
+  material = new Material(); material.initialize({ effectAsset: joinEffect, defines: { USE_TEXTURE: true } });
+  material.setProperty('mainInfo', new Vec4(slopePlacement(join.edge, 1).height, join.edge.direction, 0, 0));
+  for (let i = 0; i < 4; i++) {
+    const neighbor = available[i];
+    material.setProperty(`mapU${i}`, neighbor ? new Vec4(...neighbor.rowU) : new Vec4());
+    material.setProperty(`mapV${i}`, neighbor ? new Vec4(...neighbor.rowV) : new Vec4());
+    if (neighbor) material.setProperty(`neighbor${i}`, frames[slopeSpritePath(neighbor.edge.direction, neighbor.edge.blocked, camera)]!.texture);
+  }
+  cache.set(key, material); return material;
+}
+
+function place(sprite: Sprite, edge: ElevationEdge, frames: Frames, size: number, project: Project, camera: number): boolean {
+  const frame = frames[slopeSpritePath(edge.direction, edge.blocked, camera)];
+  if (!frame) return false;
+  const p = project(edge.high.pos.q, edge.high.pos.r), placement = slopePlacement(edge, size);
+  const transform = sprite.node.getComponent(UITransform)!;
+  // The shared border always bisects the slope; stretching never consumes only the lower hex.
+  transform.setAnchorPoint(0.5, SLOPE_ART.anchorY);
+  transform.setContentSize(placement.width, placement.height);
+  sprite.spriteFrame = frame;
+  sprite.node.setPosition(p.x + placement.x, p.y + placement.y, 0);
+  sprite.node.angle = placement.angle;
+  sprite.node.active = true;
+  return true;
+}
+
+/** Static pooled decals above ground and below the grid/units. All lighting is pre-baked per direction. */
+export class ElevationRenderer {
+  private layer: Node;
+  private pool: Sprite[] = [];
+  private surface: Graphics;
+  private materials = new Map<string, Material>();
+  private frameSignature = '';
+  private lastDraw: [readonly Tile[], Frames, number, Project, number] | null = null;
+  constructor(parent: Node) {
+    this.layer = new Node('ElevationSlopes'); this.layer.layer = parent.layer;
+    this.layer.addComponent(UITransform); parent.addChild(this.layer);
+    this.surface = this.layer.addComponent(Graphics);
+    withJoinEffect(() => { if (this.layer.isValid && this.lastDraw) this.draw(...this.lastDraw); });
+  }
+  destroy(): void { this.lastDraw = null; this.layer.destroy(); this.pool = []; for (const material of this.materials.values()) material.destroy(); this.materials.clear(); }
+  draw(tiles: readonly Tile[], frames: Frames, size: number, project: Project, camera = 0): void {
+    if (!this.layer.isValid) return;
+    this.lastDraw = [tiles, frames, size, project, camera];
+    const signature = Object.keys(frames).filter(key => key.includes('/elevation/') && frames[key]).sort().join('|');
+    if (signature !== this.frameSignature) {
+      for (const material of this.materials.values()) material.destroy(); this.materials.clear(); this.frameSignature = signature;
+    }
+    this.surface.clear();
+    for (const tile of tiles) {
+      const tint = elevationSurfaceTint(tileHeight(tile)); if (!tint) continue;
+      const p = project(tile.pos.q, tile.pos.r);
+      this.surface.fillColor = new Color(tint.value, tint.value, tint.value, tint.alpha);
+      for (let i = 0; i < 6; i++) {
+        const angle = (-30 + i * 60) * Math.PI / 180, x = p.x + Math.cos(angle) * size, y = p.y + Math.sin(angle) * size;
+        if (i === 0) this.surface.moveTo(x, y); else this.surface.lineTo(x, y);
+      }
+      this.surface.close(); this.surface.fill();
+    }
+    let count = 0;
+    for (const join of elevationJoins(elevationEdges(tiles))) {
+      const edge = join.edge;
+      if (!frames[slopeSpritePath(edge.direction, edge.blocked, camera)]) continue;
+      let sprite = this.pool[count];
+      if (!sprite) {
+        const node = new Node('ElevationEdge'); node.layer = this.layer.layer;
+        node.addComponent(UITransform); sprite = node.addComponent(Sprite);
+        sprite.sizeMode = Sprite.SizeMode.CUSTOM; sprite.trim = false;
+        this.layer.addChild(node); this.pool.push(sprite);
+      }
+      place(sprite, edge, frames, size, project, camera);
+      sprite.customMaterial = joinMaterial(join, frames, camera, this.materials); count++;
+    }
+    for (let i = count; i < this.pool.length; i++) this.pool[i].node.active = false;
+    this.layer.setSiblingIndex(this.layer.parent!.children.length - 1);
+  }
+}
+
+/** Inspector crops the same decals, including slopes owned by an adjacent higher cell. */
+export function addElevationPreview(parent: Node, tiles: readonly Tile[], tile: Tile, frames: Frames,
+  cx: number, cy: number, size: number, camera = 0): void {
+  const relevant = elevationJoins(elevationEdges(tiles)).filter(({ edge }) => [edge.high, edge.low].some(t => t.pos.q === tile.pos.q && t.pos.r === tile.pos.r));
+  if (!relevant.length && tileHeight(tile) === 0) return;
+  const node = new Node('ElevationPreview'); node.layer = parent.layer;
+  node.addComponent(UITransform); node.setPosition(cx, cy, 0); parent.addChild(node);
+  const mask = node.addComponent(Mask); mask.type = Mask.Type.GRAPHICS_STENCIL;
+  const g = mask.subComp as Graphics; g.clear();
+  for (let i = 0; i < 6; i++) {
+    const a = (-30 + i * 60) * Math.PI / 180, x = size * Math.cos(a), y = size * Math.sin(a);
+    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+  }
+  g.close(); g.fill();
+  const tint = elevationSurfaceTint(tileHeight(tile));
+  if (tint) {
+    const wash = new Node('InspectElevationSurface'); wash.layer = parent.layer; node.addChild(wash);
+    const graphics = wash.addComponent(Graphics); graphics.fillColor = new Color(tint.value, tint.value, tint.value, tint.alpha);
+    for (let i = 0; i < 6; i++) { const a = (-30 + i * 60) * Math.PI / 180;
+      if (i === 0) graphics.moveTo(size * Math.cos(a), size * Math.sin(a)); else graphics.lineTo(size * Math.cos(a), size * Math.sin(a)); }
+    graphics.close(); graphics.fill();
+  }
+  const project = (q: number, r: number) => ({ x: size * Math.sqrt(3) * (q - tile.pos.q + (r - tile.pos.r) / 2), y: -size * 1.5 * (r - tile.pos.r) });
+  const previewSprites: Array<{ sprite: Sprite; join: ElevationJoin }> = [];
+  const materials = new Map<string, Material>();
+  for (const join of relevant) {
+    const edge = join.edge;
+    const child = new Node('InspectElevationEdge'); child.layer = parent.layer; child.addComponent(UITransform);
+    const sprite = child.addComponent(Sprite); sprite.sizeMode = Sprite.SizeMode.CUSTOM; sprite.trim = false;
+    node.addChild(child); child.active = place(sprite, edge, frames, size, project, camera);
+    previewSprites.push({ sprite, join });
+  }
+  withJoinEffect(() => {
+    if (!node.isValid) return;
+    for (const { sprite, join } of previewSprites) sprite.customMaterial = joinMaterial(join, frames, camera, materials);
+  });
+  node.once?.('node-destroyed', () => { for (const material of materials.values()) material.destroy(); materials.clear(); });
+}

@@ -10,6 +10,8 @@ const { generateMultiRegionPackage } = require('../assets/scripts/core/MultiRegi
 const { loadMission } = require('../assets/scripts/core/MissionLoader.ts');
 const { RNG } = require('../assets/scripts/core/Dice.ts');
 const { HexMap } = require('../assets/scripts/core/HexGrid.ts');
+const { fireDirectionTo, approximateFireDirection } = require('../assets/scripts/core/HexGrid.ts');
+const { selectTankMachineGun } = require('../assets/scripts/core/Combat.ts');
 const { isTankUnit, isFootUnit } = require('../assets/scripts/core/types.ts');
 const { applyUrbanStructureDamage } = require('../assets/scripts/core/UrbanTerrain.ts');
 let played = [];
@@ -24,7 +26,8 @@ const Scene = sceneMethods([
   'playHighExplosiveSuppressionCue', 'playTankDestroySoundOnce', 'deploySmokeAt',
   'applyUrbanBuildingDamage', 'updateNonPlayerTankCommanderHatch', 'playMoveStartSound',
   'advanceProjectileTraces', 'advanceInfantryRocketTraces', 'beginTurretAimAnim',
-], { ...audio, isTankUnit, isFootUnit, applyUrbanStructureDamage, HexMap,
+], { ...audio, ...require('../assets/scripts/core/TankRiding.ts'), isTankUnit, isFootUnit, applyUrbanStructureDamage, HexMap,
+  fireDirectionTo, approximateFireDirection, selectTankMachineGun,
   GameSession: { gameMode: 'hardcore' }, shouldNonPlayerTankOpenCommanderHatch: () => true,
   clearLockedFire() {},
 });
@@ -32,6 +35,7 @@ function fixture() {
   played = [];
   const mission = loadMission(generateMultiRegionPackage(20261026, 4).mission, new RNG(1), { hardcore: true });
   const scene = new Scene();
+  scene.allUnits = () => [mission.sherman, ...mission.allies, ...mission.enemies];
   Object.assign(scene, { mission, hexSize: 60, destroyWreckVisualIds: new Set(), smokeScreenAges: new Map(),
     projectileTraces: [], infantryRocketTraces: [], enemyTurretFacing: new Map(),
     rememberAttackPosition() {}, setInfantryVisualFacing() {}, redraw() {}, startMainGunRecoil() {},
@@ -40,6 +44,7 @@ function fixture() {
     allUnits: () => [mission.sherman, ...mission.allies, ...mission.enemies],
     displayedFogVisionSnapshot: () => null, startFogVisionTransition() {},
     hashStringToSeed: () => 1, project: (q, r) => ({ x: q, y: r }), spawnHighExplosiveBlast() {},
+    currentTurretFacingFor: unit => unit.turretFacing ?? unit.facing ?? 0,
     drawProjectileTrace() {}, drawInfantryRocketTrace() {},
   });
   const local = mission.data.multiRegion.regions[0].center;

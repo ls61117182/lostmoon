@@ -23,7 +23,7 @@ const names = ['enterPhase', 'enterPhaseIfChoose', 'endCurrentSubPhase', 'dieSte
   'usePhaseDice', 'completePhaseDiceAction', 'autoEndPhaseIfDone', 'dieActionHint', 'playerDieFillColor', 'refreshDiceTray', 'canToggleHatch'];
 const methods = names.map(name => sceneClass.members.find(m => m.name?.getText(ast) === name).getText(ast));
 const session = { gameMode: 'test', isPvp: false };
-const context = vm.createContext({ GameSession: session, getGameModeConfig, actionDicePool, rollActionDice,
+const context = vm.createContext({ ...require('../assets/scripts/core/TankRiding.ts'), GameSession: session, getGameModeConfig, actionDicePool, rollActionDice,
   effectiveTankCrew, resolvedLoadedShell, effectiveDiceTerrain: tile => tile.terrain, DICE_ROLL_DUR: 1, playDiceRoll() {},
   clearLockedFire() {}, beginAmbushTurn() {}, classifyMoveDie, classifyAttackDie, classifyMiscDie, t: key => key,
   AI_ATTACK_DIE_FILL: 'attack-red', AI_MOVE_DIE_FILL: 'move-green', AI_MISC_DIE_FILL: 'misc',
@@ -39,6 +39,7 @@ function harness(mode = 'test') {
   const h = new context.Scene();
   const missionData = JSON.parse(fs.readFileSync('assets/resources/missions/mission_03.json', 'utf8'));
   h.mission = loadMission(missionData, undefined, { hardcore: mode !== 'classic' });
+  h.allUnits = () => [h.mission.sherman, ...h.mission.allies, ...h.mission.enemies];
   Object.assign(h, { playerStep: 'choose', phase: 'player', outcome: 'ongoing', movementDone: false,
     attackDone: false, miscDone: false, phaseDice: [], rng: { d6: (() => { let n = 0; return () => ++n % 6 + 1; })() },
     campaignUpgradesEnabled: () => false, campaignUpgradeActive: () => false, isBusy: () => false,
