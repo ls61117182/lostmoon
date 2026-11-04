@@ -1,3 +1,4 @@
+import { canHitCrewAt, isTwoHexUnit, selectedUnitHitHex, unitAtHex, unitCellAt, unitFrontHex, unitOccupiedHexes, unitOccupiesHex, unitTurretHex } from './UnitFootprint';
 import { crewRoleAlive } from "./types";
 /**
  * 战斗结算 —— 纯函数，不依赖 Cocos，可直接 Jest 测。
@@ -16,6 +17,7 @@ import { crewRoleAlive } from "./types";
  */
 
 import { RNG } from './Dice';
+import { tileHeight } from './Elevation';
 import { mountedMachineGunTarget } from './TankRiding';
 import { immobilizeTank } from './TankTrackDamage';
 import { turretTurnDistance } from './TurretTraverse';
@@ -150,6 +152,10 @@ export interface AttackReport {
 }
 
 export interface AttackContext {
+  /** The chosen physical hit hex of a two-hex target. Defaults to a legal visible hex. */
+  targetHex?: Axial;
+  /** Internal geometry-view marker; never persisted on units. */
+  geometryWeapon?: string;
   /** Fog-of-war shooting requires direct sight; shared radio intelligence is insufficient. */
   requireOwnVision?: boolean;
   /** Hardcore: a previous main-gun hit grants -2 against the locked tank. */
@@ -252,6 +258,7 @@ export interface HitThresholdModifierDetail {
 
 /** Rules-facing firing direction. Flank targets retain the current halfway turret direction. */
 export function attackFireDirection(ctx: AttackContext): FireDirection | null {
+  ctx = positionAttackContext(ctx);
   const { attacker, target, map } = ctx;
   if (isHeavyArtilleryUnit(attacker) || (ctx.expandedTurretDirections && attacker.stats.visionType === 'turreted')) {
     const flankDirection = diagonalMainGunDirectionForHex(
@@ -269,6 +276,7 @@ export function attackFireDirection(ctx: AttackContext): FireDirection | null {
  * single capability flag is a sufficient mode discriminator on its own.
  */
 function usesHardcoreSmokeRules(ctx: AttackContext): boolean {
+  ctx = positionAttackContext(ctx);
   return ctx.expandedTurretDirections === true
     || ctx.hardcoreTankMachineGuns === true
     || ctx.sameHexInfantryTankAttack === true;
@@ -276,11 +284,13 @@ function usesHardcoreSmokeRules(ctx: AttackContext): boolean {
 
 /** Smoke blocks firing rays only in hardcore mode; classic smoke is a hit modifier only. */
 function firingRaySmokeHexes(ctx: AttackContext): ReadonlySet<string> | undefined {
+  ctx = positionAttackContext(ctx);
   return usesHardcoreSmokeRules(ctx) ? ctx.smokeHexes : undefined;
 }
 
 function unitIsInSmoke(ctx: AttackContext, unit: Unit): boolean {
-  return ctx.smokeHexes?.has(HexMap.keyOf(unit.pos)) === true || unit.smoked === true;
+  ctx = positionAttackContext(ctx);
+  return ctx.smokeHexes?.has(HexMap.keyOf(unit.pos)) === true || (!isTwoHexUnit(unit) && unit.smoked === true);
 }
 
 /** 本次攻击使用的临时穿甲值，不修改单位基础属性。 */
@@ -297,7 +307,7 @@ export interface EffectivePenetrationBreakdown {
 export function effectivePenetrationBreakdown(attacker: Unit, target: Unit, enabled = false): EffectivePenetrationBreakdown {
   const basePenetration = attacker.stats.penetration;
   const effectiveRange = attacker.stats.effectiveRange;
-  const distance = hexDistance(attacker.pos, target.pos);
+  const distance = hexDistance(unitTurretHex(attacker), target.pos);
   const rangePenalty = enabled ? Math.max(0, distance - effectiveRange) : 0;
   return {
     basePenetration,
@@ -317,6 +327,7 @@ export const HVAP_EFFECTIVE_RANGE_BONUS = 2;
 
 /** HVAP follows AP rules with its penetration and effective-range bonuses applied before range falloff. */
 export function attackEffectivePenetrationBreakdown(ctx: AttackContext): EffectivePenetrationBreakdown {
+  ctx = positionAttackContext(ctx);
   const hvap = ctx.shellType === 'hvap';
   const basePenetration = ctx.attacker.stats.penetration;
   const penetrationBonus = hvap ? HVAP_PENETRATION_BONUS : 0;
@@ -337,6 +348,7 @@ export function attackEffectivePenetrationBreakdown(ctx: AttackContext): Effecti
 }
 
 export function attackEffectivePenetration(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   return attackEffectivePenetrationBreakdown(ctx).penetration;
 }
 
@@ -350,17 +362,20 @@ const PACIFIC_UNIT_KINDS: ReadonlySet<UnitKind> = new Set<UnitKind>([
 ]);
 
 function isPacificCombat(ctx: AttackContext): boolean {
+  ctx = positionAttackContext(ctx);
   return ctx.theater === 'pacific'
     || PACIFIC_UNIT_KINDS.has(ctx.attacker.kind)
     || PACIFIC_UNIT_KINDS.has(ctx.target.kind);
 }
 
 function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: number): boolean {
+  ctx = positionAttackContext(ctx);
   return isHostile(ctx.attacker, ctx.target)
     && isTankUnit(ctx.target)
     && d1 === d2
     && !!ctx.target.hatchOpen
-    && !!ctx.target.crew?.commander;
+    && !!ctx.target.crew?.commander
+    && canHitCrewAt(ctx.target, 1, ctx.target.pos);
 }
 
 /**
@@ -398,10 +413,11 @@ export function infantryAttackRange(_target: Unit): number {
 }
 
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
+  ctx = positionAttackContext(ctx);
   const { attacker, target, map } = ctx;
   if (!map.sameRegion(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
-  if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
+  if (target === attacker || (target.id !== undefined && target.id === attacker.id)) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   if (ctx.precisionFire === true
     && (isFootUnit(target) || (isAntiTankGunUnit(target) && ctx.shellType === 'he'))) {
@@ -411,6 +427,16 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
     && !isBunkerShootingPortAttack(ctx)) {
     return { ok: false, reason: 'attack.reason.bunkerSlitAngle' };
   }
+  if (isTwoHexUnit(target)) {
+    if (!unitOccupiesHex(target, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
+    const axis = directionTo(target.pos, attacker.pos);
+    const cell = unitCellAt(target, target.pos);
+    if (!sameHex(attacker.pos, target.pos)
+      && ((axis === target.facing && cell === 'rear') || (axis === ((target.facing ?? 0) + 3) % 6 && cell === 'front'))) {
+      return { ok: false, reason: 'attack.reason.blocked' };
+    }
+  }
+  if (isTwoHexUnit(attacker) && unitOccupiesHex(attacker, target.pos)) return { ok: false, reason: 'attack.reason.overlap' };
   const infantryAttack = isFootUnit(attacker);
   const suppressionAttack = ctx.mainGunSuppressesInfantry === true
     && ctx.shellType === 'he'
@@ -482,6 +508,7 @@ export interface HitBreakdownOptions {
 }
 
 export function hitThreshold(ctx: AttackContext, opts: HitBreakdownOptions = {}): number {
+  ctx = positionAttackContext(ctx);
   const b = hitBreakdown(ctx, opts);
   return b.threshold;
 }
@@ -510,11 +537,13 @@ export interface HitBreakdown {
   rocky?: number;
   forest?: number;      // 森林内步兵受机枪或步兵攻击时 +1
   trench?: number;      // 跨壕射击 +2；防护修正只取最高，不与其它掩护叠加
+  elevation?: number;   // 仰射高地：主炮 +2，步兵普通射击及坦克机枪 +1
 }
 
 /** Intact friendly bunkers shelter infantry under the non-classic combat rules.
  * MG and turn-end attacks carry narrower capability sets than main-gun attacks. */
 function hasFriendlyBunkerCover(ctx: AttackContext): boolean {
+  ctx = positionAttackContext(ctx);
   if (!ctx.hardcoreHeavyArtilleryRules && !ctx.atGunCrewTargets && !usesHardcoreSmokeRules(ctx)) return false;
   if (!isFootUnit(ctx.target)) return false;
   return ctx.units?.some(unit => !unit.destroyed
@@ -526,7 +555,19 @@ function hasFriendlyBunkerCover(ctx: AttackContext): boolean {
     && unit.pos.r === ctx.target.pos.r) === true;
 }
 
+function uphillHitModifier(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
+  if (tileHeight(ctx.map.get(ctx.target.pos)) <= tileHeight(ctx.map.get(ctx.attacker.pos))) return 0;
+  if (ctx.attackKind === 'mg') return isTankUnit(ctx.attacker) || isFootUnit(ctx.attacker) ? 1 : 0;
+  if (isFootUnit(ctx.attacker)) {
+    // Infantry use the main attack resolver for small arms as well as anti-tank weapons.
+    return isFootUnit(ctx.target) || isControlledATGun(ctx.target) ? 1 : 0;
+  }
+  return 2;
+}
+
 export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {}): HitBreakdown {
+  ctx = positionAttackContext(ctx);
   const { attacker, target, map } = ctx;
   const distance = hexDistance(attacker.pos, target.pos);
   const hedges = map.countHedgesAlong(attacker.pos, target.pos);
@@ -562,6 +603,7 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     ? weatherHitThresholdModifier(ctx.weather)
     : 0;
   const unitLevel = unitLevelHitThresholdModifier(attacker, target, ctx.attackKind ?? 'main');
+  const elevation = uphillHitModifier(ctx);
   const trench = !target.mountedOnUnitId && (infantryMGTarget || (isFootUnit(attacker) && isFootUnit(target)))
     ? trenchCoverModifier(targetTile, attacker.pos, target.pos) : 0;
   const defense = { trench, hedges, building, crater, rocky, forest, smoke, concealed, trees };
@@ -573,13 +615,14 @@ export function hitBreakdown(ctx: AttackContext, opts: HitBreakdownOptions = {})
     for (const key of keys) if (key !== winner) defense[key] = 0;
   }
   return {
-    size, distance, ...defense, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel,
+    size, distance, ...defense, rearArc, frontArc: frontArcModifier, actionModifier, weather, unitLevel, elevation,
     threshold: size + distance + Object.values(defense).reduce((sum, value) => sum + value, 0) + rearArc
-      + frontArcModifier + actionModifier + weather + unitLevel,
+      + frontArcModifier + actionModifier + weather + unitLevel + elevation,
   };
 }
 
 function countPacificTreesAlong(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   const path = hexLine(ctx.attacker.pos, ctx.target.pos);
   let n = 0;
   for (let i = 1; i < path.length; i++) {
@@ -625,7 +668,8 @@ export function probDie1d6(threshold: number): number {
 }
 
 function isProtagonistTarget(ctx: AttackContext): boolean {
-  return ctx.protagonist ? ctx.target === ctx.protagonist : isPlayerControlled(ctx.target);
+  ctx = positionAttackContext(ctx);
+  return ctx.protagonist ? ctx.target === ctx.protagonist || (ctx.target.id !== undefined && ctx.target.id === ctx.protagonist.id) : isPlayerControlled(ctx.target);
 }
 
 /**
@@ -661,6 +705,7 @@ export function attackDirectionRuleFromFireDirection(target: Unit, fireDirection
 }
 
 function isSameHexInfantryTankAttack(ctx: AttackContext): boolean {
+  ctx = positionAttackContext(ctx);
   return ctx.sameHexInfantryTankAttack === true
     && isFootUnit(ctx.attacker)
     && isTankUnit(ctx.target)
@@ -669,14 +714,25 @@ function isSameHexInfantryTankAttack(ctx: AttackContext): boolean {
 }
 
 function attackDirectionRuleFor(ctx: AttackContext): AttackDirectionRule {
+  ctx = positionAttackContext(ctx);
   // Infantry sharing a tank's hex attacks it from its vulnerable rear.
-  if (isSameHexInfantryTankAttack(ctx)) return ATTACK_DIRECTION_RULES[180];
+  if (isSameHexInfantryTankAttack(ctx)) {
+    if (!isTwoHexUnit(ctx.target)) return ATTACK_DIRECTION_RULES[180];
+    return unitCellAt(ctx.target, ctx.target.pos) === 'front'
+      ? { ...ATTACK_DIRECTION_RULES[0], armorFace: 'frontSide' }
+      : ATTACK_DIRECTION_RULES[180];
+  }
   const flankDirection = ctx.expandedTurretDirections
     ? diagonalMainGunDirectionForHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather)
     : null;
-  return flankDirection !== null
+  const rule = flankDirection !== null
     ? attackDirectionRuleFromFireDirection(ctx.target, flankDirection)
     : attackDirectionRuleFrom(ctx.target, ctx.attacker.pos);
+  if (!isTwoHexUnit(ctx.target)) return rule;
+  const front = unitCellAt(ctx.target, ctx.target.pos) === 'front';
+  return { ...rule, armorFace: front
+    ? (rule.armorFace === 'rear' || rule.armorFace === 'rearSide' ? 'frontSide' : rule.armorFace)
+    : (rule.armorFace === 'front' || rule.armorFace === 'frontSide' ? 'rearSide' : rule.armorFace) };
 }
 
 export function armorFaceFrom(target: Unit, attackerPos: Axial): ArmorFace {
@@ -703,6 +759,7 @@ export function armorValue(target: Unit, face: ArmorFace): number {
  * shot are treated as exactly 90 degrees rather than being rounded apart.
  */
 function incomingFireDirectionStepFor(ctx: AttackContext): number | null {
+  ctx = positionAttackContext(ctx);
   if (hexDistance(ctx.attacker.pos, ctx.target.pos) === 0) return null;
   const flankDirection = ctx.expandedTurretDirections
     ? diagonalMainGunDirectionForHex(ctx.map, ctx.attacker, ctx.target.pos, ctx.weather, ctx.smokeHexes)
@@ -714,12 +771,14 @@ function incomingFireDirectionStepFor(ctx: AttackContext): number | null {
 }
 
 export function gunMantletArmorBonus(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   const { target } = ctx;
   const bonus = target.stats.gunMantletArmor ?? 0;
   if (!ctx.gunMantletArmor
     || bonus <= 0
     || !isTankUnit(target)
-    || target.stats.visionType !== 'turreted') return 0;
+    || target.stats.visionType !== 'turreted'
+    || (isTwoHexUnit(target) && unitCellAt(target, target.pos) !== (target.stats.turretCell ?? 'front'))) return 0;
   const incomingStep = incomingFireDirectionStepFor(ctx);
   const turretFacing = target.turretFacing ?? target.facing;
   if (incomingStep === null || turretFacing === null) return 0;
@@ -736,6 +795,7 @@ function isWithinThirtyDegreeArc(incomingStep: number, facing: FireDirection): b
  * Use positions and hull facing, never the attacker's turret or a rounded ray.
  */
 export function isBunkerShootingPortAttack(ctx: AttackContext): boolean {
+  ctx = positionAttackContext(ctx);
   const { target, attacker } = ctx;
   if (!ctx.hardcoreHeavyArtilleryRules || !ctx.precisionFire
     || !isHeavyArtilleryUnit(target) || target.facing == null) return false;
@@ -751,11 +811,13 @@ export function isBunkerShootingPortAttack(ctx: AttackContext): boolean {
 }
 
 export function effectiveArmorValue(ctx: AttackContext, face: ArmorFace): number {
+  ctx = positionAttackContext(ctx);
   return armorValue(ctx.target, face) + gunMantletArmorBonus(ctx);
 }
 
 /** Shared by bunker HE resolution and its damage-threshold preview. */
 export function bunkerHighExplosiveThresholds(ctx: AttackContext): { fireThreshold: number; destroyThreshold: number } {
+  ctx = positionAttackContext(ctx);
   const armor = effectiveArmorValue(ctx, attackDirectionRuleFor(ctx).armorFace);
   const power = ctx.attacker.stats.highExplosivePower ?? 0;
   return { fireThreshold: armor - power - 2, destroyThreshold: armor - power + 2 };
@@ -824,6 +886,7 @@ export type InfantryHighExplosiveCoverSource = 'building' | 'forest' | 'trees' |
 export function infantryHighExplosiveCoverSource(
   ctx: AttackContext,
 ): InfantryHighExplosiveCoverSource | undefined {
+  ctx = positionAttackContext(ctx);
   const tile = ctx.map.get(ctx.target.pos);
   if (tileHasBuilding(tile) || hasFriendlyBunkerCover(ctx)) return 'building';
   if (tile?.terrain === 'forest') return 'forest';
@@ -832,17 +895,18 @@ export function infantryHighExplosiveCoverSource(
     && !unit.destroyed
     && isSameSide(unit, ctx.target)
     && isTankUnit(unit)
-    && unit.pos.q === ctx.target.pos.q
-    && unit.pos.r === ctx.target.pos.r) === true ? 'friendly_tank' : undefined;
+    && unitOccupiesHex(unit, ctx.target.pos)) === true ? 'friendly_tank' : undefined;
 }
 
 /** Legacy shared cover affecting BOTH destruction and suppression; earthworks are separate. */
 export function infantryHighExplosiveCoverValue(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   return infantryHighExplosiveCoverSource(ctx) ? 1 : 0;
 }
 
 /** Infantry use either earthwork; AT-gun bodies receive this bonus only in gun pits. */
 export function highExplosiveFortificationCoverValue(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   const tile = ctx.map.get(ctx.target.pos);
   const eligible = (isFootUnit(ctx.target) && !ctx.target.mountedOnUnitId)
     || (isAntiTankGunUnit(ctx.target) && tile?.fortification?.kind === 'gun_pit');
@@ -851,12 +915,14 @@ export function highExplosiveFortificationCoverValue(ctx: AttackContext): number
 
 /** Shared by actual infantry/gun-body HE resolution and map destruction previews. */
 export function highExplosiveDestroyThreshold(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   return 12 + infantryHighExplosiveCoverValue(ctx) + highExplosiveFortificationCoverValue(ctx)
     - (ctx.attacker.stats.highExplosivePower ?? 0);
 }
 
 /** Compatibility helper retained for callers that only need a yes/no cover preview. */
 export function infantryHasHighExplosiveCover(ctx: AttackContext): boolean {
+  ctx = positionAttackContext(ctx);
   return infantryHighExplosiveCoverValue(ctx) > 0 || highExplosiveFortificationCoverValue(ctx) > 0;
 }
 
@@ -885,6 +951,7 @@ export function rollHighExplosiveInfantryOutcome(
 
 /** Resolve hardcore HE without any AP penetration, range falloff or damage-table roll. */
 export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplosiveReport {
+  ctx = positionAttackContext(ctx);
   const { attacker, target } = ctx;
   const lockedHitBreakdown = hitBreakdown(ctx);
   const shootingPortAttack = isBunkerShootingPortAttack(ctx);
@@ -902,7 +969,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   const hitModifiers = mainGunHitThresholdModifierDetails(ctx);
   const power = attacker.stats.highExplosivePower ?? 0;
   const base: HighExplosiveReport = {
-    incomingAngle: incomingAngleFrom(target, attacker.pos),
+    incomingAngle: attackDirectionRuleFor(ctx).incomingAngle,
     dice: [d1, d2], roll, threshold, hit, automaticHit, shootingPortHit, hitBreakdown: lockedHitBreakdown,
     hitModifiers, highExplosivePower: power, outcome: 'none',
   };
@@ -1081,13 +1148,13 @@ function isEffectApplicable(target: Unit, effect: DamageTableEffect): boolean {
     case 'fire':
       return true;
     case 'turret':
-      return !target.turretDamaged;
+      return !target.turretDamaged && (!isTwoHexUnit(target) || unitCellAt(target, target.pos) === (target.stats.turretCell ?? 'front'));
     case 'paralyzed':
       return !target.paralyzed;
     case 'radio':
       return target.stats.hasRadio !== false && target.radioDamaged !== true;
     case 'crew':
-      return !!effect.crew?.some(role => crewRoleAlive(target, role));
+      return !!effect.crew?.some(role => crewRoleAlive(target, role) && (target.stats.crewRoleAssignments?.[role] ?? [crewRoleSlot(role)]).some(slot => canHitCrewAt(target, slot, target.pos) && isCrewAlive(target.crew!, slot)));
   }
 }
 
@@ -1096,7 +1163,7 @@ function damageEffectStepFrom(target: Unit, effect: DamageTableEffect): DamageEf
     effect: effect.kind === 'crew' ? 'crewCheck' : effect.kind,
     ...(effect.kind === 'crew'
       ? (() => {
-        const crewPriority = (effect.crew ?? []).flatMap(role => target.stats.crewRoleAssignments?.[role] ?? [crewRoleSlot(role)]);
+        const crewPriority = (effect.crew ?? []).flatMap(role => target.stats.crewRoleAssignments?.[role] ?? [crewRoleSlot(role)]).filter(slot => canHitCrewAt(target, slot, target.pos));
         return { crewPriority, crewSlot: firstAliveCrewSlot(target, crewPriority) };
       })()
       : {}),
@@ -1152,6 +1219,7 @@ function isOverpenetrationSuppressedEffect(effect: DamageEffect): boolean {
  * 这样玩家能看清楚每颗骰子点数与命中阈值，再看到目标变色。
  */
 export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
+  ctx = positionAttackContext(ctx);
   const { attacker, target } = ctx;
   const pacific = isPacificCombat(ctx);
   const protagonistTarget = isProtagonistTarget(ctx);
@@ -1180,7 +1248,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   // penetration. Ordinary hardcore fire against the bunker is automatic.
   const hit = automaticHit || shootingPortAttack || roll >= threshold;
   const hitRollMeta = {
-    incomingAngle: incomingAngleFrom(target, attacker.pos),
+    incomingAngle: attackDirectionRuleFor(ctx).incomingAngle,
     automaticHit: automaticHit || undefined,
     shootingPortHit,
   };
@@ -1288,13 +1356,15 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const rawStagedDamageEffects = stagedDamageDie !== undefined && targetClass
     ? resolveDamageTableEffects(target, targetClass, damageTable, stagedDamageDie)
     : undefined;
-  const rawStagedDamageEffect = rawStagedDamageEffects
+  let rawStagedDamageEffect = rawStagedDamageEffects
     ? primaryDamageEffect(rawStagedDamageEffects)
     : (stagedDamageDie !== undefined
       ? (pacific && protagonistTarget
         ? resolvePacificShermanDamageEffect(stagedDamageDie, damageTable)
         : resolveDamageEffect(target, stagedDamageDie, protagonistTarget, damageTable))
       : undefined);
+  if (isTwoHexUnit(target) && rawStagedDamageEffect === 'turret'
+    && unitCellAt(target, target.pos) !== (target.stats.turretCell ?? 'front')) rawStagedDamageEffect = undefined;
   const overpenetrationSuppressedEffects: DamageEffect[] = overpenetrated
     ? Array.from(new Set([
       ...(rawStagedDamageEffects ?? []).map(step => step.effect),
@@ -1320,7 +1390,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
     const crewTarget = commanderKilledByHitDoubles && target.crew
       ? { ...target, crew: { ...target.crew, commander: false } }
       : target;
-    stagedCrewCheck = resolveCrewCheck(crewTarget, rng);
+    stagedCrewCheck = resolveCrewCheck(crewTarget, rng, isTwoHexUnit(target) ? target.stats.crewMembers.filter(slot => canHitCrewAt(target, slot, target.pos)) : undefined);
   }
 
   if (!hit) {
@@ -1498,7 +1568,7 @@ function resolvePacificShermanDamageEffectByDie(die: number): DamageEffect {
  *
  * 返回 CrewDeathResult；调用方在 applyAttack 里真正把对应 crew 字段置 false。
  */
-export function resolveCrewCheck(target: Unit, rng: RNG): CrewDeathResult {
+export function resolveCrewCheck(target: Unit, rng: RNG, allowedSlots?: CrewSlot[]): CrewDeathResult {
   const crew = target.crew;
   let rerolled = false;
   const MAX_REROLL = 12;
@@ -1509,6 +1579,7 @@ export function resolveCrewCheck(target: Unit, rng: RNG): CrewDeathResult {
       // 舱盖关闭时的 6 = 虚惊，规则上不再重抛：直接返回
       return { die, slot: null, rerolled };
     }
+    if (allowedSlots && !allowedSlots.includes(slot)) return { die, slot: null, rerolled };
     // 有具体乘员编号：若已死，按脚注重抛；否则接受结果
     if ((target.stats.crewMembers ?? [1, 2, 3, 4, 5]).includes(slot) && (!crew || isCrewAlive(crew, slot))) {
       return { die, slot, rerolled };
@@ -1683,6 +1754,7 @@ export function applyAttack(target: Unit, report: AttackReport): void {
 
 /** 一步到位：掷骰 + 写入。无需动画时（如自动测试）使用。 */
 export function resolveAttack(ctx: AttackContext, rng: RNG): AttackReport {
+  ctx = positionAttackContext(ctx);
   const report = rollAttack(ctx, rng);
   applyAttack(ctx.target, report);
   return report;
@@ -1727,12 +1799,13 @@ function tankCoordinationBonus(unit: Unit): number {
 }
 
 function mgTankCoordinationModifier(ctx: AttackContext): number {
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   if (!isFootUnit(ctx.target) || ctx.target.mountedOnUnitId) return 0;
   const units = ctx.units;
   if (!units) return 0;
   let bonus = 0;
   for (const u of units) {
-    if (u === ctx.target || u.destroyed || !sameHex(u.pos, ctx.target.pos)) continue;
+    if (u === ctx.target || u.destroyed || !unitOccupiesHex(u, ctx.target.pos)) continue;
     bonus = Math.max(bonus, tankCoordinationBonus(u));
   }
   return bonus;
@@ -1740,21 +1813,34 @@ function mgTankCoordinationModifier(ctx: AttackContext): number {
 
 /** All tank MGs, including casemate-mounted guns, gain -1 against infantry. */
 function mgTankHitModifier(ctx: AttackContext): number {
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   const infantryTarget = isFootUnit(ctx.target)
     || (ctx.atGunCrewTargets === true && isControlledATGun(ctx.target));
   return isTankUnit(ctx.attacker) && infantryTarget ? -1 : 0;
 }
 
 export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyReason } {
+  if (isTwoHexUnit(ctx.attacker) && !ctx.tankMachineGun) {
+    const selection = selectTwoHexMachineGun(ctx);
+    return selection ? canMGAttack({ ...ctx, tankMachineGun: selection.weapon, tankMachineGunWillTraverse: selection.rotateTurret, hardcoreTankMachineGuns: true })
+      : { ok: false, reason: 'attack.reason.mgDirection' };
+  }
+  if (isTwoHexUnit(ctx.attacker) && ctx.tankMachineGun === 'both') {
+    const hull = canMGAttack({ ...ctx, tankMachineGun: 'hull' });
+    return hull.ok ? canMGAttack({ ...ctx, tankMachineGun: 'coaxial' }) : hull;
+  }
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   const { attacker, target, map } = ctx;
   if (!map.sameRegion(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
-  if (target === attacker) return { ok: false, reason: 'attack.reason.selfFire' };
+  if (target === attacker || (target.id !== undefined && target.id === attacker.id)) return { ok: false, reason: 'attack.reason.selfFire' };
   if (target.destroyed) return { ok: false, reason: 'attack.reason.destroyedTarget' };
   const atGunCrewTarget = ctx.atGunCrewTargets === true && isControlledATGun(target);
   if (!isFootUnit(target) && !atGunCrewTarget) return { ok: false, reason: 'attack.reason.notInfantry' };
   if (ctx.units && mountedMachineGunTarget(target, ctx.units) !== target) return { ok: false, reason: 'attack.reason.ridersFirst' };
   const distance = hexDistance(attacker.pos, target.pos);
+  if (isTwoHexUnit(attacker) && unitOccupiesHex(attacker, target.pos)) return { ok: false, reason: 'attack.reason.mgRange' };
+  if (isTwoHexUnit(attacker) && ctx.tankMachineGun === 'hull' && (distance !== 1 || directionTo(attacker.pos, target.pos) !== attacker.facing)) return { ok: false, reason: 'attack.reason.mgRange' };
   if (distance === 0 || distance > MG_MAX_RANGE) return { ok: false, reason: 'attack.reason.mgRange' };
   const raySmokeHexes = firingRaySmokeHexes(ctx);
   const flankDirection = ctx.expandedTurretDirections && !attacker.turretDamaged
@@ -1801,6 +1887,21 @@ export function canMGAttack(ctx: AttackContext): { ok: boolean; reason?: MGDenyR
   return { ok: true };
 }
 
+/** Each gun must independently reach the same hex from its own physical origin. */
+export function selectTwoHexMachineGun(ctx: AttackContext): TankMachineGunSelection | null {
+  const attacker = ctx.attacker;
+  const direction = attackFireDirection({ ...ctx, attackKind: 'mg', tankMachineGun: 'coaxial' });
+  const facing = attacker.turretFacing ?? attacker.facing;
+  const reaches = direction !== null && facing !== null && !attacker.turretDamaged
+    && turretTurnDistance(facing, direction) <= (attacker.stats.turretTraverseSpeed ?? 6);
+  const base = { ...ctx, attackKind: 'mg' as const, hardcoreTankMachineGuns: true, tankMachineGunWillTraverse: reaches };
+  const hull = canMGAttack({ ...base, tankMachineGun: 'hull' }).ok;
+  const coaxial = canMGAttack({ ...base, tankMachineGun: 'coaxial' }).ok;
+  if (!hull && !coaxial) return null;
+  return { weapon: hull && coaxial ? 'both' : hull ? 'hull' : 'coaxial',
+    rotateTurret: !attacker.turretDamaged && direction !== null && direction !== facing };
+}
+
 export interface MGReport {
   dice: [number, number];
   hitDiceCount: number;
@@ -1818,6 +1919,7 @@ export interface TankMachineGunAttackReport {
 }
 
 export function mgHitThreshold(ctx: AttackContext): number {
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   const base = mgHitBreakdown(ctx);
   return base.threshold
     + mgTankHitModifier(ctx)
@@ -1827,6 +1929,7 @@ export function mgHitThreshold(ctx: AttackContext): number {
 
 /** A controlled AT gun's shield uses the same +/-30-degree protection arc as a tank gun mantlet. */
 function atGunShieldModifier(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   if (ctx.atGunCrewTargets !== true || !isControlledATGun(ctx.target)) return 0;
   const shieldFacing = ctx.target.turretFacing ?? ctx.target.facing;
   if (shieldFacing === null) return 0;
@@ -1835,6 +1938,7 @@ function atGunShieldModifier(ctx: AttackContext): number {
 }
 
 export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   // In hardcore mode the hull and coaxial guns are separate attacks. A target
   // covered by both weapons no longer receives the old combined-fire -1 bonus.
   const frontArcModifier = isTankUnit(ctx.attacker) && !ctx.hardcoreTankMachineGuns
@@ -1856,6 +1960,7 @@ export function mgHitBreakdown(ctx: AttackContext): HitBreakdown {
 }
 
 export function rollMGAttack(ctx: AttackContext, rng: RNG): MGReport {
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   const d1 = rng.d6();
   const roll = d1;
   const threshold = mgHitThreshold(ctx);
@@ -1885,6 +1990,7 @@ export function rollSelectedTankMachineGunAttacks(
 }
 
 function mainGunHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
+  ctx = positionAttackContext(ctx);
   const details = ctx.hitThresholdModifiers?.filter(item => item.value !== 0).map(item => ({ ...item })) ?? [];
   const lock = lockedFireModifier(ctx.attacker, ctx.target, ctx.lockedFire && ctx.shellType !== 'smoke');
   if (lock) details.push({ labelKey: 'dice.rule.lockedFire', value: lock });
@@ -1892,6 +1998,7 @@ function mainGunHitThresholdModifierDetails(ctx: AttackContext): HitThresholdMod
 }
 
 export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdModifierDetail[] {
+  ctx = positionAttackContext({ ...ctx, attackKind: 'mg' });
   const details = mainGunHitThresholdModifierDetails(ctx);
   const tankHit = mgTankHitModifier(ctx);
   const coordination = mgTankCoordinationModifier(ctx);
@@ -1903,6 +2010,7 @@ export function mgHitThresholdModifierDetails(ctx: AttackContext): HitThresholdM
 }
 
 export function maxMGHitRoll(ctx: AttackContext): number {
+  ctx = positionAttackContext(ctx);
   return 6;
 }
 
@@ -1940,6 +2048,7 @@ export interface AttackPreview {
  * 假设 attacker 当前朝向 / target 当前位置 / 当前地形，所以面板里的数字 = 真实开火时的数字。
  */
 export function previewAttack(ctx: AttackContext): AttackPreview {
+  ctx = positionAttackContext(ctx);
   const hb = hitBreakdown(ctx);
   const hitProb = probHit2d6(hb.threshold);
 
@@ -1955,4 +2064,21 @@ export function previewAttack(ctx: AttackContext): AttackPreview {
     pen: { armorFace: face, armor, penetration: pen, threshold: penThreshold, probability: penProb },
     jointProbability: hitProb * penProb,
   };
+}
+
+/** Resolve every range, ray, elevation and armour calculation from the same physical endpoints. */
+export function positionAttackContext(ctx: AttackContext): AttackContext {
+  const weapon = ctx.attackKind === 'mg' ? (ctx.tankMachineGun ?? 'coaxial') : 'main';
+  if (ctx.geometryWeapon === weapon) return ctx;
+  const source = weapon === 'hull' ? unitFrontHex(ctx.attacker) : unitTurretHex(ctx.attacker);
+  let hitHex = ctx.targetHex ?? selectedUnitHitHex(ctx.target);
+  if (!hitHex && isTwoHexUnit(ctx.target)) {
+    const distance = (p: Axial) => hexDistance(source, p);
+    const candidates = unitOccupiedHexes(ctx.target).sort((a,b) => distance(a)-distance(b));
+    hitHex = candidates.find(pos => canAttack({ ...ctx, geometryWeapon: undefined, targetHex: pos }).ok) ?? candidates[0];
+  }
+  hitHex ??= ctx.target.pos;
+  return { ...ctx, geometryWeapon: weapon, targetHex: hitHex,
+    attacker: isTwoHexUnit(ctx.attacker) ? unitAtHex(ctx.attacker, source) : ctx.attacker,
+    target: isTwoHexUnit(ctx.target) ? unitAtHex(ctx.target, hitHex) : ctx.target };
 }

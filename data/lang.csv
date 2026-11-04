@@ -425,6 +425,7 @@ tileInspect.slope,缓坡：可正常上下，不额外消耗移动力。,"Gentle
 dice.rule.crater,弹坑掩护,Crater cover
 dice.rule.rockyCover,岩石高地掩护,Rocky high ground cover
 dice.rule.forestCover,森林掩护,Forest cover
+dice.rule.uphill,仰射高地,Uphill fire
 tileInspect.forestCover,森林掩护：步兵受机枪或步兵攻击时命中所需点数+1。,Forest cover: infantry hit threshold +1 against machine-gun or infantry attacks.
 tileInspect.rockyCover,岩石高地掩护：步兵命中所需点数+1。,Rocky high ground cover: infantry hit threshold +1.
 floater.hedgehogParalyzed,进入拒马格：瘫痪,Steel hedgehogs: immobilized
@@ -1033,3 +1034,5 @@ dice.rule.heTrenchCover,战壕掩护（仅摧毁）,Trench cover (destruction on
 tileInspect.gunPitRules,炮位：反坦克炮不能主动移出，但可转向；HE 侧向攻击时摧毁所需点数+1，沿开放壕口射入无此加成。,"Gun pit: AT guns cannot move out, but may turn. HE destruction threshold +1 except when firing along an open arm."
 outcome.report.viewBattlefield,查看战场,View battlefield
 outcome.report.returnReport,返回战斗报告,Return to battle report
+unit.twoHex.rearTurret,占两格；炮塔位于后格,Two hexes; rear turret
+unit.twoHex.frontTurret,占两格；炮塔位于前格,Two hexes; front turret

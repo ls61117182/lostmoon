@@ -10,7 +10,7 @@ function sightState(unit: Unit) {
     unit.diagonalGunnerSidePreference, unit.hatchOpen, unit.radioDamaged, unit.turretDamaged,
     unit.crew, unit.visionRange, unit.gunnerVisionRange, unit.interiorVisionRange,
     unit.stats.visionType, unit.stats.hasRadio, unit.stats.visionRange, unit.stats.gunnerVisionRange,
-    unit.stats.interiorVisionRange, unit.campaignUpgradeIds, unit.mountedOnUnitId,
+    unit.stats.interiorVisionRange, unit.stats.footprintLength, unit.stats.turretCell, unit.campaignUpgradeIds, unit.mountedOnUnitId,
     unit.attachedToATGunId, unit.atGunControllerUnitId, unit.atGunCrewAlive];
 }
 

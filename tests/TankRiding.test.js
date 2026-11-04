@@ -121,7 +121,7 @@ test('mounted MG targets receive no coordination bonus while same-hex ground inf
 });
 
 test('AI machine guns prefer legal hostile riders over same-hex ground infantry, retaining vision and range gates', () => {
-  const rules = Object.assign({}, ...['HexGrid', 'FogOfWar', 'Combat', 'types', 'GameMode', 'EnemyAI', 'Suppression']
+  const rules = Object.assign({}, ...['HexGrid', 'UnitFootprint', 'FogOfWar', 'Combat', 'types', 'GameMode', 'EnemyAI', 'Suppression']
     .map(name => require(`../assets/scripts/core/${name}.ts`)));
   const GameSession = { gameMode: 'hardcore' };
   const Scene = require('./helpers/BattleSceneMethods.cjs')(['selectAIMGTarget', 'tankMachineGunContext'], { ...rules, GameSession });
@@ -397,5 +397,5 @@ test('all seated assets retain consistent full-canvas hip anchors and independen
     assert.equal(meta.subMetas['6c48a'].userData.minfilter, 'linear');
     uuids.add(meta.uuid);
   }
-  assert.equal(uuids.size, 9);
+  assert.equal(uuids.size, 12);
 });

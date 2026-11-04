@@ -155,6 +155,7 @@ const DB: Record<UnitKind, UnitStats> = {
   },
   maus: { // 鼠式 - 鼠式试验车；六人车组含两名装填手；六人双装填手，额外人员不直接增火力；128毫米主炮重弹装填3，试验车估档
     faction: "german",
+    footprintLength: 2, turretCell: "rear",
     firepower: 2, size: 0, armorFront: 18, armorFrontSide: 17, armorRearSide: 16, armorRear: 16, gunMantletArmor: 0, reloadDifficulty: 3, penetration: 9, highExplosivePower: 5, effectiveRange: 5, turretTraverseSpeed: 1, mobility: 1, usCasualtyDice: 0, visionRange: 4, gunnerVisionRange: 4, interiorVisionRange: 1,
     hasRadio: true,
     moveSound: "audio/tank_move_heavy",

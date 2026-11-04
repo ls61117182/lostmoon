@@ -25,7 +25,7 @@ function unit(kind = 'sherman', overrides = {}) {
 }
 const sees = (map, observer, target) => computeUnitVisibleHexes(map, observer).has(HexMap.keyOf(target));
 
-test('six axes: low cannot see high; high sees low only when intermediate heights do not exceed the target', () => {
+test('six axes: high and low endpoints are visible; intermediate heights above the lower endpoint block', () => {
   for (let direction = 0; direction < 6; direction++) {
     const map = fieldMap(), x = origin, y = neighbor(x, direction), z = neighbor(y, direction);
     for (const [observerHeight, targetHeight] of [[1, 0], [0, -1], [-.5, -2.5]]) {
@@ -35,7 +35,7 @@ test('six axes: low cannot see high; high sees low only when intermediate height
       for (const los of [map.hasLineOfSight.bind(map), (from, to) => hasFogLineOfSight(map, from, to)]) {
         assert.equal(los(x, y), true, 'same-height neighbor remains visible');
         assert.equal(los(y, z), true, 'a higher origin is excluded from blockers');
-        assert.equal(los(z, y), false, 'higher target itself is hidden from below');
+        assert.equal(los(z, y), true, 'higher target itself remains visible from below');
         assert.equal(los(x, z), false, 'x(1), y(1), z(0) is blocked');
         map.get(y).height = targetHeight;
         assert.equal(los(x, z), true, 'intermediate height equal to target is clear');
@@ -67,8 +67,29 @@ test('commander, interior, infantry, fixed gun, gunner and artillery use the sam
     map.get(y).height = 0;
     assert(sees(map, observer, z), `${kind}: clear downhill path visible`);
     map.get(y).height = 2;
-    assert(!sees(map, observer, y), `${kind}: higher endpoint hidden`);
+    assert(sees(map, observer, y), `${kind}: higher endpoint visible`);
     assert(!sees(map, observer, z), `${kind}: higher intermediate blocks`);
+    map.get(z).height = 2;
+    assert(!sees(map, observer, z), `${kind}: high ground blocks an equally high target behind it`);
+    map.get(z).height = 3;
+    assert(!sees(map, observer, z), `${kind}: high ground also blocks an even higher target behind it`);
+  }
+});
+
+test('a raised cell matches a building: its endpoint is visible but it blocks the cells behind it', () => {
+  for (const direction of [0, 6]) for (const [kind, overrides] of [
+    ['sherman', {}], ['sherman', { hatchOpen: false, interiorVisionRange: 0 }],
+    ['stug3', { hatchOpen: false, interiorVisionRange: 0 }], ['american_infantry', {}], ['heavy_artillery', {}],
+  ]) {
+    const highland = fieldMap(), building = fieldMap(), step = fireDirectionVector(direction);
+    const first = axialAdd(origin, step), behind = axialAdd(first, step);
+    highland.get(first).height = 1;
+    building.get(first).hasBuilding = true;
+    const observer = unit(kind, { ...overrides, facing: direction, turretFacing: direction });
+    const visible = computeUnitVisibleHexes(highland, observer);
+    assert(visible.has(HexMap.keyOf(first)), `${kind}/${direction}: first high cell visible`);
+    assert(!visible.has(HexMap.keyOf(behind)), `${kind}/${direction}: ground behind is hidden`);
+    assert.deepEqual(visible, computeUnitVisibleHexes(building, observer), `${kind}/${direction}: building-equivalent sight`);
   }
 });
 
@@ -109,7 +130,12 @@ test('all six halfway rays use target height for both flanks and intermediate ce
     map.get(far).height = 1;
     assert.equal(map.hasDiagonalLineOfSight(origin, far, direction), true);
     map.get(far).height = 3;
-    assert.equal(map.hasDiagonalLineOfSight(origin, far, direction), false, 'higher endpoint hidden');
+    assert.equal(map.hasDiagonalLineOfSight(origin, far, direction), true, 'higher endpoint visible through clear flanks');
+    map.get(target).height = 3;
+    assert.equal(map.hasDiagonalLineOfSight(origin, target, direction), true, 'first high center is visible');
+    assert.equal(map.hasDiagonalLineOfSight(origin, far, direction), false, 'high center blocks equally high ground behind it');
+    map.get(far).height = 4;
+    assert.equal(map.hasDiagonalLineOfSight(origin, far, direction), false, 'high center blocks even higher ground behind it');
   }
 });
 
@@ -127,8 +153,9 @@ test('closed halfway sight requires one continuous flank, including mixed terrai
   assert(sees(map, observer, target), 'higher target reopens the complete a path');
   assert.equal(diagonalGunnerClickPreference(map, observer, 6, flank), 0);
   map.get(flank).height = 3;
-  assert.equal(diagonalGunnerClickPreference(map, observer, 6, flank), null, 'cannot select an uphill target');
+  assert.equal(diagonalGunnerClickPreference(map, observer, 6, flank), 0, 'can select an unobstructed uphill target');
   map.get({ q: 1, r: 0 }).height = 3;
+  assert.equal(diagonalGunnerClickPreference(map, observer, 6, flank), null, 'high flank blocks uphill ground behind it');
   reconcileDiagonalGunnerSideAfterMove(map, observer);
   assert.equal(observer.diagonalGunnerSidePreference, 1, 'higher terrain changes the preferred clear side');
 });
@@ -160,7 +187,8 @@ test('radio shares a high ally view while own attack sight and firing paths rema
   const context = { map, attacker: observer, target, shellType: 'ap', expandedTurretDirections: true };
   const mgContext = { ...context, target: { ...unit('infantry'), id: 'infantry', faction: 'german', sideId: 'enemy', pos: ally.pos } };
   assert.equal(canAttack(context).reason, 'attack.reason.blocked');
-  assert.equal(canMGAttack(mgContext).reason, 'attack.reason.blocked');
+  assert.equal(canMGAttack(mgContext).ok, true, 'MG can target visible adjacent uphill infantry');
+  assert.equal(canAttack({ ...context, target: { ...target, pos: ally.pos } }).ok, true, 'main gun can target the first high cell');
   map.get(origin).height = 2;
   assert.equal(canAttack(context).ok, true, 'clear downhill firing path works');
   assert.equal(canMGAttack(mgContext).ok, true, 'MG can fire downhill at adjacent infantry');

@@ -6,7 +6,7 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
 ).outputText, filename);
 const { HexMap, neighbors, offsetToAxial, axialToPixel } = require('../assets/scripts/core/HexGrid.ts');
-const { isTankUnit } = require('../assets/scripts/core/types.ts');
+const { isTankUnit, isFootUnit } = require('../assets/scripts/core/types.ts');
 const { wreckVisualHex, pushTankWrecks, WRECK_PUSH_STEP } = require('../assets/scripts/view/TankWreckPush.ts');
 const { urbanBuildingState } = require('../assets/scripts/core/UrbanTerrain.ts');
 const { wreckWaterAppearance, WRECK_SINK_DURATION } = require('../assets/scripts/view/TankWreckWater.ts');
@@ -39,7 +39,7 @@ const Scene = require('./helpers/BattleSceneMethods.cjs')([
   'redrawUnitVisibilityMask', 'redrawVisibleHexMask', 'updateTankWreckPose',
   'isUnitVisible', 'isHexVisible', 'fogOverlayAlpha', 'captureSilhouetteSources', 'syncTankDamageOverlay',
   'advanceTankWreckPush', 'interpolatedPos', 'drawPresentedUnit',
-], { Node, Graphics, UITransform, Color, HexMap, neighbors, isTankUnit,
+], { Node, Graphics, UITransform, Color, HexMap, neighbors, isTankUnit, isFootUnit,
   wreckVisualHex, wreckWaterAppearance, WRECK_SINK_DURATION,
   pushTankWrecks, WRECK_PUSH_STEP, urbanBuildingState, easeOutCubic: t => 1 - (1 - t) ** 3,
   FOG_OVERLAY_COLOR: { a: 145 }, GameSession: { gameMode: 'classic' }, fogOfWarEnabled: () => true,

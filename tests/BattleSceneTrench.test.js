@@ -8,6 +8,8 @@ const {HexMap}=require('../assets/scripts/core/HexGrid.ts');
 const GameSession={gameMode:'hardcore'};
 class UITransform {setContentSize(w,h){this.w=w;this.h=h}setAnchorPoint(){}}
 class Graphics {}
+class Mask {static Type={GRAPHICS_STENCIL:0};constructor(){this.subComp=new Graphics()}}
+class Sprite {static SizeMode={CUSTOM:0}}
 class Node {
   constructor(name){this.name=name;this.children=[];this.components=new Map();this.active=true;this.angle=0}
   addComponent(C){const c=new C();this.components.set(C,c);return c}
@@ -20,8 +22,9 @@ class Node {
   setPosition(x,y){this.x=x;this.y=y}setScale(){}
 }
 const Scene=require('./helpers/BattleSceneMethods.cjs')(
-  ['drawInfantry','infantryFormationOffsets','captureSilhouetteSources','spawnInfantryBulletVolley','shouldDisplayUnitOutline','tankTrenchInfantryOccluders','recordVectorSilhouette','syncUnitOcclusion'],
-  {...types,Node,UITransform,Graphics,trenchInfantryOffsets,infantrySquadOffsets,BattleScene:{INFANTRY_SPRITES_PER_UNIT:3},GameSession},
+  ['drawInfantry','infantryFormationOffsets','captureSilhouetteSources','spawnInfantryBulletVolley','shouldDisplayUnitOutline','tankTrenchInfantryOccluders','recordVectorSilhouette','syncUnitOcclusion',
+    'registerDestroyWreckVisual','spawnInfantryBloodDecals','spawnInfantryBloodDecalsAt','infantryBloodSpriteFrameFor','flushPendingInfantryBloodDecals'],
+  {...types,Node,UITransform,Graphics,Sprite,trenchInfantryOffsets,infantrySquadOffsets,BattleScene:{INFANTRY_SPRITES_PER_UNIT:3},GameSession},
 );
 const plain=value=>JSON.parse(JSON.stringify(value));
 function assertOffsets(actual,expected,message) {
@@ -31,10 +34,15 @@ function assertOffsets(actual,expected,message) {
 function setup() {
   const scene=new Scene(),map=new HexMap(5,5),unit={id:'squad',kind:'infantry',pos:{q:0,r:0},facing:0,faction:'german'};
   map.set({pos:unit.pos,terrain:'field',fortification:{kind:'trench',connections:'111100'}});
-  const root=new Node('Map'),urban=new Node('Urban');root.addChild(urban);
+  const root=new Node('Map'),urban=new Node('Urban');
   Object.assign(scene,{node:{layer:0},mission:{map,data:{},sherman:unit,allies:[],enemies:[]},hexSize:128,g:{},sceneryPoolParents:new Map()});
   // Execute the actual onLoad layer construction rather than duplicate its order.
   const source=fs.readFileSync('assets/scripts/view/BattleScene.ts','utf8');
+  const groundStart=source.indexOf("    const fortificationSurface = new Node('FortificationGround');");
+  const groundEnd=source.indexOf('    // Brief friendly ambush',groundStart);
+  const groundCode=ts.transpileModule(source.slice(groundStart,groundEnd),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
+  new Function('Node','UITransform','Graphics','Mask','gNode',groundCode).call(scene,Node,UITransform,Graphics,Mask,root);
+  root.addChild(urban);
   const start=source.indexOf("    const unitMaskNode = new Node('VisibleUnitMask');");
   const end=source.indexOf('    // Bottom to top: wreck tracks',start);
   const code=ts.transpileModule(source.slice(start,end),{compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
@@ -47,6 +55,7 @@ function setup() {
     unitSilhouetteColor:()=>({}),silhouetteClaimed:new Set(),silhouetteSources:new Map(),infantryOcclusionSprites:new Map(),
     vectorSilhouettes:[],infantryVectorSilhouettes:[],hasBunkerAt:()=>false,
     isUnitVisible:()=>true,project:(q,r)=>({x:q*100,y:-r*100}),interpolatedPos:u=>({x:u.pos.q*100,y:-u.pos.r*100}),infantryBulletVolleys:[],drawInfantryBulletVolley:()=>{},placeProjectileTraceNode:()=>{},
+    infantryBloodSpriteFrames:[{name:'blood'}],infantryBloodDecalNodes:[],infantryBloodDecalUnitIds:new Set(),pendingInfantryBloodDecals:new Map(),
   });
   return {scene,unit,slots,root,map};
 }
@@ -76,6 +85,45 @@ test('actual layer construction and pooled sprite ownership keep tanks above tre
   assert.ok(infantryMask.getSiblingIndex()<tankMask.getSiblingIndex());
   assert.ok(infantryMask.children.find(n=>n.name==='FortificationRimsAboveInfantry').getSiblingIndex()>scene.infantryContentNode.getSiblingIndex());
   assert.ok(root.children.find(n=>n.name==='FortificationGround').getSiblingIndex()<infantryMask.getSiblingIndex());
+});
+
+test('deaths leave blood above trench and pit floors at the three visible soldier positions',()=>{
+  for(const kind of ['trench','gun_pit']) {
+    const {scene,unit,slots,root,map}=setup();map.get(unit.pos).fortification.kind=kind;
+    scene.drawInfantry(unit,0,0);unit.destroyed=true;
+    scene.registerDestroyWreckVisual(unit);
+    const blood=scene.infantryBloodDecalNodes,layer=scene.infantryBloodDecalLayerNode;
+    assert.equal(blood.length,3);
+    assertOffsets(blood.map(n=>({ox:n.x,oy:n.y})),slots.map(s=>({ox:s.node.x,oy:s.node.y})));
+    for(const node of blood) {
+      assert.equal(node.parent,layer);
+      assert.equal(node.getComponent(Sprite).spriteFrame,scene.infantryBloodSpriteFrames[0]);
+    }
+    const ground=root.children.find(n=>n.name==='FortificationGround'),fogMask=layer.parent;
+    assert.equal(fogMask.name,'VisibleTrackMask','blood retains the existing terrain visibility mask');
+    assert.ok(fogMask.getComponent(Mask));
+    assert.ok(ground.getSiblingIndex()<fogMask.getSiblingIndex(),'the opaque floor must not cover blood');
+    assert.ok(fogMask.getSiblingIndex()<scene.infantryContentNode.parent.getSiblingIndex(),'units stay above blood');
+    assert.ok(fogMask.getSiblingIndex()<root.children.find(n=>n.name==='Urban').getSiblingIndex(),'buildings stay above blood');
+    scene.registerDestroyWreckVisual(unit);
+    assert.equal(blood.length,3,'redrawing a dead squad must not duplicate its stains');
+  }
+});
+
+test('blood queued before texture loading still appears above the fortification floor',()=>{
+  for(const kind of ['trench','gun_pit']) {
+    const {scene,unit,root,map}=setup();map.get(unit.pos).fortification.kind=kind;
+    scene.infantryBloodSpriteFrames=[null,null,null,null];unit.destroyed=true;
+    scene.registerDestroyWreckVisual(unit);
+    assert.equal(scene.pendingInfantryBloodDecals.size,1);assert.equal(scene.infantryBloodDecalNodes.length,0);
+    scene.infantryBloodSpriteFrames[2]={name:'loaded-blood'};scene.flushPendingInfantryBloodDecals();
+    assert.equal(scene.pendingInfantryBloodDecals.size,0);assert.equal(scene.infantryBloodDecalNodes.length,3);
+    const floor=root.children.find(n=>n.name==='FortificationGround');
+    for(const decal of scene.infantryBloodDecalNodes) {
+      assert.ok(floor.getSiblingIndex()<decal.parent.parent.getSiblingIndex());
+      assert.equal(decal.getComponent(Sprite).spriteFrame,scene.infantryBloodSpriteFrames[2]);
+    }
+  }
 });
 
 test('actual infantry volleys start and end at the independent attacker and target trench slots',()=>{

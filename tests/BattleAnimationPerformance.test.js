@@ -42,7 +42,7 @@ test('60 movement frames translate only cached unit nodes, labels and engine ori
   assert.deepEqual(label.position, { x: 100, y: -50, z: 0 });
   assert.deepEqual(stationary.position, { x: 100, y: 100, z: 0 });
   assert.equal(scene.engineVibrationVisuals[0].baseX, 90);
-  assert.equal(shadows, 60);
+  assert.equal(shadows, 0, 'animation defers incremental shadow updates to lateUpdate');
 });
 
 test('rotating units replay only their reserved sprite slots and restore the shared pool cursors', () => {
@@ -157,7 +157,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
   });
   const graphics = () => ({ clear() {} });
   const unit = { pos: { q: 0, r: 0 } }, tile = { pos: { q: 0, r: 0 }, terrain: 'forest', hasBuilding: true };
-  const map = { all: () => [tile] }; let ground = 0, trees = 0, buildings = 0;
+  const map = { all: () => [tile] }; let ground = 0, trees = 0, buildings = 0, formationClears = 0;
   const scene = new Proxy(new Scene(), { get(target, key) {
     const value = Reflect.get(target, key);
     if (value !== undefined) return value;
@@ -170,6 +170,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
     bunkerOcclusionSprites: new Map(), infantryOcclusionSprites: new Map(), infantryVectorSilhouettes: [],
     occlusionShapes: [], vectorSilhouettes: [], engineVibrationVisuals: [], terrainSpriteBatchReady: true,
     pendingSeasonTerrainLoads: 0, continuousTerrain: { loading: false }, tankRiderRenderer: { begin() {} },
+    infantryFormationCache: { clear: () => formationClears++ },
     allUnits: () => [unit], project: () => ({ x: 0, y: 0 }), hasBunkerAt: () => false,
     drawContinuousTerrain: () => { ground++; return true; }, drawForestCanopy: () => trees++, drawBuildingOverlay: () => buildings++,
     anim: null, phase: 'player', playerStep: 'choose', selectedGunDieIdx: -1, selectedMGDieIdx: -1,
@@ -184,6 +185,31 @@ test('rules redraws reuse static scenery until terrain or resource state changes
   assert.deepEqual([ground, trees, buildings], [2, 2, 1], 'destroyed scenery invalidates its cached layer');
   scene.requestResourceRedraw(); scene.redraw();
   assert.deepEqual([ground, trees, buildings], [3, 3, 1], 'late artwork invalidates scenery even when terrain rules are unchanged');
+  assert.equal(formationClears, 1, 'UI, unit state and resource redraws preserve the geometry-keyed formation cache');
+  scene.mission.map = { all: () => [tile] }; scene.redraw();
+  assert.equal(formationClears, 2, 'changing missions releases the old unit cache');
+});
+
+test('AI phase entry draws once whether the first actor renders or waits', () => {
+  const Scene = sceneMethods(['beginAllyPhaseAfterTransition', 'beginGermanAIPhase', 'continueEnemyPhase'], {
+    GameSession: { gameMode: 'test' }, isAIActorUnit: () => true, selectAIOrder: units => units,
+  });
+  for (const method of ['beginAllyPhaseAfterTransition', 'beginGermanAIPhase', 'continueEnemyPhase']) {
+    for (const actorRenders of [false, true]) {
+      const scene = new Scene(); let draws = 0;
+      Object.assign(scene, { mission: { sherman: {}, allies: [{}], enemies: [{}] }, turn: 3,
+        outcome: 'ongoing', battlefieldRenderVersion: 0,
+        computeOutcome: () => 'ongoing', updateOutcomeOverlay() {}, clearAIMoveState() {}, clearActiveActingUnit() {},
+        destroyEnemyDiceTray() {}, closeDiePopover() {}, refreshPhaseUI() {}, updateHUD() {}, battleLogI18n() {},
+        aiMissionTargetsFor: () => [],
+        redraw() { draws++; this.battlefieldRenderVersion++; },
+        beginCurrentEnemyTurn() { if (actorRenders) this.redraw(); },
+      });
+      scene[method]();
+      assert.equal(draws, 1, `${method}: first actor renders=${actorRenders}`);
+      assert.equal(scene.enemyIndex, 0);
+    }
+  }
 });
 
 test('vision cache ignores ammo, interpolation, UI and off-region changes, and isolates timed reveal copies', () => {
@@ -262,6 +288,27 @@ test('moving effects draw once per frame after the current position is applied',
     x = frame; scene.redrawAnimatedUnits(); scene.lateUpdate();
     assert.equal(draws, frame, 'fire, reticles and ripples share one final-position draw');
   }
+});
+
+test('final-pose occlusion and shadows update once after all animation callbacks', () => {
+  const Scene = sceneMethods(['lateUpdate']);
+  const scene = new Scene(), calls = [];
+  Object.assign(scene, {
+    unitOcclusion: { syncTransforms: () => calls.push('local occlusion') },
+    vehicleShadows: { syncTransforms: () => calls.push('shadow poses') },
+    syncUnitOcclusion: () => calls.push('full occlusion'),
+    redrawObjectShadows: unitsOnly => calls.push(unitsOnly ? 'unit membership' : 'all membership'),
+    drawUnitEffects: () => calls.push('effects'), drawWeatherEffects() {},
+  });
+  scene.lateUpdate();
+  assert.deepEqual(calls, ['local occlusion', 'shadow poses', 'effects']);
+  calls.length = 0;
+  scene.unitOcclusionDirty = true; scene.shadowRedrawPending = 'all';
+  scene.lateUpdate();
+  assert.deepEqual(calls, ['full occlusion', 'all membership', 'effects'], 'a rebuild replaces the incremental pass');
+  assert.equal(scene.unitOcclusionDirty, false); assert.equal(scene.shadowRedrawPending, null);
+  calls.length = 0; scene.lateUpdate();
+  assert.deepEqual(calls, ['local occlusion', 'shadow poses', 'effects']);
 });
 
 test('enemy dice visual animation retains subtitles without rerunning AI action selection', () => {

@@ -1,3 +1,4 @@
+import { isTwoHexUnit, planUnitMove, unitMoveEntry, unitOccupiedHexes, unitTurretHex } from './UnitFootprint';
 import { crewRoleAlive, effectiveTankCrew, isTankUnit, isMainGunLoaded } from "./types";
 /**
  * 德军坦克 AI —— 纯 TypeScript，不依赖 Cocos。
@@ -156,10 +157,12 @@ export function hardcoreTankAIDiceCount(unit: Unit, terrain: TerrainType): { att
   };
 }
 
-export function rollHardcoreTankAIDice(rng: RNG, unit: Unit, terrain: TerrainType): EnemyAIDie[] {
-  const count = hardcoreTankAIDiceCount(unit, terrain);
+export function rollHardcoreTankAIDice(rng: RNG, unit: Unit, terrain: TerrainType, occupiedTerrains: TerrainType[] = []): EnemyAIDie[] {
+  const terrains = [terrain, ...occupiedTerrains];
+  const counts = terrains.map(t => hardcoreTankAIDiceCount(unit,t));
+  const count = { attack: Math.min(...counts.map(c=>c.attack)), move: Math.min(...counts.map(c=>c.move)), misc: Math.min(...counts.map(c=>c.misc)) };
   const out: EnemyAIDie[] = [];
-  const validFaces = effectiveAIFirepower(unit, terrain) * 3;
+  const validFaces = Math.min(...terrains.map(t => effectiveAIFirepower(unit, t))) * 3;
   const extra = Math.max(0, Math.ceil(validFaces / 6) - 1);
   const baseCount = Math.max(1, count.attack - extra);
   for (let i = 0; i < count.attack; i++) {
@@ -218,7 +221,7 @@ export function selectEnemyOrder(
 }
 
 export function aiTargetPriority(u: Unit, missionTargets: readonly Unit[]): number {
-  if (missionTargets.includes(u)) return 0;
+  if (missionTargets.some(target => target === u || (u.id !== undefined && target.id === u.id))) return 0;
   return isFootUnit(u) ? 2 : 1;
 }
 
@@ -234,7 +237,8 @@ export function aiTargetPriorityForActor(
   missionTargets: readonly Unit[],
 ): number {
   if (battleSideIdOf(actor) === 'enemy') {
-    return unitLevelOf(actor) === 'elite' && missionTargets.includes(target) ? 0 : 1;
+    return unitLevelOf(actor) === 'elite' && missionTargets.some(unit => unit === target
+      || (target.id !== undefined && unit.id === target.id)) ? 0 : 1;
   }
   return aiTargetPriority(target, missionTargets);
 }
@@ -351,7 +355,17 @@ export type TurnDecision = 'stay' | 'cw' | 'ccw';
  * @param map       地图
  * @param occupied  其他已占格（不含 enemy 自身），用于判定"正前可通行"是否被堵
  */
-export function decideEnemyTurn(
+export function decideEnemyTurn(enemy: Unit, target: Axial, map: HexMap, occupied: Set<string>, rng?: RNG): TurnDecision {
+  const chosen = decidePointEnemyTurn(enemy, target, map, occupied, rng);
+  if (!isTwoHexUnit(enemy) || chosen === 'stay') return chosen;
+  const legal = (action: 'cw' | 'ccw') => {
+    const p = planUnitMove(enemy, action);
+    return map.canUnitCrossEdge(p.entryFrom, p.entryTo, enemy) && !occupied.has(HexMap.keyOf(p.entryTo));
+  };
+  return legal(chosen) ? chosen : legal(chosen === 'cw' ? 'ccw' : 'cw') ? (chosen === 'cw' ? 'ccw' : 'cw') : 'stay';
+}
+
+function decidePointEnemyTurn(
   enemy: Unit,
   target: Axial,
   map: HexMap,
@@ -454,11 +468,14 @@ export function canExecuteAction(
     case 'reload': return isTankUnit(enemy) && !isMainGunLoaded(enemy, true);
     case 'shoot':  return enemy.facing !== null; // 有朝向就算可试；真正的视线/装甲合法性 BattleScene 里用 canAttack 再确认
     case 'ambush': return canEnterAmbush(enemy, 'hardcore', true) && !enemy.ambushReadyThisTurn;
-    case 'turn':   return !enemy.paralyzed;
+    case 'turn': return !enemy.paralyzed && (!isTwoHexUnit(enemy) || ['cw', 'ccw'].some(action => {
+      const plan = planUnitMove(enemy, action as 'cw' | 'ccw');
+      return map.canUnitCrossEdge(plan.entryFrom, plan.entryTo, enemy) && !occupied.has(HexMap.keyOf(plan.entryTo));
+    }));
     case 'smoke':  return commanderHasSkill(enemy, 'use_smoke_grenade')
       && !enemy.smoked
-      && !smokeHexes?.has(HexMap.keyOf(enemy.pos))
-      && !tileForbidsSmokeOrConcealment(currentTile);
+      && !smokeHexes?.has(HexMap.keyOf(unitTurretHex(enemy)))
+      && !tileForbidsSmokeOrConcealment(map.get(unitTurretHex(enemy)));
     case 'repair': return crewAlive(enemy, 'commander') && (
       !!enemy.damaged
       || !!enemy.paralyzed
@@ -492,9 +509,10 @@ export function canExecuteAction(
       const dir = action === 'advance'
         ? enemy.facing
         : rotateDirection(enemy.facing, 3);
-      const to = neighbor(enemy.pos, dir);
+      const entry = unitMoveEntry(enemy, enemy.pos, neighbor(enemy.pos, dir));
+      const to = entry.to;
       // 桥梁边向（GDD §3.2）：水域+桥梁可入需 dir 落在 br 端；非桥梁场景 canTankCrossEdge 行为退化为 canTankEnter。
-      if (!map.canUnitCrossEdge(enemy.pos, to, enemy, {
+      if (!map.canUnitCrossEdge(entry.from, to, enemy, {
         ignoreBreakwater: enemy.faction === 'japanese',
         faction: enemy.faction,
       })) return false;
@@ -527,8 +545,8 @@ export function decideEnemyMove(
 ): EnemyMoveDecision | null {
   const currentDist = hexDistance(enemy.pos, sherman.pos);
   const occupied = new Set<string>();
-  for (const u of otherUnits) occupied.add(`${u.pos.q},${u.pos.r}`);
-  occupied.add(`${sherman.pos.q},${sherman.pos.r}`);
+  for (const u of otherUnits) for (const p of unitOccupiedHexes(u)) occupied.add(`${p.q},${p.r}`);
+  for (const p of unitOccupiedHexes(sherman)) occupied.add(`${p.q},${p.r}`);
 
   let best: Axial | null = null;
   let bestDist = currentDist;

@@ -1,0 +1,1392 @@
+{
+  "dune": [
+    {
+      "pos": {
+        "q": 0,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 7,
+        "r": 0
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 7,
+        "r": 1
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 2,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 2
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 2,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 3
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -2,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 1,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 4
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -2,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 5
+      },
+      "terrain": "mud",
+      "height": 0,
+      "surface": "sand"
+    }
+  ],
+  "plateau": [
+    {
+      "pos": {
+        "q": 0,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 7,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone",
+      "cliffs": [
+        false,
+        false,
+        false,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone",
+      "cliffs": [
+        true,
+        true,
+        false,
+        false,
+        true,
+        true
+      ]
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 7,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone",
+      "cliffs": [
+        true,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone",
+      "cliffs": [
+        true,
+        true,
+        false,
+        false,
+        false,
+        true
+      ]
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -2,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone",
+      "cliffs": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 1,
+      "surface": "limestone",
+      "cliffs": [
+        true,
+        true,
+        true,
+        false,
+        false,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -2,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    }
+  ],
+  "wadi": [
+    {
+      "pos": {
+        "q": 0,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand",
+      "cliffs": [
+        false,
+        false,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 7,
+        "r": 0
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand",
+      "cliffs": [
+        false,
+        false,
+        true,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 7,
+        "r": 1
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand",
+      "cliffs": [
+        false,
+        false,
+        false,
+        true,
+        false,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 2
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand",
+      "cliffs": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 6,
+        "r": 3
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -2,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand",
+      "cliffs": [
+        false,
+        false,
+        false,
+        true,
+        true,
+        false
+      ]
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 4
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -2,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": -1,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 0,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 1,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": -1,
+      "surface": "wadi-silt"
+    },
+    {
+      "pos": {
+        "q": 2,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 3,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 4,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    },
+    {
+      "pos": {
+        "q": 5,
+        "r": 5
+      },
+      "terrain": "field",
+      "height": 0,
+      "surface": "sand"
+    }
+  ]
+}

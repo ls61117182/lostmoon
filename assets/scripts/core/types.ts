@@ -358,6 +358,9 @@ export interface EnemyTankActionTableIds {
 }
 
 export interface UnitStats {
+  /** The persisted position is the front hex; absent means one hex. */
+  footprintLength?: 1 | 2;
+  turretCell?: 'front' | 'rear';
   faction: Faction;          // 阵营
   size: number;            // 命中难度：数值越高，命中所需点数越高
   armorFront: number;      // 前装甲

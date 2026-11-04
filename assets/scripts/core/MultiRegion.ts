@@ -1,3 +1,5 @@
+import { findTwoHexRoute } from './TwoHexPath';
+import { isTwoHexUnit, unitOccupiedHexes } from './UnitFootprint';
 import { HexMap, hexDistance, neighbors, directionTo } from './HexGrid';
 import type { LoadedMission } from './MissionLoader';
 import {
@@ -86,7 +88,12 @@ export function regionalReinforcementAllowed(mission: LoadedMission, id: string,
 function routeToRegion(mission: LoadedMission, actor: Unit, destination: string): Axial[] | null {
   const occupied = new Set([mission.sherman, ...mission.allies, ...mission.enemies]
     .filter(unit => unit !== actor && !unit.destroyed && !unit.mountedOnUnitId)
-    .map(unit => HexMap.keyOf(unit.pos)));
+    .flatMap(unit => unitOccupiedHexes(unit).map(pos => HexMap.keyOf(pos))));
+  if (isTwoHexUnit(actor)) {
+    const route = findTwoHexRoute(mission.map, actor, state => regionAt(mission, state.pos) === destination,
+      pos => occupied.has(HexMap.keyOf(pos)));
+    return route?.map(step => step.plan.pos) ?? null;
+  }
   const queue: Axial[] = [actor.pos];
   const parents = new Map<string, Axial | null>([[HexMap.keyOf(actor.pos), null]]);
   for (let i = 0; i < queue.length; i++) {

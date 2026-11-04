@@ -37,7 +37,7 @@ test('all six slopes pass normally; either-side cliffs block both directions for
       assert.equal(p.map.canUnitCrossEdge(p.b.pos,p.a.pos,{...u,pos:p.b.pos}),false);
     }
     const edge=elevationEdges(p.map.all())[0];assert.equal(edge.blocked,true);assert.equal(edge.direction,reverseHeight?(d+3)%6:d);
-    assert.equal(p.map.hasLineOfSight(p.a.pos,p.b.pos),!reverseHeight,'cliffs do not change height-based sight: only the higher side sees its lower neighbor');
+    assert.equal(p.map.hasLineOfSight(p.a.pos,p.b.pos),true,'both high and low endpoints remain visible across a cliff');
   }
 });
 

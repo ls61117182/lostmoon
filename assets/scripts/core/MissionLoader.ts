@@ -1,3 +1,4 @@
+import { fitTwoHexDeployment } from './TwoHexDeployment';
 /**
  * 任务加载器：把 JSON 任务数据 → 内存中的 HexMap + 单位列表。
  *
@@ -433,6 +434,8 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
     return makeUnit(`enemy_${i}`, p, rowParityOffset, { sideId: 'enemy', controller: 'ai' });
   });
   for (const enemy of enemies) validateUnitNotOnDisplayOnly(data.id, map, enemy);
+  const deploymentUnits = [sherman, ...allies, ...enemies];
+  for (const unit of deploymentUnits) fitTwoHexDeployment(map, unit, deploymentUnits);
   attachScenarioATGunCrews(allies, data.theater);
   attachScenarioATGunCrews(enemies, data.theater);
   if (options.hardcore) {

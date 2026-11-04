@@ -436,6 +436,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'dice.rule.crater': { zh: "弹坑掩护", en: "Crater cover" },
   'dice.rule.rockyCover': { zh: "岩石高地掩护", en: "Rocky high ground cover" },
   'dice.rule.forestCover': { zh: "森林掩护", en: "Forest cover" },
+  'dice.rule.uphill': { zh: "仰射高地", en: "Uphill fire" },
   'tileInspect.forestCover': { zh: "森林掩护：步兵受机枪或步兵攻击时命中所需点数+1。", en: "Forest cover: infantry hit threshold +1 against machine-gun or infantry attacks." },
   'tileInspect.rockyCover': { zh: "岩石高地掩护：步兵命中所需点数+1。", en: "Rocky high ground cover: infantry hit threshold +1." },
   'floater.hedgehogParalyzed': { zh: "进入拒马格：瘫痪", en: "Steel hedgehogs: immobilized" },
@@ -1044,4 +1045,6 @@ export const LANG_DB: Record<string, LangEntry> = {
   'tileInspect.gunPitRules': { zh: "炮位：反坦克炮不能主动移出，但可转向；HE 侧向攻击时摧毁所需点数+1，沿开放壕口射入无此加成。", en: "Gun pit: AT guns cannot move out, but may turn. HE destruction threshold +1 except when firing along an open arm." },
   'outcome.report.viewBattlefield': { zh: "查看战场", en: "View battlefield" },
   'outcome.report.returnReport': { zh: "返回战斗报告", en: "Return to battle report" },
+  'unit.twoHex.rearTurret': { zh: "占两格；炮塔位于后格", en: "Two hexes; rear turret" },
+  'unit.twoHex.frontTurret': { zh: "占两格；炮塔位于前格", en: "Two hexes; front turret" },
 };

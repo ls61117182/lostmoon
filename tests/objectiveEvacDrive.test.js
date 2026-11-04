@@ -17,9 +17,7 @@ function loadTsModule(rel) {
   }).outputText;
   const mod = { exports: {} };
   const req = (id) => {
-    if (id === './types') return loadTsModule('assets/scripts/core/types.ts');
-    if (id === './MissionLoader') return loadTsModule('assets/scripts/core/MissionLoader.ts');
-    if (id === './HexGrid') return loadTsModule('assets/scripts/core/HexGrid.ts');
+    if (id.startsWith('./')) return loadTsModule(path.join('assets/scripts/core', `${id}.ts`));
     return require(id);
   };
   new Function('require', 'module', 'exports', js)(req, mod, mod.exports);

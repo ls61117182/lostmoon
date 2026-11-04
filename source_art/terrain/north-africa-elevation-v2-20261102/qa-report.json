@@ -1,0 +1,69 @@
+{
+  "renderer": "Existing ElevationContourRaster, unchanged",
+  "scenes": [
+    {
+      "name": "dune",
+      "tiles": 48,
+      "heights": [
+        0,
+        1,
+        2
+      ],
+      "boundaryEdges": 36,
+      "blockedEdges": 0,
+      "openEdges": 36,
+      "directions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "maximumChunkPixelDelta": 0
+    },
+    {
+      "name": "plateau",
+      "tiles": 48,
+      "heights": [
+        0,
+        1
+      ],
+      "boundaryEdges": 30,
+      "blockedEdges": 14,
+      "openEdges": 16,
+      "directions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "maximumChunkPixelDelta": 0
+    },
+    {
+      "name": "wadi",
+      "tiles": 48,
+      "heights": [
+        0,
+        -1
+      ],
+      "boundaryEdges": 22,
+      "blockedEdges": 9,
+      "openEdges": 13,
+      "directions": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "maximumChunkPixelDelta": 0
+    }
+  ],
+  "materialVersion": 5,
+  "stones": 16,
+  "removedSourceArtifactPixels": 164075
+}

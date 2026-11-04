@@ -1,0 +1,134 @@
+{
+  "ver": "1.0.27",
+  "importer": "image",
+  "imported": true,
+  "uuid": "4e12baf6-3481-4b6f-9a54-3ceccd921892",
+  "files": [
+    ".json",
+    ".png"
+  ],
+  "subMetas": {
+    "6c48a": {
+      "importer": "texture",
+      "uuid": "4e12baf6-3481-4b6f-9a54-3ceccd921892@6c48a",
+      "displayName": "SovietInfantry03",
+      "id": "6c48a",
+      "name": "texture",
+      "userData": {
+        "wrapModeS": "clamp-to-edge",
+        "wrapModeT": "clamp-to-edge",
+        "imageUuidOrDatabaseUri": "4e12baf6-3481-4b6f-9a54-3ceccd921892",
+        "isUuid": true,
+        "visible": false,
+        "minfilter": "linear",
+        "magfilter": "nearest",
+        "mipfilter": "none",
+        "anisotropy": 0
+      },
+      "ver": "1.0.22",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    },
+    "f9941": {
+      "importer": "sprite-frame",
+      "uuid": "4e12baf6-3481-4b6f-9a54-3ceccd921892@f9941",
+      "displayName": "SovietInfantry03",
+      "id": "f9941",
+      "name": "spriteFrame",
+      "userData": {
+        "trimThreshold": 8,
+        "rotated": false,
+        "offsetX": -6,
+        "offsetY": -67,
+        "trimX": 257,
+        "trimY": 239,
+        "width": 638,
+        "height": 1007,
+        "rawWidth": 1164,
+        "rawHeight": 1351,
+        "borderTop": 0,
+        "borderBottom": 0,
+        "borderLeft": 0,
+        "borderRight": 0,
+        "packable": false,
+        "pixelsToUnit": 100,
+        "pivotX": 0.5,
+        "pivotY": 0.5,
+        "meshType": 0,
+        "vertices": {
+          "rawPosition": [
+            -319,
+            -503.5,
+            0,
+            319,
+            -503.5,
+            0,
+            -319,
+            503.5,
+            0,
+            319,
+            503.5,
+            0
+          ],
+          "indexes": [
+            0,
+            1,
+            2,
+            2,
+            1,
+            3
+          ],
+          "uv": [
+            257,
+            1112,
+            895,
+            1112,
+            257,
+            105,
+            895,
+            105
+          ],
+          "nuv": [
+            0.22079037800687284,
+            0.07772020725388601,
+            0.7689003436426117,
+            0.07772020725388601,
+            0.22079037800687284,
+            0.8230940044411547,
+            0.7689003436426117,
+            0.8230940044411547
+          ],
+          "minPos": [
+            -319,
+            -503.5,
+            0
+          ],
+          "maxPos": [
+            319,
+            503.5,
+            0
+          ]
+        },
+        "isUuid": true,
+        "imageUuidOrDatabaseUri": "4e12baf6-3481-4b6f-9a54-3ceccd921892@6c48a",
+        "atlasUuid": "",
+        "trimType": "auto"
+      },
+      "ver": "1.0.12",
+      "imported": true,
+      "files": [
+        ".json"
+      ],
+      "subMetas": {}
+    }
+  },
+  "userData": {
+    "type": "sprite-frame",
+    "fixAlphaTransparencyArtifacts": true,
+    "hasAlpha": true,
+    "redirect": "4e12baf6-3481-4b6f-9a54-3ceccd921892@6c48a"
+  }
+}

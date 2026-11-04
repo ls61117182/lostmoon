@@ -9,8 +9,8 @@ const end = source.indexOf('\n  private ', start + 10);
 const compiled = ts.transpile(`class Scene { ${source.slice(start, end)} }`, {
   target: ts.ScriptTarget.ES2020,
 });
-const Scene = new Function('isTankUnit', 'GameSession', `${compiled}; return Scene;`)(
-  unit => unit.tank, { gameMode: 'classic' },
+const Scene = new Function('isTankUnit', 'isFootUnit', 'GameSession', `${compiled}; return Scene;`)(
+  unit => unit.tank, () => false, { gameMode: 'classic' },
 );
 
 class Node {

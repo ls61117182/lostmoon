@@ -46,7 +46,10 @@ export const SEATED_INFANTRY_VISUALS: Record<InfantryVisualKind, {
 }> = {
   infantry: EUROPEAN_SEATED,
   german_infantry: EUROPEAN_SEATED,
-  soviet_infantry: EUROPEAN_SEATED,
+  soviet_infantry: {
+    paths: [1, 2, 3].map(i => `textures/units/SovietInfantry0${i}_seated/spriteFrame`),
+    colors: [{ r: 220, g: 217, b: 211 }, { r: 231, g: 228, b: 211 }, { r: 223, g: 221, b: 215 }],
+  },
   japanese_infantry: {
     paths: [1, 2, 3].map(i => `textures/units/JapaneseInfantry0${i}_seated/spriteFrame`),
     colors: [{ r: 173, g: 172, b: 173 }, { r: 164, g: 167, b: 177 }, { r: 173, g: 172, b: 173 }],

@@ -14,6 +14,7 @@
 
 import { Axial, Direction, type Faction, FireDirection, Offset, Tile, tileHasBuilding, tileHasBridge, Unit, isFootUnit, isAntiTankGunUnit, isTankUnit } from './types';
 import { isCliffEdge, tileHeight } from './Elevation';
+import { unitMoveEntry } from './UnitFootprint';
 
 // ---------- 常量 ----------
 /** 6 个方向对应的 (dq, dr) 偏移（pointy-top, 顺时针自东） */
@@ -411,6 +412,7 @@ export class HexMap {
   }
 
   canUnitCrossEdge(from: Axial, to: Axial, unit: Unit, opts: { ignoreBreakwater?: boolean; faction?: Faction } = {}): boolean {
+    ({ from, to } = unitMoveEntry(unit, from, to));
     if (isAntiTankGunUnit(unit)
       && (this.get(from)?.fortification?.kind === 'gun_pit'
         || this.get(to)?.fortification?.kind === 'trench')) return false;
@@ -422,6 +424,7 @@ export class HexMap {
 
   /** Commit only after an actual move; previews/path searches never crush wire. */
   applyMovementTerrainEffects(unit: Unit, from: Axial, to: Axial): boolean {
+    ({ from, to } = unitMoveEntry({ ...unit, pos: from }, from, to));
     if (!isTankUnit(unit) || hexDistance(from, to) !== 1) return false;
     let crushed = false;
     for (const [pos, other] of [[from, to], [to, from]]) {
@@ -477,7 +480,7 @@ export class HexMap {
    * 当某格在视线路径的**中间**（非起点、非终点）时，是否因此截断视线。
    * 林地、以及路径**中间**的带建筑格均阻挡；水域**不**阻挡视线（任何单位仍不可入）；
    * 建筑在起止格不调用本方法故不挡视线（含：建筑格内的单位可作为视线起点向外射击）。
-   * sightHeight 为目标格高度；未提供时只查询原有地形遮挡。
+   * sightHeight 为观察者与目标格中较低的高度；未提供时只查询原有地形遮挡。
    */
   lineOfSightBlockedByTile(t: Tile, sightHeight?: number): boolean {
     if (sightHeight !== undefined && tileHeight(t) > sightHeight) return true;
@@ -488,11 +491,10 @@ export class HexMap {
 
   /**
    * 计算 from → to 之间是否有视线。
-   * 不能向更高格观察；中间格高于目标格时遮挡，地形/建筑仍按原规则遮挡。
+   * 高处目标本格可见；中间格高于起止格中较低的一方时遮挡，地形/建筑仍按原规则遮挡。
    */
   hasLineOfSight(from: Axial, to: Axial, blockedHexes?: ReadonlySet<string>): boolean {
-    const sightHeight = tileHeight(this.get(to));
-    if (sightHeight > tileHeight(this.get(from))) return false;
+    const sightHeight = Math.min(tileHeight(this.get(from)), tileHeight(this.get(to)));
     const path = hexLine(from, to);
     for (let i = 1; i < path.length - 1; i++) {
       const t = this.get(path[i]);
@@ -513,8 +515,7 @@ export class HexMap {
     fireDirection: FireDirection,
     blockedHexes?: ReadonlySet<string>,
   ): boolean {
-    const sightHeight = tileHeight(this.get(to));
-    if (sightHeight > tileHeight(this.get(from))) return false;
+    const sightHeight = Math.min(tileHeight(this.get(from)), tileHeight(this.get(to)));
     const diagonalIndex = fireDirection - 6;
     const a = diagonalIndex as Direction;
     const b = ((diagonalIndex + 1) % 6) as Direction;

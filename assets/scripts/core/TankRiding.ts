@@ -1,3 +1,4 @@
+import { unitOccupiedHexes, unitOccupiesHex, unitRearHex } from './UnitFootprint';
 import { isAbandonedTank, isFootUnit, isSameSide, isTankUnit, type Unit } from './types';
 
 export function isRidingInfantry(unit: Unit): boolean {
@@ -14,7 +15,7 @@ export function destroyTankRiders(tank: Unit, units: readonly Unit[]): Unit[] {
   if (!isTankUnit(tank) || !tank.destroyed) return [];
   const casualties = tankRiders(tank, units);
   for (const infantry of casualties) {
-    infantry.pos = { ...tank.pos };
+    infantry.pos = { ...unitRearHex(tank) };
     infantry.destroyed = true;
     infantry.mountedOnUnitId = undefined;
     infantry.mountedDoubleSide = undefined;
@@ -31,7 +32,7 @@ export function canMountTank(infantry: Unit, tank: Unit, units: readonly Unit[])
   return isRidingInfantry(infantry) && !infantry.destroyed
     && !infantry.suppressed && !infantry.attachedToATGunId && !infantry.mountedOnUnitId
     && canCarryInfantry(tank) && isSameSide(infantry, tank) && infantry.faction === tank.faction
-    && infantry.pos.q === tank.pos.q && infantry.pos.r === tank.pos.r
+    && unitOccupiesHex(tank, infantry.pos)
     && tankRiders(tank, units).length === 0;
 }
 
@@ -40,7 +41,7 @@ export function mountTank(infantry: Unit, tank: Unit, units: readonly Unit[], ra
   infantry.mountedOnUnitId = tank.id;
   // Presentation randomness is sampled only on boarding, independently of combat dice.
   infantry.mountedDoubleSide = random() < 0.5 ? 'left' : 'right';
-  infantry.pos = { ...tank.pos };
+  infantry.pos = { ...unitRearHex(tank) };
   infantry.hidden = false;
   infantry.ambushReadyThisTurn = false;
   infantry.lockedFireTargetId = undefined;
@@ -52,15 +53,14 @@ export function canDismountTank(infantry: Unit, units: readonly Unit[]): boolean
   if (!isRidingInfantry(infantry) || infantry.destroyed || !infantry.mountedOnUnitId) return false;
   const tank = units.find(unit => unit.id === infantry.mountedOnUnitId);
   if (!tank || tank.destroyed) return false;
-  return !units.some(unit => unit.id !== infantry.id && !unit.destroyed && isFootUnit(unit)
-    && unit.pos.q === tank.pos.q && unit.pos.r === tank.pos.r);
+  return dismountHex(infantry, tank, units) !== undefined;
 }
 
 /** Voluntary dismount requires a free infantry slot in the carrier's hex. */
 export function dismountTank(infantry: Unit, units: readonly Unit[]): boolean {
   if (!canDismountTank(infantry, units)) return false;
   const tank = units.find(unit => unit.id === infantry.mountedOnUnitId);
-  if (tank) infantry.pos = { ...tank.pos };
+  if (tank) infantry.pos = { ...dismountHex(infantry, tank, units)! };
   infantry.mountedOnUnitId = undefined;
   infantry.mountedDoubleSide = undefined;
   return true;
@@ -100,7 +100,7 @@ export function syncTankRiders(units: readonly Unit[]): void {
   for (const infantry of units) {
     if (!infantry.mountedOnUnitId) { infantry.mountedDoubleSide = undefined; continue; }
     const tank = byId.get(infantry.mountedOnUnitId);
-    if (tank) infantry.pos = { ...tank.pos };
+    if (tank) infantry.pos = { ...unitRearHex(tank) };
     if (infantry.destroyed || !isRidingInfantry(infantry) || infantry.attachedToATGunId
       || !tank || !canCarryInfantry(tank) || !isSameSide(infantry, tank) || infantry.faction !== tank.faction
       || occupied.has(tank.id)) {
@@ -116,4 +116,9 @@ export function syncTankRiders(units: readonly Unit[]): void {
       }
     }
   }
+}
+
+function dismountHex(infantry: Unit, tank: Unit, units: readonly Unit[]) {
+  return unitOccupiedHexes(tank).reverse().find(pos => !units.some(unit => unit.id !== infantry.id && !unit.destroyed
+    && isFootUnit(unit) && !unit.mountedOnUnitId && unit.pos.q === pos.q && unit.pos.r === pos.r));
 }

@@ -176,6 +176,7 @@ test('bunkers remain fog-darkened scenery and infantry bodies have no hex stenci
     for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
       for (const destroyed of [false, true]) {
         const { scene, bunker, infantry } = fixture(kind);
+        scene.mission.map = new hex.HexMap(2, 2);
         bunker.destroyed = destroyed;
         infantry.pos = { ...pos };
         const map = new Node('MapGraphics');

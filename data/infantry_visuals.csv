@@ -2,6 +2,6 @@
 单位类型ID,精灵图1路径,精灵图1缩放,精灵图2路径,精灵图2缩放,精灵图3路径,精灵图3缩放
 infantry,textures/units/Infantry01/spriteFrame,0.6,textures/units/Infantry02/spriteFrame,0.6,textures/units/Infantry03/spriteFrame,0.69
 german_infantry,textures/units/Infantry01/spriteFrame,0.6,textures/units/Infantry02/spriteFrame,0.6,textures/units/Infantry03/spriteFrame,0.69
-soviet_infantry,textures/units/Infantry01/spriteFrame,0.6,textures/units/Infantry02/spriteFrame,0.6,textures/units/Infantry03/spriteFrame,0.6
+soviet_infantry,textures/units/SovietInfantry01/spriteFrame,0.6,textures/units/SovietInfantry02/spriteFrame,0.6,textures/units/SovietInfantry03/spriteFrame,0.6
 japanese_infantry,textures/units/JapaneseInfantry01/spriteFrame,0.6,textures/units/JapaneseInfantry02/spriteFrame,0.6,textures/units/JapaneseInfantry03/spriteFrame,0.6
 american_infantry,textures/units/AmericanInfantry01/spriteFrame,0.6,textures/units/AmericanInfantry02/spriteFrame,0.6,textures/units/AmericanInfantry03/spriteFrame,0.6

@@ -115,7 +115,7 @@ test('shared mouth profiles have identical pixels across trench and gun-pit topo
 });
 
 test('self-contained art configurator contains valid JavaScript and all production surfaces',()=>{
-  const html=fs.readFileSync(path.join(ROOT,'source_art/terrain/fortifications-v1-20261028/configurator.html'),'utf8');
+  const html=fs.readFileSync(path.join(ROOT,manifest.sourceArtFolder??'source_art/terrain/fortifications-v1-20261028','configurator.html'),'utf8');
   const script=html.match(/<script>([\s\S]*?)<\/script>/)[1];
   assert.doesNotThrow(()=>new (require('node:vm').Script)(script));
   assert.equal((html.match(/data:image\/png;base64,/g)||[]).length,29);

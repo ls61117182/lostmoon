@@ -14,6 +14,8 @@ import type { SeasonType, SnowCover } from './types';
 import { syncTankRiders } from './TankRiding';
 import { cloneRegionalState } from './MultiRegion';
 import { BattleStatistics, cloneBattleStatistics } from './BattleStatistics';
+import { fitTwoHexDeployment } from './TwoHexDeployment';
+import { isTwoHexUnit } from './UnitFootprint';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
@@ -93,6 +95,8 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
+  /** Distinguishes old single-cell Maus positions from intentional half-exited two-cell positions. */
+  twoHexFootprintVersion?: 1;
   battleStatistics?: BattleStatistics;
   multiRegionState?: import('./types').MultiRegionState;
   multiRegionHistory?: unknown[];
@@ -335,6 +339,7 @@ export function captureSave(p: SnapshotParams): SaveData {
   };
   return {
     version: SAVE_VERSION,
+    twoHexFootprintVersion: 1,
     battleStatistics: cloneBattleStatistics(p.mission.battleStatistics),
     multiRegionState: cloneRegionalState(p.mission.multiRegionState),
     gameMode: p.gameMode,
@@ -624,6 +629,12 @@ export function applySave(
   // Older sessions restarted the reinforcement sequence after loading. Give
   // duplicate reinforcement tanks independent IDs before visual maps use them.
   const units = [playerTank, ...mission.allies, ...mission.enemies];
+  if (save.twoHexFootprintVersion !== 1) {
+    for (const unit of units) {
+      if (!isTwoHexUnit(unit) || unit.destroyed || (unit === playerTank && mission.playerTankEvacuated)) continue;
+      fitTwoHexDeployment(mission.map, unit, units);
+    }
+  }
   if (save.version < 12 && save.gameMode === 'hardcore') {
     for (const unit of new Set(units)) {
       const progress = unit.reloadProgress ?? 0;

@@ -17,11 +17,14 @@ const code = ts.transpileModule(`class Harness { ${method('machineGunAimDirectio
 const Harness = new Function(
   'hexDistance', 'fireDirectionTo', 'MG_MAX_RANGE', 'selectTankMachineGun', 'GameSession',
   'diagonalGunnerClickPreference', 'isTankUnit', 'currentGunnerVisionRange',
+  'isTwoHexUnit', 'unitTurretHex',
   `${code}; return Harness;`,
 )(
   hexDistance, fireDirectionTo, MG_MAX_RANGE, selectTankMachineGun, { gameMode: 'hardcore' },
   () => null, unit => unit?.stats?.visionType === 'turreted' || unit?.stats?.visionType === 'fixed',
   currentGunnerVisionRange,
+  require('../assets/scripts/core/UnitFootprint.ts').isTwoHexUnit,
+  require('../assets/scripts/core/UnitFootprint.ts').unitTurretHex,
 );
 const scene = new Harness();
 const map = new HexMap(7, 7);

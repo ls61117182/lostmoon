@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "forward": "down",
+  "camera": "strict top-down orthographic",
+  "transparent": true,
+  "status": "art-design; not wired to gameplay",
+  "sprites": [
+    {
+      "name": "GermanMG01_gunner",
+      "file": "sprites/GermanMG01_gunner.png",
+      "width": 208,
+      "height": 362,
+      "suggestedScale": 0.996
+    },
+    {
+      "name": "GermanMG02_loader",
+      "file": "sprites/GermanMG02_loader.png",
+      "width": 218,
+      "height": 218,
+      "suggestedScale": 0.6
+    },
+    {
+      "name": "GermanMG03_ammo",
+      "file": "sprites/GermanMG03_ammo.png",
+      "width": 198,
+      "height": 239,
+      "suggestedScale": 0.658
+    }
+  ],
+  "composition": {
+    "file": "sprites/GermanMG_squad_deployed.png",
+    "width": 560,
+    "height": 560,
+    "previewPixels": 72,
+    "members": [
+      {
+        "name": "GermanMG03_ammo",
+        "left": 361,
+        "top": 97
+      },
+      {
+        "name": "GermanMG01_gunner",
+        "left": 220,
+        "top": 160
+      },
+      {
+        "name": "GermanMG02_loader",
+        "left": 85,
+        "top": 188
+      }
+    ]
+  }
+}

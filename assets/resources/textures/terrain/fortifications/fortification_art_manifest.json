@@ -1321,5 +1321,7 @@
         "foreground": "gun_pit_111111_v1_rim.png"
       }
     }
-  ]
+  ],
+  "artRevision": 2,
+  "sourceArtFolder": "source_art/terrain/fortifications-v2-20261102"
 }

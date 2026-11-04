@@ -27,15 +27,21 @@ class Node {
   addComponent(Type) { const c = new Type(); c.node = this; this.components.set(Type, c); return c; }
   getComponent(Type) { return this.components.get(Type); }
   addChild(n) { this.children.push(n); n.parent = this; }
+  setSiblingIndex(index) { const a = this.parent.children; a.splice(a.indexOf(this), 1); a.splice(index, 0, this); }
   setPosition(x, y, z) { this.worldPosition = { x, y, z }; }
   setRotationFromEuler() {}
   setScale(x, y, z) { this.worldScale = { x, y, z }; }
-  setWorldPosition(v) { this.worldPosition = { ...v }; }
+  setWorldPosition(v) { this.worldWrites = (this.worldWrites ?? 0) + 1; this.worldPosition = { ...v }; }
   setWorldRotation(v) { this.worldRotation = v; }
   setWorldScale(v) { this.worldScale = { ...v }; }
 }
 class Vec4 { constructor(x, y, z, w) { Object.assign(this, {x, y, z, w}); } }
-class Sprite { getMaterialInstance() { return { setProperty() {} }; } static SizeMode = { CUSTOM: 1 }; trim = true; getComponent(t) { return this.node.getComponent(t); } }
+class Sprite {
+  material = { writes: [], setProperty(...args) { this.writes.push(args); } };
+  getMaterialInstance() { return this.material; }
+  static SizeMode = { CUSTOM: 1 }; trim = true;
+  getComponent(t) { return this.node.getComponent(t); }
+}
 class Graphics {
   circles = []; clear() { this.circles = []; } circle(...v) { this.circles.push(v); }
   fill() {} stroke() {} moveTo() {} lineTo() {} close() {}
@@ -166,4 +172,115 @@ test('vector overlap follows map pan, zoom and rotation in world coordinates', (
   blocker.node.worldPosition.y = 300;
   renderer.sync(new Map(), [blocker], [], [{ circle: [10, 0, 4], color: {} }]);
   assert.equal(root.children[0].active, false);
+});
+
+test('60 movement frames read only the changed source bounds and retain distant passes', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const units = Array.from({ length: 24 }, (_, i) => sprite(i * 1000));
+  const blockers = Array.from({ length: 300 }, (_, i) => sprite(i * 1000));
+  renderer.sync(new Map(units.map(unit => [unit, {}])), blockers);
+  const first = root.children[0], distant = root.children[23], distantWrites = distant.worldWrites;
+  const boundsReads = () => [...units, ...blockers].reduce((sum, s) => sum + (s.getComponent(UITransform).boundsReads ?? 0), 0);
+  const before = boundsReads(), copies = first.children[0].getComponent(Sprite), uniforms = copies.material.writes.length;
+  for (let frame = 1; frame <= 60; frame++) {
+    units[0].node.worldPosition.x = frame / 100;
+    renderer.syncTransforms();
+  }
+  assert.equal(boundsReads() - before, 60, 'trees and stationary units reuse their cached bounds');
+  assert.equal(distant.worldWrites, distantWrites, 'distant masks are never reconfigured');
+  assert.equal(copies.material.writes.length, uniforms, 'translation does not change UVs or outline width');
+  assert.equal(root.children.length, 24, 'no stencil allocation during motion inside an existing overlap');
+  renderer.syncTransforms();
+  assert.equal(boundsReads() - before, 60, 'an unchanged final pose is a complete no-op');
+});
+
+test('crossing spatial cells removes the old outline and adds the new one in the same frame', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const unit = sprite(0), oldTree = sprite(0), nextTree = sprite(1024);
+  renderer.sync(new Map([[unit, {}]]), [oldTree, nextTree]);
+  const oldMask = root.children[0];
+  unit.node.worldPosition.x = 1024; renderer.syncTransforms();
+  assert.equal(oldMask.active, false);
+  assert.equal(root.children.length, 2);
+  const nextMask = root.children[1];
+  assert(nextMask.active);
+  assert.equal(nextMask.getComponent(Mask).subComp.spriteFrame, nextTree.spriteFrame);
+  assert.equal(nextMask.children[0].worldPosition.x, 1024);
+  unit.node.active = false; renderer.syncTransforms();
+  assert(root.children.every(node => !node.active), 'hidden or released source leaves no outline');
+  unit.node.active = true; renderer.syncTransforms();
+  assert(nextMask.active); assert.equal(root.children.length, 2, 're-entering reuses its pass');
+  unit.node.isValid = false; renderer.syncTransforms();
+  assert(root.children.every(node => !node.active), 'destroyed sources are removed too');
+});
+
+test('a tank mask enters and leaves stationary bridge infantry without a rules rebuild', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const infantry = sprite(0), tank = sprite(100), sources = new Map([[infantry, {}]]);
+  renderer.sync(new Map(), [], [], [], [{ blocker: tank, sources }]);
+  assert.equal(root.children.length, 0);
+  tank.node.worldPosition.x = 5; renderer.syncTransforms();
+  const mask = root.children[0], copy = mask.children[0];
+  assert(mask.active); assert.equal(mask.worldPosition.x, 5); assert.equal(copy.worldPosition.x, 0);
+  tank.node.worldPosition.x = 7; tank.node.worldRotation = { x: 0, y: 0, z: .3, w: .95 };
+  renderer.syncTransforms();
+  assert.equal(mask.worldRotation.z, .3); assert.equal(copy.worldPosition.x, 0);
+  tank.node.worldPosition.x = 100; renderer.syncTransforms();
+  assert.equal(mask.active, false);
+  tank.node.worldPosition.x = 0; renderer.syncTransforms();
+  assert(mask.active); assert.equal(root.children.length, 1);
+});
+
+test('outline parameters invalidate for scale, dimensions, atlas UV and material replacement', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const unit = sprite(0), tree = sprite(0), sources = new Map([[unit, {}]]);
+  renderer.sync(sources, [tree]);
+  const copy = root.children[0].children[0].getComponent(Sprite), material = copy.material;
+  assert.equal(material.writes.length, 2);
+  unit.node.worldRotation = { x: 0, y: 0, z: .5, w: .86 }; renderer.syncTransforms();
+  assert.equal(material.writes.length, 2, 'rotation alone leaves sampling parameters unchanged');
+  unit.node.worldScale.x = 2; renderer.syncTransforms(); assert.equal(material.writes.length, 4);
+  unit.getComponent(UITransform).contentSize.width = 30; renderer.syncTransforms(); assert.equal(material.writes.length, 6);
+  unit.spriteFrame.uv[2] = .5; renderer.syncTransforms(); assert.equal(material.writes.length, 8);
+  copy.material = { writes: [], setProperty(...args) { this.writes.push(args); } };
+  renderer.sync(sources, [tree]);
+  assert.equal(copy.material.writes.length, 2, 'a new stencil material receives all sampling uniforms');
+});
+
+test('fallback vectors update nearby masks and retain a late-activated graphics stencil', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const vector = { circle: [1024, 0, 4], color: {} }, tree = sprite(0), shapes = [{ circle: [0, 0, 20] }];
+  renderer.sync(new Map(), [tree], shapes, [vector]);
+  const graphicMask = root.children[0];
+  vector.circle[0] = 0; renderer.syncTransforms();
+  assert.equal(root.children.filter(node => node.active).length, 2);
+  const treeMask = root.children.find(node => node.getComponent(Mask).type === Mask.Type.SPRITE_STENCIL);
+  assert.deepEqual(treeMask.children[0].getComponent(Graphics).circles, [[0, 0, 4]]);
+  assert.deepEqual(graphicMask.getComponent(Mask).subComp.circles, [[0, 0, 20]]);
+  vector.circle[0] = 1024; renderer.syncTransforms(); assert.equal(treeMask.active, false);
+});
+
+test('camera changes rebuild world-space indices and a rules redraw replaces pooled memberships', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const unit = sprite(0), tree = sprite(0), sources = new Map([[unit, {}]]);
+  renderer.sync(sources, [tree]);
+  const before = tree.getComponent(UITransform).boundsReads;
+  root.worldMatrix.m12 = 1000; root.worldMatrix.m00 = 2; root.worldMatrix.m05 = 2;
+  unit.node.worldPosition.x = 1000; tree.node.worldPosition.x = 1000; renderer.syncTransforms();
+  assert.equal(tree.getComponent(UITransform).boundsReads, before + 1);
+  assert(root.children[0].active); assert.equal(root.children[0].worldPosition.x, 1000);
+  renderer.sync(new Map(), [tree]); assert(root.children.every(node => !node.active));
+  renderer.sync(sources, []); assert(root.children.every(node => !node.active));
+});
+
+test('spatial reinsertion and newly overlapping masks preserve source and stencil draw order', () => {
+  const root = new Node('root'), renderer = new Renderer(root); renderer.setMaterial({ destroy() {} });
+  const hull = sprite(0), turret = sprite(0), lateTree = sprite(100), roof = sprite(0);
+  const hullColor = {}, turretColor = {}, sources = new Map([[hull, hullColor], [turret, turretColor]]);
+  renderer.sync(sources, [lateTree, roof]);
+  const roofMask = root.children[0];
+  hull.node.worldPosition.x = 1; renderer.syncTransforms();
+  assert.deepEqual(roofMask.children.map(n => n.getComponent(Sprite).color), [hullColor, turretColor]);
+  hull.node.worldPosition.x = 100; renderer.syncTransforms();
+  assert.equal(root.children[1], roofMask, 'late activation inserts the earlier tree pass before the existing roof');
 });

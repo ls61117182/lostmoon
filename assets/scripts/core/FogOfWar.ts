@@ -1,3 +1,4 @@
+import { isTwoHexUnit, unitAtHex, unitOccupiedHexes, unitOccupiesHex, unitTurretHex } from './UnitFootprint';
 import { axialAdd, HexMap, axialEquals, axialToPixel, diagonalFlankFireDirectionTo, fireDirectionStep, fireDirectionTo, fireDirectionVector, hexDistance, isDiagonalFireDirection, neighbor } from './HexGrid';
 import { CAMPAIGN_UPGRADE_BY_ID } from './CampaignUpgradeDB';
 import { getGameModeConfig, GameMode } from './GameMode';
@@ -65,7 +66,7 @@ export function isWithinOwnVisionRange(observer: Unit, target: Unit, weather?: W
   const range = isTankUnit(observer)
     ? currentGunnerVisionRange(observer, weather)
     : currentVisionRange(observer, weather);
-  return hexDistance(observer.pos, target.pos) <= range;
+  return Math.min(...unitOccupiedHexes(target).map(pos => hexDistance(unitTurretHex(observer), pos))) <= range;
 }
 
 /** Direct sight at shot time, after an intact turret has aimed; never merges radio intelligence. */
@@ -79,7 +80,7 @@ export function isHexInOwnAttackVision(
   const canAim = observer.stats.visionType === 'turreted' && !observer.turretDamaged;
   const direction = canAim
     ? diagonalMainGunDirectionForHex(map, observer, target, weather, smokeHexes)
-      ?? fireDirectionTo(observer.pos, target)
+      ?? fireDirectionTo(unitTurretHex(observer), target)
     : null;
   // Validate the sight the shot will actually use. A flank target selects its
   // own gunner path when the attack is committed; previews must simulate that
@@ -89,16 +90,35 @@ export function isHexInOwnAttackVision(
       map, observer, direction, target, smokeHexes, currentGunnerVisionRange(observer, weather),
     )
     : null;
-  const aimed = direction === null ? observer : {
+  const aimed = direction === null ? observer : Object.assign(unitAtHex(observer, observer.pos), {
     ...observer,
     turretFacing: direction,
     diagonalGunnerSidePreference: attackedSide ?? observer.diagonalGunnerSidePreference,
-  };
+  });
   return computeUnitVisibleHexes(map, aimed, weather, smokeHexes).has(HexMap.keyOf(target));
 }
 
+/** Combine physical observation origins without duplicating turret sight. */
+export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: WeatherType, smokeHexes?: ReadonlySet<string>): Set<string> {
+  if (!isTwoHexUnit(unit)) return computePointVisibleHexes(map, unit, weather, smokeHexes);
+  const turret = unitAtHex(unit, unitTurretHex(unit));
+  turret.interiorVisionRange = 0;
+  const visible = computePointVisibleHexes(map, turret, weather, smokeHexes);
+  if (unit.hatchOpen !== true || unit.crew?.commander === false) {
+    for (const pos of unitOccupiedHexes(unit)) {
+      const interior = unitAtHex(unit, pos);
+      interior.hatchOpen = false;
+      interior.gunnerVisionRange = 0;
+      interior.interiorVisionRange = currentInteriorVisionRange(unit);
+      // Point-only interior pass must not move back to the turret origin.
+      for (const key of computePointVisibleHexes(map, interior, weather, smokeHexes)) visible.add(key);
+    }
+  }
+  return visible;
+}
+
 /** Runtime source of truth for the map coordinates visible to one unit. */
-export function computeUnitVisibleHexes(
+function computePointVisibleHexes(
   map: HexMap,
   unit: Unit,
   weather?: WeatherType,
@@ -107,10 +127,8 @@ export function computeUnitVisibleHexes(
   const visible = new Set<string>();
   if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
   const opaqueSmoke = weather === 'fog';
-  const observerHeight = tileHeight(map.get(unit.pos));
   const add = (p: Axial) => {
     if (!map.sameRegion(unit.pos, p)) return;
-    if (tileHeight(map.get(p)) > observerHeight) return;
     // Filter direct sight only. Radio sight is merged later, and must be able
     // to reveal a transmitting friendly's occupied smoke hex to its teammates.
     if (opaqueSmoke && !axialEquals(p, unit.pos) && smokeHexes?.has(HexMap.keyOf(p))) return;
@@ -223,6 +241,7 @@ export function diagonalMainGunDirectionForHex(
   weather?: WeatherType,
   smokeHexes?: ReadonlySet<string>,
 ): FireDirection | null {
+  unit = unitAtHex(unit, unitTurretHex(unit));
   if (!isHeavyArtilleryUnit(unit)
     && ((!isTankUnit(unit) && !isControlledATGun(unit)) || unit.stats.visionType !== 'turreted')) return null;
   const direction = diagonalFlankFireDirectionTo(unit.pos, target);
@@ -243,6 +262,7 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
   weather?: WeatherType,
   smokeHexes?: ReadonlySet<string>,
 ): FireDirection | null {
+  unit = unitAtHex(unit, unitTurretHex(unit));
   const controlledATGun = isControlledATGun(unit);
   if ((!isTankUnit(unit) && !controlledATGun) || unit.stats.visionType !== 'turreted') return null;
   // Every adjacent hex lies on one of the six true hex axes. It is also the
@@ -308,6 +328,7 @@ export function diagonalGunnerClickPreference(
   smokeHexes?: ReadonlySet<string>,
   maxRange = currentGunnerVisionRange(unit),
 ): Direction | null {
+  unit = unitAtHex(unit, unitTurretHex(unit));
   return diagonalGunnerPathSide(map, unit, fireDirection, target, smokeHexes, maxRange, false);
 }
 
@@ -322,8 +343,7 @@ function diagonalGunnerPathSide(
   includeCenter: boolean,
 ): Direction | null {
   if (!isDiagonalFireDirection(fireDirection)) return null;
-  const sightHeight = tileHeight(map.get(target));
-  if (sightHeight > tileHeight(map.get(unit.pos))) return null;
+  const sightHeight = Math.min(tileHeight(map.get(unit.pos)), tileHeight(map.get(target)));
   const diagonalIndex = fireDirection - 6;
   const a = diagonalIndex as Direction;
   const b = ((diagonalIndex + 1) % 6) as Direction;
@@ -528,7 +548,7 @@ export function computeRadioSharedVisibleHexes(
         || !isFootUnit(friendly)
         || friendly.stats.hasRadio !== false
         || !shareVisionFaction(friendly, receiver)
-        || !axialEquals(friendly.pos, receiver.pos)) continue;
+        || !unitOccupiesHex(receiver, friendly.pos)) continue;
       for (const key of computeUnitVisibleHexes(map, friendly, weather, smokeHexes)) {
         const [q, r] = key.split(',').map(Number);
         const pos = { q, r };
@@ -572,13 +592,13 @@ export function isUnitInVision(
   const visible = radioVisionSharing
     ? computeRadioSharedVisibleHexes(map, observer, friendlies, weather, smokeHexes)
     : computeUnitVisibleHexes(map, observer, weather, smokeHexes);
-  return visible.has(HexMap.keyOf(target.pos));
+  return unitOccupiedHexes(target).some(pos => visible.has(HexMap.keyOf(pos)));
 }
 
 /**
  * Fog LoS uses rendered geometry, not a rounded hex path: the segment joining
  * observer and target centers is blocked when it intersects an intermediate
- * blocking hex. Higher targets are hidden; intermediate heights above the target block.
+ * blocking hex. A higher endpoint is visible, but intermediate heights above either endpoint block.
  */
 export function hasFogLineOfSight(
   map: HexMap,
@@ -588,8 +608,7 @@ export function hasFogLineOfSight(
 ): boolean {
   if (!map.sameRegion(from, to)) return false;
   if (axialEquals(from, to)) return true;
-  const sightHeight = tileHeight(map.get(to));
-  if (sightHeight > tileHeight(map.get(from))) return false;
+  const sightHeight = Math.min(tileHeight(map.get(from)), tileHeight(map.get(to)));
   const a = axialToPixel(from, GEOMETRY_HEX_SIZE);
   const b = axialToPixel(to, GEOMETRY_HEX_SIZE);
   for (const tile of map.all()) {

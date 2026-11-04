@@ -159,7 +159,7 @@ async function centerOn(png,bg=path.join(ROOT,'assets/resources/textures/terrain
   const p=await sharp(png).extract({left:Math.floor((info.width-W)/2),top:Math.floor((info.height-H)/2),width:W,height:H}).png().toBuffer();
   return sharp(base).composite([{input:p}]).png().toBuffer();
 }
-async function makePreviews(rendered,manifest) {
+async function makePreviews(rendered,manifest,source=SOURCE) {
   const composites=new Map();
   for(const kind of ['trench','gun_pit']) for(let m=0;m<64;m++) {
     const t=fortificationArtTransform({kind,connections:flags(m)});
@@ -173,7 +173,7 @@ async function makePreviews(rendered,manifest) {
     layers.push({input:svgText(`${label} · ${flags(m)}`,W),left,top:top+H+4});
   }
   layers.push({input:svgText('战壕与炮位 · 正式透明贴图 / 222 × 256',1228,42,23),left:0,top:8});
-  await sharp({create:{width:1228,height:682,channels:4,background:'#303b31'}}).composite(layers).png().toFile(path.join(SOURCE,'asset-sheet.png'));
+  await sharp({create:{width:1228,height:682,channels:4,background:'#303b31'}}).composite(layers).png().toFile(path.join(source,'asset-sheet.png'));
   for(const kind of ['trench','gun_pit']) {
     const items=[];
     for(let m=0;m<64;m++) {
@@ -182,7 +182,7 @@ async function makePreviews(rendered,manifest) {
       items.push({input:svgText(flags(m),111,22,12),left,top:top+128});
     }
     items.push({input:svgText(`${kind} · 全部 64 种方向配置（实际贴图旋转）`,1080,34,20),left:0,top:2});
-    await sharp({create:{width:1080,height:1296,channels:4,background:'#303b31'}}).composite(items).png().toFile(path.join(SOURCE,`${kind}-all-connections.png`));
+    await sharp({create:{width:1080,height:1296,channels:4,background:'#303b31'}}).composite(items).png().toFile(path.join(source,`${kind}-all-connections.png`));
   }
   const cells=new Map(),offsets=[[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
   for(let r=-1;r<=1;r++) for(let q=-2;q<=2;q++) cells.set(`${q},${r}`,{q,r,kind:'trench',mask:0,active:false});
@@ -213,13 +213,13 @@ async function makePreviews(rendered,manifest) {
   }
   const title={input:svgText('实际贴图拼接 · 炮位低土沿，不限定射击方向',1440,48,24),left:0,top:14};
   const map=await sharp({create:{width:1440,height:780,channels:4,background:'#29342c'}}).composite([title,...ground,...overlay,...units,...foreground]).png().toBuffer();
-  await fs.promises.writeFile(path.join(SOURCE,'connected-map-preview.png'),map);
+  await fs.promises.writeFile(path.join(source,'connected-map-preview.png'),map);
   // Typical game's 84x96 tile size, upscaled only to inspect pixels.
   const small=await sharp(map).resize(545,295).png().toBuffer();
-  await sharp(small).resize(1090,590,{kernel:'nearest'}).png().toFile(path.join(SOURCE,'map-game-scale-2x.png'));
-  await writeConfigurator(rendered,manifest);
+  await sharp(small).resize(1090,590,{kernel:'nearest'}).png().toFile(path.join(source,'map-game-scale-2x.png'));
+  await writeConfigurator(rendered,manifest,source);
 }
-async function writeConfigurator(rendered,manifest) {
+async function writeConfigurator(rendered,manifest,source=SOURCE) {
   const images={};
   for(const [key,value] of rendered) images[key]='data:image/png;base64,'+value.surface.toString('base64');
   const grass='data:image/png;base64,'+(await fs.promises.readFile(path.join(ROOT,'assets/resources/textures/terrain/terrain_field.png'))).toString('base64');
@@ -227,15 +227,16 @@ async function writeConfigurator(rendered,manifest) {
 <style>*{box-sizing:border-box}body{margin:0;background:#202c26;color:#eee8d8;font:16px system-ui,"Microsoft YaHei",sans-serif}main{max-width:1000px;margin:40px auto;padding:24px}h1{font-size:26px}p{color:#c1c4b3;line-height:1.8}.layout{display:flex;gap:48px;align-items:center;flex-wrap:wrap}.controls{flex:1;min-width:290px}button,select{font:inherit;padding:10px 14px;margin:5px;border:1px solid #68745d;border-radius:8px;background:#354339;color:#ede6ce;cursor:pointer}button[aria-pressed=true]{background:#9b8956;color:#fff}canvas{max-width:100%;height:auto;background:#29372e;border-radius:14px}pre{padding:18px;background:#15251e;border-radius:10px;white-space:pre-wrap;line-height:1.6}label{display:block;margin:12px 0}</style>
 <main><h1>战壕与炮位 · 正式资源配置预览</h1><p>六方向顺序与道路一致：E → SE → SW → W → NW → NE。点击方向切换交通壕出口。炮位没有固定射击口；这些开口表示交通壕连接。</p><div class="layout"><canvas id="preview" width="444" height="512"></canvas><div class="controls"><label>工事类型 <select id="kind"><option value="trench">步兵战壕</option><option value="gun_pit">反坦克炮位</option></select></label><div id="ports"></div><button id="clear">独立工事</button><button id="straight">东西贯通</button><button id="junction">三向连接</button><pre id="config"></pre><p>此页面预览正式 PNG、旋转与美术配置；游戏内请在格子属性配置战壕或炮位。</p></div></div></main>
 <script>const manifest=${JSON.stringify(manifest)},sources=${JSON.stringify(images)},grassSrc=${JSON.stringify(grass)};const bg=new Image(),cache={},canvas=document.getElementById('preview'),ctx=canvas.getContext('2d');let mask=9;const kinds=document.getElementById('kind'),ports=document.getElementById('ports');const labels=['东 E','东南 SE','西南 SW','西 W','西北 NW','东北 NE'];for(let d=0;d<6;d++){const b=document.createElement('button');b.textContent=labels[d];b.onclick=()=>{mask^=1<<d;draw()};ports.appendChild(b)}for(const [key,src]of Object.entries(sources)){const im=new Image();im.src=src;im.onload=draw;cache[key]=im}bg.onload=draw;bg.src=grassSrc;function draw(){const v=manifest.variants[mask],kind=kinds.value;ctx.clearRect(0,0,444,512);if(bg.complete)ctx.drawImage(bg,0,0,444,512);const im=cache[kind+':'+v.canonicalMask];if(im?.complete&&im.naturalWidth){ctx.save();ctx.translate(222,256);ctx.rotate(v.rotationSteps*Math.PI/3);ctx.drawImage(im,-222,-256,444,512);ctx.restore()}[...ports.children].forEach((b,d)=>b.setAttribute('aria-pressed',String(!!(mask&(1<<d)))));document.getElementById('config').textContent=JSON.stringify({kind,connections:v.connections},null,2)+'\\n\\n'+kind+'_'+v.canonicalConnections+'_v1.png\\nCocos Z 旋转：'+v.rotationDegrees+'°'}kinds.onchange=draw;document.getElementById('clear').onclick=()=>{mask=0;draw()};document.getElementById('straight').onclick=()=>{mask=9;draw()};document.getElementById('junction').onclick=()=>{mask=21;draw()};draw();</script></html>`;
-  fs.writeFileSync(path.join(SOURCE,'configurator.html'),html);
+  fs.writeFileSync(path.join(source,'configurator.html'),html);
 }
-async function build() {
-  fs.mkdirSync(OUT,{recursive:true});fs.mkdirSync(SOURCE,{recursive:true});directoryMeta();
+async function build(options={}) {
+  const source=options.sourceDir??SOURCE,renderArt=options.renderArt??render;
+  fs.mkdirSync(OUT,{recursive:true});fs.mkdirSync(source,{recursive:true});directoryMeta();
   const scriptMeta=path.join(ROOT,'assets/scripts/core/FortificationArt.ts.meta');
   if(!fs.existsSync(scriptMeta)) saveJson(scriptMeta,{ver:'4.0.24',importer:'typescript',imported:true,uuid:uuid('FortificationArt.ts'),files:[],subMetas:{},userData:{}});
-  const mats=await materials(),rendered=new Map(),hashes={};
+  const mats=options.renderArt?null:await materials(),rendered=new Map(),hashes={};
   for(const kind of ['trench','gun_pit']) for(const mask of FORTIFICATION_ART_MASKS) {
-    const art=await render(kind,mask,mats);rendered.set(`${kind}:${mask}`,art);
+    const art=await renderArt(kind,mask,mats);rendered.set(`${kind}:${mask}`,art);
     for(const [layer,rim]of [['surface',false],['foreground',true]]) {
       const name=filename(kind,mask,rim);await fs.promises.writeFile(path.join(OUT,name),art[layer]);imageMeta(name);
       hashes[name]=crypto.createHash('sha256').update(art[layer]).digest('hex');
@@ -251,10 +252,15 @@ async function build() {
     canonicalShapeCountPerKind:14,surfaceCount:28,foregroundCount:28,trenchFloorWidth:HALF*2,pitFloorDiameter:PIT_RADIUS*2,
     mouthBleed:2,unitFacingRestriction:false,canonicalMasks:FORTIFICATION_ART_MASKS,
     note:'Reuse road rotation mapping. 000000 is an isolated earthwork, not absence. Missing configuration means no fortification. Connections are communications trenches, never weapon firing arcs. Draw ground, surface, units, then optional foreground rim. Floor and rim contain no units, grass, text or baked effects.',variants};
+  if(options.artRevision) manifest.artRevision=options.artRevision;
+  manifest.sourceArtFolder=path.relative(ROOT,source).replaceAll('\\','/');
   saveJson(path.join(OUT,'fortification_art_manifest.json'),manifest);jsonMeta('fortification_art_manifest.json');
-  saveJson(path.join(SOURCE,'checksums.json'),hashes);
-  await makePreviews(rendered,manifest);
+  saveJson(path.join(source,'checksums.json'),hashes);
+  await makePreviews(rendered,manifest,source);
   console.log(`Exported ${Object.keys(hashes).length} transparent 222x256 PNGs, 128 configurations, Cocos metas and previews.`);
 }
-if(require.main===module) build().catch(e=>{console.error(e);process.exitCode=1});
 module.exports={W,H,HALF,PIT_RADIUS,EDGES,RAYS,flags,geometry,hexInset,render,filename,build};
+if(require.main===module) {
+  const run=process.argv.includes('--v1')?build:require('./prepareFortificationArtV2.cjs').build;
+  run().catch(e=>{console.error(e);process.exitCode=1});
+}

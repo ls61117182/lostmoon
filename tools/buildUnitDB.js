@@ -295,6 +295,12 @@ function build() {
     const note = r.notes ? ` - ${r.notes}` : '';
     lines.push(`  ${k}: { // ${name}${note}`);
     lines.push(`    faction: ${jsString(r.faction)},`);
+    const footprintLength = optionalInt(r, 'footprintLength', 1);
+    if (![1, 2].includes(footprintLength)) throw new Error(`${k}: footprintLength must be 1 or 2`);
+    const turretCell = r.turretCell || 'front';
+    if (!['front', 'rear'].includes(turretCell)) throw new Error(`${k}: invalid turretCell`);
+    if (footprintLength === 2 && !TANK_KINDS.has(k)) throw new Error(`${k}: only tanks support two hexes`);
+    if (footprintLength === 2) lines.push(`    footprintLength: 2, turretCell: ${jsString(turretCell)},`);
     lines.push(
       `    firepower: ${r.firepower}, size: ${r.size}, ` +
       `armorFront: ${r.armorFront}, ` +

@@ -109,6 +109,8 @@ export interface ActionDicePoolOpts {
   subPhase: ActionDiceSubPhase;
   /** 谢尔曼当前所在格的地形 */
   terrain: TerrainType;
+  /** Additional occupied terrain; evaluate complete pools independently and take the minimum. */
+  occupiedTerrains?: TerrainType[];
   /** 车长舱盖是否打开（杂项始终依赖；移动 / 攻击可由模式规则放宽） */
   hatchOpen: boolean;
   /** 移动 / 攻击阶段是否允许车长存活但关舱时仍获得车长加骰 */
@@ -117,6 +119,7 @@ export interface ActionDicePoolOpts {
   crew: ShermanCrew;
   /** 战役强化等系统在钳制前追加的阶段骰修正。 */
   externalBonus?: number;
+  externalBonusForTerrain?: (terrain: TerrainType) => number;
   /** 硬核模式使用独立骰池，并在移动阶段加入当前坦克机动属性。 */
   hardcore?: boolean;
   mobility?: number;
@@ -132,6 +135,10 @@ export const HARDCORE_PLAYER_MISC_BASE_DICE = 1;
  * cap_min / cap_max 均来自对应骰池配置。
  */
 export function actionDicePool(opts: ActionDicePoolOpts): number {
+  if (opts.occupiedTerrains?.length) {
+    return Math.min(...[opts.terrain, ...opts.occupiedTerrains].map(terrain =>
+      actionDicePool({ ...opts, terrain, occupiedTerrains: undefined })));
+  }
   const cfg = opts.hardcore ? PLAYER_HARDCORE_DICE_POOL : PLAYER_DICE_POOL;
   const row = cfg.baseByPhaseTerrain[opts.subPhase];
   let n = typeof row[opts.terrain] === 'number' ? row[opts.terrain] : 0;
@@ -157,7 +164,7 @@ export function actionDicePool(opts: ActionDicePoolOpts): number {
     if (hatchOpenForDice) n += cfg.miscMods.hatch;
   }
 
-  n += opts.externalBonus ?? 0;
+  n += opts.externalBonusForTerrain?.(opts.terrain) ?? opts.externalBonus ?? 0;
 
   const capped = cfg.capMax == null ? n : Math.min(cfg.capMax, n);
   const minimum = opts.hardcore ? Math.max(1, cfg.capMin) : cfg.capMin;

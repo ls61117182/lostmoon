@@ -1,3 +1,4 @@
+import { isTwoHexUnit, unitMoveEntry, unitOccupiedHexes } from './UnitFootprint';
 import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
 import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, MissionObjective, tileHasBridge, UnitKind } from './types';
@@ -74,13 +75,18 @@ export function isPlayerTankEvacDrive(
     if (!allEnemiesOfKindDestroyed(mission, 'truck')) return false;
   } else if (!destroyKindEvacPrereqMet(mission, obj)) return false;
   const ev = offsetToAxial(evacAt, mission.data.rowParityOffset === 1 ? 1 : 0);
-  if (from.q !== ev.q || from.r !== ev.r) return false;
+  const unit = mission.playerTank ?? mission.sherman;
+  const entry = isTwoHexUnit(unit) ? unitMoveEntry(unit, from, to) : { from, to };
+  const atExit = entry.from.q === ev.q && entry.from.r === ev.r;
+  const finishingExit = isTwoHexUnit(unit) && !mission.map.has(entry.from)
+    && unitOccupiedHexes(unit).some(pos => pos.q === ev.q && pos.r === ev.r);
+  if (!atExit && !finishingExit) return false;
   const driveDir = (dirSign === 1 ? facing : rotateDirection(facing, 3)) as number;
   if (driveDir !== evacExitDir) return false;
   // 撤离格若是桥梁，驶出方向须落在桥端两方向之一
-  const fromTile = mission.map.get(from);
+  const fromTile = mission.map.get(entry.from);
   if (tileHasBridge(fromTile) && !fromTile!.bridgeEnds!.includes(driveDir as Direction)) return false;
-  return !mission.map.has(to) || options.canExitTo?.(to) === true;
+  return !mission.map.has(entry.to) || options.canExitTo?.(entry.to) === true;
 }
 
 /** @deprecated Compatibility alias for older call sites and extensions. */

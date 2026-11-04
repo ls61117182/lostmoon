@@ -1,3 +1,4 @@
+import { footprintDistance, unitOccupiedHexes, unitOccupiesHex } from './UnitFootprint';
 import { loadCampaignShell } from './CampaignUpgrade';
 import { AirbornePlan, planAirborneSupport, landAirborneUnit } from './AirborneSupport';
 /**
@@ -156,7 +157,7 @@ function findShermanLosInfantry(mission: LoadedMission): Unit | null {
   for (const e of mission.enemies) {
     // 仅检查未被压制、距玩家坦克 2 格以内的「徒步类」单位。
     if (e.destroyed || e.suppressed || isAttachedATGunCrew(e) || !isFootUnit(e)) continue;
-    if (hexDistance(e.pos, sh.pos) > 2) continue;
+    if (footprintDistance(e, sh) > 2) continue;
     if (directionTo(e.pos, sh.pos) === null) continue;
     if (mission.map.hasLineOfSight(e.pos, sh.pos)) return e;
   }
@@ -188,12 +189,12 @@ export function spawnMarkerKindForMission(
 }
 
 function unitAt(mission: LoadedMission, pos: { q: number; r: number }): Unit | null {
-  if (mission.sherman.pos.q === pos.q && mission.sherman.pos.r === pos.r) return mission.sherman;
+  if (unitOccupiesHex(mission.sherman, pos)) return mission.sherman;
   for (const a of mission.allies) {
-    if (!a.destroyed && a.pos.q === pos.q && a.pos.r === pos.r) return a;
+    if (!a.destroyed && unitOccupiesHex(a, pos)) return a;
   }
   for (const e of mission.enemies) {
-    if (!e.destroyed && e.pos.q === pos.q && e.pos.r === pos.r) return e;
+    if (!e.destroyed && unitOccupiesHex(e, pos)) return e;
   }
   return null;
 }
@@ -204,10 +205,10 @@ function unitsAt(mission: LoadedMission, pos: { q: number; r: number }): Unit[] 
     units.push(mission.sherman);
   }
   for (const a of mission.allies) {
-    if (!a.destroyed && a.pos.q === pos.q && a.pos.r === pos.r) units.push(a);
+    if (!a.destroyed && unitOccupiesHex(a, pos)) units.push(a);
   }
   for (const e of mission.enemies) {
-    if (!e.destroyed && e.pos.q === pos.q && e.pos.r === pos.r) units.push(e);
+    if (!e.destroyed && unitOccupiesHex(e, pos)) units.push(e);
   }
   return units;
 }
@@ -374,7 +375,7 @@ function hasInfantryAdjacentToSherman(mission: LoadedMission, includeSameHex = f
   // 步兵 / 军官都计入「相邻徒步单位」 —— 任务 8 起军官在相邻齐射事件中与步兵同等参与。
   return mission.enemies.some(
     e => !e.destroyed && !e.suppressed && !isAttachedATGunCrew(e) && isFootUnit(e)
-      && (hexDistance(e.pos, sh.pos) === 1 || (includeSameHex && hexDistance(e.pos, sh.pos) === 0)),
+      && (footprintDistance(e, sh) === 1 || (includeSameHex && footprintDistance(e, sh) === 0)),
   );
 }
 
@@ -401,7 +402,7 @@ function simulateAdjacentInfantryVolleysForTurnEnd(
   // 任务 8 起：军官与步兵同属「徒步类」，未被压制时参与相邻齐射。
   const infs = mission.enemies.filter(
     e => !e.destroyed && !e.suppressed && !isAttachedATGunCrew(e) && isFootUnit(e)
-      && (hexDistance(e.pos, sh.pos) === 1 || (sameHexInfantryTankAttack && hexDistance(e.pos, sh.pos) === 0)),
+      && (footprintDistance(e, sh) === 1 || (sameHexInfantryTankAttack && footprintDistance(e, sh) === 0)),
   );
 
   for (const inf of infs) {
@@ -885,7 +886,7 @@ export function prepareTurnEndEvent(
       const t = mission.map.get(sh.pos);
       // GDD §3.2：桥梁叠加格视同公路（`effectiveDiceTerrain` 把水域+桥梁折算成 'road'），
       // 因此谢尔曼站在桥上也满足「公路地雷」的触发条件。
-      const onRoad = effectiveDiceTerrain(t) === 'road';
+      const onRoad = unitOccupiedHexes(sh).some(pos => effectiveDiceTerrain(mission.map.get(pos)) === 'road');
       if (sh.destroyed || sh.paralyzed || !onRoad) {
         return {
           bodyKey: 'turnEnd.mine.skip',
@@ -945,7 +946,7 @@ export function prepareTurnEndEvent(
     }
     case 'clear_mine': {
       const t = mission.map.get(sh.pos);
-      const onClear = effectiveDiceTerrain(t) === 'clear';
+      const onClear = unitOccupiedHexes(sh).some(pos => effectiveDiceTerrain(mission.map.get(pos)) === 'clear');
       if (sh.destroyed || sh.paralyzed || !onClear) {
         return {
           bodyKey: 'turnEnd.clearMine.skip',
@@ -993,7 +994,7 @@ export function prepareTurnEndEvent(
     }
     case 'heavy_mortar': {
       const spotter = mission.enemies.find(
-        e => !e.destroyed && e.kind === 'japanese_infantry' && hexDistance(e.pos, sh.pos) > 1,
+        e => !e.destroyed && e.kind === 'japanese_infantry' && footprintDistance(e, sh) > 1,
       );
       if (sh.destroyed || !spotter) {
         return {

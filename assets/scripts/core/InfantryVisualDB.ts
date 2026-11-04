@@ -31,9 +31,9 @@ const INFANTRY_VISUAL_CONFIG: Record<InfantryVisualKind, InfantryVisualConfig> =
     { spritePath: "textures/units/Infantry03/spriteFrame", scale: 0.69 },
   ] },
   soviet_infantry: { soldiers: [
-    { spritePath: "textures/units/Infantry01/spriteFrame", scale: 0.6 },
-    { spritePath: "textures/units/Infantry02/spriteFrame", scale: 0.6 },
-    { spritePath: "textures/units/Infantry03/spriteFrame", scale: 0.6 },
+    { spritePath: "textures/units/SovietInfantry01/spriteFrame", scale: 0.6 },
+    { spritePath: "textures/units/SovietInfantry02/spriteFrame", scale: 0.6 },
+    { spritePath: "textures/units/SovietInfantry03/spriteFrame", scale: 0.6 },
   ] },
   japanese_infantry: { soldiers: [
     { spritePath: "textures/units/JapaneseInfantry01/spriteFrame", scale: 0.6 },
