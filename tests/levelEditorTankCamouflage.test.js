@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 require.extensions['.ts'] = (m, file) => m._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2019 } }).outputText, file);
 const { CustomMissionStore } = require('../assets/scripts/core/CustomMissionStore.ts');
+const { removeRailwayHedgeConflicts } = require('../assets/scripts/core/RailwayHedges.ts');
 const source = fs.readFileSync('assets/scripts/view/MainMenuScene.ts', 'utf8');
 const ast = ts.createSourceFile('MainMenuScene.ts', source, ts.ScriptTarget.Latest, true);
 function find(predicate) {
@@ -17,6 +18,7 @@ const builder = find(n => ts.isVariableDeclaration(n) && n.name.getText(ast) ===
 const button = find(n => ts.isCallExpression(n) && n.expression.getText(ast) === 'addPlainBtn' && n.arguments[0].getText(ast).includes('German paint:')).getText(ast);
 function context() {
   return vm.createContext({ captureMissionFields() {}, cloneJson: v => JSON.parse(JSON.stringify(v)), editingExistingMission: null,
+    removeRailwayHedgeConflicts, redrawAllCells() {},
     draftBaseMission: { germanTankCamouflage: 'late_war' }, draftSherman: { kind: 'sherman', at: { col: 0, row: 0 }, facing: 0 },
     draftShermanStartByDice: false, draftName: 'Test', draftDescription: 'Test', draftTerrainCategory: 'europe', cols: 2, rows: 1,
     draftTiles: [[{ t: 'f' }, { t: 'f' }]], draftEnemies: [], draftObjective: { type: 'destroy_all_enemies' }, draftRoundEvents: [],

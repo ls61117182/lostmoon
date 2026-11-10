@@ -67,10 +67,23 @@ function penetration(a: WreckPolygon, b: WreckPolygon): number {
   return contact ? Math.hypot(contact.x, contact.y) : 0;
 }
 
+/** Velocity at the contacting part of a rotating hull, including its rear sweep. */
+function contactTravel(wreck: WreckBody, mover: WreckBody, travel: WreckPoint, previous?: WreckBody): WreckPoint {
+  if (!previous || Math.abs(mover.angle - previous.angle) < EPS) return travel;
+  const ux = Math.cos(mover.angle), uy = Math.sin(mover.angle);
+  const dx = wreck.x - mover.x, dy = wreck.y - mover.y;
+  const forward = Math.max(-mover.halfLength, Math.min(mover.halfLength, dx * ux + dy * uy));
+  const right = Math.max(-mover.halfWidth, Math.min(mover.halfWidth, -dx * uy + dy * ux));
+  const px = Math.cos(previous.angle), py = Math.sin(previous.angle);
+  return { x: mover.x - previous.x + forward * (ux - px) - right * (uy - py),
+    y: mover.y - previous.y + forward * (uy - py) + right * (ux - px) };
+}
+
 /** A jam still creates resistance; reversing away from contact does not. */
-export function tankWreckPushContact(wreck: WreckBody, mover: WreckBody, travel: WreckPoint): WreckPoint | null {
+export function tankWreckPushContact(wreck: WreckBody, mover: WreckBody, travel: WreckPoint, previous?: WreckBody): WreckPoint | null {
   const contact = wreckPolygonContact(wreckBodyPolygon(wreck), wreckBodyPolygon(mover));
-  if (!contact || contact.x * travel.x + contact.y * travel.y < -EPS) return null;
+  const direction = contactTravel(wreck, mover, travel, previous);
+  if (!contact || contact.x * direction.x + contact.y * direction.y < -EPS) return null;
   return contact;
 }
 
@@ -83,6 +96,7 @@ export function tankWreckPushContact(wreck: WreckBody, mover: WreckBody, travel:
 export function pushTankWrecks(
   wrecks: WreckBody[], mover: WreckBody, travel: WreckPoint,
   liveTanks: readonly WreckBody[], buildings: readonly WreckPolygon[],
+  previousMover?: WreckBody,
 ): void {
   const speed = Math.hypot(travel.x, travel.y);
   if (speed < EPS) return;
@@ -91,13 +105,16 @@ export function pushTankWrecks(
 
   const push = (wreck: WreckBody, source: WreckBody, direction: WreckPoint, depth: number) => {
     if (visited.has(wreck.id) || depth > MAX_CHAIN) return;
+    if (depth === 0) direction = contactTravel(wreck, source, direction, previousMover);
+    const contactSpeed = Math.hypot(direction.x, direction.y);
+    if (contactSpeed < EPS) return;
     const original = { ...wreck };
     const shape = wreckBodyPolygon(wreck);
     const sourceShape = wreckBodyPolygon(source);
     const contact = tankWreckPushContact(wreck, source, direction);
     if (!contact) return;
     visited.add(wreck.id);
-    const distance = Math.min(Math.hypot(contact.x, contact.y) + 0.001, speed * 2);
+    const distance = Math.min(Math.hypot(contact.x, contact.y) + 0.001, (previousMover ? contactSpeed : speed) * 2);
     const contactLength = Math.hypot(contact.x, contact.y);
     const desired = { x: contact.x / contactLength * distance, y: contact.y / contactLength * distance };
     const forward = { x: direction.x / Math.hypot(direction.x, direction.y), y: direction.y / Math.hypot(direction.x, direction.y) };

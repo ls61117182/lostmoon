@@ -57,7 +57,7 @@ assert.match(scene, /precisionFire\s*&& resolvedLoadedShell\(this\.mission!\.she
 const overlayMethod = scene.match(/  private redrawTurretAimOverlay\(\) \{[\s\S]*?\n  \}/)[0];
 const overlayCode = ts.transpileModule('class OverlayHarness { '+overlayMethod+' }', {compilerOptions:{target:ts.ScriptTarget.ES2020}}).outputText;
 const hex = { keyOf: p=>p.q+','+p.r };
-const OverlayHarness = new Function('resolvedLoadedShell','GameSession','HexMap','isMainGunLoaded','neighbor',overlayCode+'; return OverlayHarness;')(resolvedLoadedShell,{gameMode:'hardcore'},hex,()=>true,()=>({q:99,r:99}));
+const OverlayHarness = new Function('resolvedLoadedShell','GameSession','HexMap','isMainGunLoaded','neighbor','unitTurretHex',overlayCode+'; return OverlayHarness;')(resolvedLoadedShell,{gameMode:'hardcore'},hex,()=>true,()=>({q:99,r:99}),require('./helpers/BattleSceneMethods.cjs').footprintGlobals.unitTurretHex);
 const h = new OverlayHarness();
 const tiles = [{pos:{q:1,r:0}},{pos:{q:2,r:0}}];
 const icons = {clear:()=>{}};

@@ -1,0 +1,433 @@
+{
+  "version": 1,
+  "size": {
+    "width": 256,
+    "height": 256
+  },
+  "gauge": 22,
+  "ballastWidth": 47,
+  "directionOrder": [
+    "E",
+    "SE",
+    "SW",
+    "W",
+    "NW",
+    "NE"
+  ],
+  "baseTerrainRules": "unchanged",
+  "allowedTerrain": [
+    "field",
+    "road",
+    "mud"
+  ],
+  "trainRules": "deferred",
+  "sourceArtFolder": "source_art/terrain/railway-v1-20261105",
+  "sprites": [
+    "railway_100000_v1.png",
+    "railway_100000_crossing_v1.png",
+    "railway_110000_v1.png",
+    "railway_110000_crossing_v1.png",
+    "railway_101000_v1.png",
+    "railway_101000_crossing_v1.png",
+    "railway_111000_v1.png",
+    "railway_111000_crossing_v1.png",
+    "railway_100100_v1.png",
+    "railway_100100_crossing_v1.png",
+    "railway_110100_v1.png",
+    "railway_110100_crossing_v1.png",
+    "railway_101100_v1.png",
+    "railway_101100_crossing_v1.png",
+    "railway_111100_v1.png",
+    "railway_111100_crossing_v1.png",
+    "railway_101010_v1.png",
+    "railway_101010_crossing_v1.png",
+    "railway_111010_v1.png",
+    "railway_111010_crossing_v1.png",
+    "railway_110110_v1.png",
+    "railway_110110_crossing_v1.png",
+    "railway_111110_v1.png",
+    "railway_111110_crossing_v1.png",
+    "railway_111111_v1.png",
+    "railway_111111_crossing_v1.png"
+  ],
+  "variants": [
+    {
+      "connections": "100000",
+      "canonicalMask": 1,
+      "rotationDegrees": 0,
+      "surface": "railway_100000_v1.png"
+    },
+    {
+      "connections": "010000",
+      "canonicalMask": 1,
+      "rotationDegrees": -60,
+      "surface": "railway_100000_v1.png"
+    },
+    {
+      "connections": "110000",
+      "canonicalMask": 3,
+      "rotationDegrees": 0,
+      "surface": "railway_110000_v1.png"
+    },
+    {
+      "connections": "001000",
+      "canonicalMask": 1,
+      "rotationDegrees": -120,
+      "surface": "railway_100000_v1.png"
+    },
+    {
+      "connections": "101000",
+      "canonicalMask": 5,
+      "rotationDegrees": 0,
+      "surface": "railway_101000_v1.png"
+    },
+    {
+      "connections": "011000",
+      "canonicalMask": 3,
+      "rotationDegrees": -60,
+      "surface": "railway_110000_v1.png"
+    },
+    {
+      "connections": "111000",
+      "canonicalMask": 7,
+      "rotationDegrees": 0,
+      "surface": "railway_111000_v1.png"
+    },
+    {
+      "connections": "000100",
+      "canonicalMask": 1,
+      "rotationDegrees": -180,
+      "surface": "railway_100000_v1.png"
+    },
+    {
+      "connections": "100100",
+      "canonicalMask": 9,
+      "rotationDegrees": 0,
+      "surface": "railway_100100_v1.png"
+    },
+    {
+      "connections": "010100",
+      "canonicalMask": 5,
+      "rotationDegrees": -60,
+      "surface": "railway_101000_v1.png"
+    },
+    {
+      "connections": "110100",
+      "canonicalMask": 11,
+      "rotationDegrees": 0,
+      "surface": "railway_110100_v1.png"
+    },
+    {
+      "connections": "001100",
+      "canonicalMask": 3,
+      "rotationDegrees": -120,
+      "surface": "railway_110000_v1.png"
+    },
+    {
+      "connections": "101100",
+      "canonicalMask": 13,
+      "rotationDegrees": 0,
+      "surface": "railway_101100_v1.png"
+    },
+    {
+      "connections": "011100",
+      "canonicalMask": 7,
+      "rotationDegrees": -60,
+      "surface": "railway_111000_v1.png"
+    },
+    {
+      "connections": "111100",
+      "canonicalMask": 15,
+      "rotationDegrees": 0,
+      "surface": "railway_111100_v1.png"
+    },
+    {
+      "connections": "000010",
+      "canonicalMask": 1,
+      "rotationDegrees": -240,
+      "surface": "railway_100000_v1.png"
+    },
+    {
+      "connections": "100010",
+      "canonicalMask": 5,
+      "rotationDegrees": -240,
+      "surface": "railway_101000_v1.png"
+    },
+    {
+      "connections": "010010",
+      "canonicalMask": 9,
+      "rotationDegrees": -60,
+      "surface": "railway_100100_v1.png"
+    },
+    {
+      "connections": "110010",
+      "canonicalMask": 13,
+      "rotationDegrees": -240,
+      "surface": "railway_101100_v1.png"
+    },
+    {
+      "connections": "001010",
+      "canonicalMask": 5,
+      "rotationDegrees": -120,
+      "surface": "railway_101000_v1.png"
+    },
+    {
+      "connections": "101010",
+      "canonicalMask": 21,
+      "rotationDegrees": 0,
+      "surface": "railway_101010_v1.png"
+    },
+    {
+      "connections": "011010",
+      "canonicalMask": 11,
+      "rotationDegrees": -60,
+      "surface": "railway_110100_v1.png"
+    },
+    {
+      "connections": "111010",
+      "canonicalMask": 23,
+      "rotationDegrees": 0,
+      "surface": "railway_111010_v1.png"
+    },
+    {
+      "connections": "000110",
+      "canonicalMask": 3,
+      "rotationDegrees": -180,
+      "surface": "railway_110000_v1.png"
+    },
+    {
+      "connections": "100110",
+      "canonicalMask": 11,
+      "rotationDegrees": -180,
+      "surface": "railway_110100_v1.png"
+    },
+    {
+      "connections": "010110",
+      "canonicalMask": 13,
+      "rotationDegrees": -60,
+      "surface": "railway_101100_v1.png"
+    },
+    {
+      "connections": "110110",
+      "canonicalMask": 27,
+      "rotationDegrees": 0,
+      "surface": "railway_110110_v1.png"
+    },
+    {
+      "connections": "001110",
+      "canonicalMask": 7,
+      "rotationDegrees": -120,
+      "surface": "railway_111000_v1.png"
+    },
+    {
+      "connections": "101110",
+      "canonicalMask": 23,
+      "rotationDegrees": -120,
+      "surface": "railway_111010_v1.png"
+    },
+    {
+      "connections": "011110",
+      "canonicalMask": 15,
+      "rotationDegrees": -60,
+      "surface": "railway_111100_v1.png"
+    },
+    {
+      "connections": "111110",
+      "canonicalMask": 31,
+      "rotationDegrees": 0,
+      "surface": "railway_111110_v1.png"
+    },
+    {
+      "connections": "000001",
+      "canonicalMask": 1,
+      "rotationDegrees": -300,
+      "surface": "railway_100000_v1.png"
+    },
+    {
+      "connections": "100001",
+      "canonicalMask": 3,
+      "rotationDegrees": -300,
+      "surface": "railway_110000_v1.png"
+    },
+    {
+      "connections": "010001",
+      "canonicalMask": 5,
+      "rotationDegrees": -300,
+      "surface": "railway_101000_v1.png"
+    },
+    {
+      "connections": "110001",
+      "canonicalMask": 7,
+      "rotationDegrees": -300,
+      "surface": "railway_111000_v1.png"
+    },
+    {
+      "connections": "001001",
+      "canonicalMask": 9,
+      "rotationDegrees": -120,
+      "surface": "railway_100100_v1.png"
+    },
+    {
+      "connections": "101001",
+      "canonicalMask": 11,
+      "rotationDegrees": -300,
+      "surface": "railway_110100_v1.png"
+    },
+    {
+      "connections": "011001",
+      "canonicalMask": 13,
+      "rotationDegrees": -300,
+      "surface": "railway_101100_v1.png"
+    },
+    {
+      "connections": "111001",
+      "canonicalMask": 15,
+      "rotationDegrees": -300,
+      "surface": "railway_111100_v1.png"
+    },
+    {
+      "connections": "000101",
+      "canonicalMask": 5,
+      "rotationDegrees": -180,
+      "surface": "railway_101000_v1.png"
+    },
+    {
+      "connections": "100101",
+      "canonicalMask": 13,
+      "rotationDegrees": -180,
+      "surface": "railway_101100_v1.png"
+    },
+    {
+      "connections": "010101",
+      "canonicalMask": 21,
+      "rotationDegrees": -60,
+      "surface": "railway_101010_v1.png"
+    },
+    {
+      "connections": "110101",
+      "canonicalMask": 23,
+      "rotationDegrees": -300,
+      "surface": "railway_111010_v1.png"
+    },
+    {
+      "connections": "001101",
+      "canonicalMask": 11,
+      "rotationDegrees": -120,
+      "surface": "railway_110100_v1.png"
+    },
+    {
+      "connections": "101101",
+      "canonicalMask": 27,
+      "rotationDegrees": -120,
+      "surface": "railway_110110_v1.png"
+    },
+    {
+      "connections": "011101",
+      "canonicalMask": 23,
+      "rotationDegrees": -60,
+      "surface": "railway_111010_v1.png"
+    },
+    {
+      "connections": "111101",
+      "canonicalMask": 31,
+      "rotationDegrees": -300,
+      "surface": "railway_111110_v1.png"
+    },
+    {
+      "connections": "000011",
+      "canonicalMask": 3,
+      "rotationDegrees": -240,
+      "surface": "railway_110000_v1.png"
+    },
+    {
+      "connections": "100011",
+      "canonicalMask": 7,
+      "rotationDegrees": -240,
+      "surface": "railway_111000_v1.png"
+    },
+    {
+      "connections": "010011",
+      "canonicalMask": 11,
+      "rotationDegrees": -240,
+      "surface": "railway_110100_v1.png"
+    },
+    {
+      "connections": "110011",
+      "canonicalMask": 15,
+      "rotationDegrees": -240,
+      "surface": "railway_111100_v1.png"
+    },
+    {
+      "connections": "001011",
+      "canonicalMask": 13,
+      "rotationDegrees": -120,
+      "surface": "railway_101100_v1.png"
+    },
+    {
+      "connections": "101011",
+      "canonicalMask": 23,
+      "rotationDegrees": -240,
+      "surface": "railway_111010_v1.png"
+    },
+    {
+      "connections": "011011",
+      "canonicalMask": 27,
+      "rotationDegrees": -60,
+      "surface": "railway_110110_v1.png"
+    },
+    {
+      "connections": "111011",
+      "canonicalMask": 31,
+      "rotationDegrees": -240,
+      "surface": "railway_111110_v1.png"
+    },
+    {
+      "connections": "000111",
+      "canonicalMask": 7,
+      "rotationDegrees": -180,
+      "surface": "railway_111000_v1.png"
+    },
+    {
+      "connections": "100111",
+      "canonicalMask": 15,
+      "rotationDegrees": -180,
+      "surface": "railway_111100_v1.png"
+    },
+    {
+      "connections": "010111",
+      "canonicalMask": 23,
+      "rotationDegrees": -180,
+      "surface": "railway_111010_v1.png"
+    },
+    {
+      "connections": "110111",
+      "canonicalMask": 31,
+      "rotationDegrees": -180,
+      "surface": "railway_111110_v1.png"
+    },
+    {
+      "connections": "001111",
+      "canonicalMask": 15,
+      "rotationDegrees": -120,
+      "surface": "railway_111100_v1.png"
+    },
+    {
+      "connections": "101111",
+      "canonicalMask": 31,
+      "rotationDegrees": -120,
+      "surface": "railway_111110_v1.png"
+    },
+    {
+      "connections": "011111",
+      "canonicalMask": 31,
+      "rotationDegrees": -60,
+      "surface": "railway_111110_v1.png"
+    },
+    {
+      "connections": "111111",
+      "canonicalMask": 63,
+      "rotationDegrees": 0,
+      "surface": "railway_111111_v1.png"
+    }
+  ]
+}

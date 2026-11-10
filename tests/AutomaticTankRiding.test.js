@@ -16,9 +16,9 @@ const GameSession = { gameMode: 'hardcore', isPvp: false };
 const Scene = require('./helpers/BattleSceneMethods.cjs')([
   'playMoveStartSound', 'completePhaseDiceAction', 'autoEndPhaseIfDone', 'endCurrentSubPhase', 'applyMainGunAttackResult',
   'rollHighExplosiveCollateralResults', 'applyHighExplosiveAttackResult', 'applyMachineGunAttackResult',
-  'runNextEnemyStep', 'executeEnemyAction', 'aiMoveDestinationForAction',
+  'runNextEnemyStep', 'executeEnemyAction', 'aiMoveDestinationForAction', 'deferRegionalAI',
   'recordPlayerBattleKill', 'applyAttackDestroyedVisualAtImpact',
-], { ...types, ...hex, ...riding, ...combat, ...statistics, GameSession, rollHEAttack: combat.rollHighExplosiveAttack,
+], { ...types, ...hex, ...riding, ...combat, ...statistics, GameSession, performance, rollHEAttack: combat.rollHighExplosiveAttack,
   startManeuverSound() {}, playInfantryMove() {}, markAmbushAction() {}, clearLockedFire() {}, endAmbushTurn() {},
   unitDisplayName: kind => kind, describeEntry: entry => entry.primary });
 function unit(id, kind, controller = 'ai') {

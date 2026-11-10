@@ -21,14 +21,14 @@ assert.match(fogSource, /export function currentGunnerVisionRange/, 'gunner rang
 assert.match(fogSource, /export function currentInteriorVisionRange/, 'interior range needs an independent resolver');
 assert.match(
   fogSource,
-  /const tank = isTankUnit\(unit\);[\s\S]*?if \(tank && !openHatch\)[\s\S]*?currentInteriorVisionRange\(unit\)/,
-  'only closed tanks should add the independent interior ring',
+  /const tank = isTankUnit\(unit\);[\s\S]*?if \(tank\)[\s\S]*?openHatch \? DEFAULT_INTERIOR_VISION_RANGE : currentInteriorVisionRange\(unit\)/,
+  'open tanks should retain a one-hex perimeter while closed tanks use their configured interior ring',
 );
 assert.match(
   fogSource,
   /const gunnerVisionRange = tank \? currentGunnerVisionRange\(unit, weather\) : commanderVisionRange/,
   'tank gunner rays must not reuse commander range',
 );
-assert.match(docSource, /开舱时 = 车长视野 ∪ 炮手视野；关舱或车长阵亡时 = 车内视野 ∪ 炮手视野/, 'GDD must define union semantics');
+assert.match(docSource, /开舱时 = 车长视野 ∪ 车身周围 1 格近距视野 ∪ 炮手视野；关舱或车长阵亡时 = 车内视野 ∪ 炮手视野/, 'GDD must define union semantics');
 
 console.log('Hardcore tank vision tests passed');

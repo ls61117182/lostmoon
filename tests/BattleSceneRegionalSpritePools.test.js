@@ -32,17 +32,20 @@ function fixture() {
       map: { sameRegion: (a, b) => (a.q < 50) === (b.q < 50) } },
     enemyTopSpritePool: [], commanderHatchSpritePool: [], infantryTopSpritePool: [], officerTopSpritePool: [],
     project: (q, r) => ({ x: q, y: r }), enemySupportsSplitTurret: () => true,
+    interpolatedPos: unit => ({ x: unit.pos.q, y: unit.pos.r }),
     currentEnemyTurretLerp: () => null, currentShermanTurretLerp: () => null,
     commanderHatchSpriteFrames: {}, mainGunRecoilOffsetFor: () => ({ x: 0, y: 0 }),
     tankVisualColor: color => color, recordVectorSilhouette() {},
     g: { circle: () => fallbacks++, fill() {}, stroke() {} },
     silhouetteClaimed: new Set(), silhouetteSources: new Map(), tankContentNode: new Node('TankContent'),
+    tankTurretContentNode: new Node('TankTurretsAboveAllHulls'),
     unitSilhouetteColor: () => null, shouldDisplayUnitOutline: () => false,
     applySplitTankHullSprite: (slot, unit) => { slot.node.active = true; slot.part = 'hull'; slot.owner = unit.id; },
     applySplitTankTurretSprite: (slot, unit) => { slot.node.active = true; slot.part = 'turret'; slot.owner = unit.id; },
     destroyedTankTopMetaFor: () => ({}),
     drawDestroyedTankSprite: function(unit) { const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++]; slot.owner = unit.id; slot.part = 'wreck'; slot.node.active = true; return true; },
   });
+  scene.tankContentNode.addChild(scene.tankTurretContentNode);
   scene.growUnitSpritePool(scene.enemyTopSpritePool, 16, 'EnemyTop');
   scene.tankWreckVisualLayer = () => scene.tankContentNode;
   return { scene, player, fallbacks: () => fallbacks };
@@ -75,7 +78,10 @@ test('entering a crowded region renders every tank with its own hull and turret 
     assert.equal(hull.owner, newRegion[i].id); assert.equal(turret.owner, newRegion[i].id);
     assert.equal(hull.part, 'hull'); assert.equal(turret.part, 'turret');
     const siblings = scene.tankContentNode.children;
-    assert(siblings.indexOf(hull.node) < siblings.indexOf(turret.node));
+    assert.equal(hull.node.parent, scene.tankContentNode);
+    assert.equal(turret.node.parent, scene.tankTurretContentNode);
+    assert(siblings.indexOf(hull.node) < siblings.indexOf(scene.tankTurretContentNode));
+    assert.equal(siblings.at(-1), scene.tankTurretContentNode);
   }
   const allocated = scene.enemyTopSpritePool.length;
   for (let i = 0; i < 6; i++) { player.pos.q = i % 2 ? 100 : 0; redrawUnits(scene, units); }

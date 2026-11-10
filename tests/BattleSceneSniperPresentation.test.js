@@ -22,7 +22,9 @@ assert.match(
 
 const spawn = battleScene.match(/private\s+spawnSniperBulletTrace\s*\([\s\S]*?\n  }\n\n/);
 assert(spawn, 'spawnSniperBulletTrace() should be found');
-assert.match(spawn[0], /infantrySquadOffsets\(this\.hexSize/);
+assert.match(spawn[0], /const squadOffsets = this\.infantryFormationOffsets\(attacker\)/);
+assert.match(spawn[0], /const targetHex = unitTurretHex\(target\)/);
+assert.match(spawn[0], /impactHex: \{ \.\.\.targetHex \}/);
 assert.match(spawn[0], /shooterIndex/);
 assert.match(spawn[0], /new Node\('SniperBulletTrace'\)/);
 

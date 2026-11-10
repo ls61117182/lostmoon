@@ -30,12 +30,12 @@ assert.match(
 );
 assert.match(
   source,
-  /deploySmokeAt\(s\.pos, 'friendly', true\)/,
+  /deployUnitSmoke\(s, 'friendly', true\)/,
   'player smoke deployment should start the visibility transition',
 );
 assert.match(
   source,
-  /case 'smoke':[\s\S]*?deploySmokeAt\(enemy\.pos,[\s\S]*?, true\)/,
+  /case 'smoke':[\s\S]*?deployUnitSmoke\(enemy,[\s\S]*?, true\)/,
   'enemy AI smoke deployment should start the same visibility transition',
 );
 assert.match(
@@ -45,7 +45,7 @@ assert.match(
 );
 assert.match(
   source,
-  /for \(const unit of this\.mission\.enemies\)[\s\S]*?deploySmokeAt\(unit\.pos, 'enemy', true\)/,
+  /for \(const unit of this\.mission\.enemies\)[\s\S]*?deployUnitSmoke\(unit, 'enemy', true\)/,
   'legacy enemy smoke state should also animate lost vision when converted',
 );
 assert.match(

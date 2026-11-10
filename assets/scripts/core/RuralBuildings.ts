@@ -38,7 +38,7 @@ export function ruralVillageProps(q:number,r:number,buildings:readonly RuralBuil
 }
 
 /** Coordinates use hex radius 1 and Y-up. Buildings remain stable across redraws. */
-export function ruralBuildingLayout(q:number,r:number,roadDistance?:(x:number,y:number)=>number):RuralBuilding[]{
+export function ruralBuildingLayout(q:number,r:number,roadDistance?:(x:number,y:number)=>number,footprintSteps=2):RuralBuilding[]{
   let state=(Math.imul(q,73856093)^Math.imul(r,19349663)^0x5f3759df)>>>0;
   const random=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};
   const target=roadDistance?4:6,minimum=roadDistance?3:5;
@@ -54,9 +54,10 @@ export function ruralBuildingLayout(q:number,r:number,roadDistance?:(x:number,y:
     }
     candidates.push({x,y,angle,priority:random()});
   }
+  const footprint=Array.from({length:footprintSteps+1},(_,i)=>i/footprintSteps-.5);
   const valid=(b:RuralBuilding,placed:RuralBuilding[])=>{
     const c=Math.cos(b.angle),s=Math.sin(b.angle);
-    for(const u of [-.5,0,.5])for(const v of [-.5,0,.5]){
+    for(const u of footprint)for(const v of footprint){
       const x=b.x+u*b.width*c-v*b.height*s,y=b.y+u*b.width*s+v*b.height*c;
       for(let i=0;i<6;i++)if(x*Math.cos(i*Math.PI/3)+y*Math.sin(i*Math.PI/3)>.866-.025)return false;
       if(roadDistance&&roadDistance(x,y)<.025)return false;

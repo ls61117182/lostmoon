@@ -6,9 +6,9 @@ const axialToPixel = ({ q, r }, size) => ({ x: Math.sqrt(3) * size * (q + r / 2)
 class Vec3 { constructor(x, y, z) { Object.assign(this, { x, y, z }); } }
 class Color { constructor(r, g, b, a) { Object.assign(this, { r, g, b, a }); } }
 const UITransform = {};
-const Scene = sceneMethods(['applyBattlefieldCameraRotation', 'mapFitScale', 'pickTileAtScreenUi',
+const Scene = sceneMethods(['applyBattlefieldCameraRotation', 'mapPanBounds', 'tileBoundsCenter', 'pickTileAtScreenUi',
   'mapScreenOffset', 'positionMapScreenNode', 'screenAlignedMapGraphics', 'advanceFloaters'], {
-  offsetToAxial, axialToPixel, Vec3, UITransform, Color,
+  offsetToAxial, axialToPixel, Vec3, UITransform, Color, BOARD_CENTER_OFFSET_Y: 38,
 });
 const scene = new Scene();
 scene.battlefieldViewNode = { angle: 0 };
@@ -28,17 +28,23 @@ const tiles = columns.flatMap(([first, last], row) => Array.from({ length: last 
   (_, i) => ({ pos: offsetToAxial({ col: first + i, row }) })));
 scene.cameraReferenceTiles = () => tiles;
 scene.campaignRuntime = null;
-assert.equal(scene.mapFitScale(), 1);
+scene.hexSize = 60;
+const center = scene.tileBoundsCenter(tiles);
+scene.offsetX = -center.x;
+scene.offsetY = center.y + 38;
+assert.equal(scene.mapPanBounds(), null);
 scene.mission.data.cameraRotation = 90;
-const scale = scene.mapFitScale();
+const bounds = scene.mapPanBounds();
 const width = Math.max(...tiles.map(t => axialToPixel(t.pos, 1).x))
   - Math.min(...tiles.map(t => axialToPixel(t.pos, 1).x)) + Math.sqrt(3);
 const height = Math.max(...tiles.map(t => axialToPixel(t.pos, 1).y))
   - Math.min(...tiles.map(t => axialToPixel(t.pos, 1).y)) + 2;
-assert.ok(Math.abs(scale - height / width) < 1e-10, 'the rotated footprint fits the original board height');
+assert.ok(Math.abs(bounds.maxX - (width - height) * 60 / 2) < 1e-10,
+  'the rotated footprint pans across its excess width without shrinking hexes');
+assert.equal(bounds.minY, 0, 'the fitting rotated axis stays centered');
 scene.campaignRuntime = { segments: [0, 1] };
 scene.cameraReferenceTilesForSegment = index => index === 0 ? tiles : tiles.map(t => ({ pos: { q: t.pos.q + 100, r: t.pos.r } }));
-assert.ok(Math.abs(scene.mapFitScale() - scale) < 1e-10, 'campaign offsets do not affect rotated sizing');
+assert.deepEqual(scene.mapPanBounds(), bounds, 'other campaign segments do not affect the current drag range');
 
 // Exercise tile picking with an inverse view transform and a panned map.
 const pivotY = 38, panX = 25, panY = -60;

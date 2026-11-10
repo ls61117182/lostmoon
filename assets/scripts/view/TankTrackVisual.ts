@@ -139,6 +139,78 @@ export interface TankTrackPoint {
   y: number;
 }
 
+/** Symmetric starts/stops, with zero velocity and acceleration at both ends. */
+export function tankSteeringProgress(time: number): number {
+  const t = Math.max(0, Math.min(1, time));
+  return t * t * t * (10 + t * (-15 + 6 * t));
+}
+
+/** Heading follows the same angular progress as the circular driving path. */
+export function tankSteeringHeadingAt(fromAngle: number, toAngle: number, progress: number): { ux: number; uy: number } {
+  const delta = Math.atan2(Math.sin(toAngle - fromAngle), Math.cos(toAngle - fromAngle));
+  const angle = fromAngle + delta * Math.max(0, Math.min(1, progress));
+  return { ux: Math.cos(angle), uy: Math.sin(angle) };
+}
+
+/** Follow the circular arc joining two hull centres, with the hull tangent to it. */
+export function tankSteeringPoseAt(
+  from: TankTrackPoint, to: TankTrackPoint,
+  fromAngle: number, toAngle: number, progress: number,
+): TankTrackPoint & { ux: number; uy: number } {
+  const p = Math.max(0, Math.min(1, progress));
+  const heading = tankSteeringHeadingAt(fromAngle, toAngle, p);
+  if (p === 0) return { ...from, ...heading };
+  if (p === 1) return { ...to, ...heading };
+  const delta = Math.atan2(Math.sin(toAngle - fromAngle), Math.cos(toAngle - fromAngle));
+  const dx = to.x - from.x, dy = to.y - from.y;
+  if (Math.abs(delta) < 1e-6 || Math.hypot(dx, dy) < 1e-6) {
+    return { x: from.x + dx * p, y: from.y + dy * p, ...heading };
+  }
+  // The circle centre lies on the chord's perpendicular bisector. For a legal
+  // two-hex turn the chord bisects the start/end headings, so its arc is tangent
+  // to the hull at every point instead of sliding diagonally under a turning hull.
+  const offset = 0.5 / Math.tan(delta / 2);
+  const centerX = (from.x + to.x) / 2 - dy * offset;
+  const centerY = (from.y + to.y) / 2 + dx * offset;
+  const radiusX = from.x - centerX, radiusY = from.y - centerY;
+  const cos = Math.cos(delta * p), sin = Math.sin(delta * p);
+  return { x: centerX + radiusX * cos - radiusY * sin,
+    y: centerY + radiusX * sin + radiusY * cos, ...heading };
+}
+
+/**
+ * A translating turn is not a pivot arc. Sample the rigid hull's four tread ends
+ * along the same circular path and tangent heading used to render the vehicle.
+ * progress is the smoothed angular/arc-length progress.
+ */
+export function tankTrackSteeringPaths(
+  from: TankTrackPoint, to: TankTrackPoint,
+  halfBodyLength: number, halfGap: number,
+  fromAngle: number, toAngle: number, progress: number,
+  offsetForward = 0, offsetRight = 0,
+): TankTrackPoint[][] {
+  const p = Math.max(0, Math.min(1, progress));
+  const angle = Math.abs(Math.atan2(Math.sin(toAngle - fromAngle), Math.cos(toAngle - fromAngle)));
+  const chordLength = Math.hypot(to.x - from.x, to.y - from.y);
+  const arcLength = angle < 1e-6 ? chordLength : chordLength * angle / (2 * Math.sin(angle / 2));
+  // Fixed full-manoeuvre samples keep the already-laid trail stable across frames.
+  const samples = Math.max(1, Math.ceil((arcLength
+    + Math.hypot(halfBodyLength + Math.abs(offsetForward), halfGap + Math.abs(offsetRight)) * angle) / 3));
+  const progressSamples = [0];
+  for (let i = 1; i / samples < p; i++) progressSamples.push(i / samples);
+  if (p > 0) progressSamples.push(p);
+  return [
+    [halfBodyLength, halfGap], [halfBodyLength, -halfGap],
+    [-halfBodyLength, halfGap], [-halfBodyLength, -halfGap],
+  ].map(([forward, lateral]) => progressSamples.map(t => {
+    const pose = tankSteeringPoseAt(from, to, fromAngle, toAngle, t);
+    return {
+      x: pose.x + pose.ux * (offsetForward + forward) + pose.uy * offsetRight - pose.uy * lateral,
+      y: pose.y + pose.uy * (offsetForward + forward) - pose.ux * offsetRight + pose.ux * lateral,
+    };
+  }));
+}
+
 export interface TankTrackRenderedSegment {
   fromX: number;
   fromY: number;

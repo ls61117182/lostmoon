@@ -131,12 +131,18 @@ export function regionalSupportStep(mission: LoadedMission, actor: Unit): Axial 
       || hexDistance(actor.pos, a.region.center) - hexDistance(actor.pos, b.region.center)
       || a.region.id.localeCompare(b.region.id));
   const current = candidates.find(item => item.region.id === state.supportTargets[actor.id]);
-  const currentRoute = current ? routeToRegion(mission, actor, current.region.id) : null;
+  // Reuse attempts only inside this decision; occupancy/terrain may change at the next action.
+  const routes = new Map<string, Axial[] | null>();
+  const routeFor = (id: string) => {
+    if (!routes.has(id)) routes.set(id, routeToRegion(mission, actor, id));
+    return routes.get(id)!;
+  };
+  const currentRoute = current ? routeFor(current.region.id) : null;
   if (current && currentRoute?.length && !(current.intel.state !== 'contested' && candidates.some(item => item.intel.state === 'contested'))) {
     return currentRoute[0];
   }
   for (const candidate of candidates) {
-    const route = routeToRegion(mission, actor, candidate.region.id);
+    const route = routeFor(candidate.region.id);
     if (!route?.length) continue;
     state.supportTargets[actor.id] = candidate.region.id;
     return route[0];
@@ -149,8 +155,8 @@ export function currentRegionDefinition(mission: LoadedMission): MultiRegionDefi
   return mission.data.multiRegion?.regions.find(region => region.id === regionAt(mission, mission.sherman.pos));
 }
 
-export function regionalSupportTurn(mission: LoadedMission, actor: Unit): 'stay' | 'cw' | 'ccw' | null {
-  const next = regionalSupportStep(mission, actor);
+export function regionalSupportTurn(mission: LoadedMission, actor: Unit,
+  next: Axial | null = regionalSupportStep(mission, actor)): 'stay' | 'cw' | 'ccw' | null {
   if (!next || actor.facing === null) return null;
   const desired = directionTo(actor.pos, next);
   if (desired === null) return null;

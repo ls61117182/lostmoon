@@ -104,15 +104,16 @@ export function computeUnitVisibleHexes(map: HexMap, unit: Unit, weather?: Weath
   const turret = unitAtHex(unit, unitTurretHex(unit));
   turret.interiorVisionRange = 0;
   const visible = computePointVisibleHexes(map, turret, weather, smokeHexes);
-  if (unit.hatchOpen !== true || unit.crew?.commander === false) {
-    for (const pos of unitOccupiedHexes(unit)) {
-      const interior = unitAtHex(unit, pos);
-      interior.hatchOpen = false;
-      interior.gunnerVisionRange = 0;
-      interior.interiorVisionRange = currentInteriorVisionRange(unit);
-      // Point-only interior pass must not move back to the turret origin.
-      for (const key of computePointVisibleHexes(map, interior, weather, smokeHexes)) visible.add(key);
-    }
+  const openHatch = unit.hatchOpen === true && unit.crew?.commander !== false;
+  for (const pos of unitOccupiedHexes(unit)) {
+    const interior = unitAtHex(unit, pos);
+    interior.hatchOpen = false;
+    interior.gunnerVisionRange = 0;
+    // Opening the hatch keeps the one-hex body perimeter in addition to the
+    // commander's turret-centred sight. Closed-hatch range bonuses stay separate.
+    interior.interiorVisionRange = openHatch ? DEFAULT_INTERIOR_VISION_RANGE : currentInteriorVisionRange(unit);
+    // Point-only interior pass must not move back to the turret origin.
+    for (const key of computePointVisibleHexes(map, interior, weather, smokeHexes)) visible.add(key);
   }
   return visible;
 }
@@ -160,8 +161,8 @@ function computePointVisibleHexes(
   // regardless of where its barrel was aimed during the previous attack.
   if (heavyArtillery) {
     if (unit.facing === null) return visible;
-    for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) > commanderVisionRange) continue;
+    for (const tile of map.tilesInRange(unit.pos, commanderVisionRange)) {
+      if (!map.sameRegion(unit.pos, tile.pos)) continue;
       const flank = diagonalMainGunDirectionForHex(map, unit, tile.pos, weather, smokeHexes);
       const direction = flank ?? fireDirectionTo(unit.pos, tile.pos);
       if (direction === null || turretTurnDistance(unit.facing, direction) > 1) continue;
@@ -174,29 +175,30 @@ function computePointVisibleHexes(
   }
 
   if (openHatch) {
-    for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) > commanderVisionRange) continue;
+    for (const tile of map.tilesInRange(unit.pos, commanderVisionRange)) {
+      if (!map.sameRegion(unit.pos, tile.pos)) continue;
       if (hasDirectionalFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
     }
   }
 
   if (visionType === 'infantry') {
     const infantryRange = ownVisionRange(isControlledATGun(unit) ? commanderVisionRange : 2);
-    for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) <= infantryRange
+    for (const tile of map.tilesInRange(unit.pos, infantryRange)) {
+      if (map.sameRegion(unit.pos, tile.pos)
         && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
     }
     return visible;
   }
 
   // Tanks (including fixed-gun tank destroyers and assault guns) always add
-  // gunner sight. Closed hatches also add independent interior sight.
+  // gunner sight and body-perimeter sight. An open hatch retains the base
+  // one-hex perimeter; closed hatches use their configured interior range.
   // Other fixed-gun units (AT guns, artillery, trucks) keep their legacy ray.
   const tank = isTankUnit(unit);
-  if (tank && !openHatch) {
-    const interiorVisionRange = ownVisionRange(currentInteriorVisionRange(unit));
-    for (const tile of map.all()) {
-      if (hexDistance(unit.pos, tile.pos) <= interiorVisionRange
+  if (tank) {
+    const interiorVisionRange = ownVisionRange(openHatch ? DEFAULT_INTERIOR_VISION_RANGE : currentInteriorVisionRange(unit));
+    for (const tile of map.tilesInRange(unit.pos, interiorVisionRange)) {
+      if (map.sameRegion(unit.pos, tile.pos)
         && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
     }
   }
@@ -611,7 +613,10 @@ export function hasFogLineOfSight(
   const sightHeight = Math.min(tileHeight(map.get(from)), tileHeight(map.get(to)));
   const a = axialToPixel(from, GEOMETRY_HEX_SIZE);
   const b = axialToPixel(to, GEOMETRY_HEX_SIZE);
-  for (const tile of map.all()) {
+  // Any intersecting pointy hex has its centre within one axial coordinate of
+  // the segment's bounds. Keep a conservative pad and the original exact test.
+  for (const tile of map.tilesInBounds(Math.min(from.q, to.q) - 1, Math.max(from.q, to.q) + 1,
+    Math.min(from.r, to.r) - 1, Math.max(from.r, to.r) + 1)) {
     if (axialEquals(tile.pos, from) || axialEquals(tile.pos, to)) continue;
     if (!map.lineOfSightBlockedByTile(tile, sightHeight) && !smokeHexes?.has(HexMap.keyOf(tile.pos))) continue;
     const center = axialToPixel(tile.pos, GEOMETRY_HEX_SIZE);

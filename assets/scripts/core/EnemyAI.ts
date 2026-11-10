@@ -474,7 +474,7 @@ export function canExecuteAction(
     }));
     case 'smoke':  return commanderHasSkill(enemy, 'use_smoke_grenade')
       && !enemy.smoked
-      && !smokeHexes?.has(HexMap.keyOf(unitTurretHex(enemy)))
+      && !unitOccupiedHexes(enemy).every(pos => smokeHexes?.has(HexMap.keyOf(pos)))
       && !tileForbidsSmokeOrConcealment(map.get(unitTurretHex(enemy)));
     case 'repair': return crewAlive(enemy, 'commander') && (
       !!enemy.damaged

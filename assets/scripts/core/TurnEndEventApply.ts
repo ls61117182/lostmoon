@@ -1,4 +1,4 @@
-import { footprintDistance, unitOccupiedHexes, unitOccupiesHex } from './UnitFootprint';
+import { footprintDistance, unitOccupiedHexes, unitOccupiesHex, unitTurretHex } from './UnitFootprint';
 import { loadCampaignShell } from './CampaignUpgrade';
 import { AirbornePlan, planAirborneSupport, landAirborneUnit } from './AirborneSupport';
 /**
@@ -153,13 +153,13 @@ function buildStukaExtraDicePhases(sim: {
 }
 
 function findShermanLosInfantry(mission: LoadedMission): Unit | null {
-  const sh = mission.sherman;
+  const target = unitTurretHex(mission.sherman);
   for (const e of mission.enemies) {
-    // 仅检查未被压制、距玩家坦克 2 格以内的「徒步类」单位。
+    // Range, bearing and LoS must all reach the commander's turret cell.
     if (e.destroyed || e.suppressed || isAttachedATGunCrew(e) || !isFootUnit(e)) continue;
-    if (footprintDistance(e, sh) > 2) continue;
-    if (directionTo(e.pos, sh.pos) === null) continue;
-    if (mission.map.hasLineOfSight(e.pos, sh.pos)) return e;
+    if (hexDistance(e.pos, target) > 2) continue;
+    if (directionTo(e.pos, target) === null) continue;
+    if (mission.map.hasLineOfSight(e.pos, target)) return e;
   }
   return null;
 }

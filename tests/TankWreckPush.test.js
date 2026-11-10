@@ -226,7 +226,7 @@ test('only intact/damaged urban buildings obstruct wrecks; other terrain is igno
   }
 });
 
-test('infantry, trucks, and turning tanks do not push wrecks', () => {
+test('infantry, trucks, and single-cell pivot turns do not push wrecks', () => {
   for (const mode of ['infantry', 'truck', 'turn', 'destroyed']) {
     const { scene, mover, wreck } = fixture();
     if (mode === 'turn') scene.anim.kind = 'turn';

@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 2,
+  "style": "BP44",
+  "scope": "art-only",
+  "canvas": {
+    "width": 512,
+    "height": 512
+  },
+  "baseHexRadius": 128,
+  "pixelDensity": 2,
+  "forward": {
+    "x": 0,
+    "y": -1
+  },
+  "footprintLength": 1,
+  "couplingDistance": 443.40500673763256,
+  "railGaugePixels": 44,
+  "sourceFolder": "source_art/trains/bp44-v1-20261106",
+  "modules": [
+    {
+      "id": "locomotive",
+      "label": "装甲机车",
+      "body": "textures/units/trains/bp44/bp44_locomotive_body/spriteFrame",
+      "destroyed": "textures/units/trains/bp44/bp44_locomotive_destroyed/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "frontCoupler": {
+        "x": 256,
+        "y": 34.29749663118372
+      },
+      "rearCoupler": {
+        "x": 256,
+        "y": 477.7025033688163
+      },
+      "bogies": [
+        {
+          "x": 256,
+          "y": 128
+        },
+        {
+          "x": 256,
+          "y": 384
+        }
+      ],
+      "chimney": {
+        "x": 256,
+        "y": 152
+      },
+      "weapons": [],
+      "registration": {
+        "source": "source_art/trains/bp44-v1-20261106/sources/locomotive_body-generated.png",
+        "sourceBounds": {
+          "left": 450,
+          "top": 70,
+          "width": 354,
+          "height": 1114
+        },
+        "scale": 0.3980296290283955,
+        "offset": {
+          "x": 186,
+          "y": 35
+        }
+      }
+    },
+    {
+      "id": "tender",
+      "label": "装甲煤水车",
+      "body": "textures/units/trains/bp44/bp44_tender_body/spriteFrame",
+      "destroyed": "textures/units/trains/bp44/bp44_tender_destroyed/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "frontCoupler": {
+        "x": 256,
+        "y": 34.29749663118372
+      },
+      "rearCoupler": {
+        "x": 256,
+        "y": 477.7025033688163
+      },
+      "bogies": [
+        {
+          "x": 256,
+          "y": 128
+        },
+        {
+          "x": 256,
+          "y": 384
+        }
+      ],
+      "weapons": [],
+      "registration": {
+        "source": "source_art/trains/bp44-v1-20261106/sources/tender_body-generated.png",
+        "sourceBounds": {
+          "left": 462,
+          "top": 75,
+          "width": 330,
+          "height": 1104
+        },
+        "scale": 0.40163496987104397,
+        "offset": {
+          "x": 190,
+          "y": 35
+        }
+      }
+    },
+    {
+      "id": "command",
+      "label": "指挥／步兵车",
+      "body": "textures/units/trains/bp44/bp44_command_body/spriteFrame",
+      "destroyed": "textures/units/trains/bp44/bp44_command_destroyed/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "frontCoupler": {
+        "x": 256,
+        "y": 34.29749663118372
+      },
+      "rearCoupler": {
+        "x": 256,
+        "y": 477.7025033688163
+      },
+      "bogies": [
+        {
+          "x": 256,
+          "y": 128
+        },
+        {
+          "x": 256,
+          "y": 384
+        }
+      ],
+      "weapons": [],
+      "registration": {
+        "source": "source_art/trains/bp44-v1-20261106/sources/command_body-generated.png",
+        "sourceBounds": {
+          "left": 461,
+          "top": 73,
+          "width": 333,
+          "height": 1108
+        },
+        "scale": 0.4001850241314373,
+        "offset": {
+          "x": 190,
+          "y": 35
+        }
+      }
+    },
+    {
+      "id": "howitzer",
+      "label": "榴弹炮车",
+      "body": "textures/units/trains/bp44/bp44_howitzer_body/spriteFrame",
+      "destroyed": "textures/units/trains/bp44/bp44_howitzer_destroyed/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "frontCoupler": {
+        "x": 256,
+        "y": 34.29749663118372
+      },
+      "rearCoupler": {
+        "x": 256,
+        "y": 477.7025033688163
+      },
+      "bogies": [
+        {
+          "x": 256,
+          "y": 128
+        },
+        {
+          "x": 256,
+          "y": 384
+        }
+      ],
+      "weapons": [
+        {
+          "slotId": "main_gun",
+          "id": "howitzer",
+          "pivot": {
+            "x": 256,
+            "y": 156
+          },
+          "initialAngleDegrees": 0,
+          "rotationMode": "independent"
+        }
+      ],
+      "registration": {
+        "source": "source_art/trains/bp44-v1-20261106/sources/howitzer_body-generated.png",
+        "sourceBounds": {
+          "left": 458,
+          "top": 67,
+          "width": 338,
+          "height": 1126
+        },
+        "scale": 0.39378775021104134,
+        "offset": {
+          "x": 190,
+          "y": 35
+        }
+      }
+    },
+    {
+      "id": "artillery_flak",
+      "label": "火炮／防空组合车",
+      "body": "textures/units/trains/bp44/bp44_artillery_flak_body/spriteFrame",
+      "destroyed": "textures/units/trains/bp44/bp44_artillery_flak_destroyed/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "frontCoupler": {
+        "x": 256,
+        "y": 34.29749663118372
+      },
+      "rearCoupler": {
+        "x": 256,
+        "y": 477.7025033688163
+      },
+      "bogies": [
+        {
+          "x": 256,
+          "y": 128
+        },
+        {
+          "x": 256,
+          "y": 384
+        }
+      ],
+      "weapons": [
+        {
+          "slotId": "main_gun",
+          "id": "howitzer",
+          "pivot": {
+            "x": 256,
+            "y": 156
+          },
+          "initialAngleDegrees": 0,
+          "rotationMode": "independent"
+        },
+        {
+          "slotId": "anti_aircraft",
+          "id": "flakvierling",
+          "pivot": {
+            "x": 256,
+            "y": 360
+          },
+          "initialAngleDegrees": 180,
+          "rotationMode": "independent"
+        }
+      ],
+      "registration": {
+        "source": "source_art/trains/bp44-v1-20261106/sources/artillery_flak_body-generated.png",
+        "sourceBounds": {
+          "left": 462,
+          "top": 67,
+          "width": 330,
+          "height": 1119
+        },
+        "scale": 0.3962511230899308,
+        "offset": {
+          "x": 191,
+          "y": 35
+        }
+      }
+    },
+    {
+      "id": "panzerjaeger",
+      "label": "反坦克炮车",
+      "body": "textures/units/trains/bp44/bp44_panzerjaeger_body/spriteFrame",
+      "destroyed": "textures/units/trains/bp44/bp44_panzerjaeger_destroyed/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "frontCoupler": {
+        "x": 256,
+        "y": 34.29749663118372
+      },
+      "rearCoupler": {
+        "x": 256,
+        "y": 477.7025033688163
+      },
+      "bogies": [
+        {
+          "x": 256,
+          "y": 128
+        },
+        {
+          "x": 256,
+          "y": 384
+        }
+      ],
+      "weapons": [
+        {
+          "slotId": "anti_tank",
+          "id": "panzer4",
+          "pivot": {
+            "x": 256,
+            "y": 256
+          },
+          "initialAngleDegrees": 0,
+          "rotationMode": "independent"
+        }
+      ],
+      "registration": {
+        "source": "source_art/trains/bp44-v1-20261106/sources/panzerjaeger_body-generated.png",
+        "sourceBounds": {
+          "left": 464,
+          "top": 72,
+          "width": 325,
+          "height": 1086
+        },
+        "scale": 0.40829190307332647,
+        "offset": {
+          "x": 190,
+          "y": 35
+        }
+      }
+    }
+  ],
+  "weapons": [
+    {
+      "id": "howitzer",
+      "label": "榴弹炮塔",
+      "layer": "weapon",
+      "sprite": "textures/units/trains/bp44/bp44_howitzer_weapon/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "muzzles": [
+        {
+          "x": 256,
+          "y": 146.5
+        }
+      ]
+    },
+    {
+      "id": "panzer4",
+      "label": "四号坦克式炮塔",
+      "layer": "weapon",
+      "sprite": "textures/units/trains/bp44/bp44_panzer4_weapon/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "muzzles": [
+        {
+          "x": 256,
+          "y": 99.5
+        }
+      ]
+    },
+    {
+      "id": "flakvierling",
+      "label": "四联装防空炮座",
+      "layer": "weapon",
+      "sprite": "textures/units/trains/bp44/bp44_flakvierling_weapon/spriteFrame",
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "muzzles": [
+        {
+          "x": 242.5,
+          "y": 176.5
+        },
+        {
+          "x": 249.5,
+          "y": 176.5
+        },
+        {
+          "x": 259.5,
+          "y": 176.5
+        },
+        {
+          "x": 266.5,
+          "y": 176.5
+        }
+      ]
+    }
+  ]
+}

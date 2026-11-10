@@ -7,6 +7,8 @@ require.extensions['.ts'] = (m, file) => m._compile(ts.transpileModule(fs.readFi
 const visuals = require('../assets/scripts/core/TankVisualDB.ts');
 const camo = require('../assets/scripts/core/TankCamouflage.ts');
 const { isTankKind } = require('../assets/scripts/core/types.ts');
+const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
+const footprint = require('../assets/scripts/core/UnitFootprint.ts');
 const source = fs.readFileSync('assets/scripts/view/MainMenuScene.ts', 'utf8');
 const ast = ts.createSourceFile('MainMenuScene.ts', source, ts.ScriptTarget.Latest, true);
 function find(predicate) {
@@ -19,23 +21,41 @@ const fn = name => find(n => ts.isFunctionDeclaration(n) && n.name?.text === nam
 const compiled = ts.transpileModule([
   `const frameKey = ${initializer('frameKey').getText(ast)};`,
   `const loadTankFrames = ${initializer('loadTankFrames').getText(ast)};`,
+  `const drawHex = ${initializer('drawHex').getText(ast)};`,
   fn('refreshCamouflageButton'), fn('refreshTankRidersButton'), fn('refreshPreview'),
   `const clickCamouflage = ${initializer('camouflageBtn').arguments[6].getText(ast)};`,
   `const clickTankRiders = ${initializer('tankRidersBtn').arguments[6].getText(ast)};`,
   '({ loadTankFrames, refreshPreview, refreshCamouflageButton, refreshTankRidersButton, clickCamouflage, clickTankRiders });',
 ].join('\n'), { compilerOptions: { target: ts.ScriptTarget.ES2019 } }).outputText;
 class Node {
-  constructor() { this.isValid = true; this.layer = 1; }
-  addComponent() { return { setContentSize() {} }; }
-  addChild() {}
-  removeAllChildren() {}
+  constructor(name) { this.name = name; this.isValid = true; this.layer = 1; this.children = []; }
+  addComponent(Type) {
+    const component = new Type();
+    if (component.setContentSize) this.transform = component;
+    else this.graphics = component;
+    return component;
+  }
+  getComponent() { return this.transform ??= { setContentSize(w, h) { this.width = w; this.height = h; } }; }
+  setPosition(x, y) { this.position = { x, y }; }
+  setScale(x, y) { this.scale = { x, y }; }
+  addChild(child) { this.children.push(child); }
+  removeAllChildren() { this.children = []; }
 }
-function setup() {
+class Graphics {
+  constructor() { this.points = []; }
+  moveTo(x, y) { this.points.push({ x, y }); }
+  lineTo(x, y) { this.points.push({ x, y }); }
+  close() {} fill() {} stroke() {}
+}
+function setup(kind = 'tiger') {
   const pending = [], sprites = [], riderDraws = [];
-  const kind = 'tiger', geometry = visuals.splitTankGeometryConfigOf(kind);
+  const geometry = visuals.splitTankGeometryConfigOf(kind);
   const draft = { ...visuals.tankVisualConfigOf(kind), ...visuals.splitTankVisualConfigOf(kind), turretPivotX: geometry.pivot.bodyX, turretPivotY: geometry.pivot.bodyY };
-  const ctx = vm.createContext({ ...visuals, ...camo, isTankKind, Node, UITransform: class {}, Graphics: class {}, SpriteFrame: class {},
-    selectedKind: kind, showLateWarCamouflage: false, showDestroyed: false, frames: {}, drafts: { tiger: draft, sherman: draft },
+  const ctx = vm.createContext({ ...visuals, ...camo, isTankKind, Node, node: new Node(),
+    UITransform: class { setContentSize(w, h) { this.width = w; this.height = h; } }, Graphics,
+    Color: class { constructor(...rgba) { this.rgba = rgba; } }, SpriteFrame: class {},
+    makeLabel(parent, text, x, y) { const label = new Node('Label'); label.text = text; label.setPosition(x, y); parent.addChild(label); },
+    selectedKind: kind, showLateWarCamouflage: false, showDestroyed: false, frames: {}, drafts: { [kind]: draft, sherman: draft },
     lateWarKindSet: new Set(camo.GERMAN_LATE_WAR_VISUAL_KINDS), splitKindSet: new Set(visuals.SPLIT_TANK_KINDS),
     previewRoot: new Node(), engineVibrationLayer: null, exhaustPreviewGraphics: null,
     hexR: 185, bodyAngleDeg: 35, turretAngleDeg: 90, lastPivot: { x: 0, y: 0 },
@@ -48,13 +68,13 @@ function setup() {
     selectedLabel: {}, bodyAngleLabel: {}, turretAngleLabel: {}, statusLabel: {},
     camouflageBtn: { label: {}, redraw() {} },
     MODE_BTN_ACTIVE: 'active', MODE_BTN_IDLE: 'idle', TEXT_DISABLED: 'disabled', TEXT_TITLE: 'title', TEXT_PRIMARY: 'primary',
-    tankVisualAssetName: k => k, drawHex() {}, drawTankExhaustPreview() {}, addExhaustPortDots() {}, addPivotDot() {},
+    tankVisualAssetName: k => k, drawTankExhaustPreview() {}, addExhaustPortDots() {}, addPivotDot() {},
     normalizeAngleDeg: n => n,
     angleVec: deg => ({ deg, ux: Math.cos(deg * Math.PI / 180), uy: Math.sin(deg * Math.PI / 180) }),
     addSprite: (parent, sf, ...transform) => {
       const sprite = { path: sf.path, transform }; sprites.push(sprite); return sprite;
     },
-    getUnitStats: k => ({ faction: k === 'sherman' ? 'usa' : 'german' }),
+    getUnitStats,
     seatedInfantryKindForFaction: require('../assets/scripts/view/TankRiderVisual.ts').seatedInfantryKindForFaction,
     resources: { load: (path, Type, callback) => pending.push({ path, callback }) },
   });
@@ -92,6 +112,55 @@ test('debugger switches normal layers and wrecks together, retaining angles, tra
   ctx.selectedKind = 'sherman'; api.refreshCamouflageButton();
   assert.equal(ctx.camouflageBtn.label.color, 'disabled');
   api.clickCamouflage(); assert.equal(pending.length, 0);
+});
+
+test('Maus debugger shows two adjacent runtime cells around the hull midpoint at the configured scale', () => {
+  const { ctx, api, sprites, flush, draft } = setup('maus');
+  api.loadTankFrames('maus'); flush();
+  const radius = ctx.hexR;
+  for (let facing = 0; facing < 6; facing++) {
+    ctx.bodyAngleDeg = -60 * facing;
+    sprites.length = 0; api.refreshPreview();
+    const cells = ctx.previewRoot.children.filter(n => n.name.startsWith('DebugHex_'));
+    assert.equal(cells.length, 2);
+    const unit = { stats: getUnitStats('maus'), pos: { q: 0, r: 0 }, facing };
+    const project = ({ q, r }) => ({ x: radius * Math.sqrt(3) * (q + r / 2), y: -radius * 1.5 * r });
+    const center = project(footprint.unitCenterHex(unit));
+    for (const [i, pos] of footprint.unitOccupiedHexes(unit).entries()) {
+      const expected = project(pos);
+      assert(Math.abs(cells[i].position.x - (expected.x - center.x)) < 1e-8);
+      assert(Math.abs(cells[i].position.y - (expected.y - center.y)) < 1e-8);
+    }
+    assert.equal(cells[0].children[0].text, '前格');
+    assert.equal(cells[1].children[0].text, '后格（炮塔）');
+    const scale = radius * 1.8 * draft.hullFitScale / Math.max(
+      visuals.splitTankGeometryConfigOf('maus').topTrim.w, visuals.splitTankGeometryConfigOf('maus').topTrim.h);
+    assert(Math.abs(sprites[0].transform[0] - visuals.splitTankGeometryConfigOf('maus').topTrim.w * scale) < 1e-8);
+    assert(Math.abs(sprites[0].transform[2] - radius * Math.sqrt(3) *
+      (draft.hullOffsetForward * Math.cos(ctx.bodyAngleDeg * Math.PI / 180)
+        + draft.hullOffsetRight * Math.sin(ctx.bodyAngleDeg * Math.PI / 180))) < 1e-8);
+    assert.equal(ctx.previewRoot.scale.x, 1);
+    assert.equal(ctx.previewRoot.scale.y, 1);
+    for (const cell of cells) for (const point of cell.graphics.points) {
+      assert(Math.abs(Math.hypot(point.x, point.y) * ctx.previewRoot.scale.x - radius) < 1e-8);
+    }
+  }
+  ctx.bodyAngleDeg = 37; api.refreshPreview();
+  const cells = ctx.previewRoot.children.filter(n => n.name.startsWith('DebugHex_'));
+  const shared = cells[0].graphics.points.filter(a => cells[1].graphics.points.some(b =>
+    Math.hypot(a.x + cells[0].position.x - b.x - cells[1].position.x,
+      a.y + cells[0].position.y - b.y - cells[1].position.y) < 1e-8));
+  assert.equal(shared.length, 2, 'freely rotating the preview keeps the cells joined by a full edge');
+  ctx.showDestroyed = true; api.refreshPreview();
+  assert.equal(ctx.previewRoot.children.filter(n => n.name.startsWith('DebugHex_')).length, 2);
+  api.loadTankFrames('sherman'); flush();
+  ctx.selectedKind = 'sherman'; api.refreshPreview();
+  assert.equal(ctx.previewRoot.children.filter(n => n.name.startsWith('DebugHex')).length, 1);
+  assert.equal(ctx.previewRoot.scale.x, 1, 'ordinary and two-hex tanks share the same preview zoom');
+  const ordinaryHex = ctx.previewRoot.children.find(n => n.name === 'DebugHex');
+  for (const point of ordinaryHex.graphics.points) {
+    assert(Math.abs(Math.hypot(point.x, point.y) * ctx.previewRoot.scale.x - radius) < 1e-8);
+  }
 });
 test('failed alternate imports are reported, cannot show a grey wreck as camouflage, and can be retried', () => {
   const { ctx, api, pending, sprites, flush } = setup();

@@ -14,8 +14,9 @@ function methodBody(name, nextMarker) {
 }
 
 const selectTarget = methodBody('selectAIShootTarget', 'private selectAIMGTarget');
+const visibilityGate = selectTarget.indexOf('if (!unitOccupiedHexes(target).some(');
 assert(
-  selectTarget.indexOf('isUnitInVision(') < selectTarget.indexOf('canAttack({'),
+  visibilityGate >= 0 && visibilityGate < selectTarget.indexOf('canAttack({'),
   'main-gun target selection must reject unseen units before checking attack legality',
 );
 

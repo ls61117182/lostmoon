@@ -354,6 +354,29 @@ export class HexMap {
     return Array.from(this.grid.values());
   }
 
+  /** Indexed local queries avoid allocating/scanning the entire battlefield for every sight ray. */
+  *tilesInBounds(minQ: number, maxQ: number, minR: number, maxR: number): IterableIterator<Tile> {
+    minQ = Math.ceil(minQ); maxQ = Math.floor(maxQ);
+    minR = Math.ceil(minR); maxR = Math.floor(maxR);
+    // Very large ranges and sparse maps are cheaper to scan than to probe empty coordinates.
+    if ((maxQ - minQ + 1) * (maxR - minR + 1) > this.grid.size) {
+      for (const tile of this.grid.values()) {
+        if (tile.pos.q >= minQ && tile.pos.q <= maxQ && tile.pos.r >= minR && tile.pos.r <= maxR) yield tile;
+      }
+      return;
+    }
+    for (let q = minQ; q <= maxQ; q++) for (let r = minR; r <= maxR; r++) {
+      const tile = this.get({ q, r });
+      if (tile) yield tile;
+    }
+  }
+
+  *tilesInRange(center: Axial, range: number): IterableIterator<Tile> {
+    for (const tile of this.tilesInBounds(center.q - range, center.q + range, center.r - range, center.r + range)) {
+      if (hexDistance(center, tile.pos) <= range) yield tile;
+    }
+  }
+
   /**
    * 单位是否能进入该格（坦克视角，不考虑是否被占据）。
    *

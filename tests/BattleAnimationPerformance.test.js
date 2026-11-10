@@ -166,6 +166,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
   Object.assign(scene, { isValid: true, mission: { map, data: { theater: 'europe' }, sherman: unit, allies: [], enemies: [] },
     g: graphics(), mapOcclusionGraphics: graphics(), mapDeepShadowGraphics: graphics(), unitGraphics: graphics(), tankGraphics: graphics(),
     buildingGraphics: graphics(), battlefieldOverlayGraphics: graphics(), unitFallbackGraphics: new Map(),
+    sceneryPoolParents: new Map(),
     tankDamageTrackNodes: new Map(), silhouetteSources: new Map(), silhouetteClaimed: new Set(),
     bunkerOcclusionSprites: new Map(), infantryOcclusionSprites: new Map(), infantryVectorSilhouettes: [],
     occlusionShapes: [], vectorSilhouettes: [], engineVibrationVisuals: [], terrainSpriteBatchReady: true,
@@ -175,7 +176,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
     drawContinuousTerrain: () => { ground++; return true; }, drawForestCanopy: () => trees++, drawBuildingOverlay: () => buildings++,
     anim: null, phase: 'player', playerStep: 'choose', selectedGunDieIdx: -1, selectedMGDieIdx: -1,
   });
-  for (const name of ['terrainSpritePool', 'fortificationSpritePool', 'fortificationRimPool', 'rockySpritePool', 'bridgeSpritePool', 'urbanBuildingSpritePool', 'urbanRubbleSpritePool',
+  for (const name of ['terrainSpritePool', 'fortificationSpritePool', 'fortificationRimPool', 'railwaySpritePool', 'rockySpritePool', 'bridgeSpritePool', 'urbanBuildingSpritePool', 'urbanRubbleSpritePool',
     'ruralPropSpritePool', 'foliageSpritePool', 'enemyTopSpritePool', 'commanderHatchSpritePool', 'infantryTopSpritePool',
     'officerTopSpritePool', 'suppressionMarkPool']) scene[name] = [];
   scene.redraw();
@@ -320,9 +321,10 @@ test('enemy dice visual animation retains subtitles without rerunning AI action 
   Object.assign(scene, { enemyDiceTrayRoot: {}, enemyTrayMetrics: { dieSize: 36 }, enemyDiceTraySubject: {},
     enemyDiceTrayLabels: Array.from({ length: count }, () => ({ node: {} })), enemyDiceTraySubtitleLabels: Array.from({ length: count }, () => ({})),
     enemyDiceTrayTileGraphics: Array.from({ length: count }, () => ({ clear() {} })), enemyDiceUsed: [],
-    enemyDice: [1, 2, 3, 4, 5, 6], enemyDiceHighlightIdx: -1, enemyDiceSortAnim: { t: 0 },
+    enemyDiceResolvedActions: [],
+    enemyDice: [1, 2, 3, 4, 5, 6], enemyDiceHighlightIdx: -1, enemyDiceSortAnim: { t: 0, dur: 0.5 },
     enemyDieActionSubtitle: () => { decisions++; return 'advance'; }, enemyDieFillColor: () => ({}),
-    drawDieBody() {}, drawDiePips() { pips++; },
+    drawDieBody() {}, drawDiePips() { pips++; }, drawRollingDie() { pips++; },
   });
   scene.refreshEnemyDiceTray();
   for (let frame = 0; frame < 60; frame++) { scene.enemyDiceSortAnim.t = frame / 60; scene.refreshEnemyDiceTray(false); }

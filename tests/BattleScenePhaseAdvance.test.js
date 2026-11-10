@@ -75,7 +75,7 @@ assert(
   'the automatic misc transition should not use a one-frame retry that can expire before the attack result closes',
 );
 
-const isBusy = battleScene.match(/private\s+isBusy\s*\(\)\s*:\s*boolean\s*{[\s\S]*?\n  }\n\n  private\s+destroyFireCheckEventUI/);
+const isBusy = battleScene.match(/private\s+isBusy\s*\([^)]*\)\s*:\s*boolean\s*{[\s\S]*?\n  }\n\n  private\s+destroyFireCheckEventUI/);
 assert(isBusy, 'BattleScene.isBusy() should be found');
 assert(
   !isBusy[0].includes('this.highExplosiveBlasts.length'),

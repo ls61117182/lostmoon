@@ -21,7 +21,8 @@ const directionTo = (a, b) => {
   return diagonal < 0 ? null : diagonal + 6;
 };
 const gunnerRange = unit => unit.gunnerVisionRange ?? 3;
-const Scene = new Function('hexDistance', 'fireDirectionTo', 'MG_MAX_RANGE', 'currentGunnerVisionRange', `${code}; return Scene;`)(distance, directionTo, 1, gunnerRange);
+const Scene = new Function('hexDistance', 'fireDirectionTo', 'MG_MAX_RANGE', 'currentGunnerVisionRange', 'unitTurretHex', `${code}; return Scene;`)(
+  distance, directionTo, 1, gunnerRange, require('./helpers/BattleSceneMethods.cjs').footprintGlobals.unitTurretHex);
 const scene = new Scene();
 Object.assign(scene, {
   mission: { sherman: { pos: { q: 0, r: 0 } }, map: { get: () => undefined } },
@@ -63,11 +64,11 @@ const layout = getMethod('layoutBattleHud');
 const layoutPrefix = layout.slice(0, layout.indexOf('this.missionTitleLabel')) + '}';
 const harnessCode = ts.transpile(`class Harness {
   ${layoutPrefix}
-  ${['outsideMapTurretAimDirection', 'outsideMapTurretAimPositions', 'shouldCombatLogTouchTargetMap', 'showOutsideMapTurretInput', 'onTouchMap', 'pixelToNearestAxial', 'tryAimShermanTurretAtFogTile'].map(getMethod).join('\n')}
+  ${['outsideMapTurretAimDirection', 'outsideMapTurretAimPositions', 'shouldCombatLogTouchTargetMap', 'showOutsideMapTurretInput', 'onTouchMap', 'pixelToNearestAxial', 'tryAimShermanTurretAtFogTile', 'onMapPanStart', 'onMapPanMove', 'onMapPanCancel', 'mapPanBlocked', 'applyMapViewPosition'].map(getMethod).join('\n')}
 }`, { target: ts.ScriptTarget.ES2020 });
-const Harness = new Function('UITransform', 'Vec3', 'visibleSizeInRootSpace', 'UI_ROOT_SCALE', 'BOTTOM_CONTROL_SAFE_INSET', 'hexDistance', 'fireDirectionTo', 'diagonalGunnerClickPreference', 'MG_MAX_RANGE', 'currentGunnerVisionRange', `${harnessCode}; return Harness;`)(
+const Harness = new Function('UITransform', 'Vec3', 'visibleSizeInRootSpace', 'UI_ROOT_SCALE', 'BOTTOM_CONTROL_SAFE_INSET', 'hexDistance', 'fireDirectionTo', 'diagonalGunnerClickPreference', 'MG_MAX_RANGE', 'currentGunnerVisionRange', 'unitTurretHex', `${harnessCode}; return Harness;`)(
   {}, class { constructor(x, y) { this.x = x; this.y = y; } },
-  () => ({ width: 1280, height: 1100 }), 1.5, 60, distance, directionTo, () => null, 1, gunnerRange,
+  () => ({ width: 1280, height: 1100 }), 1.5, 60, distance, directionTo, () => null, 1, gunnerRange, require('./helpers/BattleSceneMethods.cjs').footprintGlobals.unitTurretHex,
 );
 const host = new Harness();
 let inputSize;
@@ -134,6 +135,12 @@ assert.deepEqual(targetNode.position, { x: click.x + 20, y: click.y + 40 });
 const screenClick = { x: click.x * 1.5 + 30, y: click.y * 1.5 + 60 };
 targetNode.handler({ getStartLocation: () => screenClick, getLocation: () => screenClick, getUILocation: () => screenClick });
 assert.equal(rotatedTo, 2, 'the independent off-map touch node must rotate the turret after UI transforms');
+rotatedTo = undefined;
+inputHost.mapPanGesture = { touchId: 1, dragged: true };
+targetNode.handler({ getID: () => 1, getStartLocation: () => screenClick,
+  getLocation: () => screenClick, getUILocation: () => screenClick });
+assert.equal(rotatedTo, undefined, 'releasing a drag over an off-map aim target must not rotate the turret');
+assert.equal(inputHost.mapPanGesture, null);
 console.log('Independent outside-map touch node test passed');
 
 // Reproduce the real blocker: the transparent combat-log ScrollView owns the touch.
@@ -180,3 +187,27 @@ assert.equal(host.shouldCombatLogTouchTargetMap(event), false, 'inactive campaig
 host.mission.map.get = () => ({});
 assert.equal(host.shouldCombatLogTouchTargetMap(event), true, 'current battlefield terrain must retain map click priority');
 console.log('Combat-log interception and off-map click forwarding tests passed');
+
+// A drag beginning on a playable hex underneath the transparent log reaches the map.
+Object.assign(host, {
+  terrainSpriteBatchReady: true,
+  battlefieldContentNode: { getComponent: () => ({ convertToNodeSpaceAR: p => p }) },
+  mapPanBounds: () => ({ minX: -100, maxX: 100, minY: -100, maxY: 100 }),
+  outsideMapTurretInputNodes: [], clearHoveredTile: () => {},
+});
+host.mapNode.position = { x: 0, y: 0 };
+host.mapNode.setPosition = (x, y) => { host.mapNode.position = { x, y }; };
+const dragEvent = (dx = 0) => ({ getID: () => 1,
+  getStartLocation: () => click, getLocation: () => ({ x: click.x + dx, y: click.y }),
+  getUILocation: () => ({ x: click.x + dx, y: click.y }) });
+callbacks.TOUCH_START(dragEvent());
+callbacks.TOUCH_MOVE(dragEvent(30));
+assert.deepEqual(host.mapNode.position, { x: 30, y: 0 }, 'the log forwards map drag movement');
+callbacks.TOUCH_END(dragEvent(30));
+assert.equal(host.mapPanGesture, null);
+assert.equal(rotatedTo, 2, 'a forwarded drag must leave the last turret heading unchanged');
+assert.equal(scrollView.vertical, true, 'the log resumes scrolling after a map drag');
+callbacks.TOUCH_START(dragEvent());
+callbacks.TOUCH_CANCEL(dragEvent());
+assert.equal(host.mapPanGesture, null, 'the log forwards cancellation to the map');
+console.log('Combat-log drag forwarding tests passed');

@@ -11,6 +11,7 @@ import { breakwaterFlagsFromMapJson, directionTo, HexMap, offsetToAxial, axialTo
 import { validateElevation } from './Elevation';
 import { validateRoundEvents } from './RoundEvents';
 import { parseFortification } from './Fortification';
+import { parseRailway } from './Railway';
 import {
   createTankCrew,
   Axial,
@@ -111,6 +112,8 @@ export interface LoadedMission {
   map: HexMap;
   /** The one locally controlled protagonist vehicle. */
   playerTank: Unit;
+  /** Authored/rolled map marker, captured before adapting the vehicle footprint. */
+  playerSpawnMarker?: { pos: Axial; facing: Direction | null };
   /** @deprecated Runtime compatibility alias for playerTank. */
   sherman: Unit;
   allies: Unit[];
@@ -297,6 +300,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
       const bridgeEnds = parseBridgeEnds(data.id, { col, row }, terrain, def.br);
       const roads = parseRoadFlags(data.id, { col, row }, terrain, !!bridgeEnds, def.rd);
       const fortification = parseFortification(def.fort, terrain);
+      const railway = parseRailway(def.rl, terrain);
       const tile: Tile = {
         pos: offsetToAxial({ col, row }, rowParityOffset),
         terrain,
@@ -312,6 +316,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
         ...(def.cr === 1 ? { crater: true } : {}),
         ...(roads ? { roads } : {}),
         ...(fortification ? { fortification } : {}),
+        ...(railway ? { railway } : {}),
         reinforceId: def.rid,
         ...(reinforceFacing !== undefined ? { reinforceFacing } : {}),
         ...(eid !== undefined && eid !== null ? { enemyStartId: eid } : {}),
@@ -395,6 +400,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
     sideId: 'player',
     controller: 'local_player',
   });
+  const playerSpawnMarker = { pos: { ...sherman.pos }, facing: sherman.facing };
   const allies = (data.allies ?? []).map((p, i) => makeUnit(`ally_${i}`, p, rowParityOffset, {
     sideId: 'player',
     controller: 'ai',
@@ -459,6 +465,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
   const mission: LoadedMission = {
     map,
     playerTank: sherman,
+    playerSpawnMarker,
     sherman,
     allies,
     enemies,

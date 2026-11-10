@@ -1,0 +1,612 @@
+[
+  {
+    "pos": {
+      "q": 0,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 0
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 8,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 9,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 10,
+      "r": 0
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 0,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 1
+    },
+    "terrain": "field",
+    "railway": "101000"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 1
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ],
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 1
+    },
+    "terrain": "field",
+    "railway": "000100"
+  },
+  {
+    "pos": {
+      "q": 8,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 9,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 10,
+      "r": 1
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -1,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 0,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 2
+    },
+    "terrain": "field",
+    "railway": "001001"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 2
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 8,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 9,
+      "r": 2
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -1,
+      "r": 3
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 0,
+      "r": 3
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 3
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 3
+    },
+    "terrain": "field",
+    "railway": "101000"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 3
+    },
+    "terrain": "field",
+    "railway": "100101"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 3
+    },
+    "terrain": "mud",
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 3
+    },
+    "terrain": "mud",
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 3
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ],
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 3
+    },
+    "terrain": "field",
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 8,
+      "r": 3
+    },
+    "terrain": "field",
+    "railway": "000100"
+  },
+  {
+    "pos": {
+      "q": 9,
+      "r": 3
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -2,
+      "r": 4
+    },
+    "terrain": "field",
+    "railway": "100000"
+  },
+  {
+    "pos": {
+      "q": -1,
+      "r": 4
+    },
+    "terrain": "field",
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 0,
+      "r": 4
+    },
+    "terrain": "field",
+    "railway": "100100"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 4
+    },
+    "terrain": "field",
+    "railway": "000101"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 4
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 4
+    },
+    "terrain": "mud"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 4
+    },
+    "terrain": "mud"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 4
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 4
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 4
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 8,
+      "r": 4
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -2,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -1,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 0,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 5
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 8,
+      "r": 5
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -3,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -2,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": -1,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 0,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 1,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 2,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 3,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 4,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 5,
+      "r": 6
+    },
+    "terrain": "field"
+  },
+  {
+    "pos": {
+      "q": 6,
+      "r": 6
+    },
+    "terrain": "road",
+    "roads": [
+      false,
+      true,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  {
+    "pos": {
+      "q": 7,
+      "r": 6
+    },
+    "terrain": "field"
+  }
+]

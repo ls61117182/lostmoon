@@ -97,6 +97,8 @@ export interface Tile {
    * 索引与 `hedges`、`HEX_DIRECTIONS`、`enemyStartFacing` 完全同序（轴向 0..5）。
    */
   roads?: [boolean, boolean, boolean, boolean, boolean, boolean];
+  /** Railway overlay, six port flags E,SE,SW,W,NW,NE. Preserves all base-terrain rules. */
+  railway?: string;
   /** 援军生成位编号（如说明书的红色数字 1..6） */
   reinforceId?: number;
   /** Reinforcement/support spawn facing for `reinforceId` (`rf` in mission JSON). */
@@ -906,6 +908,8 @@ export interface TileDef {
    * 纯视觉字段，不影响移动 / 视线 / 骰子；缺省时本格不绘制道路条带（视觉退化为整格平涂的公路色）。
    */
   rd?: string;
+  /** Railway overlay on f/r/m; road-compatible six port flags. Train rules are deferred. */
+  rl?: string;
   /** Earthwork overlay, connections in road rd order E,SE,SW,W,NW,NE. */
   fort?: FortificationArtConfig;
   /** 援军编号 1..6（红格；掷骰放置步兵时用，全图不重复） */

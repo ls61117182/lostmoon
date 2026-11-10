@@ -1,0 +1,254 @@
+{
+  "status": "passed",
+  "corePngCount": 15,
+  "modules": [
+    {
+      "id": "locomotive",
+      "weaponCount": 0,
+      "independentSlots": [],
+      "normalBounds": {
+        "left": 186,
+        "top": 35,
+        "width": 141,
+        "height": 443
+      },
+      "destroyedBounds": {
+        "left": 184,
+        "top": 35,
+        "width": 143,
+        "height": 443
+      },
+      "wreckSilhouetteIoU": 0.9843
+    },
+    {
+      "id": "tender",
+      "weaponCount": 0,
+      "independentSlots": [],
+      "normalBounds": {
+        "left": 190,
+        "top": 35,
+        "width": 133,
+        "height": 443
+      },
+      "destroyedBounds": {
+        "left": 188,
+        "top": 34,
+        "width": 139,
+        "height": 444
+      },
+      "wreckSilhouetteIoU": 0.9788
+    },
+    {
+      "id": "command",
+      "weaponCount": 0,
+      "independentSlots": [],
+      "normalBounds": {
+        "left": 190,
+        "top": 35,
+        "width": 133,
+        "height": 443
+      },
+      "destroyedBounds": {
+        "left": 188,
+        "top": 35,
+        "width": 136,
+        "height": 443
+      },
+      "wreckSilhouetteIoU": 0.9682
+    },
+    {
+      "id": "howitzer",
+      "weaponCount": 1,
+      "independentSlots": [
+        "main_gun"
+      ],
+      "normalBounds": {
+        "left": 190,
+        "top": 35,
+        "width": 133,
+        "height": 443
+      },
+      "destroyedBounds": {
+        "left": 189,
+        "top": 35,
+        "width": 135,
+        "height": 443
+      },
+      "wreckSilhouetteIoU": 0.9915
+    },
+    {
+      "id": "artillery_flak",
+      "weaponCount": 2,
+      "independentSlots": [
+        "main_gun",
+        "anti_aircraft"
+      ],
+      "normalBounds": {
+        "left": 191,
+        "top": 35,
+        "width": 131,
+        "height": 443
+      },
+      "destroyedBounds": {
+        "left": 190,
+        "top": 35,
+        "width": 133,
+        "height": 444
+      },
+      "wreckSilhouetteIoU": 0.992
+    },
+    {
+      "id": "panzerjaeger",
+      "weaponCount": 1,
+      "independentSlots": [
+        "anti_tank"
+      ],
+      "normalBounds": {
+        "left": 190,
+        "top": 35,
+        "width": 133,
+        "height": 443
+      },
+      "destroyedBounds": {
+        "left": 189,
+        "top": 35,
+        "width": 134,
+        "height": 443
+      },
+      "wreckSilhouetteIoU": 0.9918
+    }
+  ],
+  "weapons": [
+    {
+      "id": "howitzer",
+      "muzzles": [
+        {
+          "x": 256,
+          "y": 146.5
+        }
+      ],
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "silhouetteIoU": 0.9656
+    },
+    {
+      "id": "panzer4",
+      "muzzles": [
+        {
+          "x": 256,
+          "y": 99.5
+        }
+      ],
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "silhouetteIoU": 0.9398
+    },
+    {
+      "id": "flakvierling",
+      "muzzles": [
+        {
+          "x": 242.5,
+          "y": 176.5
+        },
+        {
+          "x": 249.5,
+          "y": 176.5
+        },
+        {
+          "x": 259.5,
+          "y": 176.5
+        },
+        {
+          "x": 266.5,
+          "y": 176.5
+        }
+      ],
+      "pivot": {
+        "x": 256,
+        "y": 256
+      },
+      "silhouetteIoU": 0.7838
+    }
+  ],
+  "files": [
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_locomotive_body.png",
+      "bytes": 111938,
+      "sha256": "4adfbfeb6d53ad22e4ff63c1b44c5ef9ee73a8666ab2fe55dafd6f0456602954"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_locomotive_destroyed.png",
+      "bytes": 129092,
+      "sha256": "783446873a0ad55f42e3d287ec26e3bba54da353105f6077ca87f61e3c46b0d4"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_tender_body.png",
+      "bytes": 105063,
+      "sha256": "cdab2e3664370ae358eb5d255e643cb3b855ffe745c6d5e7b21e5237d50843bf"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_tender_destroyed.png",
+      "bytes": 118216,
+      "sha256": "88e0c46dc94e03f0f59507a2f64d79dd11db547725ec677b8c67ca4ef7302b70"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_command_body.png",
+      "bytes": 105571,
+      "sha256": "1ffe853c03c2434e7d62a3f751c5e1a797600d48e7bb0bfadb39699a49d4399d"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_command_destroyed.png",
+      "bytes": 119241,
+      "sha256": "9ca381ffa56b1be73b5d8019a2d32833683cfbc21055a6024a7643c46986f636"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_howitzer_body.png",
+      "bytes": 110761,
+      "sha256": "b17ca001065da3e5d1cfafe5cacbfa2672e56278bbe46908df50c1f8b6afaf5d"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_howitzer_destroyed.png",
+      "bytes": 128403,
+      "sha256": "51e32fae2273fc3ea39f18da17a5790c411d345bba7dda4e9aeffe5539374c59"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_artillery_flak_body.png",
+      "bytes": 111480,
+      "sha256": "6867b582872594869d1973562f4ee661f0dbeabba62a85950c30b0ea9655618f"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_artillery_flak_destroyed.png",
+      "bytes": 137385,
+      "sha256": "a0679d71df15228d07c43ad08b75ad7ba43b69b369d49e75f97e0b7e2a73e304"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_panzerjaeger_body.png",
+      "bytes": 104822,
+      "sha256": "805ecd1ac412436c5697c9947b04e04ea6e2726533acc339ac7a3a89de8b2fdc"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_panzerjaeger_destroyed.png",
+      "bytes": 130546,
+      "sha256": "50fa581745c3740e8bd63c4e814560763f5b5c82a4923b59211196528f9611dc"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_howitzer_weapon.png",
+      "bytes": 25665,
+      "sha256": "89d51446581a3af20d8011a7113d13f68e2b4f627912df196b3290873a096b99"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_panzer4_weapon.png",
+      "bytes": 31147,
+      "sha256": "2a2f20958d7c462853ffd5103403ef41ef18caa455fa53fd4d7b2ef2bbb9856e"
+    },
+    {
+      "path": "assets/resources/textures/units/trains/bp44/bp44_flakvierling_weapon.png",
+      "bytes": 24667,
+      "sha256": "1ab23ecac8e7a3d7c49a9ac18ee51f3b047fc98b391f4703cc168cc5f5bed39e"
+    }
+  ]
+}

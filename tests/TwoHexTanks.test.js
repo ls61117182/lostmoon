@@ -10,7 +10,8 @@ const { HexMap, neighbor, rotateDirection, hexDistance } = require('../assets/sc
 const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
 const { createTankCrew } = require('../assets/scripts/core/types.ts');
 const combat = require('../assets/scripts/core/Combat.ts');
-const { computeUnitVisibleHexes } = require('../assets/scripts/core/FogOfWar.ts');
+const { computeUnitVisibleHexes, computePlayerVisibleHexes, hasFogLineOfSight } = require('../assets/scripts/core/FogOfWar.ts');
+const { PlayerVisionCache } = require('../assets/scripts/core/PlayerVisionCache.ts');
 const { actionDicePool } = require('../assets/scripts/core/ActionDice.ts');
 const { canExecuteAction, rollHardcoreTankAIDice } = require('../assets/scripts/core/EnemyAI.ts');
 
@@ -143,6 +144,44 @@ test('a front hit does not kill the rear commander on hit doubles; rear hit can'
   }
 });
 
+test('AP and HE open-hatch casualties and commander shields apply only at the configured turret cell', () => {
+  for (let facing=0;facing<6;facing++) for (const turretCell of ['front','rear'])
+    for (const hitCell of ['front','rear']) for (const shell of ['ap','he']) for (const shield of [false,true]) for (const playerTarget of [false,true]) {
+      const target=unit('maus',{q:0,r:0},{facing,hatchOpen:true,campaignCommanderShieldAvailable:shield});
+      target.sideId=playerTarget?'player':'enemy';
+      target.stats={...target.stats,turretCell,armorFront:100,armorFrontSide:100,armorRearSide:100,armorRear:100};
+      const hitHex=hitCell==='front'?target.pos:geometry.unitRearHex(target);
+      const attacker=unit('sherman',neighbor(hitHex,(facing+2)%6));
+      attacker.sideId=playerTarget?'enemy':'player';
+      const ctx={map:battlefield(),attacker,target,targetHex:hitHex,shellType:shell,expandedTurretDirections:true};
+      const roll=shell==='he'?combat.rollHighExplosiveAttack:combat.rollAttack;
+      const apply=shell==='he'?combat.applyHighExplosiveAttack:combat.applyAttack;
+      const report=roll(ctx,rolls(6,6,1,1,1));
+      const exposed=hitCell===turretCell;
+      assert.equal(report.hit,true);
+      assert.equal(report.targetCommanderExposed,exposed);
+      assert.equal(report.commanderKilledByHitDoubles,exposed&&!shield);
+      assert.equal(report.commanderShieldBlocked,exposed&&shield);
+      apply(target,report);
+      assert.equal(target.crew.commander,!(exposed&&!shield));
+      assert.equal(target.campaignCommanderShieldAvailable,shield&&!exposed);
+    }
+});
+
+test('closed hatches and single-cell tanks retain their commander casualty rules', () => {
+  for (const kind of ['maus','sherman']) for (const open of [false,true]) for (const shell of ['ap','he']) {
+    const target=unit(kind,{q:0,r:0},{hatchOpen:open});
+    target.stats={...target.stats,armorFront:100,armorFrontSide:100,armorRearSide:100,armorRear:100};
+    const hitHex=geometry.unitTurretHex(target);
+    const ctx={map:battlefield(),attacker:unit('panzer4',{q:0,r:2},{faction:'soviet',sideId:'opponent'}),
+      target,targetHex:hitHex,shellType:shell,expandedTurretDirections:true};
+    const report=(shell==='he'?combat.rollHighExplosiveAttack:combat.rollAttack)(ctx,rolls(6,6,1,1,1));
+    assert.equal(report.hit,true);
+    assert.equal(report.targetCommanderExposed,open);
+    assert.equal(report.commanderKilledByHitDoubles,open);
+  }
+});
+
 test('main gun distance starts at the rear turret and cannot attack either occupied hex', () => {
   const map = battlefield(), tank = unit('maus');
   assert.equal(combat.hitBreakdown({ map, attacker: tank, target: unit('sherman', { q: 2, r: 0 }) }).distance, 3);
@@ -159,6 +198,76 @@ test('closed-hatch interior sight combines both cells; open-hatch and gunner sta
   tank.hatchOpen = true;
   visible = computeUnitVisibleHexes(map, tank);
   assert(visible.has('-5,0')); assert(!visible.has('4,0'));
+});
+
+test('open tanks retain the one-hex body perimeter in all six headings, including both Maus cells', () => {
+  for (const kind of ['maus','sherman','tiger','stug3']) for (let facing=0;facing<6;facing++) {
+    const map=battlefield(),tank=unit(kind,{q:0,r:0},{facing,turretFacing:facing,
+      hatchOpen:true,visionRange:0,gunnerVisionRange:0,interiorVisionRange:1});
+    const cells=geometry.unitOccupiedHexes(tank);
+    const expected=map.all().filter(tile=>cells.some(pos=>hexDistance(pos,tile.pos)<=1)).map(tile=>HexMap.keyOf(tile.pos)).sort();
+    const opened=computeUnitVisibleHexes(map,tank);
+    assert.deepEqual(Array.from(opened).sort(),expected,`${kind}, heading ${facing}`);
+    tank.hatchOpen=false;
+    assert.deepEqual(Array.from(computeUnitVisibleHexes(map,tank)).sort(),expected);
+  }
+});
+
+test('opening a Maus hatch retains nearby ground hidden from the rear turret by a plateau edge', () => {
+  for (let facing=0;facing<6;facing++) {
+    const map=battlefield(),tank=unit('maus',{q:0,r:0},{facing,turretFacing:rotateDirection(facing,3),
+      hatchOpen:false,gunnerVisionRange:0,interiorVisionRange:1});
+    const rear=geometry.unitRearHex(tank),nearFront=neighbor(tank.pos,facing),key=HexMap.keyOf(nearFront);
+    map.get(rear).height=1;map.get(tank.pos).height=1;
+    assert.equal(hasFogLineOfSight(map,rear,nearFront),false,'the turret-origin path is blocked by the plateau');
+    assert(computeUnitVisibleHexes(map,tank).has(key),'the front-cell near sight sees down the plateau edge');
+    tank.hatchOpen=true;
+    assert(computeUnitVisibleHexes(map,tank).has(key),'opening must keep the front-cell near sight');
+  }
+});
+
+test('open body sight does not create another long-range observer or activate closed-hatch cupola bonuses', () => {
+  const map=battlefield(),tank=unit('maus',{q:0,r:0},{hatchOpen:true,visionRange:2,gunnerVisionRange:0,
+    interiorVisionRange:2,campaignUpgradeIds:['commander_cupola']});
+  assert(computeUnitVisibleHexes(map,tank).has('1,0'));
+  assert(!computeUnitVisibleHexes(map,tank).has('2,0'),'two cells beyond the front is outside both near sight and rear-origin commander range');
+  tank.hatchOpen=false;
+  assert(computeUnitVisibleHexes(map,tank).has('2,0'),'the configured cupola interior bonus still applies while closed');
+});
+
+test('retained open-hatch perimeter obeys per-cell smoke, fog weather and region boundaries', () => {
+  for (const kind of ['maus','sherman']) for (const weather of ['clear','rain','fog']) {
+    const map=battlefield(),tank=unit(kind,{q:0,r:0},{hatchOpen:false,visionRange:0,gunnerVisionRange:0,interiorVisionRange:1});
+    const cells=geometry.unitOccupiedHexes(tank),ownKeys=cells.map(HexMap.keyOf);
+    for (const smoke of [new Set(),new Set(['0,0']),new Set(ownKeys),new Set(['1,0'])]) {
+      tank.hatchOpen=false;
+      const closed=computeUnitVisibleHexes(map,tank,weather,smoke);
+      tank.hatchOpen=true;
+      const opened=computeUnitVisibleHexes(map,tank,weather,smoke);
+      for (const tile of map.all()) if (cells.some(pos=>hexDistance(pos,tile.pos)<=1) && closed.has(HexMap.keyOf(tile.pos))) {
+        assert(opened.has(HexMap.keyOf(tile.pos)),`${kind}, ${weather}, ${HexMap.keyOf(tile.pos)}`);
+      }
+      if (weather==='fog') for (const key of smoke) if (!ownKeys.includes(key)) assert(!opened.has(key));
+      if (weather==='fog' && ownKeys.every(key=>smoke.has(key))) assert.deepEqual(Array.from(opened).sort(),ownKeys.slice().sort());
+    }
+    for (const tile of map.all()) map.regions.set(HexMap.keyOf(tile.pos),'A');
+    map.regions.set('1,0','B');tank.hatchOpen=true;
+    assert(!computeUnitVisibleHexes(map,tank,weather).has('1,0'),'near sight cannot cross a region boundary');
+  }
+});
+
+test('the player vision cache recomputes hatch changes without dropping near-body visibility', () => {
+  const map=battlefield(),tank=unit('maus',{q:0,r:0},{hatchOpen:false,turretFacing:3,gunnerVisionRange:0});
+  map.get({q:0,r:0}).height=1;map.get({q:-1,r:0}).height=1;
+  const mission={map,sherman:tank,playerTank:tank,allies:[],smokeHexes:new Set(),data:{}};
+  let computations=0;
+  const cache=new PlayerVisionCache((...args)=>{computations++;return computePlayerVisibleHexes(...args);});
+  const closed=cache.get(mission,'clear',true,false);
+  assert(closed.has('1,0'));tank.hatchOpen=true;
+  assert(cache.get(mission,'clear',true,false).has('1,0'));assert.equal(computations,2);
+  tank.hatchOpen=false;
+  assert.deepEqual(Array.from(cache.get(mission,'clear',true,false)).sort(),Array.from(closed).sort());
+  assert.equal(computations,3);
 });
 
 test('half smoke limits the actual observation origin without isolating the other half', () => {

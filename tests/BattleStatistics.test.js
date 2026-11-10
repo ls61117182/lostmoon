@@ -11,6 +11,54 @@ const { applyHighExplosiveAttack } = require('../assets/scripts/core/Combat.ts')
 const { isTankUnit } = require('../assets/scripts/core/types.ts');
 const { destroyTankRiders } = require('../assets/scripts/core/TankRiding.ts');
 const sceneMethods = require('./helpers/BattleSceneMethods.cjs');
+const { unitHitView, unitOccupiedHexes } = require('../assets/scripts/core/UnitFootprint.ts');
+const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
+
+test('Maus incoming fire counts front and rear target views by protagonist identity', () => {
+  const Scene = sceneMethods(['recordSettledBattleAttack'], { cloneBattleStatistics, recordBattleAttack });
+  const player = { id: 'player-maus', kind: 'maus', stats: getUnitStats('maus'), pos: { q: 0, r: 0 }, facing: 0 };
+  const enemy = { id: 'enemy' };
+  for (const hex of unitOccupiedHexes(player)) {
+    const scene = new Scene();
+    scene.mission = { playerTank: player, sherman: player };
+    const target = unitHitView(player, hex);
+    assert.notEqual(target, player, 'even the front hex uses a target proxy');
+    scene.recordSettledBattleAttack(enemy, target, 'main', [
+      { hit: false },
+      { hit: true, penThreshold: 4, penetrated: false },
+      { hit: true, penThreshold: 4, penetrated: true },
+    ]);
+    scene.recordSettledBattleAttack(enemy, target, 'he', [{ hit: true }]);
+    scene.recordSettledBattleAttack(enemy, target, 'mg', [{ hit: false }, { hit: true }]);
+    const ally = { ...player, id: 'ally-maus' };
+    scene.recordSettledBattleAttack(enemy, unitHitView(ally, hex), 'main', [
+      { hit: true, penThreshold: 4, penetrated: true },
+    ]);
+    const stats = scene.mission.battleStatistics;
+    assert.deepEqual([stats.attacksReceived, stats.hitsReceived, stats.penetrationsReceived], [6, 4, 1]);
+    assert.equal(stats.mainGunHitChecks, 0, 'incoming fire must not count as player shots');
+    assert.equal(stats.machineGunShots, 0);
+  }
+});
+
+test('protagonist geometry views retain outgoing shot credit without crediting other tanks', () => {
+  const Scene = sceneMethods(['recordSettledBattleAttack'], { cloneBattleStatistics, recordBattleAttack });
+  const player = { id: 'player-maus', kind: 'maus', stats: getUnitStats('maus'), pos: { q: 0, r: 0 }, facing: 0 };
+  const scene = new Scene();
+  scene.mission = { playerTank: player, sherman: player };
+  const target = { id: 'enemy' };
+  for (const hex of unitOccupiedHexes(player)) {
+    scene.recordSettledBattleAttack(unitHitView(player, hex), target, 'main', [
+      { hit: true, penThreshold: 4, penetrated: true },
+    ]);
+    scene.recordSettledBattleAttack(unitHitView({ ...player, id: 'ally-maus' }, hex), target, 'main', [
+      { hit: true, penThreshold: 4, penetrated: true },
+    ]);
+  }
+  const stats = scene.mission.battleStatistics;
+  assert.deepEqual([stats.mainGunHitChecks, stats.mainGunHits, stats.mainGunPenetrationChecks, stats.mainGunPenetrations], [2, 2, 2, 2]);
+  assert.equal(stats.attacksReceived, 0);
+});
 
 test('incoming fire counts misses, hits and armor penetrations independently', () => {
   const stats = cloneBattleStatistics();

@@ -29,8 +29,9 @@ assert(
 );
 
 assert(
-  !/onMapPanStart|onMapPanMove|mapPanEnabled/.test(battleScene),
-  'BattleScene should not allow manual map panning',
+  ['TOUCH_START, this.onMapPanStart', 'TOUCH_MOVE, this.onMapPanMove', 'TOUCH_CANCEL, this.onMapPanCancel']
+    .every(listener => battleScene.includes(`mapInputNode.on(Node.EventType.${listener}, this);`)),
+  'MapInput should handle drag start, movement and cancellation',
 );
 
 assert(

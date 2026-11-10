@@ -1,10 +1,12 @@
 import { createMenuBackground } from './MenuBackground';
 import { EXTRA_EUROPEAN_LOOKS, europeanTerrainLook, normalizeSeason, normalizeSnowCover, seasonalTerrainPath, seasonalTerrainRGB, seasonalFoliageRGB } from '../core/TerrainSeason';
-import type { SnowCover, Direction } from '../core/types';
+import type { SnowCover, Direction, Tile } from '../core/types';
 import { drawBeachEdge, drawBeachOverlays, drawSeawallJoints } from './BeachTerrainVisual';
 import type { SeawallSegment } from '../core/SeawallJunctions';
 import { applyNormandyEditorBrush, normandyEditorEdgeState, setNormandyEditorEdge, type NormandyEditorBrush } from '../core/NormandyEditor';
 import { fortificationArtTransform, FORTIFICATION_ART_MASKS, type FortificationArtKind } from '../core/FortificationArt';
+import { railwayArtTransform, railwayHasCrossing, RAILWAY_ART_MASKS, editorAllowsRailway, setEditorRailwayConnection, clearEditorRailway } from '../core/Railway';
+import { removeRailwayHedgeConflicts, setEditorRailwaySafeHedge } from '../core/RailwayHedges';
 import { setEditorFortification, setEditorFortificationConnection } from '../core/Fortification';
 import { SLOPE_DIRECTIONS, tileHeight, editorCliffState, setEditorCliff, editorElevationTiles } from '../core/Elevation';
 import { ElevationRenderer } from './ElevationRenderer';
@@ -2148,24 +2150,41 @@ export class MainMenuScene extends Component {
     previewRoot.on(Node.EventType.MOUSE_UP, endMouseDrag, this);
     previewRoot.on(Node.EventType.MOUSE_LEAVE, endMouseDrag, this);
     const drawHex = (parent: Node) => {
-      const n = new Node('DebugHex');
-      n.layer = this.node.layer;
-      n.addComponent(UITransform).setContentSize(hexR * 2.2, hexR * 2.2);
-      const g = n.addComponent(Graphics);
-      g.fillColor = new Color(117, 130, 91, 185);
-      for (let i = 0; i < 6; i++) {
-        const angle = Math.PI / 180 * (60 * i - 30);
-        const px = Math.cos(angle) * hexR;
-        const py = Math.sin(angle) * hexR;
-        if (i === 0) g.moveTo(px, py);
-        else g.lineTo(px, py);
+      const stats = getUnitStats(selectedKind);
+      const twoHex = stats.footprintLength === 2;
+      const body = angleVec(bodyAngleDeg);
+      // The runtime renders the hull at the midpoint of the occupied hex centres.
+      // Rotate the reference grid with the freely draggable hull so the two cells
+      // remain adjacent; at each 60-degree heading it matches the battle grid.
+      const halfSpacing = twoHex ? hexR * Math.sqrt(3) / 2 : 0;
+      const cells = twoHex ? ['front', 'rear'] as const : ['front'] as const;
+      for (const cell of cells) {
+        const n = new Node(twoHex ? `DebugHex_${cell}` : 'DebugHex');
+        n.layer = this.node.layer;
+        n.addComponent(UITransform).setContentSize(hexR * 2.2, hexR * 2.2);
+        const sign = cell === 'front' ? 1 : -1;
+        n.setPosition(sign * halfSpacing * body.ux, sign * halfSpacing * body.uy, 0);
+        const g = n.addComponent(Graphics);
+        g.fillColor = cell === 'rear' ? new Color(92, 115, 126, 185) : new Color(117, 130, 91, 185);
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.PI / 180 * (60 * i - 30 + (twoHex ? bodyAngleDeg : 0));
+          const px = Math.cos(angle) * hexR;
+          const py = Math.sin(angle) * hexR;
+          if (i === 0) g.moveTo(px, py);
+          else g.lineTo(px, py);
+        }
+        g.close();
+        g.fill();
+        g.strokeColor = new Color(228, 216, 158, 235);
+        g.lineWidth = 2;
+        g.stroke();
+        parent.addChild(n);
+        if (twoHex) {
+          const name = cell === 'front' ? '前格' : '后格';
+          this.makeLabel(n, `${name}${stats.turretCell === cell ? '（炮塔）' : ''}`,
+            0, -hexR * 0.72, hexR * 1.6, 32, 25, TEXT_PRIMARY);
+        }
       }
-      g.close();
-      g.fill();
-      g.strokeColor = new Color(228, 216, 158, 235);
-      g.lineWidth = 2;
-      g.stroke();
-      parent.addChild(n);
     };
     const addSprite = (
       parent: Node,
@@ -2322,6 +2341,13 @@ export class MainMenuScene extends Component {
         : '青：同轴 / 黄：航向；炮口火焰可预览弹道';
       engineVibrationLayer = null;
       exhaustPreviewGraphics = null;
+      const twoHex = getUnitStats(selectedKind).footprintLength === 2;
+      // Use the same preview zoom for every vehicle so their sizes can be compared.
+      // Only expand the input bounds for the larger two-cell footprint.
+      const footprintDiameter = twoHex ? hexR * Math.sqrt(13) : 520;
+      previewRoot.setScale(1, 1, 1);
+      previewRoot.setPosition(0, twoHex ? -44 : -4, 0);
+      previewRoot.getComponent(UITransform)!.setContentSize(footprintDiameter, footprintDiameter);
       drawHex(previewRoot);
       const exhaustPreviewNode = new Node('TankEngineExhaustPreview');
       exhaustPreviewNode.layer = previewRoot.layer;
@@ -3644,6 +3670,10 @@ export class MainMenuScene extends Component {
       if (tile.t !== 'eb') { delete tile.sh; delete tile.cr; }
       if (['w', 'dw', 'B', 'esw'].includes(tile.t)) { delete tile.wire; delete tile.sw; delete tile.fort; }
       if (tile.t !== 'w') delete tile.br;
+      if (!editorAllowsRailway(tile) && tile.rl) {
+        clearEditorRailway(draftTiles, selectedRow, selectedCol, draftRowParityOffset);
+        delete tile.rl;
+      }
       if (tile.t !== 'r' && tile.t !== 'ur' && tile.t !== 'a') {
         delete tile.rd;
       }
@@ -3697,6 +3727,35 @@ export class MainMenuScene extends Component {
       };
       refresh();
     };
+    const openRailwayProps = (tile: TileDef) => {
+      const popup = new Node('RailwayProps');
+      popup.layer = this.node.layer;
+      popup.addComponent(UITransform).setContentSize(330, 330);
+      const background = popup.addComponent(Graphics);
+      background.fillColor = new Color(30, 37, 32, 255);
+      background.rect(-165, -165, 330, 330); background.fill();
+      propRoot.addChild(popup);
+      const refresh = () => {
+        popup.removeAllChildren();
+        const zh = getLang() === 'zh';
+        this.makeLabel(popup, zh ? '铁路连接方向' : 'Railway connections', 0, 135, 310, 30, 17, TEXT_TITLE);
+        const button = (label: string, x: number, y: number, active: boolean, click: () => void) => {
+          const btn = this.makeRectButton(popup, x, y, 96, 30, active ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => {
+            click(); redrawAllCells(); refresh();
+          });
+          this.makeLabel(btn.node, label, 0, 0, 90, 28, 13, TEXT_PRIMARY);
+        };
+        const labels = zh ? ['东 E','东南 SE','西南 SW','西 W','西北 NW','东北 NE'] : ['E','SE','SW','W','NW','NE'];
+        labels.forEach((label, d) => button(label, (d%3-1)*102, 82-Math.floor(d/3)*42, tile.rl?.[d] === '1', () => {
+          setEditorRailwayConnection(draftTiles, selectedRow, selectedCol, d as Direction, tile.rl?.[d] !== '1', draftRowParityOffset);
+        }));
+        this.makeLabel(popup, zh ? '保留原地形规则；可覆盖田野、道路、泥地。\n连接方向会同步到相邻的可用格子。' : 'Keeps base terrain rules: field, road or mud.\nConnections synchronize with eligible neighbours.', 0, -18, 306, 56, 12, TEXT_SUBTITLE);
+        button(zh ? '移除铁路' : 'Remove', -65, -88, false, () => clearEditorRailway(draftTiles, selectedRow, selectedCol, draftRowParityOffset));
+        const done = this.makeRectButton(popup, 65, -88, 96, 30, BTN_LEVEL_UNLOCKED, () => { popup.destroy(); refreshSelection(); });
+        this.makeLabel(done.node, zh ? '完成' : 'Done', 0, 0, 90, 28, 13, TEXT_PRIMARY);
+      };
+      refresh();
+    };
     const openElevationProps = (tile: TileDef) => {
       const popup = new Node('ElevationProps'); popup.layer = this.node.layer;
       popup.addComponent(UITransform).setContentSize(330, 390); popup.addComponent(BlockInputEvents);
@@ -3743,8 +3802,13 @@ export class MainMenuScene extends Component {
     const elevationHeading = (tile: TileDef | null, y: number) => {
       const text = `${getLang() === 'zh' ? '格子' : 'Hex'} ${selectedCol},${selectedRow}`;
       if (!tile) { this.makeLabel(propRoot, text, 0, y, 300, 26, 18, TEXT_TITLE); return; }
-      const btn = this.makeRectButton(propRoot, 0, y, 300, 28, BTN_LEVEL_UNLOCKED, () => openElevationProps(tile));
-      this.makeLabel(btn.node, `${text} · ${getLang() === 'zh' ? '高度' : 'Height'} ${tileHeight(tile)} / ${getLang() === 'zh' ? '边坡' : 'Slopes'}`, 0, 0, 290, 26, 14, TEXT_PRIMARY);
+      const allowsRailway = editorAllowsRailway(tile);
+      const btn = this.makeRectButton(propRoot, allowsRailway ? -48 : 0, y, allowsRailway ? 204 : 300, 28, BTN_LEVEL_UNLOCKED, () => openElevationProps(tile));
+      this.makeLabel(btn.node, `${text} · ${getLang() === 'zh' ? '高度' : 'Height'} ${tileHeight(tile)} / ${getLang() === 'zh' ? '边坡' : 'Slopes'}`, 0, 0, allowsRailway ? 194 : 290, 26, 14, TEXT_PRIMARY);
+      if (allowsRailway) {
+        const railway = this.makeRectButton(propRoot, 106, y, 88, 28, tile.rl ? BTN_LEVEL_COMPLETED : BTN_LEVEL_UNLOCKED, () => openRailwayProps(tile));
+        this.makeLabel(railway.node, getLang() === 'zh' ? '铁路' : 'Railway', 0, 0, 82, 26, 14, TEXT_PRIMARY);
+      }
     };
     const openBeachProps = (tile: TileDef) => {
       const popup = new Node('BeachObstacleProps');
@@ -4334,12 +4398,15 @@ export class MainMenuScene extends Component {
         }
         addBtn('清空附加', allowsBuilding ? 72 : 0, 82, 112, 28, false, () => {
           for (let dir = 0; dir < 6; dir++) setEditorCliff(draftTiles, selectedRow, selectedCol, dir, false, draftRowParityOffset);
+          clearEditorRailway(draftTiles, selectedRow, selectedCol, draftRowParityOffset);
           delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef; delete tile.fort;
         });
         const sectionY = 8;
         if (allowsHedge) {
           addDirHexButtons(-78, sectionY, '树篱\nh', (i) => normalizeFlags(tile.h)[i] === '1', (i) => {
-            tile.h = setFlag(tile.h, i, normalizeFlags(tile.h)[i] !== '1');
+            if (!setEditorRailwaySafeHedge(draftTiles, selectedRow, selectedCol, i, normalizeFlags(tile.h)[i] !== '1', draftRowParityOffset)) {
+              statusLabel.string = '铁路经过该格边，不能配置树篱。';
+            }
           });
         }
         if (allowsRoadDirs || allowsAirstripDirs) {
@@ -4442,12 +4509,15 @@ export class MainMenuScene extends Component {
       }
       addBtn('清空附加', allowsBuilding ? 72 : 0, 146, 112, 28, false, () => {
         for (let dir = 0; dir < 6; dir++) setEditorCliff(draftTiles, selectedRow, selectedCol, dir, false, draftRowParityOffset);
+        clearEditorRailway(draftTiles, selectedRow, selectedCol, draftRowParityOffset);
         delete tile.bd; delete tile.h; delete tile.bw; delete tile.sw; delete tile.wire; delete tile.sh; delete tile.cr; delete tile.rd; delete tile.br; delete tile.rid; delete tile.rf; delete tile.eid; delete tile.ef; delete tile.fort;
       });
       const sectionY = 66;
       if (allowsHedge) {
         addDirHexButtons(-78, sectionY, '树篱\nh', (i) => normalizeFlags(tile.h)[i] === '1', (i) => {
-          tile.h = setFlag(tile.h, i, normalizeFlags(tile.h)[i] !== '1');
+          if (!setEditorRailwaySafeHedge(draftTiles, selectedRow, selectedCol, i, normalizeFlags(tile.h)[i] !== '1', draftRowParityOffset)) {
+            statusLabel.string = '铁路经过该格边，不能配置树篱。';
+          }
         });
       }
       if (allowsRoadDirs || allowsAirstripDirs) {
@@ -4655,11 +4725,20 @@ export class MainMenuScene extends Component {
       fortSprite.sizeMode = Sprite.SizeMode.CUSTOM;
       fortNode.active = false;
       node.addChild(fortNode);
+      const railNode = new Node('EditorRailway');
+      railNode.layer = this.node.layer;
+      railNode.addComponent(UITransform).setContentSize(h, h);
+      const railSprite = railNode.addComponent(Sprite);
+      railSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+      railNode.active = false;
+      node.addChild(railNode);
       const outlineNode = new Node('EditorHexOutline');
       outlineNode.layer = this.node.layer;
       outlineNode.addComponent(UITransform).setContentSize(w, h);
       const outlineGraphics = outlineNode.addComponent(Graphics);
       node.addChild(outlineNode);
+      // Keep the railway above road-direction strokes, like the battle ground layers.
+      railNode.setSiblingIndex(outlineNode.getSiblingIndex() + 1);
       const graphics = node.addComponent(Graphics);
       const label = this.makeLabel(node, `${col},${row}`, 0, -2, w - 6, 18, 11, TEXT_PRIMARY);
       label.enableOutline = true;
@@ -4910,6 +4989,13 @@ export class MainMenuScene extends Component {
         fortSprite.spriteFrame = fortArt ? spriteFrames[fortArt.surface] ?? null : null;
         fortNode.active = !!fortSprite.spriteFrame;
         fortNode.angle = fortArt?.rotationDegrees ?? 0;
+        const railArt = tile?.rl && editorAllowsRailway(tile) ? railwayArtTransform(tile.rl, railwayHasCrossing({
+          terrain: tile.t === 'r' ? 'road' : tile.t === 'm' ? 'mud' : 'field',
+          railway: tile.rl, roads: [...normalizeFlags(tile.rd)].map(c => c === '1') as Tile['roads'],
+        })) : null;
+        railSprite.spriteFrame = railArt ? spriteFrames[railArt.surface] ?? null : null;
+        railNode.active = !!railSprite.spriteFrame;
+        railNode.angle = railArt?.rotationDegrees ?? 0;
         drawHex(colorForTile(tile));
         drawTileOverlays(tile);
         const markers = supportMarkerVisuals(tile?.rid, tile?.rf, tile?.eid, tile?.ef, radius);
@@ -4940,6 +5026,7 @@ export class MainMenuScene extends Component {
           if (selectedTool.normandy) {
             if (!applyNormandyEditorBrush(draftTiles, row, col, selectedTool.normandy, normandyEdgeDirection, draftRowParityOffset)) statusLabel.string = t('levelEditor.normandy.landOnly');
           } else {
+            if (selectedTool.code === null) clearEditorRailway(draftTiles, row, col, draftRowParityOffset);
             draftTiles[row]![col] = selectedTool.code === null
               ? null
               : { ...(draftTiles[row]![col] ?? {}), t: selectedTool.code };
@@ -5475,6 +5562,14 @@ export class MainMenuScene extends Component {
     const extendLeft = makeExtendButton('+←', -605, 10, 'left');
     const extendRight = makeExtendButton('+→', 245, 10, 'right');
     rebuildGrid(true);
+    for (const mask of RAILWAY_ART_MASKS) for (const crossing of [false, true]) {
+      const art = railwayArtTransform(Array.from({ length: 6 }, (_, d) => (mask >> d) & 1).join(''), crossing)!;
+      resources.load(art.surface, SpriteFrame, (err, frame) => {
+        if (err || !frame || !panel.isValid) return;
+        spriteFrames[art.surface] = frame;
+        redrawAllCells();
+      });
+    }
     for (const kind of ['trench', 'gun_pit'] as const) for (const mask of FORTIFICATION_ART_MASKS) {
       const connections = Array.from({ length: 6 }, (_, d) => (mask >> d) & 1).join('');
       const art = fortificationArtTransform({ kind, connections });
@@ -5563,6 +5658,7 @@ export class MainMenuScene extends Component {
       }));
     const buildDraftMission = (id: string, oldPkg: ReturnType<typeof CustomMissionStore.load> | null, fallbackName: string): MissionData => {
       captureMissionFields();
+      if (removeRailwayHedgeConflicts(draftTiles, draftRowParityOffset)) redrawAllCells();
       const randomGeneratedId = draftBaseMission.id?.startsWith('random_') ? draftBaseMission.id : undefined;
       const missionId = editingExistingMission?.id ?? oldPkg?.mission.id ?? randomGeneratedId ?? id;
       const sherman = cloneJson(draftSherman);

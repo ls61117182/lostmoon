@@ -22,6 +22,7 @@ const geometry = { topTrim: { x: 0, y: 0, w: 100, h: 50 }, turretTrim: { w: 50, 
   pivot: { bodyX: 40, bodyY: 20, spriteX: 40, spriteY: 15 }, muzzle: { spriteX: 0, spriteY: 15 } };
 let motorStarts = 0;
 const deps = {
+  ...require('./helpers/BattleSceneMethods.cjs').footprintGlobals,
   clearLockedFire: u => { u.lockedFireTargetId = undefined; },
   finishLockedFireAttack: () => {},
   GameSession: { gameMode: 'hardcore' },

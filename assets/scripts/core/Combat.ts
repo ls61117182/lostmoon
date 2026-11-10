@@ -138,7 +138,9 @@ export interface AttackReport {
   stagedCrewCheck?: CrewDeathResult;
   /** 阵亡检定分段：仅在 damageEffect === 'crewCheck' 时有值。 */
   crewCheck?: CrewDeathResult;
-  /** Matching hit dice kill the commander of any open-hatch tank on a successful hit. */
+  /** Open-hatch commander exposure at the actual hit cell, captured before settlement. */
+  targetCommanderExposed?: boolean;
+  /** Matching hit dice can kill the open-hatch commander only at the turret cell. */
   commanderKilledByHitDoubles?: boolean;
   /** The hit doubles triggered, but a per-segment campaign shield absorbed the commander hit. */
   commanderShieldBlocked?: boolean;
@@ -368,14 +370,17 @@ function isPacificCombat(ctx: AttackContext): boolean {
     || PACIFIC_UNIT_KINDS.has(ctx.target.kind);
 }
 
-function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: number): boolean {
+function openHatchCommanderExposedAtHit(ctx: AttackContext): boolean {
   ctx = positionAttackContext(ctx);
   return isHostile(ctx.attacker, ctx.target)
     && isTankUnit(ctx.target)
-    && d1 === d2
     && !!ctx.target.hatchOpen
     && !!ctx.target.crew?.commander
-    && canHitCrewAt(ctx.target, 1, ctx.target.pos);
+    && (!isTwoHexUnit(ctx.target) || sameHex(ctx.targetHex ?? ctx.target.pos, unitTurretHex(ctx.target)));
+}
+
+function hitDoublesKillOpenHatchCommander(ctx: AttackContext, d1: number, d2: number): boolean {
+  return d1 === d2 && openHatchCommanderExposedAtHit(ctx);
 }
 
 /**
@@ -876,6 +881,7 @@ export interface HighExplosiveReport {
   /** Directional earthwork bonus applies only to destruction, never suppression. */
   fortificationCoverValue?: number;
   outcome: HighExplosiveOutcome;
+  targetCommanderExposed?: boolean;
   commanderKilledByHitDoubles?: boolean;
   commanderShieldBlocked?: boolean;
 }
@@ -970,6 +976,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   const power = attacker.stats.highExplosivePower ?? 0;
   const base: HighExplosiveReport = {
     incomingAngle: attackDirectionRuleFor(ctx).incomingAngle,
+    targetCommanderExposed: openHatchCommanderExposedAtHit(ctx),
     dice: [d1, d2], roll, threshold, hit, automaticHit, shootingPortHit, hitBreakdown: lockedHitBreakdown,
     hitModifiers, highExplosivePower: power, outcome: 'none',
   };
@@ -1249,6 +1256,7 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const hit = automaticHit || shootingPortAttack || roll >= threshold;
   const hitRollMeta = {
     incomingAngle: attackDirectionRuleFor(ctx).incomingAngle,
+    targetCommanderExposed: openHatchCommanderExposedAtHit(ctx),
     automaticHit: automaticHit || undefined,
     shootingPortHit,
   };

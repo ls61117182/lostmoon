@@ -6,6 +6,13 @@ const os = require('node:os');
 const { createHash, randomUUID } = require('node:crypto');
 const { chooseParsedRows, decodeTable, rowsToCsv } = require('./csvSmart');
 const { build } = require('./buildTurnEndEventDB');
+// Use the same dependency-free repair function as the runtime/editor.
+const ts = require('typescript');
+const railwayHedges = {};
+new Function('exports', ts.transpileModule(fs.readFileSync(
+  path.join(__dirname, '../assets/scripts/core/RailwayHedges.ts'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(railwayHedges);
 
 function missionFile(root, missionPath) {
   if (typeof missionPath !== 'string' || !/^missions\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/.test(missionPath)) {
@@ -75,7 +82,7 @@ function saveExistingMission(root, payload, generate = build) {
     || !Array.isArray(mission.enemies) || !mission.objective || !Array.isArray(turnEndEvents)) {
     throw new Error('关卡配置无效，不能更改原关卡 ID');
   }
-  const nextMission = { ...mission };
+  const nextMission = { ...mission, tiles: railwayHedges.railwaySafeTiles(mission.tiles, mission.rowParityOffset ?? 0) };
   const writes = [];
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'sherman-mission-editor-'));
   try {

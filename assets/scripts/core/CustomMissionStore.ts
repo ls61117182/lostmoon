@@ -1,4 +1,5 @@
 import type { MissionData } from './types';
+import { railwaySafeTiles } from './RailwayHedges';
 import type { TurnEndEventRow } from './TurnEndEventDB';
 
 export const CUSTOM_MISSION_INDEX_KEY = 'lone_sherman_custom_mission_index_v1';
@@ -102,6 +103,7 @@ function normalizePackage(pkg: CustomMissionPackage): CustomMissionPackage {
     schemaVersion: 2,
     mission: {
       ...pkg.mission,
+      tiles: railwaySafeTiles(pkg.mission.tiles, pkg.mission.rowParityOffset ?? 0),
       ...(playerTank ? { playerTank, sherman: playerTank } : {}),
     },
     savedAt: Date.now(),

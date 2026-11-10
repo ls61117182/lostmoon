@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "weapons": {
+    "howitzer": {
+      "scale": 0.3608422,
+      "x": 30,
+      "y": 35,
+      "silhouetteIoU": 0.9656
+    },
+    "panzer4": {
+      "scale": 0.3246019,
+      "x": 52,
+      "y": 39,
+      "silhouetteIoU": 0.9398
+    },
+    "flakvierling": {
+      "scale": 0.2829007,
+      "x": 77,
+      "y": 78,
+      "silhouetteIoU": 0.7838
+    }
+  },
+  "destroyed": {
+    "locomotive": {
+      "scale": 0.4041971,
+      "x": 2,
+      "y": 3,
+      "silhouetteIoU": 0.9843
+    },
+    "tender": {
+      "scale": 0.4041971,
+      "x": 2,
+      "y": 2,
+      "silhouetteIoU": 0.9788
+    },
+    "command": {
+      "scale": 0.4045662,
+      "x": 2,
+      "y": 3,
+      "silhouetteIoU": 0.9682
+    },
+    "howitzer": {
+      "scale": 0.406422,
+      "x": 1,
+      "y": 1,
+      "silhouetteIoU": 0.9915
+    },
+    "artillery_flak": {
+      "scale": 0.406422,
+      "x": 1,
+      "y": 1,
+      "silhouetteIoU": 0.992
+    },
+    "panzerjaeger": {
+      "scale": 0.4045662,
+      "x": 2,
+      "y": 2,
+      "silhouetteIoU": 0.9918
+    }
+  }
+}

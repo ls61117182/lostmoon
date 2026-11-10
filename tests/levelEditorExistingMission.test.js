@@ -128,6 +128,10 @@ function initializer(name) {
   return found;
 }
 const compile = code => ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2019 } }).outputText;
+const hedgeRules = {};
+new Function('exports', ts.transpileModule(fs.readFileSync(path.join(__dirname, '../assets/scripts/core/RailwayHedges.ts'), 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText)(hedgeRules);
 function uiContext() {
   return vm.createContext({
     editingExistingMission: { id: 'mission_01', missionPath: 'missions/mission_01', revision: 'before' },
@@ -135,6 +139,7 @@ function uiContext() {
     currentLabel: {}, saveButtonLabel: {}, existingDeleteButton: { redraw() {} }, BTN_LEVEL_LOCKED: 0, MODAL_CLOSE_BG: 1,
     draftName: 'Edited', t: key => key, statusLabel: {}, draftBaseMission: { _comment: 'retain', id: 'mission_01' },
     captureMissionFields() {}, cloneJson: v => JSON.parse(JSON.stringify(v)),
+    removeRailwayHedgeConflicts: hedgeRules.removeRailwayHedgeConflicts, redrawAllCells() {},
     draftSherman: { kind: 'sherman', at: { col: 0, row: 0 }, facing: 0 }, draftShermanStartByDice: false,
     draftDescription: 'Description', draftTerrainCategory: 'europe', cols: 1, rows: 1,
     draftTiles: [[{ t: 'f' }]], draftEnemies: [], draftObjective: { type: 'destroy_all_enemies' }, draftRoundEvents: [],
@@ -168,6 +173,26 @@ test('real UI save routes to the original resource file, retains ID, blocks dupl
   assert.equal(ctx.saveButtonLabel.string, '保存现有关卡');
   assert.equal(ctx.draftName, 'Newer edit during save');
   assert.match(ctx.statusLabel.string, /已保存现有关卡/);
+});
+
+test('file-save repair removes railway-blocking hedges on both sides and retains unrelated tile data', t => {
+  const root=fixture(t),loaded=loadExistingMission(root,'missions/mission_01');
+  loaded.mission.rowParityOffset=1;
+  loaded.mission.tiles[1][1]={t:'r',rl:'100000',h:'110000',rd:'010010',bd:1,_note:'keep'};
+  loaded.mission.tiles[1][2]={t:'F',h:'000110'};
+  const saved=saveExistingMission(root,loaded).mission;
+  assert.equal(saved.tiles[1][1].h,'010000');assert.equal(saved.tiles[1][2].h,'000010');
+  assert.deepEqual({...saved.tiles[1][1],h:undefined},{...loaded.mission.tiles[1][1],h:undefined});
+  assert.equal(loaded.mission.tiles[1][1].h,'110000','save service does not mutate the request');
+  assert.equal(JSON.parse(read(root,files[0])).tiles[1][2].h,'000010');
+});
+
+test('draft builder repairs imported hedge conflicts before export and save, then redraws the repaired map',()=>{
+  const ctx=uiContext();ctx.draftTiles=[[{t:'f',rl:'100000',h:'110000'},{t:'f',h:'000100'}]];ctx.cols=2;
+  let redraws=0;ctx.redrawAllCells=()=>redraws++;
+  vm.runInContext(compile(`const buildDraftMission = ${initializer('buildDraftMission').getText(ast)}; globalThis.built = buildDraftMission('mission_01',null,'Demo');`),ctx);
+  assert.equal(ctx.built.tiles[0][0].h,'010000');assert.equal(ctx.built.tiles[0][1].h,undefined);
+  assert.equal(ctx.draftTiles[0][0].h,'010000');assert.equal(redraws,1);
 });
 
 test('real UI retains source target after failure and new mode restores custom saving', async () => {

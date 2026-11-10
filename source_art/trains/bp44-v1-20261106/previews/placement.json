@@ -1,0 +1,106 @@
+{
+  "straight": [
+    {
+      "id": "locomotive",
+      "position": {
+        "q": 0,
+        "r": 0
+      },
+      "center": {
+        "x": 190,
+        "y": 190
+      },
+      "angle": 90
+    },
+    {
+      "id": "tender",
+      "position": {
+        "q": 1,
+        "r": 0
+      },
+      "center": {
+        "x": 356.2768775266122,
+        "y": 190
+      },
+      "angle": 90
+    },
+    {
+      "id": "command",
+      "position": {
+        "q": 2,
+        "r": 0
+      },
+      "center": {
+        "x": 522.5537550532244,
+        "y": 190
+      },
+      "angle": 90
+    },
+    {
+      "id": "howitzer",
+      "position": {
+        "q": 3,
+        "r": 0
+      },
+      "center": {
+        "x": 688.8306325798367,
+        "y": 190
+      },
+      "angle": 90
+    },
+    {
+      "id": "artillery_flak",
+      "position": {
+        "q": 4,
+        "r": 0
+      },
+      "center": {
+        "x": 855.1075101064489,
+        "y": 190
+      },
+      "angle": 90
+    },
+    {
+      "id": "panzerjaeger",
+      "position": {
+        "q": 5,
+        "r": 0
+      },
+      "center": {
+        "x": 1021.3843876330611,
+        "y": 190
+      },
+      "angle": 90
+    }
+  ],
+  "curved": [
+    {
+      "q": 0,
+      "r": 3,
+      "id": "command",
+      "a": 3,
+      "b": 0
+    },
+    {
+      "q": 1,
+      "r": 3,
+      "id": "howitzer",
+      "a": 3,
+      "b": 5
+    },
+    {
+      "q": 2,
+      "r": 2,
+      "id": "artillery_flak",
+      "a": 2,
+      "b": 0
+    },
+    {
+      "q": 3,
+      "r": 2,
+      "id": "panzerjaeger",
+      "a": 3,
+      "b": 0
+    }
+  ]
+}

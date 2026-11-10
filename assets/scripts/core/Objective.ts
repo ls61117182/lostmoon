@@ -1,4 +1,4 @@
-import { isTwoHexUnit, unitMoveEntry, unitOccupiedHexes } from './UnitFootprint';
+import { isTwoHexUnit, planUnitMove, unitFrontHex, unitMoveEntry, unitOccupiedHexes } from './UnitFootprint';
 import { offsetToAxial, rotateDirection } from './HexGrid';
 import { LoadedMission } from './MissionLoader';
 import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, MissionObjective, tileHasBridge, UnitKind } from './types';
@@ -91,6 +91,18 @@ export function isPlayerTankEvacDrive(
 
 /** @deprecated Compatibility alias for older call sites and extensions. */
 export const isShermanEvacDrive = isPlayerTankEvacDrive;
+
+/** Two-cell turns travel forward through the exit along their final hull facing. */
+export function isPlayerTankEvacTurn(
+  mission: LoadedMission,
+  sign: 1 | -1,
+  options: PlayerTankEvacDriveOptions = {},
+): boolean {
+  const unit = mission.playerTank ?? mission.sherman;
+  if (!isTwoHexUnit(unit) || unit.facing === null) return false;
+  const plan = planUnitMove(unit, sign === 1 ? 'cw' : 'ccw');
+  return isPlayerTankEvacDrive(mission, unitFrontHex(unit), plan.facing, 1, plan.pos, options);
+}
 
 export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): boolean {
   switch (obj.type) {

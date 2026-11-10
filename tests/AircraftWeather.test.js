@@ -69,6 +69,7 @@ test('Stuka flyover plays engine sound and movement, with no cannon or commander
   Object.assign(scene, {
     mission: mission('fog'), mapNode: { position: { x: 0, y: 0 } }, hexSize: 50, stukaFlyover: null,
     stukaSpriteNode: plane, project: () => ({ x: 0, y: 0 }), hashStringToSeed: () => 1,
+    canHearBattleAt: () => true,
     drawStukaCannonBurst: () => attacks++, drawStukaShotDown: () => attacks++,
   });
   scene.playStukaFlyover(scene.mission.sherman, false, () => completed++, true, true);
@@ -89,6 +90,7 @@ test('bad-weather event flow waits for the aircraft before continuing and skips 
   const Scene = sceneMethods(['startTurnEndEventFlow'], {
     GameSession: { isPvp: false, gameMode: 'classic' }, getGameModeConfig: () => ({}),
     HexMap: require('../assets/scripts/core/HexGrid.ts').HexMap, prepareTurnEndEvent, t: key => key,
+    currentRegionDefinition: () => undefined,
   });
   for (const effectType of ['airborne_support', 'stuka']) {
     let completed = 0, onDone, flown = 0;

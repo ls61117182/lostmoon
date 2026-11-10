@@ -21,3 +21,4 @@ module.exports = function sceneMethods(names, globals = {}) {
   const compiled = ts.transpileModule(`class TestScene { ${methods.join('\n')} }`, { compilerOptions: { target: ts.ScriptTarget.ES2019, module: ts.ModuleKind.CommonJS } }).outputText;
   return vm.runInNewContext(`${compiled}; TestScene`, { ...footprintModule.exports, ...globals });
 };
+module.exports.footprintGlobals = footprintModule.exports;

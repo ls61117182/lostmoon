@@ -1,11 +1,13 @@
 import { findTwoHexRoute } from '../core/TwoHexPath';
-import { isTwoHexUnit, planUnitMove, unitAtHex, unitCenterHex, unitHitView, unitMoveEntry, unitOccupiedHexes, unitOccupiesHex, unitRearHex, unitTurretHex } from '../core/UnitFootprint';
+import { isTwoHexUnit, planUnitMove, selectedUnitHitHex, unitAtHex, unitCenterHex, unitHitView, unitMoveEntry, unitOccupiedHexes, unitOccupiesHex, unitRearHex, unitTurretHex } from '../core/UnitFootprint';
 import { positionAttackContext, selectTwoHexMachineGun } from '../core/Combat';
 import { createTankCrew, crewRoleAlive, effectiveTankCrew } from "../core/types";
 import { BUILD_FEATURES } from '../core/BuildProfile';
 import { fortificationArtTransform, FORTIFICATION_ART_MASKS } from '../core/FortificationArt';
+import { railwayArtTransform, railwayHasCrossing, railwaySurfaceClearance, RAILWAY_ART_MASKS } from '../core/Railway';
 import { trenchInfantryOffsets } from '../core/Fortification';
 import { TerrainGroundRenderer } from './TerrainGroundRenderer';
+import { projectRoundedDie, restingRoundedDie, type DicePoint, type RoundedDiceProjection } from './DiceRollGeometry';
 import { ElevationRenderer, addElevationPreview } from './ElevationRenderer';
 import { tileHeight, isCliffEdge } from '../core/Elevation';
 import { PlayerVisionCache } from '../core/PlayerVisionCache';
@@ -168,7 +170,7 @@ import { loadMission, LoadedMission } from '../core/MissionLoader';
 import { computePlayerVisibleHexes, computeRadioSharedVisibleHexes, computeUnitVisibleHexes, currentGunnerVisionRange, currentVisionRange, diagonalGunnerClickPreference, diagonalMainGunDirectionForHex, fogOfWarEnabled, HEAVY_ARTILLERY_VISION_RANGE, isHexInOwnAttackVision, isUnitInVision, reconcileDiagonalGunnerSideAfterMove } from '../core/FogOfWar';
 import { getUnitStats } from '../core/UnitDB';
 import { buildObjectiveHudLines, objectiveDestroyProgressLangKey, ObjHudLine } from '../core/MissionObjectiveHud';
-import { checkOutcome, isPlayerTankEvacDrive, MissionOutcome } from '../core/Objective';
+import { checkOutcome, isPlayerTankEvacDrive, isPlayerTankEvacTurn, MissionOutcome } from '../core/Objective';
 import {
   AdjacentInfantryVolleyPreview,
   GermanTruckMoveSegment,
@@ -289,6 +291,10 @@ import {
   tankTrackHalfGap,
   tankTrackLineWidth,
   tankTrackProgressSegment,
+  tankSteeringHeadingAt,
+  tankSteeringPoseAt,
+  tankSteeringProgress,
+  tankTrackSteeringPaths,
   tankTrackTurnArcPoints,
   tankTrackVisibleIntervals,
   tankTrackStyleForTerrain,
@@ -754,7 +760,7 @@ interface MoveAnim {
   /** kind==='turn'：一步 60° 的起止朝向 */
   turnFrom?: Direction;
   turnTo?: Direction;
-  /** kind==='move'：驶出地图的撤离移动，结束时置 shermanEvacuated 并判胜 */
+  /** 撤离位移（含双格转向），结束时置 shermanEvacuated 并判胜 */
   evacExit?: boolean;
   /** Campaign-only exit: rotate the player turret to the hull while the tank drives out. */
   campaignExitTurretPrepared?: boolean;
@@ -814,9 +820,12 @@ interface TankTrackMove {
   progress: number;
   /** Number of completed full turns since this mark was created. */
   fadeSteps: number;
+  /** Two-hex vehicles render at the midpoint rather than their front anchor. */
+  centerOffset?: Axial;
+  bodyOffset?: { forward: number; right: number; facing: Direction };
 }
 
-/** Permanent curved marks swept by the four track ends during an in-place turn. */
+/** Permanent tread-end paths: pivot arcs or a translating two-hex manoeuvre. */
 interface TankTrackTurn {
   serial: number;
   unitId: string;
@@ -829,6 +838,12 @@ interface TankTrackTurn {
   toAngle: number;
   progress: number;
   fadeSteps: number;
+  steering?: {
+    from: Axial;
+    to: Axial;
+    offsetForward: number;
+    offsetRight: number;
+  };
 }
 
 interface TurretAimAnim {
@@ -1106,6 +1121,7 @@ interface RepairIndicator {
   opacity: UIOpacity;
   q: number;
   r: number;
+  visibilityHexes: Axial[];
   t: number;
 }
 
@@ -1651,8 +1667,6 @@ const DICE_PEN_SHOW_DUR   = 0.6;
 const DICE_DMG_SHOW_DUR   = 0.6;
 const DICE_CREW_SHOW_DUR  = 0.7;
 const DICE_HOLD_DUR       = 0.7;
-/** 掷骰阶段内每颗骰子面切换频率 */
-const DICE_CYCLE_INTERVAL = 0.06;
 
 // 战斗视觉：起火 / 受损由炮塔黑烟表达；摧毁 = 暗灰 + 红 X
 const TANK_CONCEALED_ALPHA = 153; // 隐蔽时保留 60% 不透明度（增加 40% 透明度）
@@ -1768,6 +1782,8 @@ export class BattleScene extends Component {
   private terrainLayerNode: Node | null = null;
   private battlefieldViewNode: Node | null = null;
   private battlefieldContentNode: Node | null = null;
+  /** Map-local aircraft and airdrops, above ground/fog and independent of unit redraws. */
+  private airSupportLayerNode: Node | null = null;
   private mapNode: Node | null = null;
   private mapInputNode: Node | null = null;
   private hoveredTile: Tile | null = null;
@@ -1801,6 +1817,9 @@ export class BattleScene extends Component {
   private unitOcclusionDirty = false;
   private shadowRedrawPending: 'all' | 'units' | null = null;
   private tankContentNode: Node | null = null;
+  private tankTurretContentNode: Node | null = null;
+  private hedgesBelowTanksNode: Node | null = null;
+  private hedgeMiddleGraphics: Graphics | null = null;
   private tankWreckLayer: Node | null = null;
   private tankWreckTrackLayer: Node | null = null;
   private tankDamageTrackLayer: Node | null = null;
@@ -1932,6 +1951,8 @@ export class BattleScene extends Component {
   private terrainSpritePoolNext = 0;
   private fortificationSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
   private fortificationSpritePoolNext = 0;
+  private railwaySpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private railwaySpritePoolNext = 0;
   private fortificationRimPool: Array<{ node: Node; sprite: Sprite }> = [];
   private fortificationRimPoolNext = 0;
   private rockySpritePool: Array<{ node: Node; sprite: Sprite }> = [];
@@ -1987,7 +2008,7 @@ export class BattleScene extends Component {
   private destroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private lateWarTopMeta: Partial<Record<EnemyTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
   private lateWarDestroyedTopMeta: Partial<Record<DestroyedTopKind, { sf: SpriteFrame; dw: number; dh: number }>> = {};
-  private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite }> = [];
+  private enemyTopSpritePool: Array<{ node: Node; sprite: Sprite; turret?: boolean }> = [];
   private enemyTopPoolNext = 0;
   /** Initial capacities; crowded battles grow these pools before drawing. */
   private static readonly ENEMY_TOP_SPRITE_POOL = 16;
@@ -2083,6 +2104,11 @@ export class BattleScene extends Component {
   private offsetX = 0;
   private offsetY = 0;
   private standardHexSize = 0;
+  private mapPanGesture: {
+    touchId: number; startX: number; startY: number; fromX: number; fromY: number;
+    screenX: number; screenY: number; dragged: boolean;
+    bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  } | null = null;
   private anim: MoveAnim | null = null;
   private wreckWaterProbe = new WeakMap<Unit, { x: number; y: number; angle: number; size: number; offsetX: number; offsetY: number; state: Unit['wreckWater']; sample: WreckWaterSample }>();
   private leavingBattle = false;
@@ -2174,6 +2200,9 @@ export class BattleScene extends Component {
   private enemyOrder: Unit[] = [];
   /** enemyOrder 的下标指针 */
   private enemyIndex: number = 0;
+  private regionalAIFrameStart: number | null = null;
+  private regionalAIWorkChecks = 0;
+  private regionalAIContinuation: (() => void) | null = null;
   private aiSide: 'ally' | 'german' = 'german';
   /** 当前敌坦本回合掷出的一串 d6 点数 */
   private enemyDice: number[] = [];
@@ -2215,6 +2244,7 @@ export class BattleScene extends Component {
   private enemyDiceSortAnim: {
     t: number;
     dur: number;
+    rollDur?: number;
     fromSlot: number[];
     toSlot: number[];
   } | null = null;
@@ -2786,6 +2816,13 @@ export class BattleScene extends Component {
     gNode.addChild(rockyLayerNode);
     this.sceneryPoolParents.set(this.rockySpritePool, rockyLayerNode);
 
+    // Railway stays above baked roads, below decals, buildings and units.
+    const railwayGround = new Node('RailwayGround');
+    railwayGround.layer = this.node.layer;
+    railwayGround.addComponent(UITransform).setContentSize(1280, 720);
+    gNode.addChild(railwayGround);
+    this.sceneryPoolParents.set(this.railwaySpritePool, railwayGround);
+
     // Excavated floors are ground: tracks and blood must render above them.
     // Keep the separate foreground rims above infantry, as before.
     const fortificationSurface = new Node('FortificationGround');
@@ -2944,11 +2981,18 @@ export class BattleScene extends Component {
     fortificationRim.addComponent(UITransform).setContentSize(1280, 720);
     unitMaskNode.addChild(fortificationRim);
     this.sceneryPoolParents.set(this.fortificationRimPool, fortificationRim);
-    // Tanks sit above roofs, but below forest canopies and hedges.
+    // Middle hedge clumps sit above infantry and below tanks; endpoints stay above tanks.
+    const hedgesBelowTanks = new Node('HedgesBelowTanks');
+    hedgesBelowTanks.layer = this.node.layer;
+    hedgesBelowTanks.addComponent(UITransform).setContentSize(1280, 720);
+    this.hedgeMiddleGraphics = hedgesBelowTanks.addComponent(Graphics);
+    gNode.insertChild(hedgesBelowTanks, urbanBuildingLayerNode.getSiblingIndex() + 1);
+    this.hedgesBelowTanksNode = hedgesBelowTanks;
+    // Tanks sit above roofs and hedge middles, below forest canopies and hedge endpoints.
     const tankMaskNode = new Node('VisibleTankMask');
     tankMaskNode.layer = this.node.layer;
     tankMaskNode.addComponent(UITransform).setContentSize(1280, 720);
-    gNode.insertChild(tankMaskNode, urbanBuildingLayerNode.getSiblingIndex() + 1);
+    gNode.insertChild(tankMaskNode, hedgesBelowTanks.getSiblingIndex() + 1);
     // Bunkers are scenery like city roofs: unseen structures and their wrecks
     // remain beneath the fog overlay, independent of mobile-unit visibility.
     const bunkerContent = new Node('BunkerContent');
@@ -2963,7 +3007,7 @@ export class BattleScene extends Component {
     this.tankGraphics = tankContent.addComponent(Graphics);
     tankMaskNode.addChild(tankContent);
     this.tankContentNode = tankContent;
-    // Bottom to top: wreck tracks, wrecks, live tracks, live hulls/turrets.
+    // Bottom to top: wreck tracks, wrecks, live tracks, all live hulls, all live turrets.
     const wreckLayer = new Node('TankWrecksBelowLiveTracks');
     wreckLayer.layer = this.node.layer;
     wreckLayer.addComponent(UITransform).setContentSize(1280, 720);
@@ -2980,6 +3024,11 @@ export class BattleScene extends Component {
     damageTrackLayer.addComponent(UITransform).setContentSize(1280, 720);
     tankContent.addChild(damageTrackLayer);
     this.tankDamageTrackLayer = damageTrackLayer;
+    const turretContent = new Node('TankTurretsAboveAllHulls');
+    turretContent.layer = this.node.layer;
+    turretContent.addComponent(UITransform).setContentSize(1280, 720);
+    tankContent.addChild(turretContent);
+    this.tankTurretContentNode = turretContent;
     // Shadows precede unit graphics and all hull/turret sprites.
     this.vehicleShadows = new ObjectShadowRenderer(unitMaskNode, 'VehicleGroundShadows', 0);
     this.vehicleShadows.setFogRenderer(this.unitFogRenderer);
@@ -3105,6 +3154,13 @@ export class BattleScene extends Component {
     this.smokeScreenEffectNode = smokeScreenEffectNode;
     gNode.addChild(smokeScreenEffectNode);
 
+    // Aircraft and their effects share the map's pan without ground/fog redraws reordering them.
+    const airSupport = new Node('AirSupport');
+    airSupport.layer = this.node.layer;
+    airSupport.addComponent(UITransform).setContentSize(1280, 720);
+    battlefieldContent.addChild(airSupport);
+    this.airSupportLayerNode = airSupport;
+
     // The blast must cover units, while the aircraft remains the top-most map actor.
     const stukaBlast = new Node('StukaBlast');
     stukaBlast.layer = this.node.layer;
@@ -3112,7 +3168,7 @@ export class BattleScene extends Component {
     this.stukaBlastGraphics = stukaBlast.addComponent(Graphics);
     this.stukaBlastNode = stukaBlast;
     stukaBlast.active = false;
-    battlefieldContent.addChild(stukaBlast);
+    airSupport.addChild(stukaBlast);
 
     const stuka = new Node('StukaFlyover');
     stuka.layer = this.node.layer;
@@ -3122,7 +3178,7 @@ export class BattleScene extends Component {
     if (this.stukaSpriteFrame) stukaSprite.spriteFrame = this.stukaSpriteFrame;
     this.stukaSpriteNode = stuka;
     stuka.active = false;
-    battlefieldContent.addChild(stuka);
+    airSupport.addChild(stuka);
 
     this.loadSpriteFrame('textures/effects/repair_wrenches/spriteFrame',
       '[RepairIcon] Failed to load reference artwork', sf => { this.repairIconSpriteFrame = sf; });
@@ -3270,6 +3326,8 @@ export class BattleScene extends Component {
     }
     const urbanOverlayPaths = [
       ...urbanBuildingPaths, ...urbanDestructiblePaths, ...urbanRoadPaths, ...europeanRoadPaths,
+      ...RAILWAY_ART_MASKS.flatMap(mask => [false, true].map(crossing =>
+        railwayArtTransform(Array.from({ length: 6 }, (_, d) => (mask >> d) & 1).join(''), crossing)!.surface)),
       ...(['trench', 'gun_pit'] as const).flatMap(kind => FORTIFICATION_ART_MASKS.flatMap(mask => {
         const connections = Array.from({ length: 6 }, (_, d) => (mask >> d) & 1).join('');
         const art = fortificationArtTransform({ kind, connections });
@@ -3349,6 +3407,9 @@ export class BattleScene extends Component {
     this.mapInputNode = mapInputNode;
 
     // Register map touches on a root-level layer so campaign camera offsets do not move the hit area.
+    mapInputNode.on(Node.EventType.TOUCH_START, this.onMapPanStart, this);
+    mapInputNode.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
+    mapInputNode.on(Node.EventType.TOUCH_CANCEL, this.onMapPanCancel, this);
     mapInputNode.on(Node.EventType.TOUCH_END, this.onTouchMap, this);
     mapInputNode.on(Node.EventType.MOUSE_MOVE, this.onMouseMoveMap, this);
     mapInputNode.on(Node.EventType.MOUSE_LEAVE, this.clearHoveredTile, this);
@@ -3371,6 +3432,7 @@ export class BattleScene extends Component {
   }
 
   onDestroy() {
+    this.regionalAIContinuation = null;
     this.cancelOutcomeOverlayDelay();
     this.seasonTerrainEpoch++;
     this.clearUnitFogVisibility();
@@ -4038,7 +4100,7 @@ export class BattleScene extends Component {
       case 'repair': {
         const p = atQr(unit);
         const component = details.repairTarget ? repairableComponentById(details.repairTarget) : null;
-        this.spawnRepairIndicator(p.q, p.r);
+        this.spawnRepairIndicator(p.q, p.r, unit);
         this.spawnFloater(p.q, p.r, t(component?.floaterKey ?? 'floater.repair'),
           new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
         return;
@@ -5399,8 +5461,8 @@ export class BattleScene extends Component {
     return { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
   }
 
-  /** Fit the playable hex footprint into the standard 36-hex board. */
-  private mapFitScale(): number {
+  /** Pan only the part of the current playable footprint beyond the standard board. */
+  private mapPanBounds(): { minX: number; maxX: number; minY: number; maxY: number } | null {
     const bounds = (positions: ReadonlyArray<Axial>) => {
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const pos of positions) {
@@ -5421,19 +5483,17 @@ export class BattleScene extends Component {
       for (let col = first; col <= last; col++) standard.push(offsetToAxial({ col, row }, 0));
     }
     const standardBounds = bounds(standard);
-    const groups = this.campaignRuntime
-      ? this.campaignRuntime.segments.map((_, index) => this.cameraReferenceTilesForSegment(index))
-      : [this.cameraReferenceTiles()];
-    let scale = 1;
-    for (const tiles of groups) {
-      if (tiles.length === 0) continue;
-      const size = bounds(tiles.map(tile => tile.pos));
-      const rotated = this.mission?.data.cameraRotation === 90;
-      const width = rotated ? size.height : size.width;
-      const height = rotated ? size.width : size.height;
-      scale = Math.min(scale, standardBounds.width / width, standardBounds.height / height);
-    }
-    return scale;
+    const tiles = this.cameraReferenceTiles();
+    const center = this.tileBoundsCenter(tiles);
+    if (!center) return null;
+    const size = bounds(tiles.map(tile => tile.pos));
+    const rotated = this.mission?.data.cameraRotation === 90;
+    const extraX = Math.max(0, size.width - (rotated ? standardBounds.height : standardBounds.width)) * this.hexSize / 2;
+    const extraY = Math.max(0, size.height - (rotated ? standardBounds.width : standardBounds.height)) * this.hexSize / 2;
+    if (extraX < 0.01 && extraY < 0.01) return null;
+    const x = -center.x - this.offsetX;
+    const y = center.y - this.offsetY + BOARD_CENTER_OFFSET_Y;
+    return { minX: x - extraX, maxX: x + extraX, minY: y - extraY, maxY: y + extraY };
   }
 
   private isCampaignNextSegmentEntry(pos: Axial): boolean {
@@ -5475,6 +5535,9 @@ export class BattleScene extends Component {
   }
 
   private loadAndDraw(data: MissionData, options: { preservePlayerReload?: boolean } = {}) {
+    this.regionalAIContinuation = null;
+    this.regionalAIFrameStart = null;
+    this.regionalAIWorkChecks = 0;
     this.cancelOutcomeOverlayDelay();
     this.outcomePanel?.hide();
     this.setOutcomeHudHidden(false);
@@ -5519,11 +5582,12 @@ export class BattleScene extends Component {
       applyCampaignUpgradesToSherman(this.mission.sherman, this.campaignUpgradeIds);
     }
     if (this.standardHexSize <= 0) this.standardHexSize = this.hexSize;
-    this.hexSize = this.standardHexSize * this.mapFitScale();
-    const { sherman: sh0 } = this.mission;
+    this.hexSize = this.standardHexSize;
+    this.mapPanGesture = null;
     this.resetTurretFacingState();
-    this.shermanSpawnQr = { q: sh0.pos.q, r: sh0.pos.r };
-    this.shermanSpawnFacing = sh0.facing;
+    const spawnMarker = this.mission.playerSpawnMarker ?? this.mission.sherman;
+    this.shermanSpawnQr = { ...spawnMarker.pos };
+    this.shermanSpawnFacing = spawnMarker.facing;
     const tiles = this.mission.map.all();
     const viewTiles = this.cameraReferenceTiles();
 
@@ -5866,6 +5930,8 @@ export class BattleScene extends Component {
     if (rebuildScenery) {
     this.terrainSpritePoolNext = 0;
     this.fortificationSpritePoolNext = this.fortificationRimPoolNext = 0;
+    this.railwaySpritePoolNext = 0;
+    for (const { node } of this.railwaySpritePool) node.active = false;
     for (const { node } of this.fortificationSpritePool) node.active = false;
     for (const { node } of this.fortificationRimPool) node.active = false;
     for (const { node } of this.terrainSpritePool) node.active = false;
@@ -5880,7 +5946,12 @@ export class BattleScene extends Component {
     this.ruralPropSpritePoolNext = 0;
     for (const { node } of this.ruralPropSpritePool) node.active = false;
     this.foliageSpritePoolNext = 0;
-    for (const { node } of this.foliageSpritePool) node.active = false;
+    const foliageParent = this.sceneryPoolParents.get(this.foliageSpritePool);
+    for (const { node } of this.foliageSpritePool) {
+      node.active = false;
+      if (foliageParent && node.parent !== foliageParent) foliageParent.addChild(node);
+    }
+    this.hedgeMiddleGraphics?.clear();
     }
     this.enemyTopPoolNext = 0;
     for (const track of this.tankDamageTrackNodes.values()) track.active = false;
@@ -6098,6 +6169,7 @@ export class BattleScene extends Component {
     for (const tile of tiles) {
       const c = this.project(tile.pos.q, tile.pos.r);
       this.drawFortificationOverlay(c.x, c.y, this.hexSize, tile);
+      this.drawRailwayOverlay(c.x, c.y, this.hexSize, tile);
       drawBeachOverlays(this.g!, c.x, c.y, this.hexSize, !!tile.crater, !!tile.steelHedgehogs);
       this.drawBeachTileEdges(c.x, c.y, this.hexSize, tile, beachEdgeKeys, false, seawallSegments);
     }
@@ -6312,6 +6384,7 @@ export class BattleScene extends Component {
   private applyMapViewPosition(x: number, y: number) {
     this.terrainLayerNode?.setPosition(x, y, 0);
     this.mapNode?.setPosition(x, y, 0);
+    this.airSupportLayerNode?.setPosition(x, y, 0);
   }
 
   private campaignSegmentPanTarget(index: number): { x: number; y: number } {
@@ -6388,13 +6461,13 @@ export class BattleScene extends Component {
 
     if (sherman.facing == null) return;
     const from = (this.shermanTurretFacing ?? sherman.turretFacing ?? sherman.facing) as FireDirection;
-    const to = sherman.facing as FireDirection;
+    const to = (anim.turnTo ?? sherman.facing) as FireDirection;
     anim.campaignExitTurretFrom = from;
     anim.campaignExitTurretTo = to;
     sherman.diagonalGunnerSidePreference = undefined;
     sherman.turretVisualTarget = undefined;
     if (from !== to) sherman.previousTurretFacing = from;
-    if (from !== to && this.enemySupportsSplitTurret(sherman)) {
+    if ((from !== to || (anim.kind === 'turn' && anim.turnFrom !== anim.turnTo)) && this.enemySupportsSplitTurret(sherman)) {
       anim.campaignExitTurretSoundPlaying = true;
       startTurretTraverseSound();
     }
@@ -6977,15 +7050,20 @@ export class BattleScene extends Component {
     if (!this.mission) return null;
     const playerTank = this.mission.playerTank ?? this.mission.sherman;
     let pos: Axial | null = null;
+    let facing = playerTank.facing;
     if (this.anim?.evacExit && this.anim.unit === playerTank) {
       pos = { q: this.anim.toQ, r: this.anim.toR };
+      facing = this.anim.turnTo ?? facing;
     } else if (this.mission.playerTankEvacuated || this.mission.shermanEvacuated) {
       pos = playerTank.pos;
     }
     // Campaign exits may lead to a real tile in the next segment. Its normal
     // visibility rules remain authoritative; only true off-map exits need an
     // extra stencil hex so the departing tank is not clipped away.
-    return pos && !this.mission.map.has(pos) ? pos : null;
+    if (!pos) return null;
+    const occupied = unitOccupiedHexes({ ...playerTank, pos, facing });
+    for (const pos of occupied) if (!this.mission.map.has(pos)) return pos;
+    return null;
   }
 
   private redrawVisibleHexMask(mask: Graphics, includePlayerEvacExit = false) {
@@ -7110,7 +7188,8 @@ export class BattleScene extends Component {
       const legalWeaponTargetKeys = this.playerWeaponTargetHexKeys();
       const unloadedGunRotation = this.selectedGunDieIdx >= 0
         && !isMainGunLoaded(this.mission.sherman, (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'));
-      const originKey = HexMap.keyOf(this.mission.sherman.pos);
+      const originHex = unitTurretHex(this.mission.sherman);
+      const originKey = HexMap.keyOf(originHex);
       const reachableKeys = new Set<string>();
       const reachableTiles: Tile[] = [];
       if (classicGunSelection || turretCanRotate || fixedWeaponArc || machineGunSelection || precisionGunSelection || smokeGunSelection) {
@@ -7165,13 +7244,13 @@ export class BattleScene extends Component {
           this.drawTurretAimHex(overlay, c.x, c.y);
           this.showOutsideMapTurretInput(pos, c);
         }
-        const origin = this.project(this.mission.sherman.pos.q, this.mission.sherman.pos.r);
+        const origin = this.project(originHex.q, originHex.r);
         const turretFacing = this.currentTurretFacingFor(
           this.mission.sherman,
           (this.mission.sherman.facing ?? 0) as FireDirection,
         );
         const turretAngle = this.directionScreenAngle(
-          this.mission.sherman.pos,
+          originHex,
           origin,
           turretFacing,
         );
@@ -7230,9 +7309,21 @@ export class BattleScene extends Component {
     node.setPosition(rootTransform.convertToNodeSpaceAR(world));
     node.angle = this.mission?.data?.cameraRotation === 90 ? 90 : 0;
     node.getComponent(UITransform)!.setContentSize(Math.sqrt(3) * this.hexSize, 2 * this.hexSize);
+    node.off(Node.EventType.TOUCH_START);
+    node.off(Node.EventType.TOUCH_MOVE);
+    node.off(Node.EventType.TOUCH_CANCEL);
     node.off(Node.EventType.TOUCH_END);
+    node.on(Node.EventType.TOUCH_START, this.onMapPanStart, this);
+    node.on(Node.EventType.TOUCH_MOVE, this.onMapPanMove, this);
+    node.on(Node.EventType.TOUCH_CANCEL, this.onMapPanCancel, this);
     const targetPos = { ...pos };
     node.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
+      if (this.mapPanGesture) {
+        if (this.mapPanGesture.touchId !== event.getID()) return;
+        const dragged = this.mapPanGesture.dragged;
+        this.mapPanGesture = null;
+        if (dragged) return;
+      }
       if (this.isBusy() || this.outcome !== 'ongoing') return;
       const start = event.getStartLocation();
       const end = event.getLocation();
@@ -7768,7 +7859,7 @@ export class BattleScene extends Component {
       g.lineWidth = 2.5;
       for (const tile of this.mission.map.all()) {
         const key = HexMap.keyOf(tile.pos);
-        if (key === HexMap.keyOf(watcher.pos) || !sight.has(key)
+        if (unitOccupiesHex(watcher, tile.pos) || !sight.has(key)
           || !this.isHexVisible(tile.pos) || this.isDeepShadowTile(tile)) continue;
         const c = this.project(tile.pos.q, tile.pos.r);
         this.traceHexPathOn(g, c.x, c.y, this.hexSize * 0.92);
@@ -8267,6 +8358,14 @@ export class BattleScene extends Component {
     if (before) this.startFogVisionTransition(before, false, SMOKE_VISION_LAYER_INTERVAL);
   }
 
+  /** One grenade action covers every occupied cell and updates vision atomically. */
+  private deployUnitSmoke(unit: Unit, owner: 'friendly' | 'enemy', animateVision = false): void {
+    if (!this.mission) return;
+    const before = animateVision ? this.displayedFogVisionSnapshot() : null;
+    for (const pos of unitOccupiedHexes(unit)) this.deploySmokeAt(pos, owner);
+    if (before) this.startFogVisionTransition(before, false, SMOKE_VISION_LAYER_INTERVAL);
+  }
+
   private clearSmokeAt(pos: Axial): boolean {
     if (!this.mission) return false;
     const key = HexMap.keyOf(pos);
@@ -8302,13 +8401,13 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     for (const unit of [this.mission.sherman, ...this.mission.allies]) {
       if (unit.smoked) {
-        this.deploySmokeAt(unit.pos, 'friendly');
+        this.deployUnitSmoke(unit, 'friendly');
         unit.smoked = false;
       }
     }
     for (const unit of this.mission.enemies) {
       if (unit.smoked) {
-        this.deploySmokeAt(unit.pos, 'enemy', true);
+        this.deployUnitSmoke(unit, 'enemy', true);
         unit.smoked = false;
       }
     }
@@ -8319,17 +8418,26 @@ export class BattleScene extends Component {
     for (const n of this.nameLabels) n.active = false;
   }
 
-  /** 单位若正在动画，返回插值像素位置；否则等价 project(u.pos)。给状态文字定位用。 */
+  /** 返回画面中心：双格取车体中点并沿圆弧转弯，其它单位沿用格心 / 直线插值。 */
   private interpolatedPos(u: Unit): { x: number; y: number } {
     if (isTwoHexUnit(u)) {
       const center = unitCenterHex(u);
       let c = this.project(center.q, center.r);
       if (this.anim?.unit === u) {
+        const startUnit = { ...u, pos: { q: this.anim.fromQ, r: this.anim.fromR }, facing: this.anim.turnFrom ?? u.facing };
+        const startCenter = unitCenterHex(startUnit);
+        c = this.project(startCenter.q, startCenter.r);
         const endUnit = { ...u, pos: { q: this.anim.toQ, r: this.anim.toR }, facing: this.anim.turnTo ?? u.facing };
         const endCenter = unitCenterHex(endUnit);
         const end = this.project(endCenter.q, endCenter.r);
-        const k = easeOutCubic(this.anim.t);
-        c = { x: c.x + (end.x-c.x)*k, y: c.y + (end.y-c.y)*k };
+        if (this.anim.kind === 'turn' && this.anim.turnFrom !== undefined && this.anim.turnTo !== undefined) {
+          c = tankSteeringPoseAt(c, end,
+            this.directionScreenAngle(startUnit.pos, c, this.anim.turnFrom),
+            this.directionScreenAngle(endUnit.pos, end, this.anim.turnTo), tankSteeringProgress(this.anim.t));
+        } else {
+          const k = easeOutCubic(this.anim.t);
+          c = { x: c.x + (end.x-c.x)*k, y: c.y + (end.y-c.y)*k };
+        }
       }
       return u.destroyed && u.wreckPose
         ? { x: c.x + u.wreckPose.x*this.hexSize, y: c.y + u.wreckPose.y*this.hexSize } : c;
@@ -8735,6 +8843,9 @@ export class BattleScene extends Component {
   private captureSilhouetteSources(unit: Unit) {
     if (!this.mission) return;
     const color = this.unitSilhouetteColor(unit);
+    const turretSprites = new Set([this.shermanTurretTopSprite,
+      ...this.enemyTopSpritePool.filter(slot => slot.turret).map(slot => slot.sprite),
+      ...this.commanderHatchSpritePool.map(slot => slot.sprite)]);
     const sprites = [this.shermanTopSprite, this.shermanTurretTopSprite,
       ...this.enemyTopSpritePool.map(slot => slot.sprite),
       ...this.commanderHatchSpritePool.map(slot => slot.sprite),
@@ -8745,11 +8856,12 @@ export class BattleScene extends Component {
         this.silhouetteClaimed.add(sprite);
         const bunker = GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(unit);
         const parent = bunker ? this.bunkerContentNode : isTankUnit(unit)
-          ? (unit.destroyed ? this.tankWreckVisualLayer(unit) : this.tankContentNode)
+          ? (unit.destroyed ? this.tankWreckVisualLayer(unit)
+            : turretSprites.has(sprite) ? this.tankTurretContentNode ?? this.tankContentNode : this.tankContentNode)
           : this.infantryContentNode;
         if (parent && sprite.node.parent !== parent) parent.addChild(sprite.node);
-        // Pool slots can move between infantry and tank layers. Restore draw
-        // order on every reuse so the turret stays above its hull.
+        // Pool slots can change roles and layers on reuse. Preserve draw order
+        // within each layer, including commanders above their own turrets.
         if (parent) sprite.node.setSiblingIndex(parent.children.length - 1);
         if (this.unitFogRenderer) {
           const boundaryMove = !!this.mission.data.multiRegion && this.isRegionalBoundaryMove(unit);
@@ -8768,6 +8880,10 @@ export class BattleScene extends Component {
         if ((this.shouldDisplayUnitOutline(unit) || trenchInfantry) && !unit.destroyed
             && (this.drawingUnitFogId || this.isUnitVisible(unit))) this.silhouetteSources.set(sprite, color);
       }
+    }
+    // Newly claimed hulls append to TankContent; keep the shared turret layer last.
+    if (this.tankTurretContentNode && this.tankContentNode) {
+      this.tankTurretContentNode.setSiblingIndex(this.tankContentNode.children.length - 1);
     }
   }
 
@@ -8916,7 +9032,7 @@ export class BattleScene extends Component {
     if (isSplitTankKind(u.kind)) {
       const cfg = splitTankVisualConfigOf(u.kind);
       const geometry = splitTankGeometryConfigOf(u.kind);
-      const scale = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale
+      const scale = this.hexSize * 1.8 * cfg.hullFitScale
         / (Math.max(geometry.topTrim.w, geometry.topTrim.h) || 1);
       const baseX = c.x + cfg.hullOffsetForward * offsetUnit * body.ux
         + cfg.hullOffsetRight * offsetUnit * body.uy;
@@ -9173,7 +9289,7 @@ export class BattleScene extends Component {
     const body = this.topDownForwardVec(u, center, null);
     const fallbackFacing = (u.facing ?? 0) as FireDirection;
     const turretFacing = this.currentTurretFacingFor(u, fallbackFacing);
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const bodyScale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
     const turretScale = bodyScale * cfg.turretScale;
     const offsetUnit = this.hexSize * Math.sqrt(3);
@@ -9427,8 +9543,13 @@ export class BattleScene extends Component {
   // ---------- 战报浮字 ----------
 
   /** Map-local repair feedback: pop in, blink once, then fade in place over 1s. */
-  private spawnRepairIndicator(q: number, r: number) {
-    if (!this.mapNode || !this.repairIconSpriteFrame || !this.repairIconMaterial || !this.isHexVisible({ q, r })) return;
+  private spawnRepairIndicator(q: number, r: number, unit?: Unit | null) {
+    const at = unit ? { ...unit, pos: { q, r } } : null;
+    const center = at ? unitCenterHex(at) : { q, r };
+    // Fractional midpoint coordinates are for drawing, not visibility lookups.
+    const visibilityHexes = at ? unitOccupiedHexes(at) : [{ q, r }];
+    if (!this.mapNode || !this.repairIconSpriteFrame || !this.repairIconMaterial
+      || !visibilityHexes.some(pos => this.isHexVisible(pos))) return;
     const node = new Node('RepairIndicator');
     node.angle = this.mission?.data?.cameraRotation === 90 ? -90 : 0;
     node.layer = this.node.layer;
@@ -9442,17 +9563,17 @@ export class BattleScene extends Component {
     sprite.customMaterial = this.repairIconMaterial;
     sprite.color = new Color(222, 250, 195, 255);
     this.mapNode.addChild(node);
-    const pixel = this.project(q, r);
+    const pixel = this.project(center.q, center.r);
     node.setPosition(pixel.x, pixel.y, 0);
     node.setScale(0.72, 0.72, 1);
-    this.repairIndicators.push({ node, opacity, q, r, t: 0 });
+    this.repairIndicators.push({ node, opacity, q: center.q, r: center.r, visibilityHexes, t: 0 });
   }
 
   private advanceRepairIndicators(dt: number) {
     for (let i = this.repairIndicators.length - 1; i >= 0; i--) {
       const effect = this.repairIndicators[i];
       effect.t += dt;
-      if (!effect.node.isValid || effect.t >= 1 || !this.isHexVisible(effect)) {
+      if (!effect.node.isValid || effect.t >= 1 || !effect.visibilityHexes.some(pos => this.isHexVisible(pos))) {
         if (effect.node.isValid) effect.node.destroy();
         this.repairIndicators.splice(i, 1);
         continue;
@@ -10125,8 +10246,9 @@ export class BattleScene extends Component {
   }
 
   private muzzleFlashPosition(attacker: Unit, target: Unit): { x: number; y: number; ux: number; uy: number } | null {
-    const dir = fireDirectionTo(attacker.pos, target.pos) ?? approximateFireDirection(attacker.pos, target.pos);
-    const c = this.project(attacker.pos.q, attacker.pos.r);
+    const origin = unitTurretHex(attacker);
+    const dir = fireDirectionTo(origin, target.pos) ?? approximateFireDirection(origin, target.pos);
+    const c = isTwoHexUnit(attacker) ? this.interpolatedPos(attacker) : this.project(attacker.pos.q, attacker.pos.r);
     // AT-gun combat rules retain the quantized 12-direction ray, but its
     // complete mount visually aims at the target hex. All firing effects must
     // use that same exact vector or the shell visibly leaves along the hidden
@@ -10255,14 +10377,14 @@ export class BattleScene extends Component {
     const spriteX = weapon === 'coaxial' ? top.coaxialMuzzleSpriteX : top.hullMuzzleSpriteX;
     const spriteY = weapon === 'coaxial' ? top.coaxialMuzzleSpriteY : top.hullMuzzleSpriteY;
     if (!isMachineGunMuzzleConfigured(spriteX, spriteY)) return null;
-    const c = this.project(u.pos.q, u.pos.r);
+    const c = isTwoHexUnit(u) ? this.interpolatedPos(u) : this.project(u.pos.q, u.pos.r);
     const body = this.topDownForwardVec(u, c);
     if (isSplitTankKind(u.kind)) {
       const cfg = splitTankVisualConfigOf(u.kind);
       const geometry = splitTankGeometryConfigOf(u.kind);
       const trim = geometry.topTrim;
       if (trim.w <= 0 || trim.h <= 0) return null;
-      const scale = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale / Math.max(trim.w, trim.h);
+      const scale = this.hexSize * 1.8 * cfg.hullFitScale / Math.max(trim.w, trim.h);
       const offsetUnit = this.hexSize * Math.sqrt(3);
       if (weapon === 'coaxial') {
         const lerp = u === this.mission?.sherman
@@ -10296,7 +10418,7 @@ export class BattleScene extends Component {
     const h = meta.dh > 0 ? meta.dh : meta.sf.height;
     if (w <= 0 || h <= 0) return null;
 
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.fitScale;
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
     const maxDim = Math.max(w, h) || 1;
     const tw0 = (w / maxDim) * fit;
     const th0 = (h / maxDim) * fit;
@@ -10331,7 +10453,7 @@ export class BattleScene extends Component {
   ): { x: number; y: number } {
     const topTrim = geometry.topTrim;
     const body = this.topDownForwardVec(u, c, bodyFacingLerp);
-    const scale = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale / (Math.max(topTrim.w, topTrim.h) || 1);
+    const scale = this.hexSize * 1.8 * cfg.hullFitScale / (Math.max(topTrim.w, topTrim.h) || 1);
     const offsetUnit = this.hexSize * Math.sqrt(3);
     const baseX = c.x + cfg.hullOffsetForward * offsetUnit * body.ux
       + cfg.hullOffsetRight * offsetUnit * body.uy;
@@ -10347,7 +10469,7 @@ export class BattleScene extends Component {
   }
 
   private turretVisualScreenAngle(u: Unit, target: Axial): number {
-    const c = this.project(u.pos.q, u.pos.r);
+    const c = isTwoHexUnit(u) ? this.interpolatedPos(u) : this.project(u.pos.q, u.pos.r);
     const pivot = isSplitTankKind(u.kind)
       ? this.splitTankTurretPivot(u, c, splitTankVisualConfigOf(u.kind), splitTankGeometryConfigOf(u.kind))
       : c;
@@ -10366,7 +10488,7 @@ export class BattleScene extends Component {
     const turretTrim = geometry.turretTrim;
     if (topTrim.w <= 0 || topTrim.h <= 0 || turretTrim.w <= 0 || turretTrim.h <= 0) return null;
 
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const scale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
     const turretScale = scale * cfg.turretScale;
     const offsetUnit = this.hexSize * Math.sqrt(3);
@@ -11139,7 +11261,7 @@ export class BattleScene extends Component {
   private playTurnEndSniperShot(attacker: Unit, target: Unit, onImpact: () => void) {
     this.rememberAttackPosition(attacker);
     if (this.mission?.data?.multiRegion && this.isOutsidePlayerRegion(attacker)) { onImpact(); return; }
-    this.setInfantryVisualFacing(attacker, target.pos);
+    this.setInfantryVisualFacing(attacker, unitTurretHex(target));
     this.redraw();
     this.spawnSniperBulletTrace(attacker, target, onImpact);
     if (this.canHearBattleAt(attacker.pos)) playSniperFire();
@@ -11149,7 +11271,8 @@ export class BattleScene extends Component {
   private spawnSniperBulletTrace(attacker: Unit, target: Unit, onImpact: () => void) {
     if (!this.mapNode || attacker.destroyed || !isFootUnit(attacker)) return;
     const a = this.project(attacker.pos.q, attacker.pos.r);
-    const b = this.project(target.pos.q, target.pos.r);
+    const targetHex = unitTurretHex(target);
+    const b = this.project(targetHex.q, targetHex.r);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const len = Math.hypot(dx, dy);
@@ -11175,7 +11298,7 @@ export class BattleScene extends Component {
     this.placeProjectileTraceNode(n);
 
     const trace: SniperBulletTrace = {
-      impactHex: { ...target.pos },
+      impactHex: { ...targetHex },
       node: n,
       g,
       startX: a.x + shooterOffset.ox + ux * muzzleForward,
@@ -11334,8 +11457,8 @@ export class BattleScene extends Component {
     }
     const targetPoint = this.project(target.pos.q, target.pos.r);
     const mapPos = this.mapNode.position;
-    const screenLeft = -CANVAS_W / 2;
-    const screenRight = CANVAS_W / 2;
+    const screenLeft = -CANVAS_W / 2 - mapPos.x;
+    const screenRight = CANVAS_W / 2 - mapPos.x;
     // Keep the whole 150%-sized aircraft outside the canvas at both ends.
     const offscreenPad = this.hexSize * 1.2;
     const fromX = attackerIsPlayer
@@ -11346,12 +11469,13 @@ export class BattleScene extends Component {
       : screenLeft - offscreenPad;
     this.stukaFlyover = {
       shotDown: shotDown && !flyoverOnly, flyoverOnly, defender: target,
-      target: { ...target.pos }, fromX, toX, y: targetPoint.y + mapPos.y,
+      target: { ...target.pos }, fromX, toX, y: targetPoint.y,
       t: 0, dur: 4, cannonT: -1, cannonSoundStarted: false,
       cannonSeed: this.hashStringToSeed(`stuka:${target.id}:${this.turn}`),
       onDone,
     };
     if (this.stukaSpriteNode) {
+      this.stukaSpriteNode.setPosition(fromX, targetPoint.y, 0);
       this.stukaSpriteNode.active = true;
     }
     if (this.canHearBattleAt(target.pos)) playStukaFlyover();
@@ -11362,7 +11486,7 @@ export class BattleScene extends Component {
     const root = new Node('AirborneSupport');
     root.layer = this.node.layer;
     root.addComponent(UITransform).setContentSize(CANVAS_W, CANVAS_H);
-    (this.battlefieldContentNode ?? this.node).addChild(root);
+    (this.airSupportLayerNode ?? this.mapNode).addChild(root);
     const plane = new Node('C47');
     plane.layer = root.layer;
     root.addChild(plane);
@@ -11372,17 +11496,17 @@ export class BattleScene extends Component {
     sprite.spriteFrame = this.c47SpriteFrame;
     const mapPos = this.mapNode.position;
     const target = this.project(plan.target.q, plan.target.r);
-    const points = this.mission.map.all().filter(tile => this.isEffectiveBattleTile(tile)).map(tile => this.project(tile.pos.q, tile.pos.r).x + mapPos.x);
-    const left = Math.min(-CANVAS_W / 2, ...points) - this.hexSize * 4;
-    const right = Math.max(CANVAS_W / 2, ...points) + this.hexSize * 4;
+    const points = this.mission.map.all().filter(tile => this.isEffectiveBattleTile(tile)).map(tile => this.project(tile.pos.q, tile.pos.r).x);
+    const left = Math.min(-CANVAS_W / 2 - mapPos.x, ...points) - this.hexSize * 4;
+    const right = Math.max(CANVAS_W / 2 - mapPos.x, ...points) + this.hexSize * 4;
     const direction = plan.side === 'friendly' ? 1 : -1;
     const fromX = direction === 1 ? left : right;
     const toX = direction === 1 ? right : left;
     plane.angle = direction === 1 ? -90 : 90;
-    plane.setPosition(fromX, target.y + mapPos.y);
-    const dropX = target.x + mapPos.x - direction * this.hexSize * Math.sqrt(3) * 3;
+    plane.setPosition(fromX, target.y);
+    const dropX = target.x - direction * this.hexSize * Math.sqrt(3) * 3;
     const dropT = Math.max(0, Math.min(4, 4 * (dropX - fromX) / (toX - fromX)));
-    this.airborneFlight = { plan, root, plane, t: 0, fromX, toX, y: target.y + mapPos.y, dropT, onDone, drops: [], reactions: [], reactionBusy: false };
+    this.airborneFlight = { plan, root, plane, t: 0, fromX, toX, y: target.y, dropT, onDone, drops: [], reactions: [], reactionBusy: false };
     this.battleLog(t(plan.units.length ? 'roundEvent.airborne.started' : 'turnEnd.airborne.flyover', { count: plan.units.length }));
     if (this.canHearBattleAt(plan.target)) playC47Flyover();
   }
@@ -11414,8 +11538,8 @@ export class BattleScene extends Component {
       const age = flight.t - drop.startT;
       const p = Math.min(1, age / 1.8);
       const target = this.project(drop.unit.pos.q, drop.unit.pos.r);
-      const x = target.x + this.mapNode.position.x;
-      const y = target.y + this.mapNode.position.y;
+      const x = target.x;
+      const y = target.y;
       this.positionMapScreenNode(drop.node, drop.startX + (x - drop.startX) * p,
         flight.y + (y - flight.y) * p, 0, Math.sin(p * Math.PI) * this.hexSize * 0.6);
       const sprite = drop.node.getComponent(Sprite);
@@ -11470,8 +11594,7 @@ export class BattleScene extends Component {
     pass.t += dt;
     const p = Math.min(1, pass.t / pass.dur);
     const x = pass.fromX + (pass.toX - pass.fromX) * p;
-    const targetX = this.project(pass.target.q, pass.target.r).x
-      + (this.mapNode?.position.x ?? 0);
+    const targetX = this.project(pass.target.q, pass.target.r).x;
     const direction = pass.toX < pass.fromX ? -1 : 1;
     // Start roughly three hexes before the target, so the plane is still
     // approaching while its cannon tracers converge on the tank.
@@ -11522,13 +11645,12 @@ export class BattleScene extends Component {
 
   /**
    * Draw a short BK 3.7 cannon sweep directly over the tank.  It is kept on a
-   * screen-space overlay so it stays readable above the unit sprite while the
-   * map/camera moves.  Eight visible tracers stand in for the full fire rate.
+   * map-local overlay above the unit sprite, moving together with the aircraft
+   * and terrain. Eight visible tracers stand in for the full fire rate.
    */
   private drawStukaShotDown(pass: StukaFlyover, x: number) {
     if (!this.mapNode) return;
-    const mapPos = this.mapNode.position;
-    const target = { x: x - mapPos.x, y: pass.y - mapPos.y };
+    const target = { x, y: pass.y };
     if (!pass.aaAttackStarted) {
       pass.aaAttackStarted = true;
       pass.aaBurst = this.spawnMachineGunBurst(pass.defender, pass.defender, true, target);
@@ -11565,9 +11687,8 @@ export class BattleScene extends Component {
     g.clear();
     node.active = true;
     const target = this.project(pass.target.q, pass.target.r);
-    const mapPos = this.mapNode.position;
-    const targetX = target.x + mapPos.x;
-    const targetY = target.y + mapPos.y;
+    const targetX = target.x;
+    const targetY = target.y;
     const cannonStartT = pass.t - pass.cannonT;
     const direction = pass.toX < pass.fromX ? -1 : 1;
     const shots = 8;
@@ -11667,9 +11788,8 @@ export class BattleScene extends Component {
     const g = this.stukaBlastGraphics;
     if (!node || !g) return;
     const c = this.project(target.q, target.r);
-    const mapPos = this.mapNode?.position ?? Vec3.ZERO;
-    const cx = c.x + mapPos.x;
-    const cy = c.y + mapPos.y;
+    const cx = c.x;
+    const cy = c.y;
     g.clear();
     node.active = true;
     const p = Math.max(0, Math.min(1, progress));
@@ -11756,6 +11876,8 @@ export class BattleScene extends Component {
 
   update(dt: number) {
     if (this.leavingBattle) return;
+    this.regionalAIFrameStart = null;
+    this.regionalAIWorkChecks = 0;
     try {
       if (this.continuousTerrain?.advanceGeneration()) this.resourceRedrawPending = true;
     } catch (error) {
@@ -11846,11 +11968,13 @@ export class BattleScene extends Component {
       const s = this.enemyDiceSortAnim;
       s.t += dt;
       const p = Math.min(1, s.t / s.dur);
-      this.applyEnemyDiceSortLayout(easeInOutCubic(p));
+      const rollDur = s.rollDur ?? s.dur;
+      const gather = s.dur > rollDur ? Math.max(0, Math.min(1, (s.t - rollDur) / (s.dur - rollDur))) : p;
+      this.applyEnemyDiceSortLayout(easeInOutCubic(gather));
       if (p >= 1) {
         this.applyEnemyDiceSortLayout(1);
         this.enemyDiceSortAnim = null;
-        this.refreshEnemyDiceTray();
+        this.refreshEnemyDiceTray(false);
         this.runNextEnemyStep();
       } else {
         this.refreshEnemyDiceTray(false);
@@ -11868,7 +11992,7 @@ export class BattleScene extends Component {
       }
       this.enemyDiceHighlightIdx = -1;
       this.enemyDiceResultHold = null;
-      this.refreshEnemyDiceTray();
+      this.refreshEnemyDiceTray(false);
       this.redraw();
       const finished = this.enemyOrder[this.enemyIndex];
       if (finished) {
@@ -11881,6 +12005,8 @@ export class BattleScene extends Component {
       return;
     }
 
+    // Resume only once per update, after existing animation/UI continuations.
+    if (this.regionalAIContinuation && this.resumeRegionalAI()) return;
     if (!this.anim || !this.mission) return;
     this.beginTankTrackAnimation(this.anim);
     if (this.anim.t === 0 && this.anim.evacExit) {
@@ -11900,7 +12026,6 @@ export class BattleScene extends Component {
     const anim = this.anim;
     const finishedUnit = anim.unit;
     this.finishTankTrackAnimation(anim);
-    this.finishCampaignExitTurretAlignment(anim);
     if (anim.kind === 'move') {
       // turretVisualTarget stores an absolute hex only so the renderer can derive
       // an exact visual angle. Move it together with the unit to preserve that
@@ -11927,22 +12052,12 @@ export class BattleScene extends Component {
         const controller = this.atGunController(finishedUnit);
         if (controller) controller.pos = { ...finishedUnit.pos };
       }
-      if (anim.evacExit && this.mission && (!isTwoHexUnit(finishedUnit)
-        || unitOccupiedHexes(finishedUnit).every(pos => !this.mission!.map.has(pos) || this.isCampaignNextSegmentEntry(pos)))) {
-        this.mission.playerTankEvacuated = true;
-        this.mission.shermanEvacuated = true;
-        this.outcome = this.computeOutcome();
-        this.updateOutcomeOverlay();
-        this.battleLogI18n('battleLog.unitEvacuated', {
-          unitKind: finishedUnit.kind,
-          outcome: this.outcome,
-        });
-      } else if (anim.truckExitDefeat && this.mission && finishedUnit.kind === 'truck') {
+      if (anim.truckExitDefeat && this.mission && finishedUnit.kind === 'truck') {
         this.mission.truckEscapeDefeat = true;
         this.outcome = this.computeOutcome();
         this.updateOutcomeOverlay();
         this.battleLogI18n('battleLog.truckExitDefeat', { outcome: this.outcome });
-      } else {
+      } else if (!anim.evacExit) {
         this.battleLogI18n('battleLog.unitArrived', {
           unitKind: finishedUnit.kind,
           q: finishedUnit.pos.q,
@@ -11979,6 +12094,17 @@ export class BattleScene extends Component {
       finishedUnit.turretVisualTarget = undefined;
       this.enemyTurretFacing.set(finishedUnit.id, nextTurretFacing);
       finishedUnit.turretFacing = nextTurretFacing;
+    }
+    this.finishCampaignExitTurretAlignment(anim);
+    if (anim.evacExit && this.mission) {
+      this.mission.playerTankEvacuated = true;
+      this.mission.shermanEvacuated = true;
+      this.outcome = this.computeOutcome();
+      this.updateOutcomeOverlay();
+      this.battleLogI18n('battleLog.unitEvacuated', {
+        unitKind: finishedUnit.kind,
+        outcome: this.outcome,
+      });
     }
     const finishManeuverSound = (nextAnim: MoveAnim | null = null) => {
       if (!maneuverSound) return;
@@ -12063,6 +12189,7 @@ export class BattleScene extends Component {
   }
 
   private onMouseMoveMap(event: EventMouse): void {
+    if (this.mapPanGesture?.dragged) return;
     if (!this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0 || this.continuousTerrain?.loading || this.terrainLoadingRoot?.active) return;
     const tile = this.pickTileAtScreenUi(event);
     const target = this.isEffectiveBattleTile(tile) ? tile : null;
@@ -12074,6 +12201,52 @@ export class BattleScene extends Component {
   private clearHoveredTile(): void {
     this.hoveredTile = null;
     this.hoverTileGraphics?.clear();
+  }
+
+  private mapPanBlocked(): boolean {
+    return !this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0
+      || !!this.continuousTerrain?.loading || !!this.terrainLoadingRoot?.active
+      || this.campaignTransitionActive || !!this.campaignPanAnim || this.leavingBattle
+      || this.combatLogReplayOpen;
+  }
+
+  private onMapPanStart(event: EventTouch) {
+    const transform = this.battlefieldContentNode?.getComponent(UITransform);
+    if (!transform || !this.mapNode || this.mapPanGesture || this.mapPanBlocked()) return;
+    const bounds = this.mapPanBounds();
+    if (!bounds) return;
+    const ui = event.getUILocation();
+    const local = transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0));
+    const screen = event.getLocation();
+    this.mapPanGesture = {
+      touchId: event.getID(), startX: local.x, startY: local.y,
+      fromX: this.mapNode.position.x, fromY: this.mapNode.position.y,
+      screenX: screen.x, screenY: screen.y, dragged: false, bounds,
+    };
+  }
+
+  private onMapPanMove(event: EventTouch) {
+    const pan = this.mapPanGesture;
+    if (!pan || pan.touchId !== event.getID() || this.mapPanBlocked()) return;
+    const screen = event.getLocation();
+    if (!pan.dragged && Math.hypot(screen.x - pan.screenX, screen.y - pan.screenY) <= 6) return;
+    pan.dragged = true;
+    const transform = this.battlefieldContentNode?.getComponent(UITransform);
+    if (!transform) return;
+    const ui = event.getUILocation();
+    const local = transform.convertToNodeSpaceAR(new Vec3(ui.x, ui.y, 0));
+    this.applyMapViewPosition(
+      Math.max(pan.bounds.minX, Math.min(pan.bounds.maxX, pan.fromX + local.x - pan.startX)),
+      Math.max(pan.bounds.minY, Math.min(pan.bounds.maxY, pan.fromY + local.y - pan.startY)),
+    );
+    this.clearHoveredTile();
+    // These hit targets live alongside the HUD and must follow the moved map.
+    if (this.outsideMapTurretInputNodes.some(node => node.active)) this.redrawTurretAimOverlay();
+    event.propagationStopped = true;
+  }
+
+  private onMapPanCancel(event: EventTouch) {
+    if (this.mapPanGesture?.touchId === event.getID()) this.mapPanGesture = null;
   }
 
   private drawHoveredTile(): void {
@@ -12590,8 +12763,8 @@ export class BattleScene extends Component {
 
   /**
    * 格内俯视方形建筑（村庄 / 农场图案）：
-   * - 在六角格内随机布置 2~4 个旋转矩形作为建筑屋顶；
-   * - 公路格（`tile.roads` 不为空）会避开预制道路的直线、圆弧与路口扩宽轮廓；
+   * - 使用稳定的格内布局；铁路格最少保留 3 栋建筑；
+   * - 同时避让道路与铁路的实际直线、弯道和道岔轮廓；
    * - 用格 axial 坐标做种子保证同格视觉稳定（重绘时不会抖动 / 数量不变）；
    * - 避让轮廓与 `prepareEuropeanRoadArt.cjs` 使用同一套六方向几何参数。
    *
@@ -12601,10 +12774,10 @@ export class BattleScene extends Component {
   private ruralBuildingsFor(tile: Tile): RuralBuilding[] {
     const variant = europeanRoadVariantIndex(tile.pos.q, tile.pos.r, (this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals()) ? '' : this.missionId);
     const curved = this.usesEuropeanSummerVisuals() || this.usesWinterTerrainVisuals();
-    const key = [tile.pos.q, tile.pos.r, tile.terrain, tile.roads?.map(Boolean).join(','), variant, curved].join('|');
+    const key = [tile.pos.q, tile.pos.r, tile.terrain, tile.roads?.map(Boolean).join(','), tile.railway, variant, curved].join('|');
     let layout = this.ruralLayoutCache.get(key);
     if (!layout) {
-      layout = ruralBuildingLayout(tile.pos.q, tile.pos.r, this.ruralRoadClearanceFor(tile));
+      layout = ruralBuildingLayout(tile.pos.q, tile.pos.r, this.ruralRoadClearanceFor(tile), tile.railway ? 4 : 2);
       this.ruralLayoutCache.set(key, layout);
     }
     return layout;
@@ -12616,15 +12789,18 @@ export class BattleScene extends Component {
     const roads = tile.roads?.some(Boolean) ? tile.roads : undefined;
     const runwayAxis = roads?.findIndex((enabled, i) => enabled && roads[(i + 3) % 6]);
     const runwayAngle = Math.max(0, runwayAxis ?? 0) * Math.PI / 3;
-    return roads && tile.terrain === 'airstrip'
+    const roadClearance = roads && tile.terrain === 'airstrip'
       ? (x: number, y: number) => Math.abs(-x * Math.sin(runwayAngle) + y * Math.cos(runwayAngle)) - .42
       : roads ? (x: number, y: number) => curved
       ? europeanCountryRoadDistance(roads, x, y, variant) - .19
       : europeanRoadSurfaceClearance(roads, x, y, variant) - .015 : undefined;
+    const railwayClearance = tile.railway ? railwaySurfaceClearance(tile.railway, railwayHasCrossing(tile)) : undefined;
+    if (!railwayClearance) return roadClearance;
+    return roadClearance ? (x, y) => Math.min(roadClearance(x,y), railwayClearance(x,y)) : railwayClearance;
   }
 
   private ruralPropsFor(tile: Tile): RuralProp[] {
-    const key = [tile.pos.q, tile.pos.r, tile.terrain, tile.roads?.map(Boolean).join(','), this.usesEuropeanSummerVisuals(), this.missionId].join('|');
+    const key = [tile.pos.q, tile.pos.r, tile.terrain, tile.roads?.map(Boolean).join(','), tile.railway, this.usesEuropeanSummerVisuals(), this.usesWinterTerrainVisuals(), this.missionId].join('|');
     let props = this.ruralPropCache.get(key);
     if (!props) {
       props = ruralVillageProps(tile.pos.q, tile.pos.r, this.ruralBuildingsFor(tile), this.ruralRoadClearanceFor(tile));
@@ -12641,7 +12817,7 @@ export class BattleScene extends Component {
 
   private drawRuralBuildingSprites(cx: number, cy: number, size: number, tile: Tile, parent?: Node) {
     if (this.hasBunkerAt(tile.pos)) return;
-    const village = !tile.roads?.some(Boolean);
+    const village = !tile.roads?.some(Boolean) && !tile.railway;
     const yardFrame = this.seasonalYardFrame ?? this.redesignObjectFrames[this.usesWinterTerrainVisuals() ? 'rural_yard_patch_snow' : 'rural_yard_patch'];
     if (parent && village && yardFrame) {
       const n = new Node('TileInspectRuralYard'); n.layer = this.node.layer;
@@ -12732,7 +12908,7 @@ export class BattleScene extends Component {
     const placed: Building[] = [];
     const maxAttemptsPer = 120;
 
-    for (let i = 0; i < target; i++) {
+    for (let i = 0; !tile.railway && i < target; i++) {
       let placedThis = false;
       for (let attempt = 0; attempt < maxAttemptsPer; attempt++) {
         // 矩形尺寸：长 0.40~0.60 size，宽 0.26~0.36 size（在原版基础上整体放大约 100%）
@@ -12772,7 +12948,7 @@ export class BattleScene extends Component {
     }
 
     // ---- 4) 绘制每栋建筑：双坡瓦顶分层（底面 → 阴坡 → 瓦楞 → 外缘 + 屋脊高光） ----
-    if (placed.length === 0) {
+    if (!tile.railway && placed.length === 0) {
       const fallbackOffsets: Array<[number, number]> = [[0, 0]];
       for (const radius of [0.28, 0.42, 0.56, 0.68]) {
         for (let step = 0; step < 12; step++) {
@@ -12816,6 +12992,13 @@ export class BattleScene extends Component {
       }
     }
 
+    if (tile.railway) {
+      // Sprite and vector fallback renderers share the same track-aware footprint.
+      for (const b of this.ruralBuildingsFor(tile)) placed.push({
+        cx: cx + b.x * size, cy: cy + b.y * size, w: b.width * size, h: b.height * size,
+        angle: b.angle, r: Math.hypot(b.width, b.height) * size / 2, colorIdx: b.variant,
+      });
+    }
     for (const b of placed) {
       const cosA = Math.cos(b.angle);
       const sinA = Math.sin(b.angle);
@@ -13583,7 +13766,7 @@ export class BattleScene extends Component {
   /**
    * 第 `edgeIndex` 条**几何边**上的树篱（`edgeIndex` = `-30°+60°·i` 划分法中的 i∈0..5），与**轴向**下标不混用：若表示 `HEX_DIRECTIONS[ax]/Tile.hedges[ax]/h[ax]/ef`，入参应取 `HEDGE_DRAW_EDGE_BY_AXIAL[ax]`。
    * 单丛大小统一，在原先基准半径 `size*0.086` 上整体放大 30%。
-   * 沿边用 `k/(n+1)` 均匀取点，使两端与顶点留出相同空隙、丛与丛之间等距。
+   * 沿边用 `k/(n-1)` 均匀取点；两端树丛在坦克上方，中间树丛在坦克下方、步兵上方。
    */
   private drawHedgeEdgeTrees(
     cx: number,
@@ -13629,8 +13812,16 @@ export class BattleScene extends Component {
       const px = x0 + tx * f + ux * along + nx * across;
       const py = y0 + ty * f + uy * along + ny * across;
       const scale = 0.34 + local.next() * 0.06;
-      if (!this.drawTreeSprite(px, py, size, keySeed, scale)) {
+      const middle = k > 0 && k < n - 1;
+      if (this.drawTreeSprite(px, py, size, keySeed, scale)) {
+        if (middle && this.hedgesBelowTanksNode) {
+          this.hedgesBelowTanksNode.addChild(this.foliageSpritePool[this.foliageSpritePoolNext - 1].node);
+        }
+      } else {
+        const previous = this.g;
+        if (middle && this.hedgeMiddleGraphics) this.g = this.hedgeMiddleGraphics;
         this.drawHedgeTreeClump(px, py, size * scale * 0.30, rng);
+        this.g = previous;
       }
     }
   }
@@ -13750,7 +13941,9 @@ export class BattleScene extends Component {
     hullFrom: Direction,
     hullTo: Direction,
     tRaw: number,
+    unit?: Unit,
   ): number {
+    if (unit && isTwoHexUnit(unit)) return tankSteeringProgress(tRaw);
     const start = this.facingToScreenUnitVec(pos, hullFrom);
     const end = this.facingToScreenUnitVec(pos, hullTo);
     const current = this.facingBlendScreenVec(pos, hullFrom, hullTo, tRaw);
@@ -13786,7 +13979,7 @@ export class BattleScene extends Component {
     // 取本车视觉配置（大小 + 自身朝向局部偏移）
     const cfg = tankVisualConfigOf(u.kind);
 
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.fitScale;
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
     const maxDim = Math.max(w, h) || 1;
     const tw0 = (w / maxDim) * fit;
     const th0 = (h / maxDim) * fit;
@@ -14112,7 +14305,7 @@ export class BattleScene extends Component {
           this.hexSize,
           splitBasis.trimW,
           splitBasis.trimH,
-          splitBasis.fitScale * (isTwoHexUnit(unit) ? 1.7 : 1),
+          splitBasis.fitScale,
         ) * trackBodyConfig.trackBodyLengthScale,
         width: renderedTankBodyWidth(
           this.hexSize,
@@ -14267,6 +14460,17 @@ export class BattleScene extends Component {
   }
 
   private advanceTankMoveTime(anim: MoveAnim, dt: number): void {
+    // Scale the common animation clock so player, AI, remote and automatic
+    // Maus movement share the same pacing, including hull/turret/track effects.
+    if (anim.unit.kind === 'maus' && !anim.unit.destroyed) {
+      dt *= anim.kind === 'turn' ? 0.4 : 0.6;
+    }
+    if (this.mission && isTwoHexUnit(anim.unit) && !anim.unit.destroyed && isTankUnit(anim.unit)
+      && [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies]
+        .some(unit => unit.destroyed && isTankUnit(unit) && !unit.wreckWater?.sink)) {
+      this.advanceTwoHexTankWreckMoveTime(anim, dt);
+      return;
+    }
     if (this.mission && anim.kind === 'turn' && isTwoHexUnit(anim.unit)) {
       const destination = { ...anim.unit, pos: { q: anim.toQ, r: anim.toR }, facing: anim.turnTo! };
       const muddy = [...unitOccupiedHexes(anim.unit), ...unitOccupiedHexes(destination)]
@@ -14279,7 +14483,7 @@ export class BattleScene extends Component {
       return;
     }
     const wreckUnits = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies]
-      .filter(unit => unit.destroyed && isTankUnit(unit) && !isTwoHexUnit(unit) && !unit.wreckWater?.sink);
+      .filter(unit => unit.destroyed && isTankUnit(unit) && !unit.wreckWater?.sink);
     const from = this.project(anim.fromQ, anim.fromR);
     const to = this.project(anim.toQ, anim.toR);
     const dx = (to.x - from.x) / this.hexSize, dy = (to.y - from.y) / this.hexSize;
@@ -14323,8 +14527,85 @@ export class BattleScene extends Component {
     unit.wreckPose = pose;
   }
 
+  /** Sample the rendered rigid hull by arc length, independently of frame rate. */
+  private twoHexTankWreckMotion(anim: MoveAnim) {
+    const turning = anim.kind === 'turn';
+    const fromUnit = { ...anim.unit, pos: { q: anim.fromQ, r: anim.fromR }, facing: anim.turnFrom ?? anim.unit.facing };
+    const toUnit = { ...anim.unit, pos: { q: anim.toQ, r: anim.toR }, facing: anim.turnTo ?? anim.unit.facing };
+    const fromHex = unitCenterHex(fromUnit), toHex = unitCenterHex(toUnit);
+    const from = this.project(fromHex.q, fromHex.r), to = this.project(toHex.q, toHex.r);
+    const fromAngle = this.directionScreenAngle(fromUnit.pos, from, fromUnit.facing ?? 0);
+    const toAngle = this.directionScreenAngle(toUnit.pos, to, toUnit.facing ?? 0);
+    const angle = turning ? Math.atan2(Math.sin(toAngle - fromAngle), Math.cos(toAngle - fromAngle)) : 0;
+    const current = this.tankWreckCollisionBody(anim.unit, turning
+      ? { from: anim.turnFrom!, to: anim.turnTo!, t: anim.t } : null);
+    const visual = this.interpolatedPos(anim.unit);
+    const ox = current.x - visual.x / this.hexSize, oy = current.y - visual.y / this.hexSize;
+    const forward = ox * Math.cos(current.angle) + oy * Math.sin(current.angle);
+    const right = -ox * Math.sin(current.angle) + oy * Math.cos(current.angle);
+    const chord = Math.hypot(to.x - from.x, to.y - from.y) / this.hexSize;
+    const arcLength = Math.abs(angle) > 1e-6 ? chord * Math.abs(angle / (2 * Math.sin(angle / 2))) : chord;
+    // Bound the furthest corner's travel, so the rotating hull cannot tunnel.
+    const steps = Math.max(1, Math.ceil((arcLength + Math.abs(angle)
+      * (Math.hypot(current.halfLength, current.halfWidth) + Math.hypot(forward, right))) / WRECK_PUSH_STEP));
+    const progress = (t: number) => turning ? tankSteeringProgress(t) : easeOutCubic(Math.max(0, Math.min(1, t)));
+    const timeAt = (p: number) => {
+      if (!turning) return 1 - Math.cbrt(1 - p);
+      if (p >= 1) return 1;
+      let low = 0, high = 1;
+      for (let i = 0; i < 40; i++) {
+        const mid = (low + high) / 2;
+        if (tankSteeringProgress(mid) < p) low = mid; else high = mid;
+      }
+      return (low + high) / 2;
+    };
+    const bodyAt = (p: number): WreckBody => {
+      const pose = turning ? tankSteeringPoseAt(from, to, fromAngle, toAngle, p)
+        : { x: from.x + (to.x - from.x) * p, y: from.y + (to.y - from.y) * p,
+          ux: Math.cos(fromAngle), uy: Math.sin(fromAngle) };
+      return { ...current, x: pose.x / this.hexSize + forward * pose.ux - right * pose.uy,
+        y: pose.y / this.hexSize + forward * pose.uy + right * pose.ux,
+        angle: fromAngle + angle * p };
+    };
+    return { steps, progress, timeAt, bodyAt };
+  }
+
+  private advanceTwoHexTankWreckMoveTime(anim: MoveAnim, dt: number): void {
+    const motion = this.twoHexTankWreckMotion(anim);
+    const wrecks = [this.mission!.sherman, ...this.mission!.allies, ...this.mission!.enemies]
+      .filter(unit => unit.destroyed && isTankUnit(unit) && !unit.wreckWater?.sink);
+    const destination = { ...anim.unit, pos: { q: anim.toQ, r: anim.toR }, facing: anim.turnTo ?? anim.unit.facing };
+    const muddyTurn = anim.kind === 'turn' && [...unitOccupiedHexes(anim.unit), ...unitOccupiedHexes(destination)]
+      .some(pos => effectiveDiceTerrain(this.mission!.map.get(pos)) === 'mud');
+    let remaining = dt / anim.dur;
+    while (remaining > 1e-10 && anim.t < 1) {
+      const progress = motion.progress(anim.t);
+      const step = Math.min(motion.steps, Math.floor(progress * motion.steps + 1e-8) + 1);
+      const boundary = anim.kind === 'move' && progress < 0.5 - 1e-10
+        ? Math.min(0.5, step / motion.steps) : step / motion.steps;
+      const boundaryT = motion.timeAt(boundary);
+      const mover = motion.bodyAt(step / motion.steps), previous = motion.bodyAt((step - 1) / motion.steps);
+      const travel = { x: mover.x - previous.x, y: mover.y - previous.y };
+      const pushing = wrecks.some(unit => !unit.wreckWater?.sink
+        && tankWreckPushContact(this.tankWreckCollisionBody(unit), mover, travel, previous));
+      const sample = (progress + boundary) / 2;
+      const front = wreckVisualHex({ q: anim.fromQ, r: anim.fromR }, {
+        x: (anim.toQ - anim.fromQ + (anim.toR - anim.fromR) / 2) * Math.sqrt(3) * sample,
+        y: -1.5 * (anim.toR - anim.fromR) * sample,
+      });
+      const muddy = anim.kind === 'turn' ? muddyTurn : unitOccupiedHexes({ ...anim.unit, pos: front })
+        .some(pos => effectiveDiceTerrain(this.mission!.map.get(pos)) === 'mud');
+      const speed = Math.min(muddy ? 0.5 : 1, pushing ? WRECK_PUSH_SPEED_SCALE : 1);
+      const timeToBoundary = Math.max(0, boundaryT - anim.t) / speed;
+      if (remaining < timeToBoundary) { anim.t += remaining * speed; break; }
+      anim.t = boundaryT;
+      remaining -= timeToBoundary;
+      this.advanceTankWreckPush(anim);
+    }
+  }
+
   private advanceTankWreckPush(anim: MoveAnim): void {
-    if (!this.mission || anim.kind !== 'move' || anim.unit.destroyed || !isTankUnit(anim.unit) || isTwoHexUnit(anim.unit)) return;
+    if (!this.mission || (anim.kind !== 'move' && !isTwoHexUnit(anim.unit)) || anim.unit.destroyed || !isTankUnit(anim.unit)) return;
     const units = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
     const wreckUnits = units.filter(unit => unit.destroyed && isTankUnit(unit) && !unit.wreckWater?.sink)
       .sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
@@ -14332,8 +14613,9 @@ export class BattleScene extends Component {
     const from = this.project(anim.fromQ, anim.fromR);
     const to = this.project(anim.toQ, anim.toR);
     const dx = (to.x - from.x) / this.hexSize, dy = (to.y - from.y) / this.hexSize;
-    const steps = Math.ceil(Math.hypot(dx, dy) / WRECK_PUSH_STEP);
-    const targetStep = Math.floor(Math.min(1, easeOutCubic(Math.min(1, anim.t))) * steps + 1e-8);
+    const motion = isTwoHexUnit(anim.unit) ? this.twoHexTankWreckMotion(anim) : null;
+    const steps = motion?.steps ?? Math.ceil(Math.hypot(dx, dy) / WRECK_PUSH_STEP);
+    const targetStep = Math.floor((motion ? motion.progress(anim.t) : Math.min(1, easeOutCubic(Math.min(1, anim.t)))) * steps + 1e-8);
     if (targetStep <= (anim.wreckPushStep ?? 0)) return;
     const live = units.filter(unit => unit !== anim.unit && !unit.destroyed && isTankUnit(unit))
       .map(unit => this.tankWreckCollisionBody(unit));
@@ -14349,18 +14631,23 @@ export class BattleScene extends Component {
         return { x: c.x / this.hexSize + Math.cos(angle), y: c.y / this.hexSize + Math.sin(angle) };
       });
     });
-    const mover = this.tankWreckCollisionBody(anim.unit);
+    let mover = this.tankWreckCollisionBody(anim.unit);
     // Extract just the hull-art offset; the animated unit may already have its
     // committed destination in the model (reinforcements and campaign exits).
     const visual = this.interpolatedPos(anim.unit);
     const ox = mover.x - visual.x / this.hexSize, oy = mover.y - visual.y / this.hexSize;
     for (let step = (anim.wreckPushStep ?? 0) + 1; step <= targetStep; step++) {
-      mover.x = from.x / this.hexSize + dx * step / steps + ox;
-      mover.y = from.y / this.hexSize + dy * step / steps + oy;
+      const previous = motion?.bodyAt((step - 1) / steps);
+      if (motion) mover = motion.bodyAt(step / steps);
+      else {
+        mover.x = from.x / this.hexSize + dx * step / steps + ox;
+        mover.y = from.y / this.hexSize + dy * step / steps + oy;
+      }
       const activeWreckUnits = wreckUnits.filter(unit => !unit.wreckWater?.sink);
       const wrecks = activeWreckUnits.map(unit => this.tankWreckCollisionBody(unit));
       const originals = wrecks.map(body => ({ ...body }));
-      pushTankWrecks(wrecks, mover, { x: dx / steps, y: dy / steps }, live, buildings);
+      const travel = previous ? { x: mover.x - previous.x, y: mover.y - previous.y } : { x: dx / steps, y: dy / steps };
+      pushTankWrecks(wrecks, mover, travel, live, buildings, previous);
       wrecks.forEach((body, i) => {
         const original = originals[i];
         if (body.x === original.x && body.y === original.y && body.angle === original.angle) return;
@@ -14401,9 +14688,20 @@ export class BattleScene extends Component {
       track.toR,
     ) !== edgeKey);
     const body = this.tankBodyDisplaySizePx(unit);
+    const split = this.splitHullDisplayBasis(unit.kind);
+    const config = tankVisualConfigOf(unit.kind);
     const track: TankTrackMove = {
       serial: this.tankTrackSerial++,
       unitId: unit.id,
+      centerOffset: isTwoHexUnit(unit) ? (() => {
+        const center = unitCenterHex({ ...unit, pos: { q: anim.fromQ, r: anim.fromR } });
+        return { q: center.q - anim.fromQ, r: center.r - anim.fromR };
+      })() : undefined,
+      bodyOffset: isTwoHexUnit(unit) ? {
+        forward: split ? split.offsetForward : config.offsetForward,
+        right: split ? split.offsetRight : config.offsetRight,
+        facing: unit.facing ?? 0,
+      } : undefined,
       fromQ: anim.fromQ,
       fromR: anim.fromR,
       toQ: anim.toQ,
@@ -14430,12 +14728,30 @@ export class BattleScene extends Component {
     const toAngle = this.directionScreenAngle(unit.pos, center, anim.turnTo);
     const halfGap = tankTrackHalfGap(body.width);
     const halfBodyLength = body.length * 0.5;
+    const split = this.splitHullDisplayBasis(unit.kind);
+    const config = tankVisualConfigOf(unit.kind);
+    const steering = isTwoHexUnit(unit) ? {
+      from: unitCenterHex({ ...unit, pos: { q: anim.fromQ, r: anim.fromR }, facing: anim.turnFrom }),
+      to: unitCenterHex({ ...unit, pos: { q: anim.toQ, r: anim.toR }, facing: anim.turnTo }),
+      offsetForward: split ? split.offsetForward : config.offsetForward,
+      offsetRight: split ? split.offsetRight : config.offsetRight,
+    } : undefined;
     const sameAngle = (a: number, b: number) =>
       Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))) < 1e-6;
     this.tankTurnTracks = this.tankTurnTracks.filter(candidate => {
-      if (candidate.q !== anim.fromQ || candidate.r !== anim.fromR
-        || Math.abs(candidate.halfGap - halfGap) >= 0.01
+      if (Math.abs(candidate.halfGap - halfGap) >= 0.01
         || Math.abs(candidate.halfBodyLength - halfBodyLength) >= 0.01) return true;
+      if (steering || candidate.steering) {
+        if (!steering || !candidate.steering) return true;
+        if (Math.abs(candidate.steering.offsetForward - steering.offsetForward) > 1e-6
+          || Math.abs(candidate.steering.offsetRight - steering.offsetRight) > 1e-6) return true;
+        const samePath = axialEquals(candidate.steering.from, steering.from) && axialEquals(candidate.steering.to, steering.to)
+          && sameAngle(candidate.fromAngle, fromAngle) && sameAngle(candidate.toAngle, toAngle);
+        const reversedPath = axialEquals(candidate.steering.from, steering.to) && axialEquals(candidate.steering.to, steering.from)
+          && sameAngle(candidate.fromAngle, toAngle) && sameAngle(candidate.toAngle, fromAngle);
+        return !samePath && !reversedPath;
+      }
+      if (candidate.q !== anim.fromQ || candidate.r !== anim.fromR) return true;
       const sameDirection = sameAngle(candidate.fromAngle, fromAngle)
         && sameAngle(candidate.toAngle, toAngle);
       const reverseDirection = sameAngle(candidate.fromAngle, toAngle)
@@ -14447,6 +14763,7 @@ export class BattleScene extends Component {
       unitId: unit.id,
       q: anim.fromQ,
       r: anim.fromR,
+      steering,
       halfGap,
       halfBodyLength,
       lineWidth: tankTrackLineWidth(body.width),
@@ -14482,6 +14799,9 @@ export class BattleScene extends Component {
             const newerQ = newerAtFrom ? newer.fromQ : newer.toQ;
             const newerR = newerAtFrom ? newer.fromR : newer.toR;
             if (q !== newerQ || r !== newerR) continue;
+            const oldOffset = older.centerOffset ?? { q: 0, r: 0 };
+            const newOffset = newer.centerOffset ?? { q: 0, r: 0 };
+            if (!axialEquals(oldOffset, newOffset)) continue;
             const newerOtherQ = newerAtFrom ? newer.toQ : newer.fromQ;
             const newerOtherR = newerAtFrom ? newer.toR : newer.fromR;
             if (!tankTrackEdgesContinueStraight(
@@ -14512,7 +14832,9 @@ export class BattleScene extends Component {
     this.beginTankTrackAnimation(anim);
     const moveProgress = easeOutCubic(Math.max(0, Math.min(1, anim.t)));
     if (this.activeTankTrack) this.activeTankTrack.progress = moveProgress;
-    if (this.activeTankTurnTrack && anim.turnFrom !== undefined && anim.turnTo !== undefined) {
+    if (this.activeTankTurnTrack?.steering) {
+      this.activeTankTurnTrack.progress = tankSteeringProgress(anim.t);
+    } else if (this.activeTankTurnTrack && anim.turnFrom !== undefined && anim.turnTo !== undefined) {
       this.activeTankTurnTrack.progress = this.hullTurnRenderedAngularProgress(
         anim.unit.pos,
         anim.turnFrom,
@@ -14596,8 +14918,17 @@ export class BattleScene extends Component {
     for (const record of records) {
       if (record.kind === 'move') {
         const track = record.track;
-        const fromCenter = this.project(track.fromQ, track.fromR);
-        const toCenter = this.project(track.toQ, track.toR);
+        const offset = track.centerOffset ?? { q: 0, r: 0 };
+        const fromCenter = this.project(track.fromQ + offset.q, track.fromR + offset.r);
+        const toCenter = this.project(track.toQ + offset.q, track.toR + offset.r);
+        if (track.bodyOffset) {
+          const angle = this.directionScreenAngle({ q: track.fromQ, r: track.fromR }, fromCenter, track.bodyOffset.facing);
+          const unit = this.hexSize * Math.sqrt(3);
+          const x = unit * (Math.cos(angle) * track.bodyOffset.forward + Math.sin(angle) * track.bodyOffset.right);
+          const y = unit * (Math.sin(angle) * track.bodyOffset.forward - Math.cos(angle) * track.bodyOffset.right);
+          fromCenter.x += x; fromCenter.y += y;
+          toCenter.x += x; toCenter.y += y;
+        }
         const swept = tankTrackProgressSegment(
           fromCenter.x,
           fromCenter.y,
@@ -14616,17 +14947,23 @@ export class BattleScene extends Component {
       }
 
       const track = record.track;
-      const center = this.project(track.q, track.r);
-      const arcs = tankTrackTurnArcPoints(
-        center.x,
-        center.y,
-        track.halfBodyLength,
-        track.halfGap,
-        track.fromAngle,
-        track.toAngle,
-        track.progress,
-      );
-      for (const arc of arcs) {
+      let paths: ReturnType<typeof tankTrackTurnArcPoints>;
+      if (track.steering) {
+        const from = this.project(track.steering.from.q, track.steering.from.r);
+        const to = this.project(track.steering.to.q, track.steering.to.r);
+        paths = tankTrackSteeringPaths(from, to, track.halfBodyLength, track.halfGap,
+          track.fromAngle, track.toAngle, track.progress,
+          track.steering.offsetForward * this.hexSize * Math.sqrt(3),
+          track.steering.offsetRight * this.hexSize * Math.sqrt(3));
+      } else {
+        const center = this.project(track.q, track.r);
+        const arcs = tankTrackTurnArcPoints(
+          center.x, center.y, track.halfBodyLength, track.halfGap,
+          track.fromAngle, track.toAngle, track.progress,
+        );
+        paths = arcs;
+      }
+      for (const arc of paths) {
         for (let i = 1; i < arc.length; i++) {
           const from = arc[i - 1]!;
           const to = arc[i]!;
@@ -14993,7 +15330,7 @@ export class BattleScene extends Component {
     node.active = true;
     const w = displayW > 0 ? displayW : sf.width;
     const h = displayH > 0 ? displayH : sf.height;
-    const size = this.destroyedTankDisplaySize(u.kind, w, h, this.hexSize * (isTwoHexUnit(u) ? 1.7 : 1));
+    const size = this.destroyedTankDisplaySize(u.kind, w, h, this.hexSize);
     const body = this.topDownForwardVec(u, c, facingLerp);
     const offsetUnit = this.hexSize * Math.sqrt(3);
     const offset = this.destroyedTankOffset(u.kind, offsetUnit);
@@ -15075,7 +15412,7 @@ export class BattleScene extends Component {
     const cfg = splitTankVisualConfigOf(kind);
     const geometry = splitTankGeometryConfigOf(kind);
     const body = this.topDownForwardVec(u, c, facingLerp);
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const scale = fit / (Math.max(geometry.topTrim.w, geometry.topTrim.h) || 1);
     const offsetUnit = this.hexSize * Math.sqrt(3);
     const f = cfg.hullOffsetForward * offsetUnit;
@@ -15118,7 +15455,7 @@ export class BattleScene extends Component {
     const topTrim = geometry.topTrim;
     const turretTrim = geometry.turretTrim;
     const pivot = geometry.pivot;
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const scale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
     const turretScale = scale * cfg.turretScale;
 
@@ -15186,7 +15523,7 @@ export class BattleScene extends Component {
 
     const topTrim = geometry.topTrim;
     const pivot = geometry.pivot;
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const bodyScale = fit / (Math.max(topTrim.w, topTrim.h) || 1);
     const turretScale = bodyScale * cfg.turretScale;
     const body = this.topDownForwardVec(u, c, bodyFacingLerp);
@@ -15262,7 +15599,7 @@ export class BattleScene extends Component {
 
     const w = Math.max(1, displayW);
     const h = Math.max(1, displayH);
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.fitScale;
+    const fit = this.hexSize * 1.8 * cfg.fitScale;
     const sourceScale = fit / Math.max(w, h);
     const aspectScale = Math.sqrt(Math.max(1e-6, cfg.aspectRatioMul));
     const scaleX = sourceScale * aspectScale;
@@ -15325,6 +15662,11 @@ export class BattleScene extends Component {
     }
     if (facingLerp) {
       if (!facingLerp.angular) {
+        if (isTwoHexUnit(u)) {
+          return tankSteeringHeadingAt(
+            this.directionScreenAngle(u.pos, c, facingLerp.from),
+            this.directionScreenAngle(u.pos, c, facingLerp.to), tankSteeringProgress(facingLerp.t));
+        }
         return this.facingBlendScreenVec(u.pos, facingLerp.from, facingLerp.to, facingLerp.t);
       }
       const a = facingLerp.fromVisualTarget
@@ -15403,12 +15745,6 @@ export class BattleScene extends Component {
         facingLerp,
       );
     }
-    if (!u.destroyed && this.mapNode) {
-      this.shermanSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
-      if (splitReady) {
-        this.shermanTurretSpriteNode!.setSiblingIndex(this.mapNode.children.length - 1);
-      }
-    }
   }
 
   /**
@@ -15430,7 +15766,7 @@ export class BattleScene extends Component {
 
     const geometry = splitTankGeometryConfigOf('sherman');
     const cfg = splitTankVisualConfigOf('sherman');
-    const fit = this.hexSize * 1.8 * (isTwoHexUnit(u) ? 1.7 : 1) * cfg.hullFitScale;
+    const fit = this.hexSize * 1.8 * cfg.hullFitScale;
     const bodyScale = fit / Math.max(geometry.topTrim.w, geometry.topTrim.h);
     const turretScale = bodyScale * cfg.turretScale;
     const hatchSpriteX = cfg.commanderHatchSpriteX;
@@ -15490,16 +15826,18 @@ export class BattleScene extends Component {
     }
 
     if (u === this.mission?.sherman && this.anim?.unit === u && u.facing !== null) {
+      if (this.anim.campaignExitTurretFrom !== undefined
+        && this.anim.campaignExitTurretTo !== undefined) {
+        return {
+          from: this.anim.campaignExitTurretFrom,
+          to: this.anim.campaignExitTurretTo,
+          t: this.anim.kind === 'turn' && isTwoHexUnit(u)
+            ? tankSteeringProgress(this.anim.t)
+            : easeInOutCubic(Math.min(1, Math.max(0, this.anim.t))),
+          angular: true,
+        };
+      }
       if (this.anim.kind === 'move') {
-        if (this.anim.campaignExitTurretFrom !== undefined
-          && this.anim.campaignExitTurretTo !== undefined) {
-          return {
-            from: this.anim.campaignExitTurretFrom,
-            to: this.anim.campaignExitTurretTo,
-            t: easeInOutCubic(Math.min(1, Math.max(0, this.anim.t))),
-            angular: true,
-          };
-        }
         const facing = this.shermanTurretFacing ?? u.turretFacing ?? u.facing;
         return {
           from: facing as FireDirection,
@@ -15519,7 +15857,7 @@ export class BattleScene extends Component {
           from,
           to,
           t: this.hullTurnRenderedAngularProgress(
-            u.pos, this.anim.turnFrom!, this.anim.turnTo!, this.anim.t,
+            u.pos, this.anim.turnFrom!, this.anim.turnTo!, this.anim.t, u,
           ),
           angular: true,
         };
@@ -15577,7 +15915,7 @@ export class BattleScene extends Component {
           from,
           to,
           t: this.hullTurnRenderedAngularProgress(
-            u.pos, this.anim.turnFrom!, this.anim.turnTo!, this.anim.t,
+            u.pos, this.anim.turnFrom!, this.anim.turnTo!, this.anim.t, u,
           ),
           angular: true,
         };
@@ -15738,6 +16076,7 @@ export class BattleScene extends Component {
 
     if (this.enemyTopPoolNext >= this.enemyTopSpritePool.length) return false;
     const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+    slot.turret = false;
     this.applyDestroyedTopDownTankSprite(
       slot.node,
       slot.sprite,
@@ -15824,8 +16163,10 @@ export class BattleScene extends Component {
           && this.enemySupportsSplitTurret(u)
           && this.enemyTopPoolNext + 1 < this.enemyTopSpritePool.length) {
         const hullSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        hullSlot.turret = false;
         this.applySplitTankHullSprite(hullSlot, u, u.kind, c, facingLerp);
         const turretSlot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        turretSlot.turret = true;
         const turretFacingLerp = u === this.mission?.playerTank
           ? (this.currentShermanTurretLerp(u) ?? facingLerp)
           : (this.currentEnemyTurretLerp(u) ?? facingLerp);
@@ -15852,6 +16193,7 @@ export class BattleScene extends Component {
       const meta = this.tankTopMetaFor(u);
       if (meta?.sf) {
         const slot = this.enemyTopSpritePool[this.enemyTopPoolNext++];
+        slot.turret = false;
         this.applyTopDownTankSprite(
           slot.node,
           slot.sprite,
@@ -16663,9 +17005,11 @@ export class BattleScene extends Component {
       if (!this.combatLogTouchTargetsMap) return;
       sv.stopAutoScroll();
       sv.vertical = false;
+      this.onMapPanStart(event);
     }, this);
     scrollN.on(Node.EventType.TOUCH_MOVE, (event: EventTouch) => {
       if (!this.combatLogTouchTargetsMap) return;
+      this.onMapPanMove(event);
       event.propagationStopped = true;
     }, this);
     scrollN.on(Node.EventType.TOUCH_END, (event: EventTouch) => {
@@ -16675,7 +17019,8 @@ export class BattleScene extends Component {
       this.onTouchMap(event);
       event.propagationStopped = true;
     }, this);
-    scrollN.on(Node.EventType.TOUCH_CANCEL, () => {
+    scrollN.on(Node.EventType.TOUCH_CANCEL, (event: EventTouch) => {
+      if (this.combatLogTouchTargetsMap) this.onMapPanCancel(event);
       this.combatLogTouchTargetsMap = false;
       sv.vertical = true;
     }, this);
@@ -17460,7 +17805,8 @@ export class BattleScene extends Component {
 
   private openPendingCombatLogReplayIfReady(): boolean {
     const replay = this.pendingCombatLogReplay;
-    if (!replay || (this.isBusy() && !this.isOutcomeBattlefieldReview())) return false;
+    // 已保存续点才允许越过事件阶段标记；实际空投、反击和弹窗仍必须完整结束。
+    if (!replay || (this.isBusy(!!this.combatLogAIResume) && !this.isOutcomeBattlefieldReview())) return false;
     if (this.isOutcomeBattlefieldReview()) this.closeOutcomeReviewDetails();
     this.pendingCombatLogReplay = null;
     this.combatLogReplayOpen = true;
@@ -17530,11 +17876,15 @@ export class BattleScene extends Component {
     this.combatLogAIResume = null;
     if (!resumeAI) return;
     // 弹窗节点在当前点击回调末尾才完成销毁；下一帧恢复可避免与旧 UI 生命周期交叉。
-    this.scheduleOnce(() => {
+    const resumeWhenReady = () => {
       if (this.outcome !== 'ongoing' || (this.phase !== 'ally' && this.phase !== 'enemy')) return;
-      if (this.isBusy()) return;
+      if (this.isBusy(true)) {
+        this.scheduleOnce(resumeWhenReady, 0);
+        return;
+      }
       resumeAI();
-    }, 0);
+    };
+    this.scheduleOnce(resumeWhenReady, 0);
   }
 
   /**
@@ -18385,8 +18735,18 @@ export class BattleScene extends Component {
     );
     if (isTwoHexUnit(this.mission.sherman)) {
       const unit = this.mission.sherman;
+      const exitTarget = neighbor(target, 0);
+      const exitStepFor = (state: Unit) => {
+        for (const action of ['advance', 'reverse', 'cw', 'ccw'] as const) {
+          const plan = planUnitMove(state, action);
+          if (axialEquals(plan.entryFrom, target) && axialEquals(plan.entryTo, exitTarget)) {
+            return { action, plan };
+          }
+        }
+        return null;
+      };
       const route = findTwoHexRoute(this.mission.map, unit,
-        state => state.pos.q === target.q && state.pos.r === target.r && state.facing === 0,
+        state => exitStepFor(state) !== null,
         pos => !this.canMoveToBattleTile(pos) || this.allUnits().some(other => other !== unit
           && unitOccupiesHex(other, pos) && this.isBlockingMoveOccupant(unit, other)));
       if (!route) { this.campaignAutoEvacActive = false; console.error('[Campaign] no legal two-hex evacuation route'); return; }
@@ -18395,13 +18755,13 @@ export class BattleScene extends Component {
       const queue: MoveAnim[] = route.map(step => ({ unit, kind: step.action === 'cw' || step.action === 'ccw' ? 'turn' : 'move',
         fromQ: step.from.pos.q, fromR: step.from.pos.r, toQ: step.plan.pos.q, toR: step.plan.pos.r,
         turnFrom: step.from.facing ?? 0, turnTo: step.plan.facing, t: 0, dur: Math.max(0.05, this.moveDuration) }));
-      let cursor = target;
-      for (let n = 0; n < 2; n++) {
-        const next = neighbor(cursor, 0);
-        queue.push({ unit, kind: 'move', fromQ: cursor.q, fromR: cursor.r, toQ: next.q, toR: next.r,
-          t: 0, dur: Math.max(0.05, this.moveDuration), evacExit: true });
-        cursor = next;
-      }
+      const last = route[route.length - 1];
+      const exitUnit = last ? { ...unit, pos: last.plan.pos, facing: last.plan.facing } : unit;
+      const exit = exitStepFor(exitUnit)!;
+      queue.push({ unit, kind: exit.action === 'cw' || exit.action === 'ccw' ? 'turn' : 'move',
+        fromQ: exitUnit.pos.q, fromR: exitUnit.pos.r, toQ: exit.plan.pos.q, toR: exit.plan.pos.r,
+        turnFrom: exitUnit.facing ?? 0, turnTo: exit.plan.facing,
+        t: 0, dur: Math.max(0.05, this.moveDuration), evacExit: true });
       this.animQueue = queue; this.anim = queue.shift() ?? null;
       this.refreshStatusPanel(); this.refreshPhaseUI(); this.redraw();
       return;
@@ -18992,19 +19352,19 @@ export class BattleScene extends Component {
       const anim = this.playerDiceSortAnim;
       const x = anim && i < anim.fromX.length
         ? anim.fromX[i] + (anim.toX[i] - anim.fromX[i]) * easeInOutCubic(Math.min(1, anim.t / anim.dur))
-        : startX + shown * (SLOT + GAP);
+        : this.playerDiceRollAnim ? this.playerDiceSlotX(shown, n, true) : startX + shown * (SLOT + GAP);
       vis.root.setPosition(x, 0, 0);
       shown++;
       // 主炮 / 机枪选中都复用同一种"已高亮"视觉，玩家以颜色与 HUD 文案区分
-      this.drawDieSlot(vis, slot, i === this.selectedGunDieIdx || i === this.selectedMGDieIdx);
+      this.drawDieSlot(vis, slot, i === this.selectedGunDieIdx || i === this.selectedMGDieIdx, i);
     }
   }
 
-  private playerDiceSlotX(index: number, count: number): number {
+  private playerDiceSlotX(index: number, count: number, rolling = false): number {
     const SLOT = BattleScene.DICE_TRAY_SLOT;
     const GAP = BattleScene.DICE_TRAY_GAP;
-    const total = count > 0 ? SLOT * count + GAP * (count - 1) : 0;
-    return count > 0 ? -total * 0.5 + SLOT * 0.5 + index * (SLOT + GAP) : 0;
+    const step = (SLOT + GAP) * (rolling ? 1.25 : 1);
+    return count > 0 ? (index - (count - 1) / 2) * step : 0;
   }
 
   private placeEnemyDiceTrayRoot(tray: Node) {
@@ -19020,10 +19380,13 @@ export class BattleScene extends Component {
       .map((slot, index) => ({ slot, index }))
       .sort((a, b) => Number(a.slot.type === 'movement') - Number(b.slot.type === 'movement')
         || (a.slot.pip - b.slot.pip) || (a.index - b.index));
+    // Capture the actual spread positions before reordering the logical slots.
+    const fromX = order.map(o => this.diceVisuals?.[o.index]?.root.position.x ?? this.playerDiceSlotX(o.index, n));
+    const toX = order.map((_, i) => this.playerDiceSlotX(i, n));
 
     let changed = false;
     for (let i = 0; i < n; i++) {
-      if (order[i].index !== i) {
+      if (order[i].index !== i || Math.abs(fromX[i] - toX[i]) > .01) {
         changed = true;
         break;
       }
@@ -19034,8 +19397,8 @@ export class BattleScene extends Component {
     this.playerDiceSortAnim = {
       t: 0,
       dur: BattleScene.PLAYER_DICE_SORT_DUR,
-      fromX: order.map(o => this.playerDiceSlotX(o.index, n)),
-      toX: order.map((_, i) => this.playerDiceSlotX(i, n)),
+      fromX,
+      toX,
     };
     return true;
   }
@@ -19057,26 +19420,26 @@ export class BattleScene extends Component {
     this.refreshDiceTray();
   }
 
-  private drawDieSlot(vis: DieVisual, slot: DieSlot, highlighted: boolean) {
+  private drawDieSlot(vis: DieVisual, slot: DieSlot, highlighted: boolean, index: number) {
     const ut = vis.root.getComponent(UITransform);
     if (!ut) return;
     const W = ut.contentSize.width, H = ut.contentSize.height;
     const g = vis.bg;
     g.clear();
-    this.drawDieBody(g, W, H, {
-      fill: slot.used ? DIE_FACE_USED_FILL : this.playerDieFillColor(slot.type),
-      border: highlighted ? DIE_FACE_SELECTED : DIE_FACE_BORDER,
-      lineWidth: highlighted ? 4 : 2,
-      shadow: !slot.used,
-    });
-
     vis.pips.clear();
-    this.drawDiePips(
-      vis.pips,
-      slot.pip,
-      Math.min(W, H),
-      slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT,
-    );
+    const roll = this.playerDiceRollAnim;
+    if (roll) {
+      this.drawRollingDie(g, Math.min(W, H), roll.finalPips[index] ?? slot.pip,
+        roll.t / roll.dur, index, this.playerDieFillColor(slot.type), DIE_FACE_BORDER, DIE_FACE_TEXT);
+    } else {
+      this.drawDieBody(g, W, H, {
+        fill: slot.used ? DIE_FACE_USED_FILL : this.playerDieFillColor(slot.type),
+        border: highlighted ? DIE_FACE_SELECTED : DIE_FACE_BORDER,
+        lineWidth: highlighted ? 4 : 2,
+        shadow: !slot.used,
+      });
+      this.drawDiePips(vis.pips, slot.pip, Math.min(W, H), slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT);
+    }
 
     vis.faceLabel.string = '';
     vis.faceLabel.color = slot.used ? DIE_FACE_TEXT_USED : DIE_FACE_TEXT;
@@ -19092,12 +19455,6 @@ export class BattleScene extends Component {
     if (!anim) return;
     anim.t += dt;
     if (anim.t < anim.dur) {
-      const frame = Math.floor(anim.t / DICE_CYCLE_INTERVAL);
-      for (let i = 0; i < this.phaseDice.length; i++) {
-        const slot = this.phaseDice[i];
-        if (!slot) continue;
-        slot.pip = (((frame + 1) * (17 + i * 6) + i * 11) % 6) + 1;
-      }
       this.refreshDiceTray();
       return;
     }
@@ -19122,42 +19479,69 @@ export class BattleScene extends Component {
     this.completePhaseDiceAction();
   }
 
+  /** All dice spin about their own center; dots are attached to the cube faces. */
+  private drawRollingDie(
+    g: Graphics, size: number, finalPip: number, progress: number, variant: number,
+    fill: Color, border: Color, pipColor: Color,
+  ) {
+    if (progress >= 1) {
+      this.drawDieBody(g, size, size, { fill, border, lineWidth: 2, shadow: true });
+      this.drawDiePips(g, finalPip, size, pipColor);
+      return;
+    }
+    const projection = projectRoundedDie(finalPip, progress, size, variant);
+    this.drawRoundedDieBody(g, projection, fill, border, 2, true);
+    g.fillColor = pipColor;
+    for (const face of projection.faces) {
+      for (const pip of face.pips) {
+        g.moveTo(pip[0].x, pip[0].y);
+        for (let i = 1; i < pip.length; i++) g.lineTo(pip[i].x, pip[i].y);
+        g.close();
+        g.fill();
+      }
+    }
+  }
+
   private drawDieBody(
     g: Graphics,
     w: number,
     h: number,
     opts: { fill: Color; border: Color; lineWidth: number; shadow?: boolean },
   ) {
-    const r = Math.max(8, Math.min(w, h) * 0.16);
-    if (opts.shadow) {
+    this.drawRoundedDieBody(g, restingRoundedDie(Math.min(w, h)),
+      opts.fill, opts.border, opts.lineWidth, !!opts.shadow);
+  }
+
+  /** The same closed rounded surface is used both in motion and after stopping. */
+  private drawRoundedDieBody(
+    g: Graphics, projection: RoundedDiceProjection, fill: Color, border: Color,
+    lineWidth: number, shadow: boolean,
+  ) {
+    const path = (points: DicePoint[], dx = 0, dy = 0) => {
+      g.moveTo(points[0].x + dx, points[0].y + dy);
+      for (let i = 1; i < points.length; i++) g.lineTo(points[i].x + dx, points[i].y + dy);
+      g.close();
+    };
+    if (shadow) {
       g.fillColor = new Color(0, 0, 0, 70);
-      g.roundRect(-w / 2 + 4, -h / 2 - 5, w, h, r);
+      path(projection.outline, 4, -5);
       g.fill();
     }
-    g.fillColor = opts.fill;
-    g.roundRect(-w / 2, -h / 2, w, h, r);
+    // A solid silhouette under the mesh avoids hairline seams between patches.
+    g.fillColor = fill;
+    path(projection.outline);
     g.fill();
-
-    // A small bevel keeps the flat UI square reading as a physical die.
-    g.strokeColor = new Color(255, 255, 255, 155);
-    g.lineWidth = 2;
-    g.moveTo(-w / 2 + r, h / 2 - 5);
-    g.lineTo(w / 2 - r, h / 2 - 5);
-    g.moveTo(-w / 2 + 5, -h / 2 + r);
-    g.lineTo(-w / 2 + 5, h / 2 - r);
-    g.stroke();
-
-    g.strokeColor = new Color(115, 105, 90, 120);
-    g.lineWidth = 2;
-    g.moveTo(w / 2 - 5, h / 2 - r);
-    g.lineTo(w / 2 - 5, -h / 2 + r);
-    g.moveTo(-w / 2 + r, -h / 2 + 5);
-    g.lineTo(w / 2 - r, -h / 2 + 5);
-    g.stroke();
-
-    g.strokeColor = opts.border;
-    g.lineWidth = opts.lineWidth;
-    g.roundRect(-w / 2, -h / 2, w, h, r);
+    for (const patch of projection.surface) {
+      g.fillColor = new Color(
+        Math.min(255, Math.round(fill.r * patch.shade)),
+        Math.min(255, Math.round(fill.g * patch.shade)),
+        Math.min(255, Math.round(fill.b * patch.shade)), fill.a);
+      path(patch.corners);
+      g.fill();
+    }
+    g.strokeColor = border;
+    g.lineWidth = lineWidth;
+    path(projection.outline);
     g.stroke();
   }
 
@@ -19351,7 +19735,7 @@ export class BattleScene extends Component {
     if (subPhase === 'attack') this.retainedCampaignAttackDiePip = null;
     this.pendingAutoEndStep = null;
     this.phaseDice = pips.map((_, i) => ({
-      pip: ((i * 2) % 6) + 1, used: false,
+      pip: pips[i], used: false,
       type: combined ? (i < attackCount ? 'attack' : 'movement') : undefined,
     }));
     this.clearGunSelection();
@@ -19650,7 +20034,7 @@ export class BattleScene extends Component {
     if (!this.mission) return t('attack.reason.unknown');
     const { map, sherman } = this.mission;
     if (tileForbidsSmokeOrConcealment(map.get(unitTurretHex(sherman)))) return t('floater.beachNoSmoke');
-    return this.hasSmokeAt(unitTurretHex(sherman)) ? t('floater.alreadySmoked') : null;
+    return unitOccupiedHexes(sherman).every(pos => this.hasSmokeAt(pos)) ? t('floater.alreadySmoked') : null;
   }
 
   private showDieActionUnavailable(reason: string, anchor?: Node) {
@@ -20240,6 +20624,7 @@ export class BattleScene extends Component {
       dur: Math.max(0.05, this.moveDuration),
       turnFrom: from,
       turnTo: to,
+      evacExit: this.isPlayerTurnEvacuation(sherman, dirSign),
     };
     this.refreshPhaseUI();
     this.updateHUD();
@@ -20376,9 +20761,11 @@ export class BattleScene extends Component {
     const facing = this.currentTurretFacingFor(watcher, watcher.facing ?? 0);
     // Suppress commander and interior sight; only the gunner's aimed ray reacts.
     const sightUnit = { ...watcher, turretFacing: facing, hatchOpen: false, interiorVisionRange: 0 };
-    return computeUnitVisibleHexes(
+    const sight = computeUnitVisibleHexes(
       this.mission.map, sightUnit, this.currentWeather(), this.mission.smokeHexes,
     );
+    for (const pos of unitOccupiedHexes(watcher)) sight.delete(HexMap.keyOf(pos));
+    return sight;
   }
 
   /** Resolve reactions after a vehicle's movement die, in stance activation order. */
@@ -20760,7 +21147,7 @@ export class BattleScene extends Component {
     const component = repairableComponentById(target);
     if (!component.playerAvailable(GameSession.gameMode) || !component.isDamaged(sherman)) return;
     component.repair(sherman);
-    this.spawnRepairIndicator(sherman.pos.q, sherman.pos.r);
+    this.spawnRepairIndicator(sherman.pos.q, sherman.pos.r, sherman);
     this.spawnFloater(sherman.pos.q, sherman.pos.r, t(component.floaterKey),
       new Color(180, 240, 160, 255), { size: 22, dur: 0.9, rise: 24 });
     this.battleLogI18n(component.battleLogKey);
@@ -21028,7 +21415,7 @@ export class BattleScene extends Component {
 
   /**
    * 烟雾（杂项 3 点初始可用；烟幕发射器强化后也可由 2、4 点使用）：
-   * 消耗该骰；在谢尔曼当前格放置烟雾 —— 下一次攻击该格内单位的命中检定 +1。
+   * 消耗该骰；在玩家坦克各占格放置烟雾 —— 下一次攻击该格内单位的命中检定 +1。
    * 烟雾在下一次"阶段①（玩家回合开始时）"自动消散。
    */
   private trySmoke(dieIdx: number) {
@@ -21043,11 +21430,11 @@ export class BattleScene extends Component {
         new Color(255, 200, 120, 255), { size: 22, dur: 0.9, rise: 24 });
       return;
     }
-    if (this.hasSmokeAt(unitTurretHex(s))) {
+    if (unitOccupiedHexes(s).every(pos => this.hasSmokeAt(pos))) {
       this.showDieActionUnavailable(t('floater.alreadySmoked'));
       return;
     }
-    this.deploySmokeAt(unitTurretHex(s), 'friendly', true);
+    this.deployUnitSmoke(s, 'friendly', true);
     this.usePhaseDice([dieIdx]);
     this.closeDiePopover();
     this.spawnFloater(unitTurretHex(s).q, unitTurretHex(s).r, t('floater.smokeDeployed'),
@@ -21341,6 +21728,7 @@ export class BattleScene extends Component {
       dur: Math.max(0.05, this.moveDuration),
       turnFrom: from,
       turnTo: to,
+      evacExit: this.isPlayerTurnEvacuation(sherman, dirSign),
     };
     this.refreshPhaseUI();
     this.updateHUD();
@@ -21644,9 +22032,11 @@ export class BattleScene extends Component {
   }
 
   /** 转向优先追踪共享视野内敌人，其次上回合敌方最后攻击格，最后才是对方出生格。 */
-  private currentAITurnTargetPosition(actor: Unit): Axial {
+  private currentAITurnTargetPosition(actor: Unit, supportStep?: Axial | null): Axial {
     if (!this.mission) return { ...actor.pos };
-    const support = this.mission.data?.multiRegion ? regionalSupportStep(this.mission, actor) : null;
+    const support = supportStep === undefined
+      ? this.mission.data?.multiRegion ? regionalSupportStep(this.mission, actor) : null
+      : supportStep;
     if (support) return support;
     const { map, smokeHexes, data } = this.mission;
     const weather = this.currentWeather();
@@ -21674,6 +22064,10 @@ export class BattleScene extends Component {
     if (isHeavyArtilleryUnit(actor)) return this.selectHardcoreHeavyArtilleryTarget(actor, adjacentOnly);
     const { map } = this.mission;
     const missionTargets = this.aiMissionTargetsFor(actor);
+    const weather = this.currentWeather();
+    const radioVisionSharing = getGameModeConfig(GameSession.gameMode).radioVisionSharing;
+    // Only reuse within this decision: the next action may change sight or radio state.
+    let visibleHexes: Set<string> | undefined;
     let bestPriority = Infinity;
     let bestWeaponPriority = Infinity;
     let bestDist = Infinity;
@@ -21697,18 +22091,14 @@ export class BattleScene extends Component {
         continue;
       }
       if (!hardcoreInfantry
-        && !getGameModeConfig(GameSession.gameMode).radioVisionSharing
-        && d > currentVisionRange(actor, this.currentWeather())) continue;
-      if (!hardcoreInfantry
-        && !isUnitInVision(
-          map,
-          actor,
-          target,
-          this.aiFriendliesFor(actor),
-          getGameModeConfig(GameSession.gameMode).radioVisionSharing,
-          this.currentWeather(),
-          this.mission.smokeHexes,
-        )) continue;
+        && !radioVisionSharing
+        && d > currentVisionRange(actor, weather)) continue;
+      if (!hardcoreInfantry) {
+        visibleHexes ??= radioVisionSharing
+          ? computeRadioSharedVisibleHexes(map, actor, this.aiFriendliesFor(actor), weather, this.mission.smokeHexes)
+          : computeUnitVisibleHexes(map, actor, weather, this.mission.smokeHexes);
+        if (!unitOccupiedHexes(target).some(pos => visibleHexes!.has(HexMap.keyOf(pos)))) continue;
+      }
       const sameHexInfantryTankAttack = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
         && isFootUnit(actor)
         && isTankUnit(target)
@@ -21753,6 +22143,9 @@ export class BattleScene extends Component {
     const { map } = this.mission;
     const units = this.allUnits();
     const missionTargets = this.aiMissionTargetsFor(actor);
+    const weather = this.currentWeather();
+    const radioVisionSharing = getGameModeConfig(GameSession.gameMode).radioVisionSharing;
+    let visibleHexes: Set<string> | undefined;
     let bestPriority = Infinity;
     let bestDist = Infinity;
     const tied: Unit[] = [];
@@ -21760,8 +22153,11 @@ export class BattleScene extends Component {
       if (isAbandonedATGun(target) || isAttachedATGunCrew(target)) continue;
       if (isAbandonedTank(target)) continue;
       if (isSameSide(target, actor)) continue;
-      if (!getGameModeConfig(GameSession.gameMode).radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, this.currentWeather())) continue;
-      if (!isUnitInVision(map, actor, target, this.aiFriendliesFor(actor), getGameModeConfig(GameSession.gameMode).radioVisionSharing, this.currentWeather(), this.mission.smokeHexes)) continue;
+      if (!radioVisionSharing && hexDistance(actor.pos, target.pos) > currentVisionRange(actor, weather)) continue;
+      visibleHexes ??= radioVisionSharing
+        ? computeRadioSharedVisibleHexes(map, actor, this.aiFriendliesFor(actor), weather, this.mission.smokeHexes)
+        : computeUnitVisibleHexes(map, actor, weather, this.mission.smokeHexes);
+      if (!unitOccupiedHexes(target).some(pos => visibleHexes!.has(HexMap.keyOf(pos)))) continue;
       const machineGun = this.tankMachineGunSelection(actor, target);
       if ((GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && !machineGun) continue;
       if (!canMGAttack({ attacker: actor, target, map, theater: this.mission.data.theater, units, smokeHexes: this.mission.smokeHexes, weather: this.currentWeather(), requireOwnVision: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), lockedFire: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), expandedTurretDirections: getGameModeConfig(GameSession.gameMode).expandedTurretDirections, atGunCrewTargets: (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test'), ...this.tankMachineGunContext(actor, target, machineGun) }).ok) continue;
@@ -22412,6 +22808,7 @@ export class BattleScene extends Component {
   /** 格子文字（不含最上行地形名——见左上角；不含单位——见下方面板） */
   private buildTileInspectTerrainText(tile: Tile): string {
     const blocks: string[] = [];
+    if (tile.railway) blocks.push(t('tileInspect.railway'));
     if (this.mission?.map && tile.pos) {
       const transitions = neighbors(tile.pos).map((pos, dir) => ({ adjacent: this.mission!.map.get(pos), dir }))
         .filter(({ adjacent }) => adjacent && tileHeight(adjacent) !== tileHeight(tile));
@@ -23211,6 +23608,21 @@ export class BattleScene extends Component {
         sprite.spriteFrame = frame;
         node.setPosition(0, hexCY, 0);
         node.angle = art.rotationDegrees;
+        preview.addChild(node);
+      }
+    }
+    if (tile.railway) {
+      const art = railwayArtTransform(tile.railway, railwayHasCrossing(tile));
+      const frame = art && this.urbanOverlaySpriteFrames[art.surface];
+      if (frame) {
+        const node = new Node('InspectRailway');
+        node.layer = this.node.layer;
+        node.addComponent(UITransform).setContentSize(hexR * 2, hexR * 2);
+        const sprite = node.addComponent(Sprite);
+        sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+        sprite.spriteFrame = frame;
+        node.setPosition(0, hexCY, 0);
+        node.angle = art!.rotationDegrees;
         preview.addChild(node);
       }
     }
@@ -24312,6 +24724,9 @@ export class BattleScene extends Component {
 
   /** Apply the runtime state common to normal saves and campaign checkpoints. */
   private restoreAppliedSave(result: ReturnType<typeof applySave>, skipHint?: boolean) {
+    this.regionalAIContinuation = null;
+    this.regionalAIFrameStart = null;
+    this.regionalAIWorkChecks = 0;
     this.loadMissionTerrainSeason();
     this.airborneFlight?.root.destroy();
     this.airborneFlight = null;
@@ -24384,18 +24799,38 @@ export class BattleScene extends Component {
     this.battleLog(`[Load] 已读档：回合 ${this.turn}, 移动 ${this.movementDone ? '已做' : '未做'}, 攻击 ${this.attackDone ? '已做' : '未做'}`);
   }
 
-  /**
-   * 开启 `enemyOrder[enemyIndex]` 这辆敌坦的回合：
-   *   1. 跳过已摧毁 / 不存在 的条目
-   *   2. 按起始格地形 & damaged 状态查 AI 列，掷骰子
-   *   3. 在 UI 层建立迷你骰子托盘（展示本回合全部点数）
-   *   4. 进入 runNextEnemyStep 开始逐颗消耗
-   *
-   * 若已轮完所有敌坦 → 结束敌方阶段。
-   */
+  /** Soft 3 ms budget between atomic remote actions, with a recursion/work cap. */
+  private deferRegionalAI(resume: () => void): boolean {
+    const mission = this.mission;
+    const actor = this.enemyOrder[this.enemyIndex];
+    if (!mission?.data?.multiRegion || !actor || !this.isOutsidePlayerRegion(actor)) return false;
+    if (this.regionalAIContinuation) return true;
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    if (this.regionalAIFrameStart == null) this.regionalAIFrameStart = now;
+    this.regionalAIWorkChecks = (this.regionalAIWorkChecks ?? 0) + 1;
+    if (now - this.regionalAIFrameStart < 3 && this.regionalAIWorkChecks <= 32) return false;
+    const phase = this.phase, turn = this.turn, order = this.enemyOrder, index = this.enemyIndex;
+    this.regionalAIContinuation = () => {
+      if (!this.leavingBattle && this.mission === mission && this.phase === phase && this.turn === turn
+        && this.enemyOrder === order && this.enemyIndex === index && this.enemyOrder[index] === actor
+        && this.outcome === 'ongoing') resume();
+    };
+    return true;
+  }
+
+  private resumeRegionalAI(): boolean {
+    const resume = this.regionalAIContinuation;
+    if (!resume || this.anim || this.turretAimAnim || this.diceShow || this.enemyDiceSortAnim || this.enemyDiceResultHold) return false;
+    this.regionalAIContinuation = null;
+    resume();
+    return true;
+  }
+
+  /** Start the current AI actor once, or advance the phase after the final actor. */
   private beginCurrentEnemyTurn() {
     if (!this.mission) return;
     if (this.pauseAIFlowForCombatLogReplay(() => this.beginCurrentEnemyTurn())) return;
+    if (this.mission.data?.multiRegion && this.deferRegionalAI(() => this.beginCurrentEnemyTurn())) return;
     // 跳过死亡 / 越界
     while (this.enemyIndex < this.enemyOrder.length) {
       const e = this.enemyOrder[this.enemyIndex];
@@ -24544,6 +24979,7 @@ export class BattleScene extends Component {
   private runHardcoreInfantryTurn(infantry: Unit) {
     const actions = infantryTurnActions(infantry);
     while (this.enemyInfantryActionIndex < actions.length) {
+      if (this.mission?.data?.multiRegion && this.deferRegionalAI(() => this.runHardcoreInfantryTurn(infantry))) return;
       const rule = actions[this.enemyInfantryActionIndex++];
       const attackTarget = rule === 'attack_or_move' ? this.selectAIShootTarget(infantry, true) : null;
       if (attackTarget && this.canAIMainGunResolveSelectedTarget(infantry, attackTarget)) {
@@ -24723,6 +25159,20 @@ export class BattleScene extends Component {
       slot.node.setScale(1, 1, 1);
       slot.node.active = true;
     }
+  }
+
+  private drawRailwayOverlay(cx: number, cy: number, size: number, tile: Tile): void {
+    if (!tile.railway) return;
+    const art = railwayArtTransform(tile.railway, railwayHasCrossing(tile));
+    const frame = art && this.urbanOverlaySpriteFrames[art.surface];
+    if (!frame || !this.ensureScenerySlot(this.railwaySpritePool, this.railwaySpritePoolNext, BattleScene.TERRAIN_SPRITE_POOL)) return;
+    const slot = this.railwaySpritePool[this.railwaySpritePoolNext++];
+    slot.sprite.spriteFrame = frame;
+    slot.node.getComponent(UITransform)!.setContentSize(size * 2, size * 2);
+    slot.node.setPosition(cx, cy, 0);
+    slot.node.setRotationFromEuler(0, 0, art!.rotationDegrees);
+    slot.node.setScale(1, 1, 1);
+    slot.node.active = true;
   }
 
   private drawTerrainSpriteFrame(
@@ -25133,13 +25583,14 @@ export class BattleScene extends Component {
     }
 
     while (true) {
+      if (this.mission.data?.multiRegion && this.deferRegionalAI(() => this.runNextEnemyStep())) return;
       // 按「点数升序（同点原序）」依次消耗骰子，而非数组下标顺序
       const dieIdx = this.enemyDiceExecOrder.find(i => !this.enemyDiceUsed[i]);
       if (dieIdx === undefined) {
         this.enemyDiceHighlightIdx = -1;
         this.clearAIMoveState(enemy);
         this.clearActiveActingUnit(enemy);
-        this.refreshEnemyDiceTray();
+        this.refreshEnemyDiceTray(false);
         if (!this.enemyDidActThisTurn && !this.isOutsidePlayerRegion(enemy)) {
           this.enemyDiceResultHold = { t: 0, dur: 1.0 };
           return;
@@ -25165,13 +25616,12 @@ export class BattleScene extends Component {
 
       this.enemyDiceHighlightIdx = dieIdx;
       // 消耗这颗骰子（无论是否真正执行成功，都算"本骰已用")
-      this.refreshEnemyDiceTray();
 
       if (!chosen) {
         this.enemyDiceResolvedActions[dieIdx] = null;
         this.enemyDiceUsed[dieIdx] = true;
         this.enemyDiceHighlightIdx = -1;
-        this.refreshEnemyDiceTray();
+        this.refreshEnemyDiceTray(false);
         continue;
       }
 
@@ -25179,7 +25629,7 @@ export class BattleScene extends Component {
       this.enemyDiceResolvedActions[dieIdx] = chosen;
       this.enemyDiceUsed[dieIdx] = true;
       this.enemyDidActThisTurn = true;
-      this.refreshEnemyDiceTray();
+      this.refreshEnemyDiceTray(false);
       const result = this.executeEnemyAction(enemy, chosen);
       if (this.outcome !== 'ongoing') {
         this.clearAIMoveState(enemy);
@@ -25231,8 +25681,9 @@ export class BattleScene extends Component {
       const moveDestination = this.aiMoveDestinationForAction(enemy, a);
       if (moveDestination && !this.canMoveToBattleTile(moveDestination)) return false;
       if (!this.isAIReverseMoveFilterEnabled()) return true;
-      const moveTarget = a === 'turn' ? this.currentAITurnTargetPosition(enemy) : target.pos;
-      const moveState = this.aiMoveStateForAction(enemy, a, moveTarget, occupied, { useRng: !!opts.commitMoveState });
+      const moveTarget = a === 'turn' ? this.currentAITurnTargetPosition(enemy, support) : target.pos;
+      const moveState = this.aiMoveStateForAction(enemy, a, moveTarget, occupied,
+        { useRng: !!opts.commitMoveState, supportStep: support });
       if (!this.isAIMoveStateAllowed(moveState, enemy)) return false;
       if (opts.commitMoveState) this.pendingAIMoveState = { unit: enemy, action: a, state: moveState };
       return true;
@@ -25292,10 +25743,11 @@ export class BattleScene extends Component {
         return 'done';
       }
       if (action === 'turn' && enemy.facing !== null) {
-        const target = this.currentAITurnTargetPosition(enemy);
+        const support = regionalSupportStep(this.mission, enemy);
+        const target = this.currentAITurnTargetPosition(enemy, support);
         const planned = this.pendingAIMoveState?.unit === enemy ? this.pendingAIMoveState.state : undefined;
         const decision = planned === 'turn_cw' ? 'cw' : planned === 'turn_ccw' ? 'ccw' : planned === null ? 'stay'
-          : regionalSupportTurn(this.mission, enemy) ?? decideEnemyTurn(enemy, target, this.mission.map, this.buildOccupiedSet(enemy), this.rng);
+          : regionalSupportTurn(this.mission, enemy, support) ?? decideEnemyTurn(enemy, target, this.mission.map, this.buildOccupiedSet(enemy), this.rng);
         const from = enemy.facing;
         const to = decision === 'stay' ? from : rotateDirection(from, decision === 'cw' ? 1 : 5);
         if (to !== from) {
@@ -25350,7 +25802,8 @@ export class BattleScene extends Component {
 
       case 'turn': {
         if (isImmobileGunUnit(enemy)) return 'done';
-        const target = this.currentAITurnTargetPosition(enemy);
+        const support = this.mission.data.multiRegion ? regionalSupportStep(this.mission, enemy) : null;
+        const target = this.currentAITurnTargetPosition(enemy, support);
         if (enemy.facing === null) enemy.facing = 0;
         const occupied = this.buildOccupiedSet(enemy);
         const decision = plannedMoveState === 'turn_cw'
@@ -25359,7 +25812,7 @@ export class BattleScene extends Component {
             ? 'ccw'
             : plannedMoveState === null
               ? 'stay'
-              : (this.mission.data.multiRegion ? regionalSupportTurn(this.mission, enemy) : null)
+              : (this.mission.data.multiRegion ? regionalSupportTurn(this.mission, enemy, support) : null)
                 ?? decideEnemyTurn(enemy, target, map, occupied, this.rng);
         if (decision === 'stay') {
           this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 转向 → 保持 facing=${enemy.facing}`);
@@ -25456,8 +25909,8 @@ export class BattleScene extends Component {
       case 'smoke': {
         if (!commanderHasSkill(enemy, 'use_smoke_grenade')
           || tileForbidsSmokeOrConcealment(map.get(unitTurretHex(enemy)))
-          || this.hasSmokeAt(unitTurretHex(enemy))) return 'done';
-        this.deploySmokeAt(unitTurretHex(enemy), enemy.sideId === 'player' ? 'friendly' : 'enemy', true);
+          || unitOccupiedHexes(enemy).every(pos => this.hasSmokeAt(pos))) return 'done';
+        this.deployUnitSmoke(enemy, enemy.sideId === 'player' ? 'friendly' : 'enemy', true);
         this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 施放烟雾`);
         this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.smoke'),
           new Color(200, 200, 220, 255), { size: 24 });
@@ -25483,7 +25936,7 @@ export class BattleScene extends Component {
         }
         if (repaired) {
           if (repairedDamage) {
-            this.spawnRepairIndicator(enemy.pos.q, enemy.pos.r);
+            this.spawnRepairIndicator(enemy.pos.q, enemy.pos.r, enemy);
           }
           this.battleLog(`[AI] ${unitDisplayName(enemy.kind)} 修复成功`);
           this.spawnFloater(enemy.pos.q, enemy.pos.r, t('floater.repairAndFire'),
@@ -25661,12 +26114,12 @@ export class BattleScene extends Component {
     action: EnemyAction,
     target: Axial,
     occupied: Set<string>,
-    opts: { useRng?: boolean } = {},
+    opts: { useRng?: boolean; supportStep?: Axial | null } = {},
   ): AIMoveState | null {
     if (!this.mission) return null;
     switch (action) {
       case 'turn': {
-        const decision = (this.mission.data?.multiRegion ? regionalSupportTurn(this.mission, enemy) : null)
+        const decision = (this.mission.data?.multiRegion ? regionalSupportTurn(this.mission, enemy, opts.supportStep) : null)
           ?? decideEnemyTurn(enemy, target, this.mission.map, occupied, opts.useRng ? this.rng : undefined);
         if (decision === 'stay') return null;
         return decision === 'cw' ? 'turn_cw' : 'turn_ccw';
@@ -25715,10 +26168,18 @@ export class BattleScene extends Component {
   private canTwoHexTurn(unit: Unit, sign: 1 | -1): boolean {
     if (!isTwoHexUnit(unit)) return true;
     if (!this.mission || unit.paralyzed) return false;
+    if (this.isPlayerTurnEvacuation(unit, sign)) return true;
     const plan = planUnitMove(unit, sign === 1 ? 'cw' : 'ccw');
     return this.canMoveToBattleTile(plan.entryTo)
       && this.mission.map.canUnitCrossEdge(plan.entryFrom, plan.entryTo, unit)
       && !this.findMoveBlocker(unit, plan.entryTo);
+  }
+
+  private isPlayerTurnEvacuation(unit: Unit, sign: 1 | -1): boolean {
+    if (!this.mission || GameSession.isPvp || unit !== (this.mission.playerTank ?? this.mission.sherman)) return false;
+    return isPlayerTankEvacTurn(this.mission, sign, {
+      canExitTo: target => this.isCampaignNextSegmentEntry(target),
+    });
   }
 
   private findMoveBlocker(mover: Unit, pos: Axial): Unit | null {
@@ -25890,6 +26351,12 @@ export class BattleScene extends Component {
    * 其余情况打开格子介绍（地形、骰子规则、单位状态）。
    */
   private onTouchMap(event: EventTouch) {
+    if (this.mapPanGesture) {
+      if (this.mapPanGesture.touchId !== event.getID()) return;
+      const dragged = this.mapPanGesture.dragged;
+      this.mapPanGesture = null;
+      if (dragged) return;
+    }
     if (!this.mission || !this.mapNode) return;
     const start = event.getStartLocation();
     const end = event.getLocation();
@@ -26000,8 +26467,8 @@ export class BattleScene extends Component {
           return;
         }
       } else {
-        const direction = fireDirectionTo(this.mission.sherman.pos, target.pos)
-          ?? diagonalFlankFireDirectionTo(this.mission.sherman.pos, target.pos);
+        const direction = fireDirectionTo(unitTurretHex(this.mission.sherman), target.pos)
+          ?? diagonalFlankFireDirectionTo(unitTurretHex(this.mission.sherman), target.pos);
         if (direction === null) {
           this.showGunAimWarning('attack.reason.cannotTurnDirection');
           return;
@@ -26141,7 +26608,7 @@ export class BattleScene extends Component {
     const dieIdx = useMG ? this.selectedMGDieIdx : this.selectedGunDieIdx;
     if (!this.mission || dieIdx < 0) return;
     // Shared visibility cannot extend the gunner's clickable rotation range.
-    if (hexDistance(this.mission.sherman.pos, targetPos)
+    if (hexDistance(unitTurretHex(this.mission.sherman), targetPos)
       > currentGunnerVisionRange(this.mission.sherman, this.currentWeather())) {
       this.showGunAimWarning('attack.reason.turretAimRange');
       return;
@@ -26221,7 +26688,7 @@ export class BattleScene extends Component {
     const flankDirection = diagonalMainGunDirectionForHex(
       this.mission.map, sherman, target.pos, this.currentWeather(), this.mission.smokeHexes,
     );
-    const to = flankDirection ?? fireDirectionTo(sherman.pos, target.pos) ?? approximateFireDirection(sherman.pos, target.pos);
+    const to = flankDirection ?? fireDirectionTo(unitTurretHex(sherman), target.pos) ?? approximateFireDirection(unitTurretHex(sherman), target.pos);
     const currentRuleFacing = (sherman.turretFacing ?? sherman.facing ?? to) as FireDirection;
     const preserveRuleFacing = flankDirection !== null && currentRuleFacing === flankDirection;
     const attackedSidePreference = flankDirection !== null
@@ -26231,7 +26698,7 @@ export class BattleScene extends Component {
         flankDirection,
         target.pos,
         this.mission.smokeHexes,
-        hexDistance(sherman.pos, target.pos),
+        hexDistance(unitTurretHex(sherman), target.pos),
       )
       : null;
     this.startShermanTurretAimDirection(
@@ -26385,7 +26852,7 @@ export class BattleScene extends Component {
         this.mission.map, enemy, target.pos, this.currentWeather(), this.mission.smokeHexes,
       )
       : null;
-    const requestedDirection = flankDirection ?? fireDirectionTo(enemy.pos, target.pos) ?? approximateFireDirection(enemy.pos, target.pos);
+    const requestedDirection = flankDirection ?? fireDirectionTo(unitTurretHex(enemy), target.pos) ?? approximateFireDirection(unitTurretHex(enemy), target.pos);
     const from = this.currentTurretFacingFor(enemy, requestedDirection);
     const traverse = limitTurretTraverse(from, requestedDirection, this.turretTraverseSpeedFor(enemy));
     const to = traverse.direction;
@@ -26468,7 +26935,10 @@ export class BattleScene extends Component {
     if (!this.mission) return;
     const player = this.mission.playerTank ?? this.mission.sherman;
     const stats = this.mission.battleStatistics ?? (this.mission.battleStatistics = cloneBattleStatistics());
-    recordBattleAttack(stats, attacker === player, target === player, weapon, reports);
+    // Two-hex hit views are distinct objects, even when aiming at the front hex.
+    const playerAttacking = attacker === player || (!!player.id && attacker?.id === player.id);
+    const playerTargeted = target === player || (!!player.id && target.id === player.id);
+    recordBattleAttack(stats, playerAttacking, playerTargeted, weapon, reports);
     if (this.outcomePanel?.root.active && this.outcome !== 'ongoing') {
       this.outcomePanel.refresh(stats, this.outcome === 'victory', GameSession.isPvp, !!this.campaignRuntime, this.turn,
         battleCrewStatus(player));
@@ -27140,7 +27610,7 @@ export class BattleScene extends Component {
     if (precisionFire) {
       this.enemyDiceResolvedActions[precisionPartnerIdx] = 'shoot';
       this.enemyDiceUsed[precisionPartnerIdx] = true;
-      this.refreshEnemyDiceTray();
+      this.refreshEnemyDiceTray(false);
     }
     const ambushModifier = attackCtx.hitThresholdModifier;
     markAmbushAction(enemy);
@@ -27372,7 +27842,10 @@ export class BattleScene extends Component {
       fireEffectPlayed: opts.fireEffectPlayed === true,
       attacker: opts.attacker ?? null,
       target: opts.target ?? null,
-      targetCommanderExposed: opts.target?.hatchOpen === true && opts.target.crew?.commander !== false,
+      targetCommanderExposed: report.targetCommanderExposed ?? (opts.target?.hatchOpen === true
+        && opts.target.crew?.commander !== false
+        && (!isTwoHexUnit(opts.target)
+          || axialEquals(selectedUnitHitHex(opts.target) ?? opts.target.pos, unitTurretHex(opts.target)))),
       onDone,
       onHold: opts.onHold ?? null,
       onHighExplosiveImpact: opts.onHighExplosiveImpact ?? null,
@@ -28281,7 +28754,7 @@ export class BattleScene extends Component {
     return l;
   }
 
-  private setDieLabelFace(label: Label | null | undefined, value: number | string) {
+  private setDieLabelFace(label: Label | null | undefined, value: number | string, rollProgress?: number, variant = 0) {
     if (!label) return;
     const text = String(value);
     const n = Number(text);
@@ -28289,6 +28762,13 @@ export class BattleScene extends Component {
     const body = container?.getComponent(Graphics);
     const bodyUt = container?.getComponent(UITransform);
     const size = bodyUt ? Math.min(bodyUt.contentSize.width, bodyUt.contentSize.height) : 48;
+    if (body && rollProgress !== undefined && Number.isInteger(n) && n >= 1 && n <= 6) {
+      body.clear();
+      container?.getChildByName('Pips')?.getComponent(Graphics)?.clear();
+      this.drawRollingDie(body, size, n, rollProgress, variant, DICE_DIE_FILL, DICE_DIE_BORDER, DICE_DIE_TEXT);
+      label.string = '';
+      return;
+    }
     if (body) {
       body.clear();
       this.drawDieBody(body, size, size, {
@@ -28312,16 +28792,19 @@ export class BattleScene extends Component {
     label.string = text;
   }
 
-  private spinMainGunDiceRows(show: DiceShow, frame: number) {
+  private spinMainGunDiceRows(show: DiceShow, progress: number) {
     for (let i = 0; i < show.penDieLabels.length; i++) {
-      this.setDieLabelFace(show.penDieLabels[i], ((frame * (13 + i * 4)) % 6) + 1);
+      const value = show.highExplosiveReport?.effectDice?.[i] ?? show.report.penDice?.[i] ?? show.report.penDie ?? 1;
+      this.setDieLabelFace(show.penDieLabels[i], value, progress, i + 2);
     }
-    this.setDieLabelFace(show.dmgDieLabel, ((frame * 11) % 6) + 1);
-    this.setDieLabelFace(show.crewDieLabel, ((frame * 29) % 6) + 1);
+    this.setDieLabelFace(show.dmgDieLabel, show.report.stagedDamageDie ?? show.report.damageDie ?? 1, progress, 4);
+    this.setDieLabelFace(show.crewDieLabel, show.report.stagedCrewCheck?.die || 1, progress, 5);
     for (let i = 0; i < show.highExplosiveCollateralRows.length; i++) {
       const row = show.highExplosiveCollateralRows[i];
+      const he = show.highExplosiveCollateral[i]?.report;
+      const dice = he && !he.automaticHit && !he.hit ? he.dice : he?.effectDice;
       row.dieLabels.forEach((label, dieIndex) => {
-        this.setDieLabelFace(label, ((frame * (17 + i * 6 + dieIndex * 4)) % 6) + 1);
+        this.setDieLabelFace(label, dice?.[dieIndex] ?? 1, progress, 6 + i * 3 + dieIndex);
       });
       row.needLabel.string = '';
       row.verdictLabel.string = '';
@@ -28358,6 +28841,7 @@ export class BattleScene extends Component {
       damageEffect,
       commanderKilledByHitDoubles: report.commanderKilledByHitDoubles,
       commanderShieldBlocked: report.commanderShieldBlocked,
+      targetCommanderExposed: report.targetCommanderExposed,
       statusChange: report.outcome === 'destroyed' ? 'destroyed'
         : report.outcome === 'none' ? 'none' : 'damaged',
     };
@@ -28801,7 +29285,7 @@ export class BattleScene extends Component {
     for (let i = 0; i < m.count; i++) {
       const root = this.enemyDiceTrayDieRoots[i];
       if (!root || !root.isValid) continue;
-      const x0 = slotCenterX(s.fromSlot[i]);
+      const x0 = this.playerDiceSlotX(s.fromSlot[i], m.count, true);
       const x1 = slotCenterX(s.toSlot[i]);
       root.setPosition(x0 + (x1 - x0) * k01, m.rowY, 0);
     }
@@ -28912,14 +29396,18 @@ export class BattleScene extends Component {
       sub.color = new Color(200, 200, 180, 255);
       sub.horizontalAlign = HorizontalTextAlignment.CENTER;
       sub.verticalAlign = VerticalTextAlignment.TOP;
-      sub.string = this.enemyDieActionSubtitle(enemy, i);
+      // Populate once in the final rules refresh after all slots are bound.
+      sub.string = '';
       dieRoot.addChild(subNode);
       this.enemyDiceTraySubtitleLabels.push(sub);
     }
 
     this.enemyDiceTrayRoot = root;
     if (playSort) {
-      this.enemyDiceSortAnim = { t: 0, dur: DICE_ROLL_DUR, fromSlot, toSlot };
+      this.enemyDiceSortAnim = {
+        t: 0, dur: DICE_ROLL_DUR + BattleScene.PLAYER_DICE_SORT_DUR,
+        rollDur: DICE_ROLL_DUR, fromSlot, toSlot,
+      };
       this.applyEnemyDiceSortLayout(0);
       playDiceRoll();
     } else {
@@ -28933,7 +29421,7 @@ export class BattleScene extends Component {
     this.refreshEnemyDiceTray();
   }
 
-  /** 重刷托盘里每颗骰的已用 / 当前执行高亮 */
+  /** 外观刷新保留未决字幕；规则变化才重算，已决骰始终使用执行结果。 */
   private refreshEnemyDiceTray(refreshActions = true) {
     if (!this.enemyDiceTrayRoot) return;
     const m = this.enemyTrayMetrics;
@@ -28950,8 +29438,10 @@ export class BattleScene extends Component {
           : new Color(20, 20, 20, 255);
       }
       const sub = this.enemyDiceTraySubtitleLabels[i];
-      if (sub && enemy && !enemy.destroyed && refreshActions) {
-        sub.string = this.enemyDieActionSubtitle(enemy, i);
+      if (sub && enemy && !enemy.destroyed) {
+        if (refreshActions || this.enemyDiceResolvedActions[i] !== undefined) {
+          sub.string = this.enemyDieActionSubtitle(enemy, i);
+        }
         sub.color = used
           ? new Color(130, 130, 120, 160)
           : new Color(200, 200, 180, 255);
@@ -28959,22 +29449,20 @@ export class BattleScene extends Component {
       const g = this.enemyDiceTrayTileGraphics[i];
       if (!g) continue;
       g.clear();
-      this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
-        fill: this.enemyDieFillColor(i),
-        border: hi
-          ? new Color(255, 200, 80, 255)
-          : DICE_DIE_BORDER,
-        lineWidth: hi ? 3.5 : 2,
-        shadow: !used,
-      });
-      this.drawDiePips(
-        g,
-        this.enemyDiceSortAnim
-          ? (((Math.floor(this.enemyDiceSortAnim.t / DICE_CYCLE_INTERVAL) + 1) * (13 + i * 4) + i * 7) % 6) + 1
-          : this.enemyDice[i],
-        DIE_SIZE,
-        used ? new Color(90, 90, 80, 180) : new Color(20, 20, 20, 255),
-      );
+      if (this.enemyDiceSortAnim) {
+        this.drawRollingDie(g, DIE_SIZE, this.enemyDice[i],
+          this.enemyDiceSortAnim.t / (this.enemyDiceSortAnim.rollDur ?? this.enemyDiceSortAnim.dur), i,
+          this.enemyDieFillColor(i), DICE_DIE_BORDER, new Color(20, 20, 20, 255));
+      } else {
+        this.drawDieBody(g, DIE_SIZE, DIE_SIZE, {
+          fill: this.enemyDieFillColor(i),
+          border: hi ? new Color(255, 200, 80, 255) : DICE_DIE_BORDER,
+          lineWidth: hi ? 3.5 : 2,
+          shadow: !used,
+        });
+        this.drawDiePips(g, this.enemyDice[i], DIE_SIZE,
+          used ? new Color(90, 90, 80, 180) : new Color(20, 20, 20, 255));
+      }
       const parent = lab?.node.parent;
       if (parent) parent.setScale(used && !hi ? 0.9 : 1, used && !hi ? 0.9 : 1, 1);
     }
@@ -29067,16 +29555,12 @@ export class BattleScene extends Component {
 
     switch (show.stage) {
       case 'hit-roll': {
-        // 按间隔切换 2d6 的显示面，营造"在转"的感觉
-        const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
-        // 用 frame 当种子简单伪随机：不用真随机以免过于抖动
-        const p1 = ((frame * 17) % 6) + 1;
-        const p2 = ((frame * 23) % 6) + 1;
-        this.setDieLabelFace(show.hitDieLabels[0], p1);
-        if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], p2);
-        if (show.secondaryMGDieLabel) this.setDieLabelFace(show.secondaryMGDieLabel, p2);
+        const progress = show.t / DICE_ROLL_DUR;
+        this.setDieLabelFace(show.hitDieLabels[0], show.report.dice[0], progress, 0);
+        if (show.hitDieLabels[1]) this.setDieLabelFace(show.hitDieLabels[1], show.report.dice[1], progress, 1);
+        if (show.secondaryMGDieLabel) this.setDieLabelFace(show.secondaryMGDieLabel, show.secondaryMGReport?.dice[0] ?? 1, progress, 2);
         show.hitSumLabel.string = '';
-        if (!show.mg) this.spinMainGunDiceRows(show, frame);
+        if (!show.mg) this.spinMainGunDiceRows(show, progress);
         if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'hit-show';
           show.t = 0;
@@ -29178,10 +29662,9 @@ export class BattleScene extends Component {
         break;
       }
       case 'pen-roll': {
-        const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
-        const p = ((frame * 13) % 6) + 1;
         for (let i = 0; i < show.penDieLabels.length; i++) {
-          this.setDieLabelFace(show.penDieLabels[i], ((frame * (13 + i * 4)) % 6) + 1);
+          this.setDieLabelFace(show.penDieLabels[i], show.report.penDice?.[i] ?? show.report.penDie ?? 1,
+            show.t / DICE_ROLL_DUR, i + 2);
         }
         if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'pen-show';
@@ -29244,9 +29727,7 @@ export class BattleScene extends Component {
         break;
       }
       case 'dmg-roll': {
-        const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
-        const p = ((frame * 11) % 6) + 1;
-        this.setDieLabelFace(show.dmgDieLabel, p);
+        this.setDieLabelFace(show.dmgDieLabel, show.report.damageDie ?? 1, show.t / DICE_ROLL_DUR, 4);
         if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'dmg-show';
           show.t = 0;
@@ -29293,9 +29774,7 @@ export class BattleScene extends Component {
         break;
       }
       case 'crew-roll': {
-        const frame = Math.floor(show.t / DICE_CYCLE_INTERVAL);
-        const p = ((frame * 29) % 6) + 1;
-        this.setDieLabelFace(show.crewDieLabel, p);
+        this.setDieLabelFace(show.crewDieLabel, show.report.stagedCrewCheck?.die || 1, show.t / DICE_ROLL_DUR, 5);
         if (show.t >= DICE_ROLL_DUR) {
           show.stage = 'crew-show';
           show.t = 0;
@@ -29364,20 +29843,21 @@ export class BattleScene extends Component {
     }
   }
 
-  /** 当前是否处于"不接受新指令"的过场态：移动动画中 / 掷骰动画中都算。 */
-  private isBusy(): boolean {
+  /** 当前是否处于"不接受新指令"的过场态；ignoreEventPhase 仅供已暂停在事件边界的战报查看/恢复使用。 */
+  private isBusy(ignoreEventPhase = false): boolean {
     return !this.terrainSpriteBatchReady || this.pendingSeasonTerrainLoads > 0 || !!this.continuousTerrain?.loading || !!this.terrainLoadingRoot?.active
       || this.turnTransition !== null || this.campaignTransitionActive || this.campaignPanAnim !== null
       || this.campaignUpgradeChoiceRoot !== null || this.campaignUpgradeDetailRoot !== null
       || this.anim !== null || this.diceShow !== null || this.playerDiceRollAnim !== null
       || this.playerDiceSortAnim !== null
+      || !!this.regionalAIContinuation
       || this.turretAimAnim !== null
       || this.smokeShellInFlight
       || this.precisionAimHoldCallback !== null
       || this.enemyDiceSortAnim !== null
       || this.enemyDiceResultHold !== null
       || this.turnEndEventUI !== null || this.fireCheckEventUI !== null || this.usCasualtyEventUI !== null
-      || this.eventPhase !== null || this.airborneFlight !== null
+      || (!ignoreEventPhase && this.eventPhase !== null) || this.airborneFlight !== null
       || this.tileInspectModalRoot !== null;
   }
 
@@ -29647,8 +30127,7 @@ export class BattleScene extends Component {
     if (!ui || ui.stage !== 'roll') return;
     ui.t += dt;
     if (ui.t < DICE_ROLL_DUR) {
-      const tick = Math.floor(ui.t / 0.08) % 6;
-      for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
+      ui.dieLabels.forEach((lab, i) => this.setDieLabelFace(lab, ui.allDice[i] ?? 1, ui.t / DICE_ROLL_DUR, i));
       return;
     }
     for (let i = 0; i < ui.dieLabels.length; i++) {
@@ -29812,8 +30291,12 @@ export class BattleScene extends Component {
     return { root, dieLabels, providerLabel: providerL, resultLabel: resultL, confirmButton: confirmB.node };
   }
 
-  private setUsCasualtyDieFace(label: Label | null | undefined, value: number | string, hot: boolean) {
+  private setUsCasualtyDieFace(label: Label | null | undefined, value: number | string, hot: boolean, rollProgress?: number, variant = 0) {
     if (!label) return;
+    if (rollProgress !== undefined) {
+      this.setDieLabelFace(label, value, rollProgress, variant);
+      return;
+    }
     const n = Number(value);
     const container = label.node.parent;
     const body = container?.getComponent(Graphics);
@@ -29846,8 +30329,7 @@ export class BattleScene extends Component {
     ui.t += dt;
     if (ui.stage === 'roll') {
       if (ui.t < DICE_ROLL_DUR) {
-        const tick = Math.floor(ui.t / 0.08) % 6;
-        for (const lab of ui.dieLabels) this.setUsCasualtyDieFace(lab, (tick % 6) + 1, false);
+        ui.dieLabels.forEach((lab, i) => this.setUsCasualtyDieFace(lab, ui.dice[i] ?? 1, false, ui.t / DICE_ROLL_DUR, i));
         return;
       }
       ui.stage = 'hold';
@@ -29983,6 +30465,7 @@ export class BattleScene extends Component {
   }
 
   private finishTurnEvent(): void {
+    if (this.pauseAIFlowForCombatLogReplay(() => this.finishTurnEvent())) return;
     const next = this.roundEventDone;
     this.roundEventDone = null;
     if (next) {
@@ -30539,10 +31022,10 @@ export class BattleScene extends Component {
         // 使用预掷的结果一次揭示，不等待上一行结束才播放下一行。
         ui.extraRows.forEach(row => { row.root.active = true; });
         if (ui.t < DICE_ROLL_DUR) {
-          const frame = Math.floor(ui.t / 0.08);
-          ui.dieLabels.forEach((lab, i) => this.setDieLabelFace(lab, ((frame * (17 + i * 6)) % 6) + 1));
+          const progress = ui.t / DICE_ROLL_DUR;
+          ui.dieLabels.forEach((lab, i) => this.setDieLabelFace(lab, ui.primaryDice[i] ?? 1, progress, i));
           ui.extraRows.forEach((row, rowIndex) => row.dice.forEach((lab, dieIndex) => {
-            this.setDieLabelFace(lab, ((frame * (13 + rowIndex * 6 + dieIndex * 4)) % 6) + 1);
+            this.setDieLabelFace(lab, ui.extraPhases[rowIndex]?.dice[dieIndex] ?? 1, progress, 2 + rowIndex * 3 + dieIndex);
           }));
           return;
         }
@@ -30558,8 +31041,7 @@ export class BattleScene extends Component {
         return;
       }
       if (ui.t < DICE_ROLL_DUR) {
-        const tick = Math.floor(ui.t / 0.08) % 6;
-        for (const lab of ui.dieLabels) this.setDieLabelFace(lab, (tick % 6) + 1);
+        ui.dieLabels.forEach((lab, i) => this.setDieLabelFace(lab, ui.primaryDice[i] ?? 1, ui.t / DICE_ROLL_DUR, i));
         return;
       }
       for (let i = 0; i < ui.dieLabels.length; i++) {
@@ -30618,10 +31100,9 @@ export class BattleScene extends Component {
       }
       const n = phase.dice.length;
       if (ui.t < DICE_ROLL_DUR) {
-        const tick = Math.floor(ui.t / 0.08) % 6;
         for (let i = 0; i < n; i++) {
           const lab = ui.extraDieLabels[i];
-          if (lab) this.setDieLabelFace(lab, (tick % 6) + 1);
+          if (lab) this.setDieLabelFace(lab, phase.dice[i] ?? 1, ui.t / DICE_ROLL_DUR, i + ui.extraIdx * 3);
         }
         return;
       }
