@@ -26,7 +26,8 @@ assert(
 
 assert(
   layout.includes('this.missionTitleLabel?.node.setPosition(left, top, 0);')
-    && layout.includes('this.statusPanel.setPosition(right - statusSize.width * 0.5')
+    && layout.includes('const panelRight = width * 0.5 - STATUS_PANEL_EDGE_INSET;')
+    && layout.includes('this.statusPanel.setPosition(panelRight - statusSize.width * 0.5')
     && layout.includes('this.combatLogPanel.setPosition(left, bottom, 0);')
     && layout.includes('this.chooseBar?.setPosition(0, operationY, 0);')
     && layout.includes('this.diceTrayRoot?.setPosition(0, operationY, 0);'),

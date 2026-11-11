@@ -28,6 +28,10 @@ class Graphics {
   clear() { this.shapes = []; }
   rect(x, y, w, h) { this.pending = { x, y, w, h }; }
   roundRect(x, y, w, h, radius) { this.pending = { x, y, w, h, radius }; }
+  moveTo(x, y) { this.pending = { x, y }; }
+  lineTo() {}
+  circle(x, y, radius) { this.pending = { x, y, radius }; }
+  close() {}
   fill() { this.shapes.push({ ...this.pending, fill: this.fillColor }); }
   stroke() { this.shapes.push({ ...this.pending, stroke: this.strokeColor }); }
 }
@@ -43,9 +47,11 @@ function load(name, requires = {}) {
 }
 const statistics = load('core/BattleStatistics');
 const lang = load('core/Lang', { './LangDB': load('core/LangDB') });
+const militaryUI = load('view/MilitaryUI', { cc });
 const { BattleOutcomePanel } = load('view/BattleOutcomePanel', {
   cc, '../core/BattleStatistics': statistics, '../core/Lang': lang,
   './ButtonFeedback': { bindButtonPressScale: () => {} }, '../audio/GameAudio': { playUiClick: () => {} },
+  './MilitaryUI': militaryUI,
 });
 function create(width = 1280, height = 720, hostWidth = 100, hostHeight = 100) {
   const parent = new Node('BattleScene');

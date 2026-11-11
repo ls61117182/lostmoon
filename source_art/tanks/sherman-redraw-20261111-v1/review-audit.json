@@ -1,0 +1,176 @@
+{
+  "date": "2026-11-11",
+  "status": "approval-candidates-only",
+  "generator": "built-in image_gen",
+  "existingArtUsed": false,
+  "gameAssetsModified": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "nominalHullLength": 800,
+  "notes": [
+    "All scale operations preserve aspect ratio.",
+    "Relative turret size and provisional pivots are preview-only, not final game geometry.",
+    "Small previews use current default hexSize=60 and hullFitScale=0.70/0.70/0.72; rounded hull length 76/76/78 px.",
+    "No in-game visual acceptance performed."
+  ],
+  "variants": [
+    {
+      "kind": "sherman",
+      "hull": {
+        "width": 1254,
+        "height": 1254,
+        "channels": 4,
+        "alphaRange": [
+          0,
+          255
+        ],
+        "transparentPixels": 964097,
+        "visiblePixels": 608419,
+        "bounds": {
+          "left": 352,
+          "top": 52,
+          "width": 550,
+          "height": 1148
+        }
+      },
+      "turret": {
+        "width": 1254,
+        "height": 1254,
+        "channels": 4,
+        "alphaRange": [
+          0,
+          255
+        ],
+        "transparentPixels": 1261067,
+        "visiblePixels": 311449,
+        "bounds": {
+          "left": 356,
+          "top": 56,
+          "width": 542,
+          "height": 1121
+        }
+      },
+      "hullScale": 0.6968641114982579,
+      "turretScale": 0.5535055350553506,
+      "pivot": [
+        400,
+        672.404181184669
+      ],
+      "sourceHullPivot": [
+        627,
+        529
+      ],
+      "sourceTurretPivot": [
+        627,
+        875
+      ],
+      "smallHullLength": 76
+    },
+    {
+      "kind": "sherman76",
+      "hull": {
+        "width": 887,
+        "height": 1774,
+        "channels": 4,
+        "alphaRange": [
+          0,
+          255
+        ],
+        "transparentPixels": 455649,
+        "visiblePixels": 1117889,
+        "bounds": {
+          "left": 49,
+          "top": 188,
+          "width": 789,
+          "height": 1461
+        }
+      },
+      "turret": {
+        "width": 1254,
+        "height": 1254,
+        "channels": 4,
+        "alphaRange": [
+          0,
+          255
+        ],
+        "transparentPixels": 1304659,
+        "visiblePixels": 267857,
+        "bounds": {
+          "left": 384,
+          "top": 12,
+          "width": 484,
+          "height": 1230
+        }
+      },
+      "hullScale": 0.5475701574264202,
+      "turretScale": 0.6446280991735537,
+      "pivot": [
+        400,
+        706.3244353182752
+      ],
+      "sourceHullPivot": [
+        440,
+        857
+      ],
+      "sourceTurretPivot": [
+        627,
+        943
+      ],
+      "smallHullLength": 76
+    },
+    {
+      "kind": "sherman_jumbo",
+      "hull": {
+        "width": 1254,
+        "height": 1254,
+        "channels": 4,
+        "alphaRange": [
+          0,
+          255
+        ],
+        "transparentPixels": 890461,
+        "visiblePixels": 682055,
+        "bounds": {
+          "left": 321,
+          "top": 54,
+          "width": 612,
+          "height": 1161
+        }
+      },
+      "turret": {
+        "width": 1086,
+        "height": 1448,
+        "channels": 4,
+        "alphaRange": [
+          0,
+          255
+        ],
+        "transparentPixels": 1107422,
+        "visiblePixels": 465106,
+        "bounds": {
+          "left": 195,
+          "top": 91,
+          "width": 696,
+          "height": 1273
+        }
+      },
+      "hullScale": 0.6890611541774333,
+      "turretScale": 0.45977011494252873,
+      "pivot": [
+        400,
+        679.7071490094746
+      ],
+      "sourceHullPivot": [
+        627,
+        547
+      ],
+      "sourceTurretPivot": [
+        544,
+        1000
+      ],
+      "smallHullLength": 78
+    }
+  ]
+}

@@ -1,10 +1,10 @@
 import { _decorator, Color, Component, Graphics, Node, UITransform } from 'cc';
 import { subscribeAdaptiveResolution, visibleSizeInRootSpace } from './ResolutionAdapter';
 const { ccclass } = _decorator;
-const BG_TOP = new Color(40, 52, 38, 255);
-const BG_MID = new Color(26, 34, 28, 255);
-const BG_BOTTOM = new Color(13, 18, 17, 255);
-const MENU_DIVIDER = new Color(145, 138, 100, 210);
+const BG_TOP = new Color(35, 47, 39, 255);
+const BG_MID = new Color(23, 34, 28, 255);
+const BG_BOTTOM = new Color(12, 20, 17, 255);
+const MENU_DIVIDER = new Color(196, 163, 101, 65);
 
 /** Shared main-menu artwork, including full-screen resize handling. */
 @ccclass('MenuBackground')
@@ -22,7 +22,7 @@ export class MenuBackground extends Component {
     const g = this.node.getComponent(Graphics)!;
     g.clear();
     // 把画布纵向分成 N 段，每段取 top/bottom 间插值颜色 —— 简易渐变
-    const STEPS = 24;
+    const STEPS = 64;
     for (let i = 0; i < STEPS; i++) {
       const tRatio = i / (STEPS - 1);
       const c = tRatio < 0.5
@@ -37,15 +37,15 @@ export class MenuBackground extends Component {
     // 装饰线条：顶部 + 底部各一条橄榄绿
     g.strokeColor = MENU_DIVIDER;
     g.lineWidth = 1;
-    g.moveTo(-backgroundW / 2 + 60, backgroundH / 2 - 80);
-    g.lineTo( backgroundW / 2 - 60, backgroundH / 2 - 80);
+    g.moveTo(-backgroundW / 2 + 50, backgroundH / 2 - 60);
+    g.lineTo( backgroundW / 2 - 50, backgroundH / 2 - 60);
     g.stroke();
     g.moveTo(-backgroundW / 2 + 60, -backgroundH / 2 + 60);
     g.lineTo( backgroundW / 2 - 60, -backgroundH / 2 + 60);
     g.stroke();
 
     // Faint operations-map grid and route marks.
-    g.strokeColor = new Color(210, 198, 150, 32);
+    g.strokeColor = new Color(190, 201, 174, 12);
     g.lineWidth = 1;
     for (let x = -560; x <= 560; x += 80) {
       g.moveTo(x, -300);
@@ -58,8 +58,8 @@ export class MenuBackground extends Component {
       g.stroke();
     }
 
-    g.strokeColor = new Color(230, 205, 130, 80);
-    g.lineWidth = 2;
+    g.strokeColor = new Color(196, 163, 101, 32);
+    g.lineWidth = 1;
     g.moveTo(-440, 118);
     g.bezierCurveTo(-260, 190, -130, 56, 20, 112);
     g.bezierCurveTo(145, 158, 245, 40, 410, 92);
@@ -68,8 +68,20 @@ export class MenuBackground extends Component {
       g.circle(x, y, 5);
       g.stroke();
     }
-
-
+    // Topographic contours give the map depth without adding visual noise.
+    g.strokeColor = new Color(175, 192, 151, 12);
+    for (let i = 0; i < 9; i++) {
+      const d = i * 24;
+      g.moveTo(30 + d, -280);
+      g.bezierCurveTo(-100 + d, -60, 440 + d, -70, 310 + d, 280);
+      g.stroke();
+    }
+    // The left side stays quiet behind the home navigation and headings.
+    for (let i = 0; i < 24; i++) {
+      g.fillColor = new Color(7, 14, 11, 70 * (1 - i / 24));
+      g.rect(-backgroundW / 2 + i * backgroundW / 36, -backgroundH / 2,
+        backgroundW / 36 + 1, backgroundH); g.fill();
+    }
   }
   onDestroy(): void { this.unsubscribe?.(); }
 }

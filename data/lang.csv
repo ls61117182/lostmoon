@@ -784,8 +784,8 @@ turnEnd.extra.stukaBomb,斯图卡轰炸命中判定（2d6≥8；不是伤害）,
 turnEnd.extra.stukaPen,穿甲检定：穿甲 1 vs 装甲 4（1d6≥3）,Penetration: AP 1 vs AV 4 (1d6≥3)
 turnEnd.extra.stukaDamage,伤害表（1d6，仅击穿后）,Damage table (1d6 after penetration)
 turnEnd.extra.stukaCrew,阵亡检定（1d6）,Crew casualty check (1d6)
-turnEnd.sniper.kia,敌方狙击手：玩家坦克舱盖开启且2格内有具备射击视线的步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡。,Enemy sniper: player tank hatch open with infantry within 2 hexes and line of sight. Event dice {d1}+{d2}={sum}. Commander KIA.
-turnEnd.sniper.safe,敌方狙击事件（事件骰 {d1}+{d2}={sum}）。舱盖状态 {hatch}、2格内具备射击视线的步兵 {los}，未造成车长伤亡。,Enemy sniper event (event dice {d1}+{d2}={sum}). Hatch={hatch} Infantry within 2 hexes and LOS={los}; commander unharmed.
+turnEnd.sniper.kia,敌方狙击手：玩家坦克舱盖开启，炮塔格2格内有能沿射击方向看见炮塔格的步兵。事件骰 {d1}+{d2}={sum}。车长中弹阵亡。,Enemy sniper: player tank hatch open with infantry within 2 hexes of its turret cell and a firing line of sight to that cell. Event dice {d1}+{d2}={sum}. Commander KIA.
+turnEnd.sniper.safe,敌方狙击事件（事件骰 {d1}+{d2}={sum}）。舱盖状态 {hatch}、炮塔格2格内且能沿射击方向看见炮塔格的步兵 {los}，未造成车长伤亡。,Enemy sniper event (event dice {d1}+{d2}={sum}). Hatch={hatch}; infantry within 2 hexes of the turret cell with a firing line of sight to it={los}; commander unharmed.
 turnEnd.sniper.shielded,敌方狙击手命中车长位置，但防弹护盾挡下了本小关第一次致命射击。,Enemy sniper hit the commander position, but the ballistic shield stopped this segment's first lethal shot.
 turnEnd.commanderExtra.skip,车长额外指挥：车长不在位，无效果。,Commander bonus: no commander; no effect.
 turnEnd.commanderExtra.fire,车长组织灭火：着火层数 -1。,Commander leads firefighting: fire level -1.
@@ -1036,3 +1036,6 @@ outcome.report.viewBattlefield,查看战场,View battlefield
 outcome.report.returnReport,返回战斗报告,Return to battle report
 unit.twoHex.rearTurret,占两格；炮塔位于后格,Two hexes; rear turret
 unit.twoHex.frontTurret,占两格；炮塔位于前格,Two hexes; front turret
+menu.operations.prototype3d,3D 样板战场,3D battlefield prototype
+menu.operations.prototype3dHint,低多边形谢尔曼与高差地形：移动、射击和可旋转镜头。,Low-poly tanks and a raised battlefield. Move and fire with an orbit camera.
+tileInspect.railway,铁路：沿用原地形的移动、骰子与掩护规则；与道路重叠时沿用道路规则。,"Railway: movement, dice and cover follow the underlying terrain, including roads."

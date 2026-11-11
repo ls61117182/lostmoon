@@ -3,13 +3,14 @@ import { BattleCrewStatus, BattleStatistics, battleStatisticRate } from '../core
 import { t } from '../core/Lang';
 import { bindButtonPressScale } from './ButtonFeedback';
 import { playUiClick } from '../audio/GameAudio';
+import { drawMilitaryPanel, MILITARY_UI, styleMilitaryLabel } from './MilitaryUI';
 
-const TEXT = new Color(235, 232, 215);
-const MUTED = new Color(163, 174, 156);
-const GOLD = new Color(225, 196, 117);
-const RED = new Color(224, 133, 119);
-const PANEL_FILL = new Color(27, 34, 28, 230);
-const CARD_FILL = new Color(36, 44, 35, 44);
+const TEXT = MILITARY_UI.text;
+const MUTED = MILITARY_UI.muted;
+const GOLD = MILITARY_UI.brass;
+const RED = new Color(215, 124, 111);
+const PANEL_FILL = new Color(29, 39, 32);
+const CARD_FILL = new Color(22, 31, 26);
 
 /** A single modal owns its input mask, report and actions. */
 export class BattleOutcomePanel {
@@ -56,8 +57,9 @@ export class BattleOutcomePanel {
     this.layout(visibleSize);
     this.box(panel, 1100, 640, PANEL_FILL, new Color(102, 116, 88));
     this.accent = this.node(panel, 'ResultAccent', 0, 0, 1100, 640).addComponent(Graphics);
-    this.title = this.label(panel, 'Result', 0, 268, 1000, 58, 44, GOLD);
-    this.subtitle = this.label(panel, 'Scope', 0, 222, 1000, 30, 18, MUTED);
+    this.title = this.label(panel, 'Result', -260, 268, 480, 58, 46, GOLD, false);
+    this.title.isBold = true;
+    this.subtitle = this.label(panel, 'Scope', 0, 222, 1000, 30, 18, MUTED, false);
     this.receivedTitle = this.label(panel, 'ReceivedTitle', -261, 187, 510, 28, 18, GOLD);
     for (let i = 0; i < 3; i++) {
       const tile = this.node(panel, `Received${i}`, -435 + i * 174, 112, 166, 114);
@@ -72,7 +74,7 @@ export class BattleOutcomePanel {
       this.box(host, 166, 114, CARD_FILL);
       this.rateValues.push(this.label(host, `Rate${i}`, 0, 18, 150, 46, 34, TEXT));
       this.rateLabels.push(this.label(host, `Caption${i}`, 0, -17, 150, 26, 17, MUTED));
-      this.fractions.push(this.label(host, `Fraction${i}`, 0, -43, 154, 22, 13, MUTED));
+      this.fractions.push(this.label(host, `Fraction${i}`, 0, -43, 154, 22, 14, MUTED));
     }
     const kills = this.node(panel, 'Kills', -195, -91, 642, 268);
     const crew = this.node(panel, 'Crew', 335, -91, 360, 268);
@@ -111,7 +113,7 @@ export class BattleOutcomePanel {
     this.panel.setScale(scale, scale, 1);
     this.dim.clear();
     if (!this.viewingBattlefield) {
-      this.dim.fillColor = new Color(8, 12, 10, 40);
+      this.dim.fillColor = new Color(8, 12, 10, 145);
       this.dim.rect(-width / 2, -height / 2, width, height);
       this.dim.fill();
     }
@@ -142,8 +144,21 @@ export class BattleOutcomePanel {
     this.title.color = color;
     this.accent.clear();
     this.accent.fillColor = color;
-    this.accent.rect(-549, 314, 1098, 5);
+    this.accent.rect(-516, 306, 48, 2);
     this.accent.fill();
+    this.accent.strokeColor = new Color(color.r, color.g, color.b, 90);
+    this.accent.lineWidth = 1;
+    this.accent.moveTo(-516, 204); this.accent.lineTo(516, 204); this.accent.stroke();
+    this.accent.circle(450, 266, 30); this.accent.stroke();
+    this.accent.strokeColor = new Color(color.r, color.g, color.b, 35);
+    this.accent.circle(450, 266, 35); this.accent.stroke();
+    this.accent.fillColor = new Color(color.r, color.g, color.b, 180);
+    for (let i = 0; i < 10; i++) {
+      const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 === 0 ? 17 : 7;
+      const x = 450 + Math.cos(a) * r, y = 266 + Math.sin(a) * r;
+      if (i === 0) this.accent.moveTo(x, y); else this.accent.lineTo(x, y);
+    }
+    this.accent.close(); this.accent.fill();
     this.subtitle.string = t('outcome.report.scope', { turn })
       + (pvp ? ` · ${t(victory ? 'outcome.pvp.win' : 'outcome.pvp.lose')}` : '');
     this.receivedTitle.string = t('outcome.report.received');
@@ -208,14 +223,12 @@ export class BattleOutcomePanel {
 
   private box(node: Node, w: number, h: number, fill: Color, border?: Color): void {
     const g = node.addComponent(Graphics);
-    g.fillColor = fill;
-    g.roundRect(-w / 2, -h / 2, w, h, 6);
-    g.fill();
-    if (border) { g.strokeColor = border; g.lineWidth = 1; g.stroke(); }
+    drawMilitaryPanel(g, w, h, fill, border ?? new Color(64, 80, 65), GOLD, node.name === 'Report');
   }
 
   private label(parent: Node, name: string, x: number, y: number, w: number, h: number, font: number, color: Color, center = true): Label {
     const label = this.node(parent, name, x, y, w, h).addComponent(Label);
+    styleMilitaryLabel(label);
     label.fontSize = font;
     label.lineHeight = font + 6;
     label.color = color;
@@ -228,9 +241,21 @@ export class BattleOutcomePanel {
 
   private button(parent: Node, name: string, x: number, y: number, primary: boolean, onClick: () => void, width = 208): Label {
     const node = this.node(parent, name, x, y, width, 48);
-    this.box(node, width, 48, primary ? new Color(81, 94, 60) : new Color(43, 52, 41), new Color(113, 128, 93));
+    const g = node.addComponent(Graphics);
+    let hovered = false, pressed = false;
+    const paint = () => {
+      g.clear();
+      drawMilitaryPanel(g, width, 48, primary ? new Color(108, 89, 52) : MILITARY_UI.button,
+        primary || hovered ? GOLD : MILITARY_UI.border, GOLD, false, hovered ? 1 : 0, pressed ? 1 : 0);
+    };
+    paint();
     const label = this.label(node, 'Label', 0, 0, width - 18, 44, 22, TEXT);
     bindButtonPressScale(node);
+    node.on(Node.EventType.MOUSE_ENTER, () => { hovered = true; paint(); });
+    node.on(Node.EventType.MOUSE_LEAVE, () => { hovered = false; pressed = false; paint(); });
+    node.on(Node.EventType.TOUCH_START, () => { pressed = true; paint(); });
+    node.on(Node.EventType.TOUCH_CANCEL, () => { pressed = false; paint(); });
+    node.on(Node.EventType.TOUCH_END, () => { pressed = false; paint(); });
     node.on(Node.EventType.TOUCH_END, () => { playUiClick(); onClick(); });
     return label;
   }

@@ -14,11 +14,12 @@ import { axialToPixel, offsetToAxial } from '../core/HexGrid';
 import { bindButtonPressScale } from './ButtonFeedback';
 import { createMenuBackground } from './MenuBackground';
 import { playUiClick } from '../audio/GameAudio';
+import { drawMilitaryPanel, MILITARY_UI, styleMilitaryLabel } from './MilitaryUI';
 
 const C = {
-  bg: new Color(14, 22, 19), panel: new Color(25, 35, 28), inset: new Color(11, 18, 15),
-  gold: new Color(227, 199, 129), muted: new Color(163, 177, 158), text: new Color(236, 239, 223),
-  line: new Color(89, 103, 70), active: new Color(99, 77, 30), idle: new Color(40, 53, 40),
+  bg: MILITARY_UI.background, panel: MILITARY_UI.panel, inset: MILITARY_UI.inset,
+  gold: MILITARY_UI.brass, muted: MILITARY_UI.muted, text: MILITARY_UI.text,
+  line: MILITARY_UI.border, active: MILITARY_UI.selected, idle: MILITARY_UI.button,
 };
 
 export interface OperationsActions {
@@ -29,6 +30,7 @@ export interface OperationsActions {
   editor(): void;
   tankDebug(): void;
   tankPicker(): void;
+  prototype3d(): void;
 }
 
 /** Fullscreen menu pages. Selecting an item never starts or generates a mission. */
@@ -128,6 +130,7 @@ export class MenuOperations {
     if (BUILD_FEATURES.tankVisualDebugger) tools.push({ id: 'TankDebug', title: 'menu.operations.tankDebug', desc: 'menu.operations.tankDebugHint', run: this.actions.tankDebug });
     if (BUILD_FEATURES.playerTankSelection) tools.push({ id: 'TankPicker', title: 'menu.tankSelect.title', desc: 'menu.operations.tankPickerHint', run: this.actions.tankPicker });
     if (BUILD_FEATURES.testChapter) {
+      tools.push({ id: 'Prototype3D', title: 'menu.operations.prototype3d', desc: 'menu.operations.prototype3dHint', run: this.actions.prototype3d });
       const test = getChapterLevels('test').find(level => level.entryKind !== 'random');
       if (test) tools.push({ id: 'TestBattle', title: 'level.test.title', desc: 'menu.operations.testBattleHint', run: () => this.actions.start(test) });
       const elevation = getChapterLevels('test').find(level => level.missionId === 'elevation_visual_test');
@@ -135,12 +138,12 @@ export class MenuOperations {
     }
     tools.forEach((tool, i) => {
       const x = -295 + (i % 2) * 590;
-      const y = 125 - Math.floor(i / 2) * 210;
-      const card = this.button(root, tool.id, '', x, y, 552, 182, tool.run);
-      this.label(card.node, `0${i + 1}`, -210, 44, 70, 38, 28, C.gold, true);
-      this.label(card.node, t(tool.title), 38, 43, 396, 38, 25, C.text, true);
-      this.label(card.node, t(tool.desc), 0, -17, 470, 60, 18, C.muted, true);
-      this.label(card.node, t('menu.operations.openTool'), 0, -65, 470, 24, 15, C.gold, true);
+      const y = 170 - Math.floor(i / 2) * 168;
+      const card = this.button(root, tool.id, '', x, y, 552, 150, tool.run);
+      this.label(card.node, `0${i + 1}`, -210, 42, 70, 34, 25, C.gold, true);
+      this.label(card.node, t(tool.title), 38, 42, 396, 34, 23, C.text, true);
+      this.label(card.node, t(tool.desc), 0, -8, 470, 52, 17, C.muted, true);
+      this.label(card.node, t('menu.operations.openTool'), 0, -55, 470, 22, 14, C.gold, true);
     });
   }
 
@@ -320,13 +323,14 @@ export class MenuOperations {
   private panel(parent: Node, name: string, x: number, y: number, w: number, h: number, fill: Color): Node {
     const node = this.node(parent, name, x, y, w, h);
     const g = node.addComponent(Graphics);
-    g.fillColor = fill; g.strokeColor = C.line; g.lineWidth = 1;
-    g.rect(-w / 2, -h / 2, w, h); g.fill(); g.stroke(); return node;
+    drawMilitaryPanel(g, w, h, fill, C.line, C.gold, !name.startsWith('MapPreview'));
+    return node;
   }
 
   private label(parent: Node, text: string, x: number, y: number, w: number, h: number, size: number, color: Color, left = false): Label {
     const node = this.node(parent, 'Text', x, y, w, h);
     const label = node.addComponent(Label);
+    styleMilitaryLabel(label);
     label.string = text; label.fontSize = size; label.lineHeight = size + 6; label.color = color;
     label.horizontalAlign = left ? HorizontalTextAlignment.LEFT : HorizontalTextAlignment.CENTER;
     label.verticalAlign = VerticalTextAlignment.CENTER;
@@ -338,13 +342,26 @@ export class MenuOperations {
     const node = this.node(parent, name, x, y, w, h);
     const g = node.addComponent(Graphics);
     const label = this.label(node, text, 0, 0, w - 28, h - 8, size, C.text, left);
+    let selected = active, hovered = false, pressed = false;
+    const paint = () => {
+      g.clear();
+      const face = selected ? C.active : C.idle;
+      drawMilitaryPanel(g, w, h, face, selected || hovered ? C.gold : C.line, C.gold, false,
+        hovered ? 1 : 0, pressed ? 1 : 0);
+      if (selected) {
+        g.fillColor = C.gold; g.rect(-w / 2 + 1, -h / 2 + 8, 2, h - 16); g.fill();
+      }
+      label.color = selected ? C.gold : C.text;
+    };
     const draw = (chosen: boolean) => {
-      g.clear(); g.fillColor = chosen ? C.active : C.idle; g.strokeColor = chosen ? C.gold : C.line;
-      g.lineWidth = chosen ? 2 : 1; g.rect(-w / 2, -h / 2, w, h); g.fill(); g.stroke();
-      if (chosen) { g.fillColor = C.gold; g.rect(-w / 2, -h / 2, 4, h); g.fill(); }
-      label.color = chosen ? C.gold : C.text;
+      selected = chosen; paint();
     };
     draw(active); bindButtonPressScale(node);
+    node.on(Node.EventType.MOUSE_ENTER, () => { hovered = true; paint(); });
+    node.on(Node.EventType.MOUSE_LEAVE, () => { hovered = false; pressed = false; paint(); });
+    node.on(Node.EventType.TOUCH_START, () => { pressed = true; paint(); });
+    node.on(Node.EventType.TOUCH_CANCEL, () => { pressed = false; paint(); });
+    node.on(Node.EventType.TOUCH_END, () => { pressed = false; paint(); });
     node.on(Node.EventType.TOUCH_END, (e: EventTouch) => { e.propagationStopped = true; playUiClick(); run(); });
     return { node, draw };
   }

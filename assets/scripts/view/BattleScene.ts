@@ -13,6 +13,7 @@ import { tileHeight, isCliffEdge } from '../core/Elevation';
 import { PlayerVisionCache } from '../core/PlayerVisionCache';
 import { battleCrewStatus, cloneBattleStatistics, recordBattleAttack, recordBattleKill } from '../core/BattleStatistics';
 import { BattleOutcomePanel } from './BattleOutcomePanel';
+import { drawMilitaryPanel, MILITARY_UI, styleMilitaryLabel } from './MilitaryUI';
 import { UnitAnimationCache, type CachedUnitAnimation, type UnitSpriteCursor } from './UnitAnimationCache';
 import { buildMultiRegionMinimap, REGION_MINIMAP_COLORS, REGION_MINIMAP_SIZE } from './MultiRegionMinimap';
 import { europeanTerrainLook, europeanRoadSeason, seasonalTerrainPath, seasonalTerrainRGB, seasonalFoliageRGB, usesSnowTerrain, EXTRA_EUROPEAN_LOOKS } from '../core/TerrainSeason';
@@ -447,37 +448,13 @@ function drawFieldPanel(
 ) {
   const x = -w / 2;
   const y = -h / 2;
-  g.fillColor = new Color(0, 0, 0, 40);
-  g.rect(x + 2, y - 2, w, h);
-  g.fill();
-  g.fillColor = fill;
-  g.rect(x, y, w, h);
-  g.fill();
-  g.fillColor = new Color(255, 240, 180, 20);
-  g.rect(x + 4, y + h - 18, w - 8, 10);
-  g.fill();
-  g.strokeColor = border;
-  g.lineWidth = 2;
-  g.rect(x + 1, y + 1, w - 2, h - 2);
-  g.stroke();
+  drawMilitaryPanel(g, w, h, fill, border, accent, false);
   if (drawInnerStroke) {
     g.strokeColor = new Color(14, 16, 14, 185);
     g.lineWidth = 1;
-    g.rect(x + 6, y + 6, w - 12, h - 12);
+    g.roundRect(x + 5.5, y + 5.5, w - 11, h - 11, 2);
     g.stroke();
   }
-  g.strokeColor = accent;
-  g.lineWidth = 2;
-  const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18));
-  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8 + l, y + h - 8);
-  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8, y + h - 8 - l);
-  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8 - l, y + h - 8);
-  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8, y + h - 8 - l);
-  g.moveTo(x + 8, y + 8); g.lineTo(x + 8 + l, y + 8);
-  g.moveTo(x + 8, y + 8); g.lineTo(x + 8, y + 8 + l);
-  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8 - l, y + 8);
-  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8, y + 8 + l);
-  g.stroke();
 }
 
 function drawDicePopupPanel(g: Graphics, w: number, h: number, fill: Color, border: Color) {
@@ -1497,19 +1474,24 @@ const TILE_BORDER_WIDTH  = 1;
 const WATER_SHARED_BORDER = new Color(40, 40, 40, 22);
 const UNIT_BORDER        = new Color(255, 255, 255, 255);
 // HUD 配色：两阶段都执行过后按钮换成"提醒色"，引导玩家结束回合
-const BTN_BG_NORMAL  = new Color( 84,  95,  58, 240);
+const BTN_BG_NORMAL  = MILITARY_UI.button;
 const BTN_BG_URGENT  = new Color(154,  60,  48, 245);
 const BTN_BG_DISABLED = new Color( 78,  78,  78, 210);
-const BTN_BORDER     = new Color(204, 190, 142, 235);
-const HUD_TEXT_COLOR = new Color(255, 255, 255, 255);
+const BTN_BORDER     = MILITARY_UI.border;
+const HUD_TEXT_COLOR = MILITARY_UI.text;
 const PVP_TURN_TIMER_W = 360;
 const PVP_TURN_TIMER_H = 22;
 const PVP_TURN_DEFAULT_MS = 60000;
 /** 左上角第一行：关卡名（与回合条区分的稍弱白） */
 const HUD_MISSION_META_COLOR = new Color(226, 214, 174, 255);
-/** 左上角 HUD 使用原字号的 75%；右侧玩家状态面板稍大，以保证信息可读性。 */
-const TOP_LEFT_HUD_FONT_SCALE = 0.75;
-const STATUS_PANEL_FONT_SCALE = 0.85;
+/** HUD and instrument text use one legible scale within their existing safe areas. */
+const TOP_LEFT_HUD_FONT_SCALE = 0.85;
+const STATUS_PANEL_FONT_SCALE = 0.95;
+// These widths keep both cards outside the standard board's top-left shoulder
+// and rightmost hexes at the minimum 1280-wide logical viewport.
+const MISSION_HUD_WIDTH = 336;
+const STATUS_PANEL_WIDTH = 236;
+const STATUS_PANEL_EDGE_INSET = 6;
 /** 与 `buildHUD` 中关卡标题 UITransform 高度一致，改布局须同步 */
 const HUD_MISSION_TITLE_H = 32;
 /** 关卡标题行下缘 与 回合状态行上缘 的间隙 */
@@ -1547,11 +1529,11 @@ const BOTTOM_CONTROL_SAFE_INSET = 64;
 const ADVANCE_BTN_W = 180;
 const ADVANCE_BTN_H = 72;
 const MODAL_BACKDROP     = new Color(  0,   0,   0, 180);
-const MODAL_PANEL_BG     = new Color( 36,  41,  34, 245);
+const MODAL_PANEL_BG     = MILITARY_UI.panel;
 const DICE_EVENT_PANEL_BG = new Color(40, 44, 52, 51);
 const DICE_EVENT_PANEL_BORDER = new Color(90, 98, 110, 255);
 const TILE_INSPECT_PANEL_BG = DICE_EVENT_PANEL_BG;
-const MODAL_PANEL_BORDER = new Color(202, 188, 136, 230);
+const MODAL_PANEL_BORDER = MILITARY_UI.border;
 const MODAL_CLOSE_BG     = new Color(134,  49,  42, 245);
 const SETTINGS_ICON_BG   = new Color( 45,  50,  44, 230);
 const SETTINGS_ICON_BD   = new Color(204, 190, 142, 205);
@@ -1568,13 +1550,13 @@ const BATTLE_MODAL_TEXT_OUTLINE = new Color(0, 0, 0, 220);
 const BATTLE_MODAL_LEVEL_BORDER = new Color(204, 190, 142, 230);
 
 // 阶段选择条配色：两个按钮（移动=绿 / 攻击=红）；已执行过的阶段被灰掉禁用
-const PHASE_BTN_MOVE      = new Color( 80, 112,  68, 240);
-const PHASE_BTN_ATTACK    = new Color(145,  64,  50, 240);
-const PHASE_BTN_MISC      = new Color(105,  96,  70, 240);
+const PHASE_BTN_MOVE      = new Color(57, 82, 57, 255);
+const PHASE_BTN_ATTACK    = new Color(119, 60, 49, 255);
+const PHASE_BTN_MISC      = new Color(97, 85, 56, 255);
 /** Matching-dice actions use one accent distinct from every single-die action. */
 const DIE_ACTION_DOUBLES  = new Color( 72,  88, 126, 240);
 /** 选择阶段条「舱盖」与杂项同紫系，便于与移动/攻击区分 */
-const PHASE_BTN_HATCH     = new Color(105,  96,  70, 240);
+const PHASE_BTN_HATCH     = PHASE_BTN_MISC;
 const PHASE_BTN_DISABLED  = new Color( 68,  68,  63, 210);
 const DIE_ACTION_UNAVAILABLE = new Color(170, 170, 164, 235);
 /** 底部阶段选择条按钮按原尺寸的 75% 显示。 */
@@ -1625,19 +1607,19 @@ const DICE_OUTCOME_CREW   = new Color(240, 220, 120, 255); // 阵亡检定
 const DICE_OUTCOME_HURT   = new Color(240, 200, 100, 255); // 受损（德军首发）
 
 // 谢尔曼状态面板配色
-const STATUS_PANEL_BG     = new Color( 33,  38,  31, 235);
-const STATUS_PANEL_BORDER = new Color(204, 190, 142, 230);
-const STATUS_TITLE_COLOR  = new Color(235, 207, 142, 255);
-const STATUS_LABEL_COLOR  = new Color(205, 202, 184, 255);
+const STATUS_PANEL_BG     = MILITARY_UI.panel;
+const STATUS_PANEL_BORDER = MILITARY_UI.border;
+const STATUS_TITLE_COLOR  = MILITARY_UI.brass;
+const STATUS_LABEL_COLOR  = MILITARY_UI.text;
 // 指示灯（值部分）：
 //   正面 = 绿（装填 / 存活 / 完好）
 //   警告 = 琥珀（舱盖开 = 暴露 / 起火）
 //   负面 = 灰（未装填 / 舱盖关）或 红（阵亡 / 摧毁）
-const STATUS_VALUE_OK     = new Color(120, 230, 120, 255);
-const STATUS_VALUE_WARN   = new Color(255, 180,  60, 255);
-const STATUS_VALUE_FIRE   = new Color(255, 120,  40, 255);
-const STATUS_VALUE_DOWN   = new Color(130, 130, 130, 255);
-const STATUS_VALUE_DEAD   = new Color(240,  90,  90, 255);
+const STATUS_VALUE_OK     = new Color(168, 199, 140, 255);
+const STATUS_VALUE_WARN   = new Color(215, 174,  98, 255);
+const STATUS_VALUE_FIRE   = new Color(229, 143,  80, 255);
+const STATUS_VALUE_DOWN   = new Color(142, 153, 142, 255);
+const STATUS_VALUE_DEAD   = new Color(215, 124, 111, 255);
 const CREW_STATUS_ICON_PATHS = [
   'textures/ui/crew_icons_source_split/crew_icon_01_star/spriteFrame',
   'textures/ui/crew_icons_source_split/crew_icon_02_crosshair/spriteFrame',
@@ -1651,7 +1633,7 @@ const CREW_RANK_ICON_PATHS = {
   elite: 'textures/ui/unit_ranks/rank_elite_32/spriteFrame',
 } as const;
 const CREW_STATUS_NORMAL_COLOR = new Color(245, 245, 238, 255);
-const CREW_STATUS_HATCH_OPEN_COLOR = new Color(40, 255, 80, 255);
+const CREW_STATUS_HATCH_OPEN_COLOR = new Color(170, 211, 143, 255);
 const CREW_STATUS_DEAD_COLOR = new Color(125, 125, 125, 220);
 const STATUS_CREW_ICON_SIZE = 38;
 const STATUS_CREW_ICON_GAP = 6;
@@ -2362,6 +2344,8 @@ export class BattleScene extends Component {
   } | null = null;
   private factionSpriteFrames = new Map<string, SpriteFrame>();
   private hudLabel: Label | null = null;
+  private missionHudPlate: Node | null = null;
+  private missionHudPlateHeight = 0;
   /** 回合数下方：多行任务目标（与 `OBJECTIVE_HUD_MAX` 同序） */
   private objectiveHudLabels: Label[] = [];
   private static readonly OBJECTIVE_HUD_MAX = 6;
@@ -16636,6 +16620,7 @@ export class BattleScene extends Component {
     for (let i = 0; i < this.objectiveHudLabels.length; i++) {
       this.objectiveHudLabels[i]!.node.setPosition(left, objectiveStartY - i * 26, 0);
     }
+    this.refreshMissionHudPlate();
 
     const settingsX = right - BATTLE_SETTINGS_R;
     const topButtonY = top - BATTLE_SETTINGS_R;
@@ -16652,7 +16637,9 @@ export class BattleScene extends Component {
       const statusSize = this.statusPanel.getComponent(UITransform)?.contentSize;
       if (statusSize) {
         const panelTop = topButtonY - BATTLE_SETTINGS_R - 10;
-        this.statusPanel.setPosition(right - statusSize.width * 0.5, panelTop - statusSize.height * 0.5, 0);
+        const panelRight = width * 0.5 - STATUS_PANEL_EDGE_INSET;
+        this.statusPanel.setPosition(panelRight - statusSize.width * 0.5,
+          panelTop - statusSize.height * 0.5, 0);
       }
     }
 
@@ -16680,13 +16667,21 @@ export class BattleScene extends Component {
   /** 一次性创建 HUD：左上关卡 id+名、回合/阶段条、多行目标 + 右下角"结束回合"按钮。无需任何美术资源。 */
   private buildHUD() {
     const hud = this.hudParent();
+    const plate = new Node('MissionHudPlate');
+    plate.layer = this.node.layer;
+    plate.addComponent(UITransform);
+    plate.addComponent(Graphics);
+    hud.addChild(plate);
+    this.missionHudPlate = plate;
     // ---- 左上角最上行：关卡名（任务加载后由 `updateHUD` 灌文案）----
     const mNode = new Node('MissionTitleLabel');
     mNode.layer = this.node.layer;
     const mUT = mNode.addComponent(UITransform);
-    mUT.setContentSize(540, HUD_MISSION_TITLE_H);
+    mUT.setContentSize(MISSION_HUD_WIDTH - 28, HUD_MISSION_TITLE_H);
     mUT.setAnchorPoint(0, 1);
     const mLab = mNode.addComponent(Label);
+    styleMilitaryLabel(mLab);
+    mLab.isBold = true;
     mLab.fontSize = 26 * TOP_LEFT_HUD_FONT_SCALE;
     mLab.lineHeight = 30 * TOP_LEFT_HUD_FONT_SCALE;
     mLab.color = HUD_MISSION_META_COLOR;
@@ -16704,6 +16699,7 @@ export class BattleScene extends Component {
     weatherUT.setContentSize(320, 24);
     weatherUT.setAnchorPoint(0, 1);
     const weatherLab = weatherNode.addComponent(Label);
+    styleMilitaryLabel(weatherLab);
     weatherLab.fontSize = 18 * TOP_LEFT_HUD_FONT_SCALE;
     weatherLab.lineHeight = 22 * TOP_LEFT_HUD_FONT_SCALE;
     weatherLab.color = new Color(166, 218, 235, 255);
@@ -16722,6 +16718,7 @@ export class BattleScene extends Component {
     pvpUT.setContentSize(760, 28);
     pvpUT.setAnchorPoint(0, 1);
     const pvpLab = pvpNode.addComponent(Label);
+    styleMilitaryLabel(pvpLab);
     pvpLab.fontSize = 19 * TOP_LEFT_HUD_FONT_SCALE;
     pvpLab.lineHeight = 24 * TOP_LEFT_HUD_FONT_SCALE;
     pvpLab.color = new Color(245, 205, 92, 255);
@@ -16751,6 +16748,7 @@ export class BattleScene extends Component {
     timerLabelNode.layer = this.node.layer;
     timerLabelNode.addComponent(UITransform).setContentSize(PVP_TURN_TIMER_W, PVP_TURN_TIMER_H);
     const timerLabel = timerLabelNode.addComponent(Label);
+    styleMilitaryLabel(timerLabel);
     timerLabel.fontSize = 17;
     timerLabel.lineHeight = 20;
     timerLabel.color = HUD_TEXT_COLOR;
@@ -16770,14 +16768,17 @@ export class BattleScene extends Component {
     const labelNode = new Node('HUDLabel');
     labelNode.layer = this.node.layer;
     const lUT = labelNode.addComponent(UITransform);
-    lUT.setContentSize(420, 60);
+    lUT.setContentSize(MISSION_HUD_WIDTH - 28, 44);
     lUT.setAnchorPoint(0, 1); // 锚点在左上，方便对齐屏幕角
     const label = labelNode.addComponent(Label);
+    styleMilitaryLabel(label);
     label.fontSize = 22 * TOP_LEFT_HUD_FONT_SCALE;
     label.lineHeight = 26 * TOP_LEFT_HUD_FONT_SCALE;
     label.color = HUD_TEXT_COLOR;
     label.horizontalAlign = HorizontalTextAlignment.LEFT;
     label.verticalAlign = VerticalTextAlignment.TOP;
+    label.enableWrapText = true;
+    label.overflow = Label.Overflow.SHRINK;
     label.string = t('hud.init');
     // 相对旧版下推：原顶 y=344
     labelNode.setPosition(-624, 344 - HUD_SHIFT_FOR_MISSION - (GameSession.isPvp ? 28 : 0), 0);
@@ -16792,10 +16793,11 @@ export class BattleScene extends Component {
       const on = new Node(`ObjectiveHud${i}`);
       on.layer = this.node.layer;
       const out = on.addComponent(UITransform);
-      out.setContentSize(520, OBJ_LINE);
+      out.setContentSize(MISSION_HUD_WIDTH - 28, OBJ_LINE);
       out.setAnchorPoint(0, 1);
       on.setPosition(-624, objStartY - i * OBJ_LINE, 0);
       const ol = on.addComponent(Label);
+      styleMilitaryLabel(ol);
       ol.fontSize = OBJ_FONT;
       ol.lineHeight = OBJ_LINE;
       ol.horizontalAlign = HorizontalTextAlignment.LEFT;
@@ -16830,7 +16832,8 @@ export class BattleScene extends Component {
     const tUT = txtNode.addComponent(UITransform);
     tUT.setContentSize(BTN_W, BTN_H);
     const txt = txtNode.addComponent(Label);
-    txt.fontSize = 28;
+    styleMilitaryLabel(txt);
+    txt.fontSize = 23;
     txt.lineHeight = 32;
     txt.color = HUD_TEXT_COLOR;
     txt.horizontalAlign = HorizontalTextAlignment.CENTER;
@@ -16860,6 +16863,29 @@ export class BattleScene extends Component {
       hud, BATTLE_SETTINGS_CX, BATTLE_SETTINGS_CY, BATTLE_SETTINGS_R, '⚙',
       () => this.openBattleSettings(),
     ).node;
+  }
+
+  /** A quiet, noninteractive backing keeps mission text legible over terrain. */
+  private refreshMissionHudPlate(): void {
+    const plate = this.missionHudPlate;
+    const title = this.missionTitleLabel;
+    if (!plate || !title) return;
+    plate.active = !GameSession.isPvp && !!title.string;
+    if (!plate.active) return;
+    const rows = this.objectiveHudLabels.filter(label => label.node.active).length;
+    const height = HUD_SHIFT_FOR_MISSION + 48 + rows * 26 + 24;
+    plate.setPosition(title.node.position.x + MISSION_HUD_WIDTH / 2 - 14,
+      title.node.position.y + 10 - height / 2, 0);
+    if (this.missionHudPlateHeight === height) return;
+    this.missionHudPlateHeight = height;
+    plate.getComponent(UITransform)!.setContentSize(MISSION_HUD_WIDTH, height);
+    const g = plate.getComponent(Graphics)!;
+    g.clear();
+    drawMilitaryPanel(g, MISSION_HUD_WIDTH, height, new Color(22, 31, 26, 230),
+      new Color(77, 91, 75, 190), STATUS_TITLE_COLOR, false);
+    g.strokeColor = new Color(196, 163, 101, 65); g.lineWidth = 1;
+    g.moveTo(-MISSION_HUD_WIDTH / 2 + 14, height / 2 - 44);
+    g.lineTo(MISSION_HUD_WIDTH / 2 - 14, height / 2 - 44); g.stroke();
   }
 
   private buildPopupResultsToggle(parent: Node) {
@@ -17966,7 +17992,7 @@ export class BattleScene extends Component {
    * 车长开舱时其图标变绿。refresh 时只改节点状态，不重建节点。
    */
   private buildStatusPanel() {
-    const W = 240;
+    const W = STATUS_PANEL_WIDTH;
     const GAP_BELOW_GEAR = 10;
     const panelTopY = BATTLE_SETTINGS_CY - BATTLE_SETTINGS_R - GAP_BELOW_GEAR;
     const showCampaignUpgrades = (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') && GameSession.isCampaign;
@@ -17974,7 +18000,7 @@ export class BattleScene extends Component {
     const H = showCampaignUpgrades ? 360 : (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? 236 : 214;
     const y = panelTopY - H / 2;
     // 整体靠右，贴近屏缘（与 ⚙ 错层由子节点顺序保证可点）
-    const x = CANVAS_W * 0.5 - W * 0.5 - 10;
+    const x = CANVAS_W * 0.5 - W * 0.5 - STATUS_PANEL_EDGE_INSET;
 
     const BODY_GAP = 22;
     const innerTop = H / 2 - 8;
@@ -18007,6 +18033,17 @@ export class BattleScene extends Component {
     this.statusCrewRowCount = 1;
 
     this.statusBodyLeftLabels = [];
+
+    const heading = new Node('StatusHeadingBand');
+    heading.layer = panel.layer;
+    heading.addComponent(UITransform).setContentSize(W - 4, 36);
+    heading.setPosition(0, H / 2 - 21);
+    const headingG = heading.addComponent(Graphics);
+    headingG.fillColor = new Color(196, 163, 101, 16);
+    headingG.rect(-W / 2 + 2, -18, W - 4, 36); headingG.fill();
+    headingG.fillColor = STATUS_TITLE_COLOR;
+    headingG.rect(-W / 2 + 12, -9, 2, 18); headingG.fill();
+    panel.addChild(heading);
 
     // 1) 乘员区（在「谢尔曼状态」之下）
     this.statusCrewTitleLabel = this.makeCenteredLabel(panel, t('status.row.crewTitle'),
@@ -18065,6 +18102,9 @@ export class BattleScene extends Component {
     // 2) 谢尔曼状态：装填 → 炮塔 → 机动 → 着火程度（仅层数 / 未着火「-」）
     this.statusPanelTitleLabel = this.makeCenteredLabel(panel, this.playerTankStatusTitle(),
       0, shermanTitleY, W - 20, 28, 22 * STATUS_PANEL_FONT_SCALE, STATUS_TITLE_COLOR);
+    this.statusPanelTitleLabel.isBold = true;
+    this.statusPanelTitleLabel.enableWrapText = false;
+    this.statusPanelTitleLabel.overflow = Label.Overflow.SHRINK;
     const bodyRows: Array<[string, 'loaded' | 'turret' | 'mobility' | 'radio' | 'fire']> = [
       [t('status.row.loaded'),    'loaded'],
       [t('status.row.turret'),    'turret'],
@@ -18074,11 +18114,25 @@ export class BattleScene extends Component {
     bodyRows.push([t('status.row.fireLevel'), 'fire']);
     for (let i = 0; i < bodyRows.length; i++) {
       const [label, key] = bodyRows[i];
-      const leftLab = this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 100, 22,
+      const row = new Node(`StatusInstrumentRow_${key}`);
+      row.layer = panel.layer;
+      row.addComponent(UITransform).setContentSize(W - 24, 20);
+      row.setPosition(0, bodyRowY[i]);
+      const rowG = row.addComponent(Graphics);
+      rowG.fillColor = new Color(9, 18, 12, i % 2 === 0 ? 42 : 18);
+      rowG.roundRect(-W / 2 + 12, -10, W - 24, 20, 2); rowG.fill();
+      rowG.fillColor = new Color(6, 14, 9, 35);
+      rowG.roundRect(W / 2 - 124, -9, 110, 18, 2); rowG.fill();
+      panel.addChild(row);
+      const leftLab = this.makeLeftLabel(panel, label, -W / 2 + 20, bodyRowY[i], 84, 22,
         18 * STATUS_PANEL_FONT_SCALE, STATUS_LABEL_COLOR);
+      leftLab.overflow = Label.Overflow.SHRINK;
+      leftLab.enableWrapText = false;
       this.statusBodyLeftLabels.push(leftLab);
-      const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 120, 22,
+      const val = this.makeRightLabel(panel, '—', W / 2 - 20, bodyRowY[i], 104, 22,
         18 * STATUS_PANEL_FONT_SCALE, STATUS_VALUE_DOWN);
+      val.overflow = Label.Overflow.SHRINK;
+      val.enableWrapText = false;
       switch (key) {
         case 'loaded':   this.statusLoaded = val; break;
         case 'fire':     this.statusFire = val; break;
@@ -18199,6 +18253,7 @@ export class BattleScene extends Component {
     ut.setAnchorPoint(0, 0.5);
     n.setPosition(x, y, 0);
     const l = n.addComponent(Label);
+    styleMilitaryLabel(l);
     l.fontSize = fontSize;
     l.lineHeight = fontSize + 4;
     l.color = color;
@@ -18223,6 +18278,7 @@ export class BattleScene extends Component {
     ut.setAnchorPoint(1, 0.5);
     n.setPosition(x, y, 0);
     const l = n.addComponent(Label);
+    styleMilitaryLabel(l);
     l.fontSize = fontSize;
     l.lineHeight = fontSize + 4;
     l.color = color;
@@ -18568,7 +18624,7 @@ export class BattleScene extends Component {
       const lab = this.objectiveHudLabels[i];
       lab.node.active = false;
     }
-    if (!this.mission) return;
+    if (!this.mission) { this.refreshMissionHudPlate(); return; }
     if (GameSession.isPvp) {
       const lab = this.objectiveHudLabels[0];
       if (lab) {
@@ -18576,6 +18632,7 @@ export class BattleScene extends Component {
         lab.color = OBJ_HUD_ACTIVE;
         lab.node.active = true;
       }
+      this.refreshMissionHudPlate();
       return;
     }
 
@@ -18587,6 +18644,7 @@ export class BattleScene extends Component {
       lab.color = this.objectiveHudColor(row.state);
       lab.node.active = true;
     }
+    this.refreshMissionHudPlate();
   }
 
   /** 托盘里还剩几颗骰子未执行（用于 HUD 展示） */
@@ -19093,15 +19151,12 @@ export class BattleScene extends Component {
       b.setPosition(x, 0, 0);
       const bg = b.addComponent(Graphics);
       bg.fillColor = opaqueButtonFill(color);
-      bg.strokeColor = BTN_BORDER;
-      bg.lineWidth = 2;
-      bg.rect(-W / 2, -H / 2, W, H);
-      bg.fill();
-      bg.stroke();
+      drawFieldPanel(bg, W, H, opaqueButtonFill(color), BTN_BORDER, STATUS_TITLE_COLOR, false);
       const txtNode = new Node('Label');
       txtNode.layer = this.node.layer;
       txtNode.addComponent(UITransform).setContentSize(W, H);
       const tx = txtNode.addComponent(Label);
+      styleMilitaryLabel(tx);
       tx.fontSize = PHASE_CHOOSE_BTN_FONT_SIZE;
       tx.lineHeight = PHASE_CHOOSE_BTN_LINE_HEIGHT;
       tx.color = HUD_TEXT_COLOR;
@@ -19289,12 +19344,8 @@ export class BattleScene extends Component {
     if (!ut) return;
     g.clear();
     g.fillColor = opaqueButtonFill(enabled ? baseColor : PHASE_BTN_DISABLED);
-    g.strokeColor = BTN_BORDER;
-    g.lineWidth = 2;
-    g.rect(-ut.contentSize.width / 2, -ut.contentSize.height / 2,
-           ut.contentSize.width, ut.contentSize.height);
-    g.fill();
-    g.stroke();
+    drawFieldPanel(g, ut.contentSize.width, ut.contentSize.height,
+      opaqueButtonFill(enabled ? baseColor : PHASE_BTN_DISABLED), BTN_BORDER, STATUS_TITLE_COLOR, false);
   }
 
   /** 遍历 diceVisuals，按 phaseDice 的当前内容重绘每个骰子（点数 + 动作提示 + 用/未用态）。 */
@@ -20426,15 +20477,12 @@ export class BattleScene extends Component {
         btn.setPosition(x, panelH / 2 - ITEM_H / 2 - rowIndex * (ITEM_H + GAP), 0);
         const bg = btn.addComponent(Graphics);
         bg.fillColor = opaqueButtonFill(it.color);
-        bg.strokeColor = BTN_BORDER;
-        bg.lineWidth = 2;
-        bg.rect(-itemW / 2, -ITEM_H / 2, itemW, ITEM_H);
-        bg.fill();
-        bg.stroke();
+        drawFieldPanel(bg, itemW, ITEM_H, opaqueButtonFill(it.color), BTN_BORDER, STATUS_TITLE_COLOR, false);
         const tn = new Node('Label');
         tn.layer = this.node.layer;
         tn.addComponent(UITransform).setContentSize(itemW, ITEM_H);
         const lab = tn.addComponent(Label);
+        styleMilitaryLabel(lab);
         lab.fontSize = 20;
         lab.lineHeight = 24;
         lab.color = HUD_TEXT_COLOR;
@@ -24492,6 +24540,7 @@ export class BattleScene extends Component {
     n.addComponent(UITransform).setContentSize(w, h);
     n.setPosition(x, y, 0);
     const l = n.addComponent(Label);
+    styleMilitaryLabel(l);
     l.fontSize = fontSize;
     l.lineHeight = fontSize + 4;
     l.color = color;
@@ -29524,6 +29573,7 @@ export class BattleScene extends Component {
     n.addComponent(UITransform).setContentSize(w, h);
     n.setPosition(x, y, 0);
     const l = n.addComponent(Label);
+    styleMilitaryLabel(l);
     l.fontSize = fontSize;
     l.lineHeight = fontSize + 4;
     l.color = color;

@@ -93,6 +93,7 @@ import type { MissionData, MissionObjective, RoundEventConfig, SeasonType, TileD
 import { validateRoundEvents } from '../core/RoundEvents';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
+import { drawMilitaryPanel, MILITARY_UI, styleMilitaryLabel } from './MilitaryUI';
 import { bindAdaptivePageLayout } from './AdaptivePageLayout';
 import {
   applyAdaptiveResolution,
@@ -149,22 +150,22 @@ const BG_TOP          = new Color( 40,  52,  38, 255);
 const BG_MID          = new Color( 26,  34,  28, 255);
 const BG_BOTTOM       = new Color( 13,  18,  17, 255);
 
-const TEXT_PRIMARY    = new Color(255, 255, 255, 255);
+const TEXT_PRIMARY    = MILITARY_UI.text;
 const TEXT_DISABLED   = new Color(150, 150, 150, 200);
 const TEXT_OUTLINE    = new Color(  0,   0,   0, 220);
-const TEXT_TITLE      = new Color(235, 207, 142, 255);
-const TEXT_SUBTITLE   = new Color(198, 194, 176, 255);
+const TEXT_TITLE      = MILITARY_UI.brass;
+const TEXT_SUBTITLE   = MILITARY_UI.muted;
 const TEXT_STAR       = new Color(238, 188,  75, 255);
 const TEXT_DIVIDER    = new Color(214, 204, 168, 255);
 
-const BTN_CONTINUE         = new Color(145,  95,  44, 245);
+const BTN_CONTINUE         = new Color(108, 89, 52, 255);
 const BTN_CONTINUE_HOVER   = new Color(177, 118,  58, 245);
 const BTN_CONTINUE_DISABLE = new Color( 56,  58,  56, 190);
 
-const BTN_LEVEL_UNLOCKED  = new Color( 74,  88,  55, 238);
-const BTN_LEVEL_COMPLETED = new Color( 96, 118,  66, 238);
+const BTN_LEVEL_UNLOCKED  = MILITARY_UI.button;
+const BTN_LEVEL_COMPLETED = new Color(65, 83, 57, 255);
 const BTN_LEVEL_LOCKED    = new Color( 49,  51,  48, 210);
-const BTN_LEVEL_BORDER    = new Color(204, 190, 142, 230);
+const BTN_LEVEL_BORDER    = MILITARY_UI.brass;
 
 const ICON_BTN_BG         = new Color( 45,  50,  44, 230);
 const ICON_BTN_BORDER     = new Color(204, 190, 142, 205);
@@ -172,8 +173,8 @@ const ICON_BTN_BORDER     = new Color(204, 190, 142, 205);
 const MENU_DIVIDER        = new Color(145, 138, 100, 210);
 
 const MODAL_BACKDROP      = new Color(  0,   0,   0, 180);
-const MODAL_PANEL_BG      = new Color( 36,  41,  34, 245);
-const MODAL_PANEL_BORDER  = new Color(202, 188, 136, 230);
+const MODAL_PANEL_BG      = MILITARY_UI.panel;
+const MODAL_PANEL_BORDER  = MILITARY_UI.border;
 const MODAL_CLOSE_BG      = new Color(134,  49,  42, 245);
 
 const SLIDER_TRACK        = new Color( 70,  80,  90, 255);
@@ -333,6 +334,7 @@ export class MainMenuScene extends Component {
     GameSession.setSelectedPlayerTankKind(this.selectedPlayerTankKind);
 
     this.buildBackground();
+    this.buildHomeArtwork();
     this.buildTitle();
     this.buildHomeNavigation();
     this.buildTopIcons();
@@ -383,33 +385,60 @@ export class MainMenuScene extends Component {
   // ================================================================
   private buildTitle() {
     const title = this.makeLabel(this.node, t('menu.title'),
-      0, 260, 900, 80, 64, TEXT_TITLE);
-    title.enableOutline = true;
-    title.outlineColor = TEXT_OUTLINE;
-    title.outlineWidth = 3;
+      -305, 260, 570, 80, 58, TEXT_PRIMARY);
+    title.horizontalAlign = HorizontalTextAlignment.LEFT;
+    title.isBold = true;
 
     const sub = this.makeLabel(this.node, t('menu.subtitle'),
-      0, 208, 900, 30, 22, TEXT_SUBTITLE);
-    sub.enableOutline = true;
-    sub.outlineColor = TEXT_OUTLINE;
-    sub.outlineWidth = 2;
+      -305, 207, 570, 30, 17, TEXT_TITLE);
+    sub.horizontalAlign = HorizontalTextAlignment.LEFT;
 
     const rule = new Node('TitleRule');
     rule.layer = this.node.layer;
     rule.addComponent(UITransform).setContentSize(360, 14);
-    rule.setPosition(0, 184, 0);
+    rule.setPosition(-410, 176, 0);
     const g = rule.addComponent(Graphics);
     g.strokeColor = MENU_DIVIDER;
-    g.lineWidth = 2;
+    g.lineWidth = 1;
     g.moveTo(-180, 0);
-    g.lineTo(-28, 0);
-    g.moveTo(28, 0);
-    g.lineTo(180, 0);
+    g.lineTo(148, 0);
     g.stroke();
     g.fillColor = TEXT_TITLE;
-    g.rect(-18, -3, 36, 6);
+    g.rect(-180, -1, 38, 2);
     g.fill();
     this.node.addChild(rule);
+  }
+
+  private buildHomeArtwork() {
+    const root = new Node('HomeArtwork');
+    root.layer = this.node.layer;
+    root.addComponent(UITransform).setContentSize(560, 510);
+    root.setPosition(280, -10);
+    this.node.addChild(root);
+    const g = root.addComponent(Graphics);
+    g.strokeColor = new Color(196, 163, 101, 25); g.lineWidth = 1;
+    for (const r of [192, 224]) { g.circle(0, 20, r); g.stroke(); }
+    for (let i = 0; i < 48; i++) {
+      const a = i * Math.PI / 24, r = i % 4 === 0 ? 211 : 219;
+      g.moveTo(Math.cos(a) * r, 20 + Math.sin(a) * r);
+      g.lineTo(Math.cos(a) * 224, 20 + Math.sin(a) * 224); g.stroke();
+    }
+    g.fillColor = new Color(0, 0, 0, 40); g.ellipse(0, -87, 228, 12); g.fill();
+    const vehicle = new Node('ShermanArtwork');
+    vehicle.layer = root.layer;
+    vehicle.addComponent(UITransform).setContentSize(520, 245);
+    vehicle.setPosition(0, 26);
+    const sprite = vehicle.addComponent(Sprite);
+    sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+    root.addChild(vehicle);
+    resources.load('textures/ui/loading_sherman_side/spriteFrame', SpriteFrame, (error, frame) => {
+      if (!error && vehicle.isValid && frame) sprite.spriteFrame = frame;
+    });
+    const name = this.makeLabel(root, 'M4 SHERMAN', 0, -161, 520, 38, 28, TEXT_PRIMARY);
+    name.isBold = true;
+    this.makeLabel(root, t('menu.subtitle'), 0, -198, 520, 24, 14, TEXT_SUBTITLE);
+    g.strokeColor = new Color(196, 163, 101, 90);
+    g.moveTo(-28, -130); g.lineTo(28, -130); g.stroke();
   }
 
   // ================================================================
@@ -442,6 +471,7 @@ export class MainMenuScene extends Component {
       editor: () => this.loadLevelEditorScene(),
       tankDebug: () => this.openTankVisualDebugger(),
       tankPicker: () => this.openPlayerTankPicker(),
+      prototype3d: () => director.loadScene('prototype3d'),
     });
     const entries: Array<[string, string, () => void]> = [
       ['Missions', 'menu.operations.mission', () => this.openOperationsEntry('mission')],
@@ -454,10 +484,18 @@ export class MainMenuScene extends Component {
       entries.push(['Tests', 'menu.operations.tests', () => this.operations?.openTests()]);
     }
     entries.forEach(([name, key, open], i) => {
-      const button = this.makeRectButton(this.node, 0, 92 - i * 66, 240, 50,
-        new Color(145, 105, 0, 255), open);
+      const button = this.makeRectButton(this.node, -426, 108 - i * 62, 328, 50,
+        i === 0 ? BTN_CONTINUE : BTN_LEVEL_UNLOCKED, open);
       button.node.name = `Home${name}`;
-      this.makeLabel(button.node, t(key), 0, 0, 224, 42, 28, TEXT_PRIMARY);
+      this.makeLabel(button.node, String(i + 1).padStart(2, '0'), -134, 0, 28, 28, 12, TEXT_TITLE);
+      const label = this.makeLabel(button.node, t(key), 8, 0, 228, 38, 21, TEXT_PRIMARY);
+      label.horizontalAlign = HorizontalTextAlignment.LEFT;
+      const arrowNode = new Node('Arrow'); arrowNode.layer = button.node.layer;
+      arrowNode.addComponent(UITransform).setContentSize(328, 50);
+      button.node.addChild(arrowNode);
+      const arrow = arrowNode.addComponent(Graphics);
+      arrow.strokeColor = TEXT_TITLE; arrow.lineWidth = 1;
+      arrow.moveTo(137, -4); arrow.lineTo(141, 0); arrow.lineTo(137, 4); arrow.stroke();
     });
   }
 
@@ -5943,7 +5981,7 @@ export class MainMenuScene extends Component {
         feedback.hover,
         feedback.press,
       );
-      const scale = 1 + feedback.hover * 0.025 - feedback.press * (0.02 + feedback.hover * 0.025);
+      const scale = 1 + feedback.hover * 0.008 - feedback.press * (0.015 + feedback.hover * 0.008);
       n.setScale(baseScale.x * scale, baseScale.y * scale, baseScale.z);
     };
     const redraw = (c: Color, opts?: { border?: boolean }) => {
@@ -6032,6 +6070,7 @@ export class MainMenuScene extends Component {
     n.addComponent(UITransform).setContentSize(w, h);
     n.setPosition(x, y, 0);
     const l = n.addComponent(Label);
+    styleMilitaryLabel(l);
     l.fontSize = fontSize;
     l.lineHeight = fontSize + 4;
     l.color = color;
@@ -6068,39 +6107,7 @@ function drawFieldPanel(
   hover: number = 0,
   press: number = 0,
 ) {
-  const x = -w / 2;
-  const y = -h / 2;
-  g.fillColor = new Color(0, 0, 0, 70 - press * 40);
-  g.rect(x + 4, y - 5, w, h);
-  g.fill();
-  g.fillColor = fill;
-  g.rect(x, y, w, h);
-  g.fill();
-  g.fillColor = new Color(255, 242, 190, 22);
-  g.rect(x + 4, h / 2 - 18, w - 8, 10);
-  g.fill();
-  g.strokeColor = border;
-  g.lineWidth = 2;
-  g.rect(x + 1, y + 1, w - 2, h - 2);
-  g.stroke();
-  if (drawInnerStroke) {
-    g.strokeColor = new Color(20, 22, 18, 180);
-    g.lineWidth = 1;
-    g.rect(x + 6, y + 6, w - 12, h - 12);
-    g.stroke();
-  }
-  g.strokeColor = lerp(accent, new Color(255, 245, 207, 255), hover);
-  g.lineWidth = 2 + hover * 0.5;
-  const l = Math.min(24, Math.max(10, Math.min(w, h) * 0.18)) + hover * 3;
-  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8 + l, y + h - 8);
-  g.moveTo(x + 8, y + h - 8); g.lineTo(x + 8, y + h - 8 - l);
-  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8 - l, y + h - 8);
-  g.moveTo(x + w - 8, y + h - 8); g.lineTo(x + w - 8, y + h - 8 - l);
-  g.moveTo(x + 8, y + 8); g.lineTo(x + 8 + l, y + 8);
-  g.moveTo(x + 8, y + 8); g.lineTo(x + 8, y + 8 + l);
-  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8 - l, y + 8);
-  g.moveTo(x + w - 8, y + 8); g.lineTo(x + w - 8, y + 8 + l);
-  g.stroke();
+  drawMilitaryPanel(g, w, h, fill, border, accent, drawInnerStroke, hover, press);
 }
 
 /** 沿父节点链向上找第一个挂 Canvas 组件的祖先节点；找不到返回 null。 */

@@ -113,7 +113,10 @@ test('kill and crew lists replace explanatory text, localize, and scroll without
   assert.equal(text(panel.root, 'CrewRow0'), '车长 — 存活');
   assert.equal(text(panel.root, 'CrewRow1'), '炮手 — 阵亡');
   assert.equal(h.find(panel.root, 'CrewRow2').active, false);
-  assert.equal(h.find(panel.root, 'CrewRow1').getComponent(h.Label).color.r, 224);
+  const kiaColor = h.find(panel.root, 'CrewRow1').getComponent(h.Label).color;
+  assert.ok(kiaColor.r > kiaColor.g && kiaColor.r > kiaColor.b, 'KIA uses a red warning tone');
+  assert.notDeepEqual(kiaColor, h.find(panel.root, 'CrewRow0').getComponent(h.Label).color,
+    'crew losses remain distinguishable from surviving crew');
   const oldRow = h.find(panel.root, 'KillRow0');
   panel.refresh(stats, true, false, false, 7);
   assert.equal(h.find(panel.root, 'KillRow0'), oldRow, 'unchanged list preserves scroll and nodes');

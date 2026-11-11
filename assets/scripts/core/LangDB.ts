@@ -591,7 +591,6 @@ export const LANG_DB: Record<string, LangEntry> = {
   'terrain.forest': { zh: "森林", en: "Forest" },
   'terrain.urban_ground': { zh: "城市地面", en: "Urban Ground" },
   'terrain.urban_road': { zh: "城市道路", en: "Urban Road" },
-  'tileInspect.railway': { zh: '铁路：沿用原地形的移动、骰子与掩护规则；与道路重叠时沿用道路规则。', en: 'Railway: movement, dice and cover follow the underlying terrain, including roads.' },
   'terrain.urban_indestructible': { zh: "不可破坏建筑", en: "Indestructible Building" },
   'terrain.urban_destructible': { zh: "可破坏建筑", en: "Destructible Building" },
   'terrain.urban_rubble': { zh: "建筑废墟", en: "Building Rubble" },
@@ -1048,4 +1047,7 @@ export const LANG_DB: Record<string, LangEntry> = {
   'outcome.report.returnReport': { zh: "返回战斗报告", en: "Return to battle report" },
   'unit.twoHex.rearTurret': { zh: "占两格；炮塔位于后格", en: "Two hexes; rear turret" },
   'unit.twoHex.frontTurret': { zh: "占两格；炮塔位于前格", en: "Two hexes; front turret" },
+  'menu.operations.prototype3d': { zh: "3D 样板战场", en: "3D battlefield prototype" },
+  'menu.operations.prototype3dHint': { zh: "低多边形谢尔曼与高差地形：移动、射击和可旋转镜头。", en: "Low-poly tanks and a raised battlefield. Move and fire with an orbit camera." },
+  'tileInspect.railway': { zh: "铁路：沿用原地形的移动、骰子与掩护规则；与道路重叠时沿用道路规则。", en: "Railway: movement, dice and cover follow the underlying terrain, including roads." },
 };
