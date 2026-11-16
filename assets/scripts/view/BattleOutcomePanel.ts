@@ -143,9 +143,6 @@ export class BattleOutcomePanel {
     this.title.string = t(victory ? 'outcome.win' : 'outcome.lose');
     this.title.color = color;
     this.accent.clear();
-    this.accent.fillColor = color;
-    this.accent.rect(-516, 306, 48, 2);
-    this.accent.fill();
     this.accent.strokeColor = new Color(color.r, color.g, color.b, 90);
     this.accent.lineWidth = 1;
     this.accent.moveTo(-516, 204); this.accent.lineTo(516, 204); this.accent.stroke();

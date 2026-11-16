@@ -1,0 +1,77 @@
+{
+  "status": "approval-candidate",
+  "generator": "built-in image_gen with user-drawn fold guides",
+  "gameAssetsReplaced": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "hullBounds": {
+    "left": 192,
+    "top": 340,
+    "width": 416,
+    "height": 800
+  },
+  "foldGuideLocal": {
+    "left": [
+      [
+        12,
+        320
+      ],
+      [
+        80,
+        515
+      ],
+      [
+        80,
+        760
+      ]
+    ],
+    "right": [
+      [
+        404,
+        320
+      ],
+      [
+        336,
+        515
+      ],
+      [
+        336,
+        760
+      ]
+    ]
+  },
+  "foldGuideMeaning": "Inner top-deck folds, not the outer hull silhouette; approximately registered from user annotation",
+  "changedPixels": 154055,
+  "frontPixelsChanged": 0,
+  "alphaPixelsChanged": 0,
+  "rearTrackPixelsChanged": 0,
+  "alphaMirrorPairMismatch": 0,
+  "redMarkerPixels": 0,
+  "ring": {
+    "center": [
+      400,
+      720
+    ],
+    "size": [
+      236,
+      236
+    ],
+    "opaquePixelMismatch": 0,
+    "blackInteriorMismatch": 0
+  },
+  "ringCoverage": {
+    "covered": 1800,
+    "total": 1800,
+    "fraction": 1,
+    "minAlpha": 252
+  },
+  "turretArtworkChanged": false,
+  "notes": [
+    "The v12 assertion that the rear should have no longitudinal narrowing folds is withdrawn.",
+    "The user annotation clarifies a symmetric central roof that narrows aft and then runs parallel.",
+    "Guide coordinates describe approximate intended break lines; generated shading remains subject to visual review.",
+    "Other two Sherman candidates remain v10."
+  ]
+}

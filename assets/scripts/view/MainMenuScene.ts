@@ -76,7 +76,7 @@ import { normalizeWeather } from '../core/Weather';
 import { normalizeUnitLevel } from '../core/UnitLevel';
 import { getAllUnitKinds, getUnitStats } from '../core/UnitDB';
 import { selectablePlayerTankKinds } from '../core/PlayerTankSelection';
-import { fixedTankCommanderHatchTransform } from '../core/CommanderHatch';
+import { commanderHatchDisplaySize, fixedTankCommanderHatchTransform } from '../core/CommanderHatch';
 import { TankRiderRenderer } from './TankRiderRenderer';
 import { seatedInfantryKindForFaction } from './TankRiderVisual';
 import { machineGunSpritePoint, machineGunSpriteCoordinates, isMachineGunMuzzleConfigured } from './MachineGunBurstGeometry';
@@ -112,14 +112,11 @@ import {
 } from './TankEngineVibration';
 import {
   SPLIT_TANK_KINDS,
-  EMPTY_COMMANDER_HATCH_SPRITE_SIZE,
-  SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
   TANK_VISUAL_KINDS,
   SplitTankKind,
   TankVisualKind,
   splitTankGeometryConfigOf,
   splitTankVisualConfigOf,
-  commanderHatchRenderedScaleCoefficientForConfig,
   tankVisualAssetConfigOf,
   tankVisualConfigOf,
 } from '../core/TankVisualDB';
@@ -487,7 +484,6 @@ export class MainMenuScene extends Component {
       const button = this.makeRectButton(this.node, -426, 108 - i * 62, 328, 50,
         i === 0 ? BTN_CONTINUE : BTN_LEVEL_UNLOCKED, open);
       button.node.name = `Home${name}`;
-      this.makeLabel(button.node, String(i + 1).padStart(2, '0'), -134, 0, 28, 28, 12, TEXT_TITLE);
       const label = this.makeLabel(button.node, t(key), 8, 0, 228, 38, 21, TEXT_PRIMARY);
       label.horizontalAlign = HorizontalTextAlignment.LEFT;
       const arrowNode = new Node('Arrow'); arrowNode.layer = button.node.layer;
@@ -2506,26 +2502,9 @@ export class MainMenuScene extends Component {
         if (commanderHatchState !== 'closed' && commanderHatchFrame && draft.commanderHatchScale > 0) {
           // Keep this transform identical to BattleScene: the hatch is at (31, 6)
           // in the source turret and rotates around the same turret pivot.
-          let commanderSize = draft.commanderHatchScale * turretScale;
-          if (commanderHatchState === 'open-dead') {
-            const shermanDraft = drafts.sherman!;
-            const shermanGeometry = splitTankGeometryConfigOf('sherman');
-            const currentCoefficient = commanderHatchRenderedScaleCoefficientForConfig(draft, geometry);
-            const shermanCoefficient = commanderHatchRenderedScaleCoefficientForConfig(
-              shermanDraft,
-              shermanGeometry,
-            );
-            const relativeEmptyScale = shermanCoefficient > 0
-              ? SHERMAN_EMPTY_COMMANDER_HATCH_SCALE * currentCoefficient / shermanCoefficient
-              : SHERMAN_EMPTY_COMMANDER_HATCH_SCALE;
-            const shermanFit = hexR * 1.8 * Math.max(0.001, shermanDraft.hullFitScale);
-            const shermanBodyScale = shermanFit
-              / (Math.max(shermanGeometry.topTrim.w, shermanGeometry.topTrim.h) || 1);
-            const shermanTurretScale = shermanBodyScale * Math.max(0.001, shermanDraft.turretScale);
-            commanderSize = EMPTY_COMMANDER_HATCH_SPRITE_SIZE
-              * relativeEmptyScale
-              * shermanTurretScale;
-          }
+          const commanderSize = commanderHatchDisplaySize(
+            draft.commanderHatchScale * turretScale, commanderHatchState === 'open-dead',
+          );
           const localX = (draft.commanderHatchSpriteX - pivot.spriteX) * turretScale;
           const localY = (pivot.spriteY - draft.commanderHatchSpriteY) * turretScale;
           const turretAngle = (turret.deg + 180) * Math.PI / 180;

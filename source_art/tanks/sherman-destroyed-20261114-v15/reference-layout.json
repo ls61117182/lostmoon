@@ -1,0 +1,92 @@
+[
+  {
+    "key": "m4a1",
+    "label": "M4A1 · 75毫米",
+    "sourceVersion": "sherman-width-tail-20261113-v10",
+    "native": 76,
+    "canvas": [
+      800,
+      1400
+    ],
+    "assembledBounds": {
+      "left": 217,
+      "top": 313,
+      "width": 367,
+      "height": 827
+    },
+    "editCrop": {
+      "left": 197,
+      "top": 293,
+      "width": 407,
+      "height": 867
+    },
+    "hullBounds": {
+      "left": 217,
+      "top": 340,
+      "width": 367,
+      "height": 800
+    },
+    "hullNoseInEdit": 47,
+    "hullRearInEdit": 847
+  },
+  {
+    "key": "m4a1_76_hvss",
+    "label": "M4A1(76)W · HVSS",
+    "sourceVersion": "sherman-width-tail-20261113-v10",
+    "native": 76,
+    "canvas": [
+      800,
+      1400
+    ],
+    "assembledBounds": {
+      "left": 217,
+      "top": 124,
+      "width": 367,
+      "height": 1016
+    },
+    "editCrop": {
+      "left": 197,
+      "top": 104,
+      "width": 407,
+      "height": 1056
+    },
+    "hullBounds": {
+      "left": 217,
+      "top": 341,
+      "width": 367,
+      "height": 799
+    },
+    "hullNoseInEdit": 237,
+    "hullRearInEdit": 1036
+  },
+  {
+    "key": "m4a3e2",
+    "label": "M4A3E2 · 巨无霸",
+    "sourceVersion": "sherman-jumbo-curved-shoulders-20261114-v14",
+    "native": 78,
+    "canvas": [
+      800,
+      1400
+    ],
+    "assembledBounds": {
+      "left": 192,
+      "top": 340,
+      "width": 416,
+      "height": 800
+    },
+    "editCrop": {
+      "left": 172,
+      "top": 320,
+      "width": 456,
+      "height": 840
+    },
+    "hullBounds": {
+      "left": 192,
+      "top": 340,
+      "width": 416,
+      "height": 800
+    },
+    "hullNoseInEdit": 20,
+    "hullRearInEdit": 820
+  }
+]

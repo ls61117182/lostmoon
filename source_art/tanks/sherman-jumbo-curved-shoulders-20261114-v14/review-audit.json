@@ -1,0 +1,54 @@
+{
+  "status": "approval-candidate",
+  "date": "2026-11-14",
+  "generator": "built-in image_gen, clean original reference; localized registration/blending",
+  "gameAssetsReplaced": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "hullBounds": {
+    "left": 192,
+    "top": 340,
+    "width": 416,
+    "height": 800
+  },
+  "workArea": {
+    "left": 192,
+    "top": 620,
+    "width": 416,
+    "height": 285
+  },
+  "changedPixels": 67670,
+  "pixelsChangedOutsideWorkArea": 0,
+  "alphaPixelsChanged": 0,
+  "alphaMirrorPairMismatch": 0,
+  "redMarkerPixels": 0,
+  "ring": {
+    "center": [
+      400,
+      720
+    ],
+    "size": [
+      236,
+      236
+    ],
+    "opaquePixelMismatch": 0,
+    "blackInteriorMismatch": 0
+  },
+  "ringCoverage": {
+    "covered": 1800,
+    "total": 1800,
+    "fraction": 1,
+    "minAlpha": 252
+  },
+  "turretArtworkChanged": false,
+  "geometryNotes": [
+    "Red annotation is approximate position only, not literal polyline geometry.",
+    "The entire forward shoulder transition is curved and blends into the aft parallel portion.",
+    "No hard-coded fold coordinates were supplied to image_gen this round.",
+    "Only clean original top-view references were used to guide curvature; the target image provided current approved layout.",
+    "Curvature/shape remains a visual-review candidate, not proven by metadata checks.",
+    "Other two Sherman candidates remain v10."
+  ]
+}

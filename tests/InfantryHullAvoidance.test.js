@@ -19,6 +19,7 @@ const Scene = require('./helpers/BattleSceneMethods.cjs')([
   'drawInfantry', 'drawSuppressionMarks', 'redrawAnimatedUnits',
   'infantrySharesHexWithOtherUnit',
 ], { ...facing, ...types, ...tankConfig, ...tracks, ...grid, trenchInfantryOffsets, wreckVisualHex, GameSession: { gameMode: 'hardcore' },
+  easeOutCubic: t => 1 - Math.pow(1 - t, 3),
   infantryOffsetsAvoidingHulls(...args) { formationSolves++; return facing.infantryOffsetsAvoidingHulls(...args); },
   isEnemyTopKind: () => true, TIGER_SPLIT_VISUAL_CONFIG: tankConfig.splitTankVisualConfigOf('tiger'),
   BattleScene: { INFANTRY_SPRITES_PER_UNIT: 3,
@@ -35,6 +36,7 @@ function setup(kind = 'sherman', direction = 0) {
   Object.assign(scene, { hexSize, mission: { map, sherman: tank, allies: [squad], enemies: [], data: {} },
     project: (q, r) => { const p = grid.axialToPixel({ q, r }, hexSize); return { x: p.x, y: -p.y }; },
     infantrySharesHexWithOtherUnit: () => true, infantryVisualAngle: () => 0, enemyTankSharingInfantryHex: () => null,
+    setInfantryVisualFacing() {},
     isUnitVisible: () => true,
     infantryVisualsFor: () => ({ frames: Array(3).fill({ width: 40, height: 60 }),
       dims: Array(3).fill({ dw: 40, dh: 60 }), scales: [0.6, 0.6, 0.69] }),
@@ -419,7 +421,7 @@ test('bridge soldiers facing an enemy tank keep their rotated footprints on the 
   }
 });
 
-test('ordinary infantry walking onto or off any bridge axis keep a deck-constrained formation', () => {
+test('bridge entry and exit interpolate each soldier directly between its actual endpoint slots', () => {
   for (let axis = 0; axis < 3; axis++) for (const leaving of [false, true]) for (const advanced of [false, true]) {
     const { scene, squad, tank } = setup();
     const bridgePos = { q: 0, r: 0 }, landPos = grid.HEX_DIRECTIONS[axis];
@@ -429,45 +431,121 @@ test('ordinary infantry walking onto or off any bridge axis keep a deck-constrai
     scene.mission.map.get = pos => pos.q === 0 && pos.r === 0
       ? { terrain: 'water', bridgeEnds: [axis, axis + 3] } : { terrain: 'field' };
     scene.infantrySharesHexWithOtherUnit = () => false;
+    squad.pos = { ...from };
+    const start = plain(scene.infantryFormationOffsets(squad));
+    squad.pos = { ...to };
+    const end = plain(scene.infantryFormationOffsets(squad));
+    squad.pos = { ...(advanced ? to : from) };
     scene.anim = { unit: squad, kind: 'move', fromQ: from.q, fromR: from.r, toQ: to.q, toR: to.r, t: 0 };
     for (let frame = 0; frame <= 60; frame++) {
       scene.anim.t = frame / 60;
       const offsets = scene.infantryFormationOffsets(squad);
       assert.equal(offsets.length, 3);
-      assertOnBridge(offsets, axis);
+      const k = 1 - Math.pow(1 - frame / 60, 3);
+      offsets.forEach((offset, i) => {
+        assert.ok(Math.abs(offset.ox - (start[i].ox + (end[i].ox - start[i].ox) * k)) < 1e-9);
+        assert.ok(Math.abs(offset.oy - (start[i].oy + (end[i].oy - start[i].oy) * k)) < 1e-9);
+      });
     }
     squad.pos = { ...to };scene.anim = null;
     const arrived = scene.infantryFormationOffsets(squad);
+    assert.deepEqual(plain(arrived), end, 'arrival must retain the exact planned landing slots');
     if (leaving) assert.deepEqual(plain(arrived), facing.infantrySquadOffsets(100, false), 'restore the land formation after leaving the bridge');
     else assertOnBridge(arrived, axis);
   }
 });
 
-test('walking animation updates a cached land squad to the bridge formation before arrival', () => {
+test('cached walking sprites and suppression marks follow individual paths without rebuilding scenery', () => {
   const { scene, squad, tank } = setup(), cache = new UnitAnimationCache();
   tank.pos = { q: 6, r: 6 };squad.pos = { q: -1, r: 0 };
   scene.mission.map.get = pos => pos.q === 0 && pos.r === 0
     ? { terrain: 'water', bridgeEnds: [0, 3] } : { terrain: 'field' };
   scene.infantrySharesHexWithOtherUnit = () => false;
-  let rendered = scene.infantryFormationOffsets(squad), replays = 0;
+  const start = plain(scene.infantryFormationOffsets(squad));
+  squad.pos = { q: 0, r: 0 };
+  const end = plain(scene.infantryFormationOffsets(squad));
+  squad.pos = { q: -1, r: 0 };
+  let rendered = start, replays = 0;
+  const positions = [], marks = [];
+  Object.assign(scene, { g: {}, infantryTopPoolNext: 0, infantryTopSpritePool: [0, 1, 2].map(i => ({ sprite: {}, node: {
+    getComponent: () => ({ setContentSize() {} }), setPosition: (x, y) => { positions[i] = { x, y }; }, setScale() {},
+  } })), suppressionMarkPoolNext: 0, suppressionMarkPool: Array.from({ length: 3 }, () => ({ graphics: {}, node: { setScale() {} } })),
+    drawSuppressionExclamation() {}, positionMapScreenNode: (_node, x, y) => marks.push({ x, y }),
+  });
   cache.record(squad, scene.interpolatedPos(squad), [], {});
   const entry = cache.entries.get(squad);
   entry.infantryCoLocated = false;entry.infantryOffsets = rendered;entry.infantryFormationKey = scene.infantryFormationKey(squad);
   Object.assign(scene, { sceneryCacheMap: scene.mission.map, unitAnimationCache: cache,
     anim: { unit: squad, kind: 'move', fromQ: -1, fromR: 0, toQ: 0, toR: 0, t: 0 },
     mainGunRecoils: new Map(), engineVibrationVisuals: [], isOutsidePlayerRegion: () => false,
-    replayAnimatedUnit: () => { rendered = scene.infantryFormationOffsets(squad);replays++;return true; },
+    replayAnimatedUnit: () => {
+      rendered = scene.infantryFormationOffsets(squad);replays++;
+      scene.infantryTopPoolNext = 0;scene.suppressionMarkPoolNext = 0;marks.length = 0;
+      const center = scene.interpolatedPos(squad);
+      scene.drawInfantry(squad, center.x, center.y);
+      scene.drawSuppressionMarks(squad, center.x, center.y);
+      return true;
+    },
     redraw: () => assert.fail('walking onto a bridge must not rebuild scenery'),
     syncUnitOcclusion() {}, redrawObjectShadows() {}, syncActiveActingUnitFrame() {},
   });
   const originalPosition = scene.interpolatedPos;
   scene.interpolatedPos = unit => unit === squad
     ? { x: -Math.sqrt(3) * 100 * Math.pow(1 - scene.anim.t, 3), y: 0 } : originalPosition(unit);
+  scene.infantryFormationCache.clear();
+  formationSolves = 0;
   for (let frame = 1; frame <= 60; frame++) {
     scene.anim.t = frame / 60;
     scene.redrawAnimatedUnits();
-    assertOnBridge(rendered, 0);
+    const k = 1 - Math.pow(1 - scene.anim.t, 3);
+    rendered.forEach((offset, i) => {
+      const x = -Math.sqrt(3) * 100 * (1 - k) + start[i].ox * (1 - k) + end[i].ox * k;
+      const y = start[i].oy * (1 - k) + end[i].oy * k;
+      assert.ok(Math.abs(positions[i].x - x) < 1e-9);
+      assert.ok(Math.abs(positions[i].y - y) < 1e-9);
+      assert.ok(Math.abs(marks[i].x - x) < 1e-9);
+      assert.ok(Math.abs(marks[i].y - y) < 1e-9);
+    });
   }
-  assert.equal(replays, 1, 'switch formation once and retain it for the rest of the walk');
+  assert.equal(replays, 60, 'update the individual soldier paths each animation frame');
+  assert.equal(formationSolves, 1, 'solve the final bridge formation once before travel');
   assert.deepEqual(squad.pos, { q: -1, r: 0 }, 'do not commit logical movement early');
+  assert.deepEqual(plain(rendered), end);
+});
+
+test('tank and trench arrival slots are fixed before travel and survive animation cache rebuilds', () => {
+  for (const leaving of [false, true]) for (const advanced of [false, true]) for (const terrain of ['tank', 'wreck', 'trench', 'infantry']) {
+    const { scene, squad, tank } = setup();
+    const occupied = { q: 0, r: 0 }, land = { q: 1, r: 0 };
+    const from = leaving ? occupied : land, to = leaving ? land : occupied;
+    scene.infantrySharesHexWithOtherUnit = Scene.prototype.infantrySharesHexWithOtherUnit;
+    if (terrain === 'wreck') { tank.destroyed = true;tank.wreckPose = { x: 0.1, y: 0, angle: 0.2 }; }
+    if (terrain === 'trench' || terrain === 'infantry') tank.pos = { q: 6, r: 6 };
+    if (terrain === 'trench') scene.mission.map.get = pos => pos.q === 0 && pos.r === 0
+      ? { fortification: { kind: 'trench', connections: '100100' } } : { terrain: 'field' };
+    if (terrain === 'infantry') scene.mission.allies.push({ ...squad, id: 'other', pos: occupied });
+    squad.pos = { ...from };
+    const start = plain(scene.infantryFormationOffsets(squad));
+    squad.pos = { ...to };
+    const end = plain(scene.infantryFormationOffsets(squad));
+    assert.notDeepEqual(start, end);
+    squad.pos = { ...(advanced ? to : from) };
+    const cache = scene.unitAnimationCache = new UnitAnimationCache();
+    cache.record(squad, scene.project(from.q, from.r), [], {});
+    cache.entries.get(squad).infantryOffsets = start;
+    scene.anim = { unit: squad, kind: 'move', fromQ: from.q, fromR: from.r, toQ: to.q, toR: to.r, t: 0 };
+    formationSolves = 0;
+    for (let frame = 0; frame <= 60; frame++) {
+      scene.anim.t = frame / 60;
+      if (frame === 30) { cache.clear();scene.infantryFormationCache?.clear(); }
+      const offsets = scene.infantryFormationOffsets(squad), k = 1 - Math.pow(1 - frame / 60, 3);
+      offsets.forEach((p, i) => {
+        assert.ok(Math.abs(p.ox - (start[i].ox + (end[i].ox - start[i].ox) * k)) < 1e-9);
+        assert.ok(Math.abs(p.oy - (start[i].oy + (end[i].oy - start[i].oy) * k)) < 1e-9);
+      });
+    }
+    assert.ok(formationSolves <= 1, 'fixed endpoints must not be solved again during travel');
+    squad.pos = { ...to };scene.anim = null;
+    assert.deepEqual(plain(scene.infantryFormationOffsets(squad)), end, `${terrain}: no snap on arrival`);
+  }
 });

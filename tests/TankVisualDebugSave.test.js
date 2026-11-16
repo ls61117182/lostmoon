@@ -19,6 +19,23 @@ function fixture(t) {
 }
 const readRows = root => chooseParsedRows(fs.readFileSync(path.join(root, 'data/tank_visuals.csv'), 'utf8'), ['kind']).rows;
 
+test('saving reloads the generator instead of restoring stale hatch scaling from module cache', t => {
+  const root = fixture(t);
+  const cachedGenerator = require('../tools/buildTankVisualDB');
+  const originalBuild = cachedGenerator.build;
+  cachedGenerator.build = () => { throw new Error('stale cached generator'); };
+  try {
+    saveTankVisualPatch(root, { kind: 'sherman76', values: { commanderHatchScale: 22 } });
+    const code = fs.readFileSync(path.join(root, 'assets/scripts/core/TankVisualDB.ts'), 'utf8');
+    const compiled = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+    const ctx = vm.createContext({ exports: {} });
+    vm.runInContext(compiled, ctx);
+    assert.equal(ctx.exports.SHERMAN_EMPTY_COMMANDER_HATCH_SCALE, 0.75);
+  } finally {
+    cachedGenerator.build = originalBuild;
+  }
+});
+
 test('saving patches only selected fields, retains descriptions/other tanks, and regenerates runtime data', t => {
   const root = fixture(t), before = readRows(root);
   saveTankVisualPatch(root, { kind: 'maus', values: { turretPivotX: 156, hullOffsetRight: 0.0123, destroyedFitScale: 1.2,

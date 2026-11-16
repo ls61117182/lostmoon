@@ -1,0 +1,187 @@
+{
+  "status": "approval-candidate",
+  "date": "2026-11-14",
+  "generator": "built-in image_gen, one edit per model",
+  "gameAssetsReplaced": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "registration": "Uniform scaling anchored to normal hull front/rear; no independent stretching of hull, turret or barrel",
+  "variants": [
+    {
+      "key": "m4a1",
+      "label": "M4A1 · 75毫米",
+      "normalSource": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-width-tail-20261113-v10\\candidates\\m4a1_assembled.png",
+      "normalSHA256": "f1b85c45fbb542583eb08ac8758c311c0847f57d9ccc6a72e7d88ab0e9438c96",
+      "sourceImage": {
+        "size": [
+          859,
+          1832
+        ],
+        "bounds": {
+          "left": 41,
+          "top": 39,
+          "width": 790,
+          "height": 1766
+        },
+        "hullNose": 99,
+        "hullRear": 1805,
+        "hullLength": 1706
+      },
+      "uniformScale": 0.46893317702227433,
+      "effectiveRasterScale": 0.4682899207248018,
+      "placement": {
+        "left": 216,
+        "top": 312,
+        "width": 370,
+        "height": 827
+      },
+      "normalHullBounds": {
+        "left": 217,
+        "top": 340,
+        "width": 367,
+        "height": 800
+      },
+      "finalImage": {
+        "size": [
+          800,
+          1400
+        ],
+        "bounds": {
+          "left": 216,
+          "top": 312,
+          "width": 370,
+          "height": 827
+        },
+        "hullNose": 340,
+        "hullRear": 1139,
+        "hullLength": 799
+      },
+      "alignmentDelta": {
+        "hullNose": 0,
+        "hullRear": -1,
+        "outlineWidthFraction": 0.008174386920980936
+      },
+      "damageCaption": "炮塔后侧破口、发动机盖翻折、右后履带损坏",
+      "output": "m4a1_destroyed.png",
+      "nominalMapHullLength": 76
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "label": "M4A1(76)W · HVSS",
+      "normalSource": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-width-tail-20261113-v10\\candidates\\m4a1_76_hvss_assembled.png",
+      "normalSHA256": "5b6215e6077a8196bfb277e901f6d7cc78bb61f7c8afacac80f283694d3e3aa0",
+      "sourceImage": {
+        "size": [
+          778,
+          2020
+        ],
+        "bounds": {
+          "left": 35,
+          "top": 35,
+          "width": 715,
+          "height": 1971
+        },
+        "hullNose": 459,
+        "hullRear": 2006,
+        "hullLength": 1547
+      },
+      "uniformScale": 0.5164835164835165,
+      "effectiveRasterScale": 0.5159817351598174,
+      "placement": {
+        "left": 216,
+        "top": 122,
+        "width": 369,
+        "height": 1017
+      },
+      "normalHullBounds": {
+        "left": 217,
+        "top": 341,
+        "width": 367,
+        "height": 799
+      },
+      "finalImage": {
+        "size": [
+          800,
+          1400
+        ],
+        "bounds": {
+          "left": 216,
+          "top": 122,
+          "width": 369,
+          "height": 1017
+        },
+        "hullNose": 340,
+        "hullRear": 1139,
+        "hullLength": 799
+      },
+      "alignmentDelta": {
+        "hullNose": -1,
+        "hullRear": -1,
+        "outlineWidthFraction": 0.005449591280654031
+      },
+      "damageCaption": "炮塔前侧破口、顶置机枪变形、后盖及左履带损坏",
+      "output": "m4a1_76_hvss_destroyed.png",
+      "nominalMapHullLength": 76
+    },
+    {
+      "key": "m4a3e2",
+      "label": "M4A3E2 · 巨无霸",
+      "normalSource": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-jumbo-curved-shoulders-20261114-v14\\candidates\\m4a3e2_assembled.png",
+      "normalSHA256": "486a0f762d09ef55a6e21e4f24f7450fed635f371bb1d417a58d346b93c075fe",
+      "sourceImage": {
+        "size": [
+          923,
+          1703
+        ],
+        "bounds": {
+          "left": 39,
+          "top": 35,
+          "width": 846,
+          "height": 1631
+        },
+        "hullNose": 36,
+        "hullRear": 1666,
+        "hullLength": 1630
+      },
+      "uniformScale": 0.49079754601226994,
+      "effectiveRasterScale": 0.49049662783568365,
+      "placement": {
+        "left": 193,
+        "top": 340,
+        "width": 415,
+        "height": 800
+      },
+      "normalHullBounds": {
+        "left": 192,
+        "top": 340,
+        "width": 416,
+        "height": 800
+      },
+      "finalImage": {
+        "size": [
+          800,
+          1400
+        ],
+        "bounds": {
+          "left": 193,
+          "top": 340,
+          "width": 415,
+          "height": 800
+        },
+        "hullNose": 340,
+        "hullRear": 1140,
+        "hullLength": 800
+      },
+      "alignmentDelta": {
+        "hullNose": 0,
+        "hullRear": 0,
+        "outlineWidthFraction": -0.0024038461538461453
+      },
+      "damageCaption": "炮塔顶破口、左格栅破损、右后履带撕裂",
+      "output": "m4a3e2_destroyed.png",
+      "nominalMapHullLength": 78
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "status": "approval-candidate",
+  "gameAssetsReplaced": false,
+  "geometryInputs": [
+    "references/user-top-front-left.png"
+  ],
+  "oldVehicleImagesPassedToGeneration": false,
+  "referenceBounds": {
+    "left": 9,
+    "top": 5,
+    "width": 957,
+    "height": 434
+  },
+  "referenceLengthWidthRatio": 2.205069124423963,
+  "sourceBounds": {
+    "left": 20,
+    "top": 14,
+    "width": 1818,
+    "height": 817
+  },
+  "sourceLengthWidthRatio": 2.2252141982864138,
+  "relativeRatioError": 0.00913580152173843,
+  "normalizedHull": [
+    360,
+    800
+  ],
+  "canvas": [
+    800,
+    1400
+  ],
+  "commonRing": {
+    "diameter": 236,
+    "center": [
+      400,
+      720
+    ]
+  },
+  "ringCoverage": {
+    "covered": 1800,
+    "total": 1800,
+    "fraction": 1,
+    "minAlpha": 252
+  },
+  "turret": "unchanged from v7; used only in review compositing",
+  "notes": [
+    "Previous ordinary Sherman style inputs affected the first v6 draft; later v6 passes removed those inputs but kept generated intermediates.",
+    "This v8 hull starts from the original user top plan alone, in its original front-left orientation.",
+    "Remaining ratio difference is explicitly reported rather than described as exact reconstruction.",
+    "No independent horizontal/vertical stretching."
+  ]
+}

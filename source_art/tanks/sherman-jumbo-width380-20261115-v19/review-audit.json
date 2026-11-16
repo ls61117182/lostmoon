@@ -1,0 +1,43 @@
+{
+  "sourceBounds": {
+    "left": 210,
+    "top": 340,
+    "width": 380,
+    "height": 800
+  },
+  "widthChange": [
+    416,
+    380
+  ],
+  "scaleX": 0.9134615384615384,
+  "ringCenter": [
+    400,
+    720
+  ],
+  "ringDiameter": 236,
+  "sourceRingProtectedRadius": 125,
+  "finalRingProtectedRadius": 24,
+  "finalHullBounds": {
+    "left": 5,
+    "top": 2,
+    "width": 74,
+    "height": 153
+  },
+  "finalWreckBounds": {
+    "left": 5,
+    "top": 2,
+    "width": 74,
+    "height": 153
+  },
+  "normalWreckAlphaIdentical": true,
+  "turretUnchanged": true,
+  "otherShermansUnchanged": true,
+  "canvasUnchanged": true,
+  "metasUnchanged": true,
+  "hullMachineGunY": 30.125,
+  "installed": [
+    "sherman_jumbo_top_hull.png",
+    "sherman_jumbo_top.png",
+    "sherman_jumbo_top_destroyed.png"
+  ]
+}

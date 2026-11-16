@@ -1,0 +1,161 @@
+{
+  "generator": "built-in image_gen",
+  "date": "2026-11-13",
+  "status": "review-only",
+  "sourceArtworkUsed": false,
+  "previousCandidateArtworkUsed": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "hullLength": 800,
+  "gameResourcesModified": false,
+  "limitations": [
+    "Similarity alignment is manual review geometry, not a pixel-exact trace.",
+    "M4A3E2 isolated barrel remains about 15-20% shorter than the plan relative to turret width; final refinement was blocked by image generation service. Keep this marked as a candidate, not approved production art.",
+    "No in-game visual acceptance; no destroyed or commander states produced."
+  ],
+  "variants": [
+    {
+      "key": "m4a1",
+      "hull": {
+        "width": 867,
+        "height": 1815,
+        "transparent": 287310,
+        "b": {
+          "left": 41,
+          "top": 44,
+          "width": 791,
+          "height": 1725
+        }
+      },
+      "turret": {
+        "width": 867,
+        "height": 1815,
+        "transparent": 949336,
+        "b": {
+          "left": 21,
+          "top": 87,
+          "width": 826,
+          "height": 1460
+        }
+      },
+      "referenceHull": {
+        "x": 22,
+        "y": 20,
+        "w": 392,
+        "h": 858
+      },
+      "referencePivot": [
+        220,
+        445
+      ],
+      "referenceTurretWidth": 320,
+      "sourceTurretPivot": [
+        434,
+        1115
+      ],
+      "hullScale": 0.463768115942029,
+      "turretScale": 0.3612207002037511,
+      "commonPivot": [
+        400,
+        736.2703962703963
+      ],
+      "smallHullLength": 76
+    },
+    {
+      "key": "m4a1_76",
+      "hull": {
+        "width": 788,
+        "height": 1996,
+        "transparent": 398403,
+        "b": {
+          "left": 38,
+          "top": 306,
+          "width": 712,
+          "height": 1682
+        }
+      },
+      "turret": {
+        "width": 802,
+        "height": 1962,
+        "transparent": 1048840,
+        "b": {
+          "left": 44,
+          "top": 23,
+          "width": 714,
+          "height": 1855
+        }
+      },
+      "referenceHull": {
+        "x": 22,
+        "y": 178,
+        "w": 411,
+        "h": 952
+      },
+      "referencePivot": [
+        228,
+        650
+      ],
+      "referenceTurretWidth": 350,
+      "sourceTurretPivot": [
+        401,
+        1405
+      ],
+      "hullScale": 0.4756242568370987,
+      "turretScale": 0.4119294776734223,
+      "commonPivot": [
+        400,
+        736.6386554621849
+      ],
+      "smallHullLength": 76
+    },
+    {
+      "key": "m4a3e2",
+      "hull": {
+        "width": 858,
+        "height": 1833,
+        "transparent": 230546,
+        "b": {
+          "left": 43,
+          "top": 51,
+          "width": 793,
+          "height": 1744
+        }
+      },
+      "turret": {
+        "width": 887,
+        "height": 1774,
+        "transparent": 902706,
+        "b": {
+          "left": 22,
+          "top": 80,
+          "width": 844,
+          "height": 1468
+        }
+      },
+      "referenceHull": {
+        "x": 21,
+        "y": 24,
+        "w": 355,
+        "h": 774
+      },
+      "referencePivot": [
+        195,
+        435
+      ],
+      "referenceTurretWidth": 272,
+      "sourceTurretPivot": [
+        444,
+        1095
+      ],
+      "hullScale": 0.45871559633027525,
+      "turretScale": 0.33310065273032313,
+      "commonPivot": [
+        400,
+        764.8062015503876
+      ],
+      "smallHullLength": 78
+    }
+  ]
+}

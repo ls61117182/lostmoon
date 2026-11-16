@@ -1,0 +1,41 @@
+{
+  "m4a1": {
+    "file": "m4a1_hull-pixel-aligned.png",
+    "sourceSize": [
+      850,
+      1850
+    ],
+    "circleCenter": [
+      424,
+      868
+    ],
+    "edgeRadius": 235,
+    "radialContrast": 84.8329609375
+  },
+  "m4a1_76_hvss": {
+    "file": "m4a1_76_hvss_hull-pixel-aligned.png",
+    "sourceSize": [
+      792,
+      1985
+    ],
+    "circleCenter": [
+      390,
+      1125
+    ],
+    "edgeRadius": 198,
+    "radialContrast": 84.15853437499999
+  },
+  "m4a3e2": {
+    "file": "m4a3e2_hull-v1.png",
+    "sourceSize": [
+      858,
+      1832
+    ],
+    "circleCenter": [
+      420,
+      976
+    ],
+    "edgeRadius": 198,
+    "radialContrast": 92.07451562500002
+  }
+}

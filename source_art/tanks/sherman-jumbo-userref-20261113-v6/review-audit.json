@@ -1,0 +1,59 @@
+{
+  "status": "approval-candidate",
+  "generator": "built-in image_gen",
+  "gameAssetsReplaced": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "hull": {
+    "width": 841,
+    "height": 1870,
+    "clearPixels": 224674,
+    "b": {
+      "left": 30,
+      "top": 48,
+      "width": 780,
+      "height": 1766
+    }
+  },
+  "turret": {
+    "width": 887,
+    "height": 1774,
+    "clearPixels": 880884,
+    "b": {
+      "left": 29,
+      "top": 193,
+      "width": 829,
+      "height": 1564
+    }
+  },
+  "hullScale": 0.45300113250283125,
+  "turretScale": 0.34320727195643286,
+  "referenceHullLength": 956,
+  "referenceTurretWidth": 340,
+  "sourceRingCenter": [
+    416,
+    913
+  ],
+  "sourceTurretPivot": [
+    444,
+    1268
+  ],
+  "pivot": [
+    398.18799546998866,
+    731.8459796149491
+  ],
+  "ringCoverage": {
+    "covered": 1800,
+    "total": 1800,
+    "fraction": 1,
+    "minAlpha": 252
+  },
+  "notes": [
+    "New user sheet is the geometric authority. Old Jumbo sprite not used as reference.",
+    "Body proportions and feature layout visually compared against the new plan; generative artwork is a review candidate, not a CAD-exact reconstruction.",
+    "Only reference crop/rotation, uniform resizing, alpha cleanup, compositing and review layout use code. Artwork and layer corrections use built-in image_gen.",
+    "No damaged states or game integration."
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "status": "production-size review; not installed",
+  "sourceScale": 0.19,
+  "sourceCanvas": [
+    800,
+    1400
+  ],
+  "scaledCanvas": [
+    152,
+    266
+  ],
+  "maxTextureSide": 200,
+  "frames": {
+    "hull": {
+      "left": 34,
+      "top": 62,
+      "width": 84,
+      "height": 158
+    },
+    "turret": {
+      "left": 43,
+      "top": 20,
+      "width": 66,
+      "height": 160
+    },
+    "top": {
+      "left": 34,
+      "top": 21,
+      "width": 84,
+      "height": 199
+    }
+  },
+  "hullPivot": [
+    42,
+    74.8
+  ],
+  "turretPivot": [
+    33,
+    116.8
+  ],
+  "hullLength": 152,
+  "ringDiameter": 44.84,
+  "variants": [
+    {
+      "key": "m4a1",
+      "kind": "sherman",
+      "label": "M4A1",
+      "sourceVersion": "sherman-width-tail-20261113-v10",
+      "files": {
+        "hull": "normal/sherman_top_hull.png",
+        "turret": "normal/sherman_top_turret.png",
+        "top": "normal/sherman_top.png"
+      },
+      "sourceHashes": {
+        "hull": "996a7c738c4768ff86734b820bcc2415d289b29b5566d5eadc2a3dabe31b90ab",
+        "turret": "6c670dae6e19ed3ebd27b80a2d151ad16c9ae1ef7a9f42bad92957d4cfcefa49"
+      }
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "kind": "sherman76",
+      "label": "M4A1(76)W HVSS",
+      "sourceVersion": "sherman-width-tail-20261113-v10",
+      "files": {
+        "hull": "normal/sherman76_top_hull.png",
+        "turret": "normal/sherman76_top_turret.png",
+        "top": "normal/sherman76_top.png"
+      },
+      "sourceHashes": {
+        "hull": "01bd0c92e75d13d49bbdc40939b708be61cbf506e50673d82d22f9f6bb45dff5",
+        "turret": "7e7550b335775b869041fc1ac3df15f525dbec8a57f7e39ba875b8104d89dc93"
+      }
+    },
+    {
+      "key": "m4a3e2",
+      "kind": "sherman_jumbo",
+      "label": "M4A3E2 Jumbo",
+      "sourceVersion": "sherman-jumbo-curved-shoulders-20261114-v14",
+      "files": {
+        "hull": "normal/sherman_jumbo_top_hull.png",
+        "turret": "normal/sherman_jumbo_top_turret.png",
+        "top": "normal/sherman_jumbo_top.png"
+      },
+      "sourceHashes": {
+        "hull": "2f2e2f31f8c33c6d376fca4ac7aa3cf67a45a320eeb33975ca0ae3d63d022a37",
+        "turret": "4d2e47a8457bab95b6cc3fc817a5f172d22614cd6baa722c3655f25916379038"
+      }
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "authorization": "User explicitly approved pixel crop and alignment in this chat.",
+  "method": "Crop/reuse existing rear tread texture, equal-width aligned belts under original armored pixels; no chassis widening.",
+  "variants": [
+    {
+      "key": "m4a1",
+      "source": "m4a1-hull-base.png",
+      "sourceSize": [
+        850,
+        1850
+      ],
+      "output": "m4a1_hull-pixel-aligned.png",
+      "beltWidth": 125,
+      "bands": {
+        "left": [
+          40,
+          165
+        ],
+        "right": [
+          685,
+          810
+        ]
+      },
+      "frontY": [
+        28,
+        220
+      ],
+      "rearY": [
+        1718,
+        1788
+      ],
+      "pixelsCleared": 42815,
+      "pixelsReused": 32362,
+      "islandsRemoved": 27,
+      "outsideTrackWindowsChanged": 0,
+      "crossSections": {
+        "left_front": {
+          "left": 40,
+          "right": 164,
+          "width": 125,
+          "pixels": 840
+        },
+        "left_rear": {
+          "left": 40,
+          "right": 164,
+          "width": 125,
+          "pixels": 3070
+        },
+        "right_front": {
+          "left": 685,
+          "right": 809,
+          "width": 125,
+          "pixels": 814
+        },
+        "right_rear": {
+          "left": 685,
+          "right": 809,
+          "width": 125,
+          "pixels": 3028
+        }
+      }
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "source": "m4a1-76-hvss-hull-base.png",
+      "sourceSize": [
+        792,
+        1985
+      ],
+      "output": "m4a1_76_hvss_hull-pixel-aligned.png",
+      "beltWidth": 120,
+      "bands": {
+        "left": [
+          40,
+          160
+        ],
+        "right": [
+          632,
+          752
+        ]
+      },
+      "frontY": [
+        420,
+        610
+      ],
+      "rearY": [
+        1768,
+        1880
+      ],
+      "pixelsCleared": 65749,
+      "pixelsReused": 44061,
+      "islandsRemoved": 67,
+      "outsideTrackWindowsChanged": 0,
+      "crossSections": {
+        "left_front": {
+          "left": 40,
+          "right": 159,
+          "width": 120,
+          "pixels": 1320
+        },
+        "left_rear": {
+          "left": 40,
+          "right": 159,
+          "width": 120,
+          "pixels": 7194
+        },
+        "right_front": {
+          "left": 632,
+          "right": 751,
+          "width": 120,
+          "pixels": 1320
+        },
+        "right_rear": {
+          "left": 632,
+          "right": 751,
+          "width": 120,
+          "pixels": 7167
+        }
+      }
+    }
+  ]
+}

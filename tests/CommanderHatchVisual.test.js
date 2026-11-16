@@ -18,6 +18,7 @@ require.extensions['.ts'] = (module, filename) => {
 
 try {
   const {
+    commanderHatchDisplaySize,
     commanderHatchVisualState,
     fixedTankCommanderHatchTransform,
     shouldNonPlayerTankOpenCommanderHatch,
@@ -25,9 +26,10 @@ try {
   const { applyAttack } = require('../assets/scripts/core/Combat.ts');
   const {
     SPLIT_TANK_KINDS,
-    commanderHatchRenderedScaleCoefficient,
     emptyCommanderHatchScaleOf,
     tankVisualConfigOf,
+    splitTankVisualConfigOf,
+    splitTankGeometryConfigOf,
   } = require('../assets/scripts/core/TankVisualDB.ts');
   const { getUnitStats } = require('../assets/scripts/core/UnitDB.ts');
 
@@ -171,26 +173,36 @@ try {
     'an elite NPC commander receives the observation skill by default',
   );
 
-  const expectedEmptyScales = {
-    sherman: 0.5,
-    sherman76: 0.45801526717557245,
-    sherman_jumbo: 0.3424946693320997,
-    m26_pershing: 0.4432808610886812,
-    t34: 0.3050384729774042,
-    t34_85: 0.41942790034393085,
-    tiger: 0.5366957470010905,
-    tigerking: 0.529677519862907,
-    maus: 0.5569403333852626,
-    panther: 0.4598926283299579,
-    panzer4: 0.3636017653129186,
-    panzer3: 0.48372020563950774,
-    type97: 0.4556784545879421,
-    type95: 0.38985823336968384,
-    type4: 0.4318429661941113,
-  };
+  const reference = splitTankVisualConfigOf('sherman');
+  const referenceGeometry = splitTankGeometryConfigOf('sherman');
+  const hexSize = 80;
+  const referenceTurretScale = hexSize * 1.8 * reference.hullFitScale
+    / Math.max(referenceGeometry.topTrim.w, referenceGeometry.topTrim.h) * reference.turretScale;
   for (const kind of SPLIT_TANK_KINDS) {
-    assert.ok(commanderHatchRenderedScaleCoefficient(kind) > 0);
-    assert.ok(Math.abs(emptyCommanderHatchScaleOf(kind, 0.5) - expectedEmptyScales[kind]) < 1e-12, kind);
+    const visual = splitTankVisualConfigOf(kind);
+    const geometry = splitTankGeometryConfigOf(kind);
+    const turretScale = hexSize * 1.8 * visual.hullFitScale
+      / Math.max(geometry.topTrim.w, geometry.topTrim.h) * visual.turretScale;
+    const occupiedSize = visual.commanderHatchScale * turretScale;
+    const previousEmptySize = 20 * emptyCommanderHatchScaleOf(kind, 0.5) * referenceTurretScale;
+    assert.ok(Math.abs(commanderHatchDisplaySize(occupiedSize, true) - 1.5 * previousEmptySize) < 1e-12,
+      kind + ' empty hatch must be 1.5 times its original size');
+    assert.strictEqual(commanderHatchDisplaySize(occupiedSize, false), occupiedSize);
+    assert.strictEqual(commanderHatchDisplaySize(occupiedSize * 2, true),
+      commanderHatchDisplaySize(occupiedSize, true) * 2,
+      kind + ' empty hatch must follow the commander scale');
+  }
+
+  // Editing Sherman's commander size must not cancel itself or resize other tanks.
+  const baselineEmptySize = commanderHatchDisplaySize(reference.commanderHatchScale * referenceTurretScale, true);
+  const savedCommanderScale = reference.commanderHatchScale;
+  try {
+    reference.commanderHatchScale *= 2;
+    assert.strictEqual(commanderHatchDisplaySize(reference.commanderHatchScale * referenceTurretScale, true),
+      baselineEmptySize * 2);
+    assert.ok(Math.abs(commanderHatchDisplaySize(12, true) - 12 * 15 / 22) < 1e-12);
+  } finally {
+    reference.commanderHatchScale = savedCommanderScale;
   }
 
   for (const kind of ['stug3', 'su152']) {
@@ -216,7 +228,13 @@ try {
   const empty = fixedTankCommanderHatchTransform(config, 100, 50, 2, 0.5, 0, true);
   assert.strictEqual(empty.x, hatch.x);
   assert.strictEqual(empty.y, hatch.y);
-  assert.strictEqual(empty.size, 10);
+  assert.ok(Math.abs(empty.size - 14 * 15 / 22) < 1e-12);
+  const enlargedEmpty = fixedTankCommanderHatchTransform(
+    { ...config, commanderHatchScale: config.commanderHatchScale * 2 }, 100, 50, 2, 0.5, 0, true,
+  );
+  assert.strictEqual(enlargedEmpty.size, empty.size * 2);
+  assert.strictEqual(enlargedEmpty.x, empty.x);
+  assert.strictEqual(enlargedEmpty.y, empty.y);
 
   const stugVisual = tankVisualConfigOf('stug3');
   assert.deepStrictEqual(

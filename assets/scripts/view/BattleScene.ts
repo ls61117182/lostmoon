@@ -247,7 +247,7 @@ import {
 import type { CampaignUpgradeDefinition, CampaignUpgradeId } from '../core/CampaignUpgrade';
 import { getGameModeConfig } from '../core/GameMode';
 import { firstDamagedRepairableComponent, repairableComponentById, repairableComponentsFor, RepairableComponentId } from '../core/RepairableComponents';
-import { commanderHatchVisualState, fixedTankCommanderHatchTransform, shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
+import { commanderHatchDisplaySize, commanderHatchVisualState, fixedTankCommanderHatchTransform, shouldNonPlayerTankOpenCommanderHatch } from '../core/CommanderHatch';
 import { pvpFactionOf, pvpParityLabel } from '../core/PvpConfig';
 import type { PvpFactionId, PvpParity } from '../core/PvpConfig';
 import { factionUiFor } from '../core/FactionUI';
@@ -318,8 +318,6 @@ import { clearCampaignCheckpoint, readCampaignCheckpoint, writeCampaignCheckpoin
 import { clearCompletedCampaignRun, readCampaignRun, writeCampaignRun } from '../core/CampaignRunStore';
 import {
   SPLIT_TANK_KINDS,
-  EMPTY_COMMANDER_HATCH_SPRITE_SIZE,
-  SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
   SplitTankKind,
   SplitTankGeometryConfig,
   SplitTankVisualConfig,
@@ -330,7 +328,6 @@ import {
   splitTankVisualConfigOf,
   tankVisualAssetConfigOf,
   tankVisualConfigOf,
-  emptyCommanderHatchScaleOf,
 } from '../core/TankVisualDB';
 import { GERMAN_LATE_WAR_VISUAL_KINDS, lateWarTankVisualAssetConfigOf, usesGermanLateWarCamouflage } from '../core/TankCamouflage';
 import {
@@ -750,6 +747,12 @@ interface MoveAnim {
   wreckPushStep?: number;
   /** Stationary infantry retain their pre-move positions until logical arrival. */
   infantryFormations?: Map<Unit, Array<{ ox: number; oy: number }>>;
+  /** Walking soldiers interpolate between fixed departure and arrival slots. */
+  infantryMoveFormation?: {
+    hexSize: number;
+    from: Array<{ ox: number; oy: number }>;
+    to: Array<{ ox: number; oy: number }>;
+  };
 }
 
 type DestroyedTurretLaunchCause = 'impact' | 'ammoExplosion';
@@ -3400,7 +3403,7 @@ export class BattleScene extends Component {
 
     this.buildWeatherEffectLayer();
     this.createHudRoot();
-    // HUD：回合数 + 阶段信息 + 下一阶段按钮
+    // HUD：回合数 + 下一阶段按钮
     this.buildHUD();
     // 底部阶段选择条 + 骰子托盘（空的，交给 refreshPhaseUI 根据状态切换可见性）
     this.buildChooseBar();
@@ -5884,7 +5887,7 @@ export class BattleScene extends Component {
       graphics.node.active = false;
       graphics.node.setPosition(0, 0, 0);
     }
-    if (this.anim?.kind === 'move' && isTankUnit(this.anim.unit)) {
+    if (this.anim?.kind === 'move') {
       const formations = this.anim.infantryFormations ??= new Map();
       for (const entry of this.unitAnimationCache?.entries.values() ?? []) {
         if (entry.infantryOffsets && !formations.has(entry.unit)) formations.set(entry.unit, entry.infantryOffsets);
@@ -6846,7 +6849,10 @@ export class BattleScene extends Component {
         if (entry.infantryCoLocated === undefined) continue;
         const coLocated = this.infantrySharesHexWithOtherUnit(entry.unit);
         const formationKey = this.infantryFormationKey(entry.unit);
-        if (entry.infantryCoLocated === coLocated && entry.infantryFormationKey === formationKey) continue;
+        // Walking slots change continuously, including sub-pixel differences
+        // hidden by the rounded stationary-formation key near arrival.
+        const walking = this.anim?.kind === 'move' && this.anim.unit === entry.unit;
+        if (!walking && entry.infantryCoLocated === coLocated && entry.infantryFormationKey === formationKey) continue;
         if (!this.replayAnimatedUnit(entry)) { this.redraw(); return; }
         entry.infantryCoLocated = coLocated;
         entry.infantryFormationKey = formationKey;
@@ -9112,7 +9118,7 @@ export class BattleScene extends Component {
     if (!this.mission) return false;
     const all: Unit[] = [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies];
     for (const o of all) {
-      if (o === u || (o.destroyed && (!isTankUnit(o) || o.wreckWater?.sink))) continue;
+      if (o === u || (u.id && o.id === u.id) || (o.destroyed && (!isTankUnit(o) || o.wreckWater?.sink))) continue;
       if (GameSession.gameMode !== 'classic' && isHeavyArtilleryUnit(o)) continue;
       // Pushing a wreck changes its visual pose, never its rules position.
       const pos = o.destroyed && o.wreckPose ? wreckVisualHex(o.pos, o.wreckPose)
@@ -15536,9 +15542,7 @@ export class BattleScene extends Component {
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
     this.applyTankConcealmentOpacity(sp, u);
-    const size = visualState === 'empty'
-      ? this.emptyCommanderHatchDisplaySize(kind)
-      : cfg.commanderHatchScale * turretScale;
+    const size = commanderHatchDisplaySize(cfg.commanderHatchScale * turretScale, visualState === 'empty');
     const ut = node.getComponent(UITransform)!;
     ut.setContentSize(size, size);
     ut.setAnchorPoint(0.5, 0.5);
@@ -15755,9 +15759,7 @@ export class BattleScene extends Component {
     const turretScale = bodyScale * cfg.turretScale;
     const hatchSpriteX = cfg.commanderHatchSpriteX;
     const hatchSpriteY = cfg.commanderHatchSpriteY;
-    const size = visualState === 'empty'
-      ? this.emptyCommanderHatchDisplaySize('sherman')
-      : cfg.commanderHatchScale * turretScale;
+    const size = commanderHatchDisplaySize(cfg.commanderHatchScale * turretScale, visualState === 'empty');
 
     sp.spriteFrame = sf;
     sp.sizeMode = Sprite.SizeMode.CUSTOM;
@@ -15774,27 +15776,6 @@ export class BattleScene extends Component {
     // Sherman turret art faces left, so compensate by -90° inside the turret.
     node.angle = -90;
     node.active = true;
-  }
-
-  /**
-   * Preserve Sherman's approved empty-hatch size, then scale every other tank
-   * by its complete commander-overlay transform (hull fit, turret, trim and
-   * commander-specific scale), rather than by commanderHatchScale alone.
-   */
-  private emptyCommanderHatchDisplaySize(kind: SplitTankKind): number {
-    const shermanVisual = splitTankVisualConfigOf('sherman');
-    const shermanGeometry = splitTankGeometryConfigOf('sherman');
-    const shermanFit = this.hexSize * 1.8 * shermanVisual.hullFitScale;
-    const shermanBodyScale = shermanFit
-      / (Math.max(shermanGeometry.topTrim.w, shermanGeometry.topTrim.h) || 1);
-    const shermanTurretScale = shermanBodyScale * shermanVisual.turretScale;
-    const relativeEmptyScale = emptyCommanderHatchScaleOf(
-      kind,
-      SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
-    );
-    return EMPTY_COMMANDER_HATCH_SPRITE_SIZE
-      * relativeEmptyScale
-      * shermanTurretScale;
   }
 
   private currentShermanTurretLerp(u: Unit): DirectionLerp | null {
@@ -16331,7 +16312,37 @@ export class BattleScene extends Component {
     };
   }
 
-  private infantryFormationOffsets(u: Unit, coLocateOtherUnit = this.infantrySharesHexWithOtherUnit(u), ignoreMoveFreeze = false) {
+  private infantryFormationOffsets(
+    u: Unit,
+    coLocateOtherUnit = this.infantrySharesHexWithOtherUnit(u),
+    ignoreMoveFreeze = false,
+    standingPos?: Axial,
+  ): Array<{ ox: number; oy: number }> {
+    const walk = !standingPos && isFootUnit(u) && u.kind !== 'officer'
+      && this.anim?.unit === u && this.anim.kind === 'move' ? this.anim : null;
+    if (walk) {
+      if (!walk.infantryMoveFormation || walk.infantryMoveFormation.hexSize !== this.hexSize) {
+        const from = { q: walk.fromQ, r: walk.fromR }, to = { q: walk.toQ, r: walk.toR };
+        const departure = { ...u, pos: from }, arrival = { ...u, pos: to };
+        // Use the displayed departure slots, even if the rules position already
+        // advanced. Solve arrival against its terrain and hulls before walking.
+        const before = walk.infantryFormations?.get(u) ?? this.unitAnimationCache?.entries.get(u)?.infantryOffsets;
+        const fromOffsets = before ?? this.infantryFormationOffsets(u, this.infantrySharesHexWithOtherUnit(departure), true, from);
+        this.setInfantryVisualFacing(departure, to);
+        walk.infantryMoveFormation = {
+          hexSize: this.hexSize,
+          from: fromOffsets.map(p => ({ ...p })),
+          to: this.infantryFormationOffsets(u, this.infantrySharesHexWithOtherUnit(arrival), true, to),
+        };
+      }
+      const k = easeOutCubic(Math.max(0, Math.min(1, walk.t)));
+      if (k === 0) return walk.infantryMoveFormation.from;
+      if (k === 1) return walk.infantryMoveFormation.to;
+      return walk.infantryMoveFormation.from.map((p, i) => {
+        const end = walk.infantryMoveFormation!.to[i];
+        return { ox: p.ox + (end.ox - p.ox) * k, oy: p.oy + (end.oy - p.oy) * k };
+      });
+    }
     const move = this.anim?.kind === 'move' && isTankUnit(this.anim.unit) ? this.anim : null;
     if (move && !ignoreMoveFreeze) {
       const formations = move.infantryFormations ??= new Map();
@@ -16341,21 +16352,13 @@ export class BattleScene extends Component {
       }
       return formations.get(u)!;
     }
-    let tile = this.mission?.map.get(u.pos);
-    if (isFootUnit(u) && this.anim?.unit === u && this.anim.kind === 'move') {
-      const from = this.mission?.map.get({ q: this.anim.fromQ, r: this.anim.fromR });
-      const to = this.mission?.map.get({ q: this.anim.toQ, r: this.anim.toR });
-      // The logical position remains at departure during a walking animation.
-      // Use the bridge deck throughout entry/exit instead of translating a
-      // land formation sideways into the water until the final arrival frame.
-      if (tileHasBridge(to)) tile = to;
-      else if (tileHasBridge(from)) tile = from;
-    }
+    const standingUnit = standingPos ? { ...u, pos: standingPos } : u;
+    const tile = this.mission?.map.get(standingUnit.pos);
     const trench = trenchInfantryOffsets(tile, this.hexSize);
     if (trench) return trench;
     const offsets = infantrySquadOffsets(this.hexSize, coLocateOtherUnit);
     if (!this.mission) return offsets;
-    const center = this.interpolatedPos(u);
+    const center = standingPos ? this.project(standingPos.q, standingPos.r) : this.interpolatedPos(u);
     const hulls: WreckBody[] = [];
     for (const tank of [this.mission.sherman, ...this.mission.allies, ...this.mission.enemies]) {
       if (tank === u || !isTankUnit(tank) || tank.wreckWater?.sink || !this.isUnitVisible(tank)) continue;
@@ -16363,7 +16366,7 @@ export class BattleScene extends Component {
       // a neighbouring hex must not rearrange its stationary infantry.
       const pos = tank.destroyed && tank.wreckPose ? wreckVisualHex(tank.pos, tank.wreckPose)
         : move?.unit === tank ? { q: move.fromQ, r: move.fromR } : tank.pos;
-      if (!unitOccupiesHex({ ...tank, pos }, u.pos)) continue;
+      if (!unitOccupiesHex({ ...tank, pos }, standingUnit.pos)) continue;
       const facingLerp = this.anim?.unit === tank && this.anim.kind === 'turn'
         ? { from: this.anim.turnFrom!, to: this.anim.turnTo!, t: this.anim.t } : null;
       const body = this.tankWreckCollisionBody(tank, facingLerp);
@@ -16385,7 +16388,7 @@ export class BattleScene extends Component {
     const standingArea = tileHasBridge(tile) ? infantryBridgeStandingArea(tile!.bridgeEnds!) : undefined;
     if (hulls.length === 0 && !standingArea) return offsets;
     const visuals = this.infantryVisualsFor(u);
-    const angle = this.enemyTankSharingInfantryHex(u) ? null : this.infantryVisualAngle(u) * Math.PI / 180;
+    const angle = this.enemyTankSharingInfantryHex(standingUnit) ? null : this.infantryVisualAngle(u) * Math.PI / 180;
     const footprints = visuals.scales.map((scale, i) => {
       const dim = visuals.dims[i], frame = visuals.frames[i];
       const w = dim.dw || frame?.width || 1, h = dim.dh || frame?.height || 1;
@@ -16664,7 +16667,7 @@ export class BattleScene extends Component {
     }
   }
 
-  /** 一次性创建 HUD：左上关卡 id+名、回合/阶段条、多行目标 + 右下角"结束回合"按钮。无需任何美术资源。 */
+  /** 一次性创建 HUD：左上关卡 id+名、回合数、多行目标 + 右下角"结束回合"按钮。无需任何美术资源。 */
   private buildHUD() {
     const hud = this.hudParent();
     const plate = new Node('MissionHudPlate');
@@ -16764,7 +16767,7 @@ export class BattleScene extends Component {
     this.pvpTurnTimerFill = timerFill;
     this.pvpTurnTimerLabel = timerLabel;
 
-    // ---- 第二行起：回合数 + 阶段信息 ----
+    // ---- 第二行：回合数 ----
     const labelNode = new Node('HUDLabel');
     labelNode.layer = this.node.layer;
     const lUT = labelNode.addComponent(UITransform);
@@ -17471,7 +17474,9 @@ export class BattleScene extends Component {
       let result = t('battleLog.combat.resultMiss');
       if (replay.highExplosiveReport) {
         result = report.hit && entry.params?.resultKey ? t(String(entry.params.resultKey)) : result;
-      } else if (replay.mg) result = report.hit ? t('battleLog.combatMg.hit') : result;
+      } else if (replay.mg) {
+        result = report.hit || replay.secondaryMGReport?.hit === true ? t('battleLog.combatMg.hit') : result;
+      }
       else if (report.hit && !report.penetrated) result = t('dice.panel.outcomeRic');
       else if (report.hit) result = combatLogDamageOutcomeLabel(report).text;
       const commanderResult = report.hit && report.commanderKilledByHitDoubles
@@ -17509,7 +17514,9 @@ export class BattleScene extends Component {
       let result = t('battleLog.combat.resultMiss');
       if (replay.highExplosiveReport) {
         result = report.hit && entry.params?.resultKey ? t(String(entry.params.resultKey)) : result;
-      } else if (replay.mg) result = report.hit ? t('battleLog.combatMg.hit') : result;
+      } else if (replay.mg) {
+        result = report.hit || replay.secondaryMGReport?.hit === true ? t('battleLog.combatMg.hit') : result;
+      }
       else if (report.hit && !report.penetrated) result = t('dice.panel.outcomeRic');
       else if (report.hit) result = combatLogDamageOutcomeLabel(report).text;
       const commanderResult = report.hit && report.commanderKilledByHitDoubles
@@ -18484,47 +18491,7 @@ export class BattleScene extends Component {
     this.refreshWeatherHud();
 
     if (this.hudLabel) {
-      if (this.eventPhase) {
-        this.hudLabel.string = t(this.eventPhase === 'round' ? 'hud.roundEvents' : 'hud.randomEvents', { n: this.turn });
-      } else if (this.phase === 'fireCheck') {
-        this.hudLabel.string = t('hud.fireCheckPhase', { n: this.turn });
-      } else if (this.phase === 'ally') {
-        this.hudLabel.string = t('hud.allyTurn', { n: this.turn });
-      } else if (this.phase === 'enemy') {
-        this.hudLabel.string = t('hud.enemyTurn', { n: this.turn });
-      } else if (this.playerStep === 'choose') {
-        const doneTag = GameSession.gameMode === 'test' ? t('btn.attackMovementPhase') : [
-          this.movementDone ? t('hud.moveDone')   : t('hud.moveTodo'),
-          this.attackDone   ? t('hud.attackDone') : t('hud.attackTodo'),
-        ].join(' ');
-        this.hudLabel.string = t('hud.playerChoose', { n: this.turn, tags: doneTag });
-      } else if (this.playerStep === 'movement') {
-        this.hudLabel.string = t('hud.movePhase', { n: this.turn, dice: this.remainingDice() });
-      } else if (this.playerStep === 'misc') {
-        this.hudLabel.string = t('hud.miscPhase', { n: this.turn, dice: this.remainingDice() });
-      } else {
-        const sherman = this.mission?.sherman;
-        const loaded = sherman && (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test') ? this.mainGunLoadingLabel(sherman) : sherman?.loaded
-          ? (GameSession.gameMode === 'hardcore' || GameSession.gameMode === 'test')
-            ? t((sherman.loadedShell ?? 'ap') === 'he' ? 'status.val.he'
-              : sherman.loadedShell === 'smoke' ? 'status.val.smoke' : sherman.loadedShell === 'hvap' ? 'status.val.hvap' : 'status.val.ap')
-            : t('hud.loaded')
-          : t('hud.unloaded');
-        // 选中主炮 → "点敌人开火"；选中机枪 → "点步兵扫射"；两者互斥
-        let sel = '';
-        if (this.selectedGunDieIdx >= 0) {
-          sel = ` | ${t(this.selectedGunHitThresholdModifier < 0
-            ? 'hud.precisionAttackSelectHint'
-            : 'hud.attackSelectHint')}`;
-        }
-        else if (this.selectedMGDieIdx >= 0) sel = ` | ${t('hud.mgSelectHint')}`;
-        this.hudLabel.string = t(GameSession.gameMode === 'test' ? 'hud.attackMovementPhase' : 'hud.attackPhase', {
-          n: this.turn,
-          loaded,
-          dice: this.remainingDice(),
-          sel,
-        });
-      }
+      this.hudLabel.string = t('hud.turn', { n: this.turn });
     }
 
     const adv = this.computeAdvanceButton();
@@ -18645,13 +18612,6 @@ export class BattleScene extends Component {
       lab.node.active = true;
     }
     this.refreshMissionHudPlate();
-  }
-
-  /** 托盘里还剩几颗骰子未执行（用于 HUD 展示） */
-  private remainingDice(): string {
-    if (this.phaseDice.length === 0) return '-';
-    const left = this.phaseDice.filter(d => !d.used).length;
-    return `${left}/${this.phaseDice.length}`;
   }
 
   /**
@@ -20832,7 +20792,11 @@ export class BattleScene extends Component {
       if (!unitOccupiedHexes(mover).some(pos => isInAmbushSight(pos, sight, HexMap.keyOf))) continue;
       const facing = this.currentTurretFacingFor(watcher, watcher.facing ?? 0);
       const sightUnit = { ...watcher, turretFacing: facing, hatchOpen: false, interiorVisionRange: 0 };
-      const shell = resolvedLoadedShell(watcher) === 'he' ? 'he' : 'ap';
+      // AI reloads do not select ammunition; use the same target policy as ordinary fire.
+      const shell = watcher === this.mission.sherman
+        ? resolvedLoadedShell(watcher)
+        : nonPlayerTankWeaponForTarget(mover, hexDistance(watcher.pos, mover.pos));
+      if (shell !== 'ap' && shell !== 'he') continue;
       if (!canAttack({
         attacker: sightUnit, target: mover, map, smokeHexes,
         weather: this.currentWeather(),
@@ -20861,6 +20825,8 @@ export class BattleScene extends Component {
           ? t('actor.enemyPrefix', { name: unitDisplayName(watcher.kind) })
           : t('actor.allyPrefix', { name: unitDisplayName(watcher.kind) });
       const fire = () => {
+        // The projectile cue reads the chamber state, so it must match the resolved shot.
+        if (watcher !== this.mission!.sherman) watcher.loadedShell = shell;
         if (shell === 'he') {
           const report = rollHighExplosiveAttack({
             ...context, shellType: 'he', mainGunSuppressesInfantry: false,
@@ -20868,21 +20834,56 @@ export class BattleScene extends Component {
           }, this.rng);
           finishLockedFireAttack(watcher, mover, report.hit, true, 'main');
           const collateral = this.rollHighExplosiveCollateralResults(watcher, mover);
-          this.startDiceShow(this.highExplosivePanelReport(report), actorLabel, unitDisplayName(mover.kind), () => {
+          const panelReport = this.highExplosivePanelReport(report);
+          let attackApplied = false;
+          const applyAndPresentHEAttack = () => {
+            if (attackApplied) return;
+            attackApplied = true;
             this.applyHighExplosiveAttackResult(mover, report, collateral, watcher);
             if (mover.destroyed) this.registerImpactDestroyWreckVisual(mover, watcher);
             watcher.loaded = false;
             watcher.loadedShell = null;
             watcher.reloadProgress = 0;
+            const resultKey = !report.hit ? 'dice.panel.outcomeMiss'
+              : report.outcome === 'destroyed' ? 'dmg.outcome.destroyed'
+                : report.outcome === 'paralyzed' ? 'dmg.outcome.paralyzed'
+                  : report.outcome === 'fire' ? 'dmg.outcome.fire'
+                    : report.outcome === 'fire_suppressed' ? 'dice.panel.heFireSuppressed'
+                      : report.outcome === 'suppressed' ? 'floater.suppressed' : 'dmg.outcome.none';
+            const effectNeed = report.paralyzeThreshold !== undefined
+              ? `${report.fireThreshold ?? '-'}/${report.paralyzeThreshold}`
+              : report.fireThreshold !== undefined
+                ? `${report.destroyThreshold ?? '-'}/${report.fireThreshold}`
+                : report.effectThreshold ?? '-';
+            this.battleLogI18n('battleLog.combat.heResult', {
+              actor: actorLabel,
+              hitRoll: report.automaticHit ? t('dice.rule.heAutomaticHit') : report.roll,
+              hitNeed: report.automaticHit ? '-' : report.threshold,
+              effectRoll: report.effectRoll ?? '-', effectNeed, resultKey,
+            }, {
+              kind: 'attack', report: panelReport, highExplosiveReport: report,
+              highExplosiveCollateral: collateral,
+              attackerKind: watcher.kind, targetKind: mover.kind, mg: false,
+              attackerTone: this.combatLogUnitTone(watcher), targetTone: this.combatLogUnitTone(mover),
+            });
+            this.spawnFloater(mover.pos.q, mover.pos.r, t(resultKey),
+              report.outcome === 'none' || !report.hit ? new Color(210, 210, 210, 255) : new Color(255, 204, 72, 255),
+              { size: 32, dur: 1.1, rise: 42 });
             this.outcome = this.computeOutcome();
-            this.resolvingAmbush = false;
+            if (this.outcome !== 'ongoing') this.updateOutcomeOverlay();
             this.refreshStatusPanel();
             this.updateHUD();
             this.redraw();
+          };
+          this.startDiceShow(panelReport, actorLabel, unitDisplayName(mover.kind), () => {
+            applyAndPresentHEAttack();
+            this.resolvingAmbush = false;
             if (!mover.destroyed && this.tryResolveAmbushAfterMove(mover, resume)) return;
             resume();
           }, { attacker: watcher, target: mover, highExplosiveReport: report,
-            highExplosiveCollateral: collateral, autoResolveWithoutPanel: true });
+            highExplosiveCollateral: collateral, autoResolveWithoutPanel: true,
+            onHighExplosiveImpact: applyAndPresentHEAttack,
+            onHold: () => { if (!report.hit) applyAndPresentHEAttack(); } });
         } else {
           const report = rollAttack({
             ...context, shellType: 'ap',

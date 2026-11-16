@@ -15,6 +15,7 @@ for (const playerWatcher of [true, false]) for (const shell of ['ap', 'he']) {
     GameSession: { gameMode: 'hardcore' }, isFootUnit: () => false,
     orderedAmbushers: () => [watcher], isHostile: () => true, canEnterAmbush: () => true,
     isInAmbushSight: () => true, HexMap: { keyOf: () => '' }, resolvedLoadedShell: () => shell,
+    nonPlayerTankWeaponForTarget: () => 'ap', hexDistance: () => 1,
     canAttack: () => ({ ok: true }), getGameModeConfig: () => ({}), markAmbushAction: () => {},
     unitDisplayName: () => 'tank', t: () => '', Color: class {},
     rollAttack: () => ({}), rollHighExplosiveAttack: () => ({}),

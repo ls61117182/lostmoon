@@ -1,0 +1,115 @@
+{
+  "status": "approval-candidate",
+  "gameAssetsReplaced": false,
+  "method": "User-requested horizontal resampling; common ring recomposited unchanged; user-authorized reuse/alignment of tread pixels",
+  "canvas": [
+    800,
+    1400
+  ],
+  "ring": {
+    "center": [
+      400,
+      720
+    ],
+    "size": [
+      236,
+      236
+    ],
+    "blackInterior": [
+      0,
+      0,
+      0
+    ]
+  },
+  "tailFix": {
+    "bands": [
+      {
+        "side": "left",
+        "left": 228,
+        "right": 286,
+        "width": 59
+      },
+      {
+        "side": "right",
+        "left": 514,
+        "right": 572,
+        "width": 59
+      }
+    ],
+    "workY": [
+      1025,
+      1080
+    ],
+    "originalTreadStart": 1078,
+    "textureMethod": "Mirror/reuse original rear tread rows behind existing hull alpha; no new vehicle painting",
+    "alteredPixels": 545,
+    "transparentCorePixelsBefore": 361,
+    "transparentCorePixelsAfter": 0,
+    "pixelsChangedOutsideTailWorkArea": 0
+  },
+  "variants": [
+    {
+      "key": "m4a1",
+      "previousWidth": 367,
+      "targetWidth": 367,
+      "measuredHullBounds": {
+        "left": 217,
+        "top": 340,
+        "width": 367,
+        "height": 800
+      },
+      "horizontalScale": 1,
+      "seatOpaquePixelMismatch": 0,
+      "blackInteriorMismatch": 0,
+      "ringCoverage": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 252
+      },
+      "turretArtworkChanged": false
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "previousWidth": 416,
+      "targetWidth": 367,
+      "measuredHullBounds": {
+        "left": 217,
+        "top": 341,
+        "width": 367,
+        "height": 799
+      },
+      "horizontalScale": 0.8822115384615384,
+      "seatOpaquePixelMismatch": 0,
+      "blackInteriorMismatch": 0,
+      "ringCoverage": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 253
+      },
+      "turretArtworkChanged": false
+    },
+    {
+      "key": "m4a3e2",
+      "previousWidth": 360,
+      "targetWidth": 416,
+      "measuredHullBounds": {
+        "left": 192,
+        "top": 340,
+        "width": 416,
+        "height": 800
+      },
+      "horizontalScale": 1.1555555555555554,
+      "seatOpaquePixelMismatch": 0,
+      "blackInteriorMismatch": 0,
+      "ringCoverage": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 252
+      },
+      "turretArtworkChanged": false
+    }
+  ]
+}

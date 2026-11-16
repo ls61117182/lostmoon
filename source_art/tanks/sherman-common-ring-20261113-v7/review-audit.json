@@ -1,0 +1,105 @@
+{
+  "status": "approval-candidate",
+  "generator": "built-in image_gen + deterministic shared-raster compositing",
+  "gameAssetsModified": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "nominalHullLength": 800,
+  "commonRing": {
+    "center": [
+      400,
+      720
+    ],
+    "canvasDiameter": 236,
+    "blackInteriorRadius": 98,
+    "blackInteriorRGB": [
+      0,
+      0,
+      0
+    ],
+    "blackPixelCount": 30172,
+    "generatedInteriorMaxRGB": 0
+  },
+  "variants": [
+    {
+      "key": "m4a1",
+      "ringCenter": [
+        400,
+        720
+      ],
+      "ringDiameter": 236,
+      "turretPivot": [
+        400,
+        720
+      ],
+      "sourceTurretPivot": [
+        550,
+        1020
+      ],
+      "turretScale": 0.40577733800088145,
+      "blackInteriorMismatch": 0,
+      "opaqueSharedRingMismatch": 0,
+      "pixelsChangedOutsideRingWorkArea": 0,
+      "ringCoverage": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 252
+      }
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "ringCenter": [
+        400,
+        720
+      ],
+      "ringDiameter": 236,
+      "turretPivot": [
+        400,
+        720
+      ],
+      "sourceTurretPivot": [
+        401,
+        1405
+      ],
+      "turretScale": 0.4347384459116303,
+      "blackInteriorMismatch": 0,
+      "opaqueSharedRingMismatch": 0,
+      "pixelsChangedOutsideRingWorkArea": 0,
+      "ringCoverage": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 253
+      }
+    },
+    {
+      "key": "m4a3e2",
+      "ringCenter": [
+        400,
+        720
+      ],
+      "ringDiameter": 236,
+      "turretPivot": [
+        400,
+        720
+      ],
+      "sourceTurretPivot": [
+        444,
+        1268
+      ],
+      "turretScale": 0.34320727195643286,
+      "blackInteriorMismatch": 0,
+      "opaqueSharedRingMismatch": 0,
+      "pixelsChangedOutsideRingWorkArea": 0,
+      "ringCoverage": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 252
+      }
+    }
+  ]
+}

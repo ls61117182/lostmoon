@@ -1,0 +1,265 @@
+{
+  "generator": "built-in image_gen; final-size hull edit targets",
+  "gameAssetsReplaced": false,
+  "canvasHull": [
+    84,
+    158
+  ],
+  "maxPNGSide": 200,
+  "ringPivot": [
+    42,
+    74.8
+  ],
+  "protectedRadius": 24,
+  "variants": [
+    {
+      "key": "m4a1",
+      "kind": "sherman",
+      "output": "destroyed/sherman_top_destroyed.png",
+      "normalHullSHA256": "b53b8ab19bbd3a3edfaee8ec7eaaf57cdd9d7965e7fbf91641c6cff70f1274de",
+      "normalBounds": {
+        "left": 7,
+        "top": 2,
+        "width": 70,
+        "height": 153
+      },
+      "generatedBounds": {
+        "left": 78,
+        "top": 12,
+        "width": 758,
+        "height": 1605
+      },
+      "uniformScale": 0.09532710280373832,
+      "placement": {
+        "left": 6,
+        "top": 2,
+        "width": 72,
+        "height": 153
+      },
+      "changedPixels": 4408,
+      "alphaDifferences": 0,
+      "ringDifferences": 0,
+      "damageMasks": [
+        [
+          9,
+          15,
+          38,
+          45,
+          3
+        ],
+        [
+          12,
+          96,
+          62,
+          51,
+          3
+        ],
+        [
+          62,
+          136,
+          18,
+          20,
+          2
+        ]
+      ],
+      "darkArmorComparison": {
+        "threshold": "RGB maximum below 55, alpha >=240, radius25 turret opening excluded",
+        "armorPixels": 7870,
+        "previousDarkPixels": 1365,
+        "newDarkPixels": 2827,
+        "ratio": 2.0710622710622713
+      }
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "kind": "sherman76",
+      "output": "destroyed/sherman76_top_destroyed.png",
+      "normalHullSHA256": "ce1c89448539d81c2e990e1afb159ceff6acd4abf8baa36db06f4b0c10fb92e8",
+      "normalBounds": {
+        "left": 7,
+        "top": 2,
+        "width": 70,
+        "height": 153
+      },
+      "generatedBounds": {
+        "left": 138,
+        "top": 6,
+        "width": 721,
+        "height": 1508
+      },
+      "uniformScale": 0.10145888594164457,
+      "placement": {
+        "left": 6,
+        "top": 2,
+        "width": 73,
+        "height": 153
+      },
+      "changedPixels": 4814,
+      "alphaDifferences": 0,
+      "ringDifferences": 0,
+      "damageMasks": [
+        [
+          38,
+          10,
+          40,
+          49,
+          3
+        ],
+        [
+          11,
+          94,
+          61,
+          55,
+          3
+        ],
+        [
+          6,
+          136,
+          21,
+          20,
+          2
+        ]
+      ],
+      "darkArmorComparison": {
+        "threshold": "RGB maximum below 55, alpha >=240, radius25 turret opening excluded",
+        "armorPixels": 7831,
+        "previousDarkPixels": 1516,
+        "newDarkPixels": 3401,
+        "ratio": 2.2434036939313984
+      }
+    },
+    {
+      "key": "m4a3e2",
+      "kind": "sherman_jumbo",
+      "output": "destroyed/sherman_jumbo_top_destroyed.png",
+      "normalHullSHA256": "7cd1fb3fa9c82a0f9c620ed00a432802b22161715f57d15cf8aa0e07f96c9771",
+      "normalBounds": {
+        "left": 2,
+        "top": 2,
+        "width": 80,
+        "height": 153
+      },
+      "generatedBounds": {
+        "left": 35,
+        "top": 13,
+        "width": 843,
+        "height": 1693
+      },
+      "uniformScale": 0.09037212049616067,
+      "placement": {
+        "left": 4,
+        "top": 2,
+        "width": 76,
+        "height": 153
+      },
+      "changedPixels": 4494,
+      "alphaDifferences": 0,
+      "ringDifferences": 0,
+      "damageMasks": [
+        [
+          4,
+          18,
+          43,
+          45,
+          3
+        ],
+        [
+          12,
+          98,
+          61,
+          49,
+          3
+        ],
+        [
+          61,
+          137,
+          20,
+          19,
+          2
+        ]
+      ],
+      "darkArmorComparison": {
+        "threshold": "RGB maximum below 55, alpha >=240, radius25 turret opening excluded",
+        "armorPixels": 9570,
+        "previousDarkPixels": 1625,
+        "newDarkPixels": 2875,
+        "ratio": 1.7692307692307692
+      }
+    }
+  ],
+  "finalFiles": [
+    {
+      "file": "normal/sherman76_top.png",
+      "width": 84,
+      "height": 199,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman76_top_hull.png",
+      "width": 84,
+      "height": 158,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman76_top_turret.png",
+      "width": 66,
+      "height": 160,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman_jumbo_top.png",
+      "width": 84,
+      "height": 199,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman_jumbo_top_hull.png",
+      "width": 84,
+      "height": 158,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman_jumbo_top_turret.png",
+      "width": 66,
+      "height": 160,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman_top.png",
+      "width": 84,
+      "height": 199,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman_top_hull.png",
+      "width": 84,
+      "height": 158,
+      "hasAlpha": true
+    },
+    {
+      "file": "normal/sherman_top_turret.png",
+      "width": 66,
+      "height": 160,
+      "hasAlpha": true
+    },
+    {
+      "file": "destroyed/sherman76_top_destroyed.png",
+      "width": 84,
+      "height": 158,
+      "hasAlpha": true
+    },
+    {
+      "file": "destroyed/sherman_jumbo_top_destroyed.png",
+      "width": 84,
+      "height": 158,
+      "hasAlpha": true
+    },
+    {
+      "file": "destroyed/sherman_top_destroyed.png",
+      "width": 84,
+      "height": 158,
+      "hasAlpha": true
+    }
+  ],
+  "normalSourceHashesUnchanged": true
+}

@@ -1,0 +1,298 @@
+{
+  "approvedByUser": true,
+  "rotationDegrees": 270,
+  "pixelPointConvention": "continuous pixel edge coordinates: (x,y) -> (y,width-x)",
+  "backup": "source_art/tanks/sherman-game-size-20261114-v17/integration-backups/20261114T060943300Z",
+  "files": [
+    {
+      "role": "hull",
+      "source": "normal/sherman_top_hull.png",
+      "asset": "assets/resources/textures/units/sherman_top_hull.png",
+      "sha256": "6edb37db04bdbe35c5a572a93bbe6f6d2d352f6db9406f076ecde725104c08ab",
+      "uuid": "14f1b3e4-0975-44cd-8cba-8eb0eafc84d2"
+    },
+    {
+      "role": "turret",
+      "source": "normal/sherman_top_turret.png",
+      "asset": "assets/resources/textures/units/sherman_top_turret.png",
+      "sha256": "6246229068212544136d5f9113c8e54afaa09a60e2405556dfcd63b78fe67161",
+      "uuid": "5f3073b4-0462-4a9c-a145-709b9e2c017d"
+    },
+    {
+      "role": "top",
+      "source": "normal/sherman_top.png",
+      "asset": "assets/resources/textures/units/sherman_top.png",
+      "sha256": "3a8cc47768072d789b4ebe6e4e4007a9f277ff4d2c5f45ac6e48911d80ec8594",
+      "uuid": "c178e20a-5916-4fed-b43d-1bb07aea556e"
+    },
+    {
+      "role": "destroyed",
+      "source": "destroyed/sherman_top_destroyed.png",
+      "asset": "assets/resources/textures/units/sherman_top_destroyed.png",
+      "sha256": "87e0b3f664969c5a3158aaebe020e281187cef384d7ecbac2ae88be4a84fd8e3",
+      "uuid": "4151f358-089f-4073-b0be-71892f24ab88"
+    },
+    {
+      "role": "hull",
+      "source": "normal/sherman76_top_hull.png",
+      "asset": "assets/resources/textures/units/sherman76_top_hull.png",
+      "sha256": "3b6586adff45770aeffccfc52bf4a4c7e7158745c65d63766524f5f775109565",
+      "uuid": "b86bff60-05da-4ce7-b32a-c5fd7776cbdd"
+    },
+    {
+      "role": "turret",
+      "source": "normal/sherman76_top_turret.png",
+      "asset": "assets/resources/textures/units/sherman76_top_turret.png",
+      "sha256": "4c4eb54099696901b89169e4ba0918d65335f026fdcedeaeefb1e6144857deed",
+      "uuid": "779b8232-f0b0-4b0c-a7bd-53e5567b6dcb"
+    },
+    {
+      "role": "top",
+      "source": "normal/sherman76_top.png",
+      "asset": "assets/resources/textures/units/sherman76_top.png",
+      "sha256": "b5f781b295c27e58601f6fcdf075af2a11a69133b2ce3fe5565f311a53afdbaf",
+      "uuid": "c16d5048-fb8b-45c3-9e18-1f1c516be069"
+    },
+    {
+      "role": "destroyed",
+      "source": "destroyed/sherman76_top_destroyed.png",
+      "asset": "assets/resources/textures/units/sherman76_top_destroyed.png",
+      "sha256": "0b39bd9c093445bd1189c2bea87d026874dafdf161428b10f7a01afffe8d647c",
+      "uuid": "d09ec141-4f7e-4c66-9263-fac0e2cb972e"
+    },
+    {
+      "role": "hull",
+      "source": "normal/sherman_jumbo_top_hull.png",
+      "asset": "assets/resources/textures/units/sherman_jumbo_top_hull.png",
+      "sha256": "e26ee4d67f9dc456a15422c2131700f23d5f55fa3782bcefb5c0bb5948446e26",
+      "uuid": "48429da5-a138-46bf-8f6b-909816f8d438"
+    },
+    {
+      "role": "turret",
+      "source": "normal/sherman_jumbo_top_turret.png",
+      "asset": "assets/resources/textures/units/sherman_jumbo_top_turret.png",
+      "sha256": "a60d1fb081e665c6e89c99ace69427481e385e7b3238c0d3e85788f0b2ac3f89",
+      "uuid": "8635d230-8c37-4933-8b55-9b2692ed9c26"
+    },
+    {
+      "role": "top",
+      "source": "normal/sherman_jumbo_top.png",
+      "asset": "assets/resources/textures/units/sherman_jumbo_top.png",
+      "sha256": "3d26cfe945a1555c9768a83d37dcb5eeee7afc962028a882c6cdea7a8acb4abc",
+      "uuid": "210cd5f4-c5ba-4a35-a77f-b9b96743cd25"
+    },
+    {
+      "role": "destroyed",
+      "source": "destroyed/sherman_jumbo_top_destroyed.png",
+      "asset": "assets/resources/textures/units/sherman_jumbo_top_destroyed.png",
+      "sha256": "e5b5b11a911b9866e2f3c27c2e494b31f8e2e8daed1338c0213274905d1d0b15",
+      "uuid": "a5c8f06e-b800-407b-83cc-44b1a4e545ff"
+    }
+  ],
+  "variants": [
+    {
+      "kind": "sherman",
+      "hullPivot": [
+        74.8,
+        42
+      ],
+      "turretPivot": [
+        116.8,
+        33
+      ],
+      "muzzle": [
+        39.5,
+        33
+      ],
+      "commanderHatch": [
+        120.5,
+        20.5
+      ],
+      "coax": [
+        85,
+        26
+      ],
+      "hullMG": [
+        14,
+        29.5
+      ],
+      "values": {
+        "fitScale": 0.88164557,
+        "offsetForward": 0.09438581,
+        "offsetRight": 0,
+        "aspectRatioMul": 1,
+        "hullFitScale": 0.7,
+        "turretScale": 1,
+        "hullOffsetForward": 0,
+        "hullOffsetRight": 0,
+        "turretOffsetForward": 0,
+        "turretOffsetRight": 0,
+        "topTrimX": 0,
+        "topTrimY": 0,
+        "topTrimW": 158,
+        "topTrimH": 84,
+        "turretTrimX": 0,
+        "turretTrimY": 0,
+        "turretTrimW": 160,
+        "turretTrimH": 66,
+        "turretPivotX": 74.8,
+        "turretPivotY": 42,
+        "turretSpritePivotX": 116.8,
+        "turretSpritePivotY": 33,
+        "muzzleSpriteX": 39.5,
+        "muzzleSpriteY": 33,
+        "commanderHatchSpriteX": 120.5,
+        "commanderHatchSpriteY": 20.5,
+        "commanderHatchScale": 14,
+        "coaxialMuzzleSpriteX": 85,
+        "coaxialMuzzleSpriteY": 26,
+        "hullMuzzleSpriteX": 14,
+        "hullMuzzleSpriteY": 29.5,
+        "destroyedOffsetForward": 0,
+        "destroyedOffsetRight": 0,
+        "destroyedFitScale": 1,
+        "trackBodyLengthScale": 1,
+        "trackBodyWidthScale": 1,
+        "notes": "M4A1 approved v17; <=200px; shared black ring; uniform layer scale; hull-only large-damage wreck; front-left runtime rotation"
+      }
+    },
+    {
+      "kind": "sherman76",
+      "hullPivot": [
+        74.8,
+        42
+      ],
+      "turretPivot": [
+        116.8,
+        33
+      ],
+      "muzzle": [
+        4,
+        33
+      ],
+      "commanderHatch": [
+        126,
+        21
+      ],
+      "coax": [
+        86,
+        20
+      ],
+      "hullMG": [
+        14,
+        30
+      ],
+      "values": {
+        "fitScale": 0.88164557,
+        "offsetForward": 0.09438581,
+        "offsetRight": 0,
+        "aspectRatioMul": 1,
+        "hullFitScale": 0.7,
+        "turretScale": 1,
+        "hullOffsetForward": 0,
+        "hullOffsetRight": 0,
+        "turretOffsetForward": 0,
+        "turretOffsetRight": 0,
+        "topTrimX": 0,
+        "topTrimY": 0,
+        "topTrimW": 158,
+        "topTrimH": 84,
+        "turretTrimX": 0,
+        "turretTrimY": 0,
+        "turretTrimW": 160,
+        "turretTrimH": 66,
+        "turretPivotX": 74.8,
+        "turretPivotY": 42,
+        "turretSpritePivotX": 116.8,
+        "turretSpritePivotY": 33,
+        "muzzleSpriteX": 4,
+        "muzzleSpriteY": 33,
+        "commanderHatchSpriteX": 126,
+        "commanderHatchSpriteY": 21,
+        "commanderHatchScale": 14,
+        "coaxialMuzzleSpriteX": 86,
+        "coaxialMuzzleSpriteY": 20,
+        "hullMuzzleSpriteX": 14,
+        "hullMuzzleSpriteY": 30,
+        "destroyedOffsetForward": 0,
+        "destroyedOffsetRight": 0,
+        "destroyedFitScale": 1,
+        "trackBodyLengthScale": 1,
+        "trackBodyWidthScale": 1,
+        "notes": "M4A1(76)W HVSS approved v17; <=200px; shared black ring; uniform layer scale; hull-only large-damage wreck; front-left runtime rotation"
+      }
+    },
+    {
+      "kind": "sherman_jumbo",
+      "hullPivot": [
+        74.8,
+        42
+      ],
+      "turretPivot": [
+        116.8,
+        33
+      ],
+      "muzzle": [
+        47,
+        33
+      ],
+      "commanderHatch": [
+        122,
+        20.5
+      ],
+      "coax": [
+        84,
+        23
+      ],
+      "hullMG": [
+        11.5,
+        29
+      ],
+      "values": {
+        "fitScale": 0.88164557,
+        "offsetForward": 0.09438581,
+        "offsetRight": 0,
+        "aspectRatioMul": 1,
+        "hullFitScale": 0.7,
+        "turretScale": 1,
+        "hullOffsetForward": 0,
+        "hullOffsetRight": 0,
+        "turretOffsetForward": 0,
+        "turretOffsetRight": 0,
+        "topTrimX": 0,
+        "topTrimY": 0,
+        "topTrimW": 158,
+        "topTrimH": 84,
+        "turretTrimX": 0,
+        "turretTrimY": 0,
+        "turretTrimW": 160,
+        "turretTrimH": 66,
+        "turretPivotX": 74.8,
+        "turretPivotY": 42,
+        "turretSpritePivotX": 116.8,
+        "turretSpritePivotY": 33,
+        "muzzleSpriteX": 47,
+        "muzzleSpriteY": 33,
+        "commanderHatchSpriteX": 122,
+        "commanderHatchSpriteY": 20.5,
+        "commanderHatchScale": 14,
+        "coaxialMuzzleSpriteX": 84,
+        "coaxialMuzzleSpriteY": 23,
+        "hullMuzzleSpriteX": 11.5,
+        "hullMuzzleSpriteY": 29,
+        "destroyedOffsetForward": 0,
+        "destroyedOffsetRight": 0,
+        "destroyedFitScale": 1,
+        "trackBodyLengthScale": 1,
+        "trackBodyWidthScale": 1,
+        "notes": "M4A3E2 Jumbo approved v17; <=200px; shared black ring; uniform layer scale; hull-only large-damage wreck; front-left runtime rotation"
+      }
+    }
+  ],
+  "validation": {
+    "tankValidate": "PASS: 35 kinds audited, 24 regression cases and TypeScript check",
+    "additionalRegression": "PASS: 53 cases",
+    "knownPreExistingFailure": "CommanderHatchVisual.test.js: sherman_jumbo fixed-ratio snapshot failed before replacement",
+    "cocosRuntimeVisualCheck": "not run: no active Cocos preview"
+  }
+}

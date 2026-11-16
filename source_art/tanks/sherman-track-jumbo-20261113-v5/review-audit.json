@@ -1,0 +1,339 @@
+{
+  "status": "approval-candidate",
+  "gameAssetsModified": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "nominalHullLength": 800,
+  "ringMeasurements": {
+    "m4a1": {
+      "file": "m4a1_hull-pixel-aligned.png",
+      "sourceSize": [
+        850,
+        1850
+      ],
+      "circleCenter": [
+        424,
+        868
+      ],
+      "edgeRadius": 235,
+      "radialContrast": 84.8329609375
+    },
+    "m4a1_76_hvss": {
+      "file": "m4a1_76_hvss_hull-pixel-aligned.png",
+      "sourceSize": [
+        792,
+        1985
+      ],
+      "circleCenter": [
+        390,
+        1125
+      ],
+      "edgeRadius": 198,
+      "radialContrast": 84.15853437499999
+    },
+    "m4a3e2": {
+      "file": "m4a3e2_hull-v1.png",
+      "sourceSize": [
+        858,
+        1832
+      ],
+      "circleCenter": [
+        420,
+        976
+      ],
+      "edgeRadius": 198,
+      "radialContrast": 92.07451562500002
+    }
+  },
+  "trackAudit": {
+    "authorization": "User explicitly approved pixel crop and alignment in this chat.",
+    "method": "Crop/reuse existing rear tread texture, equal-width aligned belts under original armored pixels; no chassis widening.",
+    "variants": [
+      {
+        "key": "m4a1",
+        "source": "m4a1-hull-base.png",
+        "sourceSize": [
+          850,
+          1850
+        ],
+        "output": "m4a1_hull-pixel-aligned.png",
+        "beltWidth": 125,
+        "bands": {
+          "left": [
+            40,
+            165
+          ],
+          "right": [
+            685,
+            810
+          ]
+        },
+        "frontY": [
+          28,
+          220
+        ],
+        "rearY": [
+          1718,
+          1788
+        ],
+        "pixelsCleared": 42815,
+        "pixelsReused": 32362,
+        "islandsRemoved": 27,
+        "outsideTrackWindowsChanged": 0,
+        "crossSections": {
+          "left_front": {
+            "left": 40,
+            "right": 164,
+            "width": 125,
+            "pixels": 840
+          },
+          "left_rear": {
+            "left": 40,
+            "right": 164,
+            "width": 125,
+            "pixels": 3070
+          },
+          "right_front": {
+            "left": 685,
+            "right": 809,
+            "width": 125,
+            "pixels": 814
+          },
+          "right_rear": {
+            "left": 685,
+            "right": 809,
+            "width": 125,
+            "pixels": 3028
+          }
+        }
+      },
+      {
+        "key": "m4a1_76_hvss",
+        "source": "m4a1-76-hvss-hull-base.png",
+        "sourceSize": [
+          792,
+          1985
+        ],
+        "output": "m4a1_76_hvss_hull-pixel-aligned.png",
+        "beltWidth": 120,
+        "bands": {
+          "left": [
+            40,
+            160
+          ],
+          "right": [
+            632,
+            752
+          ]
+        },
+        "frontY": [
+          420,
+          610
+        ],
+        "rearY": [
+          1768,
+          1880
+        ],
+        "pixelsCleared": 65749,
+        "pixelsReused": 44061,
+        "islandsRemoved": 67,
+        "outsideTrackWindowsChanged": 0,
+        "crossSections": {
+          "left_front": {
+            "left": 40,
+            "right": 159,
+            "width": 120,
+            "pixels": 1320
+          },
+          "left_rear": {
+            "left": 40,
+            "right": 159,
+            "width": 120,
+            "pixels": 7194
+          },
+          "right_front": {
+            "left": 632,
+            "right": 751,
+            "width": 120,
+            "pixels": 1320
+          },
+          "right_rear": {
+            "left": 632,
+            "right": 751,
+            "width": 120,
+            "pixels": 7167
+          }
+        }
+      }
+    ]
+  },
+  "notes": [
+    "Built-in image_gen for Jumbo ring and style; explicitly authorized pixel crop/alignment for M4A1 and M4A1(76) tracks.",
+    "Original hull scale and nose placement preserved for both track-edited hulls.",
+    "Circle centers measured from actual image edges; turret source pivots aligned to measured centers.",
+    "No resource registration, asset replacement or in-game visual acceptance."
+  ],
+  "variants": [
+    {
+      "key": "m4a1",
+      "hull": {
+        "width": 850,
+        "height": 1850,
+        "clearPixels": 160393,
+        "b": {
+          "left": 16,
+          "top": 22,
+          "width": 819,
+          "height": 1786
+        }
+      },
+      "turret": {
+        "width": 1101,
+        "height": 1428,
+        "clearPixels": 1036543,
+        "b": {
+          "left": 170,
+          "top": 18,
+          "width": 754,
+          "height": 1391
+        }
+      },
+      "hullBaselineBounds": {
+        "left": 16,
+        "top": 22,
+        "width": 819,
+        "height": 1786
+      },
+      "hullScale": 0.4479283314669653,
+      "turretScale": 0.40577733800088145,
+      "sourceRingCenter": [
+        424,
+        868
+      ],
+      "sourceTurretPivot": [
+        550,
+        1020
+      ],
+      "pivot": [
+        399.3281075027995,
+        718.9473684210527
+      ],
+      "ringRadius": 117.35722284434492,
+      "ringCoverageByTurret": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 252
+      },
+      "mapHullLength": 76
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "hull": {
+        "width": 792,
+        "height": 1985,
+        "clearPixels": 496293,
+        "b": {
+          "left": 15,
+          "top": 419,
+          "width": 761,
+          "height": 1461
+        }
+      },
+      "turret": {
+        "width": 801,
+        "height": 1962,
+        "clearPixels": 1037942,
+        "b": {
+          "left": 44,
+          "top": 35,
+          "width": 716,
+          "height": 1843
+        }
+      },
+      "hullBaselineBounds": {
+        "left": 15,
+        "top": 418,
+        "width": 761,
+        "height": 1462
+      },
+      "hullScale": 0.5471956224350205,
+      "turretScale": 0.4347384459116303,
+      "sourceRingCenter": [
+        390,
+        1125
+      ],
+      "sourceTurretPivot": [
+        401,
+        1405
+      ],
+      "pivot": [
+        396.9904240766074,
+        726.8673050615595
+      ],
+      "ringRadius": 117.0998632010944,
+      "ringCoverageByTurret": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 253
+      },
+      "mapHullLength": 76
+    },
+    {
+      "key": "m4a3e2",
+      "hull": {
+        "width": 858,
+        "height": 1832,
+        "clearPixels": 236184,
+        "b": {
+          "left": 37,
+          "top": 48,
+          "width": 787,
+          "height": 1749
+        }
+      },
+      "turret": {
+        "width": 887,
+        "height": 1774,
+        "clearPixels": 891292,
+        "b": {
+          "left": 22,
+          "top": 79,
+          "width": 844,
+          "height": 1471
+        }
+      },
+      "hullBaselineBounds": {
+        "left": 37,
+        "top": 48,
+        "width": 787,
+        "height": 1749
+      },
+      "hullScale": 0.45740423098913663,
+      "turretScale": 0.33310065273032313,
+      "sourceRingCenter": [
+        420,
+        976
+      ],
+      "sourceTurretPivot": [
+        444,
+        1095
+      ],
+      "pivot": [
+        395.1972555746141,
+        764.4711263579188
+      ],
+      "ringRadius": 102.00114351057746,
+      "ringCoverageByTurret": {
+        "covered": 1800,
+        "total": 1800,
+        "fraction": 1,
+        "minAlpha": 252
+      },
+      "mapHullLength": 78
+    }
+  ]
+}

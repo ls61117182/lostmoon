@@ -229,7 +229,7 @@ function build({ csvPath = CSV_PATH, outPath = OUT_PATH } = {}) {
   lines.push(`export const TANK_VISUAL_KINDS: readonly TankVisualKind[] = [${tankVisualKinds}];`);
   lines.push(`export const SPLIT_TANK_KINDS: readonly SplitTankKind[] = [${splitTankKinds}];`);
   lines.push('export const EMPTY_COMMANDER_HATCH_SPRITE_SIZE = 20;');
-  lines.push('export const SHERMAN_EMPTY_COMMANDER_HATCH_SCALE = 0.5;');
+  lines.push('export const SHERMAN_EMPTY_COMMANDER_HATCH_SCALE = 0.75;');
   lines.push('');
   lines.push('export interface TankVisualAssetConfig {');
   lines.push('  topSpritePath: string;');

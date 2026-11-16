@@ -1,0 +1,51 @@
+{
+  "status": "approval-candidate",
+  "generator": "built-in image_gen, localized alignment/blending only",
+  "gameAssetsReplaced": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "hullBounds": {
+    "left": 192,
+    "top": 340,
+    "width": 416,
+    "height": 800
+  },
+  "workingRegion": {
+    "left": 192,
+    "top": 840,
+    "width": 416,
+    "height": 300
+  },
+  "changedPixels": 113553,
+  "alphaPixelsChanged": 0,
+  "pixelsChangedOutsideWorkArea": 0,
+  "frontPixelsChanged": 0,
+  "rearTrackPixelsChanged": 0,
+  "commonRing": {
+    "center": [
+      400,
+      720
+    ],
+    "size": [
+      236,
+      236
+    ],
+    "opaquePixelMismatch": 0,
+    "blackInteriorMismatch": 0
+  },
+  "ringCoverage": {
+    "covered": 1800,
+    "total": 1800,
+    "fraction": 1,
+    "minAlpha": 252
+  },
+  "turretArtworkChanged": false,
+  "notes": [
+    "Based on the supplied side/rear/top reference crops.",
+    "Rejected the first generated polygonal platform; selected the continuous deck and longitudinal side transition rendering.",
+    "Same silhouette and full existing alpha map retained; rear tread colors also retained.",
+    "Static candidate review, no in-game visual acceptance."
+  ]
+}

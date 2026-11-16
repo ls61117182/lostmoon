@@ -12,16 +12,18 @@ require.extensions['.ts'] = (module, filename) => module._compile(ts.transpileMo
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS },
 }).outputText, filename);
 const { wreckVisualHex } = require('../assets/scripts/view/TankWreckPush.ts');
+const { unitOccupiesHex } = require('../assets/scripts/core/UnitFootprint.ts');
 const helperSource = coLocationHelper[0].replace(/^private\s+/, '');
 const compiledHelper = ts.transpileModule(`class FormationProbe { ${helperSource} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const GameSession = { gameMode: 'hardcore' };
-const FormationProbe = new Function('isTankUnit', 'isHeavyArtilleryUnit', 'GameSession', 'wreckVisualHex', `${compiledHelper}\nreturn FormationProbe;`)(
+const FormationProbe = new Function('isTankUnit', 'isHeavyArtilleryUnit', 'GameSession', 'wreckVisualHex', 'unitOccupiesHex', `${compiledHelper}\nreturn FormationProbe;`)(
   unit => unit.kind === 'sherman' || unit.kind === 'tiger',
   unit => unit.kind === 'heavy_artillery' || unit.kind === 'german_heavy_artillery',
   GameSession,
   wreckVisualHex,
+  unitOccupiesHex,
 );
 const probe = new FormationProbe();
 const infantry = { kind: 'infantry', pos: { q: 2, r: 3 }, destroyed: false };

@@ -1,0 +1,112 @@
+{
+  "source": "two user-supplied images",
+  "generator": "built-in image_gen",
+  "status": "candidate-only",
+  "oldArtUsed": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "hullLength": 800,
+  "gameResourcesModified": false,
+  "notes": [
+    "Image geometry measured manually from user top-plan crops.",
+    "Each layer is uniformly scaled; no independent nonuniform stretching or painting by code.",
+    "Front corner zooms show the actual hull layer, not a separately generated idealized detail.",
+    "Default map-length check 76px is external QA only, not in-game visual acceptance."
+  ],
+  "variants": [
+    {
+      "key": "m4a1",
+      "hull": {
+        "width": 850,
+        "height": 1850,
+        "clearPixels": 149887,
+        "b": {
+          "left": 16,
+          "top": 22,
+          "width": 818,
+          "height": 1786
+        }
+      },
+      "turret": {
+        "width": 1101,
+        "height": 1428,
+        "clearPixels": 1036543,
+        "b": {
+          "left": 170,
+          "top": 18,
+          "width": 754,
+          "height": 1391
+        }
+      },
+      "refHull": {
+        "x": 5,
+        "y": 8,
+        "w": 294,
+        "h": 638
+      },
+      "refPivot": [
+        151,
+        327
+      ],
+      "sourceTurretPivot": [
+        550,
+        1020
+      ],
+      "pivot": [
+        400,
+        740
+      ],
+      "hullScale": 0.4479283314669653,
+      "turretScale": 0.40577733800088145,
+      "mapHullLength": 76
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "hull": {
+        "width": 792,
+        "height": 1986,
+        "clearPixels": 476528,
+        "b": {
+          "left": 15,
+          "top": 418,
+          "width": 761,
+          "height": 1464
+        }
+      },
+      "turret": {
+        "width": 951,
+        "height": 1654,
+        "clearPixels": 1199152,
+        "b": {
+          "left": 168,
+          "top": 23,
+          "width": 606,
+          "height": 1619
+        }
+      },
+      "refHull": {
+        "x": 6,
+        "y": 154,
+        "w": 273,
+        "h": 550
+      },
+      "refPivot": [
+        140,
+        433
+      ],
+      "sourceTurretPivot": [
+        475,
+        1290
+      ],
+      "pivot": [
+        400,
+        745.8181818181818
+      ],
+      "hullScale": 0.546448087431694,
+      "turretScale": 0.5136513651365137,
+      "mapHullLength": 76
+    }
+  ]
+}

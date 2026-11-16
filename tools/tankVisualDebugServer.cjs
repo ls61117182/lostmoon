@@ -8,7 +8,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
 const { chooseParsedRows, decodeTable, rowsToCsv } = require('./csvSmart');
-const { build } = require('./buildTankVisualDB');
+function build(options) {
+  // Saves must use the current generator even when this local server stays open.
+  const generatorPath = require.resolve('./buildTankVisualDB');
+  delete require.cache[generatorPath];
+  return require(generatorPath).build(options);
+}
 const { loadExistingMission, saveExistingMission } = require('./missionEditorFiles.cjs');
 
 const ROOT = path.resolve(__dirname, '..');

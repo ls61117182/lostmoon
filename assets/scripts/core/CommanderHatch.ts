@@ -3,8 +3,15 @@ import { commanderHasSkill } from './UnitLevel';
 import { isSameSide, isTankUnit, Unit } from './types';
 import {
   EMPTY_COMMANDER_HATCH_SPRITE_SIZE, SHERMAN_EMPTY_COMMANDER_HATCH_SCALE,
-  splitTankVisualConfigOf, TankVisualConfig,
+  TankVisualConfig,
 } from './TankVisualDB';
+
+/** Both hatch states follow the single commander scale, with a fixed art ratio. */
+export function commanderHatchDisplaySize(occupiedSize: number, empty: boolean): number {
+  // 22 is the reference commander size when the shared 20px empty art was calibrated.
+  const emptyRatio = EMPTY_COMMANDER_HATCH_SPRITE_SIZE * SHERMAN_EMPTY_COMMANDER_HATCH_SCALE / 22;
+  return occupiedSize * (empty ? emptyRatio : 1);
+}
 
 /** An invisible, fixed turret uses the complete body image as its source space. */
 export function fixedTankCommanderHatchTransform(
@@ -19,12 +26,10 @@ export function fixedTankCommanderHatchTransform(
   const localX = (config.commanderHatchSpriteX - width / 2) * scaleX;
   const localY = (height / 2 - config.commanderHatchSpriteY) * scaleY;
   const occupiedSize = config.commanderHatchScale * Math.sqrt(scaleX * scaleY);
-  const emptyRatio = EMPTY_COMMANDER_HATCH_SPRITE_SIZE * SHERMAN_EMPTY_COMMANDER_HATCH_SCALE
-    / (splitTankVisualConfigOf('sherman').commanderHatchScale || 1);
   return {
     x: localX * Math.cos(bodyAngle) - localY * Math.sin(bodyAngle),
     y: localX * Math.sin(bodyAngle) + localY * Math.cos(bodyAngle),
-    size: occupiedSize * (empty ? emptyRatio : 1),
+    size: commanderHatchDisplaySize(occupiedSize, empty),
     angle: bodyAngle * 180 / Math.PI - 90,
   };
 }

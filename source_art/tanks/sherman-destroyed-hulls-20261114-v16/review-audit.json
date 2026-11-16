@@ -1,0 +1,183 @@
+{
+  "status": "hull-only approval candidate",
+  "date": "2026-11-14",
+  "toolMode": "built-in image_gen edits",
+  "gameAssetsReplaced": false,
+  "canvas": [
+    800,
+    1400
+  ],
+  "ring": {
+    "center": [
+      400,
+      720
+    ],
+    "templateSize": [
+      236,
+      236
+    ],
+    "protectedRadius": 125
+  },
+  "method": "Uniform registration to normal hull length; local generated damage composite, unchanged normal pixels outside masks; original ring protected",
+  "variants": [
+    {
+      "key": "m4a1",
+      "normalSource": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-width-tail-20261113-v10\\candidates\\m4a1_hull.png",
+      "normalSHA256": "996a7c738c4768ff86734b820bcc2415d289b29b5566d5eadc2a3dabe31b90ab",
+      "generatedBounds": {
+        "left": 0,
+        "top": 0,
+        "width": 849,
+        "height": 1845
+      },
+      "uniformScale": 0.43360433604336046,
+      "registered": {
+        "left": 217,
+        "top": 340,
+        "width": 368,
+        "height": 800
+      },
+      "damageMasks": [
+        [
+          234,
+          425,
+          151,
+          194,
+          15
+        ],
+        [
+          353,
+          937,
+          187,
+          158,
+          12
+        ],
+        [
+          510,
+          1083,
+          74,
+          57,
+          5
+        ]
+      ],
+      "finalBounds": {
+        "left": 217,
+        "top": 340,
+        "width": 367,
+        "height": 800
+      },
+      "changedPixels": 57482,
+      "ringProtectedPixelDifferences": 0,
+      "opaqueBlackRingSamples": 30149,
+      "blackRingSamples": 30149,
+      "normalAlphaUnchanged": true,
+      "output": "m4a1_hull_destroyed.png"
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "normalSource": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-width-tail-20261113-v10\\candidates\\m4a1_76_hvss_hull.png",
+      "normalSHA256": "01bd0c92e75d13d49bbdc40939b708be61cbf506e50673d82d22f9f6bb45dff5",
+      "generatedBounds": {
+        "left": 0,
+        "top": 0,
+        "width": 850,
+        "height": 1850
+      },
+      "uniformScale": 0.43189189189189187,
+      "registered": {
+        "left": 217,
+        "top": 341,
+        "width": 367,
+        "height": 799
+      },
+      "damageMasks": [
+        [
+          405,
+          442,
+          161,
+          185,
+          15
+        ],
+        [
+          275,
+          897,
+          168,
+          168,
+          10
+        ],
+        [
+          217,
+          1074,
+          88,
+          66,
+          5
+        ]
+      ],
+      "finalBounds": {
+        "left": 217,
+        "top": 341,
+        "width": 367,
+        "height": 799
+      },
+      "changedPixels": 56697,
+      "ringProtectedPixelDifferences": 0,
+      "opaqueBlackRingSamples": 30149,
+      "blackRingSamples": 30149,
+      "normalAlphaUnchanged": true,
+      "output": "m4a1_76_hvss_hull_destroyed.png"
+    },
+    {
+      "key": "m4a3e2",
+      "normalSource": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-jumbo-curved-shoulders-20261114-v14\\candidates\\m4a3e2_hull.png",
+      "normalSHA256": "2f2e2f31f8c33c6d376fca4ac7aa3cf67a45a320eeb33975ca0ae3d63d022a37",
+      "generatedBounds": {
+        "left": 3,
+        "top": 2,
+        "width": 899,
+        "height": 1738
+      },
+      "uniformScale": 0.46029919447640966,
+      "registered": {
+        "left": 193,
+        "top": 340,
+        "width": 414,
+        "height": 800
+      },
+      "damageMasks": [
+        [
+          207,
+          472,
+          171,
+          143,
+          15
+        ],
+        [
+          268,
+          839,
+          154,
+          201,
+          10
+        ],
+        [
+          520,
+          1091,
+          88,
+          49,
+          5
+        ]
+      ],
+      "finalBounds": {
+        "left": 192,
+        "top": 340,
+        "width": 416,
+        "height": 800
+      },
+      "changedPixels": 53908,
+      "ringProtectedPixelDifferences": 0,
+      "opaqueBlackRingSamples": 30149,
+      "blackRingSamples": 30149,
+      "normalAlphaUnchanged": true,
+      "output": "m4a3e2_hull_destroyed.png"
+    }
+  ]
+}

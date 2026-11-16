@@ -1,0 +1,29 @@
+{
+  "generator": "built-in image_gen rear paint edit; low-frequency paint-field projection to original pixels",
+  "colorMasterBounds": {
+    "left": 58,
+    "top": 13,
+    "width": 797,
+    "height": 1654
+  },
+  "sourceShapeBounds": {
+    "left": 5,
+    "top": 2,
+    "width": 74,
+    "height": 153
+  },
+  "changedHullPixels": 4083,
+  "changedWreckPixels": 2352,
+  "pixelsChangedInFront": 0,
+  "ringPixelDifferences": 0,
+  "alphaDifferences": 0,
+  "scope": "rear paint only: x>65 in runtime left-facing hull, ring radius24 protected",
+  "otherShermansUnchanged": true,
+  "turretsUnchanged": true,
+  "metasAndConfigurationUnchanged": true,
+  "installed": [
+    "sherman_jumbo_top_hull.png",
+    "sherman_jumbo_top.png",
+    "sherman_jumbo_top_destroyed.png"
+  ]
+}

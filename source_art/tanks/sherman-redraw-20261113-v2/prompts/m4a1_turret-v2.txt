@@ -1,0 +1,6 @@
+Use case: precise-object-edit. Image 1 is the new M4A1 75mm TURRET layer to correct. Image 2 is the historical top plan, showing the actual details. Make a targeted fidelity correction to the REAR of the turret in image 1.
+1. Remove the two big rectangular hinges projecting across the rear edge at bottom-left and bottom-right. Those are chassis engine-cover hinges wrongly included in turret. Restore smooth turret rear outline.
+2. Add the small round antenna base on image-LEFT rear roof, at the exact relative place of the small circle near the left end of the rear bustle in image 2. This is a simple small circle, NOT a crew hatch.
+3. Add the compact pistol-port/hatch projection at image-LEFT rear cheek where shown near the lower-left curved edge in image 2; small, no long projecting gun tube. Keep its correct top-view form.
+4. Preserve the little square fixture at rear-center if shown by reference.
+Keep the front mantlet, short plain 75mm barrel, all other roof parts, overall exact silhouette, proportions, ONE split commander hatch on right, front-center ventilator, colors, lines, alpha and original canvas. No loader hatch, no crew, no chassis parts. Transparent background.

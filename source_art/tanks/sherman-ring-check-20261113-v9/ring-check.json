@@ -1,0 +1,198 @@
+{
+  "scope": "Read-only audit of latest candidate PNGs, no artwork modified",
+  "canvas": [
+    800,
+    1400
+  ],
+  "templateHole": {
+    "left": 14,
+    "top": 15,
+    "width": 207,
+    "height": 207,
+    "center": [
+      117.5,
+      118.5
+    ],
+    "centroid": [
+      117.88300481560135,
+      118.3791313971226
+    ],
+    "pixels": 33433,
+    "maxRGB": 3,
+    "minAlpha": 255
+  },
+  "templateOuterBounds": {
+    "left": 0,
+    "top": 0,
+    "width": 235,
+    "height": 236,
+    "pixels": 43290
+  },
+  "variants": [
+    {
+      "key": "m4a1",
+      "file": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-common-ring-20261113-v7\\candidates\\m4a1_hull.png",
+      "canvas": [
+        800,
+        1400
+      ],
+      "actualHullBounds": {
+        "left": 217,
+        "top": 340,
+        "width": 367,
+        "height": 800,
+        "pixels": 281720
+      },
+      "detectedBlackHole": {
+        "left": 296,
+        "top": 617,
+        "width": 207,
+        "height": 207,
+        "center": [
+          399.5,
+          720.5
+        ],
+        "centroid": [
+          399.88300481560134,
+          720.3791313971226
+        ],
+        "pixels": 33433,
+        "maxRGB": 3,
+        "minAlpha": 255
+      },
+      "ringCenter": [
+        400,
+        720
+      ],
+      "inferredRingScale": 1,
+      "ringCanvasDiameter": 236,
+      "visibleOuterBounds": {
+        "left": 282,
+        "top": 602,
+        "width": 235,
+        "height": 236
+      },
+      "opaqueRingPixelsCompared": 42134,
+      "opaqueRingPixelMismatch": 0,
+      "blackInteriorMismatch": 0,
+      "fromActualHullNose": 380,
+      "noseFraction": 0.475,
+      "fromNominalHullNose": 380,
+      "ratioToNominalHullLength": 0.295,
+      "turretCoverage": {
+        "covered": 1800,
+        "total": 1800
+      }
+    },
+    {
+      "key": "m4a1_76_hvss",
+      "file": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-common-ring-20261113-v7\\candidates\\m4a1_76_hvss_hull.png",
+      "canvas": [
+        800,
+        1400
+      ],
+      "actualHullBounds": {
+        "left": 192,
+        "top": 341,
+        "width": 416,
+        "height": 799,
+        "pixels": 317915
+      },
+      "detectedBlackHole": {
+        "left": 296,
+        "top": 617,
+        "width": 207,
+        "height": 207,
+        "center": [
+          399.5,
+          720.5
+        ],
+        "centroid": [
+          399.88300481560134,
+          720.3791313971226
+        ],
+        "pixels": 33433,
+        "maxRGB": 3,
+        "minAlpha": 255
+      },
+      "ringCenter": [
+        400,
+        720
+      ],
+      "inferredRingScale": 1,
+      "ringCanvasDiameter": 236,
+      "visibleOuterBounds": {
+        "left": 282,
+        "top": 602,
+        "width": 235,
+        "height": 236
+      },
+      "opaqueRingPixelsCompared": 42134,
+      "opaqueRingPixelMismatch": 0,
+      "blackInteriorMismatch": 0,
+      "fromActualHullNose": 379,
+      "noseFraction": 0.47434292866082606,
+      "fromNominalHullNose": 380,
+      "ratioToNominalHullLength": 0.295,
+      "turretCoverage": {
+        "covered": 1800,
+        "total": 1800
+      }
+    },
+    {
+      "key": "m4a3e2",
+      "file": "E:\\cocos\\Project\\Sherman\\source_art\\tanks\\sherman-jumbo-geometry-20261113-v8\\candidates\\m4a3e2_hull.png",
+      "canvas": [
+        800,
+        1400
+      ],
+      "actualHullBounds": {
+        "left": 220,
+        "top": 340,
+        "width": 360,
+        "height": 800,
+        "pixels": 282471
+      },
+      "detectedBlackHole": {
+        "left": 296,
+        "top": 617,
+        "width": 207,
+        "height": 207,
+        "center": [
+          399.5,
+          720.5
+        ],
+        "centroid": [
+          399.88300481560134,
+          720.3791313971226
+        ],
+        "pixels": 33433,
+        "maxRGB": 3,
+        "minAlpha": 255
+      },
+      "ringCenter": [
+        400,
+        720
+      ],
+      "inferredRingScale": 1,
+      "ringCanvasDiameter": 236,
+      "visibleOuterBounds": {
+        "left": 282,
+        "top": 602,
+        "width": 235,
+        "height": 236
+      },
+      "opaqueRingPixelsCompared": 42134,
+      "opaqueRingPixelMismatch": 0,
+      "blackInteriorMismatch": 0,
+      "fromActualHullNose": 380,
+      "noseFraction": 0.475,
+      "fromNominalHullNose": 380,
+      "ratioToNominalHullLength": 0.295,
+      "turretCoverage": {
+        "covered": 1800,
+        "total": 1800
+      }
+    }
+  ]
+}

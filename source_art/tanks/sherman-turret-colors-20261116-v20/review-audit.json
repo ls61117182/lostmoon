@@ -1,0 +1,200 @@
+{
+  "date": "2026-11-16",
+  "reference": "unchanged M4A1 turret",
+  "tool": "built-in image_gen edit masters followed by source-pixel paint projection",
+  "referenceAnchors": {
+    "samples": 2030,
+    "channels": [
+      [
+        0,
+        84,
+        98,
+        106,
+        255
+      ],
+      [
+        0,
+        81,
+        94,
+        102,
+        255
+      ],
+      [
+        0,
+        54,
+        64,
+        70,
+        255
+      ]
+    ]
+  },
+  "referenceMedian": [
+    98,
+    94,
+    64
+  ],
+  "shapeAndAlphaUnchanged": true,
+  "models": [
+    {
+      "kind": "sherman76",
+      "sourceAnchors": {
+        "samples": 2961,
+        "channels": [
+          [
+            0,
+            88,
+            110,
+            118,
+            255
+          ],
+          [
+            0,
+            85,
+            106,
+            113,
+            255
+          ],
+          [
+            0,
+            64,
+            81,
+            88,
+            255
+          ]
+        ]
+      },
+      "imageGenAnchors": {
+        "samples": 400914,
+        "channels": [
+          [
+            0,
+            80,
+            94,
+            100,
+            255
+          ],
+          [
+            0,
+            77,
+            91,
+            97,
+            255
+          ],
+          [
+            0,
+            56,
+            65,
+            70,
+            255
+          ]
+        ]
+      },
+      "sourceMedian": [
+        110,
+        106,
+        81
+      ],
+      "finalMedian": [
+        98,
+        94,
+        64
+      ],
+      "referenceMedian": [
+        98,
+        94,
+        64
+      ],
+      "medianRGBDistanceBefore": 41,
+      "medianRGBDistanceAfter": 0,
+      "paintPixelsChanged": 3489,
+      "alphaDifferences": 0,
+      "protectedPixelDifferences": 0,
+      "installed": [
+        "sherman76_top_turret.png",
+        "sherman76_top.png"
+      ]
+    },
+    {
+      "kind": "sherman_jumbo",
+      "sourceAnchors": {
+        "samples": 2121,
+        "channels": [
+          [
+            0,
+            82,
+            107,
+            119,
+            255
+          ],
+          [
+            0,
+            78,
+            101,
+            112,
+            255
+          ],
+          [
+            0,
+            54,
+            70,
+            81,
+            255
+          ]
+        ]
+      },
+      "imageGenAnchors": {
+        "samples": 231683,
+        "channels": [
+          [
+            0,
+            81,
+            94,
+            103,
+            255
+          ],
+          [
+            0,
+            78,
+            91,
+            99,
+            255
+          ],
+          [
+            0,
+            50,
+            58,
+            66,
+            255
+          ]
+        ]
+      },
+      "sourceMedian": [
+        107,
+        101,
+        70
+      ],
+      "finalMedian": [
+        98,
+        94,
+        64
+      ],
+      "referenceMedian": [
+        98,
+        94,
+        64
+      ],
+      "medianRGBDistanceBefore": 22,
+      "medianRGBDistanceAfter": 0,
+      "paintPixelsChanged": 2449,
+      "alphaDifferences": 0,
+      "protectedPixelDifferences": 0,
+      "installed": [
+        "sherman_jumbo_top_turret.png",
+        "sherman_jumbo_top.png"
+      ]
+    }
+  ],
+  "m4a1ReferenceUnchanged": true,
+  "allHullsAndWrecksUnchanged": true,
+  "allMetasUnchanged": true
+}

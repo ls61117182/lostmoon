@@ -1,0 +1,58 @@
+{
+  "status": "approval-candidate",
+  "gameAssetsReplaced": false,
+  "generator": "built-in image_gen; crop/alpha alignment and shared-layer compositing",
+  "selectedGeneration": "generated/rear-symmetric-planes.png",
+  "rejectedGeneration": "generated/full-hull-rejected.png",
+  "layoutBase": "v10 plain hull; v11 diagonal rear facets not used",
+  "canvas": [
+    800,
+    1400
+  ],
+  "hullBounds": {
+    "left": 192,
+    "top": 340,
+    "width": 416,
+    "height": 800
+  },
+  "outlineAxisX": 400,
+  "firstSymmetryPass": {
+    "asymmetricPairsBefore": 56904,
+    "croppedEdgePairs": 730
+  },
+  "trimmedBoundsBeforeNormalization": {
+    "left": 192,
+    "top": 340,
+    "width": 416,
+    "height": 800
+  },
+  "silhouetteMirrorPixelMismatch": 0,
+  "alphaMirrorPairMismatch": 0,
+  "maxRowEdgeMirrorError": 0,
+  "accessoryColorsMirrored": false,
+  "ring": {
+    "center": [
+      400,
+      720
+    ],
+    "size": [
+      236,
+      236
+    ],
+    "opaquePixelMismatch": 0,
+    "blackInteriorMismatch": 0
+  },
+  "ringCoverage": {
+    "covered": 1800,
+    "total": 1800,
+    "fraction": 1,
+    "minAlpha": 252
+  },
+  "turretArtworkChanged": false,
+  "notes": [
+    "Shape relation schematic was made before generation, not an engineering dimension drawing.",
+    "Basic shell symmetry is checked separately from asymmetric accessory layout.",
+    "Do not equate a symmetry pass with full historical/geometric approval.",
+    "Other two Sherman candidates remain v10."
+  ]
+}
