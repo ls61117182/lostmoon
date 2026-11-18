@@ -35,8 +35,8 @@ test('European mission 13 is listed, importable and has a real Cocos JSON asset'
   assert.equal(data.tiles.length, data.rows);
   assert.ok(data.tiles.every(row => row.length === data.cols));
   const levels = getChapterLevels('europe');
-  assert.equal(levels.length, 13);
-  const last = levels.at(-1); assert.equal(last.id, 13); assert.equal(last.missionId, data.id); assert.equal(last.titleKey, 'level.13.title');
+  assert.equal(levels.length, 14);
+  const last = levels.find(level => level.id === 13); assert.equal(last.id, 13); assert.equal(last.missionId, data.id); assert.equal(last.titleKey, 'level.13.title');
   assert.equal(last.alwaysUnlocked, true, 'the new mission can be tried without replaying mission 12 on an old save');
   assert.ok(getImportableMissionLevels().some(level => level.missionId === data.id));
   assert.equal(JSON.parse(fs.readFileSync(`assets/resources/${last.missionPath}.json.meta`, 'utf8')).importer, 'json');

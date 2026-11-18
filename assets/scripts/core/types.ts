@@ -64,7 +64,7 @@ export type UrbanTileKind = 'ground' | 'road' | 'indestructible' | 'destructible
 export interface Tile {
   pos: Axial;
   terrain: TerrainType;
-  /** Absolute terrain height; omitted means zero. Negative values are valid. */
+  /** Absolute terrain height; omitted means 1 for rocky, otherwise 0. Negative values are valid. */
   height?: number;
   /** Impassable height transitions, E, SE, SW, W, NW, NE. Either side may mark an edge. */
   cliffs?: [boolean, boolean, boolean, boolean, boolean, boolean];
@@ -236,7 +236,46 @@ export type UnitKind =
    * 但在关卡目标上是与 `infantry` **互不替代**的独立 `kind`——避免与回合结束 5–6 spawn 的普通步兵
    * 混淆。视觉上由 `BattleScene` 在所在格绘制红色边框 + 单位身周红色光环，与说明书原图一致。
    */
-  | 'officer';
+  | 'officer'
+  | 'train_locomotive' | 'train_tender' | 'train_command'
+  | 'train_howitzer' | 'train_artillery_flak' | 'train_panzerjaeger';
+
+export type TrainModuleKind = 'locomotive' | 'tender' | 'command' | 'howitzer' | 'artillery_flak' | 'panzerjaeger';
+export interface TrainCarState {
+  trainId: string;
+  order: number;
+  module: TrainModuleKind;
+  presence: 'pending' | 'outside' | 'present' | 'exited';
+  separated: boolean;
+  /** Dynamic radio eligibility; command cars supply it to the intact formation. */
+  radio: boolean;
+  antiAircraftFacing?: FireDirection;
+}
+export function isTrainKind(kind: UnitKind): boolean { return kind.startsWith('train_'); }
+export function isTrainUnit(unit: { kind: UnitKind }): boolean { return isTrainKind(unit.kind); }
+export function trainBodyBlocks(unit: Unit): boolean {
+  return isTrainUnit(unit) && unit.trainCar?.presence === 'present'
+    && (!unit.destroyed || !unit.trainCar.separated);
+}
+export interface TrainRouteDefinition {
+  id: string;
+  cells: Offset[];
+  loop?: boolean;
+  /** Required for an open route; directions must lead outside the map. */
+  entryDir?: Direction;
+  exitDir?: Direction;
+}
+export interface ArmoredTrainDefinition {
+  id: string;
+  routeId: string;
+  sideId: BattleSideId;
+  faction?: Faction;
+  /** First carriage's zero-based route index. Defaults to N-1 for initial formations. */
+  headIndex?: number;
+  /** End-of-turn entry event; omitted means initially on the map. */
+  entryTurn?: number;
+  carriages: Array<{ id: string; kind: Extract<UnitKind, `train_${string}`>; turretFacing?: FireDirection; unitLevel?: UnitLevel }>;
+}
 
 /**
  * 「徒步类」单位（德国步兵 / 日本步兵 / 军官）共享判定：
@@ -445,6 +484,7 @@ export interface WreckWaterState {
 }
 
 export interface Unit {
+  trainCar?: TrainCarState;
   id: string;
   kind: UnitKind;
   faction: Faction;
@@ -641,6 +681,7 @@ export function restoreFullTankCrew(u: Unit): void {
 
 // ---------- 任务 ----------
 export type ObjectiveType =
+  | 'destroy_train' | 'destroy_train_carriage'
   | 'destroy_all_enemies'   // 击毁所有当前存活敌军单位（含增援）
   | 'destroy_kind'          // 摧毁某种单位
   | 'destroy_kind_evac'     // 先歼指定种类（`kind` 或 `kinds`）再撤离；若二者皆省略则仅撤离（驶出地图即胜）
@@ -649,6 +690,8 @@ export type ObjectiveType =
 
 export interface MissionObjective {
   type: ObjectiveType;
+  trainId?: string;
+  carriageId?: string;
   /** Optional cumulative destroyed-unit requirement, rather than all units of a kind. */
   count?: number;
   /** destroy_kind / destroy_kind_evac 用 */
@@ -758,6 +801,8 @@ export interface UnitPlacement {
 export type GermanTankCamouflage = 'grey' | 'late_war';
 
 export interface MissionData {
+  trainRoutes?: TrainRouteDefinition[];
+  trains?: ArmoredTrainDefinition[];
   id: string;
   /** Simultaneous regions on a single continuous hex grid. */
   multiRegion?: MultiRegionConfig;
@@ -872,7 +917,7 @@ export interface TruckPathEntry extends Offset {
 }
 
 export interface TileDef {
-  /** Absolute terrain height, default 0; finite negative values are allowed. */
+  /** Absolute terrain height, default 1 for H, otherwise 0; finite negative values are allowed. */
   height?: number;
   /** Impassable slopes: six 0/1 flags, E, SE, SW, W, NW, NE. Equal heights ignore these flags. */
   cliff?: string;

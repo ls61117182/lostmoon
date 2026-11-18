@@ -52,7 +52,8 @@ test('shared bridge checks preserve infantry terrain access and reject nonadjace
   const tile = { pos: to, terrain: 'forest' }; map.set(tile);
   for (const terrain of ['forest', 'rocky', 'urban_destructible', 'urban_indestructible']) {
     tile.terrain = terrain;
-    assert.equal(map.canUnitCrossEdge(center, to, unit('american_infantry', center)), true);
+    assert.equal(map.canUnitCrossEdge(center, to, unit('american_infantry', center)), terrain !== 'rocky',
+      'Rocky highlands now have a fixed cliff above the lowland approach');
     assert.equal(map.canUnitCrossEdge(center, to, unit('sherman', center)), false);
   }
   for (const kind of kinds) {

@@ -61,7 +61,7 @@ function fixture() {
   return { scene, map, tank, masks, edges, actions };
 }
 
-for (const mode of ['hardcore', 'test']) {
+for (const mode of ['hardcore']) {
   GameSession.gameMode = mode;
   for (const blocker of [{ terrain: 'forest' }, { terrain: 'rocky' }, { hasBuilding: true }, { smoke: true }]) {
     const { scene, map, masks, edges } = fixture();
@@ -128,7 +128,7 @@ for (const visible of [true, false]) for (const shell of ['ap', 'smoke']) {
   assert.deepEqual(actions, ['rotate'], 'a shared visible enemy behind cover also permits rotation only');
 }
 // Shared radio vision must not enlarge either the blue area or its clickable range.
-for (const mode of ['hardcore', 'test']) for (const visible of [true, false]) {
+for (const mode of ['hardcore']) for (const visible of [true, false]) {
   GameSession.gameMode = mode;
   for (const [configuredRange, weather, range] of [[4, 'clear', 4], [2, 'clear', 2], [5, 'clear', 5], [4, 'fog', 2]]) {
     for (const shell of ['ap', 'smoke']) for (const occupied of [false, true]) {

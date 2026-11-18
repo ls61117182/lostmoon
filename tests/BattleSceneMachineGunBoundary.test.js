@@ -40,7 +40,7 @@ function fixture() {
   return { scene, map, tank, masks, edges };
 }
 
-for (const mode of ['hardcore', 'test']) {
+for (const mode of ['hardcore']) {
   GameSession.gameMode = mode;
   const { scene, tank, masks, edges } = fixture();
   for (let facing = 0; facing < 6; facing++) for (let turret = 0; turret < 12; turret++) {

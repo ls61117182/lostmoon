@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
 const exported = {};
-const code = ts.transpileModule(fs.readFileSync('assets/scripts/view/RockyHighlandVariants.ts', 'utf8'), {
+const code = ts.transpileModule(fs.readFileSync('source_art/terrain/rocky-highland-variants-20261016/RockyHighlandVariants.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 new Function('exports', code)(exported);
@@ -57,33 +57,21 @@ function method(name) {
   assert(start >= 0 && end > start);
   return source.slice(start, end);
 }
-const sceneJS = ts.transpileModule(`class Scene { ${method('prepareRockyHighlandVariants')} ${method('terrainSpriteFrameFor')} }`, {
+const sceneJS = ts.transpileModule(`class Scene { ${method('terrainSpriteFrameFor')} }`, {
   compilerOptions: { target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const Scene = new Function('assignRockyHighlandVariants', 'rockyCellKey', `${sceneJS}; return Scene;`)(assign, key);
-const scene = new Scene(), fallback = {}, grass = {}, winterGrass = {};
+const Scene = new Function(`${sceneJS}; return Scene;`)();
+const scene = new Scene(), currentRock = {}, grass = {}, winterGrass = {};
 Object.assign(scene, {
-  mission: { data: { id: 'random_pacific_42' } }, rockyVariantLayoutSignature: '', rockyVariantsByCell: new Map(),
-  rockyVariantFrames: paths.map(() => ({})), terrainSpriteFrames: { rocky: fallback, field: grass },
-  winterTerrainSpriteFrames: { field: winterGrass }, usesWinterTerrainVisuals: () => false,
+  terrainSpriteFrames: { rocky: currentRock, field: grass },
+  seasonalTerrainFrames: { rocky: { stale: true } }, winterTerrainSpriteFrames: { field: winterGrass, rocky: { stale: true } }, usesWinterTerrainVisuals: () => false,
 });
-scene.prepareRockyHighlandVariants(cells);
-const cache = scene.rockyVariantsByCell;
-scene.prepareRockyHighlandVariants([...cells].reverse());
-assert.equal(scene.rockyVariantsByCell, cache, 'Redraws reuse the assignment cache');
 const tile = cells.find(cell => cell.terrain === 'rocky');
-const selected = scene.rockyVariantsByCell.get(key(tile.pos));
-assert.equal(scene.terrainSpriteFrameFor('rocky', tile), scene.rockyVariantFrames[selected]);
+assert.equal(scene.terrainSpriteFrameFor('rocky', tile), currentRock, 'Legacy variant selection no longer participates in live scenery');
+assert.equal(scene.terrainSpriteFrameFor('rocky'), currentRock, 'All rocky icons use the new representative');
 assert.equal(scene.terrainSpriteFrameFor('field', tile), grass, 'Other terrain is unaffected');
-scene.rockyVariantFrames[selected] = null;
-assert.equal(scene.terrainSpriteFrameFor('rocky', tile), fallback, 'Missing variant falls back to legacy art');
 scene.usesWinterTerrainVisuals = () => true;
 assert.equal(scene.terrainSpriteFrameFor('field', tile), winterGrass);
-assert.equal(scene.terrainSpriteFrameFor('rocky', tile), fallback);
-scene.mission.data.id = 'random_pacific_43';
-scene.prepareRockyHighlandVariants(cells);
-assert.notDeepEqual(scene.rockyVariantsByCell, cache, 'Changing mission refreshes assignments');
-scene.prepareRockyHighlandVariants(cells.filter(cell => cell !== tile));
-assert(!scene.rockyVariantsByCell.has(key(tile.pos)), 'Removing highlands refreshes the cached topology');
-assert.match(source, /terrainSpriteFrameFor\(tile\.terrain, tile\)/, 'Tile inspection uses the same selected frame');
-console.log('Six rocky highland variants: stable seeded distribution, no adjacent repeats, balanced usage and fallback verified.');
+assert.equal(scene.terrainSpriteFrameFor('rocky', tile), currentRock, 'Winter and seasonal frames cannot restore old rocky art');
+assert.doesNotMatch(source, /RockyHighlandVariants|rockyVariant|rocky_highland_|pacific_rocks/);
+console.log('Archived six-variant tooling remains reproducible; live rocky terrain exclusively uses the new highland art.');

@@ -150,7 +150,7 @@ function addTankOccluders(scene) {
 }
 
 test('tank hull and turret masks select only entrenched infantry, including while arriving from another hex',()=>{
-  for(const mode of ['classic','hardcore','test'])for(const kind of ['trench','gun_pit']) {
+  for(const mode of ['classic','hardcore'])for(const kind of ['trench','gun_pit']) {
     GameSession.gameMode=mode;
     const {scene,unit,slots,map}=setup();map.get(unit.pos).fortification.kind=kind;
     scene.drawInfantry(unit,0,0);scene.captureSilhouetteSources(unit);
@@ -203,7 +203,7 @@ test('the live occlusion sync retains building passes and adds tank-trench passe
 });
 
 test('bridge infantry receive hull and turret outlines in all game modes',()=>{
-  for(const mode of ['classic','hardcore','test']) {
+  for(const mode of ['classic','hardcore']) {
     GameSession.gameMode=mode;
     const {scene,unit,slots,map}=setup();
     const tile=map.get(unit.pos);delete tile.fortification;tile.terrain='water';tile.bridgeEnds=[1,4];

@@ -6,7 +6,7 @@ const sharp = require('sharp');
 const ts = require('typescript');
 const root = path.resolve(__dirname, '../../..');
 const terrain = path.join(root, 'assets/resources/textures/terrain');
-const helper = path.join(root, 'assets/scripts/view/RockyHighlandVariants.ts');
+const helper = path.join(__dirname, 'RockyHighlandVariants.ts');
 const exported = {};
 new Function('exports', ts.transpileModule(fs.readFileSync(helper, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },

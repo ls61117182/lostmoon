@@ -91,6 +91,7 @@ import {
 import { isAntiTankGunKind, isFootKind, isTankKind } from '../core/types';
 import type { MissionData, MissionObjective, RoundEventConfig, SeasonType, TileDef, UnitKind, UnitLevel, UnitPlacement, WeatherType } from '../core/types';
 import { validateRoundEvents } from '../core/RoundEvents';
+import { loadMission } from '../core/MissionLoader';
 import type { TurnEndEffectType, TurnEndEventRow } from '../core/TurnEndEventDB';
 import { bindButtonPressScale } from './ButtonFeedback';
 import { drawMilitaryPanel, MILITARY_UI, styleMilitaryLabel } from './MilitaryUI';
@@ -258,7 +259,6 @@ export class MainMenuScene extends Component {
   private battleLoading = false;
   private classicModeBtn: ButtonRefs | null = null;
   private hardcoreModeBtn: ButtonRefs | null = null;
-  private testModeBtn: ButtonRefs | null = null;
   private pvpEntryBtn: ButtonRefs | null = null;
   private playerTankSelectBtn: ButtonRefs | null = null;
   private playerTankSelectLabel: Label | null = null;
@@ -538,25 +538,18 @@ export class MainMenuScene extends Component {
     const x = 390;
     this.makeLabel(this.node, t('menu.mode.title'), x, 158, 280, 22, 16, TEXT_SUBTITLE);
     this.classicModeBtn = this.makeRectButton(
-      this.node, x - 96, 126, 90, 38, MODE_BTN_IDLE,
+      this.node, x - 48, 126, 90, 38, MODE_BTN_IDLE,
       () => this.selectGameMode('classic'),
     );
     this.classicModeBtn.label = this.makeLabel(
       this.classicModeBtn.node, t('menu.mode.classic'), 0, 0, 84, 26, 18, TEXT_PRIMARY,
     );
     this.hardcoreModeBtn = this.makeRectButton(
-      this.node, x, 126, 90, 38, MODE_BTN_IDLE,
+      this.node, x + 48, 126, 90, 38, MODE_BTN_IDLE,
       () => this.selectGameMode('hardcore'),
     );
     this.hardcoreModeBtn.label = this.makeLabel(
       this.hardcoreModeBtn.node, t('menu.mode.hardcore'), 0, 0, 84, 26, 18, TEXT_PRIMARY,
-    );
-    this.testModeBtn = this.makeRectButton(
-      this.node, x + 96, 126, 90, 38, MODE_BTN_IDLE,
-      () => this.selectGameMode('test'),
-    );
-    this.testModeBtn.label = this.makeLabel(
-      this.testModeBtn.node, t('menu.mode.test'), 0, 0, 84, 26, 18, TEXT_PRIMARY,
     );
     this.refreshGameModeSwitch();
   }
@@ -572,7 +565,7 @@ export class MainMenuScene extends Component {
 
   private refreshGameModeSwitch() {
     for (const [mode, button] of [
-      ['classic', this.classicModeBtn], ['hardcore', this.hardcoreModeBtn], ['test', this.testModeBtn],
+      ['classic', this.classicModeBtn], ['hardcore', this.hardcoreModeBtn],
     ] as const) {
       const active = this.gameMode === mode;
       button?.redraw(active ? MODE_BTN_ACTIVE : MODE_BTN_IDLE, { border: active });
@@ -3084,7 +3077,6 @@ export class MainMenuScene extends Component {
     this.continueSubLabel = null;
     this.classicModeBtn = null;
     this.hardcoreModeBtn = null;
-    this.testModeBtn = null;
     this.playerTankSelectBtn = null;
     this.playerTankSelectLabel = null;
     this.authNameLabel = null;
@@ -3338,7 +3330,7 @@ export class MainMenuScene extends Component {
       clear: 'textures/terrain/pacific_sand/spriteFrame',
       trees: 'textures/terrain/pacific_trees/spriteFrame',
       beach: 'textures/terrain/pacific_water/spriteFrame',
-      rocky: 'textures/terrain/rocky_highland_01/spriteFrame',
+      rocky: 'textures/terrain/pacific_highland_elevation/spriteFrame',
       road_snow: 'textures/terrain/terrain_road_snow/spriteFrame',
       field_snow: 'textures/terrain/terrain_field_snow/spriteFrame',
       mud_snow: 'textures/terrain/terrain_mud_snow/spriteFrame',
@@ -3506,6 +3498,8 @@ export class MainMenuScene extends Component {
     };
     const selectedOffset = () => ({ col: selectedCol, row: selectedRow });
     const unitKindLabels: Record<UnitKind, string> = {
+      train_locomotive: '装甲机车', train_tender: '装甲煤水车', train_command: '装甲指挥车',
+      train_howitzer: '列车榴弹炮车', train_artillery_flak: '列车火炮防空车', train_panzerjaeger: '列车反坦克炮车',
       sherman: '谢尔曼',
       sherman76: '谢尔曼76',
       sherman_jumbo: '巨无霸',
@@ -3549,12 +3543,13 @@ export class MainMenuScene extends Component {
       officer: 'Officer',
     };
     // Keep editor choices in sync with data/units.csv (via the generated UnitDB).
-    const allUnitKinds = getAllUnitKinds();
+    const allUnitKinds = getAllUnitKinds().filter(kind => !kind.startsWith('train_'));
     // Objective authoring follows battle-side placement, not nationality: an
     // American or Soviet vehicle may legally be authored in the enemy list.
     const objectiveTargetKinds = allUnitKinds;
     const objectiveTypes: MissionObjective['type'][] = ['destroy_all_enemies', 'destroy_kind', 'destroy_kind_evac', 'exit_from_edge'];
     const objectiveTypeLabels: Record<MissionObjective['type'], string> = {
+      destroy_train: '击毁整列列车', destroy_train_carriage: '击毁指定车厢',
       destroy_all_enemies: '击毁所有单位',
       destroy_kind: '歼灭指定单位',
       destroy_kind_evac: '歼灭后撤离',
@@ -3785,7 +3780,7 @@ export class MainMenuScene extends Component {
         const commit = () => {
           const height = Number(input.string.trim());
           if (!Number.isFinite(height)) { statusLabel.string = zh ? '高度必须为有限数值，可为负数。' : 'Height must be finite; negative values are valid.'; return false; }
-          if (height === 0) delete tile.height; else tile.height = height;
+          if (height === (tile.t === 'H' ? 1 : 0)) delete tile.height; else tile.height = height;
           redrawAllCells(); return true;
         };
         input.node.on('editing-did-ended', () => { if (input.node.parent === popup) commit(); });
@@ -3795,7 +3790,7 @@ export class MainMenuScene extends Component {
         };
         [-1, 1].forEach(step => button(step < 0 ? '−1' : '+1', step * 106, 122, 62, false, () => {
           if (!commit()) return; const next = tileHeight(tile) + step;
-          if (next === 0) delete tile.height; else tile.height = next;
+          if (next === (tile.t === 'H' ? 1 : 0)) delete tile.height; else tile.height = next;
           redrawAllCells(); refresh();
         }));
         SLOPE_DIRECTIONS.forEach((dir, i) => {
@@ -3811,7 +3806,7 @@ export class MainMenuScene extends Component {
             redrawAllCells(); refresh();
           });
         });
-        this.makeLabel(popup, zh ? '默认高度 0，可设负数；同高无边坡。\n高差默认可通行，陡坡两侧均禁止跨越。' : 'Default height 0; negatives allowed. Equal heights have no slope.\nSlopes are passable unless marked as cliffs.', 0, -126, 306, 42, 12, TEXT_SUBTITLE);
+        this.makeLabel(popup, zh ? '岩石高地默认高度 1，外沿固定陡坡。\n其它格默认高度 0；同高无边坡。' : 'Rocky highlands default to height 1, with fixed cliffs.\nOther tiles default to 0. Equal heights have no slope.', 0, -126, 306, 42, 12, TEXT_SUBTITLE);
         button(zh ? '完成' : 'Done', 0, -169, 124, false, () => { if (commit()) { popup.destroy(); refreshSelection(); } });
       };
       refresh();
@@ -3866,7 +3861,8 @@ export class MainMenuScene extends Component {
     };
     let editorElevation: ElevationRenderer | null = null;
     const redrawEditorSlopes = () => {
-      if (!editorElevation) editorElevation = new ElevationRenderer(gridContent);
+      if (!editorGroundLayer) return;
+      if (!editorElevation) editorElevation = new ElevationRenderer(editorGroundLayer);
       const radius = 27, stepX = radius * Math.sqrt(3) + 5, stepY = radius * 1.5 + 5;
       editorElevation.draw(editorElevationTiles(draftTiles, draftRowParityOffset), spriteFrames, radius, (q, r) => {
         const col = q + ((r + draftRowParityOffset - ((r + draftRowParityOffset) & 1)) >> 1);
@@ -4653,6 +4649,7 @@ export class MainMenuScene extends Component {
     gridContent.layer = this.node.layer;
     gridContent.addComponent(UITransform).setContentSize(gridViewportW, gridViewportH);
     gridViewport.addChild(gridContent);
+    let editorGroundLayer: Node | null = null;
     let gridScale = 1;
     let gridPixelW = 0;
     let gridPixelH = 0;
@@ -4729,12 +4726,17 @@ export class MainMenuScene extends Component {
       node.layer = this.node.layer;
       node.addComponent(UITransform).setContentSize(w, h);
       node.setPosition(x, y, 0);
+      const groundNode = new Node('EditorHexGround');
+      groundNode.layer = this.node.layer;
+      groundNode.addComponent(UITransform).setContentSize(w, h);
+      groundNode.setPosition(x, y, 0);
+      editorGroundLayer!.addChild(groundNode);
       const spriteNode = new Node('EditorHexTexture');
       spriteNode.layer = this.node.layer;
       spriteNode.addComponent(UITransform).setContentSize(w, h);
       const sprite = spriteNode.addComponent(Sprite);
       sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-      node.addChild(spriteNode);
+      groundNode.addChild(spriteNode);
       const fortNode = new Node('EditorFortification');
       fortNode.layer = this.node.layer;
       fortNode.addComponent(UITransform).setContentSize(w, h);
@@ -4756,7 +4758,7 @@ export class MainMenuScene extends Component {
       node.addChild(outlineNode);
       // Keep the railway above road-direction strokes, like the battle ground layers.
       railNode.setSiblingIndex(outlineNode.getSiblingIndex() + 1);
-      const graphics = node.addComponent(Graphics);
+      const graphics = groundNode.addComponent(Graphics);
       const label = this.makeLabel(node, `${col},${row}`, 0, -2, w - 6, 18, 11, TEXT_PRIMARY);
       label.enableOutline = true;
       label.outlineColor = TEXT_OUTLINE;
@@ -4999,7 +5001,7 @@ export class MainMenuScene extends Component {
       };
       const redraw = (tile: EditorTile) => {
         const spriteKey = spriteKeyForTile(tile);
-        sprite.spriteFrame = spriteKey ? (spriteFrames[spriteKey] ?? null) : null;
+        sprite.spriteFrame = spriteKey && tile?.t !== 'H' ? (spriteFrames[spriteKey] ?? null) : null;
         spriteNode.getComponent(UITransform)?.setContentSize(w, h);
         spriteNode.active = !!sprite.spriteFrame;
         const fortArt = tile?.fort ? fortificationArtTransform(tile.fort) : null;
@@ -5060,6 +5062,10 @@ export class MainMenuScene extends Component {
     const rebuildGrid = (resetView = false) => {
       editorElevation?.destroy(); editorElevation = null;
       gridContent.removeAllChildren();
+      editorGroundLayer = new Node('EditorGroundBelowMarkers');
+      editorGroundLayer.layer = this.node.layer;
+      editorGroundLayer.addComponent(UITransform);
+      gridContent.addChild(editorGroundLayer);
       cells.length = 0;
       const radius = 27;
       const hexW = radius * Math.sqrt(3);
@@ -5563,6 +5569,7 @@ export class MainMenuScene extends Component {
         for (const unit of [...draftAllies, ...draftEnemies]) shiftOffset(unit.at, dc, dr);
         shiftOffset(draftObjective.evacAt, dc, dr);
         for (const entry of draftTruckPath) shiftOffset(entry, dc, dr);
+        for (const route of draftBaseMission.trainRoutes ?? []) for (const cell of route.cells) shiftOffset(cell, dc, dr);
         selectedCol += dc;
         selectedRow += dr;
       }
@@ -5725,6 +5732,15 @@ export class MainMenuScene extends Component {
       return mission;
     };
 
+    const validateTrainConfiguration = (mission: MissionData): boolean => {
+      if (!mission.trains?.length && !mission.trainRoutes?.length) return true;
+      try { loadMission(mission); return true; }
+      catch (error) {
+        statusLabel.string = `列车配置无效：${error instanceof Error ? error.message : String(error)}`;
+        return false;
+      }
+    };
+
     const copyTextToClipboard = (text: string): boolean => {
       const nav = (globalThis as any).navigator;
       if (nav?.clipboard?.writeText) {
@@ -5757,6 +5773,7 @@ export class MainMenuScene extends Component {
       const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
       const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
       const mission = buildDraftMission(id, oldPkg, name);
+      if (!validateTrainConfiguration(mission)) return;
       const errors = validateRoundEvents(mission.roundEvents);
       if (errors.length) { statusLabel.string = '回合事件配置无效：触发回合必须是不重复的正整数，或填写“每回合”。'; return; }
       const json = JSON.stringify({ mission, turnEndEvents: buildTurnEndEvents(mission.id) }, null, 2);
@@ -5770,6 +5787,7 @@ export class MainMenuScene extends Component {
       if (!editingExistingMission || existingMissionSaving) return;
       const target = editingExistingMission;
       const mission = buildDraftMission(target.id, null, draftName);
+      if (!validateTrainConfiguration(mission)) return;
       const errors = validateRoundEvents(mission.roundEvents);
       if (errors.length) { statusLabel.string = '回合事件配置无效：触发回合必须是不重复的正整数，或填写“每回合”。'; return; }
       existingMissionSaving = true;
@@ -5805,6 +5823,7 @@ export class MainMenuScene extends Component {
         const oldPkg = editingPackageId ? CustomMissionStore.load(editingPackageId) : null;
         const name = oldPkg?.mission.name || (getLang() === 'en' ? `Custom Mission ${n}` : `自定义关卡 ${n}`);
         const mission = buildDraftMission(id, oldPkg, name);
+        if (!validateTrainConfiguration(mission)) return;
         const errors = validateRoundEvents(mission.roundEvents);
         if (errors.length) { statusLabel.string = '回合事件配置无效：触发回合必须是不重复的正整数，或填写“每回合”。'; return; }
         editingPackageId = CustomMissionStore.save(id, {

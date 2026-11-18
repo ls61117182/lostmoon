@@ -45,7 +45,7 @@ export const REPAIRABLE_COMPONENTS: readonly RepairableComponent[] = [
     battleLogKey: 'battleLog.misc.repairRadio',
     statusIntactKey: 'tileInspect.status.radioIntact',
     statusDamagedKey: 'tileInspect.status.radioDamaged',
-    playerAvailable: (mode) => mode === 'hardcore' || mode === 'test',
+    playerAvailable: (mode) => mode === 'hardcore',
     isDamaged: (unit) => !!unit.radioDamaged,
     repair: (unit) => { unit.radioDamaged = false; },
   },

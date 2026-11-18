@@ -125,7 +125,7 @@ test('AI machine guns prefer legal hostile riders over same-hex ground infantry,
     .map(name => require(`../assets/scripts/core/${name}.ts`)));
   const GameSession = { gameMode: 'hardcore' };
   const Scene = require('./helpers/BattleSceneMethods.cjs')(['selectAIMGTarget', 'tankMachineGunContext'], { ...rules, GameSession });
-  for (const mode of ['classic', 'hardcore', 'test']) {
+  for (const mode of ['classic', 'hardcore']) {
     GameSession.gameMode = mode;
     const { tank, infantry, units } = setup();
     const ground = unit('ground', 'american_infantry');

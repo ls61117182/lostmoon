@@ -42,7 +42,7 @@ function fixture() {
 }
 
 test('both visible diagonal flanks are selectable without changing the current view', () => {
-  for (const mode of ['hardcore', 'test']) for (const shell of ['ap', 'hvap', 'he']) {
+  for (const mode of ['hardcore']) for (const shell of ['ap', 'hvap', 'he']) {
     GameSession.gameMode = mode;
     const { scene, attacker, target, context } = fixture();
     attacker.loadedShell = shell;

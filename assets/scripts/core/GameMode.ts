@@ -1,6 +1,6 @@
 import { BUILD_FEATURES } from './BuildProfile';
 
-export type GameMode = 'classic' | 'hardcore' | 'test';
+export type GameMode = 'classic' | 'hardcore';
 
 export interface GameModeConfig {
   fogOfWar: boolean;
@@ -39,10 +39,12 @@ export const DEFAULT_GAME_MODE: GameMode = BUILD_FEATURES.gameModeSelection ? 'c
 
 export function normalizeSelectedGameMode(value: unknown): GameMode {
   if (!BUILD_FEATURES.gameModeSelection) return 'hardcore';
+  // Migrate the former test profile to the new Hardcore rules.
+  if (value === 'test') return 'hardcore';
   return isGameMode(value) ? value : DEFAULT_GAME_MODE;
 }
 
-const GAME_MODE_CONFIGS: Record<Exclude<GameMode, 'test'>, GameModeConfig> = {
+const GAME_MODE_CONFIGS: Record<GameMode, GameModeConfig> = {
   classic: {
     fogOfWar: false,
     aiMainGunFallbackToMG: false,
@@ -82,9 +84,9 @@ const GAME_MODE_CONFIGS: Record<Exclude<GameMode, 'test'>, GameModeConfig> = {
 };
 
 export function isGameMode(value: unknown): value is GameMode {
-  return value === 'classic' || value === 'hardcore' || value === 'test';
+  return value === 'classic' || value === 'hardcore';
 }
 
 export function getGameModeConfig(mode: GameMode): GameModeConfig {
-  return GAME_MODE_CONFIGS[mode === 'test' ? 'hardcore' : mode];
+  return GAME_MODE_CONFIGS[mode];
 }

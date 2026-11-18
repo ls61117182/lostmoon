@@ -63,7 +63,7 @@ function normalizedVisionRange(raw: unknown, fallback: number): number {
  * the gunner's independent sight; non-tanks retain their legacy vision range.
  */
 export function isWithinOwnVisionRange(observer: Unit, target: Unit, weather?: WeatherType): boolean {
-  const range = isTankUnit(observer)
+  const range = isTankUnit(observer) || !!observer.trainCar
     ? currentGunnerVisionRange(observer, weather)
     : currentVisionRange(observer, weather);
   return Math.min(...unitOccupiedHexes(target).map(pos => hexDistance(unitTurretHex(observer), pos))) <= range;
@@ -126,6 +126,7 @@ function computePointVisibleHexes(
   smokeHexes?: ReadonlySet<string>,
 ): Set<string> {
   const visible = new Set<string>();
+  if (unit.trainCar && (unit.destroyed || unit.trainCar.presence !== 'present')) return visible;
   if (isAbandonedATGun(unit) || isAttachedATGunCrew(unit)) return visible;
   const opaqueSmoke = weather === 'fog';
   const add = (p: Axial) => {
@@ -194,6 +195,11 @@ function computePointVisibleHexes(
   // gunner sight and body-perimeter sight. An open hatch retains the base
   // one-hex perimeter; closed hatches use their configured interior range.
   // Other fixed-gun units (AT guns, artillery, trucks) keep their legacy ray.
+  if (unit.trainCar) {
+    for (const tile of map.tilesInRange(unit.pos, commanderVisionRange)) {
+      if (map.sameRegion(unit.pos, tile.pos) && hasFogLineOfSight(map, unit.pos, tile.pos, smokeHexes)) add(tile.pos);
+    }
+  }
   const tank = isTankUnit(unit);
   if (tank) {
     const interiorVisionRange = ownVisionRange(openHatch ? DEFAULT_INTERIOR_VISION_RANGE : currentInteriorVisionRange(unit));
@@ -209,11 +215,11 @@ function computePointVisibleHexes(
     : unit.facing;
   if (sightFacing !== null) {
     const gunnerVisionRange = tank ? currentGunnerVisionRange(unit, weather) : commanderVisionRange;
-    const limitedGunnerVisionRange = ownVisionRange(gunnerVisionRange);
+    const limitedGunnerVisionRange = ownVisionRange(unit.trainCar ? currentGunnerVisionRange(unit, weather) : gunnerVisionRange);
     const rayVector = fireDirectionVector(sightFacing as FireDirection);
     const fireDirection = sightFacing as FireDirection;
     const diagonalRay = isDiagonalFireDirection(fireDirection);
-    if (tank && !openHatch && diagonalRay) {
+    if ((tank || !!unit.trainCar) && !openHatch && diagonalRay) {
       addClosedTankDiagonalGunnerVision(map, unit, fireDirection, limitedGunnerVisionRange, add, smokeHexes);
       return visible;
     }
@@ -245,7 +251,7 @@ export function diagonalMainGunDirectionForHex(
 ): FireDirection | null {
   unit = unitAtHex(unit, unitTurretHex(unit));
   if (!isHeavyArtilleryUnit(unit)
-    && ((!isTankUnit(unit) && !isControlledATGun(unit)) || unit.stats.visionType !== 'turreted')) return null;
+    && ((!isTankUnit(unit) && !isControlledATGun(unit) && !unit.trainCar) || unit.stats.visionType !== 'turreted')) return null;
   const direction = diagonalFlankFireDirectionTo(unit.pos, target);
   if (direction === null) return null;
   return diagonalGunnerClickPreference(map, unit, direction, target, smokeHexes, hexDistance(unit.pos, target)) !== null
@@ -266,7 +272,7 @@ export function diagonalGunnerRuleDirectionForVisibleHex(
 ): FireDirection | null {
   unit = unitAtHex(unit, unitTurretHex(unit));
   const controlledATGun = isControlledATGun(unit);
-  if ((!isTankUnit(unit) && !controlledATGun) || unit.stats.visionType !== 'turreted') return null;
+  if ((!isTankUnit(unit) && !controlledATGun && !unit.trainCar) || unit.stats.visionType !== 'turreted') return null;
   // Every adjacent hex lies on one of the six true hex axes. It is also the
   // first side cell of two halfway-ray paths geometrically, but attacks at
   // distance one must use the exact 60-degree axis bearing. Otherwise a
@@ -504,11 +510,13 @@ function clockStepDistance(a: number, b: number): number {
 }
 
 export function hasRadioReceive(unit: Unit): boolean {
+  if (unit.trainCar) return !unit.destroyed && unit.trainCar.presence === 'present' && unit.trainCar.radio;
   if (unit.destroyed || unit.stats.hasRadio === false || unit.radioDamaged === true) return false;
   return true;
 }
 
 export function hasRadioTransmit(unit: Unit): boolean {
+  if (unit.trainCar) return !unit.destroyed && unit.trainCar.presence === 'present' && unit.trainCar.radio;
   if (unit.destroyed || unit.stats.hasRadio === false || unit.radioDamaged === true) return false;
   return isTankUnit(unit) ? unit.crew?.commander !== false : true;
 }
@@ -525,6 +533,12 @@ export function computeRadioSharedVisibleHexes(
   smokeHexes?: ReadonlySet<string>,
 ): Set<string> {
   const visible = computeUnitVisibleHexes(map, receiver, weather, smokeHexes);
+  if (receiver.trainCar && receiver.trainCar.presence !== 'present') return visible;
+  if (receiver.trainCar && !receiver.destroyed) {
+    for (const car of friendlies) if (car.trainCar?.trainId === receiver.trainCar.trainId && !car.destroyed) {
+      for (const hex of computeUnitVisibleHexes(map, car, weather, smokeHexes)) visible.add(hex);
+    }
+  }
   // Fixed heavy artillery never acquires off-axis targets from friendly radio.
   if (isHeavyArtilleryUnit(receiver)) return visible;
   if (hasRadioReceive(receiver)) {

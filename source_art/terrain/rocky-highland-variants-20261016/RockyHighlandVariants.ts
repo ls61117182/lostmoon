@@ -1,3 +1,4 @@
+/** Archived art tooling only. Live maps use ElevationContour's continuous reef material. */
 export const ROCKY_HIGHLAND_VARIANT_COUNT = 6;
 export const ROCKY_HIGHLAND_SPRITE_PATHS = Array.from({ length: ROCKY_HIGHLAND_VARIANT_COUNT },
   (_, index) => `textures/terrain/rocky_highland_${String(index + 1).padStart(2, '0')}/spriteFrame`);

@@ -37,7 +37,7 @@ function fixture(kind = 'heavy_artillery') {
 }
 
 test('both bunker kinds restrict entry by side and retain tank collision after destruction', () => {
-  for (const gameMode of ['hardcore', 'test', 'classic']) {
+  for (const gameMode of ['hardcore', 'classic']) {
     GameSession.gameMode = gameMode;
     for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
       const { scene, tank, infantry, bunker } = fixture(kind);
@@ -171,7 +171,7 @@ test('bunkers remain fog-darkened scenery and infantry bodies have no hex stenci
     `return function(gNode, urbanBuildingLayerNode) { ${source.slice(start, end)} }`,
     { compilerOptions: { target: ts.ScriptTarget.ES2020 } },
   ).outputText)(Node, UITransform, Graphics, Mask);
-  for (const gameMode of ['hardcore', 'test']) {
+  for (const gameMode of ['hardcore']) {
     GameSession.gameMode = gameMode;
     for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
       for (const destroyed of [false, true]) {
@@ -218,7 +218,7 @@ test('bunkers remain fog-darkened scenery and infantry bodies have no hex stenci
 });
 
 test('intact and wrecked bunker sprites cover only visible same-hex infantry with city-style alpha stencils', () => {
-  for (const gameMode of ['hardcore', 'test', 'classic']) {
+  for (const gameMode of ['hardcore', 'classic']) {
     GameSession.gameMode = gameMode;
     for (const destroyed of [false, true]) {
       const { scene, infantry, bunker } = fixture();
@@ -261,7 +261,7 @@ test('intact and wrecked bunker sprites cover only visible same-hex infantry wit
 });
 
 test('unseen bunkers and wrecks cast once in the unmasked scenery layer while classic shadows stay unchanged', () => {
-  for (const gameMode of ['hardcore', 'test', 'classic']) {
+  for (const gameMode of ['hardcore', 'classic']) {
     GameSession.gameMode = gameMode;
     for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
       for (const destroyed of [false, true]) {

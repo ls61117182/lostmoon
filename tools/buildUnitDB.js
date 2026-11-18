@@ -30,6 +30,8 @@ const REQUIRED_HEADERS = ['unitKind', 'displayName', 'faction', ...NUM_FIELDS, '
 const REQUIRED_KINDS = ['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer4_f', 'stug3', 'sturmtiger', 'jagdtiger', 'jagdpanther', 'elefant', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'truck', 'infantry', 'german_infantry', 'soviet_infantry', 'officer', 'type95', 'type97', 'type4', 'at_gun', 'pak38', 'pak43', 'flak88', 'japanese_infantry', 'american_infantry', 'heavy_artillery', 'german_heavy_artillery'];
 const TANK_KINDS = new Set(['sherman', 'sherman76', 'sherman_jumbo', 'm26_pershing', 't34', 't34_85', 'kv1', 'is2', 'su152', 'tiger', 'tigerking', 'maus', 'panther', 'panzer4', 'panzer4_f', 'stug3', 'sturmtiger', 'jagdtiger', 'jagdpanther', 'elefant', 'panzer3', 'panzer3_m', 'panzer3_m_no_schurzen', 'panzer3_n', 'panzer3_n_schurzen', 'type95', 'type97', 'type4']);
 
+REQUIRED_KINDS.push('train_locomotive', 'train_tender', 'train_command', 'train_howitzer', 'train_artillery_flak', 'train_panzerjaeger');
+
 function readCsvSmart(filePath) {
   const buf = fs.readFileSync(filePath);
   const hasBOM = buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF;

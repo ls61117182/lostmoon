@@ -1,5 +1,6 @@
 import { isTwoHexUnit, planUnitMove, unitFrontHex, unitMoveEntry, unitOccupiedHexes } from './UnitFootprint';
 import { offsetToAxial, rotateDirection } from './HexGrid';
+import { syncArmoredTrains } from './ArmoredTrain';
 import { LoadedMission } from './MissionLoader';
 import { Axial, Direction, isAbandonedATGun, isAbandonedTank, isAttachedATGunCrew, MissionObjective, tileHasBridge, UnitKind } from './types';
 
@@ -26,6 +27,8 @@ export type MissionOutcome = 'ongoing' | 'victory' | 'defeat';
 
 /** 判断当前任务状态：胜 / 负 / 进行中 */
 export function checkOutcome(mission: LoadedMission): MissionOutcome {
+  syncArmoredTrains(mission);
+  if (mission.trainEscapeDefeat) return 'defeat';
   // Keep hand-built legacy fixtures/extensions working while MissionLoader
   // guarantees playerTank for all real missions.
   const playerTank = mission.playerTank ?? mission.sherman;
@@ -44,10 +47,11 @@ export function allEnemiesOfKindDestroyed(mission: LoadedMission, kind: UnitKind
 }
 
 export function liveEnemyCount(mission: LoadedMission): number {
-  return mission.enemies.filter(e => !e.destroyed
+  return mission.enemies.filter(e => !e.trainCar && !e.destroyed
     && !isAbandonedATGun(e)
     && !isAbandonedTank(e)
-    && !isAttachedATGunCrew(e)).length;
+    && !isAttachedATGunCrew(e)).length
+    + (mission.trains ?? []).filter(t => t.carriages[0].sideId === 'enemy' && !t.destroyed).length;
 }
 
 /**
@@ -106,8 +110,12 @@ export function isPlayerTankEvacTurn(
 
 export function isObjectiveMet(obj: MissionObjective, mission: LoadedMission): boolean {
   switch (obj.type) {
+    case 'destroy_train':
+      return !!mission.trains?.find(t => t.id === obj.trainId)?.destroyed;
+    case 'destroy_train_carriage':
+      return !!mission.trains?.find(t => t.id === obj.trainId)?.carriages.find(c => c.id === obj.carriageId)?.destroyed;
     case 'destroy_all_enemies':
-      return mission.enemies.length > 0 && liveEnemyCount(mission) === 0;
+      return (mission.enemies.length > 0 || (mission.trains?.length ?? 0) > 0) && liveEnemyCount(mission) === 0;
     case 'destroy_kind': {
       if (obj.count != null) return mission.enemies.filter(unit =>
         unit.kind === obj.kind && unit.destroyed && !isAttachedATGunCrew(unit)).length >= obj.count;

@@ -46,7 +46,9 @@ async function main(){
   // Reduce large baked lighting variations; the curved terrain normal supplies directional light.
   for(let i=0;i<pixels.length;i++)pixels[i]=Math.round(Math.min(255,pixels[i]*.8+blurred[i]*.2));
   const stones=await rubble(root);
-  fs.writeFileSync(file,JSON.stringify({version:5,rock:{width:size,height:size,rgb:pixels.toString('base64')},stones})+'\n');
+  const reef=await sharp(path.join(root,'source_art/terrain/pacific-highland-elevation-20261117/reef-top-generated.png')).resize(384,384).removeAlpha().raw().toBuffer();
+  fs.writeFileSync(file,JSON.stringify({version:6,rock:{width:size,height:size,rgb:pixels.toString('base64')},stones,
+    reefTop:{width:384,height:384,rgb:reef.toString('base64')}})+'\n');
   if(!fs.existsSync(file+'.meta'))fs.writeFileSync(file+'.meta',JSON.stringify({ver:'2.0.1',importer:'json',imported:true,uuid:'5bb28daf-97a6-40a5-9b08-c05c17b33057',files:['.json'],subMetas:{},userData:{}},null,2)+'\n');
   console.log('Prepared continuous elevation material.');
 }

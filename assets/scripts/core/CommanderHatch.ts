@@ -66,7 +66,7 @@ export function shouldNonPlayerTankOpenCommanderHatch(
   protagonist: Unit,
   mode: GameMode,
 ): boolean {
-  if ((mode !== 'hardcore' && mode !== 'test') || unit === protagonist || unit.destroyed || !isTankUnit(unit)
+  if ((mode !== 'hardcore') || unit === protagonist || unit.destroyed || !isTankUnit(unit)
     || !hasOpenHatchObservationSkill(unit)) {
     return false;
   }

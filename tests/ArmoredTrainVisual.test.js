@@ -6,19 +6,35 @@ const geometry=load('assets/scripts/core/ArmoredTrainArt.ts');
 const manifest=JSON.parse(fs.readFileSync(path.join(ROOT,'assets/resources/textures/units/trains/bp44/bp44_art_manifest.json'),'utf8'));
 class UITransform{setAnchorPoint(x,y){this.anchor={x,y}}setContentSize(w,h){this.size={width:w,height:h}}}
 class Sprite{static SizeMode={CUSTOM:1};}
-class SpriteFrame{}
+class SpriteFrame{
+  constructor(path){this.path=path;this.rect={x:0,y:0,width:512,height:512};}
+  clone(){const frame=new SpriteFrame(this.path);frame.rect={...this.rect};return frame;}
+  destroy(){this.destroyed=true;}
+}
+class Rect{constructor(x,y,width,height){Object.assign(this,{x,y,width,height})}}
+class Size{constructor(width,height){Object.assign(this,{width,height})}}
+class Vec2{constructor(x,y){Object.assign(this,{x,y})}}
+class Color{constructor(r,g,b){Object.assign(this,{r,g,b})}}
+class Graphics{
+  constructor(){this.commands=[];}
+  clear(){this.commands=[];}
+  moveTo(x,y){this.commands.push(['move',x,y]);}
+  lineTo(x,y){this.commands.push(['line',x,y]);}
+  stroke(){}
+}
 class JsonAsset{}
 class Node{
   constructor(name='parent'){this.name=name;this.children=[];this.components=new Map();this.layer=9;this.active=true;this.angle=0;this.isValid=true;}
   addComponent(Kind){const c=new Kind();this.components.set(Kind,c);return c}
   getComponent(Kind){return this.components.get(Kind)}
   addChild(node){node.parent=this;this.children.push(node)}
+  setSiblingIndex(index){const list=this.parent.children;list.splice(list.indexOf(this),1);list.splice(index,0,this);}
   setPosition(x,y,z){this.position={x,y,z}}
   destroy(){this.isValid=false;for(const node of this.children)node.destroy()}
 }
 const resources={load(){throw Error('Unexpected resource load')}};
-const view=load('assets/scripts/view/ArmoredTrainVisual.ts',{'cc':{Node,Sprite,SpriteFrame,UITransform,JsonAsset,resources},'../core/ArmoredTrainArt':geometry});
-const frames={};for(const path of manifest.modules.flatMap(m=>[m.body,m.destroyed]).concat(manifest.weapons.map(w=>w.sprite)))frames[path]={path};
+const view=load('assets/scripts/view/ArmoredTrainVisual.ts',{'cc':{Node,Sprite,SpriteFrame,UITransform,JsonAsset,resources,Rect,Size,Vec2,Color,Graphics},'../core/ArmoredTrainArt':geometry});
+const frames={};for(const path of manifest.modules.flatMap(m=>[m.body,m.destroyed]).concat(manifest.weapons.map(w=>w.sprite)))frames[path]=new SpriteFrame(path);
 function fixture(moduleId='artillery_flak',pose={x:12,y:24,angleDegrees:0}){const parent=new Node();return{parent,visual:new view.ArmoredTrainVisual(parent,{manifest,frames},moduleId,48,pose)}}
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 
@@ -90,6 +106,70 @@ test('wreck swaps hide independent weapon nodes and suppress muzzles without los
   visual.setPose({x:0,y:0,angleDegrees:60});visual.setDestroyed(false);
   assert.equal(visual.getWeaponNode('main_gun').active,true);assert.equal(visual.getWeaponNode('main_gun').angle,77);assert.equal(visual.getWeaponMuzzles('anti_aircraft').length,4);
   assert.throws(()=>visual.setWeaponAngle('missing',0),/slot/);assert.throws(()=>visual.setWeaponAngle('main_gun',NaN),/finite/);
+});
+
+test('two-bogie corner pose bisects the bend, reduces the coupler gap, and stays continuous through movement',()=>{
+  const step=Math.sqrt(3)*48;
+  const route=i=>i<=0?{x:i*step,y:0}:{x:i*step/2,y:-i*step*Math.sqrt(3)/2};
+  const pose=geometry.trainTrackPose(route,0),module=geometry.trainModuleArt(manifest,'panzerjaeger');
+  close(pose.angleDegrees,-120);
+  const front=geometry.trainCouplerPoint(manifest,module,geometry.trainTrackPose(route,-1),'front',48);
+  const rear=geometry.trainCouplerPoint(manifest,module,pose,'rear',48);
+  const old=geometry.trainCouplerPoint(manifest,module,{x:0,y:0,angleDegrees:-150},'rear',48);
+  assert.ok(Math.hypot(rear.x-front.x,rear.y-front.y)<Math.hypot(old.x-front.x,old.y-front.y)*.3);
+  let last=geometry.trainTrackPose(route,-1);
+  for(let i=1;i<=200;i++){
+    const next=geometry.trainTrackPose(route,-1+i/100);
+    assert.ok(Math.hypot(next.x-last.x,next.y-last.y)<step*.02);
+    assert.ok(Math.abs(next.angleDegrees-last.angleDegrees)<3);
+    last=next;
+  }
+  const straight=geometry.trainTrackPose(i=>({x:i*step,y:0}),.37);
+  close(straight.x,.37*step);close(straight.y,0);close(straight.angleDegrees,-90);
+  const loop=i=>[{x:0,y:0},{x:step,y:0},{x:step/2,y:-step*Math.sqrt(3)/2}][((i%3)+3)%3];
+  const first=geometry.trainTrackPose(loop,0),lap=geometry.trainTrackPose(loop,3);
+  close(first.x,lap.x);close(first.y,lap.y);close(first.angleDegrees,lap.angleDegrees);
+});
+
+test('outer couplers are cropped without changing body scale, pivot, inner cars, or weapon mounts',()=>{
+  for(const module of manifest.modules){
+    const {visual}=fixture(module.id),original=visual.bodyNode.getComponent(Sprite).spriteFrame;
+    const top=module.bodyBounds.top,bottom=module.bodyBounds.bottom;
+    visual.setCouplerVisibility(false,true);
+    const front=visual.bodyNode.getComponent(Sprite).spriteFrame,ui=visual.bodyNode.getComponent(UITransform);
+    assert.notEqual(front,original);close(front.rect.y,top);close(front.rect.height,512-top);
+    close(ui.size.height,96*(512-top)/512);close(ui.anchor.y,1-(256-top)/(512-top));
+    visual.setCouplerVisibility(true,false);
+    const rear=visual.bodyNode.getComponent(Sprite).spriteFrame;
+    close(rear.rect.y,0);close(rear.rect.height,bottom);
+    visual.setCouplerVisibility(false,false);
+    close(visual.bodyNode.getComponent(Sprite).spriteFrame.rect.height,bottom-top);
+    visual.setCouplerVisibility(true,true);
+    assert.equal(visual.bodyNode.getComponent(Sprite).spriteFrame,original);
+    assert.deepEqual(original.rect,{x:0,y:0,width:512,height:512});
+    visual.destroy();assert.equal(front.destroyed,true);assert.ok(!original.destroyed);
+  }
+});
+
+test('one straight drawbar connects body attachments with fixed hooks hidden and disappears on separation',()=>{
+  const {visual}=fixture('panzerjaeger');
+  visual.setCouplerVisibility(false,false);
+  visual.setRearConnection({x:80,y:90});
+  const node=visual.node.children.find(n=>n.name==='ArticulatedCoupling'),g=node.getComponent(Graphics);
+  assert.equal(visual.node.children[0],node);
+  const module=geometry.trainModuleArt(manifest,'panzerjaeger');
+  const anchor=geometry.trainCouplingAnchor(manifest,module,{x:12,y:24,angleDegrees:0},'rear',48);
+  const tip=geometry.trainCouplerPoint(manifest,module,{x:12,y:24,angleDegrees:0},'rear',48);
+  close(g.commands[0][1],anchor.x-12);close(g.commands[0][2],anchor.y-24);
+  assert.notEqual(anchor.y,tip.y,'attach at the body, not at the old fixed hook tip');
+  assert.deepEqual(g.commands[1],['line',68,66]);
+  assert.deepEqual(g.commands.map(c=>c[0]),['move','line','move','line'],'outline and metal use the same single straight segment');
+  close(visual.bodyNode.getComponent(Sprite).spriteFrame.rect.y,module.bodyBounds.top);
+  visual.setPose({x:20,y:30,angleDegrees:35});
+  const moved=geometry.trainCouplingAnchor(manifest,module,{x:20,y:30,angleDegrees:35},'rear',48);
+  close(g.commands[0][1],moved.x-20);close(g.commands[0][2],moved.y-30);
+  assert.deepEqual(g.commands[1],['line',60,60]);
+  visual.setRearConnection();assert.deepEqual(g.commands,[]);
 });
 
 test('loading caches fifteen shared sprites and destroying a carriage only destroys its own nodes',async()=>{

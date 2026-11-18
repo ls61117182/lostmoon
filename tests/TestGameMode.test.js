@@ -22,8 +22,10 @@ const names = ['enterPhase', 'enterPhaseIfChoose', 'endCurrentSubPhase', 'dieSte
   'tryTurnSherman', 'tryDriveSherman', 'autoEnterPhaseWhenReady', 'beginPlayerPhaseForNewTurn',
   'usePhaseDice', 'completePhaseDiceAction', 'autoEndPhaseIfDone', 'dieActionHint', 'playerDieFillColor', 'refreshDiceTray', 'canToggleHatch'];
 const methods = names.map(name => sceneClass.members.find(m => m.name?.getText(ast) === name).getText(ast));
-const session = { gameMode: 'test', isPvp: false };
-const context = vm.createContext({ ...require('../assets/scripts/core/TankRiding.ts'), GameSession: session, getGameModeConfig, actionDicePool, rollActionDice,
+const session = { gameMode: 'hardcore', isPvp: false };
+const context = vm.createContext({ ...require('../assets/scripts/core/TankRiding.ts'),
+  ...require('../assets/scripts/core/UnitFootprint.ts'), ...require('../assets/scripts/core/CampaignUpgrade.ts'),
+  GameSession: session, getGameModeConfig, actionDicePool, rollActionDice,
   effectiveTankCrew, resolvedLoadedShell, effectiveDiceTerrain: tile => tile.terrain, DICE_ROLL_DUR: 1, playDiceRoll() {},
   clearLockedFire() {}, beginAmbushTurn() {}, classifyMoveDie, classifyAttackDie, classifyMiscDie, t: key => key,
   AI_ATTACK_DIE_FILL: 'attack-red', AI_MOVE_DIE_FILL: 'move-green', AI_MISC_DIE_FILL: 'misc',
@@ -34,7 +36,7 @@ const code = `class BattleScene { static PLAYER_DICE_SORT_DUR = 1; static DICE_T
   static DICE_TRAY_GAP = 12; ${methods.join('\n')} }; globalThis.Scene = BattleScene;`;
 vm.runInContext(ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText, context);
 const plain = value => JSON.parse(JSON.stringify(value));
-function harness(mode = 'test') {
+function harness(mode = 'hardcore') {
   session.gameMode = mode;
   const h = new context.Scene();
   const missionData = JSON.parse(fs.readFileSync('assets/resources/missions/mission_03.json', 'utf8'));
@@ -49,10 +51,12 @@ function harness(mode = 'test') {
   return h;
 }
 
-test('test mode is selectable and shares every hardcore rule', () => {
-  assert.equal(isGameMode('test'), true);
-  assert.equal(normalizeSelectedGameMode('test'), 'test');
-  assert.deepEqual(getGameModeConfig('test'), getGameModeConfig('hardcore'));
+test('only Classic and Hardcore are selectable; legacy test settings migrate to Hardcore', () => {
+  assert.equal(isGameMode('classic'), true);
+  assert.equal(isGameMode('hardcore'), true);
+  assert.equal(isGameMode('test'), false);
+  assert.equal(normalizeSelectedGameMode('test'), 'hardcore');
+  assert.equal(getGameModeConfig('hardcore').precisionFire, true);
 });
 
 test('combined roll uses both hardcore pools from the same starting terrain and crew', () => {
@@ -69,6 +73,52 @@ test('combined roll uses both hardcore pools from the same starting terrain and 
   assert(h.phaseDice.slice(attack).every(d => d.type === 'movement'));
   assert.equal(h.playerDiceRollAnim.finalPips.length, attack + movement);
   assert.equal(h.playerDiceRollAnim.logEntry.params.phaseKey, 'battleLog.phase.attackMovement');
+});
+
+test('campaign bonuses are calculated separately for attack and movement dice', () => {
+  const baseline = harness(); baseline.enterPhase('attack');
+  const h = harness();
+  h.campaignUpgradesEnabled = () => true;
+  h.campaignUpgradeIds = ['wide_tracks'];
+  h.mission.map.get(h.mission.sherman.pos).terrain = 'mud';
+  const withoutUpgrade = harness();
+  withoutUpgrade.mission.map.get(withoutUpgrade.mission.sherman.pos).terrain = 'mud';
+  withoutUpgrade.enterPhase('attack');
+  h.enterPhase('attack');
+  for (const type of ['attack', 'movement']) {
+    assert.equal(h.phaseDice.filter(d => d.type === type).length,
+      withoutUpgrade.phaseDice.filter(d => d.type === type).length + 1);
+  }
+});
+
+test('campaign retained dice stay attack dice and never retain unused movement dice', () => {
+  const h = harness();
+  h.campaignUpgradeActive = id => id === 'ammo_handling_optimization';
+  h.retainedCampaignAttackDiePip = 4;
+  h.enterPhase('attack');
+  assert.deepEqual(plain(h.phaseDice.at(-1)), { pip: 4, used: false, type: 'attack' });
+  assert.equal(h.retainedCampaignAttackDiePip, null);
+  h.phaseDice = [{ pip: 1, type: 'movement' }, { pip: 5, type: 'attack' },
+    { pip: 2, type: 'attack', used: true }];
+  h.endCurrentSubPhase();
+  assert.equal(h.retainedCampaignAttackDiePip, 5);
+  h.playerStep = 'attack';
+  h.phaseDice = [{ pip: 1, type: 'movement' }];
+  h.endCurrentSubPhase();
+  assert.equal(h.retainedCampaignAttackDiePip, null);
+});
+
+test('legacy test preferences and session selections resume as Hardcore', () => {
+  const storage = new Map();
+  global.localStorage = { getItem: key => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, value) };
+  const { MenuProgress, MENU_STATE_KEY } = require('../assets/scripts/core/LevelDB.ts');
+  const { GameSession } = require('../assets/scripts/core/GameSession.ts');
+  storage.set(MENU_STATE_KEY, JSON.stringify({ gameMode: 'test' }));
+  assert.equal(MenuProgress.load().gameMode, 'hardcore');
+  GameSession.reset();
+  GameSession.setGameMode('test');
+  assert.equal(GameSession.gameMode, 'hardcore');
 });
 
 test('sorting groups attack before movement and sorts pips inside each group', () => {
@@ -110,7 +160,7 @@ test('large combined trays shrink inside the space reserved beside Next Phase', 
   h.refreshDiceTray();
   assert(scale < 1 && scale > 0);
   assert(20 * 72 * scale + 19 * 12 * scale <= 1280 - 2 * (160 + 40));
-  session.gameMode = 'hardcore'; h.refreshDiceTray(); assert.equal(scale, 1);
+  session.gameMode = 'classic'; h.refreshDiceTray(); assert.equal(scale, 1);
 });
 
 test('movement dice cannot be selected for gun, precision, MG, or loading actions', () => {
@@ -152,7 +202,7 @@ test('consuming the last movement die completes the combined phase only after it
   assert.equal(h.movementDone, true); assert.equal(h.attackDone, true);
 });
 
-test('test mode waits for the phase button and allows hatch switching before rolling', () => {
+test('Hardcore waits for the phase button and allows hatch switching before rolling', () => {
   const h = harness();
   h.ambushSightHighlightUntil = new Map();
   Object.assign(h, { clearAIMoveState() {}, clearActiveActingUnit() {}, destroyEnemyDiceTray() {},
@@ -171,16 +221,21 @@ test('test mode waits for the phase button and allows hatch switching before rol
 test('save and restore preserve mixed die types, order, pips and consumed flags', () => {
   const h = harness();
   const dice = [{ pip: 6, used: true, type: 'attack' }, { pip: 1, used: false, type: 'movement' }];
-  const save = captureSave({ gameMode: 'test', missionId: h.mission.data.id, mission: h.mission,
+  const save = captureSave({ gameMode: 'hardcore', missionId: h.mission.data.id, mission: h.mission,
     turn: 2, phase: 'player', movesLeft: 2, attacksLeft: 1, miscDone: false,
     playerStep: 'attack', hatchChangedThisTurn: false, phaseDice: dice });
   const restored = applySave(h.mission, h.mission.data.id, JSON.parse(JSON.stringify(save)));
-  assert.equal(restored.ok, true); assert.equal(save.gameMode, 'test');
+  assert.equal(restored.ok, true); assert.equal(save.gameMode, 'hardcore');
   assert.deepEqual(restored.phaseDice, dice); assert.equal(restored.playerStep, 'attack');
+  save.gameMode = 'test';
+  const legacy = applySave(h.mission, h.mission.data.id, JSON.parse(JSON.stringify(save)));
+  assert.equal(normalizeSelectedGameMode(save.gameMode), 'hardcore');
+  assert.equal(legacy.ok, true);
+  assert.deepEqual(legacy.phaseDice, dice);
 });
 
-test('classic and hardcore keep single-column rolling and sequential phase completion', () => {
-  for (const mode of ['classic', 'hardcore']) {
+test('Classic keeps single-column rolling and sequential phase completion', () => {
+  for (const mode of ['classic']) {
     const h = harness(mode); h.enterPhase('attack');
     assert(h.phaseDice.every(d => d.type === undefined));
     h.enterPhase = phase => { h.nextPhase = phase; };

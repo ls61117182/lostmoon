@@ -30,57 +30,46 @@ const js = ts.transpileModule(`class BattleScene {
 }`, { compilerOptions: { target: ts.ScriptTarget.ES2020 } }).outputText;
 const Scene = new Function('Node', 'Sprite', 'UITransform', `${js}; return BattleScene;`)(Node, Sprite, UITransform);
 const scene = new Scene();
-const groundLayer = new Node(), rockLayer = new Node();
-const rockFrame = {}, fieldFrame = {};
+const groundLayer = new Node();
+const fieldFrame = {};
 Object.assign(scene, {
   node: new Node(), terrainSpritePool: [], terrainSpritePoolNext: 0,
-  rockySpritePool: [], rockySpritePoolNext: 0,
   bunkerOcclusionSprites: new Map(), splitTankSprites: {}, lateWarSplitTankSprites: {},
   urbanBuildingSpritePoolNext: 0, urbanRubbleSpritePoolNext: 0, foliageSpritePoolNext: 0,
   hexSize: 50, mission: { data: { cameraRotation: 90 } },
-  terrainSpriteFrameFor: terrain => ({ rocky: rockFrame, field: fieldFrame })[terrain],
+  terrainSpriteFrameFor: terrain => { assert.notEqual(terrain, 'rocky'); return { field: fieldFrame }[terrain]; },
 });
-scene.sceneryPoolParents = new Map([[scene.terrainSpritePool, groundLayer], [scene.rockySpritePool, rockLayer]]);
-assert(scene.drawTerrainTileSprite(10, 20, 50, 'rocky'));
+scene.sceneryPoolParents = new Map([[scene.terrainSpritePool, groundLayer]]);
+assert.equal(scene.drawTerrainTileSprite(10, 20, 50, 'rocky'), false, 'No call can draw an independent rock sprite');
+assert.equal(scene.drawTerrainTileSprite(10, 20, 50, 'rocky', { terrain: 'rocky', pos: { q: 0, r: 0 } }), false);
+assert.equal(scene.terrainSpritePoolNext, 0, 'Rocky terrain does not allocate scenery slots');
 assert(scene.drawTerrainTileSprite(90, 20, 50, 'field'));
-assert.equal(rockLayer.children.length, 1, 'Rock is above the cast layer, separate from flat terrain');
 assert.equal(groundLayer.children.length, 1);
-const rock = scene.rockySpritePool[0].sprite;
-assert.equal(rock.spriteFrame, rockFrame);
-assert.deepEqual(rock.node.getComponent(UITransform).size, [50 * Math.sqrt(3), 100]);
+const field = scene.terrainSpritePool[0].sprite;
+assert.equal(field.spriteFrame, fieldFrame);
+assert.deepEqual(field.node.getComponent(UITransform).size, [50 * Math.sqrt(3), 100]);
 const calls = [];
-scene.rockyShadows = {
+scene.sceneryShadows = {
   begin: rotation => calls.push(['begin', rotation]),
-  draw: (...args) => calls.push(['draw', ...args]),
+  draw: () => assert.fail('Rocky terrain and ordinary ground must not cast scenery shadows'),
   end: () => calls.push(['end']),
 };
-scene.sceneryShadows = {
-  begin() {},
-  draw() { assert.fail('Rock shadows must not also be drawn in the higher building shadow layer'); },
-  end() {},
-};
-// A released pooled slot must never cast, and ordinary ground must never cast.
-scene.rockySpritePool.push({ sprite: {} });
 scene.redrawObjectShadows();
-assert.deepEqual(calls, [['begin', 90], ['draw', rock, 'rocky', 50], ['end']]);
-scene.rockySpritePoolNext = 0;
+assert.deepEqual(calls, [['begin', 90], ['end']], 'Terrain casts are supplied only by the continuous contour');
 calls.length = 0;
-scene.redrawObjectShadows();
-assert.deepEqual(calls, [['begin', 90], ['end']], 'Removing rocks clears their casts');
-assert(scene.drawTerrainTileSprite(40, 30, 50, 'rocky'));
-assert.equal(scene.rockySpritePool[0].sprite, rock, 'Redraw reuses the rock node');
+scene.redrawObjectShadows(true);
+assert.deepEqual(calls, [], 'Unit-only redraws do not touch terrain');
 assert.equal(scene.drawTerrainTileSprite(0, 0, 50, 'missing'), false);
-assert.equal(scene.rockySpritePoolNext, 1, 'Missing frames do not reserve a casting slot');
+assert.equal(scene.terrainSpritePoolNext, 1, 'Missing frames do not reserve a slot');
 
-const shadowIndex = source.indexOf("new ObjectShadowRenderer(gNode, 'RockyGroundShadows')");
-const rockIndex = source.indexOf("new Node('RockyHighlandSprites')");
+assert.doesNotMatch(source, /rockyShadows|rockySpritePool|RockyGroundShadows|RockyHighlandSprites/,
+  'No legacy per-hex layer or shadow renderer remains active');
+const terrainIndex = source.indexOf('this.elevationRenderer = new ElevationRenderer(terrainNode)');
 const trackIndex = source.indexOf("new Node('VisibleTrackMask')");
 const bloodIndex = source.indexOf("new Node('InfantryBloodDecals')");
 const buildingIndex = source.indexOf("new Node('UrbanBuildingSprites')");
-assert(shadowIndex >= 0 && rockIndex > shadowIndex && trackIndex > rockIndex && bloodIndex > trackIndex,
-  'Rock faces cover their own casts and remain below the masked tracks/blood layer');
+assert(terrainIndex >= 0 && trackIndex > terrainIndex && bloodIndex > trackIndex,
+  'Continuous terrain remains below the masked tracks/blood layer');
 assert(buildingIndex > bloodIndex && source.indexOf("new Node('VisibleUnitMask')") > buildingIndex,
   'Infantry stays above rock terrain while buildings keep their existing depth');
-assert.match(source, /rockySpritePoolNext = 0;\s*for \(const \{ node \} of this\.rockySpritePool\) node\.active = false;/,
-  'Every map redraw releases old rock sprites');
-console.log('Rocky highland shadow integration tests passed.');
+console.log('All rocky terrain uses continuous elevation without legacy sprites or duplicate shadows.');

@@ -68,6 +68,7 @@ test('classic selection uses one own-vision calculation; no candidates do not ca
 
 class Color { constructor(...values) { this.values = values; } }
 const trayGlobals = { ...rules, Color, t: key => key, DICE_DIE_BORDER: {}, unitDisplayName: value => value,
+  DIE_FACE_TEXT: {}, DIE_FACE_TEXT_USED: {}, DIE_FACE_USED_FILL: {}, DIE_FACE_SELECTED: {},
   describeEntry: entry => entry.primary };
 function trayFixture() {
   const Scene = sceneMethods(['refreshEnemyDiceTray', 'enemyDieActionSubtitle', 'runNextEnemyStep'], trayGlobals);

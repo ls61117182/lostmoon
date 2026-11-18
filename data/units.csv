@@ -41,3 +41,9 @@ jagdtiger,猎虎,german,2,1,16,13,11,11,0,2,3,9,5,,5,0,0,4,4,1,1,audio/tank_move
 elefant,象式坦克歼击车,german,2,1,16,12,11,11,0,2,2,8,3,,5,0,0,4,4,1,1,audio/tank_move_heavy,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,fixed,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5|6,loader=3|6,1944象式；固定88毫米PaK43/2 L71；六人双装填手；200毫米正面与80毫米侧后装甲映射为暂定游戏值，待平衡；六人双装填手、独立车长炮手；88毫米L71长重整装弹装填2,1,front
 jagdpanther,追猎者,german,3,3,14,11,9,8,0,2,2,8,3,,4,0,0,4,4,1,1,audio/tank_move_heavy,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,fixed,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,,追猎者固定主炮；五人乘员；装甲机动沿用豹式、穿甲沿用象式的既有游戏值；按Jagdpanther猎豹原型，五人分工完整；88毫米L71长重整装弹装填2,1,front
 panzer4_f,4号F,german,4,3,9,9,8,7,0,2,1,1,2,,1,3,0,4,4,1,1,audio/tank_move,audio/cannon_fire,textures/units/german_commander_hatch_open/spriteFrame,turreted,german_tank,1,attack=attack1|move=move1|misc=misc1,1|2|3|4|5,,谢尔曼基准重评2026-10-19；四号F1；车体及炮塔正面50毫米，侧面30毫米；综合前甲9，前侧9与四号G及无裙板三号M/N同档；短75毫米KwK 37 L/24常规AP穿甲1、HE2、有效穿甲距离1，与三号N相同，不含HEAT；车身美术复用G型；五人三人炮塔；协同2、装填1,1,front
+train_locomotive,装甲机车,german,2,0,7,9,9,7,0,1,1,0,0,,0,0,0,3,0,3,0,,,,turreted,german_tank,0,,,,列车V6可调初始数值，待平衡；无乘员；防空闲置,1,front
+train_tender,装甲煤水车,german,2,0,7,9,9,7,0,1,1,0,0,,0,0,0,3,0,3,0,,,,turreted,german_tank,0,,,,列车V6可调初始数值，待平衡；无乘员；防空闲置,1,front
+train_command,装甲指挥车,german,2,0,7,9,9,7,0,1,1,0,0,,0,0,0,3,0,3,0,,,,turreted,german_tank,0,,,,列车V6可调初始数值，待平衡；无乘员；防空闲置,1,front
+train_howitzer,列车榴弹炮车,german,2,0,7,9,9,7,0,1,1,2,3,,3,2,0,3,4,3,0,,audio/cannon_fire,,turreted,german_tank,0,,,,列车V6可调初始数值，待平衡；无乘员；防空闲置,1,front
+train_artillery_flak,列车火炮防空组合车,german,2,0,7,9,9,7,0,1,1,2,3,,3,2,0,3,4,3,0,,audio/cannon_fire,,turreted,german_tank,0,,,,列车V6可调初始数值，待平衡；无乘员；防空闲置,1,front
+train_panzerjaeger,列车反坦克炮车,german,2,0,7,9,9,7,0,1,1,4,2,,4,2,0,3,4,3,0,,audio/cannon_fire,,turreted,german_tank,0,,,,列车V6可调初始数值，待平衡；无乘员；防空闲置,1,front

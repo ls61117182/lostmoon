@@ -64,6 +64,17 @@ export function buildObjectiveHudLines(mission: LoadedMission): ObjHudLine[] {
   };
 
   switch (obj.type) {
+    case 'destroy_train': {
+      const train = mission.trains?.find(t => t.id === obj.trainId);
+      const locos = train?.carriages.filter(c => c.trainCar.module === 'locomotive') ?? [];
+      return withUsCasualties([{ displayIndex: 1, state: train?.destroyed ? 'done' : 'active',
+        template: { key: 'destroyProgress', unitKind: 'train_locomotive', cur: locos.filter(c => c.destroyed).length, total: locos.length } }]);
+    }
+    case 'destroy_train_carriage': {
+      const car = mission.trains?.find(t => t.id === obj.trainId)?.carriages.find(c => c.id === obj.carriageId);
+      return withUsCasualties([{ displayIndex: 1, state: car?.destroyed ? 'done' : 'active',
+        template: { key: 'destroyProgress', unitKind: car?.kind ?? 'train_locomotive', cur: car?.destroyed ? 1 : 0, total: 1 } }]);
+    }
     case 'destroy_kind_evac': {
       const evacDone = !!(mission.playerTankEvacuated || mission.shermanEvacuated);
       if (obj.destroyAllEnemiesBeforeEvac) {

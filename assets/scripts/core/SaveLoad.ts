@@ -16,6 +16,7 @@ import { cloneRegionalState } from './MultiRegion';
 import { BattleStatistics, cloneBattleStatistics } from './BattleStatistics';
 import { fitTwoHexDeployment } from './TwoHexDeployment';
 import { isTwoHexUnit } from './UnitFootprint';
+import { syncArmoredTrains } from './ArmoredTrain';
 
 /** localStorage 的 key；数据结构升级由 version 字段控制，不一定要改 key */
 export const SAVE_KEY = profileStorageKey('lone_sherman_save_v1');
@@ -39,6 +40,7 @@ const SAVE_VERSION = 12 as const;
 export type SavePlayerStep = 'choose' | 'movement' | 'attack' | 'misc';
 
 interface UnitSnapshot {
+  trainCar?: Unit['trainCar'];
   id?: string;
   kind: UnitKind;
   faction?: Faction;
@@ -95,6 +97,10 @@ interface UnitSnapshot {
 }
 
 export interface SaveData {
+  trains?: Array<{ id: string; routeId: string; headIndex: number; active: boolean; separated: boolean; destroyed: boolean;
+    lastActionTurn?: number; carriages: UnitSnapshot[] }>;
+  trainAction?: import('./ArmoredTrain').TrainActionState;
+  trainEscapeDefeat?: boolean;
   /** Distinguishes old single-cell Maus positions from intentional half-exited two-cell positions. */
   twoHexFootprintVersion?: 1;
   battleStatistics?: BattleStatistics;
@@ -103,7 +109,7 @@ export interface SaveData {
   rngState?: number;
   version: typeof SAVE_VERSION | 11 | 10 | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2;
   /** v5: selected rule profile; older saves resume as classic. */
-  gameMode?: GameMode;
+  gameMode?: GameMode | 'test'; // Legacy test saves resume with Hardcore rules.
   missionId: string;
   missionSource?: MissionSource;
   /** The weather already drawn for this game, including an explicit clear result. */
@@ -167,6 +173,7 @@ function cloneWreckWater(state: WreckWaterState | undefined): WreckWaterState | 
 function captureUnit(u: Unit): UnitSnapshot {
   return {
     id: u.id,
+    trainCar: u.trainCar ? { ...u.trainCar } : undefined,
     kind: u.kind,
     faction: u.faction,
     sideId: u.sideId,
@@ -235,6 +242,7 @@ function savedTurretFacing(value: unknown, fallback: Direction | null): FireDire
 }
 
 function applyUnitSnapshot(live: Unit, s: UnitSnapshot, legacyCrewlessTankFaction?: Faction): void {
+  if (s.trainCar) live.trainCar = { ...s.trainCar };
   const recoverLegacyCrewlessTankFaction = isTankKind(live.kind)
     && !s.crew
     && s.faction === 'neutral'
@@ -331,6 +339,7 @@ function makeSavedUnit(s: UnitSnapshot, idFallback: string, theater: LoadedMissi
  * 单元测试或服务器战报回放时可以直接使用同一 JSON 格式。
  */
 export function captureSave(p: SnapshotParams): SaveData {
+  syncArmoredTrains(p.mission);
   const sh = p.mission.playerTank ?? p.mission.sherman;
   syncTankRiders([sh, ...p.mission.allies, ...p.mission.enemies]);
   const playerTankSnapshot = {
@@ -359,8 +368,11 @@ export function captureSave(p: SnapshotParams): SaveData {
     attackPositionMemory: cloneAttackPositionMemory(p.attackPositionMemory),
     sherman: playerTankSnapshot,
     playerTank: { ...playerTankSnapshot },
-    allies: p.mission.allies.map(captureUnit),
-    enemies: p.mission.enemies.map(captureUnit),
+    allies: p.mission.allies.filter(u => !u.trainCar).map(captureUnit),
+    enemies: p.mission.enemies.filter(u => !u.trainCar).map(captureUnit),
+    trains: p.mission.trains?.map(t => ({ ...t, carriages: t.carriages.map(captureUnit) })),
+    trainAction: p.mission.trainAction ? JSON.parse(JSON.stringify(p.mission.trainAction)) : undefined,
+    trainEscapeDefeat: p.mission.trainEscapeDefeat,
     smokeHexes: Array.from(p.mission.smokeHexes ?? []),
     smokeHexOwners: captureSmokeHexOwners(p.mission),
     urbanStructures: Object.fromEntries(p.mission.map.all()
@@ -452,6 +464,14 @@ export function applySave(
     return { ok: false, reason: `任务不匹配 (${save.missionId} vs ${missionId})` };
   }
   const playerTank = mission.playerTank ?? mission.sherman;
+  if ((save.trains?.length ?? 0) !== (mission.trains?.length ?? 0)) return { ok: false, reason: '列车编组数量不匹配' };
+  for (const saved of save.trains ?? []) {
+    const live = mission.trains?.find(t => t.id === saved.id && t.routeId === saved.routeId);
+    if (!live || !Number.isSafeInteger(saved.headIndex) || saved.carriages.length !== live.carriages.length
+      || saved.carriages.some((c, i) => c.id !== live.carriages[i].id || c.kind !== live.carriages[i].kind
+        || c.trainCar?.trainId !== live.id || c.trainCar?.order !== i
+        || !['pending', 'outside', 'present', 'exited'].includes(c.trainCar.presence))) return { ok: false, reason: '列车车序或状态不匹配' };
+  }
   const savedPlayer = save.playerTank ?? save.sherman;
   if (savedPlayer.kind !== playerTank.kind) {
     return { ok: false, reason: `玩家坦克种类不匹配` };
@@ -462,10 +482,10 @@ export function applySave(
   const legacyCrewLayout = save.version < 10;
   const liveEnemies = legacyCrewLayout
     ? mission.enemies.filter(unit => !unit.id.endsWith(':scenario_crew'))
-    : mission.enemies;
+    : mission.enemies.filter(unit => !unit.trainCar);
   const liveAllies = legacyCrewLayout
     ? mission.allies.filter(unit => !unit.id.endsWith(':scenario_crew'))
-    : mission.allies;
+    : mission.allies.filter(unit => !unit.trainCar);
   if (save.enemies.length < liveEnemies.length) {
     return {
       ok: false,
@@ -635,7 +655,7 @@ export function applySave(
       fitTwoHexDeployment(mission.map, unit, units);
     }
   }
-  if (save.version < 12 && save.gameMode === 'hardcore') {
+  if (save.version < 12 && (save.gameMode === 'hardcore' || save.gameMode === 'test')) {
     for (const unit of new Set(units)) {
       const progress = unit.reloadProgress ?? 0;
       if (unit.loaded || progress <= 0) continue;
@@ -663,6 +683,15 @@ export function applySave(
   }
 
   syncTankRiders(units);
+  for (const saved of save.trains ?? []) {
+    const train = mission.trains!.find(t => t.id === saved.id)!;
+    train.headIndex = saved.headIndex; train.active = saved.active; train.separated = saved.separated;
+    train.destroyed = saved.destroyed; train.lastActionTurn = saved.lastActionTurn;
+    train.carriages.forEach((c, i) => applyUnitSnapshot(c, saved.carriages[i]));
+  }
+  mission.trainAction = save.trainAction ? JSON.parse(JSON.stringify(save.trainAction)) : undefined;
+  mission.trainEscapeDefeat = save.trainEscapeDefeat === true;
+  syncArmoredTrains(mission);
   mission.battleStatistics = cloneBattleStatistics(save.battleStatistics);
   if (mission.data.multiRegion && save.multiRegionState) {
     mission.multiRegionState = cloneRegionalState(save.multiRegionState);

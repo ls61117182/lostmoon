@@ -5,7 +5,9 @@ export const SLOPE_DIRECTIONS = ['E', 'SE', 'SW', 'W', 'NW', 'NE'] as const;
 export const SLOPE_ART = { width: 384, height: 256, center: 128, anchorY: 0.5, widthScale: 2, heightScale: 4 / 3,
   slopeDepth: 114, cliffDepth: 82 } as const;
 const STEPS = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]] as const;
-export const tileHeight = (tile: { height?: number } | null | undefined): number => tile?.height ?? 0;
+/** Legacy Pacific H tiles are one-level terraces without rewriting mission/save data. */
+export const tileHeight = (tile: { height?: number; terrain?: string; t?: string } | null | undefined): number =>
+  tile?.height ?? (tile?.terrain === 'rocky' || tile?.t === 'H' ? 1 : 0);
 /** A continuous terrace value supports the relief even when rain/fog reduces contrast. */
 export function elevationSurfaceTint(height: number): { value: number; alpha: number } | null {
   return height === 0 ? null : { value: height > 0 ? 255 : 0,
@@ -23,7 +25,7 @@ export function validateElevation(tile: Pick<TileDef, 'height' | 'cliff'>): void
 
 export function isCliffEdge(a: Tile | undefined, b: Tile | undefined, dir: number): boolean {
   return !!a && !!b && tileHeight(a) !== tileHeight(b)
-    && (!!a.cliffs?.[dir] || !!b.cliffs?.[(dir + 3) % 6]);
+    && (a.terrain === 'rocky' || b.terrain === 'rocky' || !!a.cliffs?.[dir] || !!b.cliffs?.[(dir + 3) % 6]);
 }
 
 export interface ElevationEdge {
@@ -108,7 +110,7 @@ export function editorElevationTiles(grid: EditorGrid, parity: 0 | 1 = 0): Tile[
   const result: Tile[] = [];
   grid.forEach((row, r) => row.forEach((tile, col) => {
     if (!tile) return;
-    result.push({ pos: { q: col - ((r + parity - ((r + parity) & 1)) >> 1), r }, terrain: 'clear',
+    result.push({ pos: { q: col - ((r + parity - ((r + parity) & 1)) >> 1), r }, terrain: tile.t === 'H' ? 'rocky' : 'clear',
       height: tileHeight(tile), cliffs: tile.cliff?.split('').map(bit => bit === '1') as Tile['cliffs'] });
   }));
   return result;
@@ -120,10 +122,13 @@ function editorNeighbor(row: number, col: number, dir: number, parity: 0 | 1) {
 }
 export function editorCliffState(grid: EditorGrid, row: number, col: number, dir: number, parity: 0 | 1 = 0): boolean {
   const n = editorNeighbor(row, col, dir, parity);
-  return grid[row]?.[col]?.cliff?.[dir] === '1' || grid[n.row]?.[n.col]?.cliff?.[(dir + 3) % 6] === '1';
+  return grid[row]?.[col]?.t === 'H' || grid[n.row]?.[n.col]?.t === 'H'
+    || grid[row]?.[col]?.cliff?.[dir] === '1' || grid[n.row]?.[n.col]?.cliff?.[(dir + 3) % 6] === '1';
 }
 export function setEditorCliff(grid: EditorGrid, row: number, col: number, dir: number, blocked: boolean, parity: 0 | 1 = 0): boolean {
   if (!Number.isInteger(dir) || dir < 0 || dir > 5 || !grid[row]?.[col]) return false;
+  const adjacentOffset = editorNeighbor(row, col, dir, parity);
+  if (grid[row][col]!.t === 'H' || grid[adjacentOffset.row]?.[adjacentOffset.col]?.t === 'H') return false;
   const write = (tile: TileDef, direction: number) => {
     const flags = (tile.cliff ?? '000000').split(''); flags[direction] = blocked ? '1' : '0';
     if (flags.some(bit => bit === '1')) tile.cliff = flags.join(''); else delete tile.cliff;

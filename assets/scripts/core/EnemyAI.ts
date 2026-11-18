@@ -244,6 +244,7 @@ export function aiTargetPriorityForActor(
 }
 
 export function isAIActorUnit(u: Unit, includeHardcoreInfantry = false): boolean {
+  if (u.trainCar || u.kind.startsWith('train_')) return false;
   return !u.destroyed
     && !isAbandonedATGun(u)
     && !isAbandonedTank(u)

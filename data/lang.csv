@@ -235,7 +235,7 @@ action.doublesCoDriverTurnCCW,↺ 60°,↺ 60°
 action.doublesLoaderReload,装填（+同点骰）,Loader Reload (+pair)
 action.doublesGunnerFire,主炮射击（+同点骰）,Gunner Fire (+pair)
 action.doublesGunnerRotate,旋转（+同点骰）,Rotate (+pair)
-action.precisionFire,精确射击（命中所需 -2）,Precision Fire (hit need -2)
+action.precisionFire,精确射击,Precision Fire
 action.closeHatchPair,关闭舱盖（+同点骰）,Close Hatch (+pair)
 attack.reason.selfFire,不能攻击自己,Cannot Target Self
 attack.reason.destroyedTarget,目标已被摧毁,Target Destroyed
@@ -996,7 +996,6 @@ faction.britain,英国,Britain
 faction.soviet,苏联,Soviet Union
 faction.german,德国,Germany
 faction.japan,日本,Japan
-menu.mode.test,测试,Test
 hud.attackMovementPhase,回合 {n} | 攻击移动阶段 | {loaded} | 骰子 {dice}{sel},Turn {n} | Attack and movement phase | {loaded} | Dice {dice}{sel}
 battleLog.phase.attackMovement,攻击移动,Attack and movement
 btn.attackMovementPhase,攻击移动阶段,Attack / Move Phase
@@ -1039,3 +1038,11 @@ unit.twoHex.frontTurret,占两格；炮塔位于前格,Two hexes; front turret
 menu.operations.prototype3d,3D 样板战场,3D battlefield prototype
 menu.operations.prototype3dHint,低多边形谢尔曼与高差地形：移动、射击和可旋转镜头。,Low-poly tanks and a raised battlefield. Move and fire with an orbit camera.
 tileInspect.railway,铁路：沿用原地形的移动、骰子与掩护规则；与道路重叠时沿用道路规则。,"Railway: movement, dice and cover follow the underlying terrain, including roads."
+level.destroyTrain.title,击毁列车,Destroy the Train
+unit.name.train_locomotive,装甲机车,Armored Locomotive
+unit.name.train_tender,装甲煤水车,Armored Tender
+unit.name.train_command,装甲指挥车,Command Car
+unit.name.train_howitzer,列车榴弹炮车,Howitzer Car
+unit.name.train_artillery_flak,列车火炮防空车,Artillery/AA Car
+unit.name.train_panzerjaeger,列车反坦克炮车,Anti-tank Car
+hud.turn,回合 {n},Turn {n}

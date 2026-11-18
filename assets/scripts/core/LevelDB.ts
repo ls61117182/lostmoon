@@ -64,7 +64,7 @@ export const CUSTOM_CHAPTER_ID = 'custom';
 export const LEVEL_EDITOR_ENTRY_ID = 0;
 
 /**
- * 欧洲 13 关、太平洋 12 关，以及战役与自定义入口。
+ * 欧洲 14 关（含列车测试）、太平洋 12 关，以及战役与自定义入口。
  */
 const ALL_CHAPTERS: ChapterMeta[] = [
   {
@@ -86,6 +86,7 @@ const ALL_CHAPTERS: ChapterMeta[] = [
       { chapterId: DEFAULT_CHAPTER_ID, id: 11, missionPath: 'missions/mission_11', titleKey: 'level.11.title', missionId: 'mission_11' },
       { chapterId: DEFAULT_CHAPTER_ID, id: 12, missionPath: 'missions/mission_12', titleKey: 'level.12.title', missionId: 'mission_12' },
       { chapterId: DEFAULT_CHAPTER_ID, id: 13, missionPath: 'missions/mission_13', titleKey: 'level.13.title', missionId: 'mission_13', alwaysUnlocked: true },
+      { chapterId: DEFAULT_CHAPTER_ID, id: 14, missionPath: 'missions/mission_destroy_train', titleKey: 'level.destroyTrain.title', missionId: 'mission_destroy_train', alwaysUnlocked: true },
     ],
   },
   {

@@ -11,7 +11,7 @@ function sightState(unit: Unit) {
     unit.crew, unit.visionRange, unit.gunnerVisionRange, unit.interiorVisionRange,
     unit.stats.visionType, unit.stats.hasRadio, unit.stats.visionRange, unit.stats.gunnerVisionRange,
     unit.stats.interiorVisionRange, unit.stats.footprintLength, unit.stats.turretCell, unit.campaignUpgradeIds, unit.mountedOnUnitId,
-    unit.attachedToATGunId, unit.atGunControllerUnitId, unit.atGunCrewAlive];
+    unit.attachedToATGunId, unit.atGunControllerUnitId, unit.atGunCrewAlive, unit.trainCar];
 }
 
 /** Cache rules sight, excluding presentation-only movement interpolation and ammo/UI state. */

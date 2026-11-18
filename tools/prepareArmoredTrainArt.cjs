@@ -206,11 +206,25 @@ async function muzzleTips(id){
   if(runs.length!==expected)throw Error(`${id}: expected ${expected} visible muzzle tips, found ${runs.length}`);
   return runs.map(run=>({x:(run.left+run.right+1)/2,y:box.top+.5}));
 }
+// Narrow end appendages are couplers; record crop planes without editing PNGs.
+async function bodyEndBounds(id){
+  const {data,info}=await sharp(path.join(OUT,filename(id,'body'))).ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  const rows=[];
+  for(let y=0;y<info.height;y++) {
+    let count=0;
+    for(let x=0;x<info.width;x++)if(data[(y*info.width+x)*4+3]>128)count++;
+    if(count>info.width/16)rows.push(y);
+  }
+  if(!rows.length)throw Error(`Missing train body silhouette: ${id}`);
+  return {top:rows[0],bottom:rows[rows.length-1]+1};
+}
 async function build(){
   fs.mkdirSync(OUT,{recursive:true});
   for(const dir of[path.join(ROOT,'assets/resources/textures/units/trains'),OUT])directoryMeta(dir);
   const poses={};
   for(const m of modules)poses[m.id]=await normalizeBody(m.id);
+  const bodyBounds={};
+  for(const m of modules)bodyBounds[m.id]=await bodyEndBounds(m.id);
   for(const w of weapons)await normalizeWeapon(w.id);
   for(const m of modules)await assembled(m.id);
   const registration=JSON.parse(fs.readFileSync(path.join(SOURCE,'registration.json'),'utf8'));
@@ -229,7 +243,7 @@ async function build(){
   const manifest={schemaVersion:2,style:'BP44',scope:'art-only',canvas:{width:SIZE,height:SIZE},baseHexRadius:128,pixelDensity:2,forward:{x:0,y:-1},footprintLength:1,
     couplingDistance:COUPLER*4,railGaugePixels:44,sourceFolder:path.relative(ROOT,SOURCE).replaceAll('\\','/'),
     modules:modules.map(m=>({id:m.id,label:m.label,body:assetPath(filename(m.id,'body')),destroyed:assetPath(filename(m.id,'destroyed')),pivot:point([128,128]),
-      frontCoupler:point([128,128-COUPLER]),rearCoupler:point([128,128+COUPLER]),bogies:[point([128,64]),point([128,192])],
+      frontCoupler:point([128,128-COUPLER]),rearCoupler:point([128,128+COUPLER]),bogies:[point([128,64]),point([128,192])],bodyBounds:bodyBounds[m.id],
       ...(m.chimney?{chimney:point(m.chimney)}:{}),weapons:m.weapons.map(w=>({slotId:w.id==='howitzer'?'main_gun':w.id==='flakvierling'?'anti_aircraft':'anti_tank',id:w.id,pivot:point(w.pivot),initialAngleDegrees:w.angle,rotationMode:'independent'})),registration:poses[m.id]})),
     weapons:weaponDefinitions,
   };
@@ -237,5 +251,5 @@ async function build(){
   if(!fs.existsSync(file+'.meta'))fs.writeFileSync(file+'.meta',JSON.stringify({ver:'2.0.1',importer:'json',imported:true,uuid:guid('manifest'),files:['.json'],subMetas:{},userData:{}},null,2)+'\n');
   console.log(`Prepared ${modules.length} module bodies and ${weapons.length} independent weapons; assembled normal previews saved.`);
 }
-module.exports={ROOT,SOURCE,OUT,SIZE,COUPLER,modules,weapons,filename,alphaBounds,saveImage,assembled,build,guides,registration};
+module.exports={ROOT,SOURCE,OUT,SIZE,COUPLER,modules,weapons,filename,alphaBounds,bodyEndBounds,saveImage,assembled,build,guides,registration};
 if(require.main===module){const command=process.argv[2]??'build';(command==='guides'?guides():command==='register'?registration():build()).catch(e=>{console.error(e);process.exitCode=1;});}

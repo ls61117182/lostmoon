@@ -44,6 +44,7 @@ import { normalizePlayerCrewLevels, normalizeUnitLevel } from './UnitLevel';
 import { createUrbanVariantAllocator } from './UrbanTerrain';
 import { normalizeGermanTankCamouflage } from './TankCamouflage';
 import { initializeMultiRegion } from './MultiRegion';
+import { initializeArmoredTrains } from './ArmoredTrain';
 
 /** TileDef 简写（不含已废弃的整格 b）→ TerrainType */
 const TERRAIN_MAP = {
@@ -107,6 +108,9 @@ function addStartOccupant(occupied: Map<string, StartOccupant[]>, pos: Axial, oc
 }
 
 export interface LoadedMission {
+  trains?: import('./ArmoredTrain').TrainRuntime[];
+  trainAction?: import('./ArmoredTrain').TrainActionState;
+  trainEscapeDefeat?: boolean;
   battleStatistics?: import('./BattleStatistics').BattleStatistics;
   multiRegionState?: import('./types').MultiRegionState;
   map: HexMap;
@@ -487,6 +491,7 @@ export function loadMission(data: MissionData, rng?: RNG, options: MissionLoadOp
     }
   }
   initializeMultiRegion(mission);
+  initializeArmoredTrains(mission);
   return mission;
 }
 
@@ -786,6 +791,7 @@ interface UnitRuntimeRole {
 }
 
 export function makeUnit(id: string, p: UnitPlacement, rowParityOffset: 0 | 1, role: UnitRuntimeRole): Unit {
+  if (p.kind.startsWith('train_')) throw new Error('Train carriages must be configured in mission.trains, with a route and formation');
   if (!p.at) {
     throw new Error(`makeUnit(${id})：缺少 at`);
   }

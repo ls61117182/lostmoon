@@ -10,9 +10,11 @@ export interface ContourSegment {
   a: Point; b: Point; na: Point; nb: Point;
   rockA: number; rockB: number; depthA: number; depthB: number;
   high: number; low: number;
+  reefA?: number; reefB?: number;
 }
 export interface RubbleArtwork { size: number; rgba: string; normals: string; }
-export interface ElevationMaterialData { version: number; rock: { width: number; height: number; rgb: string }; stones?: RubbleArtwork[]; }
+export interface ElevationMaterialData { version: number; rock: { width: number; height: number; rgb: string }; stones?: RubbleArtwork[];
+  reefTop?: { width: number; height: number; rgb: string }; }
 export interface ElevationChunk { x: number; y: number; size: number; pixels: Uint8Array; }
 const SQ = Math.sqrt(3), R = ELEVATION_RADIUS;
 const clamp = (x: number, a = 0, b = 1) => Math.max(a, Math.min(b, x));
@@ -43,14 +45,18 @@ export function elevationContour(tiles: readonly Tile[]): ContourSegment[] {
     return vertexKey(lines[j].a) === vertexKey(line.b) && compatible(line.edge, lines[j].edge) ? j : -1;
   });
   const previous = lines.map(() => -1); next.forEach((j, i) => { if (j >= 0) previous[j] = i; });
-  const result: ContourSegment[] = [], trim = .27;
+  const result: ContourSegment[] = [];
+  // Reef shelves keep longer straight faces; only the corners are rounded.
+  const cornerTrim = (edge: ElevationEdge) => edge.high.terrain === 'rocky' ? .16 : .27;
   lines.forEach((line, i) => {
+    const trim = cornerTrim(line.edge);
     const edge = line.edge, a = point(line.a, line.b, previous[i] >= 0 ? trim : 0), b = point(line.a, line.b, next[i] >= 0 ? 1 - trim : 1);
     const rock = edge.blocked ? 1 : 0, depth = slopeDepth(edge.difference);
     const common = { high: tileHeight(edge.high), low: tileHeight(edge.low) };
-    result.push({ a, b, na: line.n, nb: line.n, rockA: rock, rockB: rock, depthA: depth, depthB: depth, ...common });
+    const reef = edge.high.terrain === 'rocky' ? 1 : 0;
+    result.push({ a, b, na: line.n, nb: line.n, rockA: rock, rockB: rock, depthA: depth, depthB: depth, reefA: reef, reefB: reef, ...common });
     const j = next[i]; if (j < 0) return;
-    const other = lines[j], c = point(other.a, other.b, trim), rockB = other.edge.blocked ? 1 : 0, depthB = slopeDepth(other.edge.difference);
+    const other = lines[j], c = point(other.a, other.b, cornerTrim(other.edge)), rockB = other.edge.blocked ? 1 : 0, depthB = slopeDepth(other.edge.difference);
     // Subdivide only the small corner; straight parts remain exact line segments.
     for (let k = 0; k < 12; k++) {
       const sample = (u: number) => {
@@ -62,14 +68,16 @@ export function elevationContour(tiles: readonly Tile[]): ContourSegment[] {
       const u = k / 12, v = (k + 1) / 12, sa = sample(u), sb = sample(v);
       result.push({ a: sa.p, b: sb.p, na: sa.n, nb: sb.n,
         rockA: mix(rock, rockB, smooth(0, 1, u)), rockB: mix(rock, rockB, smooth(0, 1, v)),
-        depthA: mix(depth, depthB, u), depthB: mix(depth, depthB, v), ...common });
+        depthA: mix(depth, depthB, u), depthB: mix(depth, depthB, v),
+        reefA: mix(reef, other.edge.high.terrain === 'rocky' ? 1 : 0, u),
+        reefB: mix(reef, other.edge.high.terrain === 'rocky' ? 1 : 0, v), ...common });
     }
   });
   return result;
 }
 
 export function elevationFingerprint(tiles: readonly Tile[], camera: number): string {
-  return `${camera === 90 ? 90 : 0}|` + tiles.map(t => `${t.pos.q},${t.pos.r}:${tileHeight(t)}:${t.cliffs?.map(Number).join('') ?? ''}`).sort().join('|');
+  return `${camera === 90 ? 90 : 0}|` + tiles.map(t => `${t.pos.q},${t.pos.r}:${tileHeight(t)}:${t.terrain === 'rocky' ? 'reef' : ''}:${t.cliffs?.map(Number).join('') ?? ''}`).sort().join('|');
 }
 function axialAt(x: number, y: number): string {
   const r = y / 1.5, q = x / SQ - r / 2;
@@ -86,6 +94,22 @@ function random(x: number, y: number, seed: number): number {
   let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(seed, 1442695041);
   h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+/** Irregular world-space limestone facets, independent of contour direction and camera.
+ * There is no repeating radial stripe pattern or per-hex texture restart. */
+function reefFacet(x: number, y: number, lx: number, ly: number): { light: number; crack: number } {
+  const step = 7.5, cx = Math.floor(x / step), cy = Math.floor(y / step);
+  let first = Infinity, second = Infinity, sx = 0, sy = 0;
+  for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+    const q = cx + ox, r = cy + oy;
+    const dx = x / step - q - .15 - random(q, r, 81) * .7;
+    const dy = y / step - r - .15 - random(q, r, 82) * .7, d = dx * dx + dy * dy;
+    if (d < first) { second = first; first = d; sx = q; sy = r; }
+    else if (d < second) second = d;
+  }
+  const angle = random(sx, sy, 83) * Math.PI * 2;
+  return { light: (random(sx, sy, 84) - .5) * .15 + (lx * Math.cos(angle) + ly * Math.sin(angle)) * .07,
+    crack: (1 - smooth(.015, .11, second - first)) * .13 };
+}
 interface StonePixels { size: number; rgba: Uint8Array; normals: Uint8Array; }
 
 /** One immutable overlay per chunk. Each pixel samples a single continuous contour field;
@@ -93,14 +117,16 @@ interface StonePixels { size: number; rgba: Uint8Array; normals: Uint8Array; }
 export class ElevationContourRaster {
   private rock: Uint8Array;
   private stones: StonePixels[];
+  private reefTop: Uint8Array | null;
   constructor(private material: ElevationMaterialData) {
     this.rock = decodeBase64(material.rock.rgb);
+    this.reefTop = material.reefTop ? decodeBase64(material.reefTop.rgb) : null;
     this.stones = (material.stones ?? []).map(s => ({ size: s.size, rgba: decodeBase64(s.rgba), normals: decodeBase64(s.normals) }));
   }
   plans(tiles: readonly Tile[]): Array<{ x: number; y: number }> {
     const keys = new Set<string>(), add = (x: number, y: number) => keys.add(`${x},${y}`);
     for (const tile of tiles) {
-      if (tileHeight(tile) === 0) continue;
+      if (tileHeight(tile) === 0 && tile.terrain !== 'rocky') continue;
       const x = SQ * R * (tile.pos.q + tile.pos.r / 2), y = R * 1.5 * tile.pos.r;
       // Includes the lower half of the widest allowed slope plus a one-pixel gutter.
       for (let row = Math.floor((y - 1.7 * R) / ELEVATION_CHUNK); row <= Math.floor((y + 1.7 * R) / ELEVATION_CHUNK); row++)
@@ -117,6 +143,7 @@ export class ElevationContourRaster {
     const width = size + 2, count = width * width, pixels = new Uint8Array(count * 4);
     const distance = new Float32Array(count).fill(Infinity), signed = new Float32Array(count), nx = new Float32Array(count), ny = new Float32Array(count);
     const rock = new Float32Array(count), depth = new Float32Array(count), high = new Float32Array(count), low = new Float32Array(count), valid = new Uint8Array(count);
+    const reef = new Float32Array(count);
     for (const segment of segments) {
       const a = { x: segment.a.x * R, y: segment.a.y * R }, b = { x: segment.b.x * R, y: segment.b.y * R };
       const reach = .67 * R * Math.max(segment.depthA, segment.depthB), dx = b.x - a.x, dy = b.y - a.y, length2 = dx * dx + dy * dy;
@@ -132,9 +159,10 @@ export class ElevationContourRaster {
         signed[index] = (ox * n.x + oy * n.y >= 0 ? 1 : -1) * Math.sqrt(d2);
         rock[index] = mix(segment.rockA, segment.rockB, u); depth[index] = mix(segment.depthA, segment.depthB, u);
         high[index] = segment.high; low[index] = segment.low;
+        reef[index] = mix(segment.reefA ?? 0, segment.reefB ?? 0, u);
       }
     }
-    const lookup = new Map(tiles.map(t => [`${t.pos.q},${t.pos.r}`, tileHeight(t)]));
+    const lookup = new Map(tiles.map(t => [`${t.pos.q},${t.pos.r}`, t]));
     const rotation = camera === 90 ? Math.PI / 2 : 0;
     // Same screen-space sun as ObjectShadowRenderer, transformed into Y-down map coordinates.
     const lx = (-Math.cos(rotation) + Math.sin(rotation)) / Math.SQRT2, ly = -(Math.sin(rotation) + Math.cos(rotation)) / Math.SQRT2;
@@ -142,9 +170,11 @@ export class ElevationContourRaster {
     const reflected = (v: number, length: number) => { const n = ((Math.floor(v) % (length * 2)) + length * 2) % (length * 2); return n < length ? n : length * 2 - n - 1; };
     for (let py = 0; py < width; py++) for (let px = 0; px < width; px++) {
       const gx = x + px - .5, gy = y + py - .5, index = py * width + px, at = index * 4;
-      let height = lookup.get(axialAt(gx / R, gy / R)); if (height === undefined) continue;
+      const tile = lookup.get(axialAt(gx / R, gy / R)); if (!tile) continue;
+      const height = tileHeight(tile);
       valid[index] = 1;
-      const k = rock[index], half = mix(.30, .215, k) * R * depth[index];
+      const reefAmount = this.reefTop ? reef[index] : 0;
+      const k = rock[index], half = mix(.30, .215, k) * R * depth[index] * mix(1, .70, reefAmount);
       const d = signed[index] + noise(gx, gy) * mix(.9, 1.5, k), u = clamp((d + half) / (2 * half || 1));
       const tint = elevationSurfaceTint(height);
       let cr = tint?.value ?? 0, cg = cr, cb = cr, alpha = (tint?.alpha ?? 0) / 255;
@@ -157,31 +187,46 @@ export class ElevationContourRaster {
         const out = a + alpha * (1 - a); if (out <= 0) return;
         cr = (r * a + cr * alpha * (1 - a)) / out; cg = (g * a + cg * alpha * (1 - a)) / out; cb = (b * a + cb * alpha * (1 - a)) / out; alpha = out;
       };
+      // A world-space surface joins adjacent H hexes without individual rims or baked casts.
+      const top = this.material.reefTop;
+      const reefAt = top ? (reflected(gy * 1.15, top.height) * top.width + reflected(gx * 1.15, top.width)) * 3 : 0;
+      if (tile.terrain === 'rocky' && this.reefTop) {
+        over(this.reefTop[reefAt], this.reefTop[reefAt + 1], this.reefTop[reefAt + 2], 1);
+      }
       if (distance[index] < Infinity && Math.abs(d) < half + 14) {
-        const face = smooth(-half - mix(5, 1.5, k), -half + mix(4, 1.5, k), d)
-          * (1 - smooth(half - 2, half + mix(7, 2.5, k), d));
+        const face = smooth(-half - mix(mix(5, 1.5, k), .8, reefAmount), -half + mix(mix(4, 1.5, k), .8, reefAmount), d)
+          * (1 - smooth(half - mix(2, .8, reefAmount), half + mix(mix(7, 2.5, k), .9, reefAmount), d));
         const facing = lx * nx[index] + ly * ny[index];
-        const shoulder = Math.exp(-Math.pow((d + half * .83) / mix(6, 3.5, k), 2));
-        const foot = Math.exp(-Math.pow((d - half * .85) / mix(6.5, 4.5, k), 2));
+        const shoulder = Math.exp(-Math.pow((d + half * .83) / mix(mix(6, 3.5, k), 1, reefAmount), 2));
+        const foot = Math.exp(-Math.pow((d - half * .85) / mix(mix(6.5, 4.5, k), 1.2, reefAmount), 2));
         // Shade the actual ground through transparent light/shadow; do not paste another grass patch.
         const lighting = 1 + facing * .38 * Math.sin(Math.PI * u) + shoulder * .15 - foot * (.23 + .08 * Math.max(0, -facing));
-        if (lighting < 1) over(0, 0, 0, clamp(1 - lighting) * face);
-        else over(255, 250, 216, clamp((lighting - 1) * .55) * face);
-        const rockAmount = k * face * smooth(-half - 1, -half + 3, d);
+        if (lighting < 1) over(0, 0, 0, clamp(1 - lighting) * face * (1 - reefAmount));
+        else over(255, 250, 216, clamp((lighting - 1) * .55) * face * (1 - reefAmount));
+        const rockAmount = k * face * smooth(-half - 1, -half + mix(3, 1.2, reefAmount), d);
         if (rockAmount > .001) {
           // One world-space rock field crosses every old hex edge and every rounded corner.
           const tx = reflected(gx * 1.4, mw), ty = reflected(gy * 1.4, mh), t = (ty * mw + tx) * 3;
           const light = clamp(.94 + facing * .22 + shoulder * .07 - foot * .12, .5, 1.2);
           // Broken earth remains between independent stones, rather than one solid rock ribbon.
-          over(this.rock[t] * light, this.rock[t + 1] * light, this.rock[t + 2] * light,
-            rockAmount * (this.stones.length ? .32 : 1));
+          const facet = reefAmount > 0 ? reefFacet(gx, gy, lx, ly) : { light: 0, crack: 0 };
+          const cliffLight = clamp(.94 + facing * .19 + facet.light - facet.crack + noise(gx * 2, gy * 2) * .035, .66, 1.17);
+          over(mix(this.rock[t] * light, ((this.reefTop?.[reefAt] ?? 0) + 5) * cliffLight, reefAmount),
+            mix(this.rock[t + 1] * light, ((this.reefTop?.[reefAt + 1] ?? 0) + 3) * cliffLight, reefAmount),
+            mix(this.rock[t + 2] * light, (this.reefTop?.[reefAt + 2] ?? 0) * cliffLight, reefAmount),
+            rockAmount * mix(this.stones.length ? .32 : 1, 1, reefAmount));
+          over(244, 229, 203, reefAmount * shoulder * (.08 + .12 * Math.max(0, facing)));
         }
         const cast = Math.exp(-Math.pow((d - half - 2) / (4 + 4 * Math.max(0, -facing)), 2));
-        over(0, 0, 0, cast * mix(.09, .23, k) * (.35 + .65 * Math.max(0, -facing)));
+        over(0, 0, 0, cast * mix(.09, .23, k) * (.35 + .65 * Math.max(0, -facing)) * (1 - reefAmount));
+        // A narrow warm contact line anchors the wall. Only the backlit side casts on sand.
+        const contact = Math.exp(-Math.pow((d - half - .25) / 1.05, 2));
+        const reefCast = Math.exp(-Math.pow((d - half - 1.8) / 2.3, 2));
+        over(66, 56, 43, reefAmount * (contact * .10 + reefCast * .14 * Math.max(0, -facing)));
       }
       pixels[at] = Math.round(clamp(cr, 0, 255)); pixels[at + 1] = Math.round(clamp(cg, 0, 255)); pixels[at + 2] = Math.round(clamp(cb, 0, 255)); pixels[at + 3] = Math.round(alpha * 255);
     }
-    if (this.stones.length) this.rubble(pixels, width, x, y, valid, distance, signed, nx, ny, rock, depth, lx, ly);
+    if (this.stones.length) this.rubble(pixels, width, x, y, valid, distance, signed, nx, ny, rock, depth, lx, ly, reef);
     if (!padding) return { ...output, pixels };
     const cropped = new Uint8Array((output.size + 2) ** 2 * 4), rowBytes = (output.size + 2) * 4;
     for (let row = 0; row < output.size + 2; row++) cropped.set(pixels.subarray(((row + padding) * width + padding) * 4,
@@ -191,7 +236,7 @@ export class ElevationContourRaster {
 
   private rubble(pixels: Uint8Array, width: number, x: number, y: number, valid: Uint8Array,
     distance: Float32Array, signed: Float32Array, nx: Float32Array, ny: Float32Array,
-    rock: Float32Array, depth: Float32Array, lx: number, ly: number): void {
+    rock: Float32Array, depth: Float32Array, lx: number, ly: number, reef: Float32Array): void {
     const stones: Array<{ x: number; y: number; radius: number; angle: number; art: StonePixels; facing: number; opacity: number }> = [];
     for (const small of [false, true]) {
       const step = small ? 3.6 : 6.5, seed = small ? 41 : 19;
@@ -201,12 +246,15 @@ export class ElevationContourRaster {
           const px = Math.round(gx - x + .5), py = Math.round(gy - y + .5);
           if (px < 0 || px >= width || py < 0 || py >= width) continue;
           const at = py * width + px, k = rock[at]; if (!valid[at] || k < .02 || distance[at] === Infinity) continue;
-          const half = mix(.30, .215, k) * R * depth[at], d = (signed[at] + noise(gx, gy) * 1.5) / half;
-          const probability = small ? .38 * smooth(-.8, .2, d) * (1 - smooth(.95, 2.0, d))
+          const half = mix(.30, .215, k) * R * depth[at] * mix(1, .70, reef[at]), d = (signed[at] + noise(gx, gy) * 1.5) / half;
+          const originalProbability = small ? .38 * smooth(-.8, .2, d) * (1 - smooth(.95, 2.0, d))
             : .82 * smooth(-1.2, -.75, d) * (1 - smooth(.65, 1.25, d));
-          if (random(cx, cy, seed + 2) > probability * k) continue;
-          stones.push({ x: gx, y: gy, radius: small ? .65 + Math.pow(random(cx, cy, seed + 3), 2) * 1.6
-            : 2.4 + Math.pow(random(cx, cy, seed + 3), 1.5) * 3.7,
+          const reefProbability = (small ? .27 : .10) * smooth(.15, .8, d) * (1 - smooth(1.15, 1.9, d))
+            * (.4 + .6 * random(Math.floor(cx / 2), Math.floor(cy / 2), seed + 10));
+          if (random(cx, cy, seed + 2) > mix(originalProbability, reefProbability, reef[at]) * k) continue;
+          const radius = small ? .65 + Math.pow(random(cx, cy, seed + 3), 2) * 1.6
+            : 2.4 + Math.pow(random(cx, cy, seed + 3), 1.5) * 3.7;
+          stones.push({ x: gx, y: gy, radius: mix(radius, small ? radius * .7 : radius * .48, reef[at]),
             angle: random(cx, cy, seed + 4) * Math.PI * 2,
             art: this.stones[Math.floor(random(cx, cy, seed + 5) * this.stones.length)],
             facing: lx * nx[at] + ly * ny[at], opacity: smooth(0, .5, k) });

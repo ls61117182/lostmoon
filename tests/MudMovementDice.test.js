@@ -58,7 +58,7 @@ function fixture({ mode = 'hardcore', phase = 'player', step = 'movement', kind 
 const used = h => Array.from(h.phaseDice, d => !!d.used);
 
 test('arriving on mud preserves remaining movement dice in every mode', () => {
-  for (const mode of ['classic', 'hardcore', 'test']) {
+  for (const mode of ['classic', 'hardcore']) {
     const h = fixture({ mode });
     h.tryResolveAmbushAfterMove = () => {
       assert.deepEqual(used(h), [true, false, false]);
@@ -76,7 +76,7 @@ test('arriving on mud preserves remaining movement dice in every mode', () => {
 });
 
 test('combined phase keeps attack dice, and misc driving keeps other misc dice', () => {
-  const h = fixture({ mode: 'test', step: 'attack' });
+  const h = fixture({ mode: 'hardcore', step: 'attack' });
   h.phaseDice.unshift({ pip: 6, type: 'attack' });
   h.update(2);
   assert.deepEqual(used(h), [false, true, false, false]);
@@ -88,7 +88,7 @@ test('combined phase keeps attack dice, and misc driving keeps other misc dice',
 });
 
 test('allied and enemy tanks retain remaining movement dice in every mode', () => {
-  for (const mode of ['classic', 'hardcore', 'test']) for (const phase of ['ally', 'enemy']) {
+  for (const mode of ['classic', 'hardcore']) for (const phase of ['ally', 'enemy']) {
     const h = fixture({ mode, phase, kind: 'stug3' });
     h.runNextEnemyStep = () => assert.deepEqual(h.enemyDiceUsed, [true, false, false, false]);
     h.update(2);
@@ -125,7 +125,7 @@ test('standing on mud does not consume newly rolled movement dice', () => {
 });
 
 test('tanks move at half speed throughout mud, including rubble and beach craters', () => {
-  for (const mode of ['classic', 'hardcore', 'test']) for (const options of [
+  for (const mode of ['classic', 'hardcore']) for (const options of [
     {}, { terrain: 'urban_rubble' }, { terrain: 'europe_beach', tileExtra: { crater: true } },
   ]) {
     const h = fixture({ mode, ...options });

@@ -158,6 +158,7 @@ test('real UI save routes to the original resource file, retains ID, blocks dupl
   };
   vm.runInContext(compile(`const refreshCurrentLabel = ${initializer('refreshCurrentLabel').getText(ast)};
     const buildDraftMission = ${initializer('buildDraftMission').getText(ast)};
+    const validateTrainConfiguration = ${initializer('validateTrainConfiguration').getText(ast)};
     const saveExistingMissionFile = ${initializer('saveExistingMissionFile').getText(ast)};`), ctx);
   const pending = vm.runInContext('saveExistingMissionFile()', ctx);
   assert.equal(sent.action, 'save');
@@ -200,6 +201,7 @@ test('real UI retains source target after failure and new mode restores custom s
   ctx.requestMissionFile = async () => { throw new Error('offline'); };
   vm.runInContext(compile(`const refreshCurrentLabel = ${initializer('refreshCurrentLabel').getText(ast)};
     const buildDraftMission = ${initializer('buildDraftMission').getText(ast)};
+    const validateTrainConfiguration = ${initializer('validateTrainConfiguration').getText(ast)};
     const saveExistingMissionFile = ${initializer('saveExistingMissionFile').getText(ast)};`), ctx);
   await vm.runInContext('saveExistingMissionFile()', ctx);
   assert.match(ctx.statusLabel.string, /保存失败.*offline/);

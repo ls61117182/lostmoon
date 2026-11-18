@@ -1,7 +1,7 @@
 /** Presentation-only cube projection. No engine state or gameplay RNG is used. */
 export interface DicePoint { x: number; y: number }
 /** Keep the same small corner treatment while rolling and at rest. */
-export const DICE_CORNER_RATIO = 0.16;
+export const DICE_CORNER_RATIO = 0.13;
 type Vector = [number, number, number];
 interface Face {
   pip: number;
@@ -39,7 +39,7 @@ const SPOTS: number[][][] = [
 ];
 const DOT_RING = Array.from({ length: 16 }, (_, i) => {
   const angle = i * Math.PI / 8;
-  return [Math.cos(angle) * 0.13, Math.sin(angle) * 0.13];
+  return [Math.cos(angle) * 0.138, Math.sin(angle) * 0.138];
 });
 const dot = (a: Vector, b: Vector) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const shade = (normal: Vector) => Math.max(0.48, Math.min(1.08,

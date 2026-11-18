@@ -34,7 +34,7 @@ function setup({ player = false, targetKind = 'sherman', loadedShell = 'he', hit
   let pending;
   const Scene = sceneMethods(['tryResolveAmbushAfterMove', 'presentAttackResult', 'combatLogIsVisible'], {
     ...types, ...ambush, nonPlayerTankWeaponForTarget, hexDistance, HexMap,
-    GameSession: { gameMode: 'test' }, getGameModeConfig: () => ({}),
+    GameSession: { gameMode: 'hardcore' }, getGameModeConfig: () => ({}),
     isInAmbushSight: () => true, canAttack: ctx => {
       events.push(['validate', ctx.shellType]); return { ok: true };
     },

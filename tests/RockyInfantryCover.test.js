@@ -18,6 +18,7 @@ for (const kind of getAllUnitKinds().filter(isFootKind)) {
   for (const attackerKind of ['sherman', 'stug3', 'american_infantry']) {
     const ctx = { attacker: unit(attackerKind, 0), target: unit(kind, 1), map, hardcoreTankMachineGuns: true };
     tile.terrain = 'field';
+    tile.height = 0; // Isolate cover; uphill stacking is checked separately.
     const plain = hitBreakdown(ctx).threshold;
     const plainMG = mgHitThreshold(ctx);
     tile.terrain = 'rocky';

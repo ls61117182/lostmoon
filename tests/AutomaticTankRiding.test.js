@@ -92,7 +92,7 @@ function germanAIFixture() {
 }
 
 test('German AI carries infantry through real advance/reverse dice actions and dismounts only at its turn end', () => {
-  for (const mode of ['classic', 'hardcore', 'test']) for (const occupied of [false, true]) {
+  for (const mode of ['classic', 'hardcore']) for (const occupied of [false, true]) {
     const { scene, tank, infantry, units } = germanAIFixture(); GameSession.gameMode = mode;
     for (let i = 0; i < 2; i++) {
       scene.runNextEnemyStep();
@@ -184,10 +184,10 @@ test('Misc ends and riders dismount only after no executable Misc dice remain; o
 });
 
 test('spent dice and manual phase completion preserve riders through movement/attack until Misc in every mode', () => {
-  for (const mode of ['classic', 'hardcore', 'test']) for (const manual of [false, true]) {
+  for (const mode of ['classic', 'hardcore']) for (const manual of [false, true]) {
     const { scene, tank, infantry, units } = fixture(); GameSession.gameMode = mode;
     riding.autoMountTankForMove(tank, units);
-    for (const step of mode === 'test' ? ['attack', 'misc'] : ['movement', 'attack', 'misc']) {
+    for (const step of mode === 'hardcore' ? ['attack', 'misc'] : ['movement', 'attack', 'misc']) {
       scene.playerStep = step;
       scene.phaseDice = [{ used: !manual }]; scene.pendingAutoEndStep = manual ? null : step;
       if (manual) scene.endCurrentSubPhase(); else scene.completePhaseDiceAction();

@@ -75,7 +75,7 @@ test('empty maps allocate no chunks, negative heights and three-height junctions
 });
 
 test('production rubble has 16 transparent silhouettes with distinct facets and neutral stone colours',()=>{
-  assert.equal(material.version,5);assert.equal(material.stones.length,16);
+  assert.equal(material.version,6);assert.equal(material.stones.length,16);
   const hashes=new Set();
   for(const art of material.stones){
     const rgba=Buffer.from(art.rgba,'base64'),normals=Buffer.from(art.normals,'base64');

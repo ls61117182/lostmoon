@@ -79,7 +79,7 @@ export class ElevationRenderer {
 /** Crop the exact map overlay, including slopes owned by a higher neighbor. */
 export function addElevationPreview(parent: Node, tiles: readonly Tile[], tile: Tile, _frames: Frames,
   cx: number, cy: number, size: number, camera = 0): void {
-  if (!tiles.some(t => tileHeight(t) !== 0)) return;
+  if (!tiles.some(t => tileHeight(t) !== 0 || t.terrain === 'rocky')) return;
   const node = new Node('ElevationPreview'); node.layer = parent.layer;
   node.addComponent(UITransform); node.setPosition(cx, cy, 0); parent.addChild(node);
   const mask = node.addComponent(Mask); mask.type = Mask.Type.GRAPHICS_STENCIL;

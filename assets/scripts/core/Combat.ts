@@ -1,5 +1,6 @@
 import { canHitCrewAt, isTwoHexUnit, selectedUnitHitHex, unitAtHex, unitCellAt, unitFrontHex, unitOccupiedHexes, unitOccupiesHex, unitTurretHex } from './UnitFootprint';
 import { crewRoleAlive } from "./types";
+import { isTrainUnit } from './types';
 /**
  * 战斗结算 —— 纯函数，不依赖 Cocos，可直接 Jest 测。
  *
@@ -420,6 +421,7 @@ export function infantryAttackRange(_target: Unit): number {
 export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDenyReason } {
   ctx = positionAttackContext(ctx);
   const { attacker, target, map } = ctx;
+  if (isTrainUnit(target) && target.trainCar?.presence !== 'present') return { ok: false, reason: 'attack.reason.destroyedTarget' };
   if (!map.sameRegion(attacker.pos, target.pos)) return { ok: false, reason: 'attack.reason.blocked' };
   if (attacker.mountedOnUnitId) return { ok: false, reason: 'attack.reason.mounted' };
   if (target === attacker || (target.id !== undefined && target.id === attacker.id)) return { ok: false, reason: 'attack.reason.selfFire' };
@@ -445,7 +447,7 @@ export function canAttack(ctx: AttackContext): { ok: boolean; reason?: AttackDen
   const infantryAttack = isFootUnit(attacker);
   const suppressionAttack = ctx.mainGunSuppressesInfantry === true
     && ctx.shellType === 'he'
-    && isTankUnit(attacker)
+    && (isTankUnit(attacker) || isTrainUnit(attacker))
     && isFootUnit(target)
     && target.kind !== 'officer';
   if (isFootUnit(target) && !infantryAttack) {
@@ -713,7 +715,7 @@ function isSameHexInfantryTankAttack(ctx: AttackContext): boolean {
   ctx = positionAttackContext(ctx);
   return ctx.sameHexInfantryTankAttack === true
     && isFootUnit(ctx.attacker)
-    && isTankUnit(ctx.target)
+    && (isTankUnit(ctx.target) || isTrainUnit(ctx.target))
     && isHostile(ctx.attacker, ctx.target)
     && hexDistance(ctx.attacker.pos, ctx.target.pos) === 0;
 }
@@ -781,7 +783,7 @@ export function gunMantletArmorBonus(ctx: AttackContext): number {
   const bonus = target.stats.gunMantletArmor ?? 0;
   if (!ctx.gunMantletArmor
     || bonus <= 0
-    || !isTankUnit(target)
+    || (!isTankUnit(target) && !isTrainUnit(target))
     || target.stats.visionType !== 'turreted'
     || (isTwoHexUnit(target) && unitCellAt(target, target.pos) !== (target.stats.turretCell ?? 'front'))) return 0;
   const incomingStep = incomingFireDirectionStepFor(ctx);
@@ -987,7 +989,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
   }
   // Tank HE pre-rolls its blast dice for presentation even on a miss. The
   // outcome remains none and is never applied unless the hit check succeeded.
-  if (!hit && !isTankUnit(target)) return base;
+  if (!hit && !isTankUnit(target) && !isTrainUnit(target)) return base;
 
   if (shootingPortHit) {
     return { ...base, outcome: 'destroyed' };
@@ -1067,7 +1069,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
       outcome,
     };
   }
-  if (isTankUnit(target)) {
+  if (isTankUnit(target) || isTrainUnit(target)) {
     const effectDice: [number, number] = [rng.d6(), rng.d6()];
     const effectRoll = effectDice[0] + effectDice[1];
     const paralyzeThreshold = armor - power;
@@ -1076,7 +1078,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
     const rolledOutcome: HighExplosiveOutcome = effectRoll >= destroyThreshold
       ? 'destroyed'
       : effectRoll >= fireThreshold ? 'fire'
-        : effectRoll >= paralyzeThreshold ? 'paralyzed' : 'none';
+        : effectRoll >= paralyzeThreshold && !isTrainUnit(target) ? 'paralyzed' : 'none';
     const destroyedByRepeatFire = hit
       && rolledOutcome === 'fire'
       && !isProtagonistTarget(ctx)
@@ -1095,7 +1097,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
         : outcome === 'fire' || destroyedByRepeatFire ? fireThreshold : paralyzeThreshold,
       destroyThreshold,
       fireThreshold,
-      paralyzeThreshold,
+      paralyzeThreshold: isTrainUnit(target) ? undefined : paralyzeThreshold,
       destroyedByRepeatFire,
       outcome,
     };
@@ -1105,6 +1107,7 @@ export function rollHighExplosiveAttack(ctx: AttackContext, rng: RNG): HighExplo
 
 export function applyHighExplosiveAttack(target: Unit, report: HighExplosiveReport): void {
   markAmbushTargeted(target);
+  if (target.destroyed) return;
   if (!report.hit) return;
   if (report.commanderShieldBlocked && target.campaignCommanderShieldAvailable === true) {
     target.campaignCommanderShieldAvailable = false;
@@ -1113,6 +1116,7 @@ export function applyHighExplosiveAttack(target: Unit, report: HighExplosiveRepo
   switch (report.outcome) {
     case 'destroyed': target.destroyed = true; break;
     case 'paralyzed':
+      if (isTrainUnit(target)) break;
       if (target.campaignParalyzedProtectionAvailable === true) {
         target.campaignParalyzedProtectionAvailable = false;
       } else {
@@ -1133,6 +1137,7 @@ export function applyHighExplosiveAttack(target: Unit, report: HighExplosiveRepo
 }
 
 function damageTargetClassFor(target: Unit, protagonistTarget: boolean, useConfiguredClass = false): DamageTargetClass | null {
+  if (isTrainUnit(target)) return null;
   if (protagonistTarget) return 'protagonist';
   if (useConfiguredClass && target.stats.damageTargetClass) return target.stats.damageTargetClass as DamageTargetClass;
   if (!isTankUnit(target)) return null;
@@ -1346,10 +1351,24 @@ export function rollAttack(ctx: AttackContext, rng: RNG): AttackReport {
   const penDie = penDice.reduce((a, b) => a + b, 0);
   const penThreshold = armor - pen;
   const penetrated = penDie >= penThreshold;
+  if (isTrainUnit(target)) {
+    const overpenetrated = penetrated && ctx.overpenetration === true && ctx.attackKind !== 'mg'
+      && (isTankUnit(attacker) || isTrainUnit(attacker)) && penDie - penThreshold > 6;
+    const damageDie = hit && penetrated && !target.destroyed && !(target.fireLevel > 0) ? rng.d6() : undefined;
+    const effect: DamageEffect | undefined = hit && penetrated && !target.destroyed
+      ? target.fireLevel > 0 || damageDie >= 5 ? 'destroyed' : 'fire' : undefined;
+    const applied = overpenetrated ? undefined : effect;
+    return { dice: [d1, d2], roll, threshold, hit, hitBreakdown: lockedHitBreakdown, hitModifiers,
+      ...hitRollMeta, armorFace: face, armor, gunMantletArmor, penetration: pen, penetrationBreakdown,
+      penDice, penDie, penThreshold, penetrated, overpenetrated,
+      overpenetrationSuppressedEffects: overpenetrated && effect ? [effect] : [],
+      damageDie, damageEffect: applied, damageEffects: applied ? [{ effect: applied }] : [],
+      protagonistTarget: false, statusChange: applied === 'destroyed' ? 'destroyed' : applied ? 'damaged' : 'none' };
+  }
   const overpenetrated = penetrated
     && ctx.overpenetration === true
     && ctx.attackKind !== 'mg'
-    && isTankUnit(attacker)
+    && (isTankUnit(attacker) || isTrainUnit(attacker))
     && isOverpenetrationVehicleTarget(target)
     && penDie - penThreshold > 6;
   const directDestroyOnBurningTank = !!damageCheckType
@@ -1528,6 +1547,7 @@ export function resolveDamageEffect(
   protagonistTarget = isPlayerControlled(target),
   damageCheckType: DamageCheckType = 'front',
 ): DamageEffect {
+  if (isTrainUnit(target)) return target.fireLevel > 0 || die >= 5 ? 'destroyed' : 'fire';
   if (protagonistTarget) {
     switch (damageCheckType) {
       case 'front':
@@ -1682,6 +1702,16 @@ function applyDamageEffectStep(target: Unit, step: DamageEffectStep, protagonist
  */
 export function applyAttack(target: Unit, report: AttackReport): void {
   markAmbushTargeted(target);
+  if (isTrainUnit(target)) {
+    if (target.destroyed || !report.hit || !report.penetrated || report.overpenetrated) return;
+    const effect = report.damageEffect;
+    if (effect === 'destroyed') target.destroyed = true;
+    else if (effect === 'fire' || effect === 'damaged') {
+      if (target.fireLevel > 0) target.destroyed = true;
+      else target.fireLevel = 1;
+    }
+    return;
+  }
   if (report.smallArms && isControlledATGun(target)) {
     if (report.hit) {
       target.atGunCrewAlive = false;

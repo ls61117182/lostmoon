@@ -1,6 +1,6 @@
-import { JsonAsset, Node, resources, Sprite, SpriteFrame, UITransform } from 'cc';
-import { trainModuleArt, trainWeaponArt, trainWeaponPose, validateArmoredTrainArt } from '../core/ArmoredTrainArt';
-import type { ArmoredTrainArtManifest, TrainBodyPose, TrainWeaponSlot } from '../core/ArmoredTrainArt';
+import { Color, Graphics, JsonAsset, Node, Rect, resources, Size, Sprite, SpriteFrame, UITransform, Vec2 } from 'cc';
+import { trainBodyCrop, trainCouplingAnchor, trainModuleArt, trainWeaponArt, trainWeaponPose, validateArmoredTrainArt } from '../core/ArmoredTrainArt';
+import type { ArmoredTrainArtManifest, TrainArtPoint, TrainBodyPose, TrainWeaponSlot } from '../core/ArmoredTrainArt';
 
 export interface LoadedArmoredTrainArt { manifest: ArmoredTrainArtManifest; frames: Record<string, SpriteFrame>; }
 
@@ -33,6 +33,12 @@ export class ArmoredTrainVisual {
   private readonly weaponNodes = new Map<string, { node: Node; slot: TrainWeaponSlot; angle: number }>();
   private pose: TrainBodyPose;
   private destroyed = false;
+  private bodyOnlyDestroyed = false;
+  private frontCouplerVisible = true;
+  private rearCouplerVisible = true;
+  private readonly croppedFrames = new Map<string, SpriteFrame>();
+  private rearConnection?: TrainArtPoint;
+  private connectionGraphics?: Graphics;
 
   constructor(parent: Node, private readonly art: LoadedArmoredTrainArt, moduleId: string,
     private hexRadius = 48, initialPose: TrainBodyPose = { x: 0, y: 0, angleDegrees: 0 }) {
@@ -77,19 +83,66 @@ export class ArmoredTrainVisual {
     if (!weapon) throw new Error(`Unknown train weapon slot: ${slotId}`);
     return this.destroyed ? [] : trainWeaponPose(this.art.manifest, this.module, weapon.slot, this.pose, weapon.angle, this.hexRadius).muzzles;
   }
-  setDestroyed(destroyed: boolean): void { this.destroyed = destroyed; this.sync(); }
+  setDestroyed(destroyed: boolean, bodyOnly = false): void { this.destroyed = destroyed; this.bodyOnlyDestroyed = bodyOnly; this.sync(); }
+  setCouplerVisibility(front: boolean, rear: boolean): void {
+    if (front === this.frontCouplerVisible && rear === this.rearCouplerVisible) return;
+    this.frontCouplerVisible = front; this.rearCouplerVisible = rear; this.sync();
+  }
+  setRearConnection(target?: TrainArtPoint): void {
+    this.rearConnection = target;
+    if (target && !this.connectionGraphics) {
+      const node = new Node('ArticulatedCoupling'); node.layer = this.node.layer;
+      node.addComponent(UITransform); this.node.addChild(node); node.setSiblingIndex(0);
+      this.connectionGraphics = node.addComponent(Graphics);
+    }
+    this.syncConnection();
+  }
+  private syncConnection(): void {
+    const g = this.connectionGraphics;
+    if (!g) return;
+    g.clear();
+    if (!this.rearConnection) return;
+    const start = trainCouplingAnchor(this.art.manifest, this.module, this.pose, 'rear', this.hexRadius);
+    const end = this.rearConnection;
+    for (const [width, color] of [[.065, new Color(29, 33, 33)], [.027, new Color(130, 139, 132)]] as const) {
+      g.lineWidth = Math.max(1, width * this.hexRadius); g.strokeColor = color;
+      g.moveTo(start.x - this.pose.x, start.y - this.pose.y);
+      g.lineTo(end.x - this.pose.x, end.y - this.pose.y); g.stroke();
+    }
+  }
   private sync(): void {
     this.node.setPosition(this.pose.x, this.pose.y, 0);
     // Keep root angle zero. Body and weapon angles are siblings, never inherited from one another.
     this.node.angle = 0; this.bodyNode.angle = this.pose.angleDegrees;
     const side = this.hexRadius * 2;
-    this.bodyNode.getComponent(UITransform)!.setContentSize(side, side);
-    this.bodySprite.spriteFrame = this.art.frames[this.destroyed ? this.module.destroyed : this.module.body];
+    const crop = trainBodyCrop(this.art.manifest, this.module, this.frontCouplerVisible, this.rearCouplerVisible);
+    const ui = this.bodyNode.getComponent(UITransform)!;
+    ui.setContentSize(side, side * crop.height / this.art.manifest.canvas.height);
+    ui.setAnchorPoint(this.module.pivot.x / this.art.manifest.canvas.width, 1 - (this.module.pivot.y - crop.top) / crop.height);
+    const path = this.destroyed && !this.bodyOnlyDestroyed ? this.module.destroyed : this.module.body;
+    let frame = this.art.frames[path];
+    if (crop.top || crop.height !== this.art.manifest.canvas.height) {
+      const key = `${path}:${crop.top}:${crop.height}`;
+      let clipped = this.croppedFrames.get(key);
+      if (!clipped) {
+        clipped = frame.clone(); clipped.packable = false;
+        clipped.rect = new Rect(frame.rect.x, frame.rect.y + crop.top, frame.rect.width, crop.height);
+        clipped.originalSize = new Size(this.art.manifest.canvas.width, crop.height); clipped.offset = new Vec2(0, 0);
+        this.croppedFrames.set(key, clipped);
+      }
+      frame = clipped;
+    }
+    this.bodySprite.spriteFrame = frame;
     for (const { node, slot, angle } of this.weaponNodes.values()) {
       const p = trainWeaponPose(this.art.manifest, this.module, slot, { ...this.pose, x: 0, y: 0 }, angle, this.hexRadius);
       node.setPosition(p.position.x, p.position.y, 0); node.angle = angle;
       node.getComponent(UITransform)!.setContentSize(side, side); node.active = !this.destroyed;
     }
+    this.syncConnection();
   }
-  destroy(): void { this.node.destroy(); }
+  destroy(): void {
+    this.node.destroy();
+    for (const frame of this.croppedFrames.values()) frame.destroy();
+    this.croppedFrames.clear();
+  }
 }

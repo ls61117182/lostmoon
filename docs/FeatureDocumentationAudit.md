@@ -10,13 +10,19 @@
 
 正文见 [主策划 §3.4 / §3.7](GameDesignDocument.md)、[逐车数值与依据](FirepowerReloadBalance.md)。实现依据为 `initialMainGunLoadingState`、`loadCampaignShell`、AI `reload` 动作、`loadMission` 的 `preservePlayerReload` 选项及v12存档。对应验证入口为 `InitialReloadState.test.js`、`ReloadDifficulty.test.js`、`AIReloadAction.test.js`；本次文档整理只做一致性核对，没有新增实机或联机验收结论。
 
+## 2026-11-18 模式规则同步
+
+规则模式统一为经典、硬核，原测试模式并入硬核。硬核玩家回合采用“舱盖准备 → 攻击移动合并投骰与交替行动 → 杂项”，动作与对子按骰子类别隔离；经典保留分阶段流程。战役新局默认并固定使用硬核，继续战役同样使用硬核；单关偏好独立保存。旧 `test` 设置及存档按硬核迁移，混合骰类别、顺序、点数与消耗状态随档恢复。战役保留骰强化只保留攻击骰，移动骰的地形与强化修正独立计算。
+
+对应正文为 [主策划 §2.3 / §3.6 / §5.2 / §6.2.5](GameDesignDocument.md)、[菜单与继续](MenuNavigation.md)、[PVP 主角行动](PvpDesignDocument.md)；实现与回归入口为 `GameMode.ts`、`BattleScene.ts`、`SaveLoad.ts` 及 `tests/TestGameMode.test.js`。下面清单中的模式与玩家行动条目已按本次规则更新，其他历史核对记录维持原日期。
+
 ## 可玩内容与系统清单
 
 | 功能 | 当前实现与边界 | 原文档覆盖 | 本次整理 / 实现依据 |
 |---|---|---|---|
 | 单关内容 | 欧洲 12 关、Pacific 12 关，有初始部署、目标、事件和关卡进度；开发版另有测试关 | 总策划与任务手册已有 | [LevelDB.ts](../assets/scripts/core/LevelDB.ts)、[任务手册](Missions.md) |
-| 经典 / 硬核模式 | 单关可切换；硬核启用迷雾、无线电、精确射击、十二向炮塔、方向伤害与过穿等 | 总策划已有，入口限制分散 | 补充战役固定硬核、体验版固定硬核；[GameMode.ts](../assets/scripts/core/GameMode.ts) |
-| 玩家行动 | 移动 / 攻击先后任选，杂项最后；地形、人员、火力、等级 / 强化修正骰池，单骰与对子菜单 | 规则已有，UI 仍写拖骰 / 3D 物理骰 | 修正 §5.2；[ActionDice.ts](../assets/scripts/core/ActionDice.ts)、[BattleScene.ts](../assets/scripts/view/BattleScene.ts) |
+| 经典 / 硬核模式 | 仅两种模式；单关可选，战役默认并固定硬核；硬核继承原测试模式的合并投骰及原有迷雾、无线电、精确射击、十二向炮塔、方向伤害与过穿等规则 | 总策划、菜单、PVP 已同步 | 删除独立测试模式入口，旧 `test` 标识迁移为硬核；[GameMode.ts](../assets/scripts/core/GameMode.ts) |
+| 玩家行动 | 经典为移动 / 攻击先后任选；硬核为攻击移动合并投骰、按类交替行动及同类对子；两模式均最后进入杂项，骰池按地形、人员、车辆及强化分别修正 | 已区分两模式流程及点击骰子交互 | 同步 §2.3、§3.6、§5.2；[ActionDice.ts](../assets/scripts/core/ActionDice.ts)、[BattleScene.ts](../assets/scripts/view/BattleScene.ts) |
 | 基础战斗 | 命中、穿甲、方向伤害、炮盾、有效射程衰减、乘员伤亡与目标概率 / 修正详情 | 总策划已有 | 保留现行正文；[Combat.ts](../assets/scripts/core/Combat.ts) |
 | HE 分目标结算 | 步兵 / 炮组压制或击毁，坦克瘫痪 / 起火，碉堡起火 / 击毁，卡车命中摧毁；同格步兵独立判定 | 总策划已有多轮修订 | 修正状态表仍残留的“重炮 HE 压制”；HE UI 测试另列待核验 |
 | HVAP 有限弹药 | 战役强化解锁，每阶段总额 2 发，穿甲及有效射程各 +2，换弹退还未发射炮弹 | 只零散提到 AP/HVAP，未说明完整规则 | 补 §2.2.1、§3.4；[CampaignUpgrade.ts](../assets/scripts/core/CampaignUpgrade.ts)、[Combat.ts](../assets/scripts/core/Combat.ts) |

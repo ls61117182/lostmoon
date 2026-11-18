@@ -58,7 +58,7 @@ probe.mission.enemies = [{ kind: 'infantry', pos: { ...infantry.pos }, destroyed
 assert.strictEqual(probe.infantrySharesHexWithOtherUnit(infantry), false, 'destroyed foot units should not trigger the wide formation');
 probe.mission.enemies[0].destroyed = false;
 assert.strictEqual(probe.infantrySharesHexWithOtherUnit(infantry), true, 'live foot units should still spread the squad');
-for (const gameMode of ['hardcore', 'test', 'classic']) {
+for (const gameMode of ['hardcore', 'classic']) {
   GameSession.gameMode = gameMode;
   for (const kind of ['heavy_artillery', 'german_heavy_artillery']) {
     for (const destroyed of [false, true]) {

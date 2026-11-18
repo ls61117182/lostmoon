@@ -176,7 +176,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
     drawContinuousTerrain: () => { ground++; return true; }, drawForestCanopy: () => trees++, drawBuildingOverlay: () => buildings++,
     anim: null, phase: 'player', playerStep: 'choose', selectedGunDieIdx: -1, selectedMGDieIdx: -1,
   });
-  for (const name of ['terrainSpritePool', 'fortificationSpritePool', 'fortificationRimPool', 'railwaySpritePool', 'rockySpritePool', 'bridgeSpritePool', 'urbanBuildingSpritePool', 'urbanRubbleSpritePool',
+  for (const name of ['terrainSpritePool', 'fortificationSpritePool', 'fortificationRimPool', 'railwaySpritePool', 'bridgeSpritePool', 'urbanBuildingSpritePool', 'urbanRubbleSpritePool',
     'ruralPropSpritePool', 'foliageSpritePool', 'enemyTopSpritePool', 'commanderHatchSpritePool', 'infantryTopSpritePool',
     'officerTopSpritePool', 'suppressionMarkPool']) scene[name] = [];
   scene.redraw();
@@ -193,7 +193,7 @@ test('rules redraws reuse static scenery until terrain or resource state changes
 
 test('AI phase entry draws once whether the first actor renders or waits', () => {
   const Scene = sceneMethods(['beginAllyPhaseAfterTransition', 'beginGermanAIPhase', 'continueEnemyPhase'], {
-    GameSession: { gameMode: 'test' }, isAIActorUnit: () => true, selectAIOrder: units => units,
+    GameSession: { gameMode: 'hardcore' }, isAIActorUnit: () => true, selectAIOrder: units => units,
   });
   for (const method of ['beginAllyPhaseAfterTransition', 'beginGermanAIPhase', 'continueEnemyPhase']) {
     for (const actorRenders of [false, true]) {
@@ -315,6 +315,7 @@ test('final-pose occlusion and shadows update once after all animation callbacks
 test('enemy dice visual animation retains subtitles without rerunning AI action selection', () => {
   const Scene = sceneMethods(['refreshEnemyDiceTray'], {
     Color: class { constructor(...values) { this.values = values; } }, DICE_DIE_BORDER: {}, DICE_CYCLE_INTERVAL: .1,
+    DIE_FACE_TEXT: {}, DIE_FACE_TEXT_USED: {}, DIE_FACE_USED_FILL: {}, DIE_FACE_SELECTED: {},
   });
   const scene = new Scene(), count = 6;
   let decisions = 0, pips = 0;

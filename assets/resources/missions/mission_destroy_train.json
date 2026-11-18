@@ -1,0 +1,334 @@
+{
+  "id": "mission_destroy_train",
+  "name": "击毁列车",
+  "theater": "europe",
+  "season": "summer",
+  "weather": "clear",
+  "description": "沿西南公路接近铁路村庄，利用两处平交道口截击绕村行驶的装甲列车。摧毁全部机车即可完成目标，无需消灭支援敌军。列车采用 11 节对称 BP44 编组；防空炮闲置。村内有 2 队德军步兵和 2 辆三号 N 型坦克。",
+  "_comment": "地图尺寸及 36 格可用边界参考欧洲第一关“村庄”（8×6）；地形与部署重新设计，不继承第一关的掷骰部署、天气池、增援或任务。14 格闭环容纳 11 节列车并留出 3 格空轨。",
+  "cols": 8,
+  "rows": 6,
+  "tiles": [
+    [
+      null,
+      null,
+      {
+        "t": "f",
+        "rl": "101000"
+      },
+      {
+        "t": "f",
+        "rl": "100100"
+      },
+      {
+        "t": "f",
+        "rl": "100100"
+      },
+      {
+        "t": "f",
+        "rl": "010100"
+      },
+      {
+        "t": "F"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "f",
+        "rl": "001001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "bd": 1
+      },
+      {
+        "t": "f",
+        "rl": "010010"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "f",
+        "rl": "010001"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "r",
+        "rd": "101000",
+        "bd": 1
+      },
+      {
+        "t": "r",
+        "rd": "100100"
+      },
+      {
+        "t": "r",
+        "rd": "100100"
+      },
+      {
+        "t": "r",
+        "rl": "001010",
+        "rd": "100100"
+      },
+      {
+        "t": "r",
+        "rd": "100100"
+      }
+    ],
+    [
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "rl": "010010"
+      },
+      {
+        "t": "r",
+        "rd": "001001"
+      },
+      {
+        "t": "f",
+        "bd": 1
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f",
+        "rl": "001001"
+      },
+      {
+        "t": "f"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "F"
+      },
+      {
+        "t": "r",
+        "rl": "100010",
+        "rd": "001001"
+      },
+      {
+        "t": "f",
+        "rl": "100100"
+      },
+      {
+        "t": "f",
+        "rl": "100100"
+      },
+      {
+        "t": "f",
+        "rl": "000101"
+      },
+      {
+        "t": "F"
+      },
+      null
+    ],
+    [
+      null,
+      {
+        "t": "r",
+        "rd": "001001"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "f"
+      },
+      {
+        "t": "m"
+      },
+      {
+        "t": "f"
+      },
+      null,
+      null
+    ]
+  ],
+  "sherman": {
+    "kind": "sherman",
+    "at": {
+      "col": 1,
+      "row": 5
+    },
+    "facing": 5,
+    "loaded": true
+  },
+  "enemies": [
+    {
+      "kind": "german_infantry",
+      "at": {
+        "col": 3,
+        "row": 2
+      }
+    },
+    {
+      "kind": "german_infantry",
+      "at": {
+        "col": 3,
+        "row": 3
+      }
+    },
+    {
+      "kind": "panzer3_n",
+      "at": {
+        "col": 5,
+        "row": 2
+      },
+      "facing": 3
+    },
+    {
+      "kind": "panzer3_n",
+      "at": {
+        "col": 4,
+        "row": 3
+      },
+      "facing": 2
+    }
+  ],
+  "trainRoutes": [
+    {
+      "id": "bp44_loop",
+      "loop": true,
+      "cells": [
+        {
+          "col": 2,
+          "row": 0
+        },
+        {
+          "col": 3,
+          "row": 0
+        },
+        {
+          "col": 4,
+          "row": 0
+        },
+        {
+          "col": 5,
+          "row": 0
+        },
+        {
+          "col": 5,
+          "row": 1
+        },
+        {
+          "col": 6,
+          "row": 2
+        },
+        {
+          "col": 5,
+          "row": 3
+        },
+        {
+          "col": 5,
+          "row": 4
+        },
+        {
+          "col": 4,
+          "row": 4
+        },
+        {
+          "col": 3,
+          "row": 4
+        },
+        {
+          "col": 2,
+          "row": 4
+        },
+        {
+          "col": 1,
+          "row": 3
+        },
+        {
+          "col": 1,
+          "row": 2
+        },
+        {
+          "col": 1,
+          "row": 1
+        }
+      ]
+    }
+  ],
+  "trains": [
+    {
+      "id": "bp44",
+      "sideId": "enemy",
+      "faction": "german",
+      "routeId": "bp44_loop",
+      "headIndex": 10,
+      "carriages": [
+        {
+          "id": "bp44_1",
+          "kind": "train_panzerjaeger"
+        },
+        {
+          "id": "bp44_2",
+          "kind": "train_howitzer"
+        },
+        {
+          "id": "bp44_3",
+          "kind": "train_artillery_flak"
+        },
+        {
+          "id": "bp44_4",
+          "kind": "train_command"
+        },
+        {
+          "id": "bp44_5",
+          "kind": "train_tender"
+        },
+        {
+          "id": "bp44_6",
+          "kind": "train_locomotive"
+        },
+        {
+          "id": "bp44_7",
+          "kind": "train_tender"
+        },
+        {
+          "id": "bp44_8",
+          "kind": "train_command"
+        },
+        {
+          "id": "bp44_9",
+          "kind": "train_artillery_flak"
+        },
+        {
+          "id": "bp44_10",
+          "kind": "train_howitzer"
+        },
+        {
+          "id": "bp44_11",
+          "kind": "train_panzerjaeger"
+        }
+      ]
+    }
+  ],
+  "objective": {
+    "type": "destroy_train",
+    "trainId": "bp44"
+  }
+}
